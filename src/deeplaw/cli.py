@@ -13,6 +13,19 @@ from .evaluate import evaluate_file
 from .ingest import build_release
 from .mcp_server import run_mcp
 from .models import SearchRequest
+from .official import (
+    disable_official,
+    enable_official,
+    official_status,
+    sync_official,
+    uninstall_official,
+)
+from .private_library import (
+    add_private_document,
+    delete_private_document,
+    list_private_documents,
+    resolve_private_database,
+)
 from .search import DeepLaw, response_json
 from .store import database_sha256, default_home, resolve_active_database
 from .vision import (
@@ -86,6 +99,100 @@ def _parser() -> argparse.ArgumentParser:
         help="Use stdio transport (explicit alias for host plugin manifests)",
     )
 
+    official = commands.add_parser(
+        "official",
+        help="Install, update, disable, or uninstall the team-maintained official catalog",
+    )
+    official_commands = official.add_subparsers(dest="official_command", required=True)
+    for name, help_text in (
+        ("install", "Install the bundled official catalog and activate its release"),
+        ("update", "Fetch a newer official catalog and build its release"),
+    ):
+        sync = official_commands.add_parser(name, help=help_text)
+        sync.add_argument("--catalog", help="Local catalog path or HTTPS catalog URL")
+        sync.add_argument(
+            "--source-root",
+            type=Path,
+            help="Use an existing verified source package instead of downloading source files",
+        )
+        sync.add_argument(
+            "--pdf-fallback",
+            choices=("off", "vision-consensus"),
+            default=None,
+        )
+    official_commands.add_parser("status", help="Show official catalog installation state")
+    official_commands.add_parser("enable", help="Enable the installed official release")
+    official_commands.add_parser("disable", help="Disable without modifying the release")
+    official_commands.add_parser("uninstall", help="Delete locally installed official data")
+
+    private = commands.add_parser(
+        "private",
+        help="Manage a per-OS-user legal-reference library outside the official catalog",
+    )
+    private_commands = private.add_subparsers(dest="private_command", required=True)
+    private_add = private_commands.add_parser("add", help="Add one private legal-reference file")
+    private_add.add_argument("--source", type=Path, required=True)
+    private_add.add_argument("--title")
+    private_add.add_argument(
+        "--document-type",
+        choices=(
+            "law",
+            "administrative_regulation",
+            "judicial_interpretation",
+            "prosecution_standard",
+            "departmental_rule",
+            "normative_document",
+            "case_reference",
+        ),
+        default="normative_document",
+    )
+    private_add.add_argument("--issuer", default="用户提供（未经 DeepLaw 官方审核）")
+    private_add.add_argument("--effective-from")
+    private_add.add_argument("--effective-to")
+    private_add.add_argument(
+        "--confirm-no-case-data",
+        action="store_true",
+        help="Confirm this is a legal reference, not Analytix case material",
+    )
+    private_add.add_argument(
+        "--pdf-fallback",
+        choices=("off", "vision-consensus"),
+        default="off",
+    )
+    private_add.add_argument("--allow-needs-ocr", action="store_true")
+
+    private_delete = private_commands.add_parser("delete", help="Delete one private document")
+    private_delete.add_argument("--document-id", required=True)
+    private_delete.add_argument(
+        "--pdf-fallback",
+        choices=("off", "vision-consensus"),
+        default="off",
+    )
+    private_delete.add_argument("--allow-needs-ocr", action="store_true")
+    private_commands.add_parser("list", help="List private legal-reference documents")
+    private_commands.add_parser("status", help="Show private legal-reference library state")
+
+    private_search = private_commands.add_parser(
+        "search", help="Search only the user-private legal-reference library"
+    )
+    private_search.add_argument("--query", required=True)
+    private_search.add_argument("--purpose", default="auto")
+    private_search.add_argument("--as-of")
+    private_search.add_argument("--limit", type=int, default=5)
+    private_search.add_argument("--max-chars", type=int, default=3500)
+    private_search.add_argument("--document-type", action="append", default=[])
+    private_search.add_argument("--db", type=Path)
+    private_get = private_commands.add_parser("get", help="Fetch one private segment by ID")
+    private_get.add_argument("--segment-id", required=True)
+    private_get.add_argument("--max-chars", type=int, default=6000)
+    private_get.add_argument("--db", type=Path)
+    private_verify = private_commands.add_parser(
+        "verify", help="Verify a private-library receipt"
+    )
+    private_verify.add_argument("--segment-id", required=True)
+    private_verify.add_argument("--receipt-id", required=True)
+    private_verify.add_argument("--db", type=Path)
+
     doctor = commands.add_parser("doctor", help="Inspect the active release without changing it")
     doctor.add_argument("--db", type=Path)
     return parser
@@ -134,6 +241,77 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "mcp":
             run_mcp(transport="stdio" if args.stdio else args.transport)
             return
+        if args.command == "official":
+            if args.official_command in {"install", "update"}:
+                _print_json(
+                    sync_official(
+                        catalog_source=args.catalog,
+                        source_root=args.source_root,
+                        update=args.official_command == "update",
+                        pdf_fallback=args.pdf_fallback,
+                    )
+                )
+            elif args.official_command == "status":
+                _print_json(official_status())
+            elif args.official_command == "enable":
+                _print_json(enable_official())
+            elif args.official_command == "disable":
+                _print_json(disable_official())
+            elif args.official_command == "uninstall":
+                _print_json(uninstall_official())
+            else:
+                raise RuntimeError(f"unhandled official command: {args.official_command}")
+            return
+        if args.command == "private":
+            if args.private_command == "add":
+                _print_json(
+                    add_private_document(
+                        args.source,
+                        title=args.title,
+                        document_type=args.document_type,
+                        issuer=args.issuer,
+                        effective_from=args.effective_from,
+                        effective_to=args.effective_to,
+                        confirm_no_case_data=args.confirm_no_case_data,
+                        pdf_fallback=args.pdf_fallback,
+                        allow_needs_ocr=args.allow_needs_ocr,
+                    )
+                )
+                return
+            if args.private_command == "delete":
+                _print_json(
+                    delete_private_document(
+                        args.document_id,
+                        pdf_fallback=args.pdf_fallback,
+                        allow_needs_ocr=args.allow_needs_ocr,
+                    )
+                )
+                return
+            if args.private_command in {"list", "status"}:
+                _print_json(list_private_documents())
+                return
+            database = resolve_private_database(explicit_db=getattr(args, "db", None))
+            with DeepLaw(database, expected_scope="user_private") as law:
+                if args.private_command == "search":
+                    response = law.search(
+                        SearchRequest(
+                            query=args.query,
+                            purpose=args.purpose,
+                            as_of=args.as_of,
+                            limit=args.limit,
+                            max_chars=args.max_chars,
+                            document_types=tuple(args.document_type),
+                        )
+                    )
+                    _print_json(response.to_dict())
+                    return
+                if args.private_command == "get":
+                    _print_json(law.get(args.segment_id, max_chars=args.max_chars))
+                    return
+                if args.private_command == "verify":
+                    _print_json(law.verify(args.segment_id, args.receipt_id))
+                    return
+            raise RuntimeError(f"unhandled private command: {args.private_command}")
 
         database = resolve_active_database(explicit_db=getattr(args, "db", None))
         if args.command == "eval":
@@ -144,12 +322,12 @@ def main(argv: list[str] | None = None) -> None:
             _print_json(report)
             return
         if args.command == "doctor":
-            with DeepLaw(database) as law:
+            with DeepLaw(database, expected_scope="official") as law:
                 info = law.release_info()
             info["database"] = str(database)
             _print_json(info)
             return
-        with DeepLaw(database) as law:
+        with DeepLaw(database, expected_scope="official") as law:
             if args.command == "search":
                 response = law.search(
                     SearchRequest(

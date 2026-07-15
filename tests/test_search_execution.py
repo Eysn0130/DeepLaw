@@ -7,8 +7,10 @@ import pytest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
+import deeplaw.ingest as ingest_module
+from deeplaw.evaluate import evaluate_file
 from deeplaw.ingest import build_release
-from deeplaw.models import SearchRequest
+from deeplaw.models import ExtractionQuality, ExtractionResult, SearchRequest, TextBlock
 from deeplaw.search import DeepLaw
 
 from .helpers import manifest_document, write_docx, write_manifest
@@ -183,6 +185,99 @@ def test_as_of_separates_missing_or_unverified_temporal_metadata(
     assert len(response.evidence) + len(response.uncertain_evidence) <= 5
     assert response.total_excerpt_chars <= 6000
     _validate_search_response(response.to_dict())
+
+
+def test_extraction_review_required_is_separated_from_primary_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    document = source / "review-required.docx"
+    safe_document = source / "safe-distractor.docx"
+    write_docx(document, ["抽取复核测试法", "第一条 未完成人工对照的文本不得进入主证据。"])
+    write_docx(
+        safe_document,
+        ["普通测试办法", "第一条 人工对照的文本属于普通测试内容。"],
+    )
+    manifest = write_manifest(
+        source / "manifest.json",
+        [
+            manifest_document(source, document.name, title="抽取复核测试法"),
+            manifest_document(source, safe_document.name, title="普通测试办法"),
+        ],
+    )
+
+    original_extract_document = ingest_module.extract_document
+
+    def extract_with_risk(path: Path, *args: object, **kwargs: object) -> ExtractionResult:
+        if path.name != document.name:
+            return original_extract_document(path, *args, **kwargs)
+        return ExtractionResult(
+            blocks=(
+                TextBlock(text="抽取复核测试法", paragraph=1),
+                TextBlock(text="第一条 未完成人工对照的文本不得进入主证据。", paragraph=2),
+            ),
+            quality=ExtractionQuality(
+                extractor="test-ocr",
+                extractor_version="test-ocr/v1",
+                block_count=2,
+                page_count=1,
+                character_count=30,
+                needs_ocr=True,
+                review_required=True,
+                warnings=("page 1: test review required",),
+            ),
+        )
+
+    monkeypatch.setattr(
+        ingest_module,
+        "extract_document",
+        extract_with_risk,
+    )
+    release, _ = build_release(
+        source_root=source,
+        manifest_path=manifest,
+        output_root=tmp_path / "releases",
+        allow_needs_ocr=True,
+    )
+
+    with DeepLaw(release / "deeplaw.sqlite3") as law:
+        response = law.search(
+            SearchRequest(query="未完成人工对照的文本", limit=1)
+        )
+
+    assert not response.evidence
+    assert response.uncertain_evidence
+    assert response.uncertain_evidence[0].title == "抽取复核测试法"
+    assert all(card.extraction_review_required for card in response.uncertain_evidence)
+    assert any("抽取风险" in notice for notice in response.notices)
+    assert any(
+        item.status == "uncertain" for item in response.obligation_coverage if item.required
+    )
+    _validate_search_response(response.to_dict())
+
+    cases = tmp_path / "review-required-cases.jsonl"
+    cases.write_text(
+        json.dumps(
+            {
+                "id": "review-required",
+                "query": "未完成人工对照的文本",
+                "expected_titles": ["抽取复核测试法"],
+                "expected_bucket": "uncertain_evidence",
+                "expected_extraction_review_required": True,
+                "max_evidence": 1,
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    report = evaluate_file(release / "deeplaw.sqlite3", cases, limit=1)
+    assert report["schema_version"] == "deeplaw.eval-report/v2"
+    assert report["overall_pass_rate"] == 1.0
+    assert report["results"][0]["expected_bucket"] == "uncertain_evidence"
+    assert report["results"][0]["evidence_count"] == 0
+    assert report["results"][0]["uncertain_evidence_count"] == 1
 
 
 def test_as_of_excludes_known_future_interval_and_reports_gap(tmp_path: Path) -> None:

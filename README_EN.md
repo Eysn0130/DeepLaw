@@ -14,12 +14,12 @@
 </p>
 
 <p align="center">
-  <sub>Architecture 2.0 is the target · The current runnable version is 0.2.0 alpha</sub>
+  <sub>Architecture 2.0 is the target · The current runnable version is 0.3.0 alpha</sub>
 </p>
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/runtime-0.2.0%20alpha-17202A?style=flat-square" alt="Runtime 0.2.0 alpha" />
+  <img src="https://img.shields.io/badge/runtime-0.3.0%20alpha-17202A?style=flat-square" alt="Runtime 0.3.0 alpha" />
   <img src="https://img.shields.io/badge/Python-3.11%20%7C%203.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 and 3.13" />
   <img src="https://img.shields.io/badge/MCP-read--only-18A999?style=flat-square" alt="Read-only MCP" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
@@ -41,14 +41,14 @@
 </p>
 
 The figure above is a target architecture, not a screenshot of the current runtime. The
-`0.2.0` baseline turns DOCX and PDF material into a read-only, versioned, traceable Agent
+`0.3.0` baseline turns DOCX and PDF material into a read-only, versioned, traceable Agent
 Knowledge Base. It performs bounded location, connection, and verification outside the
 model, then delivers a small **Evidence Pack** containing admitted evidence, uncertain
 evidence, explicit gaps, and verifiable receipts. Architecture 2.0 adds source-bound
-Explain, TXT input, and minimal sufficient evidence selection.
+Explain, governed official TXT input, and minimal sufficient evidence selection.
 
 `DeepLaw` is the product name; Architecture 2.0 is the next architecture direction. The
-runnable package is still the `0.2.0` alpha baseline. This README keeps implemented
+runnable package is still the `0.3.0` alpha baseline. This README keeps implemented
 capabilities separate from research targets.
 
 ## Quick Start
@@ -58,11 +58,60 @@ DeepLaw requires Python 3.11+ and [`uv`](https://docs.astral.sh/uv/):
 ```bash
 git clone https://github.com/Eysn0130/DeepLaw.git
 cd DeepLaw
-uv sync --extra dev
-uv run deeplaw --version
+uv tool install .
+deeplaw --version
 ```
 
-Build an operator-owned source package that you are authorized to process and retain:
+`uv tool install .` makes the `deeplaw` executable visible to Agent hosts. Run
+`uv sync --extra dev` only for source development, and use `uv tool install --force .`
+after upgrading runtime code from a checkout.
+
+Install the bundled DeepLaw team catalog. The client fetches DOCX/PDF files from their
+recorded official download URLs, verifies byte sizes and SHA-256 values, then builds locally;
+the GitHub repository does not redistribute those source binaries:
+
+```bash
+deeplaw official install
+deeplaw official status
+deeplaw doctor
+```
+
+Use `--source-root "/path/to/legal-source-package"` to reuse an already downloaded package
+that exactly matches the catalog. Fetch a later monotonically sequenced team catalog with:
+
+```bash
+deeplaw official update
+```
+
+Transient `429/5xx` and timeout failures use bounded exponential backoff. Sources that already
+passed byte-size and SHA-256 verification remain in the local cache, so rerunning can resume the
+build. DeepLaw never silently falls back to a non-official mirror just to make an install succeed.
+
+An in-flight read remains pinned to its release. Later calls from an older MCP process fail
+closed after the official epoch changes; restart the Agent/MCP process to use the new release.
+
+The official catalog is optional. `disable` preserves immutable files, `enable` restores the
+pointer, and `uninstall` removes only team-catalog releases and caches:
+
+```bash
+deeplaw official disable
+deeplaw official enable
+deeplaw official uninstall
+```
+
+User-supplied legal references use a physically separate local library. MCP access remains
+read-only; add and delete are explicit local CLI administration:
+
+```bash
+deeplaw private add \
+  --source "/path/to/user-legal-reference.docx" \
+  --confirm-no-case-data
+deeplaw private list
+deeplaw private search --query "document title article 1"
+deeplaw private delete --document-id "doc_..."
+```
+
+You can also build an operator-owned source package that you are authorized to process and retain:
 
 ```bash
 export DEEPLAW_SOURCE_ROOT="/path/to/legal-source-package"
@@ -88,12 +137,12 @@ human legal approval.
   <img src="assets/readme/knowledge-cycle.png" width="1120" alt="DeepLaw Architecture 2.0 target knowledge cycle: Ingest, Organize, Locate, Connect, Explain, and Verify around the Evidence Core, delivering Evidence, Gaps, and Receipts" />
 </p>
 
-Architecture 2.0 defines six core knowledge actions. The table separates the `0.2.0`
+Architecture 2.0 defines six core knowledge actions. The table separates the `0.3.0`
 baseline from the target:
 
 | Action | Responsibility | Current status and boundary |
 | --- | --- | --- |
-| **Ingest** | Verify files, extract content, preserve locators and hashes | DOCX/PDF today; processing success is not human approval |
+| **Ingest** | Verify files, extract content, preserve locators and hashes | Official DOCX/PDF; the private library also accepts UTF-8 TXT; processing success is not human approval |
 | **Organize** | Build hierarchy, versions, relations, and a Knowledge Map | Heading/article segments and order today; full legal hierarchy is a 2.0 target |
 | **Locate** | Find titles, citations, articles, terms, and related segments | Broad terms do not expand into unbounded output |
 | **Connect** | Link citations, amendments, repeal, replacement, implementation, and exceptions | Provenance-bound one-hop document relations today; definitions, scope, and challenge closure are 2.0 targets |
@@ -113,7 +162,7 @@ before it can become citable.
   <img src="assets/readme/evidence-core.png" width="1120" alt="DeepLaw Architecture 2.0 target Evidence Core: Sources and Versions, Knowledge Map, Evidence Duties, Limits and Gaps, Receipts and Replay" />
 </p>
 
-The Evidence Core is the Architecture 2.0 target. The `0.2.0` baseline already implements
+The Evidence Core is the Architecture 2.0 target. The `0.3.0` baseline already implements
 immutable sources, a basic Knowledge Map, Evidence Duties, bounded output, gaps, and
 receipts. Coverage witnesses, challenge results, and replay traces are not implemented.
 
@@ -191,37 +240,46 @@ This is an Architecture 2.0 target. DeepLaw will actively check temporal change,
 extraction risk, and conflicts. Each challenge is `satisfied`, `unresolved`, or
 `not_applicable`; unresolved checks remain gaps.
 
-### Public knowledge, private cases
+### Official catalog, user-private references, and private cases
 
-DeepLaw stores shared read-only knowledge. Case uploads, facts, chats, identities,
-transactions, and agent memory stay inside the host's private case project. They must
-never enter a public release, sidecar, log, or public benchmark. This is a mandatory host
-integration boundary: `0.2.0` does not provide content-level DLP or a private-data
-classifier, so the host must isolate and reject private material before invoking DeepLaw.
+DeepLaw keeps three physical scopes:
+
+| Scope | Storage and mutation | Agent access |
+| --- | --- | --- |
+| Team-maintained official catalog | Immutable releases under `~/.deeplaw/releases`; monotonic catalog updates; optional disable/uninstall | `search/get/verify/release_info` |
+| User-private legal references | Separate `~/.deeplaw/private` root; owner-only files; explicit local add/delete and snapshot rebuild | Explicit `private_*` operations only; never blended with official ranking |
+| Analytix case projects | Analytix-owned per-case SQLite/DuckDB, attachments, and sessions | Outside DeepLaw; DeepLaw never reads or owns it |
+
+“Only this user” currently means the local OS account plus owner-only filesystem permissions,
+not multi-tenant authentication for a shared server or volume. Case evidence, facts, chats,
+identities, transactions, and agent memory remain outside both DeepLaw scopes. The CLI requires
+`--confirm-no-case-data`, but that acknowledgement is not content-level DLP.
 
 The full design, invariants, implementation phases, and non-goals are documented in
 [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md).
 
 ## What Is Implemented Today
 
-| Capability | `0.2.0` status |
+| Capability | `0.3.0` status |
 | --- | --- |
-| File processing | Direct DOCX parsing; native-text PDF first; local vision consensus for poor pages |
+| File processing | Official DOCX/PDF; private UTF-8 TXT; native-text PDF first; local vision consensus for poor pages |
+| Official lifecycle | Bundled install, HTTPS catalog update, sequence anti-rollback/rewrite checks, enable/disable/uninstall, per-source hash verification |
+| Private legal references | Owner-only physical root, explicit add/list/delete, separate immutable snapshot, old-snapshot cleanup on deletion |
 | Immutable releases | Source/segment/release hashes, atomic publication, read-only SQLite, receipts |
 | Precise location | Titles, aliases, document numbers, articles, and Chinese FTS |
 | QueryPlan | Eight closed Evidence Duties, stable plan IDs, and hard bounds |
 | Time | Target dates, verified intervals, uncertain metadata, and out-of-interval separation |
 | Knowledge Map | Provenance-bound one-hop relations and bounded paths |
-| Agent interface | One read-only MCP leaf tool with four operations |
+| Agent interface | One read-only MCP leaf tool with eight explicit official/private operations and no write operation |
 | Hosts | Codex, Claude Code, and OpenCode adapters; Analytix integration is design-only |
 
-Not implemented yet: signed release approval and revocation, a complete bitemporal legal
+Not implemented yet: cryptographically signed catalog/release approval and revocation, a complete bitemporal legal
 event ledger, coverage-first selection, coverage witnesses, replay traces, an external
 held-out Chinese legal benchmark, and the Analytix pre-schema activation gate.
 
 ## One Small Agent Interface
 
-DeepLaw exposes one MCP leaf tool, `law_support`, with four read-only operations:
+DeepLaw exposes one MCP leaf tool, `law_support`, with eight read-only operations:
 
 | Operation | Purpose |
 | --- | --- |
@@ -229,6 +287,14 @@ DeepLaw exposes one MCP leaf tool, `law_support`, with four read-only operations
 | `get` | Read normalized extracted text by exact `segment_id`, with explicit `truncated` state |
 | `verify` | Verify a receipt and segment hash in the fixed release |
 | `release_info` | Inspect the fixed release, schema, review, and redistribution status |
+| `private_search` | Search only the user-private legal-reference snapshot |
+| `private_get` | Read one exact private segment |
+| `private_verify` | Verify a private receipt; old receipts expire after a private snapshot change |
+| `private_info` | Inspect the current user-private snapshot |
+
+Private `add` and `delete` exist only in the local administrative CLI. They are not MCP
+operations. When both scopes matter, an Agent must query and present them separately; it may
+not merge rankings, authority, or temporal conclusions.
 
 Response skeleton:
 
@@ -256,10 +322,20 @@ valid runtime identifiers.
 | OpenCode | [`adapters/opencode`](adapters/opencode) | Default deny; explicit dedicated-agent grant |
 | Analytix | [`docs/ANALYTIX_INTEGRATION.md`](docs/ANALYTIX_INTEGRATION.md) | Future turn-scoped integration; no code change yet |
 
+Local Codex install (replace the path with the checkout's absolute path):
+
+```bash
+codex plugin marketplace add /absolute/path/to/DeepLaw
+codex plugin add deeplaw@deeplaw
+```
+
 Installation does not mean automatic invocation. Ordinary code, data, SQL, and document
 tasks should not enter DeepLaw. Future Analytix integration must gate legal intent before
 provider tool-schema materialization and prove inactive zero impact on routing, the stable
 prefix, request bodies, tokens, and latency.
+
+The plugin never downloads or mutates legal data in the background. A user explicitly runs
+`deeplaw official install` and later `deeplaw official update` outside the Agent MCP surface.
 
 ## File and Extraction Quality
 
@@ -282,8 +358,9 @@ uv run deeplaw eval --cases evals/core-2026-07-14.jsonl --limit 5
 git diff --check
 ```
 
-The current local candidate passes 32/32 known-corpus white-box smoke cases, and 109/109
-returned receipts complete a round-trip verification. This result is pinned to one release,
+The current local candidate passes 32/32 known-corpus white-box smoke cases; six cases explicitly
+require extraction-risk material to appear only in `uncertain_evidence`, and 109/109 returned
+receipts complete a round-trip verification. This result is pinned to one release,
 database, case set, source tree, and environment. It is not a blind test, a held-out set, a
 human legal gold standard, or a cross-system leaderboard. See
 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for hashes and limitations.
@@ -299,7 +376,8 @@ architecture is welcome; performance claims require evidence.
 - live web content never enters primary evidence at query time;
 - a model may not determine amendment, repeal, conflict, or priority on its own;
 - DeepLaw does not predict guilt, sentence, liability, or case outcome;
-- hosts and operators must not write or send private case material to the public knowledge base;
+- the private library accepts legal references, not case evidence, facts, chats, or attachments;
+- private material never changes official releases, review status, ranking, or update state;
 - restricted sources and case data must not appear in issues, PRs, logs, screenshots, or benchmarks.
 
 See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
@@ -310,7 +388,7 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
 | Document | Scope |
 | --- | --- |
 | [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | Complete 2.0 design and research gates |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Current `0.2.0` implementation and runtime facts |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Current `0.3.0` implementation and runtime facts |
 | [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) | Source, review, license, release, and update governance |
 | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Reproducible smoke evidence and the next evaluation protocol |
 | [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) | Codex, Claude Code, and OpenCode adapters |
@@ -324,9 +402,11 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
 - [x] Provenance-bound Knowledge Map with bounded one-hop navigation
 - [x] Page-level PDF evidence and human-review attestations
 - [x] Codex, Claude Code, and OpenCode adapters
+- [x] Team catalog install/update/enable/disable/uninstall lifecycle
+- [x] Physically separate user-private legal references with explicit add/delete and read-only Agent access
 - [ ] Coverage witnesses, challenge results, and replay traces
 - [ ] Coverage-first minimal sufficient evidence selection
-- [ ] TXT input, complete legal hierarchy, and source-bound Explain
+- [ ] Official TXT input, complete legal hierarchy, and source-bound Explain (private UTF-8 TXT is implemented)
 - [ ] Corpus Coverage Manifest and bitemporal legal event ledger
 - [ ] Signed publication, revocation, supersession feed, and secure updates
 - [ ] External held-out Chinese legal evidence benchmark
@@ -337,7 +417,8 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
 DeepLaw is being built as a general legal knowledge base. The tables below show only the
 material currently recorded as of **2026-07-14**: **28** binary source files — **10 DOCX**,
 **18 PDF**, and **0 HTML**. They do not limit future coverage. Counts come from the
-operator-maintained download manifest; this repository does not redistribute the files.
+bundled team catalog; this repository distributes only catalog metadata, source URLs, sizes,
+and hashes, not the source binaries. `deeplaw official update` fetches later monotonic catalogs.
 
 | Source-package group | Count | Coverage |
 | --- | ---: | --- |
@@ -361,6 +442,14 @@ the former determines authority; the latter records where the source binary was 
 | [Shandong Court](https://www.sdcourt.gov.cn/) official hosts | 5 | PDF: case-library references and procedure material |
 | Official hosts of the [CSRC](https://www.csrc.gov.cn/), [NIA](https://www.nia.gov.cn/), and [SZSE](https://www.szse.cn/) | 3 | PDF: officially hosted originals issued by the relevant authority |
 | **Total** | **28** | **Each file records URL, format, byte size, and SHA-256** |
+
+“Team-maintained official catalog” means that the DeepLaw team maintains catalog identity,
+source declarations, hashes, and version lifecycle. It does not mean that every page has
+completed human legal review. In the reproducible build of the current 28 items, **5 PDFs
+and 15 pages** still carry extraction-review flags. Their segments are returned only as
+`uncertain_evidence`, never as admitted primary evidence. Full page-level records remain in
+the local release's `build-report.json`; corrections require a later catalog sequence and a
+new immutable release rather than an overwrite.
 
 Concise update method:
 

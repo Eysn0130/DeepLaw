@@ -1,7 +1,7 @@
 {
   "name": "deeplaw",
-  "version": "0.2.0",
-  "description": "Read-only Agent Knowledge Base for versioned Chinese legal sources.",
+  "version": "0.3.0",
+  "description": "Read-only Agent Knowledge Base for official and user-private Chinese legal sources.",
   "author": {
     "name": "Eysn0130",
     "url": "https://github.com/Eysn0130"
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "DeepLaw",
     "shortDescription": "Verify Chinese legal sources, versions, and citations",
-    "longDescription": "DeepLaw turns versioned Chinese legal sources into a bounded, read-only Agent Knowledge Base. It returns source-backed evidence cards, explicit gaps, receipts, and exact segments without adding case-private memory to ordinary agent work.",
+    "longDescription": "DeepLaw turns versioned Chinese legal sources into a bounded, read-only Agent Knowledge Base. A team-maintained official catalog and a physically separate per-user legal-reference library return evidence cards, explicit gaps, receipts, and exact segments without taking ownership of case projects.",
     "developerName": "Eysn0130",
     "category": "Productivity",
     "capabilities": [

@@ -43,6 +43,8 @@ _RELEASE_OPTIONAL_FIELDS = {
     "reviewer_kind",
     "review_scope",
     "review_covered_documents",
+    "collection_scope",
+    "library_id",
 }
 
 
@@ -161,6 +163,25 @@ def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[st
         manifest.get("derived_wiki"), bool
     ):
         raise RuntimeError("release derived-index flags are invalid")
+    collection_scope = manifest.get("collection_scope", "official")
+    if collection_scope not in {"official", "user_private"}:
+        raise RuntimeError("release collection_scope is invalid")
+    library_id = manifest.get("library_id")
+    if collection_scope == "official" and library_id is not None:
+        raise RuntimeError("official release must not declare a private library_id")
+    if collection_scope == "user_private":
+        if (
+            not isinstance(library_id, str)
+            or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", library_id)
+        ):
+            raise RuntimeError("user-private release library_id is invalid")
+        if (
+            manifest["temporal_status"] != "requires_human_review"
+            or manifest["redistribution_status"] != "not_assessed"
+            or manifest["vector_index"]
+            or manifest["derived_wiki"]
+        ):
+            raise RuntimeError("user-private release cannot claim official review authority")
     return manifest
 
 
@@ -469,13 +490,14 @@ def resolve_active_database(
     *,
     explicit_db: str | Path | None = None,
     home: str | Path | None = None,
+    use_env_db: bool = True,
 ) -> Path:
     if explicit_db:
         database = Path(explicit_db).expanduser().absolute()
         if not database.exists():
             raise FileNotFoundError(database)
         return database
-    env_db = os.environ.get("DEEPLAW_DB")
+    env_db = os.environ.get("DEEPLAW_DB") if use_env_db else None
     if env_db:
         database = Path(env_db).expanduser().absolute()
         if not database.exists():
@@ -515,9 +537,26 @@ def activate_release(output_root: Path, release_id: str) -> Path:
     if not _RELEASE_ID.fullmatch(release_id):
         raise ValueError(f"invalid DeepLaw release ID: {release_id}")
     var_root = output_root.parent
+    if var_root.is_symlink() or output_root.is_symlink():
+        raise RuntimeError("DeepLaw home and releases directory must not be symbolic links")
+    database = output_root / release_id / "deeplaw.sqlite3"
+    verify_release_artifact(database)
     active = var_root / "ACTIVE"
+    if active.is_symlink():
+        raise RuntimeError(f"DeepLaw ACTIVE pointer must not be a symbolic link: {active}")
     temporary = active.with_suffix(".tmp")
-    temporary.write_text(f"{release_id}\n", encoding="utf-8")
+    if temporary.is_symlink():
+        raise RuntimeError(f"DeepLaw ACTIVE temporary must not be a symbolic link: {temporary}")
+    temporary.unlink(missing_ok=True)
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(f"{release_id}\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
     os.replace(temporary, active)
     return active
 

@@ -56,6 +56,11 @@
     },
     "redistribution_status": { "enum": ["not_assessed", "approved", "restricted"] },
     "vector_index": { "type": "boolean" },
-    "derived_wiki": { "type": "boolean" }
+    "derived_wiki": { "type": "boolean" },
+    "collection_scope": { "enum": ["official", "user_private"] },
+    "library_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    }
   }
 }

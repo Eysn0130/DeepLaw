@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -17,20 +18,34 @@ from mcp.server.stdio import stdio_server
 
 from . import __version__
 from .models import Purpose, SearchRequest
+from .official import active_official_release_id
+from .private_library import active_private_release_id, resolve_private_database
 from .search import DeepLaw
 
-Operation = Literal["search", "get", "verify", "release_info"]
+Operation = Literal[
+    "search",
+    "get",
+    "verify",
+    "release_info",
+    "private_search",
+    "private_get",
+    "private_verify",
+    "private_info",
+]
 
 _DESCRIPTION = (
     "Read-only Chinese-law research gateway. Call only after an explicit Chinese-law "
     "research request; never call for ordinary code, data, document, or analytics work, "
     "and never activate from a lone legal-looking keyword. Operations: search bounded "
-    "evidence, get an exact segment, verify a receipt, or inspect the active immutable release."
+    "official evidence, get an exact segment, verify a receipt, or inspect the active immutable "
+    "release. Explicit private_* operations search a separate local user-private legal-reference "
+    "library; they never blend its ranking or authority with the official catalog."
 )
 _INSTRUCTIONS = (
     "Read-only, version-aware Chinese legal research. Use only for explicit legal questions. "
     "Search returns at most five evidence cards; fetch full text only by selected segment_id. "
-    "Never treat retrieval as proof of case facts or applicability."
+    "Never treat retrieval as proof of case facts or applicability. Private results are "
+    "user-provided and never official DeepLaw sources."
 )
 _OUTPUT_CONTRACTS = {
     "search": "law-search-response.v2.schema.json",
@@ -44,7 +59,10 @@ _OUTPUT_CONTRACTS = {
 
 @dataclass(frozen=True)
 class _RuntimeContext:
-    law: DeepLaw
+    official: DeepLaw | None
+    private: DeepLaw | None
+    guard_official_epoch: bool
+    guard_private_epoch: bool
     lock: RLock
 
 
@@ -104,7 +122,7 @@ def tool_definition() -> types.Tool:
     return types.Tool(
         name="law_support",
         description=_DESCRIPTION,
-        inputSchema=deepcopy(_load_contract("law-support.input.v1.schema.json")),
+        inputSchema=deepcopy(_load_contract("law-support.input.v2.schema.json")),
         outputSchema=deepcopy(bundled_output_schema()),
         annotations=types.ToolAnnotations(
             readOnlyHint=True,
@@ -115,10 +133,10 @@ def tool_definition() -> types.Tool:
     )
 
 
-def _execute_support(
+def _execute_law_operation(
     law: DeepLaw,
     *,
-    operation: Operation,
+    operation: Literal["search", "get", "verify", "release_info"],
     query: str = "",
     purpose: Purpose = "auto",
     as_of: str | None = None,
@@ -151,6 +169,60 @@ def _execute_support(
     return law.search(request).to_dict()
 
 
+def _execute_support(
+    runtime: _RuntimeContext,
+    *,
+    operation: Operation,
+    query: str = "",
+    purpose: Purpose = "auto",
+    as_of: str | None = None,
+    limit: int = 5,
+    max_chars: int = 3500,
+    document_types: list[str] | None = None,
+    segment_id: str | None = None,
+    receipt_id: str | None = None,
+) -> dict[str, Any]:
+    private_operation = operation.startswith("private_")
+    law = runtime.private if private_operation else runtime.official
+    if law is None:
+        scope = "user-private" if private_operation else "official"
+        raise FileNotFoundError(f"DeepLaw has no active {scope} release")
+    if not private_operation and runtime.guard_official_epoch:
+        current_release_id = active_official_release_id()
+        if current_release_id != law.release_id:
+            raise RuntimeError(
+                "official library changed or was disabled; restart the DeepLaw MCP process "
+                "before reading it"
+            )
+    elif private_operation and runtime.guard_private_epoch:
+        current_release_id = active_private_release_id()
+        if current_release_id != law.release_id:
+            raise RuntimeError(
+                "user-private library changed; restart the DeepLaw MCP process before reading it"
+            )
+    elif private_operation and not law.database.is_file():
+        raise RuntimeError(
+            "user-private snapshot was removed; restart the DeepLaw MCP process before reading it"
+        )
+    normalized_operation = operation.removeprefix("private_")
+    if normalized_operation == "info":
+        normalized_operation = "release_info"
+    return _execute_law_operation(
+        law,
+        operation=cast(
+            Literal["search", "get", "verify", "release_info"], normalized_operation
+        ),
+        query=query,
+        purpose=purpose,
+        as_of=as_of,
+        limit=limit,
+        max_chars=max_chars,
+        document_types=document_types,
+        segment_id=segment_id,
+        receipt_id=receipt_id,
+    )
+
+
 def handle_support(
     *,
     operation: Operation = "search",
@@ -163,12 +235,27 @@ def handle_support(
     segment_id: str | None = None,
     receipt_id: str | None = None,
     database: str | Path | None = None,
+    private_database: str | Path | None = None,
 ) -> dict[str, Any]:
     """Execute one read-only DeepLaw operation outside the MCP transport."""
 
-    with DeepLaw(database) as law:
+    private_operation = operation.startswith("private_")
+    selected_database = private_database if private_operation else database
+    if private_operation and selected_database is None:
+        selected_database = resolve_private_database()
+    expected_scope: Literal["official", "user_private"] = (
+        "user_private" if private_operation else "official"
+    )
+    with DeepLaw(selected_database, expected_scope=expected_scope) as law:
+        runtime = _RuntimeContext(
+            official=None if private_operation else law,
+            private=law if private_operation else None,
+            guard_official_epoch=False,
+            guard_private_epoch=False,
+            lock=RLock(),
+        )
         return _execute_support(
-            law,
+            runtime,
             operation=operation,
             query=query,
             purpose=purpose,
@@ -184,8 +271,38 @@ def handle_support(
 def create_mcp_server() -> Server[_RuntimeContext]:
     @asynccontextmanager
     async def lifespan(_: Server[_RuntimeContext]) -> AsyncIterator[_RuntimeContext]:
-        with DeepLaw() as law:
-            yield _RuntimeContext(law=law, lock=RLock())
+        official: DeepLaw | None = None
+        private: DeepLaw | None = None
+        official_explicit = os.environ.get("DEEPLAW_DB") is not None
+        private_explicit = os.environ.get("DEEPLAW_PRIVATE_DB") is not None
+        try:
+            try:
+                official = DeepLaw(expected_scope="official")
+            except FileNotFoundError:
+                if os.environ.get("DEEPLAW_DB") is not None:
+                    raise
+            try:
+                private_database = resolve_private_database()
+                private = DeepLaw(private_database, expected_scope="user_private")
+            except FileNotFoundError:
+                if private_explicit:
+                    raise
+            yield _RuntimeContext(
+                official=official,
+                private=private,
+                guard_official_epoch=(
+                    official is not None
+                    and not official_explicit
+                    and active_official_release_id() == official.release_id
+                ),
+                guard_private_epoch=private is not None and not private_explicit,
+                lock=RLock(),
+            )
+        finally:
+            if private is not None:
+                private.close()
+            if official is not None:
+                official.close()
 
     server: Server[_RuntimeContext] = Server(
         "DeepLaw",
@@ -206,7 +323,7 @@ def create_mcp_server() -> Server[_RuntimeContext]:
         runtime = server.request_context.lifespan_context
         with runtime.lock:
             return _execute_support(
-                runtime.law,
+                runtime,
                 operation=cast(Operation, arguments.get("operation", "search")),
                 query=str(arguments.get("query", "")),
                 purpose=cast(Purpose, arguments.get("purpose", "auto")),
@@ -223,7 +340,7 @@ def create_mcp_server() -> Server[_RuntimeContext]:
 
 def run_mcp(*, transport: str = "stdio") -> None:
     if transport != "stdio":
-        raise ValueError("DeepLaw 0.2 supports only the local stdio MCP transport")
+        raise ValueError("DeepLaw supports only the local stdio MCP transport")
 
     async def serve() -> None:
         server = create_mcp_server()
