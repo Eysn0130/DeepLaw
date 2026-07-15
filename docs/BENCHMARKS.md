@@ -2,24 +2,25 @@
 
 ## 当前 0.3 候选结果
 
-2026-07-16 使用当前 `deeplaw.release/v2` / `deeplaw.sqlite/v4` 本地候选运行 32 项白盒
-smoke set，结果记录在
-[`benchmarks/core-v3-candidate-2026-07-16.json`](../benchmarks/core-v3-candidate-2026-07-16.json)：
+本次运行于 **2026-07-15T17:57:07Z** 开始（北京时间 **2026-07-16 01:57:07**），使用当前
+`deeplaw.release/v2` / `deeplaw.sqlite/v4` 本地候选执行 32 项白盒 smoke set。报告按无歧义的
+UTC 运行日期记录在
+[`benchmarks/core-v3-candidate-2026-07-15.json`](../benchmarks/core-v3-candidate-2026-07-15.json)：
 
 - 32/32 同时通过检索目标与噪声/上下文约束；
 - 其中 6 项明确要求命中的 5 份抽取风险 PDF 只能出现在 `uncertain_evidence`，不能进入主证据；
 - 30 个有排名目标的 case 为 Hit@1 1.0、MRR 1.0；
 - 平均 evidence excerpt 679.719 字符；
 - 109/109 张返回证据的 receipt 往返核验通过率为 1.0；
-- 已打开本地数据库后的 `law.search()` 本机延迟为 p50 12.000 ms、p95 17.250 ms；数据库
+- 已打开本地数据库后的 `law.search()` 本机延迟为 p50 12.363 ms、p95 17.552 ms；数据库
   打开、receipt 往返断言、JSON 序列化和 MCP transport 均不包含在该延迟中；
 - 精确题名聚焦、法名 + 条号、未来时点负例、历史标题纠偏、OCR review flag 和泛词预算均被
   固定断言覆盖；
 - `expected_bucket` 将“检索到风险候选”和“准入主证据”拆开断言，cases SHA-256 为
   `95f52e14b11589850a3a7ecc57fb2bf4614a6be85a979a73869dd37973453625`。
 
-报告绑定 release、database、source manifest、review overlay、case 文件、Python source tree、
-关键实现文件和本机环境。语料二进制及 SQLite 不进入 Git；release 仍是
+报告绑定 release、database、已验签 catalog、review overlay、case 文件、Python source tree、
+关键实现文件、UTC 执行时间和本机环境。语料二进制及 SQLite 不进入 Git；release 仍是
 `partially_verified`、`restricted`、`ai_precheck`。成功只能证明这组已知语料白盒断言，不能
 证明法律内容已获人工批准，也不能证明 DeepLaw 超过任何外部系统。
 

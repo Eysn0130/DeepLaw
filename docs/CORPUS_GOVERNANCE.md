@@ -241,10 +241,29 @@ Tesseract/Poppler 只由显式选择的离线 `vision-consensus` 构建路径调
 写入案件材料或敏感正文。客户端必须显式显示 release 不可用，不能静默切换到网络搜索或
 模型记忆后继续声称是现行法。
 
-官方更新目录使用固定 catalog ID、递增 sequence 和整份 catalog SHA-256；拒绝降序更新和
-“同 sequence 改内容”。客户端经 HTTPS 取得目录与原件，并逐文件校验字节数/SHA-256。
-当前 v0.3.0 尚无公钥签名，因此 GitHub 团队账号与 HTTPS 仍属于信任根；在签名 catalog、
-撤销列表和密钥轮换落地前，不得把它描述为抗仓库接管的安全更新通道。
+官方更新目录使用固定 catalog ID、递增 sequence、整份 catalog SHA-256 和 Ed25519 分离签名；
+拒绝降序更新和“同 sequence 改内容”。bundled 与 HTTPS 目录在解析 JSON、下载原件或构建前，
+必须使用软件包内置公钥验证目录原始字节；缺失签名、未知/已撤销公钥、hash 或签名不一致均
+失败关闭。客户端随后逐文件校验字节数/SHA-256。显式 unsigned bypass 只允许合成测试所用的
+本地文件，不能用于 bundled 目录或任何网络 URL。
+
+当前单维护者发布模式使用 1-of-1 Ed25519 身份。私钥默认固定在
+`~/.config/deeplaw/signing/official-catalog-ed25519.pem`，目录权限 `0700`、文件权限 `0600`，
+不进入仓库、发行包、日志或 CI；仓库仅保存 `trust/` 下的公钥和 `catalogs/*.sig`。维护命令会
+在密钥不存在时自行创建，不需要交互式口令：
+
+```bash
+deeplaw maintainer init-signing-key \
+  --trust-output trust/official-catalog-keys.v1.json
+deeplaw maintainer sign-catalog \
+  --catalog catalogs/deeplaw-official-cn.json
+```
+
+如需把签名身份放到另一个 owner-only 专用目录，可设置 `DEEPLAW_SIGNING_KEY_FILE`。当前选择
+未加密的本机 owner-only 私钥，是为了单维护者和 Codex 能执行无人值守签名；它不抵抗维护者
+OS 账户或主机 root 被攻破。公钥轮换和撤销通过新版软件包中的多 key trust store 完成。该机制
+阻止已安装客户端接受仅由仓库/HTTPS 篡改产生的目录，但不是完整 TUF：独立 release 审批签名、
+在线撤销/supersession 元数据和 freeze 检测仍需后续实现，不能把目录签名扩大描述为这些能力。
 
 ## 禁止事项
 

@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .catalog_signing import (
+    export_trust_store,
+    initialize_signing_key,
+    sign_catalog_file,
+)
 from .evaluate import evaluate_file
 from .ingest import build_release
 from .mcp_server import run_mcp
@@ -111,6 +116,10 @@ def _parser() -> argparse.ArgumentParser:
         sync = official_commands.add_parser(name, help=help_text)
         sync.add_argument("--catalog", help="Local catalog path or HTTPS catalog URL")
         sync.add_argument(
+            "--catalog-signature",
+            help="Detached signature path or HTTPS URL (defaults to <catalog>.sig)",
+        )
+        sync.add_argument(
             "--source-root",
             type=Path,
             help="Use an existing verified source package instead of downloading source files",
@@ -119,6 +128,11 @@ def _parser() -> argparse.ArgumentParser:
             "--pdf-fallback",
             choices=("off", "vision-consensus"),
             default=None,
+        )
+        sync.add_argument(
+            "--allow-unsigned-local-catalog",
+            action="store_true",
+            help="Development only: accept an explicitly selected local unsigned catalog",
         )
     official_commands.add_parser("status", help="Show official catalog installation state")
     official_commands.add_parser("enable", help="Enable the installed official release")
@@ -193,6 +207,26 @@ def _parser() -> argparse.ArgumentParser:
     private_verify.add_argument("--receipt-id", required=True)
     private_verify.add_argument("--db", type=Path)
 
+    maintainer = commands.add_parser(
+        "maintainer",
+        help="Manage the offline official-catalog signing identity",
+    )
+    maintainer_commands = maintainer.add_subparsers(dest="maintainer_command", required=True)
+    init_key = maintainer_commands.add_parser(
+        "init-signing-key",
+        help="Create or inspect the owner-only Ed25519 signing key",
+    )
+    init_key.add_argument("--key-file", type=Path)
+    init_key.add_argument("--trust-output", type=Path)
+    sign_catalog = maintainer_commands.add_parser(
+        "sign-catalog",
+        help="Sign an exact official catalog with the maintainer key",
+    )
+    sign_catalog.add_argument("--catalog", type=Path, required=True)
+    sign_catalog.add_argument("--signature-output", type=Path)
+    sign_catalog.add_argument("--key-file", type=Path)
+    sign_catalog.add_argument("--trust-output", type=Path)
+
     doctor = commands.add_parser("doctor", help="Inspect the active release without changing it")
     doctor.add_argument("--db", type=Path)
     return parser
@@ -246,9 +280,11 @@ def main(argv: list[str] | None = None) -> None:
                 _print_json(
                     sync_official(
                         catalog_source=args.catalog,
+                        catalog_signature_source=args.catalog_signature,
                         source_root=args.source_root,
                         update=args.official_command == "update",
                         pdf_fallback=args.pdf_fallback,
+                        allow_unsigned_local_catalog=args.allow_unsigned_local_catalog,
                     )
                 )
             elif args.official_command == "status":
@@ -262,6 +298,34 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 raise RuntimeError(f"unhandled official command: {args.official_command}")
             return
+        if args.command == "maintainer":
+            key_result = initialize_signing_key(args.key_file)
+            if args.maintainer_command == "init-signing-key":
+                result: dict[str, Any] = dict(key_result)
+                if args.trust_output is not None:
+                    result["trust"] = export_trust_store(
+                        args.trust_output,
+                        key_path=args.key_file,
+                    )
+                _print_json(result)
+                return
+            if args.maintainer_command == "sign-catalog":
+                result = {
+                    **key_result,
+                    **sign_catalog_file(
+                        args.catalog,
+                        signature_path=args.signature_output,
+                        key_path=args.key_file,
+                    ),
+                }
+                if args.trust_output is not None:
+                    result["trust"] = export_trust_store(
+                        args.trust_output,
+                        key_path=args.key_file,
+                    )
+                _print_json(result)
+                return
+            raise RuntimeError(f"unhandled maintainer command: {args.maintainer_command}")
         if args.command == "private":
             if args.private_command == "add":
                 _print_json(

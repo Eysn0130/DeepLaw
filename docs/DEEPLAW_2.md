@@ -368,8 +368,10 @@ DeepLaw 不用口号证明自己。外部主张需要在相同语料、问题、
 
 ### Phase 6：签名、撤销和安全更新
 
-使用成熟供应链规范记录 source → extraction → review → release，防止 rollback、freeze 和
-mix-and-match；不自创密码学协议。
+已落地第一步：bundled/HTTPS 官方 catalog 使用 Ed25519 分离签名、随包公钥信任根、精确字节
+验签和 sequence 防 rollback/改写，网络目录不能绕过。后续继续使用成熟供应链规范记录
+source → extraction → review → release，增加独立 release 审批签名、在线撤销/supersession、
+freeze 与 mix-and-match 防护；不把目录签名冒充完整供应链，也不自创密码学原语。
 
 ## 明确不能做
 

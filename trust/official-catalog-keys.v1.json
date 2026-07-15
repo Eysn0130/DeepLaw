@@ -1,0 +1,11 @@
+{
+  "keys": [
+    {
+      "algorithm": "Ed25519",
+      "keyId": "ed25519:0e3f95bd070fa3b48f84670b18805947f4f3f553fe60346d8abc6b76dcfd84eb",
+      "publicKey": "rwj9nE20VrTNGJoQPWyay10nhBENZ028YfSHY+fq+64=",
+      "status": "active"
+    }
+  ],
+  "schemaVersion": "deeplaw.catalog-trust/v1"
+}
