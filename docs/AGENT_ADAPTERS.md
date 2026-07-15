@@ -219,7 +219,7 @@ in a later, scoped Analytix change with these invariants:
    `verify`. Do not place broad retrieval results in the main context.
 7. Fail closed. If the process, release, receipt, or version check fails, report
    that DeepLaw is unavailable. Do not fall back silently to model memory, web
-   search, generated Wiki text, or case-private retrieval.
+   search, generated topic-page text, or case-private retrieval.
 8. Log only operational metadata needed for diagnostics. Do not log raw legal
    queries when they may encode case facts.
 

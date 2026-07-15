@@ -1,251 +1,51 @@
+<p align="center">
+  <strong>简体中文</strong> · <a href="README_EN.md">English</a>
+</p>
+
 <h1 align="center">DeepLaw</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eysn0130/DeepLaw/main/assets/brand/deeplaw-lockup.svg" width="560" alt="DeepLaw — source-bound legal evidence for agents" />
+  <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 磨砂玻璃字标与 Architecture 2.0 次级标签" />
 </p>
 
 <p align="center">
-  <strong>把法律检索从“相似文本注入”升级为可执行、可拒答、可校验的证据协议。</strong><br />
-  Version-aware legal evidence infrastructure for Codex, Claude Code and OpenCode; designed for future Analytix integration.
+  <strong>面向 Agent 的可验证知识库。</strong><br />
+  Files in. Verifiable knowledge out.
+</p>
+
+<p align="center">
+  <sub>Architecture 2.0 是目标架构 · 当前可运行版本为 0.2.0 alpha</sub>
 </p>
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/status-alpha-F2A65A?style=flat-square" alt="Alpha" />
+  <img src="https://img.shields.io/badge/runtime-0.2.0%20alpha-17202A?style=flat-square" alt="Runtime 0.2.0 alpha" />
   <img src="https://img.shields.io/badge/Python-3.11%20%7C%203.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 and 3.13" />
-  <img src="https://img.shields.io/badge/MCP-read--only-6F5CF1?style=flat-square" alt="Read-only MCP" />
-  <img src="https://img.shields.io/badge/context-%E2%89%A45%20cards%20%2F%206000%20chars-0F766E?style=flat-square" alt="At most five cards and 6000 characters" />
-  <a href="https://github.com/Eysn0130/DeepLaw/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache-2.0" /></a>
+  <img src="https://img.shields.io/badge/MCP-read--only-18A999?style=flat-square" alt="Read-only MCP" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eysn0130/DeepLaw/main/assets/readme/evidence-execution-badge.svg" width="250" height="55" alt="DeepLaw Evidence Execution Engine — source, version, proof and explicit gaps" />
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#deeplaw-如何工作">工作原理</a> ·
+  <a href="docs/DEEPLAW_2.md">2.0 技术设计</a> ·
+  <a href="docs/BENCHMARKS.md">评测</a> ·
+  <a href="SECURITY.md">安全</a>
 </p>
 
 ---
 
-DeepLaw 是一个独立、只读、内容寻址的中国法律证据底座。它不把向量相似度、图关系或
-LLM 生成页面当作法律真相；它先把问题编译成有限的证据义务，再在固定法源版本中执行检索，
-最后只向 Agent 交付一个有界、可验证且能明确暴露缺口的 proof packet。
-
-这不是“换一种 RAG”。DeepLaw 的核心抽象是 **Evidence Execution Engine**：RAG、
-GraphRAG、树检索、reranker 和 Wiki 都可以成为未来的候选生成器，但永远不能绕过版本门、
-权威层、上下文预算、缺口判断和 receipt 校验。
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eysn0130/DeepLaw/main/assets/readme/architecture.svg" width="1120" alt="DeepLaw architecture: source, version gate, query plan, evidence graph, bounded proof pack, immutable receipt and agent" />
+  <img src="assets/readme/architecture-2-glass.png" width="1180" alt="DeepLaw Architecture 2.0 目标架构：文件进入知识库，经定位、连接和解释形成证据包并交给 Agent" />
 </p>
 
-## 为什么需要 DeepLaw
+上图是 Architecture 2.0 目标，不是当前运行截图。当前 `0.2.0` 能把 DOCX 和 PDF 构建成
+只读、版本化、可追溯的 Agent Knowledge Base，在知识库内部完成有界定位、连接和核验，再向
+Agent 交付小型 **Evidence Pack**：主证据、不确定证据、显式缺口和可复核回执。2.0 将补齐
+source-bound Explain、TXT 输入和最小充分证据选择。
 
-传统知识库通常优化“找到更多相似内容”，而法律研判首先需要回答另外几件事：这是哪一个
-文件、哪个版本、在什么时间范围内、为什么命中、有哪些相反规则、还有什么没有被证明。
-
-| 常见方案 | 典型短板 | DeepLaw 的约束 |
-| --- | --- | --- |
-| 向量 RAG | 泛词产生大量近似片段；高 recall 直接变成上下文噪声 | 精确检索和中文 FTS 优先；语义通道只能有界兜底 |
-| GraphRAG | 图边可能由模型推断；社区摘要容易被误当事实 | 图只做导航；每条边绑定来源 segment、hash 和 review status |
-| LLM Wiki | 结构好读，但派生叙述会老化、合并版本或丢失例外 | Wiki 只能重建和删除，不能覆盖原文或成为最终引证 |
-| 长上下文全文注入 | 成本、注意力稀释和 prompt cache 退化 | `search` 最多 5 卡/6000 字，全文必须按 `segment_id` 二次读取 |
-| 关键词规则 | 命中可解释，但不知道任务到底缺什么 | QueryPlan 把请求编译成 primary rule、时效、要件、反证等义务 |
-
-DeepLaw 的创新点不是“同时使用更多检索器”，而是把检索结果变成一个可审计执行结果：
-
-```text
-Question
-  -> closed QueryPlan
-  -> exact / article / lexical candidates
-  -> temporal trust buckets
-  -> provenance-carrying legal graph
-  -> obligation coverage + explicit gaps
-  -> bounded proof packet
-  -> source/segment/release receipt
-```
-
-如果义务没有覆盖，DeepLaw 返回 `gaps`；如果时效元数据没有通过 release 级核验，候选进入
-`uncertain_evidence`；如果已知效力区间不含目标日期，候选不会进入主证据。它不会为了给出
-“看起来完整”的答案而回退到模型记忆或未核验网络搜索。
-
-## 已实现的能力
-
-### 1. Evidence execution
-
-- 确定性 `QueryPlan`：8 类封闭证据义务、稳定 plan ID 和硬边界；
-- 三种路由：精确法条、主题导航、研究问题；
-- `obligation_coverage`：区分 `covered`、`uncertain` 和 `gap`；
-- 结构化 `gaps`：精确目标未解析、时效未核验、区间外、主证据缺失等；
-- 证据卡总量、excerpt 字符数、图路径和 hop 数均有硬上限。
-
-### 2. Authority and time
-
-- 原件路径、格式、大小和 SHA-256 构建前校验；
-- 法名、文号、别名、条款、发布/施行/失效时间和状态；
-- `as_of` 使用 `verified_in_scope` / `unverified_metadata` /
-  `outside_effective_interval` 三分法，未知时间不再混入主证据；
-- hash 绑定的 review overlay 可以收窄错误状态，但 AI-only overlay 无权把 release 标为
-  `verified` 或批准再分发；
-- 从来源 segment 精确识别的废止、修订、替代、实施和引用关系进入带 provenance 的
-  `legal_edges`；overlay 中的关系只作为 hash 绑定的治理提案，不会直接进入运行时图。
-
-### 3. DeepLaw Vision
-
-- DOCX 直接解析 OOXML，保留段落、表格行和脚注引用；
-- 文本 PDF 优先读取原生文本层；
-- 每页记录 image/native/OCR/selected text hash、字符数、一致度、OCR 置信度和风险标志；
-- 原生层异常时才启动本地 OCR；低置信度或原生/OCR 分歧保持 `review_required`；
-- 人工校对文件必须同时绑定源 PDF SHA 和渲染页 SHA，并声明人工身份、时区时间和视觉比对
-  attestation；管线自身不能生成或冒充 `human_reviewed`。
-
-### 4. Immutable releases
-
-- release ID 绑定来源 metadata、提取版本/配置、页级证据、segment hash、关系图和 SQLite
-  schema；
-- 同 ID 不覆盖，构建目录原子发布；
-- SQLite 使用 `mode=ro&immutable=1`，运行时无语料写接口；
-- `receipt_id` 绑定 release/document/segment/source/text hash；
-- `verify` 会重算 segment hash 并验证 receipt，不把成功表述成“重新核验了官方网站”。
-
-### 5. One small Agent surface
-
-DeepLaw 只暴露一个 MCP leaf tool：`law_support`。内部只有四个只读操作：
-
-| Operation | 作用 |
-| --- | --- |
-| `search` | 返回有界主证据、不确定证据、图路径、覆盖状态和缺口 |
-| `get` | 按精确 `segment_id` 读取被选中的规范文本 |
-| `verify` | 验证 receipt 和当前不可变 release 中的 segment hash |
-| `release_info` | 检查固定 release、schema、审核与再分发状态 |
-
-普通数据分析、SQL、代码或文档任务不应经过 DeepLaw。安装插件不等于每轮自动调用；当前
-插件把只读工具注册给宿主，是否能在 provider tool schema 物化前完全隐藏它取决于宿主。
-未来 Analytix 接入必须把显式法律意图门禁放在 schema 物化之前，并用 inactive A/B 测试证明
-普通任务零影响。
-
-## 返回结果长什么样
-
-下面是一个可由当前运行时生成的“零命中”响应形态，不包含任何法源正文；ID 使用示意值：
-
-```json
-{
-  "schema_version": "deeplaw.search-response/v2",
-  "release_id": "lawrel_11111111111111111111111111111111",
-  "mode": "research",
-  "query_plan": {
-    "schema_version": "deeplaw.query-plan/v1",
-    "plan_id": "lawplan_641f0c887156e56449cf71cb2453d87b",
-    "query": "某规范文件是否现行",
-    "purpose": "auto",
-    "route": "research",
-    "as_of": null,
-    "obligations": [
-      {
-        "id": "primary_rule",
-        "role": "support",
-        "required": true,
-        "query_cues": ["purpose:auto", "route:research"]
-      },
-      {
-        "id": "temporal_status_version",
-        "role": "temporal",
-        "required": true,
-        "query_cues": ["text:现行"]
-      },
-      {
-        "id": "exceptions_counterevidence",
-        "role": "counterevidence",
-        "required": true,
-        "query_cues": ["route:research"]
-      }
-    ],
-    "bounds": {
-      "max_query_chars": 8000,
-      "max_obligations": 8,
-      "max_query_cues_per_obligation": 8
-    },
-    "channels": ["exact_metadata", "article_locator", "chinese_fts"],
-    "document_types": [],
-    "max_evidence": 5,
-    "max_chars": 3500,
-    "max_graph_paths": 4,
-    "max_hops": 1,
-    "graph_used": false,
-    "temporal_reference_date": null,
-    "temporal_reference_source": "release_review_unavailable",
-    "vector_used": false,
-    "wiki_used": false
-  },
-  "evidence": [],
-  "uncertain_evidence": [],
-  "graph_paths": [],
-  "obligation_coverage": [
-    {
-      "obligation_id": "primary_rule",
-      "role": "support",
-      "required": true,
-      "status": "gap",
-      "evidence_segment_ids": [],
-      "graph_path_ids": []
-    },
-    {
-      "obligation_id": "temporal_status_version",
-      "role": "temporal",
-      "required": true,
-      "status": "gap",
-      "evidence_segment_ids": [],
-      "graph_path_ids": []
-    },
-    {
-      "obligation_id": "exceptions_counterevidence",
-      "role": "counterevidence",
-      "required": true,
-      "status": "gap",
-      "evidence_segment_ids": [],
-      "graph_path_ids": []
-    }
-  ],
-  "gaps": [
-    {
-      "code": "required_obligation_uncovered",
-      "obligation_id": "primary_rule",
-      "message": "当前有界检索未覆盖该必需检索义务。",
-      "blocking": true,
-      "candidate_count": 0
-    },
-    {
-      "code": "required_obligation_uncovered",
-      "obligation_id": "temporal_status_version",
-      "message": "当前有界检索未覆盖该必需检索义务。",
-      "blocking": true,
-      "candidate_count": 0
-    },
-    {
-      "code": "required_obligation_uncovered",
-      "obligation_id": "exceptions_counterevidence",
-      "message": "当前有界检索未覆盖该必需检索义务。",
-      "blocking": true,
-      "candidate_count": 0
-    },
-    {
-      "code": "no_primary_evidence",
-      "obligation_id": null,
-      "message": "当前有界检索未形成可进入主证据桶的候选。",
-      "blocking": true,
-      "candidate_count": 0
-    }
-  ],
-  "notices": [
-    "检索结果是研究证据候选，不等同于本案法律适用结论。",
-    "DeepLaw 未使用模型记忆、自动 Web 回退或向量 top-k 注入。",
-    "当前 release 未找到足够证据；这不表示相关法律不存在。",
-    "当前 release 缺少 reviewed_on，无法把未指定 as_of 的问法解释为已复核的现行状态。"
-  ],
-  "next_questions": [],
-  "total_excerpt_chars": 0
-}
-```
-
-空的 `evidence` 不是失败，也不表示相关法律不存在；它表示当前固定 release 无法在既定信任
-边界内完成该义务。
+`DeepLaw` 是产品名，Architecture 2.0 是下一代架构方向；当前可运行包仍为 `0.2.0` alpha。
+主页不会把研究目标伪装成已完成能力。
 
 ## 快速开始
 
@@ -258,7 +58,7 @@ uv sync --extra dev
 uv run deeplaw --version
 ```
 
-使用操作者自己合法取得并保留的 source package：
+构建操作者自己合法取得、且有权处理并保留的 source package：
 
 ```bash
 export DEEPLAW_SOURCE_ROOT="/path/to/legal-source-package"
@@ -267,62 +67,192 @@ export DEEPLAW_SOURCE_MANIFEST="$DEEPLAW_SOURCE_ROOT/manifest.json"
 uv run deeplaw build \
   --source-root "$DEEPLAW_SOURCE_ROOT" \
   --manifest "$DEEPLAW_SOURCE_MANIFEST" \
-  --pdf-fallback vision-consensus \
-  --allow-needs-ocr \
   --output-root "$HOME/.deeplaw/releases" \
   --activate
-```
 
-`--allow-needs-ocr` 只允许生成明确标记为不完整的 candidate release，不会把低质量页面升级
-为已审核。生产发布必须使用源 SHA 命名的人工页审文件，并通过独立的法源、版本、隐私和许可
-闸门。仓库内的 `governance/core-2026-07-14.ai-review.json` 只适用于其绑定的 28 个来源
-hash；其他 source package 不得复用该 overlay。匹配该 manifest 时可显式追加
-`--review-overlay governance/core-2026-07-14.ai-review.json`，不匹配会失败关闭。
-
-```bash
 uv run deeplaw doctor
 uv run deeplaw search --query "刑法第二百六十六条" --as-of 2024-07-01
-uv run deeplaw get --segment-id "seg_..."
-uv run deeplaw verify --segment-id "seg_..." --receipt-id "lawrcpt_..."
-uv run deeplaw mcp --stdio
 ```
 
-单独审查 PDF 的页级证据：
+仓库不分发受限法源、案件材料或生成的 SQLite release。`build` 成功只表示产物通过了机器
+闸门，不表示资料已经完成人工法律审核。
 
-```bash
-uv run deeplaw pdf-evidence --source "/path/to/document.pdf"
+## DeepLaw 如何工作
+
+<p align="center">
+  <img src="assets/readme/knowledge-cycle.png" width="1120" alt="DeepLaw Architecture 2.0 目标知识闭环：Ingest、Organize、Locate、Connect、Explain、Verify 围绕 Evidence Core，并交付 Evidence、Gaps 与 Receipts" />
+</p>
+
+Architecture 2.0 用六个核心知识动作定义从文件到 Agent 的闭环；下表同时标明 `0.2.0` 与
+2.0 目标的边界：
+
+| 动作 | 作用 | 当前状态与边界 |
+| --- | --- | --- |
+| **Ingest** | 校验文件、解析内容、保留页码/段落/hash | 当前支持 DOCX/PDF；处理成功不等于人工审核通过 |
+| **Organize** | 构建层级、版本、关系和 Knowledge Map | 当前保留标题/条文分段和顺序；完整法律层级属于 2.0 目标 |
+| **Locate** | 精确定位题名、文号、条款、关键词和相关片段 | 泛词不会展开成无限候选 |
+| **Connect** | 连接引用、修订、废止、替代、实施和例外关系 | 当前仅 provenance-bound 单跳文档关系；定义、范围和 challenge closure 属于 2.0 目标 |
+| **Explain** | 生成有来源的导航、短摘要和问题分解 | 2.0 目标；当前只有 excerpt 和固定的下一步问题 |
+| **Verify** | 执行来源、时效、证据义务、预算、缺口和 receipt | 当前已实现基础门禁；witness 与 replay 属于 2.0 目标 |
+
+`Deliver` 是最终输出动作：交付最多五张证据卡，并按 ID 二次读取所选 segment 的规范化抽取
+文本；若 `truncated=true`，可在契约上限 6000 字符内提高 `max_chars` 后重取。Agent 不接收
+内部候选池。抽取文本仍须通过 official source 与 locator 核对。任何 2.0 派生解释都必须回到
+精确 source segment 才能成为可引用证据。
+
+## Architecture 2.0 目标：Evidence Core
+
+<p align="center">
+  <img src="assets/readme/evidence-core.png" width="1120" alt="DeepLaw Architecture 2.0 目标 Evidence Core：来源与版本、知识地图、证据义务、限制与缺口、回执与重放" />
+</p>
+
+Evidence Core 是 2.0 目标架构。`0.2.0` 已实现其中的不可变来源、基础 Knowledge Map、
+Evidence Duties、有界结果、gaps 与 receipts；coverage witness、挑战结果和 replay trace 尚未
+实现。
+
+### Sources & Versions
+
+每张主证据都必须绑定固定 release、来源 URL、source hash、segment hash 和精确定位。目标时点
+以 `verified_in_scope`、`unverified_metadata`、`outside_effective_interval` 三分法处理；未知
+时效不会混入已验证主证据。
+
+### Knowledge Map
+
+当前 release 保留标题/条文分段、顺序，以及有来源的单跳关系。2.0 目标会扩展完整法律层级，
+并把模型或统计发现的候选关系放入可删除、可重建、固定到 release 的 discovery sidecar；它
+只能帮助 Locate / Connect，不能授予权威。
+
+### Evidence Duties
+
+问题先编译为封闭 `QueryPlan`。当前有八类 Duty：primary rule、exact citation、temporal
+status、definitions、interpretation、procedure、counterevidence 和 case reference。没有覆盖的
+必需 Duty 进入 `gaps`，而不是由模型记忆补齐。
+
+### Limits & Gaps
+
+搜索最多返回五张卡；导航和精确查询通常更少。字符预算、关系路径和 hop 数都有硬上限。
+DeepLaw 区分主证据、不确定证据、区间外候选和 blocking/non-blocking gap。
+
+### Receipts & Replay
+
+`receipt_id` 绑定 release、document、segment、source hash 和 text hash。`verify` 会重新计算
+当前不可变 release 中的 segment hash。2.0 目标还会增加 coverage witness 与短 replay trace，
+解释为什么返回这些证据、拒绝了哪些候选。
+
+## Architecture 2.0 目标能力
+
+### 1. Knowledge Release
+
+- 原始文件 hash、来源声明、文档身份与版本；
+- 当前保留标题/条文分段和顺序；2.0 目标扩展为文件 → 编 → 章 → 节 → 条 → 款 → 项；
+- 页码、段落、抽取方式、风险和审核状态；
+- content-addressed release，不覆盖同 ID；
+- SQLite `mode=ro&immutable=1`，运行时无语料写接口。
+
+### 2. Evidence-first selection
+
+当前运行时已经具备 QueryPlan、时效门、证据卡、coverage、gaps 与 receipt。2.0 的关键增量
+是把选择顺序改成：
+
+```text
+Question
+  → Evidence Duties
+  → bounded discovery
+  → source / version / extraction admission
+  → limitation and counterevidence challenges
+  → minimal sufficient evidence set
+  → Evidence Pack
 ```
+
+目标不是选“分数最高的五张”，而是在硬预算内选能覆盖必需 Duty 的最小证据集。
+
+### 3. Evidence capability types
+
+这是 2.0 目标。证据风险不会压成单一 confidence 分数。Integrity、source identity、authority metadata、
+temporal、extraction 和 provenance 是正交能力；只有确定性校验或人工 attestation 才能提升
+能力类型，模型自评不能升级。
+
+### 4. Challenges before confidence
+
+这是 2.0 目标。系统主动检查时效变化、例外、定义、范围、交叉引用、抽取风险和冲突。每项只能是
+`satisfied`、`unresolved` 或 `not_applicable`；`unresolved` 必须保留为 gap。
+
+### 5. Public knowledge, private cases
+
+DeepLaw 只承载公用、只读知识。案件项目上传、事实、聊天、身份、交易与 Agent memory 必须留
+在宿主私有项目中，不得写入公共 release、sidecar、日志或公开 benchmark。这是强制集成
+边界；`0.2.0` 没有内容级 DLP 或私有资料分类器，宿主必须在调用 DeepLaw 之前完成隔离和拒绝。
+
+完整 2.0 设计、形式化不变量、实现阶段和“不能做”的事项见
+[`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md)。
+
+## 当前已经实现什么
+
+| 能力 | `0.2.0` 状态 |
+| --- | --- |
+| 文件处理 | DOCX 直接解析；文本 PDF 原生层优先；低质量页可进入本地视觉共识管线 |
+| 不可变发布 | source/segment/release hash、原子发布、只读 SQLite、receipt |
+| 精确定位 | 题名、别名、文号、条款与中文 FTS |
+| QueryPlan | 8 类封闭 Evidence Duty、稳定 plan ID 和硬边界 |
+| 时效 | 目标日期、已验证区间、不确定元数据和区间外候选分离 |
+| Knowledge Map | provenance-bound 单跳关系与有限路径 |
+| Agent 接口 | 一个只读 MCP leaf tool，四个 operation |
+| 宿主 | Codex、Claude Code、OpenCode 适配；Analytix 仅有未来设计，尚未修改 |
+
+当前还没有实现：签名 release 审批/撤销、完整法律双时态事件账本、coverage-first 最小集、
+coverage witness、replay trace、外部 held-out 中文法律 benchmark，以及 Analytix 的 schema 前
+激活门。这些不会被当前主页表述成已完成。
+
+## 一个小型 Agent 接口
+
+DeepLaw 只暴露一个 MCP leaf tool：`law_support`。内部四个 operation 全部只读：
+
+| Operation | 作用 |
+| --- | --- |
+| `search` | 返回有界证据、不确定证据、覆盖状态、关系路径和 gaps |
+| `get` | 按精确 `segment_id` 读取规范化抽取文本，并显式返回 `truncated` |
+| `verify` | 验证 receipt 与当前 release 中的 segment hash |
+| `release_info` | 检查固定 release、schema、审核与再分发状态 |
+
+响应骨架：
+
+```json
+{
+  "release_id": "lawrel_...",
+  "query_plan": { "plan_id": "lawplan_...", "obligations": [] },
+  "evidence": [{ "segment_id": "seg_...", "receipt_id": "lawrcpt_..." }],
+  "uncertain_evidence": [],
+  "obligation_coverage": [],
+  "gaps": [],
+  "total_excerpt_chars": 0
+}
+```
+
+完整 schema 位于 [`contracts`](contracts)，真实运行时不会把示意 ID 当作有效 ID。
 
 ## Agent 接入
 
-- Codex / Claude Code 插件：[`plugins/deeplaw`](plugins/deeplaw)
-- OpenCode 配置：[`adapters/opencode`](adapters/opencode)
-- 适配器说明：[`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md)
-- Analytix 下一步接入设计：[`docs/ANALYTIX_INTEGRATION.md`](docs/ANALYTIX_INTEGRATION.md)
+| 宿主 | 当前入口 | 激活边界 |
+| --- | --- | --- |
+| Codex | [`plugins/deeplaw`](plugins/deeplaw) | Skill 明确要求后使用只读 MCP |
+| Claude Code | [`plugins/deeplaw`](plugins/deeplaw) | 同一插件内的 Skill + MCP |
+| OpenCode | [`adapters/opencode`](adapters/opencode) | 默认 deny，由专用 agent 显式授权 |
+| Analytix | [`docs/ANALYTIX_INTEGRATION.md`](docs/ANALYTIX_INTEGRATION.md) | 未来 turn-scoped 接入；当前未改代码 |
 
-当前没有修改 Analytix。未来接入必须保证 inactive 时普通任务的 route、provider-visible tool
-schema、stable prefix、request body 和 token 数与未安装 DeepLaw 的基线等价；法律服务损坏或
-离线也不能拖垮 DuckDB、SQLite、代码和文档能力。
+安装插件不等于每轮自动调用。普通代码、数据、SQL 或文档任务不应进入 DeepLaw。未来
+Analytix 接入必须在 provider tool schema 物化前完成法律意图门禁，并用 inactive A/B 证明
+普通任务的 route、stable prefix、request body、Token 和延迟零退化。
 
-## 核心包审计状态
+## 文件与抽取质量
 
-仓库提供的是代码和 metadata review overlay，不分发 28 份 DOCX/PDF、完整规范文本、案例
-材料或生成的 SQLite release。当前 overlay 已逐项完成 AI precheck，并在适用且有依据时补充
-文号、发布机关、日期、状态风险和关系提案；它并不声称每一字段都已补齐。其 `reviewerKind`
-是 `ai_precheck`，release 只能是 `partially_verified` 且
-`redistributionStatus=restricted`。
+- DOCX：直接解析 OOXML，保留段落、表格行和脚注引用；
+- 文本 PDF：优先读取原生文本层；
+- 低质量 PDF：按页渲染并比较 native/OCR/selected text hash；
+- OCR：只在原生层失败时启动本地 fallback；
+- 人工校对：必须绑定 source PDF hash 和 rendered-page hash，并记录人工身份、角色、时间与比对声明；
+- 低置信度或 native/OCR 分歧：保持 `review_required`，管线不能冒充 `human_reviewed`。
 
-四个已被硬门禁阻断的高风险项：
-
-- 2020 刑法整合文本在 2024-03-01 后不能脱离修正案（十二）单独作为当前全文；
-- 已于 2021-05-01 废止的行政法规只能进入历史证据桶；
-- 2021 反洗钱监管办法在 2025-12-01 后必须与修改决定组合；
-- 原包误标“现行整合文本”的央行规章实际缺少 2018/2025 修改，已重命名并限制为历史候选。
-
-完整边界见 [`docs/SOURCE_AUDIT_2026-07-14.md`](docs/SOURCE_AUDIT_2026-07-14.md) 和
-[`governance/core-2026-07-14.ai-review.json`](governance/core-2026-07-14.ai-review.json)。
-
-## 质量、评测与诚实边界
+## 评测与诚实边界
 
 ```bash
 uv lock --check
@@ -332,56 +262,60 @@ uv run deeplaw eval --cases evals/core-2026-07-14.jsonl --limit 5
 git diff --check
 ```
 
-现有 smoke benchmark 用于验证固定核心包上的命中、上下文预算和 receipt 链路，不是跨系统
-冠军榜。当前 v0.2 本地候选在 32 项已知语料白盒 smoke case 上为 32/32；结果、hash 和限制见
-[`benchmarks/core-v2-candidate-2026-07-15.json`](benchmarks/core-v2-candidate-2026-07-15.json)。
-DeepLaw 只有在公开 held-out 中文法律集上同时报告版本正确率、引用 span、义务覆盖、
-反证召回、上下文字符、延迟和成本后，才会发布可比较的领先性结论。
+当前本地 candidate 在 32 项已知语料白盒 smoke case 上为 32/32，109/109 张返回证据的
+receipt 往返核验通过。它绑定特定 release、database、case、源码与环境，并且不是盲测、
+留出集、人工法律金标或跨系统冠军榜。完整 hash、指标与限制见
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)。
 
-换句话说：架构目标可以领先，市场宣传必须等证据。
+DeepLaw 只有在外部 held-out 集、专家中文法律集、mutation suite 和非法律任务激活测试同时
+通过后，才会发布领先性结论。架构可以有野心，性能主张必须有证据。
 
-## 项目边界
+## 法源与安全边界
 
-DeepLaw 不做以下事情：
-
+- DeepLaw 输出研究证据候选，不是法律意见、事实认定或裁判结论；
+- 日期匹配不等于规则适用于本案；
+- 查询时不自动把公网内容加入主证据；
+- 模型不能决定修订、废止、冲突或优先级；
 - 不预测有罪、量刑、责任或案件结果；
-- 不把日期命中等同于本案适用；
-- 不把案件私有文档、聊天、身份或交易数据写入公共 release；
-- 不让 LLM 决定修订、废止或覆盖法律原文；
-- 不在 MCP 运行时采集、构建、激活或修改语料；
-- 不因一个数据字段叫“诈骗”就把普通数据分析带入法律工作流。
+- 宿主和操作者不得把案件私有材料写入或发送到公共知识库；
+- 不在 issue、PR、日志、截图或 benchmark 中发布受限法源与案件信息。
 
-DeepLaw 输出的是法律研究证据候选，不是法律意见、事实认定或裁判结论。
+语料治理见 [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md)，安全报告流程见
+[`SECURITY.md`](SECURITY.md)。
 
 ## 文档地图
 
-- 架构与信任模型：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- 语料治理：[`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md)
-- Benchmark：[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)
-- 上游研究与复用边界：[`docs/UPSTREAM_REUSE.md`](docs/UPSTREAM_REUSE.md)
-- 安全策略：[`SECURITY.md`](SECURITY.md)
-- 贡献指南：[`CONTRIBUTING.md`](CONTRIBUTING.md)
+| 文档 | 内容 |
+| --- | --- |
+| [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | DeepLaw Architecture 2.0 完整技术设计与研究门禁 |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 当前 `0.2.0` 实现、存储与运行时事实 |
+| [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) | 法源、审核、许可、发布和更新治理 |
+| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | 可复现 smoke 结果与下一阶段评价协议 |
+| [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) | Codex、Claude Code 与 OpenCode 适配 |
+| [`docs/ANALYTIX_INTEGRATION.md`](docs/ANALYTIX_INTEGRATION.md) | Analytix 未来接入和 zero-impact 门禁 |
+| [`docs/SOURCE_AUDIT_2026-07-14.md`](docs/SOURCE_AUDIT_2026-07-14.md) | 当前受限核心包的 hash-bound AI precheck |
 
 ## Roadmap
 
-- [x] 不可变 SQLite release、receipt 和只读 MCP
-- [x] QueryPlan、义务覆盖、显式 gaps 和严格时间分桶
-- [x] provenance graph 与单跳有界导航
-- [x] DeepLaw Vision 页级证据和人工审校 attestation
-- [x] 28 项 hash-bound AI metadata precheck
-- [ ] 双人法源/OCR/许可签字与签名 release
-- [ ] 受控更新、撤销、supersession feed 和差分验证
-- [ ] held-out 中文法律检索/版本/反证公开 benchmark
-- [ ] 通过净增益门禁后的可选语义候选通道
+- [x] 不可变 Knowledge Release、receipt 和只读 MCP
+- [x] QueryPlan、Evidence Duties、时效分桶和显式 gaps
+- [x] provenance-bound Knowledge Map 与单跳有限导航
+- [x] 页级 PDF 证据和人工审校 attestation
+- [x] Codex、Claude Code、OpenCode 适配
+- [ ] coverage witness、challenge result 和 replay trace
+- [ ] coverage-first 最小充分证据集
+- [ ] TXT 输入、完整法律层级与 source-bound Explain
+- [ ] Corpus Coverage Manifest 与法律双时态事件账本
+- [ ] 签名发布、撤销、supersession feed 和安全更新
+- [ ] 外部 held-out 中文法律证据 benchmark
 - [ ] Analytix turn-scoped 激活与 inactive zero-impact A/B gate
 
 ## Community and license
 
-欢迎使用 synthetic fixture 提交可复现的检索、版本、解析和安全问题。请不要在 issue、PR、
-日志或截图中发布案件私有材料、完整法源正文、凭证或生成 release。参见
+欢迎使用 synthetic fixture 提交可复现的定位、版本、解析和安全问题。参见
 [`CONTRIBUTING.md`](CONTRIBUTING.md)、[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) 和
 [`SECURITY.md`](SECURITY.md)。
 
 DeepLaw 源代码按 [Apache License 2.0](LICENSE) 发布。该许可不自动授予外部法源、案例、
-网站版式、第三方商标、模型或工具的再分发权。品牌资产为 DeepLaw 原创；名称仍建议在商业
-发布前完成目标司法辖区的专业商标检索。
+网站版式、第三方商标、模型或工具的再分发权。品牌资产由 image2 生成并经项目审核使用；
+名称仍应在商业发布前完成目标司法辖区的专业商标检索。

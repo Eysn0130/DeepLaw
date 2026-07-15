@@ -88,7 +88,8 @@ wide semantic top-k.
 
 ## Answer from evidence, not memory
 
-- Separate retrieved source text from the agent's interpretation.
+- Separate retrieved normalized segment text from the agent's interpretation,
+  and retain the official-source locator for comparison.
 - Identify the release, source title, document number when present, exact article
   or locator, status, effective interval, and official source URL.
 - State when temporal applicability or authority relationships require human
@@ -101,7 +102,7 @@ wide semantic top-k.
 - Treat notices, missing sources, ambiguous versions, failed receipts, and
   `temporal_review_required` as limitations, not details to hide.
 - If DeepLaw is unavailable or has no verified source, say so. Do not silently
-  substitute model memory, a generated Wiki, embeddings, or web search.
+  substitute model memory, generated topic pages, discovery indexes, or web search.
 - Never present the result as legal advice, a verdict, a finding of fact, or a
   complete authority set.
 

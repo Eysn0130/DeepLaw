@@ -70,8 +70,7 @@ Code、OpenCode 或未来 Analytix 的模型一定遵守 Skill；必须在每个
 - 去标识化多规则事实问题；
 - 非法律任务误激活；
 - OCR 逐页人工金标；
-- 相同数据集上的 BM25、dense、gbrain-style hybrid/RRF、PageIndex、图谱增强和完整
-  DeepLaw 梯子基线；
+- 相同数据集上的纯词法、纯语义、混合定位、结构树、关系增强和完整 DeepLaw 梯子基线；
 - latency、内存、磁盘、模型调用成本、置信区间和失败样本。
 
 错误版本率、来源/hash 覆盖率和引用区间错误率是硬门禁，不能用平均召回率抵消。在完成这组

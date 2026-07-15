@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "deeplaw"
 version = "0.2.0"
-description = "Version-aware, read-only Chinese legal retrieval for AI agents"
+description = "Verifiable, read-only agent knowledge base for Chinese legal sources"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "Eysn0130" }]
-keywords = ["law", "mcp", "rag", "legal-research", "chinese-law"]
+keywords = ["law", "mcp", "agent-knowledge-base", "legal-research", "chinese-law"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: Apache Software License",

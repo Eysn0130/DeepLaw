@@ -13,7 +13,8 @@ required for a particular release artifact.
 No source file or substantial code fragment from the research projects listed
 below has been copied, modified, vendored, or redistributed in the current
 DeepLaw source tree. Their algorithms and architecture informed design
-decisions documented in [`docs/UPSTREAM_REUSE.md`](docs/UPSTREAM_REUSE.md).
+decisions documented in the
+[upstream reuse audit](https://github.com/Eysn0130/DeepLaw/blob/main/docs/UPSTREAM_REUSE.md).
 
 If that status changes, this file must be updated in the same change with:
 

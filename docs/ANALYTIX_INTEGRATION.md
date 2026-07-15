@@ -64,7 +64,7 @@ DeepLaw `0.2.0` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transp
 | operation | 用途 | 约束 |
 |---|---|---|
 | `search` | 返回小候选集 | 最多 5 张 evidence card，总摘要最多 6000 字符 |
-| `get` | 按稳定 `segment_id` 获取原文 | 只能读取已选定 segment，不做宽泛整库返回 |
+| `get` | 按稳定 `segment_id` 获取规范化抽取文本 | 只能读取已选定 segment；显式返回 `truncated`，必要时提高 `max_chars`；仍须按 source 与 locator 核对 |
 | `verify` | 校验 segment/receipt | 重算 segment 文本 hash，并校验 receipt 对 release、document、segment 和已记录 source/segment hash 的绑定；不重哈希原件，不判断案件适用 |
 | `release_info` | 获取当前 release 元数据 | 用于宿主预检和版本绑定 |
 
@@ -335,7 +335,7 @@ DeepLaw 在 Analytix 中应遵循已接受的 Context Epoch 规则：
 - 正式报告保存确切 release 和 receipt，不依赖后来变化的 ACTIVE 指针。
 
 会话 transcript 可以保存用户和最终回答，但检索候选、原始工具输出和法律正文的持久化必须
-遵守有界 public projection。不得把每次对话自动写回 DeepLaw Wiki 或案件知识真源。
+遵守有界 public projection。不得把每次对话自动写回 DeepLaw 派生专题页或案件知识真源。
 
 ## 实施顺序
 
@@ -357,6 +357,6 @@ DeepLaw 在 Analytix 中应遵循已接受的 Context Epoch 规则：
 - 不把当前案件绑定当作法律能力自动激活信号；
 - 不把公共法律库与案件 SQLite/DuckDB 或全局向量库合并；
 - 不让 provider 指定 case/path/release 或直接签发权威 receipt；
-- 不让 LLM、Wiki、向量或相似案例决定效力和案件结论；
+- 不让模型、派生专题页、相似关系或相似案例决定效力和案件结论；
 - 不因法律服务故障阻断普通数据、代码、文件或会话能力；
 - 不在本次 DeepLaw 开发中提前修改 Analytix 代码。

@@ -3,7 +3,7 @@
 Status: architecture baseline for DeepLaw `0.2.0`, reviewed against the current
 implementation on 2026-07-15.
 
-DeepLaw is a read-only, version-aware Chinese legal evidence substrate. It is a
+DeepLaw is a read-only, version-aware Agent Knowledge Base for Chinese legal sources. It is a
 separate local service and release format used by Codex, Claude Code, and
 OpenCode, and designed for a later Analytix integration. It is not an agent
 memory store, a case workspace, or an LLM-authored legal authority.
@@ -14,20 +14,21 @@ memory store, a case workspace, or an LLM-authored legal authority.
 - Build content-addressed SQLite releases offline; open them with SQLite
   `mode=ro&immutable=1` at runtime.
 - Prefer exact title, citation, article, effective-date, and lexical retrieval.
-- Return at most five evidence cards, then fetch selected source text by stable
-  `segment_id`.
-- Keep vector search, graph augmentation, reranking, and Wiki pages optional,
-  derived, replaceable, and outside the authority decision.
+- Return at most five evidence cards, then fetch normalized extracted text by
+  stable `segment_id`; `get` exposes truncation and accepts `max_chars` up to
+  6000, while the official source and locator remain the comparison authority.
+- Keep semantic discovery, relationship discovery, reranking, and source-bound
+  explanations optional, derived, replaceable, and outside the authority decision.
 - Expose one compact, read-only MCP tool instead of injecting a legal corpus or
   a large tool catalogue into every agent session.
 - Never place case-private documents, conversations, facts, or identifiers in a
   public DeepLaw release.
 
-This is a constrained retrieval architecture, not a rejection of all RAG
-techniques. Semantic retrieval can be added as a bounded fallback after it
-proves useful on a Chinese legal benchmark. An LLM-generated Wiki can be added
-as navigation material, but it can never become source text or establish legal
-validity.
+This is a constrained Agent Knowledge Base. Local semantic discovery,
+relationship discovery, and source-bound explanations may be added as
+release-pinned sidecars after they prove useful on a Chinese legal benchmark.
+They can help Locate, Connect, or Explain, but can never become source text or
+establish legal validity.
 
 ## Goals And Non-Goals
 
@@ -53,7 +54,7 @@ validity.
 - Store case projects, uploads, chats, user memory, or agent state.
 - Make every non-legal Analytix task pass through a legal classifier or legal
   retrieval pipeline.
-- Claim that DeepLaw exceeds every RAG, graph, or Wiki system without a fair,
+- Claim that DeepLaw exceeds every external knowledge system without a fair,
   reproducible, held-out benchmark.
 
 ## Trust And Authority Model
@@ -69,7 +70,7 @@ DeepLaw uses an explicit evidence hierarchy:
 | Search result | Rank, excerpt and hit reason | Evidence candidate, not legal authority |
 | Receipt | Hash binding release, document, segment, source and text | Integrity proof for a returned candidate |
 | Derived index | FTS, graph, embedding, reranker cache | Rebuildable retrieval aid |
-| Derived prose | Summary, tag, topic page, LLM Wiki | Non-authoritative navigation only |
+| Derived prose | Summary, tag, topic page, source-bound explanation | Non-authoritative navigation only |
 
 An official-looking URL alone does not prove authenticity or current legal
 effect. A production release requires review of the source, its issuer, the
@@ -340,7 +341,7 @@ unrelated agent work.
 
 Host integration must follow these rules:
 
-- Do not inject statutes, Wiki pages, or release summaries into the system
+- Do not inject statutes, generated topic pages, or release summaries into the system
   prompt at startup.
 - Invoke DeepLaw only for an explicit legal research need.
 - Do not invoke it merely because an unrelated dataset contains words such as
@@ -356,7 +357,7 @@ These constraints allow Analytix to gain legal research capability without
 changing its normal data-analysis path. Analytix integration is a later host
 change, not part of the public corpus runtime.
 
-## Derived Graph, Semantic Index, And Wiki
+## Derived Discovery Sidecars
 
 Derived layers are permitted only when all of the following hold:
 
@@ -374,9 +375,10 @@ The `0.2.0` deterministic graph supports only `cites`, `amends`, `repeals`,
 `replaces`, `implements`, and `exception_to`. Each runtime edge is
 `deterministic_exact` and retains the source segment and evidence hash. Relations
 declared in a review overlay remain governance proposals; the current runtime
-has no producer that promotes them to `reviewed` edges. An LLM Wiki may summarize
-topics, disputes, and timelines, but every proposition must link back to a
-source segment and the whole Wiki must be safe to delete.
+has no producer that promotes them to `reviewed` edges. A source-bound
+explanation sidecar may summarize topics, disputes, and timelines, but every
+proposition must link back to a source segment and the entire sidecar must be
+safe to delete.
 
 ## Security And Failure Boundaries
 

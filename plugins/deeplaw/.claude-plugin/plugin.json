@@ -3,7 +3,7 @@
   "name": "deeplaw",
   "displayName": "DeepLaw",
   "version": "0.2.0",
-  "description": "Explicit-use, read-only and version-aware Chinese legal-source research.",
+  "description": "Explicit-use, read-only Agent Knowledge Base for versioned Chinese legal sources.",
   "author": {
     "name": "Eysn0130",
     "url": "https://github.com/Eysn0130"

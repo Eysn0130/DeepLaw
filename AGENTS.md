@@ -1,7 +1,7 @@
 # DeepLaw Agent Guide
 
-DeepLaw is a read-only, version-aware Chinese legal research substrate for
-Codex, Claude Code, OpenCode, and Analytix.
+DeepLaw is a read-only, version-aware Agent Knowledge Base for Chinese legal
+sources, used by Codex, Claude Code, OpenCode, and future Analytix integration.
 
 ## Source Of Truth
 
@@ -9,7 +9,7 @@ Codex, Claude Code, OpenCode, and Analytix.
   dependency lockfile.
 - Legal text is authoritative only when it belongs to an immutable release and
   retains its official source URL, source SHA-256, locator, and release ID.
-- Generated Wiki, summaries, tags, graphs, embeddings, model output, and search
+- Generated topic pages, summaries, tags, graphs, embeddings, model output, and search
   rankings are derived data. They never replace source text or determine legal
   validity.
 - GitHub mirrors and fixtures are not authoritative legal sources.
