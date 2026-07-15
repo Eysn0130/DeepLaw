@@ -27,6 +27,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#source-acquisition-and-updates">Sources</a> ·
   <a href="#how-deeplaw-works">How it works</a> ·
   <a href="docs/DEEPLAW_2.md">2.0 Design</a> ·
   <a href="docs/BENCHMARKS.md">Benchmarks</a> ·
@@ -80,6 +81,45 @@ uv run deeplaw search --query "刑法第二百六十六条" --as-of 2024-07-01
 This repository does not distribute restricted legal sources, case material, or generated
 SQLite releases. A successful build proves only that machine gates passed; it is not a
 human legal approval.
+
+## Source Acquisition and Updates
+
+The current economic-crime source package was last reviewed on **2026-07-14**: **28**
+binary source files — **10 DOCX**, **18 PDF**, and **0 HTML**. Counts below come from the
+operator-maintained download manifest; this repository does not redistribute the files.
+
+| Source-package group | Count | Coverage |
+| --- | ---: | --- |
+| Core legal sources | 4 | Criminal Law, Criminal Procedure Law, amendments, and filing standards |
+| Finance and illegal fundraising | 4 | Money laundering, AML, illegal fundraising, and prohibition rules |
+| Data and cyber | 3 | Personal information, data security, and telecom-fraud rules |
+| Case references | 4 | Public cases from the People's Court Case Library |
+| Procedure and evidence | 4 | Economic-crime procedure, criminal procedure, and asset handling |
+| AML, payments, and beneficial ownership | 8 | Foreign exchange, beneficial ownership, due diligence, and payments |
+| Offence topic | 1 | Judicial interpretation on tax-administration crimes |
+| **Total** | **28** | **10 DOCX + 18 PDF** |
+
+DeepLaw records the **issuing authority** separately from the **official download host**:
+the former determines authority; the latter records where the source binary was obtained.
+
+| Official download source | Count | Files currently obtained |
+| --- | ---: | --- |
+| [National Laws and Regulations Database](https://flk.npc.gov.cn/) | 10 | DOCX: laws, amendments, and judicial interpretations |
+| [Ministry of Justice Administrative Regulations Database](https://xzfg.moj.gov.cn/) | 4 | PDF: administrative regulations and related rules |
+| [People's Bank of China](https://www.pbc.gov.cn/) and its official branch site | 6 | PDF: AML, payments, due diligence, and amendment decisions |
+| [Shandong Court](https://www.sdcourt.gov.cn/) official hosts | 5 | PDF: case-library references and procedure material |
+| Official hosts of the [CSRC](https://www.csrc.gov.cn/), [NIA](https://www.nia.gov.cn/), and [SZSE](https://www.szse.cn/) | 3 | PDF: officially hosted originals issued by the relevant authority |
+| **Total** | **28** | **Each file records URL, format, byte size, and SHA-256** |
+
+Concise update method:
+
+1. Identify the title, document number, issuing authority, promulgation/effective date, and status.
+2. Download a DOCX/PDF original supported by the current package from the issuing authority or an official host; do not guess download URLs or save web pages as originals.
+3. Validate format, first-page identity, and SHA-256; update the manifest with the URL, hash, version relationship, and notes before building a new immutable release.
+
+Drafts, consultation papers, web-page-only material, commercial reposts, and private case
+material do not enter the public source package. Cases are research and argument references,
+not substitutes for the legal effect of statutory sources.
 
 ## How DeepLaw Works
 
