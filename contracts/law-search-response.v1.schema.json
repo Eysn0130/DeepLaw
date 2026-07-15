@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-search-response:v1",
+  "title": "DeepLawSearchResponseV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_id",
+    "mode",
+    "query_plan",
+    "evidence",
+    "notices",
+    "next_questions",
+    "total_excerpt_chars"
+  ],
+  "properties": {
+    "schema_version": { "const": "deeplaw.search-response/v1" },
+    "release_id": { "type": "string", "pattern": "^lawrel_[0-9a-f]{32}$" },
+    "mode": { "enum": ["navigation", "exact", "research"] },
+    "query_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose",
+        "route",
+        "channels",
+        "as_of",
+        "document_types",
+        "max_evidence",
+        "max_chars",
+        "vector_used",
+        "wiki_used"
+      ],
+      "properties": {
+        "purpose": {
+          "enum": [
+            "auto",
+            "exact_citation",
+            "as_of_version",
+            "elements",
+            "legal_issue_screen",
+            "citation_verify",
+            "broad_topic"
+          ]
+        },
+        "route": { "enum": ["navigation", "exact", "research"] },
+        "channels": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "maxLength": 64 }
+        },
+        "as_of": {
+          "type": ["string", "null"],
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "document_types": {
+          "type": "array",
+          "maxItems": 7,
+          "items": { "type": "string", "maxLength": 64 }
+        },
+        "max_evidence": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "max_chars": { "type": "integer", "minimum": 500, "maximum": 6000 },
+        "vector_used": { "const": false },
+        "wiki_used": { "const": false }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "$ref": "urn:deeplaw:schema:legal-evidence-card:v1" }
+    },
+    "notices": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "maxLength": 500 }
+    },
+    "next_questions": {
+      "type": "array",
+      "maxItems": 4,
+      "items": { "type": "string", "maxLength": 500 }
+    },
+    "total_excerpt_chars": { "type": "integer", "minimum": 0, "maximum": 6000 }
+  }
+}

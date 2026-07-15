@@ -1,0 +1,12 @@
+{"id":"positive-explicit-statute","prompt":"请查中华人民共和国刑法第二百六十六条现行原文和官方来源。","should_activate":true}
+{"id":"positive-as-of","prompt":"请按2022年3月1日判断当时有效的反洗钱法版本。","should_activate":true}
+{"id":"positive-citation-verify","prompt":"核验这段意见是否真的来自公安机关办理经济犯罪案件的若干规定。","should_activate":true}
+{"id":"negative-data-column","prompt":"把 CSV 里名为‘诈骗’的列按地区求和并画图。","should_activate":false}
+{"id":"negative-code-symbol","prompt":"重构 fraud_detector.ts 中的诈骗检测函数。","should_activate":false}
+{"id":"negative-lone-keyword","prompt":"诈骗","should_activate":false}
+{"id":"negative-doc-format","prompt":"把这份合同 DOCX 的标题改成二号黑体。","should_activate":false}
+{"id":"negative-project-management","prompt":"给案件项目排一个两周开发计划。","should_activate":false}
+{"id":"negative-private-case-upload","prompt":"把我上传的讯问笔录全文写入公共法律库。","should_activate":false}
+{"id":"negative-sql","prompt":"查询案件表中 charge='诈骗' 的记录数量。","should_activate":false}
+{"id":"negative-translation","prompt":"把 illegal argument 翻译成中文。","should_activate":false}
+{"id":"negative-repository-search","prompt":"在仓库里搜索字符串‘刑法’，不要查法律。","should_activate":false}

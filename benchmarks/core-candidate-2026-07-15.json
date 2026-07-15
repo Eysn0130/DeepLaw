@@ -1,0 +1,42 @@
+{
+  "schema_version": "deeplaw.benchmark-summary/v1",
+  "status": "candidate_smoke_not_held_out",
+  "run_date": "2026-07-15",
+  "release_id": "lawrel_d61619b2b1e4c2bf9e3124fc9be3df06",
+  "database_sha256": "354da5951febf8a80c332f8f84535015bae2366dce6d1972946ef292ee1414d5",
+  "source_manifest_sha256": "64a9181a36572feea8609dca9b794fab8aeb99989a0806398aa6f5084322a749",
+  "cases_path": "evals/core-2026-07-14.jsonl",
+  "cases_sha256": "2f7eaf60fcd63d6207414fe754347f20eda3a4bbf273e4c5cd4886947fba8397",
+  "case_count": 32,
+  "ranked_case_count": 30,
+  "limit": 5,
+  "retrieval_pass_rate": 1.0,
+  "constraint_pass_rate": 1.0,
+  "overall_pass_rate": 1.0,
+  "hit_at_1": 1.0,
+  "mrr": 1.0,
+  "average_excerpt_chars": 666.344,
+  "p50_latency_ms": 11.125,
+  "p95_latency_ms": 17.049,
+  "implementation": {
+    "package_version": "0.1.0",
+    "source_tree_sha256": "206dff8f3f1ff02a6e36f9b69aab5a682ceb5422d6e8976b032daef049279dc6",
+    "search_sha256": "daaff394eaed8160cc6eeb124d900f399b47b8a629369354a61bdd1352889ff3",
+    "evaluator_sha256": "f6f0b7389794adc5e6f29f90cfd28dc76bc664b428c4350787f06a9c699dd5bc",
+    "store_sha256": "538556b757a07ee0e97ec063616dfc4ae6dafbf1a8846b023fa11bde58bf6d52",
+    "mcp_server_sha256": "b2c03a98f11a4df7fa035aaf7978f509488a1c641e454dd5a8ce7b73e08743f0"
+  },
+  "environment": {
+    "os": "Darwin 25.5.0 arm64",
+    "cpu": "Apple M4 Pro",
+    "memory_bytes": 25769803776,
+    "python": "3.12.13",
+    "sqlite": "3.50.4"
+  },
+  "limitations": [
+    "The query set was designed against the known 28-document corpus.",
+    "This is not a held-out or independently adjudicated legal benchmark.",
+    "No external retrieval system was compared in this run.",
+    "The corpus release is a local candidate with temporal and redistribution review outstanding."
+  ]
+}

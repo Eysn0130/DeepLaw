@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-verification:v1",
+  "title": "DeepLawVerificationV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["valid", "reason", "release_id"],
+  "properties": {
+    "valid": { "type": "boolean" },
+    "reason": {
+      "enum": ["verified", "unknown_segment", "segment_hash_mismatch", "receipt_mismatch"]
+    },
+    "release_id": { "type": "string", "pattern": "^lawrel_[0-9a-f]{32}$" },
+    "segment_id": { "type": "string", "pattern": "^seg_[0-9a-f]{24}$" },
+    "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "segment_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

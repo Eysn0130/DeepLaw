@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "deeplaw": {
+      "type": "local",
+      "command": [
+        "deeplaw",
+        "mcp",
+        "--stdio"
+      ],
+      "enabled": true,
+      "timeout": 5000
+    }
+  },
+  "permission": {
+    "deeplaw_*": "deny",
+    "skill": {
+      "research-chinese-law": "deny"
+    },
+    "task": {
+      "deeplaw": "deny"
+    }
+  }
+}

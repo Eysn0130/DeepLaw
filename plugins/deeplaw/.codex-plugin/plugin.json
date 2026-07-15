@@ -1,0 +1,37 @@
+{
+  "name": "deeplaw",
+  "version": "0.1.0",
+  "description": "Read-only, version-aware Chinese legal-source research for AI agents.",
+  "author": {
+    "name": "Eysn0130",
+    "url": "https://github.com/Eysn0130"
+  },
+  "homepage": "https://github.com/Eysn0130/DeepLaw",
+  "repository": "https://github.com/Eysn0130/DeepLaw",
+  "license": "Apache-2.0",
+  "keywords": [
+    "chinese-law",
+    "legal-research",
+    "mcp",
+    "read-only",
+    "version-aware"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "DeepLaw",
+    "shortDescription": "Verify Chinese legal sources, versions, and citations",
+    "longDescription": "DeepLaw provides bounded, read-only retrieval of versioned Chinese legal sources. It returns source-backed evidence cards and exact segments without adding case-private memory or a broad vector dump to ordinary agent work.",
+    "developerName": "Eysn0130",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/Eysn0130/DeepLaw",
+    "brandColor": "#17324D",
+    "defaultPrompt": [
+      "Verify a Chinese-law question with bounded, version-aware official-source evidence"
+    ]
+  }
+}

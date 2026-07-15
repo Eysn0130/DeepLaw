@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "deeplaw",
+  "displayName": "DeepLaw",
+  "version": "0.1.0",
+  "description": "Explicit-use, read-only and version-aware Chinese legal-source research.",
+  "author": {
+    "name": "Eysn0130",
+    "url": "https://github.com/Eysn0130"
+  },
+  "homepage": "https://github.com/Eysn0130/DeepLaw",
+  "repository": "https://github.com/Eysn0130/DeepLaw",
+  "license": "Apache-2.0",
+  "keywords": [
+    "chinese-law",
+    "legal-research",
+    "mcp",
+    "read-only",
+    "version-aware"
+  ],
+  "defaultEnabled": false,
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:corpus-release-manifest:v1",
+  "title": "DeepLawCorpusReleaseManifestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_id",
+    "package_name",
+    "document_count",
+    "segment_count",
+    "source_manifest_sha256",
+    "derivation_sha256",
+    "ingestion_schema",
+    "storage_schema",
+    "storage_engine",
+    "database_sha256",
+    "temporal_status",
+    "redistribution_status",
+    "vector_index",
+    "derived_wiki"
+  ],
+  "properties": {
+    "schema_version": { "const": "deeplaw.release/v1" },
+    "release_id": { "type": "string", "pattern": "^lawrel_[0-9a-f]{32}$" },
+    "package_name": { "type": ["string", "null"], "maxLength": 500 },
+    "retrieved_on": { "type": ["string", "null"], "format": "date" },
+    "reviewed_on": { "type": ["string", "null"], "format": "date" },
+    "document_count": { "type": "integer", "minimum": 1 },
+    "segment_count": { "type": "integer", "minimum": 1 },
+    "source_manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "derivation_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "ingestion_schema": { "const": "deeplaw.ingestion/v1" },
+    "storage_schema": { "const": "deeplaw.sqlite/v3" },
+    "storage_engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sqlite"],
+      "properties": {
+        "sqlite": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "database_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "temporal_status": { "enum": ["requires_human_review", "verified"] },
+    "redistribution_status": { "enum": ["not_assessed", "approved", "restricted"] },
+    "vector_index": { "type": "boolean" },
+    "derived_wiki": { "type": "boolean" }
+  }
+}

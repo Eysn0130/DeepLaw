@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deeplaw"
+version = "0.1.0"
+description = "Version-aware, read-only Chinese legal retrieval for AI agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Eysn0130" }]
+keywords = ["law", "mcp", "rag", "legal-research", "chinese-law"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "mcp>=1.28.1,<2",
+  "pydantic>=2.13,<3",
+  "pypdf>=6.10,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<9",
+  "pytest-cov>=6.2,<7",
+  "pyyaml>=6.0,<7",
+  "reportlab>=4.4,<5",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+deeplaw = "deeplaw.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Eysn0130/DeepLaw"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deeplaw"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"contracts" = "deeplaw/contracts"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+allowed-confusables = ["，", "；", "（", "）", "：", "〇"]
+
+[tool.ruff.lint.flake8-builtins]
+strict-checking = true
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 100
