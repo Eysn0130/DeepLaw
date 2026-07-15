@@ -9,7 +9,7 @@ import stat
 import tempfile
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from .evidence_graph import derive_relations
@@ -199,7 +199,23 @@ def build_release(
     allow_needs_ocr: bool = False,
     review_overlay_path: Path | None = None,
     reviewed_pages_root: Path | None = None,
+    source_scope: Literal["official", "user_private"] = "official",
+    library_id: str | None = None,
+    artifact_mode: int = 0o444,
 ) -> tuple[Path, BuildReport]:
+    if source_scope not in {"official", "user_private"}:
+        raise ValueError(f"unsupported source scope: {source_scope}")
+    if source_scope == "official" and library_id is not None:
+        raise ValueError("library_id is valid only for user-private releases")
+    if source_scope == "user_private":
+        if not library_id or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", library_id):
+            raise ValueError("user-private releases require a safe library_id")
+        if review_overlay_path is not None or reviewed_pages_root is not None:
+            raise ValueError("user-private releases cannot use official review overlays")
+        if artifact_mode not in {0o400, 0o600}:
+            raise ValueError("user-private release artifacts must be owner-only")
+    elif artifact_mode != 0o444:
+        raise ValueError("official release artifacts must remain read-only")
     source_root = source_root.expanduser().resolve(strict=True)
     manifest_path = manifest_path.expanduser().resolve(strict=True)
     output_root = output_root.expanduser().resolve()
@@ -301,7 +317,10 @@ def build_release(
         if len(title) > _MAX_TITLE_CHARACTERS:
             raise ValueError(f"manifest title exceeds 500 characters for {relative_path}")
         format_name = str(raw.get("format", source_path.suffix.lstrip("."))).upper()
-        expected_suffix = {"DOCX": ".docx", "PDF": ".pdf"}.get(format_name)
+        supported_formats = {"DOCX": ".docx", "PDF": ".pdf"}
+        if source_scope == "user_private":
+            supported_formats["TXT"] = ".txt"
+        expected_suffix = supported_formats.get(format_name)
         if expected_suffix is None or source_path.suffix.lower() != expected_suffix:
             raise ValueError(f"format/path mismatch for {relative_path}: {format_name}")
         official_source = str(raw.get("officialSource", "")).strip()
@@ -311,16 +330,31 @@ def build_release(
             _ = parsed_source.port
         except ValueError as error:
             raise ValueError(f"officialSource is malformed for {relative_path}") from error
-        if (
+        unsafe_source = (
             len(official_source) > _MAX_SOURCE_URL_CHARACTERS
             or any(ord(character) < 32 for character in official_source)
-            or parsed_source.scheme != "https"
-            or not parsed_source.netloc
-            or not source_hostname
             or parsed_source.username is not None
             or parsed_source.password is not None
+        )
+        if source_scope == "official":
+            if (
+                unsafe_source
+                or parsed_source.scheme != "https"
+                or not parsed_source.netloc
+                or not source_hostname
+            ):
+                raise ValueError(f"officialSource must be HTTPS for {relative_path}")
+        elif (
+            unsafe_source
+            or parsed_source.scheme != "private"
+            or parsed_source.netloc != "source"
+            or parsed_source.path != f"/{actual_hash}"
+            or parsed_source.query
+            or parsed_source.fragment
         ):
-            raise ValueError(f"officialSource must be HTTPS for {relative_path}")
+            raise ValueError(
+                f"user-private source locator must bind the source hash for {relative_path}"
+            )
 
         inferred_type, inferred_issuer, inferred_authority = classify_document(relative_path, title)
         document_type = str(raw.get("documentType") or inferred_type)
@@ -332,6 +366,8 @@ def build_release(
         authority_rank = int(raw.get("authorityRank", inferred_authority))
         if not 0 <= authority_rank <= 100:
             raise ValueError(f"invalid authorityRank for {relative_path}: {authority_rank}")
+        if source_scope == "user_private" and authority_rank != 0:
+            raise ValueError(f"user-private authorityRank must be 0 for {relative_path}")
         normalized_dates: dict[str, str] = {}
         for field_name in ("effectiveDate", "effectiveTo", "promulgatedOn"):
             if raw.get(field_name) is not None:
@@ -361,6 +397,8 @@ def build_release(
         status = str(raw.get("status") or "unverified_current").strip()
         if status not in _DOCUMENT_STATUSES:
             raise ValueError(f"unsupported status for {relative_path}: {status}")
+        if source_scope == "user_private" and status != "unknown":
+            raise ValueError(f"user-private status must be unknown for {relative_path}")
         if status.startswith("verified_") and not effective_from:
             raise ValueError(f"verified status requires effectiveDate for {relative_path}")
         raw_note = raw.get("note")
@@ -513,6 +551,13 @@ def build_release(
             for item in report.documents
         ],
     }
+    if source_scope == "user_private":
+        derivation_payload.update(
+            {
+                "collection_scope": source_scope,
+                "library_id": library_id,
+            }
+        )
     derivation_sha256 = sha256_bytes(canonical_json(derivation_payload).encode("utf-8"))
     release_id = stable_id("lawrel", derivation_sha256, length=32)
     report.release_id = release_id
@@ -539,6 +584,13 @@ def build_release(
         "vector_index": False,
         "derived_wiki": False,
     }
+    if source_scope == "user_private":
+        release_metadata.update(
+            {
+                "collection_scope": source_scope,
+                "library_id": library_id,
+            }
+        )
     if applied_review is not None:
         release_metadata.update(
             {
@@ -553,6 +605,8 @@ def build_release(
     if payload["package_qa_reviewed_on"] is not None:
         release_metadata["package_qa_reviewed_on"] = payload["package_qa_reviewed_on"]
     output_root.mkdir(parents=True, exist_ok=True)
+    if source_scope == "user_private":
+        os.chmod(output_root, 0o700)
     staging_dir = Path(tempfile.mkdtemp(prefix=".deeplaw-build-", dir=output_root))
     try:
         database_path = staging_dir / "deeplaw.sqlite3"
@@ -565,7 +619,7 @@ def build_release(
             relations=relations,
         )
         release_metadata["database_sha256"] = database_sha256(database_path)
-        os.chmod(database_path, 0o444)
+        os.chmod(database_path, artifact_mode)
         (staging_dir / "release.json").write_text(
             json.dumps(release_metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -574,8 +628,8 @@ def build_release(
             json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        os.chmod(staging_dir / "release.json", 0o444)
-        os.chmod(staging_dir / "build-report.json", 0o444)
+        os.chmod(staging_dir / "release.json", artifact_mode)
+        os.chmod(staging_dir / "build-report.json", artifact_mode)
         if release_dir.exists():
             existing_manifest_path = release_dir / "release.json"
             existing_database_path = release_dir / "deeplaw.sqlite3"
@@ -597,6 +651,8 @@ def build_release(
                 raise RuntimeError(f"existing immutable release failed verification: {release_dir}")
         else:
             os.replace(staging_dir, release_dir)
+            if source_scope == "user_private":
+                os.chmod(release_dir, 0o700)
     finally:
         if staging_dir.exists():
             shutil.rmtree(staging_dir)

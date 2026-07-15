@@ -48,12 +48,23 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             )
             latency_ms = (perf_counter() - started) * 1000
             latencies.append(latency_ms)
-            titles = [card.title for card in response.evidence]
-            articles = [card.article_label for card in response.evidence]
-            extraction_review_flags = [
-                card.extraction_review_required for card in response.evidence
-            ]
             returned_cards = (*response.evidence, *response.uncertain_evidence)
+            expected_bucket = case.get("expected_bucket", "evidence")
+            if expected_bucket not in {"evidence", "uncertain_evidence"}:
+                raise ValueError(
+                    f"unsupported expected_bucket in case {case.get('id')}: {expected_bucket}"
+                )
+            target_cards = (
+                response.evidence
+                if expected_bucket == "evidence"
+                else response.uncertain_evidence
+            )
+            titles = [card.title for card in target_cards]
+            articles = [card.article_label for card in target_cards]
+            extraction_review_flags = [
+                card.extraction_review_required for card in target_cards
+            ]
+            all_titles = [card.title for card in returned_cards]
             receipt_checks: list[bool] = []
             for card in returned_cards:
                 verification = law.verify(card.segment_id, card.receipt_id)
@@ -85,7 +96,7 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             is_ranked_case = bool(expected_titles or expected_articles)
             ranked_cases += int(is_ranked_case)
             if expected_empty:
-                retrieval_passed = not response.evidence
+                retrieval_passed = not returned_cards
             else:
                 title_passed = not expected_titles or title_rank is not None
                 article_passed = not expected_articles or article_rank is not None
@@ -101,11 +112,11 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                 and extraction_review_flags[0] is bool(expected_extraction_review)
             )
             constraints_passed = (
-                not (forbidden_titles & set(titles))
+                not (forbidden_titles & set(all_titles))
                 and mode_passed
                 and extraction_review_passed
                 and receipt_verification_passed
-                and len(response.evidence) <= evidence_bound
+                and len(returned_cards) <= evidence_bound
                 and response.total_excerpt_chars <= excerpt_bound
             )
             passed = retrieval_passed and constraints_passed
@@ -126,13 +137,20 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                     "retrieval_passed": retrieval_passed,
                     "constraints_passed": constraints_passed,
                     "rank": rank,
-                    "returned_titles": titles,
-                    "returned_articles": articles,
+                    "expected_bucket": expected_bucket,
+                    "returned_titles": all_titles,
+                    "returned_articles": [card.article_label for card in returned_cards],
+                    "returned_primary_titles": [card.title for card in response.evidence],
+                    "returned_uncertain_titles": [
+                        card.title for card in response.uncertain_evidence
+                    ],
                     "returned_extraction_review_required": extraction_review_flags,
                     "receipt_count": len(receipt_checks),
                     "receipt_verification_passed": receipt_verification_passed,
                     "mode": response.mode,
                     "evidence_count": len(response.evidence),
+                    "uncertain_evidence_count": len(response.uncertain_evidence),
+                    "returned_count": len(returned_cards),
                     "excerpt_chars": response.total_excerpt_chars,
                     "latency_ms": round(latency_ms, 3),
                 }
@@ -141,7 +159,7 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
     latencies.sort()
     p95_index = max(0, min(len(latencies) - 1, int(len(latencies) * 0.95) - 1))
     return {
-        "schema_version": "deeplaw.eval-report/v1",
+        "schema_version": "deeplaw.eval-report/v2",
         "release_id": release_id,
         "database_sha256": database_sha256(database),
         "source_manifest_sha256": source_manifest_sha256,

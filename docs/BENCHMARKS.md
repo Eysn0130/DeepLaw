@@ -1,29 +1,32 @@
 # DeepLaw 评测说明
 
-## 当前 0.2 候选结果
+## 当前 0.3 候选结果
 
-2026-07-15 使用当前 `deeplaw.release/v2` / `deeplaw.sqlite/v4` 本地候选运行 32 项白盒
+2026-07-16 使用当前 `deeplaw.release/v2` / `deeplaw.sqlite/v4` 本地候选运行 32 项白盒
 smoke set，结果记录在
-[`benchmarks/core-v2-candidate-2026-07-15.json`](../benchmarks/core-v2-candidate-2026-07-15.json)：
+[`benchmarks/core-v3-candidate-2026-07-16.json`](../benchmarks/core-v3-candidate-2026-07-16.json)：
 
 - 32/32 同时通过检索目标与噪声/上下文约束；
+- 其中 6 项明确要求命中的 5 份抽取风险 PDF 只能出现在 `uncertain_evidence`，不能进入主证据；
 - 30 个有排名目标的 case 为 Hit@1 1.0、MRR 1.0；
 - 平均 evidence excerpt 679.719 字符；
 - 109/109 张返回证据的 receipt 往返核验通过率为 1.0；
-- 已打开本地数据库后的 `law.search()` 本机延迟为 p50 12.337 ms、p95 18.322 ms；数据库
+- 已打开本地数据库后的 `law.search()` 本机延迟为 p50 12.000 ms、p95 17.250 ms；数据库
   打开、receipt 往返断言、JSON 序列化和 MCP transport 均不包含在该延迟中；
 - 精确题名聚焦、法名 + 条号、未来时点负例、历史标题纠偏、OCR review flag 和泛词预算均被
   固定断言覆盖；
-- 两个 expected title 随 hash-bound overlay 的安全标题纠偏同步更新，cases SHA-256 因此变为
-  `f60d88ab4b90e421b965e16ea85040edfab9dedb5cb387a1f92e20dd4ecc8d50`。
+- `expected_bucket` 将“检索到风险候选”和“准入主证据”拆开断言，cases SHA-256 为
+  `95f52e14b11589850a3a7ecc57fb2bf4614a6be85a979a73869dd37973453625`。
 
 报告绑定 release、database、source manifest、review overlay、case 文件、Python source tree、
 关键实现文件和本机环境。语料二进制及 SQLite 不进入 Git；release 仍是
 `partially_verified`、`restricted`、`ai_precheck`。成功只能证明这组已知语料白盒断言，不能
 证明法律内容已获人工批准，也不能证明 DeepLaw 超过任何外部系统。
 
-`benchmarks/core-candidate-2026-07-15.json` 保留的是 0.1 / SQLite v3 历史快照，不代表当前
-实现。两份报告均为 `candidate_smoke_not_held_out`，不是盲测、留出集或独立专家金标。
+`benchmarks/core-v2-candidate-2026-07-15.json` 和
+`benchmarks/core-candidate-2026-07-15.json` 分别保留 0.2 / SQLite v4 与 0.1 / SQLite v3
+历史快照，不代表当前实现。三份报告均为 `candidate_smoke_not_held_out`，不是盲测、留出集或
+独立专家金标；旧报告绑定的是旧 case hash，不能用当前 case 文件重放后声称结果相同。
 
 外部复现需要调用者合法取得确切 candidate 数据库，或用同一 source package、overlay 和
 匹配构建实现重新生成。不同 release 必须作为新快照评测，不能沿用这里的数字。
@@ -43,11 +46,11 @@ deeplaw eval \
 
 评测器检查：
 
-- expected title/article 是否出现及其 rank；
-- `expected_empty` case 是否确实没有返回证据；
-- forbidden title 是否被错误返回；
+- expected title/article 是否出现在明确指定的 `evidence` 或 `uncertain_evidence` 分桶及其桶内 rank；
+- `expected_empty` case 是否在两个分桶都没有返回候选；
+- forbidden title 是否在任一分桶被错误返回；
 - expected route；
-- evidence 数量和 excerpt 字符预算（不是完整序列化响应的字节预算）；
+- 两个分桶合计数量和 excerpt 字符预算（不是完整序列化响应的字节预算）；
 - 指定 case 的 `extraction_review_required` 标记；
 - 每张主证据和不确定证据的 receipt、release、source hash 与 segment hash 往返核验；
 - retrieval、constraint 和 overall pass rate；

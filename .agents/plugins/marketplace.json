@@ -1,7 +1,7 @@
 {
-  "name": "personal",
+  "name": "deeplaw",
   "interface": {
-    "displayName": "Personal"
+    "displayName": "DeepLaw"
   },
   "plugins": [
     {

@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-support-input:v2",
+  "title": "DeepLawSupportInputV2",
+  "oneOf": [
+    {
+      "title": "search",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "operation": {
+          "const": "search",
+          "default": "search"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "purpose": {
+          "enum": [
+            "auto",
+            "exact_citation",
+            "as_of_version",
+            "elements",
+            "legal_issue_screen",
+            "citation_verify",
+            "broad_topic"
+          ],
+          "default": "auto"
+        },
+        "as_of": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 5
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 6000,
+          "default": 3500
+        },
+        "document_types": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "enum": [
+              "law",
+              "administrative_regulation",
+              "judicial_interpretation",
+              "prosecution_standard",
+              "departmental_rule",
+              "normative_document",
+              "case_reference"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 7
+        }
+      }
+    },
+    {
+      "title": "get",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "segment_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "get"
+        },
+        "segment_id": {
+          "type": "string",
+          "pattern": "^seg_[0-9a-f]{24}$"
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 6000,
+          "default": 3500
+        }
+      }
+    },
+    {
+      "title": "verify",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "segment_id",
+        "receipt_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "verify"
+        },
+        "segment_id": {
+          "type": "string",
+          "pattern": "^seg_[0-9a-f]{24}$"
+        },
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^lawrcpt_[0-9a-f]{32}$"
+        }
+      }
+    },
+    {
+      "title": "release_info",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation"
+      ],
+      "properties": {
+        "operation": {
+          "const": "release_info"
+        }
+      }
+    },
+    {
+      "title": "private_search",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "query"
+      ],
+      "properties": {
+        "operation": {
+          "const": "private_search"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "purpose": {
+          "enum": [
+            "auto",
+            "exact_citation",
+            "as_of_version",
+            "elements",
+            "legal_issue_screen",
+            "citation_verify",
+            "broad_topic"
+          ],
+          "default": "auto"
+        },
+        "as_of": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 5
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 6000,
+          "default": 3500
+        },
+        "document_types": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "enum": [
+              "law",
+              "administrative_regulation",
+              "judicial_interpretation",
+              "prosecution_standard",
+              "departmental_rule",
+              "normative_document",
+              "case_reference"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 7
+        }
+      }
+    },
+    {
+      "title": "private_get",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "segment_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "private_get"
+        },
+        "segment_id": {
+          "type": "string",
+          "pattern": "^seg_[0-9a-f]{24}$"
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 6000,
+          "default": 3500
+        }
+      }
+    },
+    {
+      "title": "private_verify",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "segment_id",
+        "receipt_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "private_verify"
+        },
+        "segment_id": {
+          "type": "string",
+          "pattern": "^seg_[0-9a-f]{24}$"
+        },
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^lawrcpt_[0-9a-f]{32}$"
+        }
+      }
+    },
+    {
+      "title": "private_info",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation"
+      ],
+      "properties": {
+        "operation": {
+          "const": "private_info"
+        }
+      }
+    }
+  ]
+}

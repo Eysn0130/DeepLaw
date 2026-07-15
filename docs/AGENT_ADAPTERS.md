@@ -21,7 +21,7 @@ so the visible name can differ, but the server-level leaf name must remain
 exactly `law_support`. For example, OpenCode renders it as
 `deeplaw_law_support`. Host namespacing does not create a second public tool.
 
-`law_support` routes four operations:
+`law_support` routes eight operations:
 
 | Operation | Purpose | Required selector |
 | --- | --- | --- |
@@ -29,10 +29,16 @@ exactly `law_support`. For example, OpenCode renders it as
 | `get` | Read one selected exact segment | `segment_id` |
 | `verify` | Verify one evidence receipt | `segment_id`, `receipt_id` |
 | `release_info` | Inspect the active immutable release | none |
+| `private_search` | Search the separate user-private legal-reference snapshot | `query` |
+| `private_get` | Read one selected private segment | `segment_id` |
+| `private_verify` | Verify one private snapshot receipt | `segment_id`, `receipt_id` |
+| `private_info` | Inspect the private snapshot | none |
 
-No host adapter may expose a separate search, get, write, upload, memory,
+No host adapter may expose a separate write, upload, memory,
 reindex, delete, activation, administration, case, or chat tool. Build and
-activation remain offline CLI administration, outside the Agent surface.
+activation remain offline CLI administration, outside the Agent surface. The
+private operations are read-only routes on the same leaf; private add/delete
+remain local CLI administration.
 
 The MCP handshake is a release gate: `tools/list` must contain one item, and its
 leaf name must be `law_support`. Treat zero tools, a renamed tool, or a second
@@ -41,12 +47,20 @@ tool as a deployment failure rather than silently continuing.
 ## Runtime prerequisite
 
 Install the `deeplaw` executable into the environment used to launch the Agent
-host. From a DeepLaw checkout, one development option is:
+host. From a DeepLaw checkout, use a user-level tool install for normal use:
 
 ```bash
-uv tool install --editable .
+uv tool install .
 deeplaw --version
+deeplaw official install
+deeplaw official status
 ```
+
+Contributors who intentionally want live source edits can instead use
+`uv tool install --editable .`; a normal user updates checkout code with
+`uv tool install --force .`. A project-only `uv sync` is insufficient when the
+Agent launches the plugin from another working directory unless its environment
+also exposes that project's `.venv/bin`.
 
 The MCP process inherits its environment. Point it at an immutable database with
 `DEEPLAW_DB`, or point `DEEPLAW_HOME` at a directory containing `ACTIVE` and the
@@ -65,6 +79,13 @@ deeplaw mcp --help
 Running `deeplaw mcp --stdio` directly waits for MCP messages on standard input;
 that is expected, not a startup hang.
 
+The plugin never downloads or mutates a corpus in the background. Official
+updates require an explicit `deeplaw official update`; private legal-reference
+imports require `deeplaw private add --confirm-no-case-data`. An MCP process
+pins both available scopes at startup. Restart it after an official update or a
+private mutation; after either managed epoch changes, the old process rejects
+later reads in that scope when its pinned epoch no longer matches.
+
 ## Explicit invocation policy
 
 DeepLaw is an optional capability, not a permanent legal persona. Ordinary
@@ -81,7 +102,8 @@ These are negative triggers and must not invoke DeepLaw by themselves:
 - coding, SQL, statistics, dashboards, and ordinary data analysis;
 - summarizing, extracting, OCRing, translating, or rewriting DOCX/PDF/text;
 - UI, session, attachment, SQLite, DuckDB, or project-management work;
-- searching or storing private case evidence and chat history;
+- searching or storing private case evidence and chat history; the DeepLaw
+  private scope contains legal references only;
 - filenames, columns, labels, or prose containing `诈骗`, `案件`, `法务`,
   `fraud`, `risk`, or another isolated domain word.
 
@@ -99,9 +121,14 @@ The Codex plugin is rooted at `plugins/deeplaw`:
 - `skills/research-chinese-law/agents/openai.yaml` sets
   `policy.allow_implicit_invocation: false`.
 
-The repository's personal marketplace entry can be used from the Codex plugin
+The repository's DeepLaw marketplace entry can be used from the Codex plugin
 browser during development. Install DeepLaw, start a new task, and invoke it
 explicitly:
+
+```bash
+codex plugin marketplace add /absolute/path/to/DeepLaw
+codex plugin add deeplaw@deeplaw
+```
 
 ```text
 $research-chinese-law 核验《中华人民共和国刑法》某条在 2020-06-01 的有效版本。
@@ -214,7 +241,8 @@ in a later, scoped Analytix change with these invariants:
    stable system prefix and ordinary data tools for every other turn.
 5. Keep private case documents, facts, chats, embeddings, SQLite state, and
    DuckDB data inside the case project. Send only a minimal de-identified legal
-   issue to DeepLaw; never ingest private material into a public release.
+   issue to the official DeepLaw scope. The optional DeepLaw user-private scope
+   is for legal references, not an Analytix case store.
 6. Keep the two-stage pattern: bounded `search`, then exact `get` and selective
    `verify`. Do not place broad retrieval results in the main context.
 7. Fail closed. If the process, release, receipt, or version check fails, report

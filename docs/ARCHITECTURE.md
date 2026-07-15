@@ -1,12 +1,15 @@
 # DeepLaw Architecture
 
-Status: architecture baseline for DeepLaw `0.2.0`, reviewed against the current
+Status: architecture baseline for DeepLaw `0.3.0`, reviewed against the current
 implementation on 2026-07-15.
 
-DeepLaw is a read-only, version-aware Agent Knowledge Base for Chinese legal sources. It is a
-separate local service and release format used by Codex, Claude Code, and
-OpenCode, and designed for a later Analytix integration. It is not an agent
-memory store, a case workspace, or an LLM-authored legal authority.
+DeepLaw is a version-aware Agent Knowledge Base for Chinese legal sources. Its
+Agent/MCP surface is read-only. Offline CLI administration manages a
+team-maintained official catalog and a physically separate per-OS-user legal
+reference library. It is a separate local service and release format used by
+Codex, Claude Code, and OpenCode, and designed for a later Analytix integration.
+It is not an agent memory store, a case workspace, or an LLM-authored legal
+authority.
 
 ## Decision Summary
 
@@ -21,8 +24,11 @@ memory store, a case workspace, or an LLM-authored legal authority.
   explanations optional, derived, replaceable, and outside the authority decision.
 - Expose one compact, read-only MCP tool instead of injecting a legal corpus or
   a large tool catalogue into every agent session.
-- Never place case-private documents, conversations, facts, or identifiers in a
-  public DeepLaw release.
+- Keep official releases and user-private legal-reference snapshots in separate
+  roots, ACTIVE pointers, source caches, and operation namespaces; never blend
+  their candidate ranking or authority.
+- Never place case-private documents, conversations, facts, or identifiers in
+  either DeepLaw scope.
 
 This is a constrained Agent Knowledge Base. Local semantic discovery,
 relationship discovery, and source-bound explanations may be added as
@@ -51,7 +57,9 @@ establish legal validity.
 - Treat a date match as proof that a rule governs a case.
 - Let an LLM decide whether a law was amended, repealed, or superseded.
 - Automatically crawl and publish an unreviewed comprehensive legal corpus.
-- Store case projects, uploads, chats, user memory, or agent state.
+- Store case projects, case uploads, chats, user memory, or agent state. A
+  user-private DeepLaw upload is limited to legal references and is not an
+  Analytix case library.
 - Make every non-legal Analytix task pass through a legal classifier or legal
   retrieval pipeline.
 - Claim that DeepLaw exceeds every external knowledge system without a fair,
@@ -87,22 +95,26 @@ flowchart LR
     Q --> G["Stable legal segments"]
     G --> R["Content-addressed SQLite release"]
     R --> E["Read-only DeepLaw engine"]
+    U["Explicit user legal-reference upload"] --> P["Owner-only private snapshot"]
+    P --> E
     E --> M["Single MCP leaf tool\nlaw_support"]
     M --> C["Codex"]
     M --> H["Claude Code"]
     M --> O["OpenCode"]
     M -. "future scoped integration" .-> A["Analytix"]
 
-    P["Case-private documents, chats, facts"] -. "must remain in host case project" .-> A
-    P -. "never enters public release" .-> R
+    C["Case-private documents, chats, facts"] -. "must remain in host case project" .-> A
+    C -. "never enters either DeepLaw scope" .-> R
+    C -. "never enters either DeepLaw scope" .-> P
 ```
 
-The builder is an offline administrative surface. The `0.2.0` MCP runtime uses
+The builder, official updater, and private add/delete commands are offline
+administrative surfaces. The `0.3.0` MCP runtime uses
 the SDK's low-level `Server` over local stdio only; it has no HTTP listener and
 no corpus-write operation. Its process lifespan resolves and verifies one
-release, computes the database hash once during startup, keeps that read-only
-release fixed for the lifetime of the process, and serializes access to the
-shared SQLite connection. By default, installed hosts share `~/.deeplaw`;
+available release, computes database hashes once during startup, keeps each
+read-only release fixed for the lifetime of the process, and serializes access
+to the SQLite connections. By default, installed hosts share `~/.deeplaw`;
 deployments can override that root with `DEEPLAW_HOME` or select one artifact
 before startup with `DEEPLAW_DB`. Host-specific configuration and skills are
 thin adapters; they do not contain a second copy of retrieval logic.
@@ -143,7 +155,7 @@ bytes, OCR output, parser identity, or normalized legal text creates a
 different release. SQLite's binary hash remains a separate artifact integrity
 value.
 
-### Known `0.2.0` release limitations
+### Known `0.3.0` release limitations
 
 The current implementation is an alpha baseline, not yet a production release
 authority. The following gaps must remain visible until code and tests close
@@ -153,7 +165,10 @@ them:
   heuristics; they require explicit review before a production release.
 - The builder validates an HTTPS source declaration but does not yet enforce an
   approved official-domain policy or independently refetch the source.
-- Release metadata carries a database SHA-256 but no release signature.
+- Release metadata carries a database SHA-256 but no release signature. The
+  current update channel trusts HTTPS plus the GitHub team account and catalog
+  sequence, then verifies every source byte size and SHA-256; it is not yet a
+  cryptographically signed feed.
 - The CLI has a local candidate activation pointer but does not yet implement
   signed release approval, revocation, or supersession workflows. Human PDF
   page-review files record reviewer identity, role, time, and attestation, but
@@ -218,6 +233,52 @@ DOCX/PDF bytes. Source packages remain separately controlled inputs. Runtime
 connections use `query_only`, foreign keys, and SQLite's immutable read-only
 URI. No WAL or write-capable cache belongs beside a published database.
 
+### Storage scopes and lifecycle
+
+```text
+~/.deeplaw/
+├── ACTIVE                         # enabled official release only
+├── releases/<lawrel_...>/         # immutable official releases
+├── official/
+│   ├── state.json                 # installed IDs + monotonic catalog state
+│   ├── catalogs/                  # exact catalog snapshots
+│   └── sources/                   # hash-addressed official downloads
+└── private/
+    ├── ACTIVE                     # active user-private snapshot
+    ├── library.json               # private document inventory, mode 0600
+    ├── sources/                   # hash-addressed private files, mode 0600
+    └── releases/<lawrel_...>/     # owner-only snapshot, database mode 0400
+```
+
+`official install` builds the bundled catalog; `official update` accepts only
+the same catalog ID and a non-decreasing sequence, rejects a same-sequence
+content rewrite, verifies every source size/hash, creates a new release, and
+atomically moves the official pointer. `disable` removes only that pointer;
+`uninstall` deletes only release IDs registered by official state plus its
+catalog/source cache.
+
+Some official download endpoints return a JSON envelope rather than the source
+binary. The current adapter recognizes only the National Laws and Regulations
+Database endpoint, caps the envelope at 64 KiB, requires its exact HTTPS object
+storage host and matching file suffix, then still verifies the catalog byte size
+and SHA-256. Transient 429/5xx failures receive three bounded retries; integrity
+failures are never retried into acceptance.
+
+Private add/delete never touches the official pointer, state, source cache, or
+release directories. A mutation rebuilds a new private snapshot and removes
+obsolete private snapshots/sources. The MCP process checks the private ACTIVE
+epoch before each private read, so a process pinned before deletion fails
+closed until restart instead of continuing to expose the deleted snapshot.
+Private receipts are snapshot-scoped and intentionally cease to verify after a
+mutation removes the prior snapshot.
+
+For a managed official catalog, the MCP process performs the same epoch check
+before every official read. Update, disable, or uninstall can finish an already
+executing read on its pinned connection, but later calls from that old process
+fail closed until restart. An explicit `DEEPLAW_DB` is host-pinned and therefore
+uses the host's own release/connection epoch policy instead of the local ACTIVE
+guard.
+
 ### Stable identifiers
 
 - `lawrel_*`: derived from source/metadata, normalized segment hashes,
@@ -258,9 +319,16 @@ enter primary evidence; unknown or unreviewed dates are isolated in
 `uncertain_evidence`, and known out-of-scope material is excluded. This is
 research assistance, not an applicability ruling.
 
+Extraction admission is independent of temporal admission. A document carrying
+`extraction_review_required=true` is isolated in `uncertain_evidence` even when
+its temporal classification would otherwise pass. Its evidence card retains the
+extractor, configuration, warnings, locator, and source hash for source comparison.
+The current v4 storage flag is document-level, so this safety gate can be broader
+than the affected pages; page-scoped admission remains a later schema refinement.
+
 The current model accepts document numbers, aliases, promulgation dates,
 jurisdiction, effective intervals, issuer/status fields, and hash-bound review
-metadata. SQLite v4 includes `legal_edges`, but the `0.2.0` runtime produces only
+metadata. SQLite v4 includes `legal_edges`, but the `0.3.0` runtime produces only
 `deterministic_exact` edges derived from an exact known-document-name reference
 in a source segment. Review-overlay relations are hash-bound governance
 proposals; they are not inserted into the runtime graph, and no current producer
@@ -296,9 +364,10 @@ review accepts it.
 
 The provider-facing schemas live in [`contracts`](../contracts):
 
-- DeepLaw `0.2.0` keeps `law-support.input` and verification at v1; the advertised
-  output union, search response, segment, release-info, evidence-card, and corpus
-  release-manifest contracts are v2.
+- DeepLaw `0.3.0` advertises `law-support.input` v2 for the eight official/private
+  operations and retains input v1 as the official-only compatibility contract.
+  Verification remains v1; the output union, search response, segment,
+  release-info, evidence-card, and corpus release-manifest contracts are v2.
 - `LegalEvidenceCardV2` returns the release, receipt, stable IDs, title, issuer,
   source URL/hash, segment hash, locator, effective interval, status, extraction
   method/configuration/review warnings, score, hit reason, and bounded excerpt.
@@ -309,7 +378,9 @@ The provider-facing schemas live in [`contracts`](../contracts):
   release, document, segment, stored source hash, and stored segment hash. It
   does not reopen or rehash the original DOCX/PDF.
 - `law-support.output` is a closed union of search, segment, verification, and
-  release-info schemas; hosts must reject unknown output fields.
+  release-info schemas. Official and private operations reuse these bounded
+  result shapes, while private release metadata binds `collection_scope` and
+  `library_id`; hosts must reject unknown output fields.
 
 This two-stage pattern prevents broad queries such as `诈骗` from inserting
 dozens of semantically related provisions into the model context. Search is a
@@ -319,7 +390,7 @@ selection operation; `get` is a deliberate evidence-read operation.
 
 [`src/deeplaw/mcp_server.py`](../src/deeplaw/mcp_server.py) uses the MCP SDK's
 low-level `Server` and local stdio transport to expose one tool, `law_support`,
-with four read-only operations. Its advertised output schema is a bundled,
+with eight read-only operations. Its advertised output schema is a bundled,
 closed copy of the repository contracts, so clients do not need to resolve
 remote schema URLs during the handshake:
 
@@ -329,6 +400,10 @@ remote schema URLs during the handshake:
 | `get` | Fetch one exact segment | `segment_id` |
 | `verify` | Verify a returned receipt | `segment_id` and `receipt_id` |
 | `release_info` | Inspect the active release | None |
+| `private_search` | Search only the user-private legal-reference snapshot | Query and optional purpose/date filters |
+| `private_get` | Fetch one exact private segment | `segment_id` |
+| `private_verify` | Verify one private snapshot receipt | `segment_id` and `receipt_id` |
+| `private_info` | Inspect the active private snapshot | None |
 
 Some hosts display a transport-qualified name such as
 `mcp__deeplaw__law_support`. The `mcp__deeplaw__` portion is host routing
@@ -347,7 +422,10 @@ Host integration must follow these rules:
 - Do not invoke it merely because an unrelated dataset contains words such as
   `诈骗`, `合同`, or `法院`.
 - Send a de-identified legal issue, citation, or date filter; do not send a full
-  case record or personal identifiers to the public service.
+  case record or personal identifiers to either DeepLaw scope.
+- Use `private_*` only after an explicit request for the user's private legal
+  references. Query official and private scopes separately and label them;
+  never merge their ranking or authority.
 - Keep case-private attachments, conversation state, and analysis in the host's
   case project storage.
 - Treat an unavailable or unverified release as a visible failure; do not fall
@@ -371,7 +449,7 @@ Derived layers are permitted only when all of the following hold:
   segment;
 - evaluated against exact/lexical-only retrieval before activation.
 
-The `0.2.0` deterministic graph supports only `cites`, `amends`, `repeals`,
+The `0.3.0` deterministic graph supports only `cites`, `amends`, `repeals`,
 `replaces`, `implements`, and `exception_to`. Each runtime edge is
 `deterministic_exact` and retains the source segment and evidence hash. Relations
 declared in a review overlay remain governance proposals; the current runtime
@@ -404,8 +482,9 @@ DeepLaw must not:
 - infer repeal or legal effect solely from an embedding or LLM output;
 - return unlimited vector top-k context;
 - use generated summaries as authoritative citations;
-- accept case-private writes through MCP;
-- share one mutable database between public law and case projects;
+- accept any writes through MCP;
+- share one mutable database between official law, private legal references,
+  or case projects;
 - hide missing evidence by answering from model memory;
 - market benchmark superiority without reproducible evidence.
 

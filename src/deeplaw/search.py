@@ -188,7 +188,13 @@ def _target_query_forms(query: str) -> tuple[str, ...]:
 
 
 class DeepLaw:
-    def __init__(self, database: str | Path | None = None, *, home: str | Path | None = None):
+    def __init__(
+        self,
+        database: str | Path | None = None,
+        *,
+        home: str | Path | None = None,
+        expected_scope: Literal["official", "user_private"] | None = None,
+    ):
         self.database = resolve_active_database(explicit_db=database, home=home)
         self.artifact = verify_release_artifact(self.database)
         self.connection = connect_readonly(self.database)
@@ -201,6 +207,12 @@ class DeepLaw:
         if self.artifact.get("release_id") != self.release_id:
             self.connection.close()
             raise RuntimeError("release database metadata does not match release.json")
+        self.collection_scope = str(self.artifact.get("collection_scope", "official"))
+        if expected_scope is not None and self.collection_scope != expected_scope:
+            self.connection.close()
+            raise RuntimeError(
+                f"expected {expected_scope} release, got {self.collection_scope}"
+            )
         release = self.info.get("release", {})
         artifact_release = {
             key: value for key, value in self.artifact.items() if key != "database_sha256"
@@ -256,7 +268,7 @@ class DeepLaw:
             self._target_document_ids(request.query)
         )
         candidates = self._candidate_rows(request, route)
-        primary_rows: list[tuple[sqlite3.Row, str]] = []
+        ranked_rows: list[tuple[sqlite3.Row, str, bool]] = []
         uncertain_rows: list[tuple[sqlite3.Row, str]] = []
         temporal_outside_count = 0
         seen: set[tuple[str, str | None]] = set()
@@ -276,47 +288,41 @@ class DeepLaw:
             )
             if temporal_classification == "outside_effective_interval":
                 temporal_outside_count += 1
-            elif temporal_classification == "unverified_metadata":
+            elif (
+                temporal_classification == "unverified_metadata"
+                or bool(row["extraction_review_required"])
+            ):
                 uncertain_rows.append((row, temporal_classification))
+                ranked_rows.append((row, temporal_classification, True))
             else:
-                primary_rows.append((row, temporal_classification))
+                ranked_rows.append((row, temporal_classification, False))
 
         evidence: list[EvidenceCard] = []
         uncertain_evidence: list[EvidenceCard] = []
         used_characters = 0
         result_limit = min(request.limit, 3) if route in {"navigation", "exact"} else request.limit
 
-        def append_cards(
-            rows: list[tuple[sqlite3.Row, str]],
-            target: list[EvidenceCard],
-        ) -> None:
-            nonlocal used_characters
-            for row, temporal_classification in rows:
-                if len(evidence) + len(uncertain_evidence) >= result_limit:
-                    break
-                budget = min(
-                    800 if route != "navigation" else 320,
-                    request.max_chars - used_characters,
-                )
-                if budget < 100:
-                    break
-                card = self._card_from_row(
-                    row,
-                    request,
-                    route=route,
-                    max_excerpt_chars=budget,
-                    temporal_classification=cast(
-                        Literal[
-                            "not_evaluated", "verified_in_scope", "unverified_metadata"
-                        ],
-                        temporal_classification,
-                    ),
-                )
-                used_characters += len(card.excerpt)
-                target.append(card)
-
-        append_cards(primary_rows, evidence)
-        append_cards(uncertain_rows, uncertain_evidence)
+        for row, temporal_classification, is_uncertain in ranked_rows:
+            if len(evidence) + len(uncertain_evidence) >= result_limit:
+                break
+            budget = min(
+                800 if route != "navigation" else 320,
+                request.max_chars - used_characters,
+            )
+            if budget < 100:
+                break
+            card = self._card_from_row(
+                row,
+                request,
+                route=route,
+                max_excerpt_chars=budget,
+                temporal_classification=cast(
+                    Literal["not_evaluated", "verified_in_scope", "unverified_metadata"],
+                    temporal_classification,
+                ),
+            )
+            used_characters += len(card.excerpt)
+            (uncertain_evidence if is_uncertain else evidence).append(card)
 
         graph_paths = self._graph_paths(
             tuple(evidence),
@@ -330,11 +336,15 @@ class DeepLaw:
             graph_paths=graph_paths,
             as_of=request.as_of,
         )
+        temporal_uncertain_count = sum(
+            temporal_classification == "unverified_metadata"
+            for _, temporal_classification in uncertain_rows
+        )
         gaps = self._search_gaps(
             route=route,
             exact_target_resolved=exact_target_resolved,
             temporal_intent=temporal_intent,
-            temporal_uncertain_count=len(uncertain_rows),
+            temporal_uncertain_count=temporal_uncertain_count,
             temporal_outside_count=temporal_outside_count,
             evidence_count=len(evidence),
             obligation_coverage=obligation_coverage,
@@ -344,11 +354,25 @@ class DeepLaw:
             "检索结果是研究证据候选，不等同于本案法律适用结论。",
             "DeepLaw 未使用模型记忆、自动 Web 回退或向量 top-k 注入。",
         ]
+        if self.collection_scope == "user_private":
+            notices.insert(
+                0,
+                "当前结果来自用户私有资料库，未经 DeepLaw 官方团队审核，"
+                "不得冒充官方法源。",
+            )
         all_returned_evidence = (*evidence, *uncertain_evidence)
-        if uncertain_evidence:
+        if any(
+            card.temporal_classification == "unverified_metadata"
+            for card in uncertain_evidence
+        ):
             notices.append(
                 "时效检索中，效力起点缺失或状态未验证的候选已从主证据分离；"
                 "正式引用前必须复核。"
+            )
+        if any(card.extraction_review_required for card in uncertain_evidence):
+            notices.append(
+                "存在未完成人工对照的抽取风险，相关候选已从主证据分离；"
+                "引用前必须按页对照原件。"
             )
         if temporal_outside_count:
             notices.append(
@@ -367,7 +391,7 @@ class DeepLaw:
         if not evidence:
             if uncertain_evidence:
                 notices.append(
-                    "当前 release 未形成已验证的主证据；不确定候选不得替代正式时点核验。"
+                    "当前 release 未形成已验证的主证据；不确定候选必须先解决时效或抽取风险。"
                 )
             else:
                 notices.append("当前 release 未找到足够证据；这不表示相关法律不存在。")

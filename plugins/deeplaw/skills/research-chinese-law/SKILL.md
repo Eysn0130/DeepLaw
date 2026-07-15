@@ -5,9 +5,12 @@ description: "Use only after the user explicitly invokes this skill to retrieve 
 
 # DeepLaw Chinese-Law Research
 
-DeepLaw is a read-only legal-source substrate. Use it to collect bounded,
-version-aware evidence. Do not use it to decide case facts, replace legal review,
-or inject a general legal corpus into every conversation.
+DeepLaw is a read-only Agent legal-knowledge substrate. Use its official catalog
+to collect bounded, version-aware evidence. It may also read a physically
+separate user-private legal-reference library, but those results are
+user-provided and never official DeepLaw sources. Do not use either scope to
+decide case facts, replace legal review, or inject a general legal corpus into
+every conversation.
 
 ## Enforce the invocation gate
 
@@ -37,20 +40,32 @@ their own server or plugin prefix to that name. The prefix is not a second tool.
 Do not use any other DeepLaw tool. If the server advertises a different leaf name
 or more than one tool, stop and report an adapter/runtime contract mismatch.
 
-`law_support` routes four read-only operations:
+`law_support` routes eight read-only operations:
 
 - `search`: return a bounded evidence-card set;
 - `get`: fetch one exact segment selected by `segment_id`;
 - `verify`: verify one `segment_id` and `receipt_id` pair;
 - `release_info`: inspect the active immutable release.
+- `private_search`: search only the user-private legal-reference snapshot;
+- `private_get`: fetch one exact private segment;
+- `private_verify`: verify one private snapshot receipt;
+- `private_info`: inspect the current private snapshot.
 
-Never ask for or invent a corpus-write, memory-write, upload, delete, reindex, or
-administration operation.
+Use `private_*` only when the user explicitly asks to use their DeepLaw private
+legal-reference library. Never infer private scope from a workspace, filename,
+or case project. Do not combine official and private candidates into one ranking
+or authority conclusion; query and label the two scopes separately when both
+are explicitly requested.
+
+Never ask for or invent an MCP corpus-write, memory-write, upload, delete,
+reindex, or administration operation. Private add/delete and official updates
+are out-of-band local CLI administration, not Agent tools.
 
 ## Minimize private facts before retrieval
 
-DeepLaw is a public legal-source library, not case storage. Convert case facts
-into the smallest abstract legal issue that can retrieve the rule. Remove names,
+DeepLaw is not case storage. Its private scope is for the user's legal reference
+materials, not case evidence, facts, attachments, chats, or memory. Convert case
+facts into the smallest abstract legal issue that can retrieve the rule. Remove names,
 identity numbers, account numbers, phone numbers, addresses, filenames, internal
 case IDs, quoted chats, and attachment contents. Do not send a whole case summary.
 
@@ -79,7 +94,7 @@ persist private facts in DeepLaw.
    text for every hit.
 5. Call `verify` for each segment that will support a material citation. Do not
    verify unused candidates.
-6. Call `release_info` only when corpus provenance is requested or release state
+6. Call `release_info` or `private_info` only when corpus provenance is requested or release state
    itself is material. Do not add it as a routine token cost.
 
 For an explicit one-word topic, keep `purpose: auto`, return a short navigation
@@ -90,6 +105,9 @@ wide semantic top-k.
 
 - Separate retrieved normalized segment text from the agent's interpretation,
   and retain the official-source locator for comparison.
+- For every `private_*` result, state that it is user-provided and unreviewed by
+  the DeepLaw team. A `private://source/...` locator is an integrity binding, not
+  an official download URL or authority claim.
 - Identify the release, source title, document number when present, exact article
   or locator, status, effective interval, and official source URL.
 - State when temporal applicability or authority relationships require human

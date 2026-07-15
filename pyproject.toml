@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deeplaw"
-version = "0.2.0"
-description = "Verifiable, read-only agent knowledge base for Chinese legal sources"
+version = "0.3.0"
+description = "Verifiable agent knowledge base for official and user-private Chinese legal sources"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -45,6 +45,8 @@ packages = ["src/deeplaw"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "contracts" = "deeplaw/contracts"
+"catalogs" = "deeplaw/catalogs"
+"governance" = "deeplaw/governance"
 
 [tool.pytest.ini_options]
 addopts = "-q"

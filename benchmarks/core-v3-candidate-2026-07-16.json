@@ -1,0 +1,58 @@
+{
+  "schema_version": "deeplaw.benchmark-summary/v2",
+  "status": "candidate_smoke_not_held_out",
+  "run_date": "2026-07-16",
+  "package_version": "0.3.0",
+  "release_id": "lawrel_d900543c826fbc4a19ee4f51adc24e1c",
+  "release_schema": "deeplaw.release/v2",
+  "storage_schema": "deeplaw.sqlite/v4",
+  "database_sha256": "7fecc8d151e0e59555adfcc312355f54861debf4dfcae52829381f40db480787",
+  "source_manifest_sha256": "f25d117a1db575d51fed22114b8ecb2f9ada8f6c3ea9d02fdb2024dc57aa7d5c",
+  "review_overlay_sha256": "9e9a67ca0e12282d610e192c984b89f2ade63a394b52324e37a404aa84288af2",
+  "temporal_status": "partially_verified",
+  "redistribution_status": "restricted",
+  "cases_path": "evals/core-2026-07-14.jsonl",
+  "cases_sha256": "95f52e14b11589850a3a7ecc57fb2bf4614a6be85a979a73869dd37973453625",
+  "eval_report_schema": "deeplaw.eval-report/v2",
+  "case_count": 32,
+  "ranked_case_count": 30,
+  "expected_bucket_counts": {
+    "evidence": 26,
+    "uncertain_evidence": 6
+  },
+  "limit": 5,
+  "retrieval_pass_rate": 1.0,
+  "constraint_pass_rate": 1.0,
+  "overall_pass_rate": 1.0,
+  "receipt_count": 109,
+  "verified_receipt_count": 109,
+  "receipt_verification_pass_rate": 1.0,
+  "hit_at_1": 1.0,
+  "mrr": 1.0,
+  "average_excerpt_chars": 679.719,
+  "p50_latency_ms": 12.0,
+  "p95_latency_ms": 17.25,
+  "latency_scope": "search_only_receipt_verification_excluded",
+  "implementation": {
+    "python_source_tree_sha256": "cbbf2bab274259d5ef79971d335cc6a4d42a329f6d0205b165a2b2a81fbf4983",
+    "search_sha256": "4becaab7ba9e807c04f2277e2c26fe6e36420f09e068172a3e1752ce7c242df6",
+    "evaluator_sha256": "b9537addf77107024facbb9ff598ca2c4bd30cb02705ccba95db4b1b37f10825",
+    "query_plan_sha256": "0a042312c774854267e06d95854caad772e441326bf1dec02a18aabe8096742d",
+    "store_sha256": "4022baaa4d5c0a18520c18ed5416ea07173f4438fe7cc1fe434a1b1ba6a1ae0d",
+    "mcp_server_sha256": "59ef1d11a57540c1f2843681450cae78698c0973e0495d24a3b56c461f94d105"
+  },
+  "environment": {
+    "os": "macOS 26.5.2 arm64",
+    "cpu": "Apple M4 Pro",
+    "memory_bytes": 25769803776,
+    "python": "3.12.13",
+    "sqlite": "3.50.4"
+  },
+  "limitations": [
+    "The query set was designed against the known 28-document corpus.",
+    "This is not a held-out or independently adjudicated legal benchmark.",
+    "No external retrieval system was compared in this run.",
+    "Six assertions require extraction-risk documents to appear only in uncertain_evidence; they do not count those documents as admitted primary evidence.",
+    "The local corpus release remains AI-prechecked, temporally partial, and redistribution-restricted."
+  ]
+}

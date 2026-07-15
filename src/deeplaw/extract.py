@@ -212,6 +212,37 @@ def extract_pdf(path: Path) -> ExtractionResult:
     )
 
 
+def extract_text(path: Path) -> ExtractionResult:
+    try:
+        raw_text = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ExtractionError(f"TXT must be UTF-8 encoded: {path.name}") from error
+    except OSError as error:
+        raise ExtractionError(f"TXT cannot be read: {path.name}") from error
+
+    blocks: list[TextBlock] = []
+    paragraph = 0
+    for raw_line in raw_text.splitlines():
+        text = normalize_text(raw_line)
+        if not text:
+            continue
+        paragraph += 1
+        blocks.append(TextBlock(text=text, paragraph=paragraph))
+    character_count = sum(len(block.text) for block in blocks)
+    if character_count < 20:
+        raise ExtractionError(f"TXT contains too little text: {path.name}")
+    return ExtractionResult(
+        blocks=tuple(blocks),
+        quality=ExtractionQuality(
+            extractor="utf8-text",
+            extractor_version="deeplaw-text/v1",
+            block_count=len(blocks),
+            page_count=None,
+            character_count=character_count,
+        ),
+    )
+
+
 def extract_document(
     path: Path,
     format_name: str,
@@ -228,6 +259,8 @@ def extract_document(
         )
     if format_name == "DOCX":
         return extract_docx(path)
+    if format_name == "TXT":
+        return extract_text(path)
     if format_name != "PDF":
         raise ExtractionError(f"unsupported source format: {format_name}")
     if pdf_fallback not in {"off", "vision-consensus"}:

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:private-library-state:v1",
+  "title": "DeepLawPrivateLibraryStateV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "library_id",
+    "revision",
+    "active_release_id",
+    "documents",
+    "pdf_fallback",
+    "allow_needs_ocr"
+  ],
+  "properties": {
+    "schema_version": { "const": "deeplaw.private-library/v1" },
+    "library_id": { "const": "local-user" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "active_release_id": {
+      "type": ["string", "null"],
+      "pattern": "^lawrel_[0-9a-f]{32}$"
+    },
+    "pdf_fallback": { "enum": ["off", "vision-consensus"] },
+    "allow_needs_ocr": { "type": "boolean" },
+    "documents": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "title",
+          "format",
+          "source_sha256",
+          "byte_size",
+          "storage_name",
+          "document_type",
+          "issuer",
+          "effective_from",
+          "effective_to",
+          "added_at"
+        ],
+        "properties": {
+          "document_id": { "type": "string", "pattern": "^doc_[0-9a-f]{24}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "format": { "enum": ["DOCX", "PDF", "TXT"] },
+          "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "byte_size": { "type": "integer", "minimum": 1, "maximum": 536870912 },
+          "storage_name": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}\\.(docx|pdf|txt)$"
+          },
+          "document_type": {
+            "enum": [
+              "law",
+              "administrative_regulation",
+              "judicial_interpretation",
+              "prosecution_standard",
+              "departmental_rule",
+              "normative_document",
+              "case_reference"
+            ]
+          },
+          "issuer": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "effective_from": { "type": ["string", "null"], "format": "date" },
+          "effective_to": { "type": ["string", "null"], "format": "date" },
+          "added_at": { "type": "string", "format": "date-time", "maxLength": 40 }
+        }
+      }
+    }
+  }
+}
