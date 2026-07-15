@@ -334,8 +334,9 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
 
 ## Source Acquisition and Updates
 
-The current economic-crime source package was last reviewed on **2026-07-14**: **28**
-binary source files — **10 DOCX**, **18 PDF**, and **0 HTML**. Counts below come from the
+DeepLaw is being built as a general legal knowledge base. The tables below show only the
+material currently recorded as of **2026-07-14**: **28** binary source files — **10 DOCX**,
+**18 PDF**, and **0 HTML**. They do not limit future coverage. Counts come from the
 operator-maintained download manifest; this repository does not redistribute the files.
 
 | Source-package group | Count | Coverage |
