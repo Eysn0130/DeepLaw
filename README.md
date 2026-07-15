@@ -2,7 +2,7 @@
   <strong>简体中文</strong> · <a href="README_EN.md">English</a>
 </p>
 
-<h1 align="center">DeepLaw</h1>
+<h1 align="center">DeepLaw - 2.0</h1>
 
 <p align="center">
   <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 磨砂透明玻璃字标" />
