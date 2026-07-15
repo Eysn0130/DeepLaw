@@ -2,9 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from reportlab.pdfgen import canvas
 
-from deeplaw.extract import _text_layer_suspicious, extract_docx, extract_pdf
+from deeplaw import extract as extract_module
+from deeplaw import vision
+from deeplaw.extract import (
+    ExtractionError,
+    _text_layer_suspicious,
+    extract_docx,
+    extract_pdf,
+    extract_text,
+)
 from deeplaw.models import TextBlock
 from deeplaw.segment import segment_document
 from deeplaw.util import excerpt, normalize_article_label, search_terms
@@ -38,6 +47,46 @@ def test_blank_pdf_is_rejected_by_native_quality_gate(tmp_path: Path) -> None:
 
     assert result.quality.page_count == 1
     assert result.quality.needs_ocr is True
+
+
+def test_native_pdf_path_reuses_the_page_render_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "two-pages.pdf"
+    pdf = canvas.Canvas(str(path))
+    pdf.drawString(72, 720, "first page")
+    pdf.showPage()
+    pdf.drawString(72, 720, "second page")
+    pdf.showPage()
+    pdf.save()
+
+    monkeypatch.setattr(vision, "_MAX_PDF_PAGES", 1)
+    with pytest.raises(ExtractionError, match="page render limit"):
+        extract_pdf(path)
+
+
+def test_txt_streaming_limits_source_characters_and_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_limited = tmp_path / "source-limited.txt"
+    source_limited.write_text("第一条 超出来源大小。\n", encoding="utf-8")
+    monkeypatch.setattr(extract_module, "_MAX_TEXT_SOURCE_BYTES", 8)
+    with pytest.raises(ExtractionError, match="source limit"):
+        extract_text(source_limited)
+
+    monkeypatch.setattr(extract_module, "_MAX_TEXT_SOURCE_BYTES", 1024)
+    character_limited = tmp_path / "character-limited.txt"
+    character_limited.write_text("第一条 超出字符预算。\n", encoding="utf-8")
+    monkeypatch.setattr(extract_module, "_MAX_TEXT_CHARACTERS", 4)
+    with pytest.raises(ExtractionError, match="character limit"):
+        extract_text(character_limited)
+
+    monkeypatch.setattr(extract_module, "_MAX_TEXT_CHARACTERS", 1024)
+    block_limited = tmp_path / "block-limited.txt"
+    block_limited.write_text("第一条 一。\n第二条 二。\n", encoding="utf-8")
+    monkeypatch.setattr(extract_module, "_MAX_TEXT_BLOCKS", 1)
+    with pytest.raises(ExtractionError, match="block limit"):
+        extract_text(block_limited)
 
 
 def test_spaced_ocr_text_layer_is_rejected() -> None:

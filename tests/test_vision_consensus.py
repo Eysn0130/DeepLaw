@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import stat
+import sys
 from pathlib import Path
 
 import pytest
 
 from deeplaw import extract, vision
 from deeplaw.cli import _parser
-from deeplaw.util import sha256_bytes, sha256_file
+from deeplaw.document_engine import DocumentEngineError, DocumentEnginePage, DocumentEngineResult
+from deeplaw.util import compact_text, sha256_bytes, sha256_file
 
 
 def _patch_pipeline(
@@ -20,7 +23,14 @@ def _patch_pipeline(
     monkeypatch.setattr(vision, "_executable", lambda name, _environment: f"/fake/{name}")
     monkeypatch.setattr(vision, "_tool_version", lambda _command: "test-tool 1.0")
 
-    def render(_path: Path, output: Path, _pdftoppm: str) -> tuple[Path, ...]:
+    def render(
+        _path: Path,
+        output: Path,
+        _pdftoppm: str,
+        *,
+        page_count: int,
+    ) -> tuple[Path, ...]:
+        assert page_count == len(native_pages)
         images = []
         for page in range(1, len(native_pages) + 1):
             image = output / f"page-{page}.png"
@@ -111,6 +121,459 @@ def test_unreviewed_ocr_remains_fail_closed(
     assert page.review_required is True
     assert "native_empty" in page.risk_flags
     assert page.ocr_confidence == pytest.approx(0.93)
+
+
+def test_document_engine_requires_independent_critical_token_consensus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    text = "第一条 任何单位不得隐匿三万元涉案财物，应当在2026年7月1日前登记。" * 5
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("",),
+        ocr_pages=(vision._OcrPage(text=text, confidence=0.99),),
+    )
+    monkeypatch.setattr(
+        vision,
+        "_document_engine_candidates",
+        lambda _path, _pages: (
+            {
+                1: vision._DocumentEngineCandidate(
+                    blocks=(vision.DocumentEngineBlock("text", text, 1, 1),),
+                    engine="test-engine",
+                    engine_version="1.0",
+                    output_schema="test-schema",
+                    method="ocr",
+                    backend="pipeline",
+                    language="ch",
+                )
+            },
+            ("document_engine=test",),
+            (),
+        ),
+    )
+
+    result = vision.extract_pdf_vision_consensus(source, use_document_engine=True)
+
+    page = result.quality.page_evidence[0]
+    assert page.selected_source == "machine_consensus"
+    assert page.review_required is False
+    assert page.critical_tokens_match is True
+    assert page.ocr_document_engine_consistency == pytest.approx(1.0)
+    assert page.document_engine_name == "test-engine"
+    assert page.document_engine_method == "ocr"
+    assert "machine_consensus_admitted" in page.risk_flags
+
+
+def test_document_engine_disagreement_stays_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    ocr_text = "第一条 任何单位不得隐匿三万元涉案财物。" * 6
+    engine_text = "第一条 任何单位可以隐匿八万元涉案财物。" * 6
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("",),
+        ocr_pages=(vision._OcrPage(text=ocr_text, confidence=0.99),),
+    )
+    monkeypatch.setattr(
+        vision,
+        "_document_engine_candidates",
+        lambda _path, _pages: (
+            {
+                1: vision._DocumentEngineCandidate(
+                    blocks=(vision.DocumentEngineBlock("text", engine_text, 1, 1),),
+                    engine="test-engine",
+                    engine_version="1.0",
+                    output_schema="test-schema",
+                    method="ocr",
+                    backend="pipeline",
+                    language="ch",
+                )
+            },
+            (),
+            (),
+        ),
+    )
+
+    result = vision.extract_pdf_vision_consensus(source, use_document_engine=True)
+
+    page = result.quality.page_evidence[0]
+    assert page.selected_source == "document_engine"
+    assert page.review_required is True
+    assert page.critical_tokens_match is False
+    assert "machine_consensus_unresolved" in page.risk_flags
+
+
+def test_short_document_engine_candidate_cannot_replace_complete_ocr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    compact_ocr_text = ("第一条任何单位应当完整登记涉案财物并保存原始凭证" * 30)[:375]
+    # The real scanned-page failure also carries inter-Han whitespace risk.
+    # That formatting risk must not let a 22-character candidate erase the page.
+    ocr_text = " ".join(compact_ocr_text)
+    engine_text = ("第一条仅识别到残缺页眉" * 3)[:22]
+    assert len(compact_text(ocr_text)) == 375
+    assert len(engine_text) == 22
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("",),
+        ocr_pages=(vision._OcrPage(text=ocr_text, confidence=0.99),),
+    )
+    monkeypatch.setattr(
+        vision,
+        "_document_engine_candidates",
+        lambda _path, _pages: (
+            {
+                1: vision._DocumentEngineCandidate(
+                    blocks=(vision.DocumentEngineBlock("text", engine_text, 1, 1),),
+                    engine="test-engine",
+                    engine_version="1.0",
+                    output_schema="test-schema",
+                    method="ocr",
+                    backend="pipeline",
+                    language="ch",
+                )
+            },
+            (),
+            (),
+        ),
+    )
+
+    page = vision.extract_pdf_vision_consensus(
+        source, use_document_engine=True
+    ).quality.page_evidence[0]
+
+    assert page.selected_source == "ocr"
+    assert page.selected_character_count == 375
+    assert page.document_engine_character_count == 22
+    assert page.review_required is True
+    assert "document_engine_low_character_count" in page.risk_flags
+    assert "machine_consensus_unresolved" in page.risk_flags
+    assert "document_engine_candidate_rejected_incomplete" in page.risk_flags
+
+
+def test_machine_consensus_rejects_noncritical_lexical_disagreement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    ocr_text = "第一条 任何单位应当登记涉案财物并保存原始凭证。" * 8
+    engine_text = "第一条 任何单位应当登记涉案财物并保管原始凭证。" * 8
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("",),
+        ocr_pages=(vision._OcrPage(text=ocr_text, confidence=0.99),),
+    )
+    monkeypatch.setattr(
+        vision,
+        "_document_engine_candidates",
+        lambda _path, _pages: (
+            {
+                1: vision._DocumentEngineCandidate(
+                    blocks=(vision.DocumentEngineBlock("text", engine_text, 1, 1),),
+                    engine="test-engine",
+                    engine_version="1.0",
+                    output_schema="test-schema",
+                    method="ocr",
+                    backend="pipeline",
+                    language="ch",
+                )
+            },
+            (),
+            (),
+        ),
+    )
+
+    result = vision.extract_pdf_vision_consensus(source, use_document_engine=True)
+
+    page = result.quality.page_evidence[0]
+    assert page.critical_tokens_match is True
+    assert page.ocr_document_engine_consistency is not None
+    assert page.ocr_document_engine_consistency >= 0.94
+    assert page.selected_source == "document_engine"
+    assert page.review_required is True
+    assert "machine_consensus_unresolved" in page.risk_flags
+
+
+def test_machine_consensus_rejects_legal_punctuation_disagreement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    ocr_text = "第一条 甲、乙应当登记；丙应当复核。" * 8
+    engine_text = "第一条 甲、乙应当登记，丙应当复核。" * 8
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("",),
+        ocr_pages=(vision._OcrPage(text=ocr_text, confidence=0.99),),
+    )
+    monkeypatch.setattr(
+        vision,
+        "_document_engine_candidates",
+        lambda _path, _pages: (
+            {
+                1: vision._DocumentEngineCandidate(
+                    blocks=(vision.DocumentEngineBlock("text", engine_text, 1, 1),),
+                    engine="test-engine",
+                    engine_version="1.0",
+                    output_schema="test-schema",
+                    method="ocr",
+                    backend="pipeline",
+                    language="ch",
+                )
+            },
+            (),
+            (),
+        ),
+    )
+
+    page = vision.extract_pdf_vision_consensus(
+        source, use_document_engine=True
+    ).quality.page_evidence[0]
+
+    assert page.critical_tokens_match is False
+    assert page.selected_source == "document_engine"
+    assert page.review_required is True
+
+
+def test_machine_consensus_does_not_flatten_table_structure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    text = "第一条 项目 金额 甲 三万元 乙 五万元。" * 8
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("",),
+        ocr_pages=(vision._OcrPage(text=text, confidence=0.99),),
+    )
+    monkeypatch.setattr(
+        vision,
+        "_document_engine_candidates",
+        lambda _path, _pages: (
+            {
+                1: vision._DocumentEngineCandidate(
+                    blocks=(vision.DocumentEngineBlock("table", text, 1, 1),),
+                    engine="test-engine",
+                    engine_version="1.0",
+                    output_schema="test-schema",
+                    method="ocr",
+                    backend="pipeline",
+                    language="ch",
+                )
+            },
+            (),
+            (),
+        ),
+    )
+
+    page = vision.extract_pdf_vision_consensus(
+        source, use_document_engine=True
+    ).quality.page_evidence[0]
+
+    assert page.critical_tokens_match is True
+    assert page.selected_source == "document_engine"
+    assert page.review_required is True
+    assert "document_engine_table_requires_review" in page.risk_flags
+
+
+def test_document_engine_configuration_is_bounded_for_many_page_ranges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "long.pdf"
+    source.write_bytes(b"long-pdf")
+    good = "中华人民共和国测试法第一条保护证据链完整性。" * 8
+    calls: list[tuple[int, str]] = []
+    failed_pages = {5}
+
+    def run_engine(
+        _path: Path,
+        *,
+        start_page: int,
+        end_page: int,
+        method: str,
+    ) -> DocumentEngineResult:
+        assert start_page == end_page
+        calls.append((start_page, method))
+        if start_page == 3 and method == "auto":
+            raise DocumentEngineError("auto failed")
+        if start_page in failed_pages:
+            raise DocumentEngineError("all methods failed")
+        return DocumentEngineResult(
+            pages=(
+                DocumentEnginePage(
+                    page=start_page,
+                    blocks=(vision.DocumentEngineBlock("text", good, start_page, 1),),
+                ),
+            ),
+            engine="mineru-compatible-cli",
+            engine_version="mineru, version 3.4.4",
+            output_schema="content_list_v2",
+            configuration=(
+                f"method={method}",
+                "backend=pipeline",
+                "language=ch",
+                f"pages={start_page}-{end_page}",
+            ),
+        )
+
+    monkeypatch.setattr(vision, "extract_pdf_page_range", run_engine)
+
+    with pytest.raises(
+        vision.VisionExtractionError,
+        match="one or more requested risk-page ranges: pages=5",
+    ):
+        vision._document_engine_candidates(source, ("", good, "", good, ""))
+    assert calls == [(1, "auto"), (3, "auto"), (3, "ocr"), (5, "auto"), (5, "ocr")]
+
+    failed_pages.clear()
+    calls.clear()
+    candidates, configuration, warnings = vision._document_engine_candidates(
+        source, ("", good, "", good, "")
+    )
+
+    assert set(candidates) == {1, 3, 5}
+    assert candidates[1].method == "auto"
+    assert candidates[3].method == "ocr"
+    assert candidates[5].method == "auto"
+    assert configuration == (
+        "document_engine=mineru-compatible-cli",
+        "document_engine_version=mineru, version 3.4.4",
+        "document_engine_run=schemas=content_list_v2;methods=auto,ocr;"
+        "backends=pipeline;languages=ch;ranges=3",
+    )
+    assert warnings == ()
+    assert calls == [(1, "auto"), (3, "auto"), (3, "ocr"), (5, "auto")]
+
+    calls.clear()
+    _patch_pipeline(
+        monkeypatch,
+        native_pages=("", good, "", good, ""),
+        ocr_pages=tuple(vision._OcrPage(text=good, confidence=0.99) for _page in range(5)),
+    )
+    result = vision.extract_pdf_vision_consensus(source, use_document_engine=True)
+
+    assert len(result.quality.configuration) == 8
+    assert all(len(item) <= 200 for item in result.quality.configuration)
+    assert result.quality.page_evidence[0].document_engine_method == "auto"
+    assert result.quality.page_evidence[2].document_engine_method == "ocr"
+    assert result.quality.page_evidence[4].document_engine_method == "auto"
+
+
+def test_document_engine_mode_fails_when_every_risk_range_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "scan.pdf"
+    source.write_bytes(b"scan-pdf")
+    monkeypatch.setattr(
+        vision,
+        "extract_pdf_page_range",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(DocumentEngineError("failed")),
+    )
+
+    with pytest.raises(vision.VisionExtractionError, match="one or more requested"):
+        vision._document_engine_candidates(source, ("",))
+
+
+class _MediaBox:
+    def __init__(self, width: float, height: float) -> None:
+        self.width = width
+        self.height = height
+
+
+class _PdfPage:
+    def __init__(self, width: float, height: float, user_unit: float = 1) -> None:
+        self.mediabox = _MediaBox(width, height)
+        self.user_unit = user_unit
+
+    def get(self, key: str, default: object) -> object:
+        assert key == "/UserUnit"
+        return self.user_unit if self.user_unit is not None else default
+
+
+def test_pdf_render_budget_rejects_oversized_mediabox(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(vision, "_MAX_RENDER_PAGE_PIXELS", 100)
+
+    with pytest.raises(vision.VisionExtractionError, match=r"page 1.*pixel limit"):
+        vision.validate_pdf_render_budget([_PdfPage(72, 72)])
+
+
+def test_pdf_render_budget_rejects_excessive_total_pixels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(vision, "_MAX_RENDER_PAGE_PIXELS", 100_000)
+    monkeypatch.setattr(vision, "_MAX_RENDER_TOTAL_PIXELS", 150_000)
+
+    with pytest.raises(vision.VisionExtractionError, match="total render pixel limit"):
+        vision.validate_pdf_render_budget([_PdfPage(72, 72), _PdfPage(72, 72)])
+
+
+def test_renderer_uses_small_batches_and_enforces_per_page_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / "fake-pdftoppm"
+    executable.write_text(
+        f"""#!{sys.executable}
+import pathlib
+import sys
+args = sys.argv[1:]
+start = int(args[args.index('-f') + 1])
+end = int(args[args.index('-l') + 1])
+prefix = pathlib.Path(args[-1])
+for page in range(start, end + 1):
+    prefix.with_name(prefix.name + f'-{{page}}.png').write_bytes(b'x' * 32)
+""",
+        encoding="utf-8",
+    )
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"pdf")
+    output = tmp_path / "rendered"
+    output.mkdir()
+    monkeypatch.setattr(vision, "_RENDER_BATCH_PAGES", 2)
+
+    images = vision._render_pages(source, output, str(executable), page_count=5)
+
+    assert [image.name for image in images] == [
+        "page-1.png",
+        "page-2.png",
+        "page-3.png",
+        "page-4.png",
+        "page-5.png",
+    ]
+    monkeypatch.setattr(vision, "_MAX_RENDER_PAGE_BYTES", 16)
+    second_output = tmp_path / "oversized"
+    second_output.mkdir()
+    with pytest.raises(vision.VisionExtractionError, match="oversized page image"):
+        vision._render_pages(source, second_output, str(executable), page_count=1)
+
+
+def test_long_tool_version_is_preserved_by_prefix_and_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    version = "tool-version-" + "y" * 300
+    monkeypatch.setattr(
+        vision,
+        "_run_bounded_pdf_subprocess",
+        lambda *_args, **_kwargs: vision._BoundedProcessResult(
+            returncode=0,
+            stdout=f"{version}\n".encode(),
+            stderr=b"",
+        ),
+    )
+
+    result = vision._tool_version(["tool", "--version"])
+
+    assert result.startswith(version[:80])
+    assert ";sha256=" in result
+    assert len(result) <= 160
 
 
 def test_native_ocr_mismatch_is_explicitly_flagged(
@@ -277,7 +740,7 @@ def test_tesseract_tsv_does_not_trust_out_of_range_confidence() -> None:
     assert result.confidence is None
 
 
-def test_cli_exposes_only_first_party_consensus_fallback() -> None:
+def test_cli_exposes_only_evidence_preserving_pdf_fallbacks() -> None:
     parser = _parser()
 
     args = parser.parse_args(
@@ -293,6 +756,18 @@ def test_cli_exposes_only_first_party_consensus_fallback() -> None:
     )
 
     assert args.pdf_fallback == "vision-consensus"
+    advanced = parser.parse_args(
+        [
+            "build",
+            "--source-root",
+            "/tmp/source",
+            "--manifest",
+            "/tmp/manifest.json",
+            "--pdf-fallback",
+            "document-engine",
+        ]
+    )
+    assert advanced.pdf_fallback == "document-engine"
     for retired in ("external-parser", "raw-ocr"):
         with pytest.raises(SystemExit):
             parser.parse_args(
@@ -314,10 +789,15 @@ def test_extract_document_routes_reviewed_pages_to_consensus(
     source = tmp_path / "source.pdf"
     review = tmp_path / "review.json"
     expected = object()
-    calls: list[tuple[Path, Path | None]] = []
+    calls: list[tuple[Path, Path | None, bool]] = []
 
-    def route(path: Path, *, reviewed_pages_path: Path | None) -> object:
-        calls.append((path, reviewed_pages_path))
+    def route(
+        path: Path,
+        *,
+        reviewed_pages_path: Path | None,
+        use_document_engine: bool,
+    ) -> object:
+        calls.append((path, reviewed_pages_path, use_document_engine))
         return expected
 
     monkeypatch.setattr(extract, "extract_pdf_vision_consensus", route)
@@ -330,7 +810,7 @@ def test_extract_document_routes_reviewed_pages_to_consensus(
     )
 
     assert result is expected
-    assert calls == [(source, review)]
+    assert calls == [(source, review, False)]
 
 
 @pytest.mark.parametrize("fallback", ["external-parser", "raw-ocr"])

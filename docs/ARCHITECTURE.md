@@ -1,9 +1,9 @@
 # DeepLaw Architecture
 
-Status: architecture baseline for DeepLaw `0.3.0`, reviewed against the current
-implementation on 2026-07-15.
+Status: current architecture baseline, reviewed against software version `v0.3.0`
+on 2026-07-16.
 
-DeepLaw is a version-aware Agent Knowledge Base for Chinese legal sources. Its
+DeepLaw 2.0 is a version-aware Agent Knowledge Base for Chinese legal sources. Its
 Agent/MCP surface is read-only. Offline CLI administration manages a
 team-maintained official catalog and a physically separate per-OS-user legal
 reference library. It is a separate local service and release format used by
@@ -101,18 +101,18 @@ flowchart LR
     U["Explicit user legal-reference upload"] --> P["Owner-only private snapshot"]
     P --> E
     E --> M["Single MCP leaf tool\nlaw_support"]
-    M --> C["Codex"]
+    M --> CX["Codex"]
     M --> H["Claude Code"]
     M --> O["OpenCode"]
     M -. "future scoped integration" .-> A["Analytix"]
 
-    C["Case-private documents, chats, facts"] -. "must remain in host case project" .-> A
-    C -. "never enters either DeepLaw scope" .-> R
-    C -. "never enters either DeepLaw scope" .-> P
+    CASE["Case-private documents, chats, facts"] -. "must remain in host case project" .-> A
+    CASE -. "never enters either DeepLaw scope" .-> R
+    CASE -. "never enters either DeepLaw scope" .-> P
 ```
 
 The builder, official updater, and private add/delete commands are offline
-administrative surfaces. The `0.3.0` MCP runtime uses
+administrative surfaces. The software version `v0.3.0` MCP runtime uses
 the SDK's low-level `Server` over local stdio only; it has no HTTP listener and
 no corpus-write operation. Its process lifespan resolves and verifies one
 available release, computes database hashes once during startup, keeps each
@@ -138,31 +138,31 @@ The current implementation starts in
    fallback or accepts an incomplete candidate build.
 8. Segment by article and heading while retaining order and available page or
    paragraph locators.
-9. Hash the normalized document metadata, every segment identity/text hash,
-   extractor backend/version/configuration, extracted-text hash, SQLite engine
-   version, segmentation recipe, and storage schema into the derivation
-   identity.
+9. Hash the exact source-manifest bytes, normalized document metadata, every
+   segment identity/text hash, extractor backend/version/configuration,
+   extracted-text hash, SQLite engine version, segmentation recipe, and storage
+   schema into the derivation identity.
 10. Build the SQLite database in a staging directory, run
     `PRAGMA integrity_check`, and calculate the database SHA-256.
-11. Write `release.json` and `build-report.json`, mark all three release files
-    read-only, and atomically publish a previously unseen release directory.
-12. If the same release ID already exists, verify its derivation and database
-    hashes without rewriting it; optionally update the local `ACTIVE` pointer
-    atomically.
+11. Write `release.json` and `build-report.json`, bind the build report's SHA-256
+    into both the release manifest and database metadata, mark all three release
+    files read-only, and atomically publish a previously unseen release directory.
+12. If the same release ID already exists, verify its derivation, database, and
+    build-report hashes without rewriting it; optionally update the local
+    `ACTIVE` pointer atomically.
 
-The release ID therefore binds the selected manifest fields, reviewed status
-fields supplied by that manifest, normalized document metadata, parser output,
-extractor versions/configuration, extracted-text and segment hashes, SQLite
-engine version, and derivation/storage schema versions. A change to source
-bytes, OCR output, parser identity, or normalized legal text creates a
-different release. SQLite's binary hash remains a separate artifact integrity
-value.
+The release ID therefore binds the exact manifest bytes, selected manifest
+fields, reviewed status fields supplied by that manifest, normalized document
+metadata, parser output, extractor versions/configuration, extracted-text and
+segment hashes, SQLite engine version, and derivation/storage schema versions.
+A change to source bytes, manifest bytes, OCR output, parser identity, or
+normalized legal text creates a different release. SQLite and build-report
+binary hashes remain separate artifact-integrity values.
 
-### Known `0.3.0` release limitations
+### Known `v0.3.0` release limitations
 
-The current implementation is an alpha baseline, not yet a production release
-authority. The following gaps must remain visible until code and tests close
-them:
+The current implementation is not itself a legal publication authority. The
+following gaps must remain visible until code and tests close them:
 
 - `document_type`, `issuer`, and `authority_rank` begin as filename/title
   heuristics; they require explicit review before a production release.
@@ -180,7 +180,7 @@ them:
 - The original source package is external to the release database, so a
   reproducible release requires separately retained and access-controlled
   source bytes.
-- Candidate IDs and metrics recorded before the current `deeplaw.sqlite/v4`
+- Candidate IDs and metrics recorded before the current `deeplaw.sqlite/v5`
   provenance schema are historical evidence only. A later code or schema
   change does not retroactively upgrade them; they must be rebuilt and
   revalidated before being described as a current runtime candidate.
@@ -194,12 +194,13 @@ silently label a candidate corpus as verified.
 | --- | --- | --- | --- |
 | DOCX | Direct OOXML parsing | None | Paragraph order and style; table rows become blocks |
 | Text-layer PDF | `pypdf` layout/text extraction | None when quality is sufficient | Page number and quality warnings |
-| Scanned or poor PDF | Quality gate fails | `deeplaw-vision-consensus` | Page image/native/OCR/selected hashes, confidence, consistency, risks, review status and tool versions |
+| Scanned or poor PDF | Quality gate fails | DeepLaw Document Engine | Page image/native/OCR/structured-candidate/selected hashes, critical-token agreement, confidence, consistency, risks, review status and tool versions |
 
-`deeplaw-vision-consensus` is a first-party evidence pipeline. It renders every
-page to bind an image hash, evaluates the native text layer, and invokes the
-separately installed local OCR executable only when that page fails the native
-quality gate. It stores page-level OCR confidence and native/OCR consistency;
+The DeepLaw PDF evidence pipeline renders every page to bind an image hash,
+evaluates the native text layer, and invokes local OCR only when that page fails
+the native quality gate. When the optional structured document engine is enabled,
+only risk-page ranges are escalated. Machine consensus requires whole-text
+agreement above the fixed threshold and exact agreement on critical legal tokens;
 low-confidence or disagreeing output remains review-required. A human-reviewed
 override is accepted only through a closed file bound to both source PDF and
 rendered-page hashes, with a human identity, timestamp, role, and visual
@@ -220,8 +221,11 @@ The current SQLite schema is created by
 - `documents`: source identity, title, source URL/hash, type, issuer,
   authority rank, effective interval, review status, extraction backend/version,
   and extraction warnings/review flag.
+- `document_blocks`: Document IR block ID/order, page or paragraph locator,
+  structure type, optional bounding box, selected source, confidence, risk,
+  text and hash.
 - `segments`: stable segment ID, document order, article/heading, text/hash,
-  and page/paragraph interval.
+  page/paragraph interval, source block IDs, and segment-scoped extraction gate.
 
 ### Derived runtime index
 
@@ -314,33 +318,52 @@ compiles a closed QueryPlan and then uses a small deterministic routing layer:
 - `exact`: explicit article/citation or exact-version intent.
 - `research`: a substantive legal research question.
 
-The implemented execution channels are:
+The implemented execution stages are:
 
-1. exact article label;
-2. compact document-title match;
-3. Chinese n-gram FTS5;
-4. deterministic, provenance-carrying one-hop legal graph navigation;
-5. deterministic reordering by channel, term coverage, authority rank, and FTS
-   score;
-6. obligation coverage, explicit gaps, per-document/article deduplication and a
-   hard evidence/character budget.
+1. exact article label and compact document-title match;
+2. source-hash-bound legal-topic locators, when the reviewed release contains the
+   exact registered source and article;
+3. Chinese n-gram FTS5 candidate discovery;
+4. deterministic topic-boundary and same-card query-focus admission before any
+   substantive duty can be witnessed; an unresolved topic fails closed instead
+   of admitting the least-bad neighboring concept;
+5. deterministic lexical ranking among admitted candidates;
+6. coverage-first Evidence Compiler selection under evidence-card and excerpt-
+   character budgets, with duty witnesses, candidate/result digests, and
+   rejection summaries;
+7. obligation coverage, including independent amount/filing-threshold duties,
+   and explicit gaps;
+8. provenance-carrying one-hop graph paths derived from selected admissible
+   evidence for bounded navigation, not for expanding the selected evidence set.
 
-An `as_of` date classifies candidates as `verified_in_scope`,
-`unverified_metadata`, or `outside_effective_interval`. Only the first class can
-enter primary evidence; unknown or unreviewed dates are isolated in
-`uncertain_evidence`, and known out-of-scope material is excluded. This is
-research assistance, not an applicability ruling.
+Topic locators are data-version-sensitive: a locator matches only the declared
+document title, source SHA-256, and article label. If that exact artifact is not
+present in a user-owned or synthetic release, DeepLaw does not claim the official
+locator resolved; it falls back to a visible textual topic boundary for candidate
+admission. Adding unrelated high-scoring documents therefore cannot displace a
+present source-bound locator, while an absent locator cannot manufacture authority.
+The identity gate is invariant across a host-selected `navigation` or `research`
+route. A primary locator alone may witness `primary_rule`; a supporting locator may
+only witness its registered independent duty, such as an amount or filing threshold.
 
-Extraction admission is independent of temporal admission. A document carrying
-`extraction_review_required=true` is isolated in `uncertain_evidence` even when
-its temporal classification would otherwise pass. Its evidence card retains the
-extractor, configuration, warnings, locator, and source hash for source comparison.
-The current v4 storage flag is document-level, so this safety gate can be broader
-than the affected pages; page-scoped admission remains a later schema refinement.
+When the caller supplies `as_of`, candidates are classified as
+`verified_in_scope`, `unverified_metadata`, or `outside_effective_interval`.
+Only the first class can enter primary evidence for that temporal query;
+unknown or unreviewed dates are isolated in `uncertain_evidence`, and known
+out-of-scope material is excluded. Without temporal intent, `v0.3.0` records
+`not_evaluated` and does not claim that returned evidence is verified as
+currently effective. This is research assistance, not an applicability ruling.
+
+Extraction admission is independent of temporal admission. SQLite v5 projects
+page-level evidence through Document IR blocks into each segment. Only a segment
+carrying `extraction_review_required=true` is isolated in `uncertain_evidence`;
+an unrelated risk page no longer downgrades every segment in the same PDF. Its
+evidence card retains the extractor, configuration, risk flags, locator, and
+source hash for source comparison.
 
 The current model accepts document numbers, aliases, promulgation dates,
 jurisdiction, effective intervals, issuer/status fields, and hash-bound review
-metadata. SQLite v4 includes `legal_edges`, but the `0.3.0` runtime produces only
+metadata. SQLite v5 includes `legal_edges`, but the `v0.3.0` runtime produces only
 `deterministic_exact` edges derived from an exact known-document-name reference
 in a source segment. Review-overlay relations are hash-bound governance
 proposals; they are not inserted into the runtime graph, and no current producer
@@ -376,7 +399,7 @@ review accepts it.
 
 The provider-facing schemas live in [`contracts`](../contracts):
 
-- DeepLaw `0.3.0` advertises `law-support.input` v2 for the eight official/private
+- DeepLaw 2.0 software version `v0.3.0` advertises `law-support.input` v2 for the eight official/private
   operations and retains input v1 as the official-only compatibility contract.
   Verification remains v1; the output union, search response, segment,
   release-info, evidence-card, and corpus release-manifest contracts are v2.
@@ -461,7 +484,7 @@ Derived layers are permitted only when all of the following hold:
   segment;
 - evaluated against exact/lexical-only retrieval before activation.
 
-The `0.3.0` deterministic graph supports only `cites`, `amends`, `repeals`,
+The software version `v0.3.0` deterministic graph supports only `cites`, `amends`, `repeals`,
 `replaces`, `implements`, and `exception_to`. Each runtime edge is
 `deterministic_exact` and retains the source segment and evidence hash. Relations
 declared in a review overlay remain governance proposals; the current runtime

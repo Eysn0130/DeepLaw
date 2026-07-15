@@ -8,7 +8,33 @@ from typing import Any
 from .models import SearchRequest
 from .search import DeepLaw
 from .store import database_sha256
-from .util import sha256_file
+from .util import canonical_json, sha256_file
+
+
+def _expected_blocking_gap_pairs(case: dict[str, Any]) -> set[tuple[str, str | None]]:
+    raw_pairs = case.get("expected_blocking_gaps", [])
+    if not isinstance(raw_pairs, list):
+        raise ValueError(
+            f"expected_blocking_gaps must be a list in case {case.get('id')}"
+        )
+    pairs: set[tuple[str, str | None]] = set()
+    for index, item in enumerate(raw_pairs):
+        if not isinstance(item, dict) or "code" not in item or "obligation_id" not in item:
+            raise ValueError(
+                "expected_blocking_gaps entries must contain code and obligation_id "
+                f"in case {case.get('id')} at index {index}"
+            )
+        code = item["code"]
+        obligation_id = item["obligation_id"]
+        if not isinstance(code, str) or (
+            obligation_id is not None and not isinstance(obligation_id, str)
+        ):
+            raise ValueError(
+                "expected_blocking_gaps code must be a string and obligation_id must "
+                f"be a string or null in case {case.get('id')} at index {index}"
+            )
+        pairs.add((code, obligation_id))
+    return pairs
 
 
 def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[str, Any]:
@@ -29,6 +55,13 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
     ranked_cases = 0
     reciprocal_rank = 0.0
     total_chars = 0
+    total_response_chars = 0
+    blocking_gap_case_count = 0
+    blocking_gap_count = 0
+    required_duty_count = 0
+    covered_required_duty_count = 0
+    uncertain_required_duty_count = 0
+    uncovered_required_duty_count = 0
     latencies: list[float] = []
     results: list[dict[str, Any]] = []
     release_id = ""
@@ -49,6 +82,7 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             latency_ms = (perf_counter() - started) * 1000
             latencies.append(latency_ms)
             returned_cards = (*response.evidence, *response.uncertain_evidence)
+            response_dict = response.to_dict()
             expected_bucket = case.get("expected_bucket", "evidence")
             if expected_bucket not in {"evidence", "uncertain_evidence"}:
                 raise ValueError(
@@ -59,12 +93,11 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                 if expected_bucket == "evidence"
                 else response.uncertain_evidence
             )
-            titles = [card.title for card in target_cards]
-            articles = [card.article_label for card in target_cards]
             extraction_review_flags = [
                 card.extraction_review_required for card in target_cards
             ]
             all_titles = [card.title for card in returned_cards]
+            all_articles = [card.article_label for card in returned_cards]
             receipt_checks: list[bool] = []
             for card in returned_cards:
                 verification = law.verify(card.segment_id, card.receipt_id)
@@ -79,30 +112,43 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             expected_titles = set(case.get("expected_titles", []))
             expected_articles = set(case.get("expected_articles", []))
             expected_empty = bool(case.get("expected_empty", False))
-            title_rank = next(
-                (index for index, title in enumerate(titles, start=1) if title in expected_titles),
-                None,
-            )
-            article_rank = next(
+            rank = next(
                 (
                     index
-                    for index, article in enumerate(articles, start=1)
-                    if article in expected_articles
+                    for index, card in enumerate(target_cards, start=1)
+                    if (not expected_titles or card.title in expected_titles)
+                    and (not expected_articles or card.article_label in expected_articles)
                 ),
                 None,
             )
-            ranks = [rank for rank in (title_rank, article_rank) if rank is not None]
-            rank = min(ranks) if ranks else None
             is_ranked_case = bool(expected_titles or expected_articles)
             ranked_cases += int(is_ranked_case)
             if expected_empty:
                 retrieval_passed = not returned_cards
             else:
-                title_passed = not expected_titles or title_rank is not None
-                article_passed = not expected_articles or article_rank is not None
-                retrieval_passed = title_passed and article_passed
+                retrieval_passed = rank is not None if is_ranked_case else bool(returned_cards)
 
             forbidden_titles = set(case.get("forbidden_titles", []))
+            forbidden_articles = set(case.get("forbidden_articles", []))
+            blocking_gaps = [gap for gap in response.gaps if gap.blocking]
+            blocking_gap_pairs = [
+                {"code": gap.code, "obligation_id": gap.obligation_id}
+                for gap in blocking_gaps
+            ]
+            blocking_gap_pair_set = {
+                (gap.code, gap.obligation_id) for gap in blocking_gaps
+            }
+            blocking_gap_codes = {gap.code for gap in blocking_gaps}
+            blocking_gap_obligations = {
+                gap.obligation_id for gap in blocking_gaps if gap.obligation_id is not None
+            }
+            expected_blocking_gap_codes = set(
+                case.get("expected_blocking_gap_codes", [])
+            )
+            expected_blocking_gap_obligations = set(
+                case.get("expected_blocking_gap_obligations", [])
+            )
+            expected_blocking_gap_pairs = _expected_blocking_gap_pairs(case)
             mode_passed = case.get("expected_mode") in {None, response.mode}
             evidence_bound = int(case.get("max_evidence", limit))
             excerpt_bound = int(case.get("max_excerpt_chars", 6000))
@@ -113,6 +159,10 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             )
             constraints_passed = (
                 not (forbidden_titles & set(all_titles))
+                and not (forbidden_articles & set(all_articles))
+                and expected_blocking_gap_codes <= blocking_gap_codes
+                and expected_blocking_gap_obligations <= blocking_gap_obligations
+                and expected_blocking_gap_pairs <= blocking_gap_pair_set
                 and mode_passed
                 and extraction_review_passed
                 and receipt_verification_passed
@@ -129,6 +179,25 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             if is_ranked_case:
                 reciprocal_rank += 0.0 if rank is None else 1.0 / rank
             total_chars += response.total_excerpt_chars
+            serialized_response_chars = len(canonical_json(response_dict))
+            total_response_chars += serialized_response_chars
+            blocking_gap_case_count += int(bool(blocking_gaps))
+            blocking_gap_count += len(blocking_gaps)
+            required_witnesses = [
+                witness
+                for witness in response_dict["evidence_compilation"]["duty_witnesses"]
+                if witness["required"]
+            ]
+            required_duty_count += len(required_witnesses)
+            covered_required_duty_count += sum(
+                witness["status"] == "covered" for witness in required_witnesses
+            )
+            uncertain_required_duty_count += sum(
+                witness["status"] == "uncertain" for witness in required_witnesses
+            )
+            uncovered_required_duty_count += sum(
+                witness["status"] == "uncovered" for witness in required_witnesses
+            )
             results.append(
                 {
                     "id": case.get("id"),
@@ -139,7 +208,7 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                     "rank": rank,
                     "expected_bucket": expected_bucket,
                     "returned_titles": all_titles,
-                    "returned_articles": [card.article_label for card in returned_cards],
+                    "returned_articles": all_articles,
                     "returned_primary_titles": [card.title for card in response.evidence],
                     "returned_uncertain_titles": [
                         card.title for card in response.uncertain_evidence
@@ -152,6 +221,25 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                     "uncertain_evidence_count": len(response.uncertain_evidence),
                     "returned_count": len(returned_cards),
                     "excerpt_chars": response.total_excerpt_chars,
+                    "serialized_response_chars": serialized_response_chars,
+                    "blocking_gap_count": len(blocking_gaps),
+                    "blocking_gap_pairs": blocking_gap_pairs,
+                    "blocking_gap_codes": [gap.code for gap in blocking_gaps],
+                    "blocking_gap_obligations": [
+                        gap.obligation_id
+                        for gap in blocking_gaps
+                        if gap.obligation_id is not None
+                    ],
+                    "required_duty_count": len(required_witnesses),
+                    "covered_required_duty_count": sum(
+                        witness["status"] == "covered" for witness in required_witnesses
+                    ),
+                    "uncertain_required_duty_count": sum(
+                        witness["status"] == "uncertain" for witness in required_witnesses
+                    ),
+                    "uncovered_required_duty_count": sum(
+                        witness["status"] == "uncovered" for witness in required_witnesses
+                    ),
                     "latency_ms": round(latency_ms, 3),
                 }
             )
@@ -159,7 +247,7 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
     latencies.sort()
     p95_index = max(0, min(len(latencies) - 1, int(len(latencies) * 0.95) - 1))
     return {
-        "schema_version": "deeplaw.eval-report/v2",
+        "schema_version": "deeplaw.eval-report/v3",
         "release_id": release_id,
         "database_sha256": database_sha256(database),
         "source_manifest_sha256": source_manifest_sha256,
@@ -177,6 +265,19 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
         "hit_at_1": top1_successes / ranked_cases if ranked_cases else None,
         "mrr": reciprocal_rank / ranked_cases if ranked_cases else None,
         "average_excerpt_chars": round(total_chars / len(cases), 3),
+        "average_serialized_response_chars": round(total_response_chars / len(cases), 3),
+        "blocking_gap_case_count": blocking_gap_case_count,
+        "blocking_gap_case_rate": blocking_gap_case_count / len(cases),
+        "blocking_gap_count": blocking_gap_count,
+        "required_duty_count": required_duty_count,
+        "covered_required_duty_count": covered_required_duty_count,
+        "uncertain_required_duty_count": uncertain_required_duty_count,
+        "uncovered_required_duty_count": uncovered_required_duty_count,
+        "required_duty_covered_rate": (
+            covered_required_duty_count / required_duty_count
+            if required_duty_count
+            else None
+        ),
         "p50_latency_ms": round(latencies[len(latencies) // 2], 3),
         "p95_latency_ms": round(latencies[p95_index], 3),
         "limit": limit,

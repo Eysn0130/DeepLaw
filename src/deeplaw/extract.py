@@ -8,10 +8,19 @@ from pathlib import Path
 
 from .models import ExtractionQuality, ExtractionResult, TextBlock
 from .util import normalize_text
-from .vision import VisionExtractionError, extract_pdf_vision_consensus
+from .vision import (
+    VisionExtractionError,
+    extract_pdf_vision_consensus,
+    validate_pdf_render_budget,
+)
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _MAX_OOXML_MEMBER_BYTES = 64 * 1024 * 1024
+_MAX_TEXT_SOURCE_BYTES = 64 * 1024 * 1024
+_MAX_TEXT_CHARACTERS = 20 * 1024 * 1024
+_MAX_TEXT_LINE_CHARACTERS = 2 * 1024 * 1024
+_MAX_TEXT_BLOCKS = 200_000
+_MAX_PDF_EXTRACTED_CHARACTERS = 20 * 1024 * 1024
 _HAN = r"[\u3400-\u4dbf\u4e00-\u9fff]"
 _HAN_CHARACTER = re.compile(_HAN)
 _HAN_INTERSPACE = re.compile(rf"(?<={_HAN})\s(?={_HAN})")
@@ -123,6 +132,8 @@ def extract_docx(path: Path) -> ExtractionResult:
                         text=text,
                         paragraph=paragraph_index,
                         style=_paragraph_style(child),
+                        kind="paragraph",
+                        source="ooxml",
                     )
                 )
         elif child.tag == f"{_W}tbl":
@@ -134,7 +145,13 @@ def extract_docx(path: Path) -> ExtractionResult:
                 if text:
                     paragraph_index += 1
                     blocks.append(
-                        TextBlock(text=text, paragraph=paragraph_index, style="table-row")
+                        TextBlock(
+                            text=text,
+                            paragraph=paragraph_index,
+                            style="table-row",
+                            kind="table_row",
+                            source="ooxml",
+                        )
                     )
 
     character_count = sum(len(block.text) for block in blocks)
@@ -162,10 +179,15 @@ def extract_pdf(path: Path) -> ExtractionResult:
         reader = PdfReader(str(path), strict=False)
     except Exception as error:  # pypdf exposes parser-specific exceptions.
         raise ExtractionError(f"invalid PDF: {path.name}") from error
+    try:
+        validate_pdf_render_budget(reader.pages)
+    except VisionExtractionError as error:
+        raise ExtractionError(str(error)) from error
 
     blocks: list[TextBlock] = []
     low_text_pages = 0
     warnings: list[str] = []
+    extracted_character_count = 0
     for page_number, page in enumerate(reader.pages, start=1):
         try:
             raw_text = page.extract_text(extraction_mode="layout") or page.extract_text() or ""
@@ -173,6 +195,12 @@ def extract_pdf(path: Path) -> ExtractionResult:
             warnings.append(f"page {page_number}: {type(error).__name__}")
             raw_text = ""
         text = normalize_text(raw_text)
+        extracted_character_count += len(text)
+        if extracted_character_count > _MAX_PDF_EXTRACTED_CHARACTERS:
+            raise ExtractionError(
+                "PDF extracted text exceeds the "
+                f"{_MAX_PDF_EXTRACTED_CHARACTERS} character limit: {path.name}"
+            )
         if len(text) < 40:
             low_text_pages += 1
         if not text:
@@ -180,9 +208,12 @@ def extract_pdf(path: Path) -> ExtractionResult:
         lines = [normalize_text(line) for line in raw_text.splitlines()]
         page_lines = [line for line in lines if line]
         if page_lines:
-            blocks.extend(TextBlock(text=line, page=page_number) for line in page_lines)
+            blocks.extend(
+                TextBlock(text=line, page=page_number, source="native")
+                for line in page_lines
+            )
         else:
-            blocks.append(TextBlock(text=text, page=page_number))
+            blocks.append(TextBlock(text=text, page=page_number, source="native"))
 
     page_count = len(reader.pages)
     character_count = sum(len(block.text) for block in blocks)
@@ -214,20 +245,51 @@ def extract_pdf(path: Path) -> ExtractionResult:
 
 def extract_text(path: Path) -> ExtractionResult:
     try:
-        raw_text = path.read_text(encoding="utf-8-sig")
+        source_size = path.stat().st_size
+    except OSError as error:
+        raise ExtractionError(f"TXT cannot be read: {path.name}") from error
+    if source_size > _MAX_TEXT_SOURCE_BYTES:
+        raise ExtractionError(
+            f"TXT exceeds the {_MAX_TEXT_SOURCE_BYTES // (1024 * 1024)} MiB source limit: "
+            f"{path.name}"
+        )
+
+    blocks: list[TextBlock] = []
+    paragraph = 0
+    source_character_count = 0
+    try:
+        with path.open("r", encoding="utf-8-sig", errors="strict") as source:
+            for raw_line in source:
+                source_character_count += len(raw_line)
+                if source_character_count > _MAX_TEXT_CHARACTERS:
+                    raise ExtractionError(
+                        f"TXT exceeds the {_MAX_TEXT_CHARACTERS} character limit: {path.name}"
+                    )
+                if len(raw_line) > _MAX_TEXT_LINE_CHARACTERS:
+                    raise ExtractionError(
+                        f"TXT line exceeds the {_MAX_TEXT_LINE_CHARACTERS} character limit: "
+                        f"{path.name}"
+                    )
+                text = normalize_text(raw_line)
+                if not text:
+                    continue
+                paragraph += 1
+                if paragraph > _MAX_TEXT_BLOCKS:
+                    raise ExtractionError(
+                        f"TXT exceeds the {_MAX_TEXT_BLOCKS} block limit: {path.name}"
+                    )
+                blocks.append(
+                    TextBlock(
+                        text=text,
+                        paragraph=paragraph,
+                        kind="text_line",
+                        source="text",
+                    )
+                )
     except UnicodeDecodeError as error:
         raise ExtractionError(f"TXT must be UTF-8 encoded: {path.name}") from error
     except OSError as error:
         raise ExtractionError(f"TXT cannot be read: {path.name}") from error
-
-    blocks: list[TextBlock] = []
-    paragraph = 0
-    for raw_line in raw_text.splitlines():
-        text = normalize_text(raw_line)
-        if not text:
-            continue
-        paragraph += 1
-        blocks.append(TextBlock(text=text, paragraph=paragraph))
     character_count = sum(len(block.text) for block in blocks)
     if character_count < 20:
         raise ExtractionError(f"TXT contains too little text: {path.name}")
@@ -252,10 +314,11 @@ def extract_document(
 ) -> ExtractionResult:
     format_name = format_name.upper()
     if reviewed_pages_path is not None and (
-        format_name != "PDF" or pdf_fallback != "vision-consensus"
+        format_name != "PDF"
+        or pdf_fallback not in {"vision-consensus", "document-engine"}
     ):
         raise ExtractionError(
-            "reviewed-pages requires PDF format and pdf_fallback='vision-consensus'"
+            "reviewed-pages requires PDF format and an evidence-preserving PDF fallback"
         )
     if format_name == "DOCX":
         return extract_docx(path)
@@ -263,14 +326,15 @@ def extract_document(
         return extract_text(path)
     if format_name != "PDF":
         raise ExtractionError(f"unsupported source format: {format_name}")
-    if pdf_fallback not in {"off", "vision-consensus"}:
+    if pdf_fallback not in {"off", "vision-consensus", "document-engine"}:
         raise ExtractionError(f"unsupported PDF fallback: {pdf_fallback}")
 
-    if pdf_fallback == "vision-consensus":
+    if pdf_fallback in {"vision-consensus", "document-engine"}:
         try:
             return extract_pdf_vision_consensus(
                 path,
                 reviewed_pages_path=reviewed_pages_path,
+                use_document_engine=pdf_fallback == "document-engine",
             )
         except VisionExtractionError as error:
             raise ExtractionError(str(error)) from error

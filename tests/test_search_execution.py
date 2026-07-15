@@ -8,9 +8,17 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 import deeplaw.ingest as ingest_module
+import deeplaw.search as search_module
 from deeplaw.evaluate import evaluate_file
 from deeplaw.ingest import build_release
-from deeplaw.models import ExtractionQuality, ExtractionResult, SearchRequest, TextBlock
+from deeplaw.legal_topics import LegalTopicAnchor, LegalTopicLocator
+from deeplaw.models import (
+    ExtractionQuality,
+    ExtractionResult,
+    PageExtractionEvidence,
+    SearchRequest,
+    TextBlock,
+)
 from deeplaw.search import DeepLaw
 
 from .helpers import manifest_document, write_docx, write_manifest
@@ -130,8 +138,6 @@ def test_search_uses_bounded_provenance_graph_for_obligation_coverage(
     )
     assert response.query_plan["graph_used"] is True
     assert "legal_graph" in response.query_plan["channels"]
-    assert response.query_plan["vector_used"] is False
-    assert response.query_plan["wiki_used"] is False
     assert len(response.evidence) + len(response.uncertain_evidence) <= 5
     assert response.total_excerpt_chars == sum(
         len(card.excerpt) for card in (*response.evidence, *response.uncertain_evidence)
@@ -273,11 +279,91 @@ def test_extraction_review_required_is_separated_from_primary_evidence(
         encoding="utf-8",
     )
     report = evaluate_file(release / "deeplaw.sqlite3", cases, limit=1)
-    assert report["schema_version"] == "deeplaw.eval-report/v2"
+    assert report["schema_version"] == "deeplaw.eval-report/v3"
     assert report["overall_pass_rate"] == 1.0
     assert report["results"][0]["expected_bucket"] == "uncertain_evidence"
     assert report["results"][0]["evidence_count"] == 0
     assert report["results"][0]["uncertain_evidence_count"] == 1
+    assert report["results"][0]["blocking_gap_count"] >= 1
+    assert report["results"][0]["serialized_response_chars"] > report["results"][0]["excerpt_chars"]
+
+
+def test_page_risk_quarantines_only_segments_from_that_page(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    document = source / "page-scoped.docx"
+    write_docx(document, ["逐页测试法", "第一条 安全文本。", "第二条 待复核文本。"])
+    manifest = write_manifest(
+        source / "manifest.json",
+        [manifest_document(source, document.name, title="逐页测试法")],
+    )
+
+    def extract_with_page_risk(*_args: object, **_kwargs: object) -> ExtractionResult:
+        safe_hash = "1" * 64
+        risky_hash = "2" * 64
+        return ExtractionResult(
+            blocks=(
+                TextBlock(text="逐页测试法", page=1, source="native"),
+                TextBlock(text="第一条 安全文本。", page=1, source="native"),
+                TextBlock(text="第二条 待复核文本。", page=2, source="ocr"),
+            ),
+            quality=ExtractionQuality(
+                extractor="test-page-consensus",
+                extractor_version="v1",
+                block_count=3,
+                page_count=2,
+                character_count=32,
+                review_required=True,
+                page_evidence=(
+                    PageExtractionEvidence(
+                        page=1,
+                        image_sha256=safe_hash,
+                        native_text_sha256=safe_hash,
+                        ocr_text_sha256=None,
+                        selected_text_sha256=safe_hash,
+                        native_character_count=16,
+                        ocr_character_count=0,
+                        selected_character_count=16,
+                        selected_source="native",
+                        review_required=False,
+                        risk_flags=(),
+                    ),
+                    PageExtractionEvidence(
+                        page=2,
+                        image_sha256=risky_hash,
+                        native_text_sha256=risky_hash,
+                        ocr_text_sha256=risky_hash,
+                        selected_text_sha256=risky_hash,
+                        native_character_count=0,
+                        ocr_character_count=16,
+                        selected_character_count=16,
+                        selected_source="ocr",
+                        review_required=True,
+                        risk_flags=("ocr_requires_review",),
+                    ),
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(ingest_module, "extract_document", extract_with_page_risk)
+    release, _ = build_release(
+        source_root=source,
+        manifest_path=manifest,
+        output_root=tmp_path / "releases",
+    )
+
+    with DeepLaw(release / "deeplaw.sqlite3") as law:
+        safe = law.search(SearchRequest(query="逐页测试法 第一条", limit=1))
+        risky = law.search(SearchRequest(query="逐页测试法 第二条", limit=1))
+
+    assert safe.evidence and not safe.uncertain_evidence
+    assert safe.evidence[0].article_label == "第一条"
+    assert not safe.evidence[0].extraction_review_required
+    assert not risky.evidence and risky.uncertain_evidence
+    assert risky.uncertain_evidence[0].article_label == "第二条"
+    assert risky.uncertain_evidence[0].extraction_warnings == ("ocr_requires_review",)
 
 
 def test_as_of_excludes_known_future_interval_and_reports_gap(tmp_path: Path) -> None:
@@ -673,6 +759,334 @@ def test_cross_reference_to_missing_content_cannot_fake_complete_coverage(
     assert coverage["exceptions_counterevidence"] == "gap"
     assert any(gap.blocking for gap in response.gaps)
     assert {
-        gap.obligation_id for gap in response.gaps if gap.code == "required_obligation_uncovered"
+        gap.obligation_id
+        for gap in response.gaps
+        if gap.code == "required_obligation_uncovered"
     } >= {"primary_rule", "elements_definitions", "exceptions_counterevidence"}
+    _validate_search_response(response.to_dict())
+
+
+def test_source_bound_fraud_topic_rejects_neighboring_offences_and_standards(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    noise_articles = [
+        (
+            f"第{index}条 诈骗行为构成要件研究中的数额标准和立案标准材料，"
+            "仅用于形成高词面相关性的非目标候选。"
+        )
+        for index in range(1, 111)
+    ]
+    criminal_law_title = "中华人民共和国刑法（2020年修正）"
+    database = _build(
+        tmp_path,
+        [
+            (
+                "criminal-law.docx",
+                [
+                    criminal_law_title,
+                    "第一百九十三条 有下列情形之一，以非法占有为目的，"
+                    "诈骗银行或者其他金融机构的贷款，数额较大的，构成贷款诈骗罪。",
+                    "第二百六十六条 诈骗公私财物，数额较大的，处三年以下有期徒刑、"
+                    "拘役或者管制，并处或者单处罚金；本法另有规定的，依照规定。",
+                ],
+                {"title": criminal_law_title, "documentType": "law"},
+            ),
+            (
+                "aml.docx",
+                [
+                    "中华人民共和国反洗钱法",
+                    "第二条 本法所称反洗钱，是指预防通过各种方式掩饰、隐瞒诈骗违法"
+                    "所得及其收益来源和性质的活动。",
+                ],
+                {"title": "中华人民共和国反洗钱法", "documentType": "law"},
+            ),
+            (
+                "loan-fraud-case.docx",
+                [
+                    "贷款诈骗案例",
+                    "裁判要旨：行为人骗取银行贷款一百万元，认定贷款诈骗罪。",
+                ],
+                {"title": "贷款诈骗案例", "documentType": "case_reference"},
+            ),
+            (
+                "securities-standard.docx",
+                [
+                    "证券违法立案追诉标准",
+                    "第一条 欺诈发行证券造成投资者损失金额五十万元以上的，应予立案追诉。",
+                ],
+                {
+                    "title": "证券违法立案追诉标准",
+                    "documentType": "judicial_interpretation",
+                },
+            ),
+            (
+                "lexical-noise.docx",
+                ["非目标主题研究资料", *noise_articles],
+                {"title": "非目标主题研究资料", "documentType": "normative_document"},
+            ),
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        source_sha256 = law.connection.execute(
+            "SELECT source_sha256 FROM documents WHERE title = ?",
+            (criminal_law_title,),
+        ).fetchone()["source_sha256"]
+        fraud_anchor = LegalTopicAnchor(
+            canonical_term="诈骗罪",
+            query_aliases=("诈骗",),
+            document_title=criminal_law_title,
+            source_sha256=source_sha256,
+            article_label="第二百六十六条",
+        )
+        checked_in_resolver = search_module.resolve_legal_topic
+
+        def resolve_fixture_topic(topic: str) -> LegalTopicAnchor | None:
+            if topic in fraud_anchor.query_terms:
+                return fraud_anchor
+            return checked_in_resolver(topic)
+
+        monkeypatch.setattr(search_module, "resolve_legal_topic", resolve_fixture_topic)
+
+        ordinary_candidates = law._candidate_rows(
+            SearchRequest(query="诈骗罪构成要件").normalized(),
+            "research",
+        )
+        assert len(ordinary_candidates) == 100
+        assert not any(
+            row["title"] == criminal_law_title
+            and row["article_label"] == "第二百六十六条"
+            for row in ordinary_candidates
+        )
+
+        elements = law.search(SearchRequest(query="诈骗罪构成要件"))
+        screened_alias = law.search(
+            SearchRequest(query="诈骗", purpose="legal_issue_screen")
+        )
+        ambiguous = law.search(SearchRequest(query="诈骗犯罪构成要件"))
+        amount = law.search(SearchRequest(query="诈骗罪 数额标准"))
+        filing = law.search(SearchRequest(query="诈骗罪 立案标准"))
+
+    assert elements.evidence
+    assert {card.title for card in elements.evidence} == {criminal_law_title}
+    assert {card.article_label for card in elements.evidence} == {"第二百六十六条"}
+    assert all(
+        "洗钱" not in card.title and "贷款诈骗" not in card.title
+        for card in elements.evidence
+    )
+    assert not any(gap.code == "query_focus_unresolved" for gap in elements.gaps)
+
+    assert [(card.title, card.article_label) for card in screened_alias.evidence] == [
+        (criminal_law_title, "第二百六十六条")
+    ]
+
+    assert not ambiguous.evidence
+    assert not ambiguous.uncertain_evidence
+    assert any(
+        gap.blocking
+        and gap.code == "query_focus_unresolved"
+        and gap.obligation_id == "query_focus"
+        for gap in ambiguous.gaps
+    )
+
+    for response in (amount, filing):
+        assert response.evidence
+        assert {card.title for card in response.evidence} == {criminal_law_title}
+        assert {card.article_label for card in response.evidence} == {"第二百六十六条"}
+        threshold_coverage = next(
+            item
+            for item in response.obligation_coverage
+            if item.obligation_id == "threshold_standard"
+        )
+        assert threshold_coverage.required is True
+        assert threshold_coverage.status == "gap"
+        assert any(
+            gap.blocking
+            and gap.code == "required_obligation_uncovered"
+            and gap.obligation_id == "threshold_standard"
+            for gap in response.gaps
+        )
+        assert not any(
+            "贷款诈骗" in card.title or "证券" in card.title
+            for card in (*response.evidence, *response.uncertain_evidence)
+        )
+
+    for response in (elements, screened_alias, ambiguous, amount, filing):
+        _validate_search_response(response.to_dict())
+
+
+def test_primary_and_supporting_topic_locators_keep_distinct_evidence_roles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    criminal_law_title = "中华人民共和国刑法（2020年修正）"
+    standard_title = "公安机关管辖的刑事案件立案追诉标准"
+    database = _build(
+        tmp_path,
+        [
+            (
+                "criminal-law.docx",
+                [
+                    criminal_law_title,
+                    "第一百九十三条 以非法占有为目的，诈骗银行或者其他金融机构的贷款，"
+                    "数额较大的，构成贷款诈骗罪并依法追究刑事责任。",
+                ],
+                {"title": criminal_law_title, "documentType": "law"},
+            ),
+            (
+                "prosecution-standard.docx",
+                [
+                    standard_title,
+                    "第四十五条（贷款诈骗案）数额在五万元以上的，应予立 案追诉。",
+                ],
+                {"title": standard_title, "documentType": "prosecution_standard"},
+            ),
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        hashes = {
+            row["title"]: row["source_sha256"]
+            for row in law.connection.execute(
+                "SELECT title, source_sha256 FROM documents"
+            ).fetchall()
+        }
+        anchor = LegalTopicAnchor(
+            canonical_term="贷款诈骗罪",
+            query_aliases=(),
+            document_title=criminal_law_title,
+            source_sha256=hashes[criminal_law_title],
+            article_label="第一百九十三条",
+            supporting_locators=(
+                LegalTopicLocator(
+                    document_title=standard_title,
+                    source_sha256=hashes[standard_title],
+                    article_label="第四十五条",
+                ),
+            ),
+        )
+        monkeypatch.setattr(
+            search_module,
+            "resolve_legal_topic",
+            lambda topic: anchor if topic == "贷款诈骗罪" else None,
+        )
+
+        bare = law.search(SearchRequest(query="贷款诈骗罪"))
+        screened_bare = law.search(
+            SearchRequest(query="贷款诈骗罪", purpose="legal_issue_screen")
+        )
+        elements = law.search(SearchRequest(query="贷款诈骗罪 构成要件"))
+        filing = law.search(SearchRequest(query="贷款诈骗罪 立案标准"))
+        filtered = law.search(
+            SearchRequest(
+                query="贷款诈骗罪 构成要件",
+                document_types=("case_reference",),
+            )
+        )
+
+    assert [(card.title, card.article_label) for card in bare.evidence] == [
+        (criminal_law_title, "第一百九十三条")
+    ]
+    assert [(card.title, card.article_label) for card in screened_bare.evidence] == [
+        (criminal_law_title, "第一百九十三条")
+    ]
+    assert [(card.title, card.article_label) for card in elements.evidence] == [
+        (criminal_law_title, "第一百九十三条")
+    ]
+    assert [(card.title, card.article_label) for card in filing.evidence] == [
+        (criminal_law_title, "第一百九十三条"),
+        (standard_title, "第四十五条"),
+    ]
+    filing_coverage = {item.obligation_id: item for item in filing.obligation_coverage}
+    assert filing_coverage["primary_rule"].evidence_segment_ids == (
+        filing.evidence[0].segment_id,
+    )
+    assert filing_coverage["threshold_standard"].status == "covered"
+    assert filing_coverage["threshold_standard"].evidence_segment_ids == (
+        filing.evidence[1].segment_id,
+    )
+    assert not filtered.evidence
+    assert not filtered.uncertain_evidence
+    assert any(
+        gap.code == "query_focus_unresolved" and gap.blocking for gap in filtered.gaps
+    )
+
+    for response in (bare, screened_bare, elements, filing, filtered):
+        _validate_search_response(response.to_dict())
+
+
+def test_navigation_uses_a_substantive_title_anchor_before_higher_authority_noise(
+    tmp_path: Path,
+) -> None:
+    database = _build(
+        tmp_path,
+        [
+            (
+                "target.docx",
+                [
+                    "中华人民共和国反电信网络诈骗法",
+                    "第一章 总则",
+                    "第一条 为了治理电信网络诈骗活动，制定本法。",
+                ],
+                {
+                    "title": "中华人民共和国反电信网络诈骗法",
+                    "authorityRank": 70,
+                },
+            ),
+            (
+                "noise.docx",
+                [
+                    "支付管理条例",
+                    "第五条 支付机构应当防范电信网络诈骗活动。",
+                ],
+                {"title": "支付管理条例", "authorityRank": 100},
+            ),
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        response = law.search(
+            SearchRequest(query="电信网络诈骗", purpose="broad_topic", limit=3)
+        )
+
+    assert response.mode == "navigation"
+    assert response.evidence[0].title == "中华人民共和国反电信网络诈骗法"
+    assert response.evidence[0].article_label == "第一条"
+    assert response.evidence_compilation["duty_witnesses"][0] == {
+        "duty_id": "query_focus",
+        "role": "identity",
+        "required": True,
+        "status": "covered",
+        "candidate_id": response.evidence[0].segment_id,
+    }
+    _validate_search_response(response.to_dict())
+
+
+def test_research_focus_is_scored_against_body_after_removing_document_title(
+    tmp_path: Path,
+) -> None:
+    database = _build(
+        tmp_path,
+        [
+            (
+                "fx.docx",
+                [
+                    "中华人民共和国外汇管理条例",
+                    "第三十九条 有逃汇行为的，应当依法处理。",
+                    "第五十二条 本条例下列用语的含义包括境内机构和境内个人。",
+                ],
+                {"title": "中华人民共和国外汇管理条例"},
+            )
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        response = law.search(
+            SearchRequest(query="外汇管理条例 逃汇", purpose="legal_issue_screen")
+        )
+
+    assert response.evidence[0].title == "中华人民共和国外汇管理条例"
+    assert response.evidence[0].article_label == "第三十九条"
+    assert all(card.article_label != "第五十二条" for card in response.evidence)
     _validate_search_response(response.to_dict())

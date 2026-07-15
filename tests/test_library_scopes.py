@@ -48,8 +48,9 @@ def _write_catalog(
     documents: list[dict[str, object]],
     *,
     sequence: int,
+    build_policy: dict[str, object] | None = None,
 ) -> Path:
-    value = {
+    value: dict[str, object] = {
         "schemaVersion": "deeplaw.official-catalog/v1",
         "catalogId": "deeplaw-test-official",
         "sequence": sequence,
@@ -63,8 +64,165 @@ def _write_catalog(
         },
         "documents": documents,
     }
+    if build_policy is not None:
+        value["buildPolicy"] = build_policy
     path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
     return path
+
+
+def _write_signed_pdf_catalog(tmp_path: Path) -> tuple[Path, Path, Path]:
+    source = tmp_path / "official-source.pdf"
+    source.write_bytes(b"%PDF-1.7\n% DeepLaw dependency preflight fixture\n")
+    catalog = _write_catalog(
+        tmp_path / "catalog.json",
+        [manifest_document(tmp_path, source.name, title="PDF 预检测试资料")],
+        sequence=1,
+        build_policy={"pdfFallback": "document-engine", "allowNeedsOcr": True},
+    )
+    key_path = tmp_path / "signing" / "catalog-key.pem"
+    trust_path = tmp_path / "trust.json"
+    signature_path = tmp_path / "catalog.json.sig"
+    initialize_signing_key(key_path)
+    export_trust_store(trust_path, key_path=key_path)
+    sign_catalog_file(catalog, signature_path=signature_path, key_path=key_path)
+    return catalog, signature_path, trust_path
+
+
+def test_official_pdf_dependency_preflight_probes_versions_and_chinese_ocr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+    outputs = {
+        ("deeplaw-document-engine", "--version"): b"deeplaw-document-engine 3.4.4\n",
+        ("pdftoppm", "-v"): b"pdftoppm version 25.06.0\n",
+        ("tesseract", "--version"): b"tesseract 5.5.2\n",
+        ("tesseract", "--list-langs"): b"List of available languages (2):\nchi_sim\neng\n",
+    }
+
+    monkeypatch.setattr(
+        official_module.shutil,
+        "which",
+        lambda executable: f"/mock/bin/{executable}",
+    )
+
+    def fake_run(command: list[str], **kwargs: object) -> object:
+        assert kwargs["shell"] is False
+        key = (Path(command[0]).name, command[1])
+        calls.append(key)
+        return official_module.subprocess.CompletedProcess(command, 0, stdout=outputs[key])
+
+    monkeypatch.setattr(official_module.subprocess, "run", fake_run)
+
+    result = official_module._preflight_official_pdf_dependencies()
+
+    assert calls == list(outputs)
+    assert result["document_engine"] == "deeplaw-document-engine 3.4.4"
+    assert result["pdf_renderer"] == "pdftoppm version 25.06.0"
+    assert result["ocr_engine"] == "tesseract 5.5.2"
+    assert result["ocr_language"] == "chi_sim"
+
+
+def test_official_pdf_dependency_preflight_requires_chi_sim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        official_module,
+        "_run_dependency_probe",
+        lambda executable, *arguments, description: (
+            "List of available languages (1):\neng"
+            if arguments == ("--list-langs",)
+            else (
+                "deeplaw-document-engine 3.4.4"
+                if executable == "deeplaw-document-engine"
+                else "dependency 1.0.0"
+            )
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="chi_sim"):
+        official_module._preflight_official_pdf_dependencies()
+
+
+def test_official_pdf_dependency_preflight_rejects_unpinned_engine_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        official_module,
+        "_run_dependency_probe",
+        lambda executable, *arguments, description: (
+            "deeplaw-document-engine 3.4.5"
+            if executable == "deeplaw-document-engine"
+            else "dependency 1.0.0"
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match=r"expected 3\.4\.4"):
+        official_module._preflight_official_pdf_dependencies()
+
+
+def test_signed_official_pdf_preflight_fails_before_source_download_build_or_activation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog, signature, trust = _write_signed_pdf_catalog(tmp_path)
+    downstream_calls: list[str] = []
+
+    def unexpected(name: str):
+        def fail(*_args: object, **_kwargs: object) -> object:
+            downstream_calls.append(name)
+            raise AssertionError(f"{name} must not run after a failed preflight")
+
+        return fail
+
+    monkeypatch.setattr(
+        official_module,
+        "_preflight_official_pdf_dependencies",
+        lambda: (_ for _ in ()).throw(RuntimeError("missing chi_sim OCR language data")),
+    )
+    for name in (
+        "_save_catalog",
+        "_resolve_review_overlay",
+        "_materialize_downloaded_sources",
+        "build_release",
+        "activate_release",
+    ):
+        monkeypatch.setattr(official_module, name, unexpected(name))
+
+    with pytest.raises(RuntimeError, match="chi_sim"):
+        sync_official(
+            catalog_source=catalog,
+            catalog_signature_source=signature,
+            home=tmp_path / "home",
+            trust_store_path=trust,
+        )
+
+    assert downstream_calls == []
+
+
+def test_signed_official_catalog_build_policy_cannot_be_weakened_by_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog, signature, trust = _write_signed_pdf_catalog(tmp_path)
+    monkeypatch.setattr(
+        official_module,
+        "_preflight_official_pdf_dependencies",
+        lambda: (_ for _ in ()).throw(AssertionError("policy rejection must precede preflight")),
+    )
+    monkeypatch.setattr(
+        official_module,
+        "build_release",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("build must not start")),
+    )
+
+    with pytest.raises(ValueError, match="cannot be overridden"):
+        sync_official(
+            catalog_source=catalog,
+            catalog_signature_source=signature,
+            pdf_fallback="off",
+            home=tmp_path / "home",
+            trust_store_path=trust,
+        )
 
 
 def test_bundled_official_catalog_matches_its_public_contract() -> None:
@@ -79,7 +237,7 @@ def test_bundled_official_catalog_matches_its_public_contract() -> None:
     assert catalog["package"]["documentCount"] == 28
     assert len(catalog["documents"]) == 28
     assert catalog["buildPolicy"] == {
-        "pdfFallback": "vision-consensus",
+        "pdfFallback": "document-engine",
         "allowNeedsOcr": True,
     }
     assert catalog["reviewOverlay"]["resource"] == "core-2026-07-14.ai-review.json"

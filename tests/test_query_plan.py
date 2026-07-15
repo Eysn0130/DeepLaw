@@ -40,6 +40,7 @@ def test_public_enum_values_are_stable() -> None:
         "elements_definitions",
         "interpretation",
         "procedure",
+        "threshold_standard",
         "exceptions_counterevidence",
         "case_reference",
     )
@@ -147,6 +148,25 @@ def test_text_cues_work_without_special_purpose() -> None:
         ObligationId.CASE_REFERENCE,
     ]
     assert all(obligation.required for obligation in plan.obligations)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_cue"),
+    [
+        ("诈骗罪 数额标准", "text:数额标准"),
+        ("诈骗罪 立案标准", "text:立案标准"),
+    ],
+)
+def test_offence_threshold_questions_compile_a_distinct_required_obligation(
+    query: str,
+    expected_cue: str,
+) -> None:
+    plan = compile_query_plan(query, "auto", "research")
+    obligations = _obligations(plan)
+
+    assert obligations[ObligationId.THRESHOLD_STANDARD].required is True
+    assert expected_cue in obligations[ObligationId.THRESHOLD_STANDARD].query_cues
+    assert ObligationId.PROCEDURE not in obligations
 
 
 @pytest.mark.parametrize(

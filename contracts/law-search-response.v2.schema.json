@@ -9,6 +9,7 @@
     "release_id",
     "mode",
     "query_plan",
+    "evidence_compilation",
     "evidence",
     "uncertain_evidence",
     "graph_paths",
@@ -42,9 +43,7 @@
         "max_hops",
         "graph_used",
         "temporal_reference_date",
-        "temporal_reference_source",
-        "vector_used",
-        "wiki_used"
+        "temporal_reference_source"
       ],
       "properties": {
         "schema_version": { "const": "deeplaw.query-plan/v1" },
@@ -70,7 +69,7 @@
         "obligations": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 8,
+          "maxItems": 9,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -84,6 +83,7 @@
                   "elements_definitions",
                   "interpretation",
                   "procedure",
+                  "threshold_standard",
                   "exceptions_counterevidence",
                   "case_reference"
                 ]
@@ -111,7 +111,7 @@
           ],
           "properties": {
             "max_query_chars": { "const": 8000 },
-            "max_obligations": { "const": 8 },
+            "max_obligations": { "const": 9 },
             "max_query_cues_per_obligation": { "const": 8 }
           }
         },
@@ -146,9 +146,144 @@
             "release_review_unavailable",
             "not_evaluated"
           ]
+        }
+      }
+    },
+    "evidence_compilation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "max_items",
+        "max_chars",
+        "candidate_count",
+        "selected_ids",
+        "selections",
+        "duty_witnesses",
+        "uncovered_duty_ids",
+        "uncertain_duty_ids",
+        "total_chars",
+        "candidate_digest",
+        "result_digest",
+        "rejected"
+      ],
+      "properties": {
+        "schema_version": { "const": "deeplaw.evidence-compiler/v1" },
+        "max_items": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "max_chars": { "type": "integer", "minimum": 0, "maximum": 6000 },
+        "candidate_count": { "type": "integer", "minimum": 0, "maximum": 256 },
+        "selected_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^seg_[0-9a-f]{24}$" }
         },
-        "vector_used": { "const": false },
-        "wiki_used": { "const": false }
+        "selections": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "candidate_id",
+              "selection_index",
+              "kind",
+              "risk_status",
+              "incremental_required_duty_ids",
+              "incremental_optional_duty_ids",
+              "adds_document_diversity",
+              "chars",
+              "cumulative_chars"
+            ],
+            "properties": {
+              "candidate_id": { "type": "string", "pattern": "^seg_[0-9a-f]{24}$" },
+              "selection_index": { "type": "integer", "minimum": 0, "maximum": 4 },
+              "kind": { "enum": ["required_coverage", "optional_coverage"] },
+              "risk_status": { "enum": ["admissible", "uncertain_fallback"] },
+              "incremental_required_duty_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/duty_id" }
+              },
+              "incremental_optional_duty_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/duty_id" }
+              },
+              "adds_document_diversity": { "type": "boolean" },
+              "chars": { "type": "integer", "minimum": 1, "maximum": 6000 },
+              "cumulative_chars": { "type": "integer", "minimum": 1, "maximum": 6000 }
+            }
+          }
+        },
+        "duty_witnesses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 11,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["duty_id", "role", "required", "status", "candidate_id"],
+            "properties": {
+              "duty_id": { "$ref": "#/$defs/duty_id" },
+              "role": {
+                "enum": [
+                  "identity",
+                  "support",
+                  "temporal",
+                  "counterevidence",
+                  "reference",
+                  "navigation"
+                ]
+              },
+              "required": { "type": "boolean" },
+              "status": { "enum": ["covered", "uncertain", "uncovered"] },
+              "candidate_id": {
+                "anyOf": [
+                  { "type": "string", "pattern": "^seg_[0-9a-f]{24}$" },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        },
+        "uncovered_duty_ids": {
+          "type": "array",
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/duty_id" }
+        },
+        "uncertain_duty_ids": {
+          "type": "array",
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/duty_id" }
+        },
+        "total_chars": { "type": "integer", "minimum": 0, "maximum": 6000 },
+        "candidate_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "result_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "rejected": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason", "count"],
+            "properties": {
+              "reason": {
+                "enum": [
+                  "no_duty_coverage",
+                  "uncertainty_gate",
+                  "redundant_coverage",
+                  "character_budget",
+                  "item_budget",
+                  "lower_priority"
+                ]
+              },
+              "count": { "type": "integer", "minimum": 1, "maximum": 256 }
+            }
+          }
+        }
       }
     },
     "evidence": {
@@ -214,7 +349,7 @@
     "obligation_coverage": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 8,
+      "maxItems": 9,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -235,6 +370,7 @@
               "elements_definitions",
               "interpretation",
               "procedure",
+              "threshold_standard",
               "exceptions_counterevidence",
               "case_reference"
             ]
@@ -270,6 +406,7 @@
           "code": {
             "enum": [
               "exact_target_unresolved",
+              "query_focus_unresolved",
               "temporal_metadata_unverified",
               "temporal_out_of_scope",
               "required_obligation_uncovered",
@@ -281,11 +418,13 @@
             "enum": [
               null,
               "exact_citation",
+              "query_focus",
               "primary_rule",
               "temporal_status_version",
               "elements_definitions",
               "interpretation",
               "procedure",
+              "threshold_standard",
               "exceptions_counterevidence",
               "case_reference"
             ]
@@ -307,5 +446,22 @@
       "items": { "type": "string", "maxLength": 500 }
     },
     "total_excerpt_chars": { "type": "integer", "minimum": 0, "maximum": 6000 }
+  },
+  "$defs": {
+    "duty_id": {
+      "enum": [
+        "exact_citation",
+        "query_focus",
+        "primary_rule",
+        "temporal_status_version",
+        "elements_definitions",
+        "interpretation",
+        "procedure",
+        "threshold_standard",
+        "exceptions_counterevidence",
+        "case_reference",
+        "discovery_lead"
+      ]
+    }
   }
 }

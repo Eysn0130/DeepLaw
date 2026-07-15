@@ -32,6 +32,31 @@ class TextBlock:
     page: int | None = None
     paragraph: int | None = None
     style: str | None = None
+    kind: str = "paragraph"
+    bbox: tuple[float, float, float, float] | None = None
+    source: str = "unknown"
+    confidence: float | None = None
+    review_required: bool = False
+    risk_flags: tuple[str, ...] = ()
+    block_id: str | None = None
+
+
+@dataclass(frozen=True)
+class DocumentBlock:
+    block_id: str
+    document_id: str
+    ordinal: int
+    text: str
+    text_sha256: str
+    page: int | None = None
+    paragraph: int | None = None
+    style: str | None = None
+    kind: str = "paragraph"
+    bbox: tuple[float, float, float, float] | None = None
+    source: str = "unknown"
+    confidence: float | None = None
+    review_required: bool = False
+    risk_flags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -44,11 +69,28 @@ class PageExtractionEvidence:
     native_character_count: int
     ocr_character_count: int
     selected_character_count: int
-    selected_source: Literal["native", "ocr", "reviewed", "none"]
+    selected_source: Literal[
+        "native",
+        "ocr",
+        "document_engine",
+        "machine_consensus",
+        "reviewed",
+        "none",
+    ]
     review_status: Literal["not_reviewed", "human_reviewed"] = "not_reviewed"
     review_required: bool = True
     ocr_confidence: float | None = None
     native_ocr_consistency: float | None = None
+    document_engine_text_sha256: str | None = None
+    document_engine_character_count: int = 0
+    document_engine_name: str | None = None
+    document_engine_version: str | None = None
+    document_engine_schema: str | None = None
+    document_engine_method: str | None = None
+    document_engine_backend: str | None = None
+    document_engine_language: str | None = None
+    ocr_document_engine_consistency: float | None = None
+    critical_tokens_match: bool | None = None
     risk_flags: tuple[str, ...] = ()
     reviewed_by: str | None = None
     reviewed_at: str | None = None
@@ -121,6 +163,9 @@ class Segment:
     page_end: int | None = None
     paragraph_start: int | None = None
     paragraph_end: int | None = None
+    source_block_ids: tuple[str, ...] = ()
+    extraction_review_required: bool = False
+    extraction_risk_flags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -240,6 +285,7 @@ class ObligationCoverage:
 class SearchGap:
     code: Literal[
         "exact_target_unresolved",
+        "query_focus_unresolved",
         "temporal_metadata_unverified",
         "temporal_out_of_scope",
         "required_obligation_uncovered",
@@ -261,6 +307,7 @@ class SearchResponse:
     release_id: str
     mode: str
     query_plan: dict[str, Any]
+    evidence_compilation: dict[str, Any]
     evidence: tuple[EvidenceCard, ...]
     uncertain_evidence: tuple[EvidenceCard, ...]
     graph_paths: tuple[GraphPath, ...]

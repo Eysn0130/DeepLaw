@@ -1,36 +1,36 @@
-# DeepLaw 评测说明
+# DeepLaw 2.0 评测说明
 
-## 当前 0.3 候选结果
+## 当前 v0.3.0 / SQLite v5 候选结果
 
-本次运行于 **2026-07-15T17:57:07Z** 开始（北京时间 **2026-07-16 01:57:07**），使用当前
-`deeplaw.release/v2` / `deeplaw.sqlite/v4` 本地候选执行 32 项白盒 smoke set。报告按无歧义的
-UTC 运行日期记录在
-[`benchmarks/core-v3-candidate-2026-07-15.json`](../benchmarks/core-v3-candidate-2026-07-15.json)：
+当前可复现摘要记录在
+[`benchmarks/core-v5-candidate-2026-07-15.json`](../benchmarks/core-v5-candidate-2026-07-15.json)，
+绑定 `deeplaw.release/v2` / `deeplaw.sqlite/v5`、最终 28 份本地 release、签名目录、review
+overlay、37 项 case 文件、当前 Python source tree 与关键实现 hash：
 
-- 32/32 同时通过检索目标与噪声/上下文约束；
-- 其中 6 项明确要求命中的 5 份抽取风险 PDF 只能出现在 `uncertain_evidence`，不能进入主证据；
-- 30 个有排名目标的 case 为 Hit@1 1.0、MRR 1.0；
-- 平均 evidence excerpt 679.719 字符；
-- 109/109 张返回证据的 receipt 往返核验通过率为 1.0；
-- 已打开本地数据库后的 `law.search()` 本机延迟为 p50 12.363 ms、p95 17.552 ms；数据库
-  打开、receipt 往返断言、JSON 序列化和 MCP transport 均不包含在该延迟中；
-- 精确题名聚焦、法名 + 条号、未来时点负例、历史标题纠偏、OCR review flag 和泛词预算均被
-  固定断言覆盖；
-- `expected_bucket` 将“检索到风险候选”和“准入主证据”拆开断言，cases SHA-256 为
-  `95f52e14b11589850a3a7ecc57fb2bf4614a6be85a979a73869dd37973453625`。
+- 37/37 同时通过已编码的检索目标与噪声、分桶、卡片、excerpt 和 receipt 约束；其中新增
+  4 项相邻罪名与错误标准负例，要求主题无法确定时失败关闭；
+- 题名与条款同时存在时，必须由**同一张卡片**命中，不再把两张不同卡片拼成成功；
+- 34 个有排名目标的 case 为 Hit@1 0.971、MRR 0.985；
+- 37/37 张返回卡 receipt 往返核验通过率为 1.0；
+- 平均 evidence excerpt 为 235.730 字符；平均完整序列化 search response 为 6362.135 字符，
+  证明 excerpt budget 不等于整个 Agent 上下文或 Token budget；
+- 已打开数据库后的 `law.search()` 本机延迟为 p50 16.722 ms、p95 30.102 ms；数据库打开、
+  receipt 核验、JSON 序列化和 MCP transport 不计入该延迟；
+- 20/37 个 case 保留至少一个 blocking gap，共 51 个；138 个必需 compiler Duty 中，91 个
+  `covered`、3 个 `uncertain`、44 个 `uncovered`，covered rate 为 0.659。
 
-报告绑定 release、database、已验签 catalog、review overlay、case 文件、Python source tree、
-关键实现文件、UTC 执行时间和本机环境。语料二进制及 SQLite 不进入 Git；release 仍是
-`partially_verified`、`restricted`、`ai_precheck`。成功只能证明这组已知语料白盒断言，不能
-证明法律内容已获人工批准，也不能证明 DeepLaw 超过任何外部系统。
+最后一组数字是报告的重要组成部分：37/37 只说明预先编码的定位与安全回归通过，不说明每个
+问题已有完整法源、Evidence Duty 已满足或可给出确定性案件适用结论。Skill 必须在回答前检查
+`duty_witnesses`、`obligation_coverage`、`uncertain_duty_ids` 与全部 blocking gaps。
 
-`benchmarks/core-v2-candidate-2026-07-15.json` 和
-`benchmarks/core-candidate-2026-07-15.json` 分别保留 0.2 / SQLite v4 与 0.1 / SQLite v3
-历史快照，不代表当前实现。三份报告均为 `candidate_smoke_not_held_out`，不是盲测、留出集或
-独立专家金标；旧报告绑定的是旧 case hash，不能用当前 case 文件重放后声称结果相同。
+release 仍为 `partially_verified`、`restricted`、`ai_precheck`；语料二进制、Markdown 导出和
+SQLite 不进入 Git。该结果不是盲测、留出集、独立专家金标或外部系统对照，不能证明法律内容
+获人工批准，也不能证明 DeepLaw 超过其他方法。
 
-外部复现需要调用者合法取得确切 candidate 数据库，或用同一 source package、overlay 和
-匹配构建实现重新生成。不同 release 必须作为新快照评测，不能沿用这里的数字。
+`core-v3-candidate-2026-07-15.json`、`core-v2-candidate-2026-07-15.json` 和
+`core-candidate-2026-07-15.json` 是 v4/v3 历史快照，不代表当前实现。外部复现需要调用者合法
+取得相同原件，或用相同 source manifest、overlay 和匹配实现重建；不同 release 必须产生新的
+评测快照，不能沿用这里的数字。
 
 ## 运行方法
 
@@ -47,13 +47,16 @@ deeplaw eval \
 
 评测器检查：
 
-- expected title/article 是否出现在明确指定的 `evidence` 或 `uncertain_evidence` 分桶及其桶内 rank；
+- expected title/article 是否由明确分桶中的同一张卡片满足及其桶内 rank；
 - `expected_empty` case 是否在两个分桶都没有返回候选；
-- forbidden title 是否在任一分桶被错误返回；
+- forbidden title/article 是否在任一分桶被错误返回；
 - expected route；
 - 两个分桶合计数量和 excerpt 字符预算（不是完整序列化响应的字节预算）；
 - 指定 case 的 `extraction_review_required` 标记；
 - 每张主证据和不确定证据的 receipt、release、source hash 与 segment hash 往返核验；
+- 预期的 blocking gap `(code, obligation_id)` 原子配对、必需 compiler Duty 的
+  covered/uncertain/uncovered 数量，
+  以及完整序列化响应字符；
 - retrieval、constraint 和 overall pass rate；
 - Hit@1、MRR、p50/p95 latency；
 - release、database、source manifest 和 case hash。

@@ -1,8 +1,8 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-07-15
+Reviewed: 2026-07-16
 
-This document records the upstream systems examined for DeepLaw and the
+This document records the upstream systems examined for DeepLaw 2.0 and the
 technical decision for each. It distinguishes a runtime dependency, an
 optional external build adapter/tool, possible future code extraction,
 architectural reference, and rejection. It does not assert that repository
@@ -23,11 +23,12 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
   pinned source commit, attribution, tests, and a recorded reason;
 - derived data is replaceable and cannot change legal validity.
 
-Current decision: none of the reviewed knowledge platforms is a direct DeepLaw
-runtime dependency. No source code from these repositories has been copied
-into DeepLaw. The first-party vision pipeline can invoke separately installed
-Tesseract and Poppler's `pdftoppm`; neither executable nor its language data is
-bundled in the DeepLaw core.
+Current decision: none of the reviewed knowledge platforms is a DeepLaw runtime
+authority. No source code from these repositories has been copied into DeepLaw.
+The base MCP runtime stays lightweight. Offline builders may use separately
+installed OCR/PDF tools and the optional `document-engine` dependency; every
+output remains a candidate subject to DeepLaw's own page evidence and admission
+policy.
 
 ## Reviewed Snapshot
 
@@ -44,6 +45,12 @@ bundled in the DeepLaw core.
 | [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) | `0d905e40afa6` | Apache-2.0 | Derived Wiki and Obsidian export reference only |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Retrieval evaluation format and span metrics reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External research benchmark harness reference |
+| [opendatalab/MinerU](https://github.com/opendatalab/MinerU) | `79d6d8d79fb8` | MinerU Open Source License | Optional structured PDF candidate behind the build-only document engine |
+| [PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | `211989f046cc` | Apache-2.0 | Strong candidate for a second Chinese OCR/layout witness; not yet integrated |
+| [docling-project/docling](https://github.com/docling-project/docling) | `e548307e8d32` | MIT | Document IR and provenance reference; not a runtime dependency |
+| [Unstructured-IO/unstructured](https://github.com/Unstructured-IO/unstructured) | `c38745b32f53` | Apache-2.0 | Broad ETL reference; not selected as legal canonical representation |
+| [datalab-to/marker](https://github.com/datalab-to/marker) | `ef16c2caa29d` | GPL-3.0 | Not selected for the default Apache-distributed build path |
+| [datalab-to/surya](https://github.com/datalab-to/surya) | `fe8e2d968462` | GPL-3.0 code; separate model terms | Not selected for default redistribution |
 
 Commit pins identify the material reviewed; they are not dependency pins
 because these projects are not imported into the DeepLaw runtime.
@@ -294,7 +301,11 @@ None of the reviewed platforms.
 ### Current optional external build tools
 
 - Tesseract OCR plus Poppler `pdftoppm`, only through the explicit first-party
-  `vision-consensus` pipeline; no raw OCR bypass is exposed.
+  PDF evidence pipeline; no raw OCR bypass is exposed.
+- MinerU through the optional `deeplaw[document-engine]` build extra and a
+  bounded page-range adapter. It is not imported by, or required for, MCP query
+  runtime. Structured JSON is treated as a candidate; generated Markdown is not
+  accepted as source truth.
 
 ### Suitable for future focused extraction
 

@@ -16,6 +16,7 @@
     "storage_schema",
     "storage_engine",
     "database_sha256",
+    "build_report_sha256",
     "temporal_status",
     "redistribution_status",
     "vector_index",
@@ -41,7 +42,7 @@
     "source_manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "derivation_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "ingestion_schema": { "const": "deeplaw.ingestion/v1" },
-    "storage_schema": { "const": "deeplaw.sqlite/v4" },
+    "storage_schema": { "const": "deeplaw.sqlite/v5" },
     "storage_engine": {
       "type": "object",
       "additionalProperties": false,
@@ -51,6 +52,7 @@
       }
     },
     "database_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "build_report_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "temporal_status": {
       "enum": ["requires_human_review", "partially_verified", "verified"]
     },

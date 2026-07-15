@@ -33,7 +33,7 @@ body:
     attributes:
       label: 版本或提交
       description: 请填写 `deeplaw --version` 输出或 commit SHA；不要填写本机私有路径。
-      placeholder: 0.2.0 or a commit SHA
+      placeholder: 0.3.0 or a commit SHA
     validations:
       required: true
 

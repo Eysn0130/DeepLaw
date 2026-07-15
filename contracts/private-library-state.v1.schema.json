@@ -21,7 +21,7 @@
       "type": ["string", "null"],
       "pattern": "^lawrel_[0-9a-f]{32}$"
     },
-    "pdf_fallback": { "enum": ["off", "vision-consensus"] },
+    "pdf_fallback": { "enum": ["off", "vision-consensus", "document-engine"] },
     "allow_needs_ocr": { "type": "boolean" },
     "documents": {
       "type": "array",

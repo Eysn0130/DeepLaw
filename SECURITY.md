@@ -1,15 +1,15 @@
 # Security Policy
 
-DeepLaw is an alpha, read-only Chinese legal-evidence retrieval project. The
+DeepLaw 2.0 is a read-only Agent Knowledge Base for Chinese legal sources. The
 repository distributes code under Apache License 2.0; it does not distribute
 legal-source packages, case documents, generated release databases, or OCR
 corpora.
 
 ## Supported versions
 
-There is no stable public release yet. Security fixes are currently evaluated
-against the `main` branch. Older commits, local candidate releases, and
-third-party packages are not separately supported unless a future release says
+Security fixes are evaluated for the current software release, `v0.3.0`, and
+the `main` branch. Older versions, local knowledge-release artifacts, and
+third-party packages are not separately supported unless a release notice says
 otherwise.
 
 ## Report a vulnerability privately

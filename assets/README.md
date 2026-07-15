@@ -1,42 +1,36 @@
-# DeepLaw visual system
+# DeepLaw 2.0 visual system
 
-The public visual system uses two coordinated directions:
+The public visual system uses two coordinated levels:
 
-- light frosted glass for the wordmark and five-second product architecture;
-- dark technical infographics for internal capabilities and Evidence Core detail.
+- light frosted glass for the wordmark and the five-second product flow;
+- dark technical diagrams for the knowledge cycle and Evidence Core.
 
-All tracked raster images in this directory were generated with image2 for DeepLaw and
-reviewed for exact text, spelling, composition, and project fit. They are not screenshots
-of a runtime UI and must not be presented as one.
+The tracked images are product illustrations, not screenshots of a runtime UI. Check every
+visible word, label, arrow, and relationship at full resolution before publishing an update.
 
 ## Files
 
-- `brand/deeplaw-2-glass.png`: primary `DeepLaw 2.0` frosted transparent-glass
-  wordmark.
-- `readme/architecture-2-glass.png`: simple Files → DeepLaw Knowledge Base →
-  Locate / Connect / Explain → Evidence Pack → Agent target architecture.
-- `readme/knowledge-cycle.png`: internal Ingest / Organize / Locate / Connect /
-  Explain / Verify target capability cycle, with Deliver as the output action.
+- `brand/deeplaw-2-glass.png`: primary DeepLaw 2.0 wordmark.
+- `readme/product-flow-glass.png`: Files → DeepLaw Knowledge Base → Locate / Connect /
+  Explain → Evidence Pack → Agent. Here “DeepLaw Knowledge Base” labels the functional
+  component inside the product; the public product name remains `DeepLaw 2.0`.
+- `readme/knowledge-cycle.png`: Ingest / Organize / Locate / Connect / Explain / Verify,
+  with Deliver as the output action.
 - `readme/evidence-core.png`: Sources & Versions, Knowledge Map, Evidence Duties,
-  Limits & Gaps, and Receipts & Replay target functional map.
-
-The previous document-icon logo, self-issued capability badge, and dense equal-card
-architecture were retired. They are not alternate DeepLaw identities.
+  Limits & Gaps, and Receipts & Replay.
 
 ## Brand rules
 
-- Primary product spelling: `DeepLaw`.
-- Public architecture wordmark: `DeepLaw 2.0`.
-- Target architecture label: `Architecture 2.0`.
-- Current package version remains independent and is currently `0.2.0` alpha.
-- Core colors: deep ink `#071821`, proof mint `#36CDBB`, cloud white `#F4F7F6`,
-  and a single gap amber accent.
-- Avoid legal-industry clichés, national or official symbols, fake awards, ranking badges,
-  unsupported benchmark claims, and visuals that imply adjudication.
-- Do not add generated text to a release without checking every character at full size.
-- Keep the light architecture as the first explanation. Use dark diagrams only for
-  technical detail so the project remains understandable.
+- Public product name: `DeepLaw 2.0`.
+- Repository name: `DeepLaw`.
+- Python package, CLI, and local configuration prefix: `deeplaw`.
+- Describe the system as the `DeepLaw architecture`; do not give the architecture a version.
+- Software release versions are independent of the product name and belong in release metadata.
+- Core colors: deep ink `#071821`, proof mint `#36CDBB`, cloud white `#F4F7F6`, and one
+  gap-amber accent.
+- Avoid legal-industry clichés, national or official symbols, fake awards, unsupported
+  ranking badges, and visuals that imply adjudication.
+- Keep the light product flow first. Use dark diagrams only for internal technical detail.
 
-The Apache License 2.0 covers the repository's copyrightable project assets. It is not
-trademark clearance for the `DeepLaw` name and does not grant rights in third-party source
-material.
+Apache License 2.0 applies to copyrightable project assets in this repository. It does not
+grant rights in third-party source material or constitute trademark clearance.
