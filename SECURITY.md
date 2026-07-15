@@ -52,6 +52,7 @@ Examples of security-relevant reports include:
 - a write path or command execution reachable through the read-only runtime;
 - path traversal, symlink escape, or release-boundary bypass;
 - receipt, hash, release pinning, or immutable-database verification bypass;
+- official-catalog signature bypass, signing-key exposure, or trust-store confusion;
 - leakage of credentials, case-private data, host paths, or provider-visible
   data beyond the documented budget;
 - unsafe archive, parser, MCP, or dependency behavior with a concrete impact.
@@ -60,6 +61,21 @@ Legal interpretation disagreements, source-currentness corrections, retrieval
 quality suggestions, and documentation errors are normally not security
 vulnerabilities. They may be reported through a public issue only when the
 report contains no private, licensed, or otherwise restricted material.
+
+## Signing-key custody
+
+The single-maintainer catalog-signing key is stored outside the repository at
+`~/.config/deeplaw/signing/official-catalog-ed25519.pem` by default. Its parent
+directory is mode `0700` and the key is mode `0600`; only public keys and detached
+signatures belong in Git. `DEEPLAW_SIGNING_KEY_FILE` may point to another dedicated
+owner-only location. Never attach the private key to an issue, pull request, CI
+secret dump, log, backup artifact, or release package.
+
+If key exposure is suspected, stop signing, report it through the private channel,
+publish a package update whose trust store revokes the affected public key and adds
+a replacement, then sign the next monotonic catalog with the replacement. Existing
+clients still require the trusted package update; the catalog signature mechanism is
+not an online revocation or freeze-detection service.
 
 ## Authorization boundary
 

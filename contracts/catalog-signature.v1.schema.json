@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Eysn0130/DeepLaw/contracts/catalog-signature.v1.schema.json",
+  "title": "DeepLaw Official Catalog Detached Signature v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "algorithm",
+    "keyId",
+    "catalogSha256",
+    "signature"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "deeplaw.catalog-signature/v1"
+    },
+    "algorithm": {
+      "const": "Ed25519"
+    },
+    "keyId": {
+      "type": "string",
+      "pattern": "^ed25519:[0-9a-f]{64}$"
+    },
+    "catalogSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "signature": {
+      "type": "string",
+      "contentEncoding": "base64"
+    }
+  }
+}

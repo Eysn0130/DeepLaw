@@ -11,6 +11,9 @@ per-OS-user private legal-reference imports.
   dependency lockfile.
 - Legal text is authoritative only when it belongs to an immutable release and
   retains its official source URL, source SHA-256, locator, and release ID.
+- Bundled and HTTPS official catalogs are trusted only after exact-byte
+  Ed25519 verification against public keys packaged from `trust/`; network
+  catalogs must never use the local unsigned-development bypass.
 - User-private legal references are never authoritative DeepLaw sources. Keep
   them under the owner-only private root, mark them unverified, and never merge
   their ranking, receipts, or lifecycle with the official catalog.
@@ -43,6 +46,10 @@ per-OS-user private legal-reference imports.
 - Add or update tests for every contract change.
 - Do not commit source DOCX/PDF files, generated release databases, credentials,
   private notes, or local paths containing user material.
+- The single-maintainer catalog key lives outside the repository at
+  `~/.config/deeplaw/signing/official-catalog-ed25519.pem` by default (directory
+  `0700`, file `0600`). Commit only public trust roots and detached signatures;
+  use the maintainer CLI without printing or copying private key material.
 - Use `uv run pytest`, `uv run ruff check .`, and `git diff --check` before
   handoff.
 

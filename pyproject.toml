@@ -20,6 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
+  "cryptography>=46,<50",
   "mcp>=1.28.1,<2",
   "pydantic>=2.13,<3",
   "pypdf>=6.10,<7",
@@ -47,6 +48,7 @@ packages = ["src/deeplaw"]
 "contracts" = "deeplaw/contracts"
 "catalogs" = "deeplaw/catalogs"
 "governance" = "deeplaw/governance"
+"trust" = "deeplaw/trust"
 
 [tool.pytest.ini_options]
 addopts = "-q"

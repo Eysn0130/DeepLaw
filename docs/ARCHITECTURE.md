@@ -16,6 +16,9 @@ authority.
 - Keep authoritative source material and derived retrieval data separate.
 - Build content-addressed SQLite releases offline; open them with SQLite
   `mode=ro&immutable=1` at runtime.
+- Verify every bundled or HTTPS official catalog with an Ed25519 detached
+  signature anchored in public keys shipped with the installed package before
+  parsing, downloading sources, or building.
 - Prefer exact title, citation, article, effective-date, and lexical retrieval.
 - Return at most five evidence cards, then fetch normalized extracted text by
   stable `segment_id`; `get` exposes truncation and accepts `max_chars` up to
@@ -165,10 +168,11 @@ them:
   heuristics; they require explicit review before a production release.
 - The builder validates an HTTPS source declaration but does not yet enforce an
   approved official-domain policy or independently refetch the source.
-- Release metadata carries a database SHA-256 but no release signature. The
-  current update channel trusts HTTPS plus the GitHub team account and catalog
-  sequence, then verifies every source byte size and SHA-256; it is not yet a
-  cryptographically signed feed.
+- The official catalog feed is Ed25519-signed and exact-byte verified against a
+  packaged public trust store. Release metadata still has no separate
+  release-approval signature; the signed catalog protects its source hashes and
+  build declarations, not an independent human approval of the generated
+  SQLite artifact.
 - The CLI has a local candidate activation pointer but does not yet implement
   signed release approval, revocation, or supersession workflows. Human PDF
   page-review files record reviewer identity, role, time, and attestation, but
@@ -241,7 +245,7 @@ URI. No WAL or write-capable cache belongs beside a published database.
 ├── releases/<lawrel_...>/         # immutable official releases
 ├── official/
 │   ├── state.json                 # installed IDs + monotonic catalog state
-│   ├── catalogs/                  # exact catalog snapshots
+│   ├── catalogs/                  # exact catalog + detached-signature snapshots
 │   └── sources/                   # hash-addressed official downloads
 └── private/
     ├── ACTIVE                     # active user-private snapshot
@@ -250,12 +254,20 @@ URI. No WAL or write-capable cache belongs beside a published database.
     └── releases/<lawrel_...>/     # owner-only snapshot, database mode 0400
 ```
 
-`official install` builds the bundled catalog; `official update` accepts only
-the same catalog ID and a non-decreasing sequence, rejects a same-sequence
-content rewrite, verifies every source size/hash, creates a new release, and
-atomically moves the official pointer. `disable` removes only that pointer;
+`official install` verifies and builds the signed bundled catalog. The
+`official update` command retrieves `<catalog URL>.sig`, verifies the exact catalog bytes against
+the packaged public trust store, accepts only the same catalog ID and a
+non-decreasing sequence, rejects a same-sequence content rewrite, verifies every
+source size/hash, creates a new release, and atomically moves the official
+pointer. Signature verification happens before catalog JSON is trusted. A
+missing signature, unknown or revoked key, or byte mismatch fails closed.
+`disable` removes only that pointer;
 `uninstall` deletes only release IDs registered by official state plus its
 catalog/source cache.
+
+An explicit `--allow-unsigned-local-catalog` switch exists only for synthetic
+local development catalogs. It requires an explicitly selected local file and
+is rejected for the bundled catalog and every network URL.
 
 Some official download endpoints return a JSON envelope rather than the source
 binary. The current adapter recognizes only the National Laws and Regulations

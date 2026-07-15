@@ -16,23 +16,30 @@ from urllib.request import Request, urlopen
 
 from . import __version__
 from .admin_lock import administration_locked
+from .catalog_signing import (
+    CATALOG_SIGNATURE_SUFFIX,
+    verify_catalog_signature,
+)
 from .ingest import build_release
 from .models import BuildReport
 from .store import activate_release, default_home, verify_release_artifact
 from .util import canonical_date, sha256_bytes, sha256_file
 
 OFFICIAL_CATALOG_SCHEMA = "deeplaw.official-catalog/v1"
-OFFICIAL_STATE_SCHEMA = "deeplaw.official-state/v1"
+OFFICIAL_STATE_SCHEMA = "deeplaw.official-state/v2"
+LEGACY_OFFICIAL_STATE_SCHEMA = "deeplaw.official-state/v1"
 DEFAULT_CATALOG_URL = (
     "https://raw.githubusercontent.com/Eysn0130/DeepLaw/main/"
     "catalogs/deeplaw-official-cn.json"
 )
 _MAX_CATALOG_BYTES = 64 * 1024 * 1024
+_MAX_SIGNATURE_BYTES = 64 * 1024
 _MAX_SOURCE_BYTES = 512 * 1024 * 1024
 _MAX_DOWNLOAD_ENVELOPE_BYTES = 64 * 1024
 _RELEASE_ID = re.compile(r"^lawrel_[0-9a-f]{32}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _CATALOG_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+_SIGNING_KEY_ID = re.compile(r"^ed25519:[0-9a-f]{64}$")
 _CATALOG_REQUIRED_FIELDS = {
     "schemaVersion",
     "catalogId",
@@ -59,6 +66,14 @@ _STATE_CATALOG_FIELDS = {
     "sha256",
     "source",
     "synced_at",
+    "signature_verified",
+    "signature_key_id",
+    "signature_sha256",
+}
+_LEGACY_STATE_CATALOG_FIELDS = _STATE_CATALOG_FIELDS - {
+    "signature_verified",
+    "signature_key_id",
+    "signature_sha256",
 }
 
 
@@ -82,6 +97,14 @@ def bundled_catalog_path() -> Path:
     if repository.is_file():
         return repository
     raise RuntimeError("bundled DeepLaw official catalog is missing")
+
+
+def bundled_catalog_signature_path() -> Path:
+    catalog = bundled_catalog_path()
+    signature = Path(f"{catalog}{CATALOG_SIGNATURE_SUFFIX}")
+    if signature.is_file():
+        return signature
+    raise RuntimeError("bundled DeepLaw official catalog signature is missing")
 
 
 def _bundled_governance_path(resource: str) -> Path | None:
@@ -115,6 +138,24 @@ def _empty_state() -> dict[str, Any]:
         "installed_release_ids": [],
         "catalog": None,
     }
+
+
+def _migrate_state(value: Any) -> Any:
+    if not isinstance(value, dict) or value.get("schema_version") != LEGACY_OFFICIAL_STATE_SCHEMA:
+        return value
+    if set(value) != _STATE_FIELDS:
+        raise RuntimeError("legacy official state does not match its closed contract")
+    catalog = value.get("catalog")
+    if catalog is not None:
+        if not isinstance(catalog, dict) or set(catalog) != _LEGACY_STATE_CATALOG_FIELDS:
+            raise RuntimeError("legacy official catalog state does not match its closed contract")
+        catalog = {
+            **catalog,
+            "signature_verified": False,
+            "signature_key_id": None,
+            "signature_sha256": None,
+        }
+    return {**value, "schema_version": OFFICIAL_STATE_SCHEMA, "catalog": catalog}
 
 
 def _validate_state(value: Any) -> dict[str, Any]:
@@ -154,6 +195,20 @@ def _validate_state(value: Any) -> dict[str, Any]:
         for field_name in ("source", "synced_at"):
             if not isinstance(catalog.get(field_name), str) or not catalog[field_name]:
                 raise RuntimeError(f"official catalog {field_name} is invalid")
+        signature_verified = catalog.get("signature_verified")
+        if not isinstance(signature_verified, bool):
+            raise RuntimeError("official catalog signature state is invalid")
+        signature_key_id = catalog.get("signature_key_id")
+        signature_sha256 = catalog.get("signature_sha256")
+        if signature_verified:
+            if not isinstance(signature_key_id, str) or not _SIGNING_KEY_ID.fullmatch(
+                signature_key_id
+            ):
+                raise RuntimeError("official catalog signature key ID is invalid")
+            if not isinstance(signature_sha256, str) or not _SHA256.fullmatch(signature_sha256):
+                raise RuntimeError("official catalog signature SHA-256 is invalid")
+        elif signature_key_id is not None or signature_sha256 is not None:
+            raise RuntimeError("unverified official catalog must not claim signature metadata")
     if value["enabled"] and active is None:
         raise RuntimeError("enabled official state requires an active release")
     return value
@@ -174,7 +229,7 @@ def _load_state(home: str | Path | None = None) -> dict[str, Any]:
         value = json.loads(path.read_bytes())
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RuntimeError("official state cannot be read") from error
-    return _validate_state(value)
+    return _validate_state(_migrate_state(value))
 
 
 def _write_state(state: dict[str, Any], *, home: str | Path | None = None) -> None:
@@ -255,32 +310,106 @@ def _urlopen_with_retry(request: Request, *, timeout: float) -> Any:
     raise RuntimeError("official download retry loop ended unexpectedly")
 
 
-def _read_catalog(source: str | Path | None) -> tuple[dict[str, Any], bytes, str]:
+def _read_local_payload(path_value: str | Path, *, maximum: int, description: str) -> bytes:
+    path = Path(path_value).expanduser()
+    if path.is_symlink():
+        raise ValueError(f"{description} must not be a symbolic link")
+    path = path.resolve(strict=True)
+    if not path.is_file():
+        raise ValueError(f"{description} must be a regular file")
+    if path.stat().st_size > maximum:
+        raise ValueError(f"{description} exceeds its size limit")
+    return path.read_bytes()
+
+
+def _read_catalog(
+    source: str | Path | None,
+    *,
+    signature_source: str | Path | None = None,
+    trust_store_path: str | Path | None = None,
+    allow_unsigned_local_catalog: bool = False,
+) -> tuple[dict[str, Any], bytes, str, bytes | None, dict[str, Any]]:
+    local_catalog_path: Path | None = None
+    remote_catalog_url: str | None = None
     if source is None:
         path = bundled_catalog_path()
         payload = path.read_bytes()
         label = "bundled"
+        local_catalog_path = path
     else:
         raw_source = str(source)
         if raw_source.startswith("https://"):
             payload = _download_bytes(raw_source, maximum=_MAX_CATALOG_BYTES)
             label = raw_source
+            remote_catalog_url = raw_source
+        elif "://" in raw_source:
+            raise ValueError("official catalog network source must use HTTPS")
         else:
             path = Path(source).expanduser()
-            if path.is_symlink():
-                raise ValueError("official catalog must not be a symbolic link")
-            path = path.resolve(strict=True)
-            if not path.is_file():
-                raise ValueError("official catalog must be a regular file")
-            payload = path.read_bytes()
+            payload = _read_local_payload(
+                path,
+                maximum=_MAX_CATALOG_BYTES,
+                description="official catalog",
+            )
+            local_catalog_path = path.resolve(strict=True)
             label = "local"
     if len(payload) > _MAX_CATALOG_BYTES:
         raise ValueError("official catalog exceeds the 64 MiB limit")
+
+    if allow_unsigned_local_catalog and (source is None or remote_catalog_url is not None):
+        raise ValueError("only an explicitly selected local catalog may bypass signature checking")
+
+    signature_payload: bytes | None = None
+    if signature_source is not None:
+        raw_signature_source = str(signature_source)
+        if raw_signature_source.startswith("https://"):
+            signature_payload = _download_bytes(
+                raw_signature_source,
+                maximum=_MAX_SIGNATURE_BYTES,
+            )
+        elif "://" in raw_signature_source:
+            raise ValueError("official catalog signature network source must use HTTPS")
+        else:
+            signature_payload = _read_local_payload(
+                signature_source,
+                maximum=_MAX_SIGNATURE_BYTES,
+                description="official catalog signature",
+            )
+    elif remote_catalog_url is not None:
+        signature_payload = _download_bytes(
+            f"{remote_catalog_url}{CATALOG_SIGNATURE_SUFFIX}",
+            maximum=_MAX_SIGNATURE_BYTES,
+        )
+    elif source is None:
+        signature_payload = bundled_catalog_signature_path().read_bytes()
+    elif local_catalog_path is not None:
+        candidate = Path(f"{local_catalog_path}{CATALOG_SIGNATURE_SUFFIX}")
+        if candidate.exists() or not allow_unsigned_local_catalog:
+            signature_payload = _read_local_payload(
+                candidate,
+                maximum=_MAX_SIGNATURE_BYTES,
+                description="official catalog signature",
+            )
+
+    if signature_payload is None:
+        signature_verification = {
+            "verified": False,
+            "algorithm": None,
+            "key_id": None,
+            "catalog_sha256": sha256_bytes(payload),
+            "signature_sha256": None,
+        }
+    else:
+        signature_verification = verify_catalog_signature(
+            payload,
+            signature_payload,
+            trust_store_path=trust_store_path,
+        )
     try:
         catalog = json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("official catalog is not valid UTF-8 JSON") from error
-    return _validate_catalog(catalog), payload, label
+    return _validate_catalog(catalog), payload, label, signature_payload, signature_verification
 
 
 def _validate_catalog(value: Any) -> dict[str, Any]:
@@ -399,6 +528,8 @@ def _save_catalog(
     catalog: dict[str, Any],
     payload: bytes,
     *,
+    signature_payload: bytes | None,
+    signature_verification: dict[str, Any],
     home: str | Path | None,
 ) -> Path:
     root = _secure_directory(official_home(home) / "catalogs")
@@ -407,14 +538,37 @@ def _save_catalog(
     if path.exists():
         if path.is_symlink() or not path.is_file() or sha256_file(path) != digest:
             raise RuntimeError("stored official catalog failed integrity validation")
-        return path
-    temporary = root / f".{path.name}.tmp"
-    if temporary.is_symlink():
-        raise RuntimeError(f"official catalog temporary must not be a symbolic link: {temporary}")
-    temporary.unlink(missing_ok=True)
-    temporary.write_bytes(payload)
-    os.chmod(temporary, 0o444)
-    os.replace(temporary, path)
+    else:
+        temporary = root / f".{path.name}.tmp"
+        if temporary.is_symlink():
+            raise RuntimeError(
+                f"official catalog temporary must not be a symbolic link: {temporary}"
+            )
+        temporary.unlink(missing_ok=True)
+        temporary.write_bytes(payload)
+        os.chmod(temporary, 0o444)
+        os.replace(temporary, path)
+    if signature_payload is not None:
+        signature_sha256 = signature_verification["signature_sha256"]
+        signature_path = root / f"{path.name}.{signature_sha256}{CATALOG_SIGNATURE_SUFFIX}"
+        if signature_path.exists():
+            if (
+                signature_path.is_symlink()
+                or not signature_path.is_file()
+                or sha256_file(signature_path) != signature_sha256
+            ):
+                raise RuntimeError("stored official catalog signature failed integrity validation")
+        else:
+            temporary = root / f".{signature_path.name}.tmp"
+            if temporary.is_symlink():
+                raise RuntimeError(
+                    "official catalog signature temporary must not be a symbolic link: "
+                    f"{temporary}"
+                )
+            temporary.unlink(missing_ok=True)
+            temporary.write_bytes(signature_payload)
+            os.chmod(temporary, 0o444)
+            os.replace(temporary, signature_path)
     return path
 
 
@@ -658,6 +812,7 @@ def _build_report_summary(report: BuildReport, release_dir: Path) -> dict[str, A
 def _reuse_unchanged_release(
     state: dict[str, Any],
     *,
+    signature_verification: dict[str, Any],
     update: bool,
     home: str | Path | None,
 ) -> dict[str, Any] | None:
@@ -679,13 +834,28 @@ def _reuse_unchanged_release(
     should_enable = state["enabled"] if update else True
     previous_active = _snapshot_active(home)
     active_changed = should_enable and previous_active != release_id
-    state_changed = should_enable != state["enabled"]
+    catalog_trust = {
+        "signature_verified": signature_verification["verified"],
+        "signature_key_id": signature_verification["key_id"],
+        "signature_sha256": signature_verification["signature_sha256"],
+    }
+    if catalog["signature_verified"] and not signature_verification["verified"]:
+        catalog_trust = {
+            "signature_verified": catalog["signature_verified"],
+            "signature_key_id": catalog["signature_key_id"],
+            "signature_sha256": catalog["signature_sha256"],
+        }
+    next_catalog = {**catalog, **catalog_trust}
+    state_changed = should_enable != state["enabled"] or next_catalog != catalog
     if active_changed or state_changed:
         try:
-            if should_enable:
+            if active_changed:
                 activate_release(base_home / "releases", release_id)
             if state_changed:
-                _write_state({**state, "enabled": should_enable}, home=home)
+                _write_state(
+                    {**state, "enabled": should_enable, "catalog": next_catalog},
+                    home=home,
+                )
         except BaseException:
             _restore_active(previous_active, home=home)
             raise
@@ -693,7 +863,7 @@ def _reuse_unchanged_release(
         "changed": False,
         "enabled": should_enable,
         "active_release_id": release_id,
-        "catalog": catalog,
+        "catalog": next_catalog,
         "report": {
             "release_id": release_id,
             "document_count": artifact["document_count"],
@@ -701,7 +871,8 @@ def _reuse_unchanged_release(
             "build_report": str(release_dir / "build-report.json"),
             "cached": True,
         },
-        "restart_required": active_changed or state_changed,
+        "restart_required": active_changed or should_enable != state["enabled"],
+        "trust_updated": next_catalog != catalog,
     }
 
 
@@ -709,14 +880,22 @@ def _reuse_unchanged_release(
 def sync_official(
     *,
     catalog_source: str | Path | None = None,
+    catalog_signature_source: str | Path | None = None,
     source_root: str | Path | None = None,
     update: bool = False,
     pdf_fallback: str | None = None,
     home: str | Path | None = None,
+    allow_unsigned_local_catalog: bool = False,
+    trust_store_path: str | Path | None = None,
 ) -> dict[str, Any]:
     if update and catalog_source is None:
         catalog_source = DEFAULT_CATALOG_URL
-    catalog, payload, source_label = _read_catalog(catalog_source)
+    catalog, payload, source_label, signature_payload, signature_verification = _read_catalog(
+        catalog_source,
+        signature_source=catalog_signature_source,
+        trust_store_path=trust_store_path,
+        allow_unsigned_local_catalog=allow_unsigned_local_catalog,
+    )
     declared_build_policy = catalog.get("buildPolicy", {})
     effective_pdf_fallback = pdf_fallback or declared_build_policy.get("pdfFallback", "off")
     effective_allow_needs_ocr = bool(declared_build_policy.get("allowNeedsOcr", False))
@@ -731,11 +910,29 @@ def sync_official(
         if catalog["sequence"] == previous["sequence"] and digest != previous["sha256"]:
             raise ValueError("official catalog sequence was rewritten with different content")
         if digest == previous["sha256"]:
-            reused = _reuse_unchanged_release(state, update=update, home=home)
+            _save_catalog(
+                catalog,
+                payload,
+                signature_payload=signature_payload,
+                signature_verification=signature_verification,
+                home=home,
+            )
+            reused = _reuse_unchanged_release(
+                state,
+                signature_verification=signature_verification,
+                update=update,
+                home=home,
+            )
             if reused is not None:
                 return reused
 
-    catalog_path = _save_catalog(catalog, payload, home=home)
+    catalog_path = _save_catalog(
+        catalog,
+        payload,
+        signature_payload=signature_payload,
+        signature_verification=signature_verification,
+        home=home,
+    )
     review_overlay_path = _resolve_review_overlay(
         catalog,
         source_label=source_label,
@@ -786,6 +983,9 @@ def sync_official(
             "sha256": digest,
             "source": source_label,
             "synced_at": _now(),
+            "signature_verified": signature_verification["verified"],
+            "signature_key_id": signature_verification["key_id"],
+            "signature_sha256": signature_verification["signature_sha256"],
         },
     }
     previous_active = _snapshot_active(home)
@@ -878,9 +1078,10 @@ def official_status(*, home: str | Path | None = None) -> dict[str, Any]:
         "installed": bool(state["installed_release_ids"]),
         "update_catalog_url": DEFAULT_CATALOG_URL,
         "trust_model": (
-            "HTTPS team catalog, monotonic sequence, catalog SHA-256, "
-            "and per-source byte size/SHA-256"
+            "Ed25519-signed team catalog anchored in packaged public keys, "
+            "monotonic sequence, catalog SHA-256, and per-source byte size/SHA-256"
         ),
+        "signature_required_for_official_install_and_update": True,
     }
 
 

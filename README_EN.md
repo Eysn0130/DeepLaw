@@ -66,8 +66,9 @@ deeplaw --version
 `uv sync --extra dev` only for source development, and use `uv tool install --force .`
 after upgrading runtime code from a checkout.
 
-Install the bundled DeepLaw team catalog. The client fetches DOCX/PDF files from their
-recorded official download URLs, verifies byte sizes and SHA-256 values, then builds locally;
+Install the bundled DeepLaw team catalog. Before parsing it, the client verifies an Ed25519
+detached signature against public keys shipped with the package. It then fetches DOCX/PDF files
+from their recorded official URLs, verifies byte sizes and SHA-256 values, and builds locally;
 the GitHub repository does not redistribute those source binaries:
 
 ```bash
@@ -86,6 +87,8 @@ deeplaw official update
 Transient `429/5xx` and timeout failures use bounded exponential backoff. Sources that already
 passed byte-size and SHA-256 verification remain in the local cache, so rerunning can resume the
 build. DeepLaw never silently falls back to a non-official mirror just to make an install succeed.
+Bundled and HTTPS catalogs fail closed before parsing or building if the signature is missing,
+is made by an unknown or revoked key, or does not match the exact catalog bytes.
 
 An in-flight read remains pinned to its release. Later calls from an older MCP process fail
 closed after the official epoch changes; restart the Agent/MCP process to use the new release.
@@ -263,7 +266,7 @@ The full design, invariants, implementation phases, and non-goals are documented
 | Capability | `0.3.0` status |
 | --- | --- |
 | File processing | Official DOCX/PDF; private UTF-8 TXT; native-text PDF first; local vision consensus for poor pages |
-| Official lifecycle | Bundled install, HTTPS catalog update, sequence anti-rollback/rewrite checks, enable/disable/uninstall, per-source hash verification |
+| Official lifecycle | Ed25519 catalog verification, bundled install, HTTPS update, sequence anti-rollback/rewrite checks, enable/disable/uninstall, per-source hash verification |
 | Private legal references | Owner-only physical root, explicit add/list/delete, separate immutable snapshot, old-snapshot cleanup on deletion |
 | Immutable releases | Source/segment/release hashes, atomic publication, read-only SQLite, receipts |
 | Precise location | Titles, aliases, document numbers, articles, and Chinese FTS |
@@ -273,7 +276,7 @@ The full design, invariants, implementation phases, and non-goals are documented
 | Agent interface | One read-only MCP leaf tool with eight explicit official/private operations and no write operation |
 | Hosts | Codex, Claude Code, and OpenCode adapters; Analytix integration is design-only |
 
-Not implemented yet: cryptographically signed catalog/release approval and revocation, a complete bitemporal legal
+Not implemented yet: separate release-approval signatures and an online revocation/supersession feed, a complete bitemporal legal
 event ledger, coverage-first selection, coverage witnesses, replay traces, an external
 held-out Chinese legal benchmark, and the Analytix pre-schema activation gate.
 
@@ -403,12 +406,13 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
 - [x] Page-level PDF evidence and human-review attestations
 - [x] Codex, Claude Code, and OpenCode adapters
 - [x] Team catalog install/update/enable/disable/uninstall lifecycle
+- [x] Ed25519 detached team-catalog signatures, packaged public trust roots, and mandatory verification
 - [x] Physically separate user-private legal references with explicit add/delete and read-only Agent access
 - [ ] Coverage witnesses, challenge results, and replay traces
 - [ ] Coverage-first minimal sufficient evidence selection
 - [ ] Official TXT input, complete legal hierarchy, and source-bound Explain (private UTF-8 TXT is implemented)
 - [ ] Corpus Coverage Manifest and bitemporal legal event ledger
-- [ ] Signed publication, revocation, supersession feed, and secure updates
+- [ ] Separate release-approval signatures, online revocation, supersession feed, and complete secure-update metadata
 - [ ] External held-out Chinese legal evidence benchmark
 - [ ] Analytix turn-scoped activation and inactive zero-impact gate
 
@@ -417,8 +421,9 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) and
 DeepLaw is being built as a general legal knowledge base. The tables below show only the
 material currently recorded as of **2026-07-14**: **28** binary source files — **10 DOCX**,
 **18 PDF**, and **0 HTML**. They do not limit future coverage. Counts come from the
-bundled team catalog; this repository distributes only catalog metadata, source URLs, sizes,
-and hashes, not the source binaries. `deeplaw official update` fetches later monotonic catalogs.
+bundled team catalog; this repository distributes only catalog metadata, detached signatures,
+public trust roots, source URLs, sizes, and hashes, not the source binaries. Running
+`deeplaw official update` fetches later signed monotonic catalogs.
 
 | Source-package group | Count | Coverage |
 | --- | ---: | --- |

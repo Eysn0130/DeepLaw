@@ -21,3 +21,4 @@ corpus/raw/
 *.sqlite3
 *.db
 .env
+*.pem

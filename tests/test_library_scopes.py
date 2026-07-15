@@ -14,6 +14,11 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 import deeplaw.official as official_module
+from deeplaw.catalog_signing import (
+    export_trust_store,
+    initialize_signing_key,
+    sign_catalog_file,
+)
 from deeplaw.ingest import build_release
 from deeplaw.mcp_server import handle_support, tool_definition
 from deeplaw.models import SearchRequest
@@ -92,6 +97,7 @@ def test_official_install_update_disable_enable_and_uninstall(tmp_path: Path) ->
         catalog_source=catalog_v1,
         source_root=source,
         home=home,
+        allow_unsigned_local_catalog=True,
     )
     release_v1 = installed["active_release_id"]
     database_v1 = resolve_active_database(home=home)
@@ -113,6 +119,7 @@ def test_official_install_update_disable_enable_and_uninstall(tmp_path: Path) ->
             source_root=source,
             update=True,
             home=home,
+            allow_unsigned_local_catalog=True,
         )
     assert unchanged["changed"] is False
     assert unchanged["restart_required"] is False
@@ -130,6 +137,7 @@ def test_official_install_update_disable_enable_and_uninstall(tmp_path: Path) ->
         source_root=source,
         update=True,
         home=home,
+        allow_unsigned_local_catalog=True,
     )
     release_v2 = updated["active_release_id"]
 
@@ -158,6 +166,7 @@ def test_official_install_update_disable_enable_and_uninstall(tmp_path: Path) ->
             source_root=source,
             update=True,
             home=home,
+            allow_unsigned_local_catalog=True,
         )
 
     uninstalled = uninstall_official(home=home)
@@ -177,6 +186,13 @@ def test_official_install_downloads_catalog_sources_and_verifies_hashes(
     document["officialSource"] = "https://example.gov.cn/downloaded.docx"
     catalog_path = _write_catalog(tmp_path / "catalog.json", [document], sequence=1)
     catalog_payload = catalog_path.read_bytes()
+    key_path = tmp_path / "signing" / "catalog-key.pem"
+    trust_path = tmp_path / "trust.json"
+    initialize_signing_key(key_path)
+    export_trust_store(trust_path, key_path=key_path)
+    signature_path = tmp_path / "catalog.json.sig"
+    sign_catalog_file(catalog_path, signature_path=signature_path, key_path=key_path)
+    signature_payload = signature_path.read_bytes()
     source_payload = source.read_bytes()
     calls: list[str] = []
 
@@ -186,6 +202,8 @@ def test_official_install_downloads_catalog_sources_and_verifies_hashes(
         assert timeout > 0
         if url.endswith("catalog.json"):
             return catalog_payload
+        if url.endswith("catalog.json.sig"):
+            return signature_payload
         raise AssertionError(f"unexpected download URL: {url}")
 
     def fake_source_download(item: dict[str, object], destination: Path) -> None:
@@ -199,6 +217,7 @@ def test_official_install_downloads_catalog_sources_and_verifies_hashes(
     result = sync_official(
         catalog_source="https://catalog.example/catalog.json",
         home=home,
+        trust_store_path=trust_path,
     )
 
     assert result["report"]["document_count"] == 1
@@ -206,6 +225,7 @@ def test_official_install_downloads_catalog_sources_and_verifies_hashes(
     assert "documents" not in result["report"]
     assert calls == [
         "https://catalog.example/catalog.json",
+        "https://catalog.example/catalog.json.sig",
         "https://example.gov.cn/downloaded.docx",
     ]
     cached_sources = list((home / "official" / "sources").iterdir())
@@ -443,7 +463,12 @@ def test_official_update_and_uninstall_do_not_mutate_private_library(tmp_path: P
     write_docx(first, ["官方第一版测试法", "第一条 官方第一版内容。"])
     first_documents = [manifest_document(official_source, first.name, title="官方第一版测试法")]
     catalog_v1 = _write_catalog(tmp_path / "catalog-v1.json", first_documents, sequence=1)
-    sync_official(catalog_source=catalog_v1, source_root=official_source, home=home)
+    sync_official(
+        catalog_source=catalog_v1,
+        source_root=official_source,
+        home=home,
+        allow_unsigned_local_catalog=True,
+    )
 
     private_source = tmp_path / "private-reference.txt"
     private_source.write_text(
@@ -476,6 +501,7 @@ def test_official_update_and_uninstall_do_not_mutate_private_library(tmp_path: P
         source_root=official_source,
         update=True,
         home=home,
+        allow_unsigned_local_catalog=True,
     )
     uninstall_official(home=home)
 
@@ -569,7 +595,12 @@ def test_mcp_rejects_official_reads_after_the_catalog_is_disabled(tmp_path: Path
         [manifest_document(source_root, source.name, title="官方停用测试法")],
         sequence=1,
     )
-    sync_official(catalog_source=catalog, source_root=source_root, home=home)
+    sync_official(
+        catalog_source=catalog,
+        source_root=source_root,
+        home=home,
+        allow_unsigned_local_catalog=True,
+    )
 
     async def exercise() -> None:
         environment = {**os.environ, "DEEPLAW_HOME": str(home)}
