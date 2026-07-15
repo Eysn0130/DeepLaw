@@ -27,47 +27,6 @@ Claims of separate permission are not relied upon for repository distribution
 unless the grant and its scope have been verified through the project's
 release process.
 
-## Optional External Adapter: MinerU
-
-- Project: [opendatalab/MinerU](https://github.com/opendatalab/MinerU)
-- Commit reviewed: `79d6d8d79fb8`
-- Version reviewed: `3.4.4`
-- License text:
-  [MinerU Open Source License](https://github.com/opendatalab/MinerU/blob/79d6d8d79fb8/LICENSE.md)
-- Integration form: optional, separately installed local `mineru` executable
-- Bundled by DeepLaw: no
-- MinerU source or model weights redistributed by DeepLaw: no
-
-DeepLaw invokes MinerU only after an operator explicitly chooses the MinerU
-PDF fallback, has preinstalled its models, and sets
-`MINERU_MODEL_SOURCE=local`. The adapter reasserts that value in the child
-environment, passes the local input path and an isolated temporary output
-directory as subprocess arguments, and fixes MinerU's `pipeline` backend. It
-prefers a generated `content_list.json` derivative and falls back to Markdown,
-records the resolved MinerU version for either path, then deletes the temporary
-directory. The core DeepLaw installation does not download MinerU, its models,
-or a cloud parser.
-
-This local-mode check prevents DeepLaw's adapter from relying on MinerU's
-normal model-download path; it is not an OS-level network sandbox. Operators
-that require stronger egress isolation must provide it around the offline
-build process.
-
-The reviewed MinerU license applies Apache License 2.0 plus additional terms.
-Those terms include:
-
-- a separate commercial-license requirement when the stated consolidated MAU
-  or monthly-revenue threshold is reached;
-- a clear and prominent attribution obligation for online third-party
-  services based on MinerU;
-- automatic termination conditions for specified violations.
-
-Accordingly, MinerU must not be described as an Apache-2.0-only component.
-Operators and distributors are responsible for reviewing the complete current
-license, model licenses, and deployment obligations. DeepLaw's architecture
-keeps MinerU optional and external so its dependency and license surface does
-not silently become part of the core runtime.
-
 ## Optional External OCR Tools: Tesseract And Poppler
 
 - OCR project: [tesseract-ocr/tesseract](https://github.com/tesseract-ocr/tesseract)
@@ -82,12 +41,12 @@ not silently become part of the core runtime.
 - Bundled by DeepLaw: no
 - Executables or Tesseract language data redistributed by DeepLaw: no
 
-When an operator explicitly selects the Tesseract fallback, DeepLaw uses
-Poppler's `pdftoppm` to create temporary 300-DPI PNG pages and invokes
-Tesseract with `chi_sim+eng` and page segmentation mode 3. Current code records
-the resolved Tesseract and `pdftoppm` version strings, those settings, page
-association, warnings, and an extracted-text hash in a newly built release. It
-does not record word-level OCR coordinates or confidence values.
+When an operator explicitly selects `vision-consensus`, DeepLaw uses Poppler's
+`pdftoppm` to create temporary 300-DPI PNG pages and invokes Tesseract with
+`chi_sim+eng` and page segmentation mode 3 only for pages whose native text
+fails the quality gate. Current code records both executable versions, page
+image/native/OCR/selected-text hashes, weighted OCR confidence, native/OCR
+consistency, risk flags, page association, warnings, and the final text hash.
 
 The historical `deeplaw.sqlite/v2` candidate mentioned in the source audit
 recorded Tesseract 5.5.2 but did not record the `pdftoppm` version or the full
@@ -132,7 +91,7 @@ not assert that their full license texts are incorporated into DeepLaw.
 
 Results published by an upstream project may use different languages,
 corpora, labels, retrieval budgets, models, hardware, and cost assumptions.
-DeepLaw does not claim to outperform gbrain, MinerU, PageIndex, KAG, RAGFlow,
+DeepLaw does not claim to outperform gbrain, PageIndex, KAG, RAGFlow,
 GraphRAG, OpenKB, LegalBench-RAG, LRAGE, or all RAG/LLM Wiki systems.
 
 Any future comparative claim must be supported by a reproducible held-out

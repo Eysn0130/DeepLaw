@@ -1,0 +1,267 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 760" role="img"
+  aria-labelledby="deeplaw-architecture-title deeplaw-architecture-desc">
+  <title id="deeplaw-architecture-title">DeepLaw evidence flow</title>
+  <desc id="deeplaw-architecture-desc">
+    Operator-owned source packages pass a version gate and build a release-bound evidence graph.
+    The read-only runtime compiles a query plan, traverses prebuilt edges, emits a bounded proof
+    pack, and serves an agent. Release, source, segment, receipt, and database hashes remain
+    connected through immutable receipts.
+  </desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7"
+      markerHeight="7" orient="auto-start-reverse">
+      <path class="arrow-head" d="M0 0l10 5-10 5z" />
+    </marker>
+  </defs>
+  <style>
+    .canvas { fill: #f5f8f9; stroke: #d4e0e5; }
+    .ink {
+      fill: #102a43;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .muted {
+      fill: #58717e;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .mono {
+      fill: #d8e7ea;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    .card { fill: #ffffff; stroke: #cfdee3; }
+    .card-runtime { fill: #fbfdfd; stroke: #bcded8; }
+    .stage { fill: #e5f3f1; stroke: #96cec5; }
+    .stage-text {
+      fill: #116b63;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    .section-line { stroke: #b8cbd2; }
+    .boundary { stroke: #8fa9b3; }
+    .flow { fill: none; stroke: #3e8f86; }
+    .arrow-head { fill: #3e8f86; }
+    .icon { fill: none; stroke: #147d72; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-fill { fill: #dff1ee; stroke: #147d72; }
+    .icon-node { fill: #f5f8f9; stroke: #147d72; }
+    .accent { fill: #d69e3a; }
+    .ledger { fill: #102a43; stroke: #285267; }
+    .ledger-title {
+      fill: #f4fafb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .ledger-muted {
+      fill: #a9c1ca;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .token { fill: #183d52; stroke: #3f6979; }
+    .verify { fill: #4bc5b4; }
+    .verify-text {
+      fill: #08202d;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      .canvas { fill: #081923; stroke: #27404d; }
+      .ink { fill: #edf6f7; }
+      .muted { fill: #a8bdc6; }
+      .card { fill: #102a3a; stroke: #2d4a58; }
+      .card-runtime { fill: #0d2d34; stroke: #2d665f; }
+      .stage { fill: #143e3d; stroke: #307a70; }
+      .stage-text { fill: #82d8ca; }
+      .section-line { stroke: #34505d; }
+      .boundary { stroke: #55717d; }
+      .flow { stroke: #65d1c1; }
+      .arrow-head { fill: #65d1c1; }
+      .icon { stroke: #65d1c1; }
+      .icon-fill { fill: #153d3c; stroke: #65d1c1; }
+      .icon-node { fill: #081923; stroke: #65d1c1; }
+      .accent { fill: #e5b553; }
+      .ledger { fill: #06131c; stroke: #315365; }
+      .token { fill: #102d3e; stroke: #416778; }
+      .verify { fill: #65d1c1; }
+    }
+  </style>
+
+  <rect class="canvas" x="1" y="1" width="1438" height="758" rx="28" stroke-width="2" />
+
+  <g aria-hidden="true" transform="translate(64 48)">
+    <path class="icon-fill" d="M0 0h30l12 12v38H0z" stroke-width="2" />
+    <path class="icon" d="M30 0v12h12M11 23h19M11 33h14" stroke-width="3" />
+    <circle class="accent" cx="42" cy="40" r="7" />
+  </g>
+  <text class="ink" x="126" y="70" font-size="30" font-weight="720">DeepLaw Evidence Flow</text>
+  <text class="muted" x="126" y="98" font-size="15">
+    Source-grounded, version-aware, read-only by contract
+  </text>
+  <g transform="translate(1194 50)">
+    <rect class="stage" width="182" height="42" rx="21" stroke-width="1.5" />
+    <circle class="accent" cx="24" cy="21" r="5" />
+    <text class="stage-text" x="42" y="27" font-size="13" font-weight="700">READ-ONLY RUNTIME</text>
+  </g>
+
+  <text class="muted" x="64" y="154" font-size="12" font-weight="700" letter-spacing="2.2">
+    RELEASE PREPARATION
+  </text>
+  <path class="section-line" d="M64 169h408" stroke-width="2" />
+  <text class="muted" x="508" y="154" font-size="12" font-weight="700" letter-spacing="2.2">
+    READ-ONLY RUNTIME
+  </text>
+  <path class="section-line" d="M508 169h868" stroke-width="2" />
+  <path class="boundary" d="M490 140v350" stroke-width="2" stroke-dasharray="6 8" />
+
+  <!-- Stage 01: source package -->
+  <g transform="translate(64 190)">
+    <rect class="card" width="190" height="280" rx="18" stroke-width="2" />
+    <rect class="stage" x="18" y="18" width="42" height="26" rx="13" />
+    <text class="stage-text" x="30" y="36" font-size="12" font-weight="700">01</text>
+    <g transform="translate(58 63)" aria-hidden="true">
+      <path class="icon-fill" d="M0 12h44l18 18v67H0z" stroke-width="2.5" />
+      <path class="icon" d="M44 12v18h18M13 48h34M13 65h34M13 82h22" stroke-width="4" />
+      <path class="icon" d="M-12 0h42" stroke-width="5" opacity=".45" />
+    </g>
+    <text class="ink" x="22" y="186" font-size="19" font-weight="750">SOURCE PACKAGE</text>
+    <text class="muted" x="22" y="216" font-size="14">Operator-owned files</text>
+    <text class="muted" x="22" y="238" font-size="14">Manifest + SHA-256</text>
+    <text class="muted" x="22" y="260" font-size="14">No corpus in Git</text>
+  </g>
+
+  <!-- Stage 02: version gate -->
+  <g transform="translate(282 190)">
+    <rect class="card" width="190" height="280" rx="18" stroke-width="2" />
+    <rect class="stage" x="18" y="18" width="42" height="26" rx="13" />
+    <text class="stage-text" x="30" y="36" font-size="12" font-weight="700">02</text>
+    <g transform="translate(48 65)" aria-hidden="true">
+      <path class="icon" d="M26 4v90M86 4v90M26 28h60M26 69h60" stroke-width="5" />
+      <circle class="icon-node" cx="56" cy="28" r="10" stroke-width="4" />
+      <circle class="icon-node" cx="56" cy="69" r="10" stroke-width="4" />
+      <circle class="accent" cx="56" cy="49" r="6" />
+    </g>
+    <text class="ink" x="22" y="186" font-size="19" font-weight="750">VERSION GATE</text>
+    <text class="muted" x="22" y="216" font-size="14">Temporal status</text>
+    <text class="muted" x="22" y="238" font-size="14">Human review flags</text>
+    <text class="muted" x="22" y="260" font-size="14">Hash-pinned release</text>
+  </g>
+
+  <!-- Stage 03: query plan -->
+  <g transform="translate(508 190)">
+    <rect class="card-runtime" width="190" height="280" rx="18" stroke-width="2" />
+    <rect class="stage" x="18" y="18" width="42" height="26" rx="13" />
+    <text class="stage-text" x="30" y="36" font-size="12" font-weight="700">03</text>
+    <g transform="translate(43 70)" aria-hidden="true">
+      <path class="icon" d="M0 15h104M0 47h104M0 79h104" stroke-width="5" />
+      <circle class="icon-fill" cx="31" cy="15" r="10" stroke-width="4" />
+      <circle class="icon-fill" cx="73" cy="47" r="10" stroke-width="4" />
+      <circle class="icon-fill" cx="48" cy="79" r="10" stroke-width="4" />
+    </g>
+    <text class="ink" x="22" y="186" font-size="19" font-weight="750">QUERY PLAN</text>
+    <text class="muted" x="22" y="216" font-size="14">Purpose + route</text>
+    <text class="muted" x="22" y="238" font-size="14">Bounded obligations</text>
+    <text class="muted" x="22" y="260" font-size="14">Deterministic plan ID</text>
+  </g>
+
+  <!-- Stage 04: evidence graph -->
+  <g transform="translate(726 190)">
+    <rect class="card-runtime" width="190" height="280" rx="18" stroke-width="2" />
+    <rect class="stage" x="18" y="18" width="42" height="26" rx="13" />
+    <text class="stage-text" x="30" y="36" font-size="12" font-weight="700">04</text>
+    <g transform="translate(45 67)" aria-hidden="true">
+      <path class="icon" d="M18 20l38 29 42-24M56 49l-15 47M56 49l44 48" stroke-width="5" />
+      <circle class="icon-fill" cx="18" cy="20" r="12" stroke-width="4" />
+      <circle class="icon-fill" cx="98" cy="25" r="12" stroke-width="4" />
+      <circle class="icon-fill" cx="56" cy="49" r="12" stroke-width="4" />
+      <circle class="icon-fill" cx="41" cy="96" r="12" stroke-width="4" />
+      <circle class="accent" cx="100" cy="97" r="12" />
+    </g>
+    <text class="ink" x="22" y="186" font-size="19" font-weight="750">GRAPH TRAVERSAL</text>
+    <text class="muted" x="22" y="216" font-size="14">Prebuilt release edges</text>
+    <text class="muted" x="22" y="238" font-size="14">Bounded to one hop</text>
+    <text class="muted" x="22" y="260" font-size="14">No authority inference</text>
+  </g>
+
+  <!-- Stage 05: bounded proof pack -->
+  <g transform="translate(944 190)">
+    <rect class="card-runtime" width="190" height="280" rx="18" stroke-width="2" />
+    <rect class="stage" x="18" y="18" width="42" height="26" rx="13" />
+    <text class="stage-text" x="30" y="36" font-size="12" font-weight="700">05</text>
+    <g transform="translate(45 68)" aria-hidden="true">
+      <rect class="icon-fill" x="17" y="4" width="82" height="72" rx="9" stroke-width="3" />
+      <rect class="icon-fill" x="8" y="15" width="82" height="72" rx="9" stroke-width="3" />
+      <rect class="icon-fill" y="27" width="82" height="72" rx="9" stroke-width="3" />
+      <path class="icon" d="M18 49h46M18 65h37M18 81h24" stroke-width="4" />
+      <path class="icon" d="M109 23h12v82h-12" stroke-width="5" />
+    </g>
+    <text class="ink" x="22" y="178" font-size="14" font-weight="720" letter-spacing="1.8">
+      BOUNDED
+    </text>
+    <text class="ink" x="22" y="202" font-size="19" font-weight="750">PROOF PACK</text>
+    <text class="muted" x="22" y="226" font-size="13">0–5 evidence cards</text>
+    <text class="muted" x="22" y="247" font-size="13">Strict character budget</text>
+    <text class="muted" x="22" y="268" font-size="13">Exact segment on demand</text>
+  </g>
+
+  <!-- Stage 06: agent -->
+  <g transform="translate(1162 190)">
+    <rect class="card-runtime" width="214" height="280" rx="18" stroke-width="2" />
+    <rect class="stage" x="18" y="18" width="42" height="26" rx="13" />
+    <text class="stage-text" x="30" y="36" font-size="12" font-weight="700">06</text>
+    <g transform="translate(45 70)" aria-hidden="true">
+      <rect class="icon-fill" width="124" height="91" rx="13" stroke-width="3" />
+      <circle class="accent" cx="18" cy="17" r="5" />
+      <path class="icon" d="M20 42l14 12-14 12M46 67h35M92 42h14v25H92" stroke-width="5" />
+    </g>
+    <text class="ink" x="22" y="186" font-size="19" font-weight="750">AGENT</text>
+    <text class="muted" x="22" y="216" font-size="13">Codex / Claude / OpenCode</text>
+    <text class="muted" x="22" y="238" font-size="14">Evidence candidate only</text>
+    <text class="muted" x="22" y="260" font-size="14">Never a legal conclusion</text>
+  </g>
+
+  <path class="flow" d="M254 285h20" stroke-width="4" marker-end="url(#arrow)" />
+  <path class="flow" d="M472 285h28" stroke-width="4" marker-end="url(#arrow)" />
+  <path class="flow" d="M698 285h20" stroke-width="4" marker-end="url(#arrow)" />
+  <path class="flow" d="M916 285h20" stroke-width="4" marker-end="url(#arrow)" />
+  <path class="flow" d="M1134 285h20" stroke-width="4" marker-end="url(#arrow)" />
+
+  <path class="boundary" d="M377 470v66M821 470v66M1039 470v66" stroke-width="2"
+    stroke-dasharray="5 7" />
+  <circle class="accent" cx="377" cy="526" r="5" />
+  <circle class="accent" cx="821" cy="526" r="5" />
+  <circle class="accent" cx="1039" cy="526" r="5" />
+
+  <g transform="translate(64 536)">
+    <rect class="ledger" width="1312" height="158" rx="20" stroke-width="2" />
+    <text class="ledger-title" x="34" y="43" font-size="19" font-weight="760" letter-spacing="1.5">
+      IMMUTABLE RECEIPTS
+    </text>
+    <text class="ledger-muted" x="34" y="69" font-size="14">
+      Hash-bound verification lineage; every response stays pinned to one release.
+    </text>
+
+    <g transform="translate(34 91)">
+      <rect class="token" width="156" height="40" rx="9" />
+      <text class="mono" x="17" y="26" font-size="13">release_id</text>
+    </g>
+    <g transform="translate(204 91)">
+      <rect class="token" width="178" height="40" rx="9" />
+      <text class="mono" x="17" y="26" font-size="13">source_sha256</text>
+    </g>
+    <g transform="translate(396 91)">
+      <rect class="token" width="152" height="40" rx="9" />
+      <text class="mono" x="17" y="26" font-size="13">segment_id</text>
+    </g>
+    <g transform="translate(562 91)">
+      <rect class="token" width="152" height="40" rx="9" />
+      <text class="mono" x="17" y="26" font-size="13">receipt_id</text>
+    </g>
+    <g transform="translate(728 91)">
+      <rect class="token" width="190" height="40" rx="9" />
+      <text class="mono" x="17" y="26" font-size="13">database_sha256</text>
+    </g>
+    <path class="flow" d="M934 111h72" stroke-width="3" marker-end="url(#arrow)" />
+    <g transform="translate(1026 91)">
+      <rect class="verify" width="250" height="40" rx="20" />
+      <circle cx="24" cy="20" r="9" fill="#08202d" />
+      <path d="M19 20l4 4 7-9" fill="none" stroke="#65d1c1" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" />
+      <text class="verify-text" x="45" y="26" font-size="13" font-weight="750">
+        VERIFY BEFORE USE
+      </text>
+    </g>
+  </g>
+</svg>

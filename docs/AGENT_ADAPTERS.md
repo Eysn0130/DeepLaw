@@ -141,10 +141,12 @@ Invoke the shared skill explicitly:
 /deeplaw:research-chinese-law 核验该法条的文号、条次和效力期间。
 ```
 
-The manifest sets `defaultEnabled: false`, so a marketplace install does not
-start the MCP process or expose its skill until the user intentionally enables
-the plugin. This field requires Claude Code 2.1.154 or later; older releases
-ignore it and should not be treated as satisfying the default-off guarantee.
+The plugin manifest describes components but does not control whether Claude
+Code enables the plugin. Installation scope and enable/disable state are owned
+by Claude Code settings and plugin-management commands. A deployment requiring
+default-off behavior must keep the plugin uninstalled or disabled outside an
+explicit legal-research session and verify that host state; the manifest alone
+is not an enablement or permission boundary.
 
 After an explicit enable or `--plugin-dir` development load, the shared skill's
 description and workflow still require explicit invocation. Claude Code does

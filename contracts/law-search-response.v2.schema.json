@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-search-response:v2",
+  "title": "DeepLawSearchResponseV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_id",
+    "mode",
+    "query_plan",
+    "evidence",
+    "uncertain_evidence",
+    "graph_paths",
+    "obligation_coverage",
+    "gaps",
+    "notices",
+    "next_questions",
+    "total_excerpt_chars"
+  ],
+  "properties": {
+    "schema_version": { "const": "deeplaw.search-response/v2" },
+    "release_id": { "type": "string", "pattern": "^lawrel_[0-9a-f]{32}$" },
+    "mode": { "enum": ["navigation", "exact", "research"] },
+    "query_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "plan_id",
+        "query",
+        "purpose",
+        "route",
+        "as_of",
+        "obligations",
+        "bounds",
+        "channels",
+        "document_types",
+        "max_evidence",
+        "max_chars",
+        "max_graph_paths",
+        "max_hops",
+        "graph_used",
+        "temporal_reference_date",
+        "temporal_reference_source",
+        "vector_used",
+        "wiki_used"
+      ],
+      "properties": {
+        "schema_version": { "const": "deeplaw.query-plan/v1" },
+        "plan_id": { "type": "string", "pattern": "^lawplan_[0-9a-f]{32}$" },
+        "query": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "purpose": {
+          "enum": [
+            "auto",
+            "exact_citation",
+            "as_of_version",
+            "elements",
+            "legal_issue_screen",
+            "citation_verify",
+            "broad_topic"
+          ]
+        },
+        "route": { "enum": ["navigation", "exact", "research"] },
+        "as_of": {
+          "type": ["string", "null"],
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "obligations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "role", "required", "query_cues"],
+            "properties": {
+              "id": {
+                "enum": [
+                  "exact_citation",
+                  "primary_rule",
+                  "temporal_status_version",
+                  "elements_definitions",
+                  "interpretation",
+                  "procedure",
+                  "exceptions_counterevidence",
+                  "case_reference"
+                ]
+              },
+              "role": {
+                "enum": ["identity", "support", "temporal", "counterevidence", "reference"]
+              },
+              "required": { "type": "boolean" },
+              "query_cues": {
+                "type": "array",
+                "maxItems": 8,
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+              }
+            }
+          }
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_query_chars",
+            "max_obligations",
+            "max_query_cues_per_obligation"
+          ],
+          "properties": {
+            "max_query_chars": { "const": 8000 },
+            "max_obligations": { "const": 8 },
+            "max_query_cues_per_obligation": { "const": 8 }
+          }
+        },
+        "channels": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["exact_metadata", "article_locator", "chinese_fts", "legal_graph"]
+          }
+        },
+        "document_types": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "type": "string", "maxLength": 64 }
+        },
+        "max_evidence": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "max_chars": { "type": "integer", "minimum": 500, "maximum": 6000 },
+        "max_graph_paths": { "const": 4 },
+        "max_hops": { "const": 1 },
+        "graph_used": { "type": "boolean" },
+        "temporal_reference_date": {
+          "type": ["string", "null"],
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "temporal_reference_source": {
+          "enum": [
+            "explicit_as_of",
+            "release_reviewed_on",
+            "release_review_unavailable",
+            "not_evaluated"
+          ]
+        },
+        "vector_used": { "const": false },
+        "wiki_used": { "const": false }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "$ref": "urn:deeplaw:schema:legal-evidence-card:v2" }
+    },
+    "uncertain_evidence": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "$ref": "urn:deeplaw:schema:legal-evidence-card:v2" }
+    },
+    "graph_paths": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path_id",
+          "seed_document_id",
+          "seed_title",
+          "target_document_id",
+          "target_title",
+          "target_document_type",
+          "relation_id",
+          "predicate",
+          "direction",
+          "provenance_segment_id",
+          "provenance_receipt_id",
+          "review_status",
+          "derivation",
+          "authority",
+          "hops"
+        ],
+        "properties": {
+          "path_id": { "type": "string", "pattern": "^lawpath_[0-9a-f]{24}$" },
+          "seed_document_id": { "type": "string", "pattern": "^doc_[0-9a-f]{24}$" },
+          "seed_title": { "type": "string", "maxLength": 500 },
+          "target_document_id": { "type": "string", "pattern": "^doc_[0-9a-f]{24}$" },
+          "target_title": { "type": "string", "maxLength": 500 },
+          "target_document_type": { "type": "string", "maxLength": 64 },
+          "relation_id": { "type": "string", "pattern": "^lawedge_[0-9a-f]{24}$" },
+          "predicate": {
+            "enum": ["cites", "amends", "repeals", "replaces", "implements", "exception_to"]
+          },
+          "direction": { "enum": ["outbound", "inbound"] },
+          "provenance_segment_id": {
+            "type": "string",
+            "pattern": "^seg_[0-9a-f]{24}$"
+          },
+          "provenance_receipt_id": {
+            "type": "string",
+            "pattern": "^lawrcpt_[0-9a-f]{32}$"
+          },
+          "review_status": { "const": "deterministic_exact" },
+          "derivation": { "type": "string", "maxLength": 200 },
+          "authority": { "const": "derived_navigation" },
+          "hops": { "const": 1 }
+        }
+      }
+    },
+    "obligation_coverage": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "obligation_id",
+          "role",
+          "required",
+          "status",
+          "evidence_segment_ids",
+          "graph_path_ids"
+        ],
+        "properties": {
+          "obligation_id": {
+            "enum": [
+              "exact_citation",
+              "primary_rule",
+              "temporal_status_version",
+              "elements_definitions",
+              "interpretation",
+              "procedure",
+              "exceptions_counterevidence",
+              "case_reference"
+            ]
+          },
+          "role": {
+            "enum": ["identity", "support", "temporal", "counterevidence", "reference"]
+          },
+          "required": { "type": "boolean" },
+          "status": { "enum": ["covered", "uncertain", "gap"] },
+          "evidence_segment_ids": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^seg_[0-9a-f]{24}$" }
+          },
+          "graph_path_ids": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^lawpath_[0-9a-f]{24}$" }
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "obligation_id", "message", "blocking", "candidate_count"],
+        "properties": {
+          "code": {
+            "enum": [
+              "exact_target_unresolved",
+              "temporal_metadata_unverified",
+              "temporal_out_of_scope",
+              "required_obligation_uncovered",
+              "required_obligation_uncertain",
+              "no_primary_evidence"
+            ]
+          },
+          "obligation_id": {
+            "enum": [
+              null,
+              "exact_citation",
+              "primary_rule",
+              "temporal_status_version",
+              "elements_definitions",
+              "interpretation",
+              "procedure",
+              "exceptions_counterevidence",
+              "case_reference"
+            ]
+          },
+          "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "blocking": { "type": "boolean" },
+          "candidate_count": { "type": "integer", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "notices": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "maxLength": 500 }
+    },
+    "next_questions": {
+      "type": "array",
+      "maxItems": 4,
+      "items": { "type": "string", "maxLength": 500 }
+    },
+    "total_excerpt_chars": { "type": "integer", "minimum": 0, "maximum": 6000 }
+  }
+}

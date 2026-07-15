@@ -1,26 +1,17 @@
 from __future__ import annotations
 
-import json
-import os
 import re
-import shutil
-import subprocess
-import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
-from dataclasses import replace
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from .models import ExtractionQuality, ExtractionResult, TextBlock
 from .util import normalize_text
+from .vision import VisionExtractionError, extract_pdf_vision_consensus
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _MAX_OOXML_MEMBER_BYTES = 64 * 1024 * 1024
-_MAX_DERIVATIVE_BYTES = 64 * 1024 * 1024
-_OCR_DPI = 300
-_OCR_LANGUAGE = "chi_sim+eng"
-_OCR_PSM = "3"
 _HAN = r"[\u3400-\u4dbf\u4e00-\u9fff]"
 _HAN_CHARACTER = re.compile(_HAN)
 _HAN_INTERSPACE = re.compile(rf"(?<={_HAN})\s(?={_HAN})")
@@ -203,7 +194,9 @@ def extract_pdf(path: Path) -> ExtractionResult:
     if suspicious_reason:
         warnings.append(f"PDF text layer failed plausibility check: {suspicious_reason}")
     if needs_ocr:
-        warnings.append("PDF text layer is incomplete; OCR or MinerU review is required")
+        warnings.append(
+            "PDF text layer is incomplete; DeepLaw vision consensus or human review is required"
+        )
     return ExtractionResult(
         blocks=tuple(blocks),
         quality=ExtractionQuality(
@@ -219,296 +212,34 @@ def extract_pdf(path: Path) -> ExtractionResult:
     )
 
 
-def extract_mineru_markdown(
-    markdown_path: Path, *, extractor_version: str | None = None
-) -> ExtractionResult:
-    if markdown_path.is_symlink() or markdown_path.stat().st_size > _MAX_DERIVATIVE_BYTES:
-        raise ExtractionError(f"unsafe MinerU Markdown output: {markdown_path}")
-    try:
-        raw_text = markdown_path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise ExtractionError(f"cannot read MinerU output: {markdown_path}") from error
-    blocks = tuple(
-        TextBlock(text=line, paragraph=index)
-        for index, raw_line in enumerate(raw_text.splitlines(), start=1)
-        if (line := normalize_text(raw_line.lstrip("#>-* ")))
-    )
-    character_count = sum(len(block.text) for block in blocks)
-    if character_count < 20:
-        raise ExtractionError(f"MinerU output contains too little text: {markdown_path}")
-    return ExtractionResult(
-        blocks=blocks,
-        quality=ExtractionQuality(
-            extractor="mineru-markdown",
-            extractor_version=extractor_version,
-            block_count=len(blocks),
-            page_count=None,
-            character_count=character_count,
-        ),
-    )
-
-
-def _mineru_version() -> str | None:
-    try:
-        process = subprocess.run(
-            ["mineru", "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    output = normalize_text(process.stdout or process.stderr)
-    return output[:200] or None
-
-
-def extract_mineru_content_list(
-    content_list_path: Path, *, extractor_version: str | None = None
-) -> ExtractionResult:
-    if content_list_path.is_symlink() or content_list_path.stat().st_size > _MAX_DERIVATIVE_BYTES:
-        raise ExtractionError(f"unsafe MinerU content list output: {content_list_path}")
-    try:
-        payload = json.loads(content_list_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ExtractionError(f"cannot read MinerU content list: {content_list_path}") from error
-    if not isinstance(payload, list):
-        raise ExtractionError("MinerU content list must be an array")
-    blocks: list[TextBlock] = []
-    pages: list[int] = []
-    for index, item in enumerate(payload, start=1):
-        if not isinstance(item, dict):
-            continue
-        page_index = item.get("page_idx")
-        page = page_index + 1 if isinstance(page_index, int) and page_index >= 0 else None
-        candidates: list[str] = []
-        for key in ("text", "table_body"):
-            value = item.get(key)
-            if isinstance(value, str):
-                candidates.append(value)
-        for key in ("image_caption", "image_footnote", "table_caption", "table_footnote"):
-            value = item.get(key)
-            if isinstance(value, list):
-                candidates.extend(part for part in value if isinstance(part, str))
-        text = normalize_text("\n".join(candidates))
-        if not text:
-            continue
-        if page is not None:
-            pages.append(page)
-        blocks.append(TextBlock(text=text, page=page, paragraph=index))
-    character_count = sum(len(block.text) for block in blocks)
-    if character_count < 20:
-        raise ExtractionError(f"MinerU output contains too little text: {content_list_path}")
-    return ExtractionResult(
-        blocks=tuple(blocks),
-        quality=ExtractionQuality(
-            extractor="mineru-content-list",
-            extractor_version=extractor_version,
-            block_count=len(blocks),
-            page_count=max(pages) if pages else None,
-            character_count=character_count,
-        ),
-    )
-
-
-def run_mineru(path: Path, *, backend: str = "pipeline") -> ExtractionResult:
-    """Run an installed MinerU CLI in an isolated temporary directory.
-
-    Calling this function is an explicit operator choice after the native PDF
-    quality gate fails. DeepLaw requires MinerU's local model-source mode, but an
-    OS-level network sandbox remains the operator's responsibility.
-    """
-
-    if os.environ.get("MINERU_MODEL_SOURCE", "").lower() != "local":
-        raise ExtractionError(
-            "MinerU fallback requires MINERU_MODEL_SOURCE=local and preinstalled models"
-        )
-    with tempfile.TemporaryDirectory(prefix="deeplaw-mineru-") as directory:
-        output = Path(directory)
-        command = ["mineru", "-p", str(path), "-o", str(output), "-b", backend]
-        environment = os.environ.copy()
-        environment["MINERU_MODEL_SOURCE"] = "local"
-        try:
-            process = subprocess.run(
-                command,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=1800,
-                env=environment,
-            )
-        except (OSError, subprocess.TimeoutExpired) as error:
-            raise ExtractionError("MinerU CLI is unavailable or timed out") from error
-        if process.returncode != 0:
-            diagnostic = normalize_text(process.stderr)[-800:]
-            raise ExtractionError(f"MinerU failed: {diagnostic or 'unknown error'}")
-        extractor_version = _mineru_version()
-        content_lists = sorted(
-            (
-                value
-                for value in output.rglob("*content_list.json")
-                if value.is_file() and not value.is_symlink()
-            ),
-            key=lambda value: value.stat().st_size,
-            reverse=True,
-        )
-        if content_lists:
-            return extract_mineru_content_list(
-                content_lists[0], extractor_version=extractor_version
-            )
-        candidates = sorted(
-            (
-                value
-                for value in output.rglob("*.md")
-                if value.is_file() and not value.is_symlink()
-            ),
-            key=lambda value: value.stat().st_size,
-            reverse=True,
-        )
-        if not candidates:
-            inventory = [
-                str(item.relative_to(output)) for item in output.rglob("*") if item.is_file()
-            ]
-            raise ExtractionError(
-                "MinerU produced no Markdown output: "
-                + json.dumps(inventory[:20], ensure_ascii=False)
-            )
-        return extract_mineru_markdown(candidates[0], extractor_version=extractor_version)
-
-
-def _page_image_number(path: Path) -> int:
-    match = re.search(r"-(\d+)$", path.stem)
-    if not match:
-        raise ExtractionError(f"unexpected pdftoppm page filename: {path.name}")
-    return int(match.group(1))
-
-
-def run_tesseract(path: Path, *, language: str = _OCR_LANGUAGE) -> ExtractionResult:
-    """OCR a scanned PDF locally without changing the source file."""
-
-    pdftoppm = shutil.which("pdftoppm") or os.environ.get("DEEPLAW_PDFTOPPM")
-    tesseract = shutil.which("tesseract") or os.environ.get("DEEPLAW_TESSERACT")
-    if not pdftoppm or not tesseract:
-        raise ExtractionError("Tesseract fallback requires pdftoppm and tesseract on PATH")
-    with tempfile.TemporaryDirectory(prefix="deeplaw-tesseract-") as directory:
-        output = Path(directory)
-        prefix = output / "page"
-        try:
-            render = subprocess.run(
-                [pdftoppm, "-r", str(_OCR_DPI), "-png", str(path), str(prefix)],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=600,
-            )
-        except (OSError, subprocess.TimeoutExpired) as error:
-            raise ExtractionError("pdftoppm failed to start or timed out") from error
-        if render.returncode != 0:
-            raise ExtractionError(f"pdftoppm failed: {normalize_text(render.stderr)[-800:]}")
-        images = sorted(output.glob("page-*.png"), key=_page_image_number)
-        if not images:
-            raise ExtractionError("pdftoppm produced no page images")
-        blocks: list[TextBlock] = []
-        for page_number, image in enumerate(images, start=1):
-            try:
-                process = subprocess.run(
-                    [
-                        tesseract,
-                        str(image),
-                        "stdout",
-                        "-l",
-                        language,
-                        "--psm",
-                        _OCR_PSM,
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=180,
-                )
-            except (OSError, subprocess.TimeoutExpired) as error:
-                raise ExtractionError(
-                    f"tesseract failed to start or timed out on page {page_number}"
-                ) from error
-            if process.returncode != 0:
-                raise ExtractionError(
-                    f"tesseract failed on page {page_number}: "
-                    f"{normalize_text(process.stderr)[-800:]}"
-                )
-            for raw_line in process.stdout.splitlines():
-                if line := normalize_text(raw_line):
-                    blocks.append(TextBlock(text=line, page=page_number))
-        character_count = sum(len(block.text) for block in blocks)
-        if character_count < 80:
-            raise ExtractionError("Tesseract OCR produced too little text")
-        version_process = subprocess.run(
-            [tesseract, "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        version_lines = (version_process.stdout or version_process.stderr).splitlines()
-        tesseract_version = normalize_text(version_lines[0]) if version_lines else "unknown"
-        renderer_process = subprocess.run(
-            [pdftoppm, "-v"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        renderer_lines = (renderer_process.stdout or renderer_process.stderr).splitlines()
-        renderer_version = normalize_text(renderer_lines[0]) if renderer_lines else "unknown"
-        extractor_version = f"{tesseract_version}; {renderer_version}"
-        return ExtractionResult(
-            blocks=tuple(blocks),
-            quality=ExtractionQuality(
-                extractor="tesseract-ocr",
-                extractor_version=extractor_version,
-                block_count=len(blocks),
-                page_count=len(images),
-                character_count=character_count,
-                configuration=(
-                    f"dpi={_OCR_DPI}",
-                    f"language={language}",
-                    f"psm={_OCR_PSM}",
-                ),
-                warnings=(
-                    "OCR derivative was generated locally; page-level manual review is required",
-                ),
-            ),
-        )
-
-
 def extract_document(
     path: Path,
     format_name: str,
     *,
     pdf_fallback: str = "off",
+    reviewed_pages_path: Path | None = None,
 ) -> ExtractionResult:
     format_name = format_name.upper()
+    if reviewed_pages_path is not None and (
+        format_name != "PDF" or pdf_fallback != "vision-consensus"
+    ):
+        raise ExtractionError(
+            "reviewed-pages requires PDF format and pdf_fallback='vision-consensus'"
+        )
     if format_name == "DOCX":
         return extract_docx(path)
     if format_name != "PDF":
         raise ExtractionError(f"unsupported source format: {format_name}")
+    if pdf_fallback not in {"off", "vision-consensus"}:
+        raise ExtractionError(f"unsupported PDF fallback: {pdf_fallback}")
 
-    result = extract_pdf(path)
-    if result.quality.needs_ocr and pdf_fallback == "mineru":
-        fallback = run_mineru(path, backend="pipeline")
-        return replace(
-            fallback,
-            quality=replace(
-                fallback.quality,
-                warnings=(*result.quality.warnings, *fallback.quality.warnings),
-            ),
-        )
-    if result.quality.needs_ocr and pdf_fallback == "tesseract":
-        fallback = run_tesseract(path)
-        return replace(
-            fallback,
-            quality=replace(
-                fallback.quality,
-                warnings=(*result.quality.warnings, *fallback.quality.warnings),
-            ),
-        )
-    return result
+    if pdf_fallback == "vision-consensus":
+        try:
+            return extract_pdf_vision_consensus(
+                path,
+                reviewed_pages_path=reviewed_pages_path,
+            )
+        except VisionExtractionError as error:
+            raise ExtractionError(str(error)) from error
+
+    return extract_pdf(path)

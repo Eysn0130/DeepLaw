@@ -15,6 +15,7 @@ from mcp import types
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
+from . import __version__
 from .models import Purpose, SearchRequest
 from .search import DeepLaw
 
@@ -32,12 +33,12 @@ _INSTRUCTIONS = (
     "Never treat retrieval as proof of case facts or applicability."
 )
 _OUTPUT_CONTRACTS = {
-    "search": "law-search-response.v1.schema.json",
-    "segment": "law-segment.v1.schema.json",
+    "search": "law-search-response.v2.schema.json",
+    "segment": "law-segment.v2.schema.json",
     "verification": "law-verification.v1.schema.json",
-    "release_info": "law-release-info.v1.schema.json",
-    "evidence": "legal-evidence-card.v1.schema.json",
-    "release_manifest": "corpus-release-manifest.v1.schema.json",
+    "release_info": "law-release-info.v2.schema.json",
+    "evidence": "legal-evidence-card.v2.schema.json",
+    "release_manifest": "corpus-release-manifest.v2.schema.json",
 }
 
 
@@ -80,7 +81,7 @@ def _rewrite_refs(value: Any, references: dict[str, str]) -> Any:
 
 @lru_cache(maxsize=1)
 def bundled_output_schema() -> dict[str, Any]:
-    schema = deepcopy(_load_contract("law-support.output.v1.schema.json"))
+    schema = deepcopy(_load_contract("law-support.output.v2.schema.json"))
     references: dict[str, str] = {}
     for name, filename in _OUTPUT_CONTRACTS.items():
         target = f"#/$defs/{name}"
@@ -188,7 +189,7 @@ def create_mcp_server() -> Server[_RuntimeContext]:
 
     server: Server[_RuntimeContext] = Server(
         "DeepLaw",
-        version="0.1.0",
+        version=__version__,
         instructions=_INSTRUCTIONS,
         lifespan=lifespan,
     )
@@ -222,7 +223,7 @@ def create_mcp_server() -> Server[_RuntimeContext]:
 
 def run_mcp(*, transport: str = "stdio") -> None:
     if transport != "stdio":
-        raise ValueError("DeepLaw 0.1 supports only the local stdio MCP transport")
+        raise ValueError("DeepLaw 0.2 supports only the local stdio MCP transport")
 
     async def serve() -> None:
         server = create_mcp_server()

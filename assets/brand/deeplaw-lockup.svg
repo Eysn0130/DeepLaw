@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 220" role="img"
+  aria-labelledby="deeplaw-lockup-title deeplaw-lockup-desc">
+  <title id="deeplaw-lockup-title">DeepLaw</title>
+  <desc id="deeplaw-lockup-desc">
+    DeepLaw wordmark with a source folio, version checkpoints, and a bounded receipt.
+  </desc>
+  <style>
+    .tile { fill: #102a43; stroke: #1f5d68; }
+    .paper-shadow { fill: #89a8b4; opacity: 0.28; }
+    .paper { fill: #f8fbfc; }
+    .fold { fill: #bee8e1; }
+    .source-line { fill: none; stroke: #7896a3; stroke-linecap: round; }
+    .gate-line { fill: none; stroke: #4bc5b4; stroke-linecap: round; }
+    .gate-node { fill: #102a43; stroke: #7de0d1; }
+    .receipt { fill: #d69e3a; }
+    .receipt-line { fill: none; stroke: #102a43; stroke-linecap: round; }
+    .word {
+      fill: #102a43;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 82px;
+      font-weight: 720;
+      letter-spacing: -3px;
+    }
+    .word-accent { fill: #147d72; }
+    .descriptor {
+      fill: #526b78;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 4px;
+    }
+    .rule { stroke: #d69e3a; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #0a1d2b; stroke: #4bc5b4; }
+      .paper-shadow { fill: #6e8d99; opacity: 0.36; }
+      .paper { fill: #edf6f7; }
+      .fold { fill: #8bd8cc; }
+      .source-line { stroke: #587684; }
+      .gate-node { fill: #0a1d2b; }
+      .receipt { fill: #e5b553; }
+      .word { fill: #edf6f7; }
+      .word-accent { fill: #65d1c1; }
+      .descriptor { fill: #a8bdc6; }
+      .rule { stroke: #e5b553; }
+    }
+  </style>
+
+  <g transform="translate(14 14) scale(.75)">
+    <rect class="tile" x="12" y="12" width="232" height="232" rx="54" stroke-width="4" />
+    <path class="paper-shadow" d="M40 54h82l32 32v130H40z" />
+    <path class="paper" d="M52 42h82l32 32v140H52z" />
+    <path class="fold" d="M134 42v32h32z" />
+    <path class="source-line" d="M74 94h54M74 128h54M74 162h54" stroke-width="8" />
+    <path class="gate-line" d="M144 82v92M128 94h16M128 128h52M128 162h16" stroke-width="7" />
+    <circle class="gate-node" cx="144" cy="94" r="8" stroke-width="5" />
+    <circle class="gate-node" cx="144" cy="128" r="8" stroke-width="5" />
+    <circle class="gate-node" cx="144" cy="162" r="8" stroke-width="5" />
+    <rect class="receipt" x="178" y="104" width="38" height="48" rx="9" />
+    <path class="receipt-line" d="M188 120h18M188 134h12" stroke-width="5" />
+  </g>
+
+  <text class="word" x="232" y="112">
+    <tspan>Deep</tspan><tspan class="word-accent">Law</tspan>
+  </text>
+  <path class="rule" d="M234 139h58" stroke-width="5" stroke-linecap="round" />
+  <text class="descriptor" x="310" y="147">SOURCE / VERSION / PROOF</text>
+</svg>

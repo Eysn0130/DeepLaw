@@ -106,19 +106,19 @@ def test_single_tool_routes_search_get_and_verify(tmp_path: Path) -> None:
 
     repository = Path(__file__).resolve().parents[1]
     contract_names = (
-        "legal-evidence-card.v1.schema.json",
-        "law-search-response.v1.schema.json",
-        "law-segment.v1.schema.json",
+        "legal-evidence-card.v2.schema.json",
+        "law-search-response.v2.schema.json",
+        "law-segment.v2.schema.json",
         "law-verification.v1.schema.json",
-        "law-release-info.v1.schema.json",
-        "corpus-release-manifest.v1.schema.json",
+        "law-release-info.v2.schema.json",
+        "corpus-release-manifest.v2.schema.json",
     )
     registry = Registry()
     for name in contract_names:
         schema = json.loads((repository / "contracts" / name).read_text())
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
     output_schema = json.loads(
-        (repository / "contracts/law-support.output.v1.schema.json").read_text()
+        (repository / "contracts/law-support.output.v2.schema.json").read_text()
     )
     validator = Draft202012Validator(output_schema, registry=registry)
     validator.validate(search)

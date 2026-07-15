@@ -40,18 +40,18 @@ schema 对所有 provider turn 永久可见。
 DeepLaw 当前只暴露一个紧凑工具：`law_support`。公开 contract 位于：
 
 - `contracts/law-support.input.v1.schema.json`
-- `contracts/law-support.output.v1.schema.json`
-- `contracts/law-search-response.v1.schema.json`
-- `contracts/law-segment.v1.schema.json`
+- `contracts/law-support.output.v2.schema.json`
+- `contracts/law-search-response.v2.schema.json`
+- `contracts/law-segment.v2.schema.json`
 - `contracts/law-verification.v1.schema.json`
-- `contracts/law-release-info.v1.schema.json`
-- `contracts/legal-evidence-card.v1.schema.json`
-- `contracts/corpus-release-manifest.v1.schema.json`
+- `contracts/law-release-info.v2.schema.json`
+- `contracts/legal-evidence-card.v2.schema.json`
+- `contracts/corpus-release-manifest.v2.schema.json`
 
 `law-support.output` 是四种只读操作结果的 closed union；宿主必须按 operation 验证对应分支，
 拒绝未知字段，不能只验证 MCP transport success。
 
-DeepLaw `0.1.x` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transport；它不是 HTTP
+DeepLaw `0.2.0` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transport；它不是 HTTP
 服务。握手时发布的是已内联本地 `$ref` 的 closed output schema，宿主不应在运行时依赖网络
 解析 GitHub schema URL。
 

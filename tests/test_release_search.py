@@ -71,7 +71,7 @@ def test_release_is_content_addressed_readonly_and_idempotent(tmp_path: Path) ->
     assert release["database_sha256"] == original_hash
     release_schema = json.loads(
         (
-            Path(__file__).resolve().parents[1] / "contracts/corpus-release-manifest.v1.schema.json"
+            Path(__file__).resolve().parents[1] / "contracts/corpus-release-manifest.v2.schema.json"
         ).read_text()
     )
     Draft202012Validator(release_schema).validate(release)
@@ -243,9 +243,12 @@ def test_exact_title_normalization_ignores_connectors_and_decision_suffix(
             )
         )
 
-    assert response.evidence
     assert {card.title for card in response.evidence} == {
         "中国人民银行关于修改和废止部分规章的决定"
+    }
+    assert not response.uncertain_evidence
+    assert "temporal_status_version" not in {
+        item["id"] for item in response.query_plan["obligations"]
     }
 
 
@@ -326,7 +329,7 @@ def test_runtime_rejects_unbounded_or_unknown_release_manifest_fields(tmp_path: 
     manifest["unexpected"] = "value"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="closed v1 contract"):
+    with pytest.raises(RuntimeError, match="closed v2 contract"):
         DeepLaw(release_dir / "deeplaw.sqlite3")
 
     manifest["unexpected"] = "X" * (64 * 1024)
@@ -354,14 +357,42 @@ def test_runtime_rejects_unsupported_storage_schema_and_metadata_drift(tmp_path:
         DeepLaw(release_dir / "deeplaw.sqlite3")
 
 
+def test_runtime_rejects_forged_verified_release_without_full_human_binding(
+    tmp_path: Path,
+) -> None:
+    release_dir, _, _ = _build_fixture(tmp_path)
+    manifest_path = release_dir / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_path.chmod(0o644)
+    manifest["temporal_status"] = "verified"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="complete review-overlay binding"):
+        DeepLaw(release_dir / "deeplaw.sqlite3")
+
+    manifest.update(
+        {
+            "reviewed_on": "2026-07-15",
+            "review_overlay_schema": "deeplaw.review-overlay/v1",
+            "review_overlay_sha256": "a" * 64,
+            "reviewer_kind": "ai_precheck",
+            "review_scope": "forged review metadata",
+            "review_covered_documents": manifest["document_count"],
+        }
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="full human temporal-review coverage"):
+        DeepLaw(release_dir / "deeplaw.sqlite3")
+
+
 def test_search_response_conforms_to_public_schema(tmp_path: Path) -> None:
     release_dir, _, _ = _build_fixture(tmp_path)
     repository = Path(__file__).resolve().parents[1]
     output_schema = json.loads(
-        (repository / "contracts/law-search-response.v1.schema.json").read_text()
+        (repository / "contracts/law-search-response.v2.schema.json").read_text()
     )
     card_schema = json.loads(
-        (repository / "contracts/legal-evidence-card.v1.schema.json").read_text()
+        (repository / "contracts/legal-evidence-card.v2.schema.json").read_text()
     )
     registry = Registry().with_resource(card_schema["$id"], Resource.from_contents(card_schema))
 
@@ -543,8 +574,19 @@ def test_source_change_during_extraction_is_rejected(
     )
     original_extract = ingest_module.extract_document
 
-    def replace_after_extract(path: Path, format_name: str, *, pdf_fallback: str = "off"):
-        result = original_extract(path, format_name, pdf_fallback=pdf_fallback)
+    def replace_after_extract(
+        path: Path,
+        format_name: str,
+        *,
+        pdf_fallback: str = "off",
+        reviewed_pages_path: Path | None = None,
+    ):
+        result = original_extract(
+            path,
+            format_name,
+            pdf_fallback=pdf_fallback,
+            reviewed_pages_path=reviewed_pages_path,
+        )
         path.write_bytes(path.read_bytes() + b"changed")
         return result
 
@@ -586,7 +628,7 @@ def test_rebuild_rejects_manifest_only_approval_tampering(tmp_path: Path) -> Non
     release["redistribution_status"] = "approved"
     release_path.write_text(json.dumps(release), encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="existing immutable release failed verification"):
+    with pytest.raises(RuntimeError, match="complete review-overlay binding"):
         build_release(
             source_root=manifest.parent,
             manifest_path=manifest,
@@ -748,4 +790,8 @@ def test_evaluation_checks_retrieval_and_noise_constraints(tmp_path: Path) -> No
     assert report["retrieval_pass_rate"] == 1.0
     assert report["constraint_pass_rate"] == 1.0
     assert report["overall_pass_rate"] == 1.0
+    assert report["receipt_verification_pass_rate"] == 1.0
+    assert report["receipt_count"] == report["verified_receipt_count"]
+    assert report["receipt_count"] > 0
+    assert all(item["receipt_verification_passed"] for item in report["results"])
     assert report["results"][1]["evidence_count"] == 0

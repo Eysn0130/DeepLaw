@@ -1,0 +1,98 @@
+name: Bug report
+description: 报告可复现的 DeepLaw 代码、CLI、MCP 或契约问题
+title: "[Bug]: "
+labels: []
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题。请只使用 source-free fixture、合成数据或已获准公开的信息复现。
+
+        不要提交案件私有数据、凭据、原始法源文件、release 数据库、OCR 正文或含本机敏感路径的日志。安全漏洞不要填写此表单，请通过 [GitHub Private Vulnerability Reporting](https://github.com/Eysn0130/DeepLaw/security/advisories/new) 私下报告。
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 影响范围
+      description: 请选择最接近的问题区域。
+      options:
+        - CLI
+        - Release build / ingestion
+        - Retrieval / evidence contract
+        - MCP server
+        - Codex / Claude Code / OpenCode adapter
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      description: 请填写 `deeplaw --version` 输出或 commit SHA；不要填写本机私有路径。
+      placeholder: 0.2.0 or a commit SHA
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 操作系统、Python 与 uv 版本，以及直接 CLI 或宿主适配器等必要信息。
+      placeholder: |
+        OS: Ubuntu 24.04
+        Python: 3.13.x
+        uv: 0.x.y
+        Entry point: deeplaw CLI
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最小复现步骤
+      description: 使用合成数据或仓库内 source-free fixture；不要粘贴真实案件或未获准公开的法源内容。
+      placeholder: |
+        1. Run ...
+        2. Pass the following synthetic input ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 粘贴已脱敏的最小错误信息。请删除凭据、用户标识、本机路径和法律正文。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息
+      description: 可提供不含受限数据的截图、fixture 或相关 contract 链接。
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我没有提交案件私有数据、凭据、原始法源、release 数据库或受限 OCR 正文。
+          required: true
+        - label: 这不是安全漏洞；安全问题将通过 GitHub Private Vulnerability Reporting 私下报告。
+          required: true
+        - label: 我理解 DeepLaw 仓库分发 Apache-2.0 代码，不随仓库分发法律语料。
+          required: true

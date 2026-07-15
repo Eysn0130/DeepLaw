@@ -1,0 +1,53 @@
+{
+  "schema_version": "deeplaw.benchmark-summary/v1",
+  "status": "candidate_smoke_not_held_out",
+  "run_date": "2026-07-15",
+  "release_id": "lawrel_0a7b7cb0a0fe5e3649a6b85889083351",
+  "release_schema": "deeplaw.release/v2",
+  "storage_schema": "deeplaw.sqlite/v4",
+  "database_sha256": "5443207e6118c46d7df251c73f794ef6342f42f973ec29ea88f6fe1beddb46ed",
+  "source_manifest_sha256": "64a9181a36572feea8609dca9b794fab8aeb99989a0806398aa6f5084322a749",
+  "review_overlay_sha256": "9e9a67ca0e12282d610e192c984b89f2ade63a394b52324e37a404aa84288af2",
+  "temporal_status": "partially_verified",
+  "redistribution_status": "restricted",
+  "cases_path": "evals/core-2026-07-14.jsonl",
+  "cases_sha256": "f60d88ab4b90e421b965e16ea85040edfab9dedb5cb387a1f92e20dd4ecc8d50",
+  "case_count": 32,
+  "ranked_case_count": 30,
+  "limit": 5,
+  "retrieval_pass_rate": 1.0,
+  "constraint_pass_rate": 1.0,
+  "overall_pass_rate": 1.0,
+  "receipt_count": 109,
+  "verified_receipt_count": 109,
+  "receipt_verification_pass_rate": 1.0,
+  "hit_at_1": 1.0,
+  "mrr": 1.0,
+  "average_excerpt_chars": 679.719,
+  "p50_latency_ms": 12.337,
+  "p95_latency_ms": 18.322,
+  "latency_scope": "search_only_receipt_verification_excluded",
+  "implementation": {
+    "package_version": "0.2.0",
+    "source_tree_sha256": "ccc0d75f06ea6f6797bc6aa2a435a683de3e267761af7bb8736e03376fe7f47e",
+    "search_sha256": "fa6032a2ccf49223b860067685fee909473626c72b7b1dfacd521f428807bef7",
+    "query_plan_sha256": "0a042312c774854267e06d95854caad772e441326bf1dec02a18aabe8096742d",
+    "evaluator_sha256": "fc5d1578980b9c23700e13af6719d2a34ba58fb55203fb8cad2b1856f121efca",
+    "store_sha256": "b6f050b1b95d392f1b8e715c44627ed7bbb5d3309e2749ca214ee3f71b6c849b",
+    "mcp_server_sha256": "b4c66a1b4b8cf78de17eaa88bde7a0053091547a9957cc76db1ffc04855c86d2"
+  },
+  "environment": {
+    "os": "Darwin 25.5.0 arm64",
+    "cpu": "Apple M4 Pro",
+    "memory_bytes": 25769803776,
+    "python": "3.12.13",
+    "sqlite": "3.50.4"
+  },
+  "limitations": [
+    "The query set was designed against the known 28-document corpus.",
+    "This is not a held-out or independently adjudicated legal benchmark.",
+    "No external retrieval system was compared in this run.",
+    "Two expected titles track safer canonical titles supplied by the hash-bound review overlay.",
+    "The local corpus release remains AI-prechecked, temporally partial, and redistribution-restricted."
+  ]
+}

@@ -4,10 +4,11 @@ from pathlib import Path
 
 from reportlab.pdfgen import canvas
 
-from deeplaw.extract import _page_image_number, _text_layer_suspicious, extract_docx, extract_pdf
+from deeplaw.extract import _text_layer_suspicious, extract_docx, extract_pdf
 from deeplaw.models import TextBlock
 from deeplaw.segment import segment_document
 from deeplaw.util import excerpt, normalize_article_label, search_terms
+from deeplaw.vision import _page_image_number
 
 from .helpers import write_docx
 

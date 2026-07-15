@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-support-output:v2",
+  "title": "DeepLawSupportOutputV2",
+  "oneOf": [
+    { "$ref": "urn:deeplaw:schema:law-search-response:v2" },
+    { "$ref": "urn:deeplaw:schema:law-segment:v2" },
+    { "$ref": "urn:deeplaw:schema:law-verification:v1" },
+    { "$ref": "urn:deeplaw:schema:law-release-info:v2" }
+  ]
+}

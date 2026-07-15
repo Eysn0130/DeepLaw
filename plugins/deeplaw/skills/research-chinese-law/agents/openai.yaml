@@ -1,7 +1,7 @@
 interface:
   display_name: "DeepLaw 中国法律研究"
   short_description: "按版本核验中国法源、效力期间、精确条款与可复核引用"
-  brand_color: "#17324D"
+  brand_color: "#102A43"
   default_prompt: "Use $research-chinese-law to verify a Chinese-law question with bounded, version-aware source evidence."
 policy:
   allow_implicit_invocation: false

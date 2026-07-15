@@ -1,6 +1,6 @@
 # DeepLaw Architecture
 
-Status: architecture baseline for DeepLaw `0.1.x`, reviewed against the current
+Status: architecture baseline for DeepLaw `0.2.0`, reviewed against the current
 implementation on 2026-07-15.
 
 DeepLaw is a read-only, version-aware Chinese legal evidence substrate. It is a
@@ -96,7 +96,7 @@ flowchart LR
     P -. "never enters public release" .-> R
 ```
 
-The builder is an offline administrative surface. The `0.1.x` MCP runtime uses
+The builder is an offline administrative surface. The `0.2.0` MCP runtime uses
 the SDK's low-level `Server` over local stdio only; it has no HTTP listener and
 no corpus-write operation. Its process lifespan resolves and verifies one
 release, computes the database hash once during startup, keeps that read-only
@@ -142,7 +142,7 @@ bytes, OCR output, parser identity, or normalized legal text creates a
 different release. SQLite's binary hash remains a separate artifact integrity
 value.
 
-### Known `0.1.x` release limitations
+### Known `0.2.0` release limitations
 
 The current implementation is an alpha baseline, not yet a production release
 authority. The following gaps must remain visible until code and tests close
@@ -154,11 +154,13 @@ them:
   approved official-domain policy or independently refetch the source.
 - Release metadata carries a database SHA-256 but no release signature.
 - The CLI has a local candidate activation pointer but does not yet implement
-  signed approval, revocation, supersession, or reviewer identity workflows.
+  signed release approval, revocation, or supersession workflows. Human PDF
+  page-review files record reviewer identity, role, time, and attestation, but
+  they are not a signed release-approval workflow.
 - The original source package is external to the release database, so a
   reproducible release requires separately retained and access-controlled
   source bytes.
-- Candidate IDs and metrics recorded before the current `deeplaw.sqlite/v3`
+- Candidate IDs and metrics recorded before the current `deeplaw.sqlite/v4`
   provenance schema are historical evidence only. A later code or schema
   change does not retroactively upgrade them; they must be rebuilt and
   revalidated before being described as a current runtime candidate.
@@ -172,25 +174,16 @@ silently label a candidate corpus as verified.
 | --- | --- | --- | --- |
 | DOCX | Direct OOXML parsing | None | Paragraph order and style; table rows become blocks |
 | Text-layer PDF | `pypdf` layout/text extraction | None when quality is sufficient | Page number and quality warnings |
-| Scanned or poor PDF | Quality gate fails | Explicit local MinerU CLI or Tesseract/Poppler | Backend/version, extracted-text hash, warnings, and available configuration in the build report |
+| Scanned or poor PDF | Quality gate fails | `deeplaw-vision-consensus` | Page image/native/OCR/selected hashes, confidence, consistency, risks, review status and tool versions |
 
-MinerU is an optional external adapter, not a Python dependency of the core
-package. DeepLaw requires `MINERU_MODEL_SOURCE=local` and preinstalled models,
-then invokes the fixed local `pipeline` backend in an isolated temporary
-directory. This prevents MinerU's normal model-download path from being used by
-the adapter; it is not an OS-level network sandbox. The adapter prefers MinerU
-`content_list.json` so it can retain page indices, then falls back to Markdown
-when that output is unavailable. Both paths record the resolved MinerU version.
-The current canonical segment schema does not yet retain `middle.json`
-bounding boxes, line spans, confidence, or model identity; those remain a gated
-future extension. MinerU output must never become the authority instead of the
-original PDF.
-
-The Tesseract fallback also uses separately installed executables. New builds
-record the resolved Tesseract and `pdftoppm` versions, DPI, language, page
-segmentation mode, extracted-text hash, page numbers, and review warnings. It
-does not yet retain OCR word coordinates or confidence values. Their absence is
-a visible review limitation, not evidence that extraction fidelity was proved.
+`deeplaw-vision-consensus` is a first-party evidence pipeline. It renders every
+page to bind an image hash, evaluates the native text layer, and invokes the
+separately installed local OCR executable only when that page fails the native
+quality gate. It stores page-level OCR confidence and native/OCR consistency;
+low-confidence or disagreeing output remains review-required. A human-reviewed
+override is accepted only through a closed file bound to both source PDF and
+rendered-page hashes, with a human identity, timestamp, role, and visual
+comparison attestation. The pipeline cannot create that attestation itself.
 
 OCR or layout-model output requires source comparison and review. A successful
 process exit is not proof of extraction fidelity.
@@ -215,6 +208,9 @@ The current SQLite schema is created by
 - `segment_search`: FTS5 index over pre-tokenized title, body, and locator
   fields. Chinese runs are represented with two- and three-character n-grams;
   ASCII identifiers remain lexical tokens.
+- `legal_edges`: one-hop navigation edges with subject/object document IDs,
+  predicate, exact provenance segment and evidence hash, derivation, review
+  status, and optional validity interval.
 
 The release database contains normalized text and provenance, not the original
 DOCX/PDF bytes. Source packages remain separately controlled inputs. Runtime
@@ -236,36 +232,44 @@ must also name the document and locator.
 
 ## Retrieval Architecture
 
-The current engine in [`src/deeplaw/search.py`](../src/deeplaw/search.py) uses a
-small deterministic routing layer:
+The current engine in [`src/deeplaw/search.py`](../src/deeplaw/search.py) first
+compiles a closed QueryPlan and then uses a small deterministic routing layer:
 
 - `navigation`: short broad terms such as a bare topic; returns shorter cards
   and suggested narrowing questions.
 - `exact`: explicit article/citation or exact-version intent.
 - `research`: a substantive legal research question.
 
-The implemented candidate channels are:
+The implemented execution channels are:
 
 1. exact article label;
 2. compact document-title match;
 3. Chinese n-gram FTS5;
-4. deterministic reordering by channel, term coverage, authority rank, and FTS
+4. deterministic, provenance-carrying one-hop legal graph navigation;
+5. deterministic reordering by channel, term coverage, authority rank, and FTS
    score;
-5. per-document/article deduplication and a hard evidence/character budget.
+6. obligation coverage, explicit gaps, per-document/article deduplication and a
+   hard evidence/character budget.
 
-An `as_of` date filters `effective_from <= as_of < effective_to` where those
-fields exist. Missing dates are deliberately not treated as verified. Evidence
-cards retain `status` and set `temporal_review_required` unless the document is
-explicitly reviewed as current. This filtering is research assistance, not an
-applicability ruling.
+An `as_of` date classifies candidates as `verified_in_scope`,
+`unverified_metadata`, or `outside_effective_interval`. Only the first class can
+enter primary evidence; unknown or unreviewed dates are isolated in
+`uncertain_evidence`, and known out-of-scope material is excluded. This is
+research assistance, not an applicability ruling.
 
-The current model accepts reviewed document numbers, aliases, promulgation
-dates, jurisdiction, effective intervals, and issuer/status fields from an
-input manifest. The supplied candidate package leaves many of those fields
-empty, and the database has no reviewed amendment, repeal, or citation-lineage
-table. It therefore cannot yet prove a complete historical provision chain.
-Those relationships belong to a later versioned schema and must not be
-simulated by search ranking.
+The current model accepts document numbers, aliases, promulgation dates,
+jurisdiction, effective intervals, issuer/status fields, and hash-bound review
+metadata. SQLite v4 includes `legal_edges`, but the `0.2.0` runtime produces only
+`deterministic_exact` edges derived from an exact known-document-name reference
+in a source segment. Review-overlay relations are hash-bound governance
+proposals; they are not inserted into the runtime graph, and no current producer
+creates a `reviewed` edge.
+
+Graph paths are navigation metadata and cannot independently mark an evidence
+obligation covered. Missing graph navigation does not create a graph-specific
+gap. If the bounded evidence execution still leaves a required obligation
+uncovered or uncertain, the response reports the corresponding generic
+obligation gap rather than filling it by model inference.
 
 ### Retrieval ladder for future expansion
 
@@ -274,7 +278,7 @@ Future channels must preserve this order:
 ```text
 exact title / document number / article / alias
   -> effective interval and status filter
-  -> deterministic amendment, repeal, citation, and interpretation graph
+  -> bounded graph navigation over cites/amends/repeals/replaces/implements/exception_to
   -> Chinese lexical retrieval
   -> small candidate reranking
   -> semantic retrieval only as a bounded fallback
@@ -291,7 +295,10 @@ review accepts it.
 
 The provider-facing schemas live in [`contracts`](../contracts):
 
-- `LegalEvidenceCardV1` returns the release, receipt, stable IDs, title, issuer,
+- DeepLaw `0.2.0` keeps `law-support.input` and verification at v1; the advertised
+  output union, search response, segment, release-info, evidence-card, and corpus
+  release-manifest contracts are v2.
+- `LegalEvidenceCardV2` returns the release, receipt, stable IDs, title, issuer,
   source URL/hash, segment hash, locator, effective interval, status, extraction
   method/configuration/review warnings, score, hit reason, and bounded excerpt.
 - Search returns at most five cards and at most 6,000 excerpt characters.
@@ -363,10 +370,13 @@ Derived layers are permitted only when all of the following hold:
   segment;
 - evaluated against exact/lexical-only retrieval before activation.
 
-The deterministic graph should represent only reviewed relationships such as
-`amends`, `repeals`, `interprets`, `cites`, and `implements`. An LLM Wiki may
-summarize topics, disputes, and timelines, but every proposition must link back
-to a source segment and the whole Wiki must be safe to delete.
+The `0.2.0` deterministic graph supports only `cites`, `amends`, `repeals`,
+`replaces`, `implements`, and `exception_to`. Each runtime edge is
+`deterministic_exact` and retains the source segment and evidence hash. Relations
+declared in a review overlay remain governance proposals; the current runtime
+has no producer that promotes them to `reviewed` edges. An LLM Wiki may summarize
+topics, disputes, and timelines, but every proposition must link back to a
+source segment and the whole Wiki must be safe to delete.
 
 ## Security And Failure Boundaries
 

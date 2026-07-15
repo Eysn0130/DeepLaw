@@ -7,12 +7,14 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from .evidence_graph import RELATION_TYPES, EvidenceRelation
 from .models import Segment, SourceDocument
 from .util import canonical_date, canonical_json, compact_text, search_terms, sha256_file
 
-SCHEMA_VERSION = "deeplaw.release/v1"
-STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v3"
+SCHEMA_VERSION = "deeplaw.release/v2"
+STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v4"
 _RELEASE_ID = re.compile(r"^lawrel_[0-9a-f]{32}$")
+_RELATION_ID = re.compile(r"^lawedge_[0-9a-f]{24}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_RELEASE_MANIFEST_BYTES = 64 * 1024
 _RELEASE_REQUIRED_FIELDS = {
@@ -32,7 +34,16 @@ _RELEASE_REQUIRED_FIELDS = {
     "vector_index",
     "derived_wiki",
 }
-_RELEASE_OPTIONAL_FIELDS = {"retrieved_on", "reviewed_on"}
+_RELEASE_OPTIONAL_FIELDS = {
+    "retrieved_on",
+    "reviewed_on",
+    "package_qa_reviewed_on",
+    "review_overlay_schema",
+    "review_overlay_sha256",
+    "reviewer_kind",
+    "review_scope",
+    "review_covered_documents",
+}
 
 
 def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[str, Any]:
@@ -43,7 +54,7 @@ def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[st
     unknown = fields - _RELEASE_REQUIRED_FIELDS - _RELEASE_OPTIONAL_FIELDS
     if missing or unknown:
         raise RuntimeError(
-            "release manifest fields do not match the closed v1 contract: "
+            "release manifest fields do not match the closed v2 contract: "
             f"missing={sorted(missing)}, unknown={sorted(unknown)}"
         )
     release_id = manifest.get("release_id")
@@ -64,7 +75,7 @@ def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[st
         not isinstance(package_name, str) or len(package_name) > 500
     ):
         raise RuntimeError("release package_name is invalid")
-    for field_name in ("retrieved_on", "reviewed_on"):
+    for field_name in ("retrieved_on", "reviewed_on", "package_qa_reviewed_on"):
         value = manifest.get(field_name)
         if value is not None:
             if not isinstance(value, str):
@@ -81,16 +92,71 @@ def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[st
         value = manifest.get(field_name)
         if not isinstance(value, str) or not _SHA256.fullmatch(value):
             raise RuntimeError(f"release {field_name} is invalid")
+    review_overlay_sha256 = manifest.get("review_overlay_sha256")
+    if review_overlay_sha256 is not None and (
+        not isinstance(review_overlay_sha256, str)
+        or not _SHA256.fullmatch(review_overlay_sha256)
+    ):
+        raise RuntimeError("release review_overlay_sha256 is invalid")
+    review_overlay_schema = manifest.get("review_overlay_schema")
+    if review_overlay_schema is not None and review_overlay_schema != "deeplaw.review-overlay/v1":
+        raise RuntimeError("release review_overlay_schema is invalid")
+    reviewer_kind = manifest.get("reviewer_kind")
+    if reviewer_kind is not None and reviewer_kind not in {"ai_precheck", "human", "mixed"}:
+        raise RuntimeError("release reviewer_kind is invalid")
+    review_scope = manifest.get("review_scope")
+    if review_scope is not None and (
+        not isinstance(review_scope, str) or not review_scope or len(review_scope) > 2000
+    ):
+        raise RuntimeError("release review_scope is invalid")
+    review_covered_documents = manifest.get("review_covered_documents")
+    if review_covered_documents is not None and (
+        isinstance(review_covered_documents, bool)
+        or not isinstance(review_covered_documents, int)
+        or not 1 <= review_covered_documents <= manifest["document_count"]
+    ):
+        raise RuntimeError("release review_covered_documents is invalid")
     storage_engine = manifest.get("storage_engine")
     if not isinstance(storage_engine, dict) or set(storage_engine) != {"sqlite"}:
         raise RuntimeError("release storage_engine is invalid")
     sqlite_version = storage_engine.get("sqlite")
     if not isinstance(sqlite_version, str) or not sqlite_version or len(sqlite_version) > 64:
         raise RuntimeError("release SQLite version is invalid")
-    if manifest.get("temporal_status") not in {"requires_human_review", "verified"}:
+    if manifest.get("temporal_status") not in {
+        "requires_human_review",
+        "partially_verified",
+        "verified",
+    }:
         raise RuntimeError("release temporal_status is invalid")
     if manifest.get("redistribution_status") not in {"not_assessed", "approved", "restricted"}:
         raise RuntimeError("release redistribution_status is invalid")
+    has_review_outcome = (
+        manifest["temporal_status"] != "requires_human_review"
+        or manifest["redistribution_status"] != "not_assessed"
+    )
+    if has_review_outcome and (
+        manifest.get("reviewed_on") is None
+        or review_overlay_schema is None
+        or review_overlay_sha256 is None
+        or reviewer_kind is None
+        or review_scope is None
+        or review_covered_documents is None
+    ):
+        raise RuntimeError("release review outcome lacks a complete review-overlay binding")
+    if manifest["temporal_status"] == "verified" and (
+        reviewer_kind not in {"human", "mixed"}
+        or review_covered_documents != manifest["document_count"]
+    ):
+        raise RuntimeError(
+            "verified release requires full human temporal-review coverage"
+        )
+    if manifest["redistribution_status"] == "approved" and (
+        reviewer_kind not in {"human", "mixed"}
+        or review_covered_documents != manifest["document_count"]
+    ):
+        raise RuntimeError(
+            "approved release requires full human redistribution-review coverage"
+        )
     if not isinstance(manifest.get("vector_index"), bool) or not isinstance(
         manifest.get("derived_wiki"), bool
     ):
@@ -109,6 +175,7 @@ def create_release_database(
     release_metadata: dict[str, Any],
     documents: list[SourceDocument],
     segments: list[Segment],
+    relations: tuple[EvidenceRelation, ...] = (),
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -175,6 +242,25 @@ def create_release_database(
                 ON segments(document_id, article_label, ordinal);
             CREATE INDEX documents_type_effective
                 ON documents(document_type, effective_from, effective_to);
+
+            CREATE TABLE legal_edges (
+                relation_id TEXT PRIMARY KEY,
+                subject_document_id TEXT NOT NULL REFERENCES documents(document_id),
+                predicate TEXT NOT NULL,
+                object_document_id TEXT NOT NULL REFERENCES documents(document_id),
+                provenance_segment_id TEXT NOT NULL REFERENCES segments(segment_id),
+                evidence_sha256 TEXT NOT NULL,
+                derivation TEXT NOT NULL,
+                review_status TEXT NOT NULL,
+                valid_from TEXT,
+                valid_to TEXT,
+                CHECK(subject_document_id <> object_document_id)
+            ) WITHOUT ROWID;
+
+            CREATE INDEX legal_edges_subject
+                ON legal_edges(subject_document_id, predicate, object_document_id);
+            CREATE INDEX legal_edges_object
+                ON legal_edges(object_document_id, predicate, subject_document_id);
 
             CREATE VIRTUAL TABLE segment_search USING fts5(
                 segment_id UNINDEXED,
@@ -277,6 +363,52 @@ def create_release_database(
                     ),
                     _token_string(segment.text),
                     _token_string(locator),
+                ),
+            )
+        by_segment = {segment.segment_id: segment for segment in segments}
+        for relation in relations:
+            provenance = by_segment.get(relation.provenance_segment_id)
+            if (
+                not _RELATION_ID.fullmatch(relation.relation_id)
+                or relation.subject_document_id not in by_document
+                or relation.object_document_id not in by_document
+                or relation.subject_document_id == relation.object_document_id
+                or relation.predicate not in RELATION_TYPES
+                or provenance is None
+                or provenance.document_id != relation.subject_document_id
+                or relation.evidence_sha256 != provenance.text_sha256
+                or relation.review_status != "deterministic_exact"
+                or not relation.derivation
+                or len(relation.derivation) > 200
+            ):
+                raise ValueError("legal relation violates the deterministic provenance contract")
+            for field_name, value in (
+                ("valid_from", relation.valid_from),
+                ("valid_to", relation.valid_to),
+            ):
+                if value is not None:
+                    canonical_date(value, field=f"relation {field_name}")
+            if (
+                relation.valid_from
+                and relation.valid_to
+                and relation.valid_to <= relation.valid_from
+            ):
+                raise ValueError("legal relation valid_to must be after valid_from")
+            connection.execute(
+                """
+                INSERT INTO legal_edges VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    relation.relation_id,
+                    relation.subject_document_id,
+                    relation.predicate,
+                    relation.object_document_id,
+                    relation.provenance_segment_id,
+                    relation.evidence_sha256,
+                    relation.derivation,
+                    relation.review_status,
+                    relation.valid_from,
+                    relation.valid_to,
                 ),
             )
         connection.commit()

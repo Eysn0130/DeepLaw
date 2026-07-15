@@ -23,6 +23,8 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
     retrieval_successes = 0
     constraint_successes = 0
     overall_successes = 0
+    receipt_count = 0
+    verified_receipt_count = 0
     top1_successes = 0
     ranked_cases = 0
     reciprocal_rank = 0.0
@@ -51,6 +53,18 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             extraction_review_flags = [
                 card.extraction_review_required for card in response.evidence
             ]
+            returned_cards = (*response.evidence, *response.uncertain_evidence)
+            receipt_checks: list[bool] = []
+            for card in returned_cards:
+                verification = law.verify(card.segment_id, card.receipt_id)
+                receipt_checks.append(
+                    bool(verification["valid"])
+                    and verification.get("release_id") == response.release_id
+                    and verification.get("segment_id") == card.segment_id
+                    and verification.get("source_sha256") == card.source_sha256
+                    and verification.get("segment_sha256") == card.segment_sha256
+                )
+            receipt_verification_passed = all(receipt_checks)
             expected_titles = set(case.get("expected_titles", []))
             expected_articles = set(case.get("expected_articles", []))
             expected_empty = bool(case.get("expected_empty", False))
@@ -90,6 +104,7 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                 not (forbidden_titles & set(titles))
                 and mode_passed
                 and extraction_review_passed
+                and receipt_verification_passed
                 and len(response.evidence) <= evidence_bound
                 and response.total_excerpt_chars <= excerpt_bound
             )
@@ -97,6 +112,8 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
             retrieval_successes += int(retrieval_passed)
             constraint_successes += int(constraints_passed)
             overall_successes += int(passed)
+            receipt_count += len(receipt_checks)
+            verified_receipt_count += sum(receipt_checks)
             top1_successes += int(is_ranked_case and rank == 1)
             if is_ranked_case:
                 reciprocal_rank += 0.0 if rank is None else 1.0 / rank
@@ -112,6 +129,8 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
                     "returned_titles": titles,
                     "returned_articles": articles,
                     "returned_extraction_review_required": extraction_review_flags,
+                    "receipt_count": len(receipt_checks),
+                    "receipt_verification_passed": receipt_verification_passed,
                     "mode": response.mode,
                     "evidence_count": len(response.evidence),
                     "excerpt_chars": response.total_excerpt_chars,
@@ -131,6 +150,11 @@ def evaluate_file(database: Path, cases_path: Path, *, limit: int = 5) -> dict[s
         "retrieval_pass_rate": retrieval_successes / len(cases),
         "constraint_pass_rate": constraint_successes / len(cases),
         "overall_pass_rate": overall_successes / len(cases),
+        "receipt_count": receipt_count,
+        "verified_receipt_count": verified_receipt_count,
+        "receipt_verification_pass_rate": (
+            verified_receipt_count / receipt_count if receipt_count else None
+        ),
         "ranked_case_count": ranked_cases,
         "hit_at_1": top1_successes / ranked_cases if ranked_cases else None,
         "mrr": reciprocal_rank / ranked_cases if ranked_cases else None,

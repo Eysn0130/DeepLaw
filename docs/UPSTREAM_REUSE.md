@@ -25,16 +25,15 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
 
 Current decision: none of the reviewed knowledge platforms is a direct DeepLaw
 runtime dependency. No source code from these repositories has been copied
-into DeepLaw. The offline builder can explicitly invoke a separately installed
-MinerU CLI, or Tesseract together with Poppler's `pdftoppm`; none of those
-executables or their model/language data is bundled in the DeepLaw core.
+into DeepLaw. The first-party vision pipeline can invoke separately installed
+Tesseract and Poppler's `pdftoppm`; neither executable nor its language data is
+bundled in the DeepLaw core.
 
 ## Reviewed Snapshot
 
 | Project | Commit reviewed | Published license | DeepLaw decision |
 | --- | --- | --- | --- |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Architectural and algorithm reference; no whole-system dependency |
-| [opendatalab/MinerU](https://github.com/opendatalab/MinerU) | `79d6d8d79fb8` | MinerU Open Source License: Apache-2.0 plus additional terms | Optional external local parser adapter |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-pack, provenance, annotation, and MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |
 | [VectifyAI/PageIndex](https://github.com/VectifyAI/PageIndex) | `f413c66fee0b` | MIT | Optional future experiment for long unstructured documents |
@@ -94,58 +93,15 @@ that prove useful in DeepLaw's own types. If future work copies a pure module,
 it requires a separate change recording the exact file, commit, MIT notice,
 adaptation, and tests.
 
-### MinerU
-
-Relevant upstream files:
-
-- [license](https://github.com/opendatalab/MinerU/blob/79d6d8d79fb8/LICENSE.md)
-- [`pyproject.toml`](https://github.com/opendatalab/MinerU/blob/79d6d8d79fb8/pyproject.toml)
-- [output-file reference](https://github.com/opendatalab/MinerU/blob/79d6d8d79fb8/docs/zh/reference/output_files.md)
-- [`pipeline_middle_json_mkcontent.py`](https://github.com/opendatalab/MinerU/blob/79d6d8d79fb8/mineru/backend/pipeline/pipeline_middle_json_mkcontent.py)
-- [`fast_api.py`](https://github.com/opendatalab/MinerU/blob/79d6d8d79fb8/mineru/cli/fast_api.py)
-
-MinerU can improve scanned and layout-heavy PDF extraction, but its full
-pipeline brings large model, Torch/ONNX/Transformers, disk, and memory
-requirements. Making it mandatory would turn a small offline read-only service
-into a document-AI platform.
-
-Decision:
-
-- keep native DOCX and text-layer PDF extraction as the default;
-- stop at a quality gate rather than silently accepting poor text;
-- let an operator explicitly select an installed local `mineru` CLI, with
-  models already present and `MINERU_MODEL_SOURCE=local` set before launch;
-- reassert local model-source mode in the child environment, use the fixed
-  `pipeline` backend, and run in an isolated temporary directory without a
-  shell;
-- prefer `content_list.json` for page indices, fall back to generated Markdown,
-  and record the resolved MinerU version for either path;
-- normalize outputs into DeepLaw-owned structures and retain parser/backend
-  provenance;
-- never treat MinerU Markdown or model output as the legal source;
-- do not vendor MinerU source or model weights.
-
-Local model-source mode prevents the adapter from relying on MinerU's normal
-model-download path. It is not an OS-level network sandbox; an operator that
-requires process-level egress isolation must provide it in the build
-environment. MinerU is an offline build option and is never started by the
-read-only MCP runtime.
-
-MinerU's current license adds commercial thresholds, an online-service
-attribution requirement, and automatic termination conditions to Apache-2.0.
-It must not be described as an unmodified Apache-2.0-only dependency. See
-[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
-
 ### Tesseract And Poppler
 
-The second explicit OCR fallback uses separately installed
+The first-party `deeplaw-vision-consensus` pipeline uses separately installed
 [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) and Poppler's
 [`pdftoppm`](https://gitlab.freedesktop.org/poppler/poppler). The current
-adapter renders PDF pages to temporary PNG files at 300 DPI, then invokes
-Tesseract with `chi_sim+eng` and page segmentation mode 3. New builds record
-the resolved versions of both executables, those settings, page association,
-warnings, and the extracted-text hash. They do not yet preserve word-level
-coordinates or confidence values.
+pipeline renders PDF pages to temporary PNG files at 300 DPI, then invokes
+Tesseract with `chi_sim+eng` and page segmentation mode 3 only for suspicious
+native pages. New builds retain page image/native/OCR/selected hashes, weighted
+confidence, native/OCR consistency, risk flags and review status.
 
 This is process integration, not copied upstream source. DeepLaw does not
 bundle either executable or Tesseract language data. Tesseract 5.5.2 publishes
@@ -262,7 +218,6 @@ Relevant upstream files:
 
 - [`rag/app/laws.py`](https://github.com/infiniflow/ragflow/blob/14d361aa5116/rag/app/laws.py)
 - [`rag/nlp/search.py`](https://github.com/infiniflow/ragflow/blob/14d361aa5116/rag/nlp/search.py)
-- [`deepdoc/parser/mineru_parser.py`](https://github.com/infiniflow/ragflow/blob/14d361aa5116/deepdoc/parser/mineru_parser.py)
 - [`deepdoc/parser/pdf_parser.py`](https://github.com/infiniflow/ragflow/blob/14d361aa5116/deepdoc/parser/pdf_parser.py)
 - [`mcp/server/server.py`](https://github.com/infiniflow/ragflow/blob/14d361aa5116/mcp/server/server.py)
 
@@ -336,12 +291,10 @@ MIT-licensed file and add attribution at that time.
 
 None of the reviewed platforms.
 
-### Current optional external build adapters
+### Current optional external build tools
 
-- MinerU CLI, only when explicitly selected for a PDF that fails the native
-  text-quality gate.
-- Tesseract OCR plus Poppler `pdftoppm`, only when explicitly selected for a
-  PDF that fails the native text-quality gate.
+- Tesseract OCR plus Poppler `pdftoppm`, only through the explicit first-party
+  `vision-consensus` pipeline; no raw OCR bypass is exposed.
 
 ### Suitable for future focused extraction
 

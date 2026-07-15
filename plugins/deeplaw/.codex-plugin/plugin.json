@@ -1,6 +1,6 @@
 {
   "name": "deeplaw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read-only, version-aware Chinese legal-source research for AI agents.",
   "author": {
     "name": "Eysn0130",
@@ -29,7 +29,7 @@
       "Read"
     ],
     "websiteURL": "https://github.com/Eysn0130/DeepLaw",
-    "brandColor": "#17324D",
+    "brandColor": "#102A43",
     "defaultPrompt": [
       "Verify a Chinese-law question with bounded, version-aware official-source evidence"
     ]

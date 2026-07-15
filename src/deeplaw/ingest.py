@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from .evidence_graph import derive_relations
 from .extract import ExtractionError, extract_document
 from .models import BuildReport, Segment, SourceDocument
+from .review_overlay import AppliedReviewOverlay, apply_review_overlay
 from .segment import segment_document
 from .store import (
     SCHEMA_VERSION,
@@ -52,6 +54,16 @@ _AUTHORITY = {
     "normative_document": 60,
     "case_reference": 40,
 }
+
+
+def _bounded_extraction_warnings(values: tuple[str, ...]) -> tuple[str, ...]:
+    unique = tuple(dict.fromkeys(values))
+    if len(unique) <= 16:
+        return unique
+    return (
+        *unique[:15],
+        f"{len(unique) - 15} additional page warnings retained in build-report.json",
+    )
 
 
 def _validate_public_output_bounds(
@@ -136,6 +148,8 @@ def _release_payload(manifest: dict[str, Any]) -> dict[str, Any]:
                     "title",
                     "format",
                     "officialSource",
+                    "canonicalAuthorityUrl",
+                    "retrievalSourceUrl",
                     "byteSize",
                     "sha256",
                     "effectiveDate",
@@ -149,6 +163,12 @@ def _release_payload(manifest: dict[str, Any]) -> dict[str, Any]:
                     "issuer",
                     "authorityRank",
                     "relations",
+                    "sourceReviewStatus",
+                    "temporalReviewStatus",
+                    "extractionReviewStatus",
+                    "redistributionStatus",
+                    "statusAsOf",
+                    "evidenceUrls",
                     "note",
                 )
             }
@@ -157,7 +177,14 @@ def _release_payload(manifest: dict[str, Any]) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "package_name": package.get("name"),
         "retrieved_on": package.get("retrievedOn"),
-        "reviewed_on": package.get("reviewedOn"),
+        "package_qa_reviewed_on": package.get("reviewedOn"),
+        "reviewed_on": package.get("reviewedAsOf"),
+        "review_overlay_schema": package.get("reviewOverlaySchema"),
+        "review_overlay_sha256": package.get("reviewOverlaySha256"),
+        "reviewer_kind": package.get("reviewerKind"),
+        "review_scope": package.get("reviewScope"),
+        "temporal_status": package.get("temporalStatus"),
+        "redistribution_status": package.get("redistributionStatus"),
         "documents": documents,
     }
 
@@ -170,6 +197,8 @@ def build_release(
     activate: bool = False,
     pdf_fallback: str = "off",
     allow_needs_ocr: bool = False,
+    review_overlay_path: Path | None = None,
+    reviewed_pages_root: Path | None = None,
 ) -> tuple[Path, BuildReport]:
     source_root = source_root.expanduser().resolve(strict=True)
     manifest_path = manifest_path.expanduser().resolve(strict=True)
@@ -184,6 +213,14 @@ def build_release(
         raise ValueError(f"manifest is not valid UTF-8 JSON: {manifest_path}") from error
     if not isinstance(manifest, dict):
         raise ValueError("manifest root must be an object")
+    applied_review: AppliedReviewOverlay | None = None
+    if review_overlay_path is not None:
+        applied_review = apply_review_overlay(manifest, review_overlay_path)
+        manifest = applied_review.manifest
+    if reviewed_pages_root is not None:
+        reviewed_pages_root = reviewed_pages_root.expanduser().resolve(strict=True)
+        if reviewed_pages_root.is_symlink() or not reviewed_pages_root.is_dir():
+            raise ValueError("reviewed-pages root must be a non-symlink directory")
     if not isinstance(manifest.get("package", {}), dict):
         raise ValueError("manifest package must be an object")
     package = manifest.get("package", {})
@@ -192,7 +229,7 @@ def build_release(
         not isinstance(package_name, str) or not package_name.strip() or len(package_name) > 500
     ):
         raise ValueError("manifest package.name must be a non-empty string of at most 500 chars")
-    for field_name in ("retrievedOn", "reviewedOn"):
+    for field_name in ("retrievedOn", "reviewedOn", "reviewedAsOf"):
         if package.get(field_name) is not None:
             if not isinstance(package[field_name], str):
                 raise ValueError(f"manifest package.{field_name} must be a date string")
@@ -353,31 +390,50 @@ def build_release(
             status=status,
             note=note,
         )
+        reviewed_pages_path: Path | None = None
+        if reviewed_pages_root is not None and format_name == "PDF":
+            candidate_review = reviewed_pages_root / f"{actual_hash}.reviewed-pages.json"
+            if candidate_review.is_symlink():
+                raise ValueError(f"reviewed-pages file must not be a symlink: {relative_path}")
+            if candidate_review.exists():
+                if not candidate_review.is_file():
+                    raise ValueError(
+                        f"reviewed-pages path must be a regular file: {relative_path}"
+                    )
+                reviewed_pages_path = candidate_review
         try:
-            extraction = extract_document(source_path, format_name, pdf_fallback=pdf_fallback)
+            extraction = extract_document(
+                source_path,
+                format_name,
+                pdf_fallback=pdf_fallback,
+                reviewed_pages_path=reviewed_pages_path,
+            )
         except ExtractionError as error:
             raise ExtractionError(f"{relative_path}: {error}") from error
         if extraction.quality.needs_ocr and not allow_needs_ocr:
             raise ExtractionError(
                 f"{relative_path}: PDF text quality gate failed; rerun with --pdf-fallback "
-                "mineru or tesseract, or "
+                "vision-consensus, or "
                 "--allow-needs-ocr for an explicitly incomplete candidate release"
             )
         if source_path.stat().st_size != actual_size or sha256_file(source_path) != actual_hash:
             raise RuntimeError(f"source changed while it was being extracted: {relative_path}")
         if extraction.quality.character_count > _MAX_EXTRACTED_CHARACTERS:
             raise ExtractionError(f"{relative_path}: extracted text exceeds the 20 MiB limit")
+        public_extraction_warnings = _bounded_extraction_warnings(
+            extraction.quality.warnings
+        )
         source_document = replace(
             source_document,
             extraction_method=extraction.quality.extractor,
             extraction_version=extraction.quality.extractor_version,
             extraction_configuration=extraction.quality.configuration,
             extraction_review_required=(
-                extraction.quality.extractor not in {"ooxml", "pypdf"}
+                extraction.quality.review_required
                 or extraction.quality.needs_ocr
-                or bool(extraction.quality.warnings)
+                or bool(public_extraction_warnings)
             ),
-            extraction_warnings=extraction.quality.warnings,
+            extraction_warnings=public_extraction_warnings,
         )
         segments = list(segment_document(document_id, extraction.blocks))
         if not segments:
@@ -414,9 +470,17 @@ def build_release(
                 "pages": extraction.quality.page_count,
                 "segments": len(segments),
                 "needs_ocr": extraction.quality.needs_ocr,
+                "review_required": extraction.quality.review_required,
+                "reviewed_page_count": extraction.quality.reviewed_page_count,
+                "page_evidence": [
+                    asdict(page_evidence)
+                    for page_evidence in extraction.quality.page_evidence
+                ],
             }
         )
 
+    relations = derive_relations(documents, all_segments)
+    report.relation_count = len(relations)
     derivation_payload = {
         "ingestion_schema": "deeplaw.ingestion/v1",
         "release_schema": SCHEMA_VERSION,
@@ -434,6 +498,7 @@ def build_release(
             }
             for segment in all_segments
         ],
+        "relations": [relation.to_dict() for relation in relations],
         "extractors": [
             {
                 "path": item["path"],
@@ -441,6 +506,9 @@ def build_release(
                 "extractor_version": item["extractor_version"],
                 "extractor_configuration": item["extractor_configuration"],
                 "extracted_text_sha256": item["extracted_text_sha256"],
+                "review_required": item["review_required"],
+                "reviewed_page_count": item["reviewed_page_count"],
+                "page_evidence": item["page_evidence"],
             }
             for item in report.documents
         ],
@@ -462,11 +530,28 @@ def build_release(
         "ingestion_schema": "deeplaw.ingestion/v1",
         "storage_schema": STORAGE_SCHEMA_VERSION,
         "storage_engine": {"sqlite": sqlite3.sqlite_version},
-        "temporal_status": "requires_human_review",
-        "redistribution_status": "not_assessed",
+        "temporal_status": (
+            applied_review.temporal_status if applied_review else "requires_human_review"
+        ),
+        "redistribution_status": (
+            applied_review.redistribution_status if applied_review else "not_assessed"
+        ),
         "vector_index": False,
         "derived_wiki": False,
     }
+    if applied_review is not None:
+        release_metadata.update(
+            {
+                "review_overlay_schema": "deeplaw.review-overlay/v1",
+                "review_overlay_sha256": applied_review.overlay_sha256,
+                "reviewed_on": applied_review.reviewed_as_of,
+                "reviewer_kind": applied_review.reviewer_kind,
+                "review_scope": applied_review.review_scope,
+                "review_covered_documents": applied_review.covered_documents,
+            }
+        )
+    if payload["package_qa_reviewed_on"] is not None:
+        release_metadata["package_qa_reviewed_on"] = payload["package_qa_reviewed_on"]
     output_root.mkdir(parents=True, exist_ok=True)
     staging_dir = Path(tempfile.mkdtemp(prefix=".deeplaw-build-", dir=output_root))
     try:
@@ -477,6 +562,7 @@ def build_release(
             release_metadata=release_metadata,
             documents=documents,
             segments=all_segments,
+            relations=relations,
         )
         release_metadata["database_sha256"] = database_sha256(database_path)
         os.chmod(database_path, 0o444)

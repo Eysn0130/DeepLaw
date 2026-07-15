@@ -22,8 +22,8 @@
 {"id":"foreign-exchange-regulation","query":"外汇管理条例 逃汇","purpose":"legal_issue_screen","expected_titles":["中华人民共和国外汇管理条例"],"max_evidence":5,"max_excerpt_chars":3500}
 {"id":"pboc-amend-repeal","query":"中国人民银行 修改和废止部分规章 2025","purpose":"exact_citation","expected_titles":["中国人民银行关于修改和废止部分规章的决定"],"max_evidence":5,"max_excerpt_chars":3500}
 {"id":"beneficial-owner","query":"受益所有人信息管理办法 备案","purpose":"legal_issue_screen","expected_titles":["受益所有人信息管理办法"],"max_evidence":5,"max_excerpt_chars":3500}
-{"id":"aml-supervision","query":"金融机构反洗钱和反恐怖融资监督管理办法","purpose":"exact_citation","expected_titles":["金融机构反洗钱和反恐怖融资监督管理办法"],"max_evidence":5,"max_excerpt_chars":3500}
-{"id":"large-suspicious-transactions","query":"金融机构大额交易和可疑交易报告管理办法","purpose":"exact_citation","expected_titles":["金融机构大额交易和可疑交易报告管理办法（现行整合文本）"],"max_evidence":5,"max_excerpt_chars":3500}
+{"id":"aml-supervision","query":"金融机构反洗钱和反恐怖融资监督管理办法","purpose":"exact_citation","expected_titles":["金融机构反洗钱和反恐怖融资监督管理办法（2021年发布文本）"],"max_evidence":5,"max_excerpt_chars":3500}
+{"id":"large-suspicious-transactions","query":"金融机构大额交易和可疑交易报告管理办法","purpose":"exact_citation","expected_titles":["金融机构大额交易和可疑交易报告管理办法（2016年发布文本，未整合后续修改）"],"max_evidence":5,"max_excerpt_chars":3500}
 {"id":"customer-record-retention","query":"金融机构客户尽职调查 客户身份资料 交易记录保存","purpose":"legal_issue_screen","expected_titles":["金融机构客户尽职调查和客户身份资料及交易记录保存管理办法"],"max_evidence":5,"max_excerpt_chars":3500}
 {"id":"nonbank-payment-regulation","query":"非银行支付机构监督管理条例 备付金","purpose":"legal_issue_screen","expected_titles":["非银行支付机构监督管理条例"],"max_evidence":5,"max_excerpt_chars":3500}
 {"id":"nonbank-payment-regulation-article","query":"非银行支付机构监督管理条例 第二十七条","purpose":"exact_citation","expected_titles":["非银行支付机构监督管理条例"],"expected_articles":["第二十七条"],"forbidden_titles":["非银行支付机构监督管理条例实施细则"],"max_evidence":3,"max_excerpt_chars":3500}

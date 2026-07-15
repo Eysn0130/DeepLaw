@@ -4,15 +4,22 @@ import argparse
 import json
 import sqlite3
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .evaluate import evaluate_file
 from .ingest import build_release
 from .mcp_server import run_mcp
 from .models import SearchRequest
 from .search import DeepLaw, response_json
 from .store import database_sha256, default_home, resolve_active_database
+from .vision import (
+    EXTRACTION_EVIDENCE_SCHEMA,
+    PIPELINE_NAME,
+    extract_pdf_vision_consensus,
+)
 
 
 def _print_json(value: Any) -> None:
@@ -21,16 +28,30 @@ def _print_json(value: Any) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="deeplaw", description="Read-only Chinese legal research")
-    parser.add_argument("--version", action="version", version="deeplaw 0.1.0")
+    parser.add_argument("--version", action="version", version=f"deeplaw {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
     build = commands.add_parser("build", help="Build an immutable release from a verified manifest")
     build.add_argument("--source-root", type=Path, required=True)
     build.add_argument("--manifest", type=Path, required=True)
+    build.add_argument("--review-overlay", type=Path)
+    build.add_argument("--reviewed-pages-root", type=Path)
     build.add_argument("--output-root", type=Path, default=default_home() / "releases")
     build.add_argument("--activate", action="store_true")
-    build.add_argument("--pdf-fallback", choices=("off", "mineru", "tesseract"), default="off")
+    build.add_argument(
+        "--pdf-fallback",
+        choices=("off", "vision-consensus"),
+        default="off",
+    )
     build.add_argument("--allow-needs-ocr", action="store_true")
+
+    evidence = commands.add_parser(
+        "pdf-evidence",
+        help="Extract one PDF with native-first page evidence and fail-closed OCR review",
+    )
+    evidence.add_argument("--source", type=Path, required=True)
+    evidence.add_argument("--reviewed-pages", type=Path)
+    evidence.add_argument("--language", default="chi_sim+eng")
 
     search = commands.add_parser("search", help="Return bounded legal evidence cards")
     search.add_argument("--query", required=True)
@@ -73,6 +94,30 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "pdf-evidence":
+            result = extract_pdf_vision_consensus(
+                args.source.expanduser().resolve(strict=True),
+                reviewed_pages_path=(
+                    args.reviewed_pages.expanduser().resolve(strict=True)
+                    if args.reviewed_pages is not None
+                    else None
+                ),
+                language=args.language,
+            )
+            quality = asdict(result.quality)
+            pages = quality.pop("page_evidence")
+            _print_json(
+                {
+                    "schemaVersion": EXTRACTION_EVIDENCE_SCHEMA,
+                    "pipeline": PIPELINE_NAME,
+                    "sourceName": args.source.name,
+                    "sourceSha256": result.quality.source_sha256,
+                    "quality": quality,
+                    "pages": pages,
+                    "blocks": [asdict(block) for block in result.blocks],
+                }
+            )
+            return
         if args.command == "build":
             release_dir, report = build_release(
                 source_root=args.source_root,
@@ -81,6 +126,8 @@ def main(argv: list[str] | None = None) -> None:
                 activate=args.activate,
                 pdf_fallback=args.pdf_fallback,
                 allow_needs_ocr=args.allow_needs_ocr,
+                review_overlay_path=args.review_overlay,
+                reviewed_pages_root=args.reviewed_pages_root,
             )
             _print_json({"release_dir": str(release_dir), "report": report.to_dict()})
             return

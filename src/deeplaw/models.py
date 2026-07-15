@@ -35,6 +35,28 @@ class TextBlock:
 
 
 @dataclass(frozen=True)
+class PageExtractionEvidence:
+    page: int
+    image_sha256: str
+    native_text_sha256: str
+    ocr_text_sha256: str | None
+    selected_text_sha256: str
+    native_character_count: int
+    ocr_character_count: int
+    selected_character_count: int
+    selected_source: Literal["native", "ocr", "reviewed", "none"]
+    review_status: Literal["not_reviewed", "human_reviewed"] = "not_reviewed"
+    review_required: bool = True
+    ocr_confidence: float | None = None
+    native_ocr_consistency: float | None = None
+    risk_flags: tuple[str, ...] = ()
+    reviewed_by: str | None = None
+    reviewed_at: str | None = None
+    review_notes: str | None = None
+    review_file_sha256: str | None = None
+
+
+@dataclass(frozen=True)
 class ExtractionQuality:
     extractor: str
     extractor_version: str | None
@@ -43,6 +65,10 @@ class ExtractionQuality:
     character_count: int
     low_text_pages: int = 0
     needs_ocr: bool = False
+    review_required: bool = False
+    source_sha256: str | None = None
+    reviewed_page_count: int = 0
+    page_evidence: tuple[PageExtractionEvidence, ...] = ()
     warnings: tuple[str, ...] = ()
     configuration: tuple[str, ...] = ()
 
@@ -143,6 +169,10 @@ class EvidenceCard:
     segment_sha256: str
     score: float
     hit_reason: str
+    retrieval_channel: Literal["article_exact", "title_exact", "chinese_fts"]
+    temporal_classification: Literal[
+        "not_evaluated", "verified_in_scope", "unverified_metadata"
+    ]
     excerpt: str
     article_label: str | None = None
     heading: str | None = None
@@ -167,12 +197,75 @@ class EvidenceCard:
 
 
 @dataclass(frozen=True)
+class GraphPath:
+    path_id: str
+    seed_document_id: str
+    seed_title: str
+    target_document_id: str
+    target_title: str
+    target_document_type: str
+    relation_id: str
+    predicate: Literal[
+        "cites", "amends", "repeals", "replaces", "implements", "exception_to"
+    ]
+    direction: Literal["outbound", "inbound"]
+    provenance_segment_id: str
+    provenance_receipt_id: str
+    review_status: Literal["deterministic_exact"]
+    derivation: str
+    authority: Literal["derived_navigation"]
+    hops: Literal[1]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ObligationCoverage:
+    obligation_id: str
+    role: str
+    required: bool
+    status: Literal["covered", "uncertain", "gap"]
+    evidence_segment_ids: tuple[str, ...] = ()
+    graph_path_ids: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        value["evidence_segment_ids"] = list(self.evidence_segment_ids)
+        value["graph_path_ids"] = list(self.graph_path_ids)
+        return value
+
+
+@dataclass(frozen=True)
+class SearchGap:
+    code: Literal[
+        "exact_target_unresolved",
+        "temporal_metadata_unverified",
+        "temporal_out_of_scope",
+        "required_obligation_uncovered",
+        "required_obligation_uncertain",
+        "no_primary_evidence",
+    ]
+    obligation_id: str | None
+    message: str
+    blocking: bool = True
+    candidate_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class SearchResponse:
     schema_version: str
     release_id: str
     mode: str
     query_plan: dict[str, Any]
     evidence: tuple[EvidenceCard, ...]
+    uncertain_evidence: tuple[EvidenceCard, ...]
+    graph_paths: tuple[GraphPath, ...]
+    obligation_coverage: tuple[ObligationCoverage, ...]
+    gaps: tuple[SearchGap, ...]
     notices: tuple[str, ...] = ()
     next_questions: tuple[str, ...] = ()
     total_excerpt_chars: int = 0
@@ -180,6 +273,10 @@ class SearchResponse:
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["evidence"] = [card.to_dict() for card in self.evidence]
+        value["uncertain_evidence"] = [card.to_dict() for card in self.uncertain_evidence]
+        value["graph_paths"] = [path.to_dict() for path in self.graph_paths]
+        value["obligation_coverage"] = [item.to_dict() for item in self.obligation_coverage]
+        value["gaps"] = [gap.to_dict() for gap in self.gaps]
         value["notices"] = list(self.notices)
         value["next_questions"] = list(self.next_questions)
         return value
@@ -191,6 +288,7 @@ class BuildReport:
     release_id: str
     document_count: int = 0
     segment_count: int = 0
+    relation_count: int = 0
     source_bytes: int = 0
     extractors: dict[str, int] = field(default_factory=dict)
     warnings: list[dict[str, Any]] = field(default_factory=list)

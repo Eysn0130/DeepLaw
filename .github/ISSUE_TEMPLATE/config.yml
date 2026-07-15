@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private vulnerability report
+    url: https://github.com/Eysn0130/DeepLaw/security/advisories/new
+    about: Report security issues privately; do not include case data or legal-source payloads.
+  - name: GitHub abuse report
+    url: https://support.github.com/contact/report-abuse
+    about: Use GitHub's private channel for harassment, impersonation, or platform abuse.
