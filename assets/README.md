@@ -11,8 +11,8 @@ of a runtime UI and must not be presented as one.
 
 ## Files
 
-- `brand/deeplaw-2-glass.png`: primary `DeepLaw` frosted-glass wordmark with a
-  secondary `Architecture 2.0` label.
+- `brand/deeplaw-2-glass.png`: primary `DeepLaw 2.0` frosted transparent-glass
+  wordmark.
 - `readme/architecture-2-glass.png`: simple Files → DeepLaw Knowledge Base →
   Locate / Connect / Explain → Evidence Pack → Agent target architecture.
 - `readme/knowledge-cycle.png`: internal Ingest / Organize / Locate / Connect /
@@ -26,6 +26,7 @@ architecture were retired. They are not alternate DeepLaw identities.
 ## Brand rules
 
 - Primary product spelling: `DeepLaw`.
+- Public architecture wordmark: `DeepLaw 2.0`.
 - Target architecture label: `Architecture 2.0`.
 - Current package version remains independent and is currently `0.2.0` alpha.
 - Core colors: deep ink `#071821`, proof mint `#36CDBB`, cloud white `#F4F7F6`,

@@ -5,7 +5,7 @@
 <h1 align="center">DeepLaw</h1>
 
 <p align="center">
-  <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 磨砂玻璃字标与 Architecture 2.0 次级标签" />
+  <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 磨砂透明玻璃字标" />
 </p>
 
 <p align="center">

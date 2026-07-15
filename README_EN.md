@@ -5,7 +5,7 @@
 <h1 align="center">DeepLaw</h1>
 
 <p align="center">
-  <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw frosted-glass wordmark with Architecture 2.0 label" />
+  <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 frosted transparent-glass wordmark" />
 </p>
 
 <p align="center">
