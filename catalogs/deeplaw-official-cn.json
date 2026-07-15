@@ -1,22 +1,22 @@
 {
   "schemaVersion": "deeplaw.official-catalog/v1",
   "catalogId": "deeplaw-cn-official",
-  "sequence": 1,
-  "version": "2026.07.14.1",
-  "publishedOn": "2026-07-14",
+  "sequence": 2,
+  "version": "2026.07.16.2",
+  "publishedOn": "2026-07-16",
   "reviewOverlay": {
     "resource": "core-2026-07-14.ai-review.json",
     "url": "https://raw.githubusercontent.com/Eysn0130/DeepLaw/main/governance/core-2026-07-14.ai-review.json",
     "sha256": "9e9a67ca0e12282d610e192c984b89f2ade63a394b52324e37a404aa84288af2"
   },
   "buildPolicy": {
-    "pdfFallback": "vision-consensus",
+    "pdfFallback": "document-engine",
     "allowNeedsOcr": true
   },
   "package": {
-    "name": "DeepLaw 官方法律资料目录",
+    "name": "DeepLaw 2.0 官方法律资料目录",
     "retrievedOn": "2026-07-14",
-    "reviewedOn": "2026-07-14",
+    "reviewedOn": "2026-07-16",
     "documentCount": 28
   },
   "documents": [

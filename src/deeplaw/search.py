@@ -7,6 +7,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from .evidence_compiler import (
+    EvidenceCandidate,
+    EvidenceDuty,
+    compile_evidence,
+)
+from .legal_topics import LegalTopicAnchor, resolve_legal_topic
 from .models import (
     EvidenceCard,
     GraphPath,
@@ -15,7 +21,7 @@ from .models import (
     SearchRequest,
     SearchResponse,
 )
-from .query_plan import ObligationId, QueryPlan, compile_query_plan
+from .query_plan import ObligationId, QueryObligation, QueryPlan, compile_query_plan
 from .store import (
     SCHEMA_VERSION,
     connect_readonly,
@@ -100,6 +106,7 @@ _NON_CURRENT_STATUSES = {
 }
 _GapCode = Literal[
     "exact_target_unresolved",
+    "query_focus_unresolved",
     "temporal_metadata_unverified",
     "temporal_out_of_scope",
     "required_obligation_uncovered",
@@ -107,15 +114,89 @@ _GapCode = Literal[
     "no_primary_evidence",
 ]
 _TITLE_QUALIFIER = re.compile(r"[（(][^）)]{1,40}[）)]")
-_APPLICABILITY_INTERPRETATION_TITLE = re.compile(
-    r"适用[《〈](?P<law>[^》〉]{2,120})[》〉]的解释"
-)
+_APPLICABILITY_INTERPRETATION_TITLE = re.compile(r"适用[《〈](?P<law>[^》〉]{2,120})[》〉]的解释")
 _QUERY_VERSION_SUFFIX = re.compile(
     r"(?:"
     r"\d{4}年?(?:修正|修订|修改|施行|版)?|"
     r"现行(?:有效|整合文本|版本)?|"
     r"最新版本"
     r")$"
+)
+_FOCUS_PHRASE_SPLIT = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
+_GENERIC_NAVIGATION_TERMS = {"法律", "法规", "条例", "规定", "办法", "意见", "通知"}
+_CJK_CHARACTER = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_TOPIC_LEFT_CONTEXTS = (
+    "关于",
+    "办理",
+    "审理",
+    "惩治",
+    "适用",
+    "有关",
+    "涉嫌",
+    "构成",
+    "触犯",
+    "认定为",
+    "按照",
+    "犯",
+)
+_TOPIC_INTENT_MARKERS = tuple(
+    sorted(
+        {
+            "数额特别巨大标准",
+            "立案追诉标准",
+            "数额较大标准",
+            "数额巨大标准",
+            "构成要件",
+            "成立条件",
+            "适用范围",
+            "数额标准",
+            "金额标准",
+            "数量标准",
+            "立案标准",
+            "追诉标准",
+            "入罪标准",
+            "定罪标准",
+            "量刑标准",
+            "如何认定",
+            "怎么认定",
+            "如何理解",
+            "法律依据",
+            "司法解释",
+            "办理程序",
+            "程序和期限",
+            "要件",
+            "定义",
+            "概念",
+            "立案",
+            "管辖",
+            "期限",
+            "例外",
+            "但书",
+            "除外",
+            "不适用",
+        },
+        key=lambda value: (-len(value), value),
+    )
+)
+_TOPIC_PREFIX_NOISE = ("请问", "关于", "有关", "针对")
+_TOPIC_SUFFIX_NOISE = ("是什么", "有哪些", "如何", "怎么", "是否", "相关", "的", "吗", "呢")
+_NUMBER_TOKEN = r"[0-9〇零一二两三四五六七八九十百千万亿点\.]+"
+_AMOUNT_THRESHOLD_PATTERN = re.compile(
+    rf"(?:数额|金额|价款|价值|所得|损失|资金).{{0,80}}?"
+    rf"{_NUMBER_TOKEN}(?:万|亿)?元(?:以上|以下|以内|不满|超过|达到|至)?"
+)
+_COUNT_THRESHOLD_PATTERN = re.compile(
+    rf"(?:数量|次数|人数).{{0,80}}?{_NUMBER_TOKEN}(?:次|人|件|个)"
+    r"(?:以上|以下|以内|不满|超过|达到|至)?"
+)
+_SENTENCING_THRESHOLD_PATTERN = re.compile(
+    rf"处.{{0,20}}?(?:{_NUMBER_TOKEN}年(?:以上|以下|以内|不满)?|拘役|管制|无期徒刑|死刑)"
+)
+_FILING_STANDARD_MARKERS = (
+    "应予立案追诉",
+    "应当立案追诉",
+    "应予追诉",
+    "涉嫌下列情形之一",
 )
 
 
@@ -134,9 +215,243 @@ def _contains_primary_rule(text: str) -> bool:
     if _defers_or_disclaims_content(text):
         return False
     normalized = normalize_text(text)
-    return bool(article_pattern().search(normalized)) or any(
+    if bool(article_pattern().search(normalized)):
+        return True
+    # A chapter title such as “法律责任” is navigation, not a substantive rule.
+    # Marker-only text must contain enough surrounding language to express an
+    # actual proposition before it can witness the primary-rule duty.
+    return len(compact_text(normalized)) >= 16 and any(
         marker in normalized for marker in _PRIMARY_RULE_MARKERS
     )
+
+
+def _normalize_focus_text(value: str) -> str:
+    """Canonicalize small drafting variants without rewriting legal meaning."""
+
+    return compact_text(value).replace("以内", "内").replace("之内", "内")
+
+
+def _focus_phrases(value: str) -> tuple[str, ...]:
+    phrases: dict[str, None] = {}
+    for raw in _FOCUS_PHRASE_SPLIT.split(normalize_text(value)):
+        normalized = _normalize_focus_text(raw)
+        if len(normalized) >= 2:
+            phrases[normalized] = None
+        if len(phrases) >= 16:
+            break
+    return tuple(phrases)
+
+
+def _focus_relevance(value: str, body: str) -> float:
+    """Score query focus against body text, excluding document-title leakage."""
+
+    if not value:
+        return 0.0
+    normalized_body = _normalize_focus_text(body)
+    phrases = _focus_phrases(value)
+    phrase_weight = sum(min(len(phrase), 8) for phrase in phrases)
+    phrase_coverage = (
+        sum(min(len(phrase), 8) for phrase in phrases if phrase in normalized_body) / phrase_weight
+        if phrase_weight
+        else 0.0
+    )
+    query_terms = set(search_terms(_normalize_focus_text(value), limit=36))
+    body_terms = set(search_terms(normalized_body, limit=256))
+    term_coverage = len(query_terms & body_terms) / max(1, len(query_terms))
+    return phrase_coverage * 0.7 + term_coverage * 0.3
+
+
+def _topic_inquiry_phrase(value: str, *, navigation: bool) -> str | None:
+    """Extract a short deterministic topic only for bounded issue/navigation queries."""
+
+    normalized = compact_text(value)
+    if not normalized:
+        return None
+    has_intent = any(marker in normalized for marker in _TOPIC_INTENT_MARKERS)
+    if not has_intent and not navigation:
+        return None
+    topic = normalized
+    if has_intent:
+        marker_offsets = [
+            normalized.find(compact_text(marker))
+            for marker in _TOPIC_INTENT_MARKERS
+            if compact_text(marker) in normalized
+        ]
+        first_issue_offset = min(marker_offsets)
+        # Legal questions overwhelmingly put the legal topic before the issue
+        # phrase. Taking that prefix also handles overlapping expressions such
+        # as “办理程序和期限”, which must not leave “办理” behind as a fake topic.
+        if first_issue_offset > 0:
+            topic = normalized[:first_issue_offset]
+        else:
+            for marker in _TOPIC_INTENT_MARKERS:
+                topic = topic.replace(compact_text(marker), "")
+    changed = True
+    while changed and topic:
+        changed = False
+        for prefix in _TOPIC_PREFIX_NOISE:
+            if topic.startswith(prefix):
+                topic = topic[len(prefix) :]
+                changed = True
+        for suffix in _TOPIC_SUFFIX_NOISE:
+            if topic.endswith(suffix):
+                topic = topic[: -len(suffix)]
+                changed = True
+    if 2 <= len(topic) <= 24 and topic not in _GENERIC_NAVIGATION_TERMS:
+        return topic
+    return None
+
+
+def _topic_phrase_matches(phrase: str, value: str) -> bool:
+    """Match exact topic text while rejecting embedded compound offence names."""
+
+    topic = compact_text(phrase)
+    body = compact_text(value)
+    if not topic or not body:
+        return False
+    strict_left_boundary = topic.endswith(("罪", "犯罪"))
+    offset = 0
+    while (index := body.find(topic, offset)) >= 0:
+        if not strict_left_boundary or index == 0:
+            return True
+        prefix = body[:index]
+        if not _CJK_CHARACTER.fullmatch(prefix[-1]) or prefix.endswith(_TOPIC_LEFT_CONTEXTS):
+            return True
+        offset = index + 1
+    return False
+
+
+def _anchor_matches_card(anchor: LegalTopicAnchor, card: EvidenceCard) -> bool:
+    if any(
+        card.title == locator.document_title
+        and card.source_sha256 == locator.source_sha256
+        and card.article_label == locator.article_label
+        for locator in anchor.locators
+    ):
+        return True
+    visible_text = f"{card.title} {card.heading or ''} {card.excerpt}"
+    return _topic_phrase_matches(anchor.canonical_term, visible_text)
+
+
+def _anchor_primary_matches_card(anchor: LegalTopicAnchor, card: EvidenceCard) -> bool:
+    return (
+        card.title == anchor.document_title
+        and card.source_sha256 == anchor.source_sha256
+        and card.article_label == anchor.article_label
+    )
+
+
+def _anchor_matches_row(anchor: LegalTopicAnchor, row: sqlite3.Row) -> bool:
+    if any(
+        row["title"] == locator.document_title
+        and row["source_sha256"] == locator.source_sha256
+        and row["article_label"] == locator.article_label
+        for locator in anchor.locators
+    ):
+        return True
+    return _topic_phrase_matches(
+        anchor.canonical_term,
+        f"{row['title']} {row['heading'] or ''} {row['text']}",
+    )
+
+
+def _row_matches_topic(
+    row: sqlite3.Row,
+    *,
+    anchor: LegalTopicAnchor | None,
+    topic_phrase: str | None,
+) -> bool:
+    if anchor is not None:
+        return _anchor_matches_row(anchor, row)
+    if topic_phrase is None:
+        return True
+    return _topic_phrase_matches(
+        topic_phrase,
+        f"{row['title']} {row['heading'] or ''} {row['text']}",
+    )
+
+
+def _card_matches_topic(
+    card: EvidenceCard,
+    *,
+    anchor: LegalTopicAnchor | None,
+    topic_phrase: str | None,
+) -> bool:
+    if anchor is not None:
+        return _anchor_matches_card(anchor, card)
+    if topic_phrase is None:
+        return True
+    return _topic_phrase_matches(
+        topic_phrase,
+        f"{card.title} {card.heading or ''} {card.excerpt}",
+    )
+
+
+def _contains_threshold_standard(obligation: QueryObligation, text: str) -> bool:
+    normalized_text = re.sub(r"\s+", "", normalize_text(text))
+    cues = obligation.query_cues
+    checks: list[bool] = []
+    if any("立案" in cue or "追诉" in cue for cue in cues):
+        checks.append(any(marker in normalized_text for marker in _FILING_STANDARD_MARKERS))
+    if any(any(term in cue for term in ("数额", "金额")) for cue in cues):
+        checks.append(bool(_AMOUNT_THRESHOLD_PATTERN.search(normalized_text)))
+    if any("数量" in cue for cue in cues):
+        checks.append(bool(_COUNT_THRESHOLD_PATTERN.search(normalized_text)))
+    if any("量刑" in cue for cue in cues):
+        checks.append(bool(_SENTENCING_THRESHOLD_PATTERN.search(normalized_text)))
+    if any("入罪" in cue or "定罪" in cue for cue in cues):
+        checks.append(
+            bool(
+                _AMOUNT_THRESHOLD_PATTERN.search(normalized_text)
+                or _COUNT_THRESHOLD_PATTERN.search(normalized_text)
+                or any(marker in normalized_text for marker in _FILING_STANDARD_MARKERS)
+            )
+        )
+    return bool(checks) and all(checks)
+
+
+def _card_matches_obligation(obligation: QueryObligation, card: EvidenceCard) -> bool:
+    substantive = not _defers_or_disclaims_content(card.excerpt)
+    if obligation.id is ObligationId.EXACT_CITATION:
+        return card.retrieval_channel in {"article_exact", "title_exact"}
+    if obligation.id is ObligationId.PRIMARY_RULE:
+        return (
+            substantive
+            and card.document_type != "case_reference"
+            and _contains_primary_rule(card.excerpt)
+        )
+    if obligation.id is ObligationId.TEMPORAL_STATUS_VERSION:
+        return card.temporal_classification in {
+            "verified_in_scope",
+            "unverified_metadata",
+        }
+    if obligation.id is ObligationId.ELEMENTS_DEFINITIONS:
+        return substantive and any(marker in card.excerpt for marker in _ELEMENTS_EVIDENCE_MARKERS)
+    if obligation.id is ObligationId.INTERPRETATION:
+        return substantive and (
+            card.document_type == "judicial_interpretation"
+            or "解释" in card.title
+            or any(marker in card.excerpt for marker in _INTERPRETATION_EVIDENCE_MARKERS)
+        )
+    if obligation.id is ObligationId.PROCEDURE:
+        return substantive and any(marker in card.excerpt for marker in _PROCEDURE_EVIDENCE_MARKERS)
+    if obligation.id is ObligationId.THRESHOLD_STANDARD:
+        return substantive and _contains_threshold_standard(obligation, card.excerpt)
+    if obligation.id is ObligationId.EXCEPTIONS_COUNTEREVIDENCE:
+        return substantive and any(marker in card.excerpt for marker in _COUNTEREVIDENCE_MARKERS)
+    if obligation.id is ObligationId.CASE_REFERENCE:
+        return substantive and card.document_type == "case_reference"
+    return False
+
+
+def _card_duty_ids(plan: QueryPlan, card: EvidenceCard) -> tuple[str, ...]:
+    """Return deterministic duties witnessed by one exact evidence card."""
+
+    witnessed: list[str] = []
+    for obligation in plan.obligations:
+        if _card_matches_obligation(obligation, card):
+            witnessed.append(obligation.id.value)
+    return tuple(witnessed)
 
 
 def _document_query_keys(title: str) -> tuple[tuple[str, int], ...]:
@@ -210,9 +525,7 @@ class DeepLaw:
         self.collection_scope = str(self.artifact.get("collection_scope", "official"))
         if expected_scope is not None and self.collection_scope != expected_scope:
             self.connection.close()
-            raise RuntimeError(
-                f"expected {expected_scope} release, got {self.collection_scope}"
-            )
+            raise RuntimeError(f"expected {expected_scope} release, got {self.collection_scope}")
         release = self.info.get("release", {})
         artifact_release = {
             key: value for key, value in self.artifact.items() if key != "database_sha256"
@@ -264,10 +577,52 @@ class DeepLaw:
             obligation.id is ObligationId.TEMPORAL_STATUS_VERSION
             for obligation in compiled_plan.obligations
         )
-        exact_target_resolved = route != "exact" or bool(
-            self._target_document_ids(request.query)
+        exact_target_resolved = route != "exact" or bool(self._target_document_ids(request.query))
+        explicit_document_target = bool(
+            self._target_document_ids(request.query) or self._mentioned_document_ids(request.query)
         )
+        focus_query = self._query_focus(request.query)
+        topic_phrase = (
+            None
+            if explicit_document_target
+            else _topic_inquiry_phrase(
+                focus_query,
+                navigation=route == "navigation",
+            )
+        )
+        topic_anchor = resolve_legal_topic(topic_phrase or "")
+        if topic_anchor is None and not explicit_document_target:
+            # A host may explicitly route a short legal topic to research
+            # instead of navigation. Known source-bound topics must retain the
+            # same identity gate regardless of that host-side routing choice.
+            topic_anchor = resolve_legal_topic(focus_query)
+            if topic_anchor is not None:
+                topic_phrase = topic_anchor.canonical_term
         candidates = self._candidate_rows(request, route)
+        if topic_anchor is not None:
+            anchor_rows = self._topic_anchor_rows(
+                topic_anchor,
+                document_types=request.document_types,
+            )
+            if anchor_rows:
+                candidates = [*anchor_rows, *candidates]
+            else:
+                # A source-bound registry entry is not portable proof that the
+                # same artifact exists in a user-owned or synthetic release.
+                # Keep the textual topic gate, but never pretend the absent
+                # official locator was resolved.
+                topic_anchor = None
+        navigation_title_targets = (
+            self._navigation_title_document_ids(request.query) if route == "navigation" else ()
+        )
+        if route == "navigation":
+            candidates = self._navigation_representatives(
+                candidates,
+                focus=focus_query,
+                title_targets=navigation_title_targets,
+                topic_anchor=topic_anchor,
+                topic_phrase=topic_phrase,
+            )
         ranked_rows: list[tuple[sqlite3.Row, str, bool]] = []
         uncertain_rows: list[tuple[sqlite3.Row, str]] = []
         temporal_outside_count = 0
@@ -288,29 +643,21 @@ class DeepLaw:
             )
             if temporal_classification == "outside_effective_interval":
                 temporal_outside_count += 1
-            elif (
-                temporal_classification == "unverified_metadata"
-                or bool(row["extraction_review_required"])
+            elif temporal_classification == "unverified_metadata" or bool(
+                row["extraction_review_required"]
             ):
                 uncertain_rows.append((row, temporal_classification))
                 ranked_rows.append((row, temporal_classification, True))
             else:
                 ranked_rows.append((row, temporal_classification, False))
 
-        evidence: list[EvidenceCard] = []
-        uncertain_evidence: list[EvidenceCard] = []
-        used_characters = 0
         result_limit = min(request.limit, 3) if route in {"navigation", "exact"} else request.limit
-
-        for row, temporal_classification, is_uncertain in ranked_rows:
-            if len(evidence) + len(uncertain_evidence) >= result_limit:
-                break
-            budget = min(
-                800 if route != "navigation" else 320,
-                request.max_chars - used_characters,
-            )
-            if budget < 100:
-                break
+        candidate_cards: dict[str, tuple[EvidenceCard, bool]] = {}
+        prepared_candidates: list[tuple[EvidenceCard, bool, float, int, bool]] = []
+        for candidate_index, (row, temporal_classification, is_uncertain) in enumerate(
+            ranked_rows[:256]
+        ):
+            budget = min(800 if route != "navigation" else 320, request.max_chars)
             card = self._card_from_row(
                 row,
                 request,
@@ -321,8 +668,143 @@ class DeepLaw:
                     temporal_classification,
                 ),
             )
-            used_characters += len(card.excerpt)
+            candidate_cards[card.segment_id] = (card, is_uncertain)
+            focus_relevance = _focus_relevance(
+                focus_query,
+                f"{card.article_label or ''} {card.heading or ''} {card.excerpt}",
+            )
+            prepared_candidates.append(
+                (
+                    card,
+                    is_uncertain,
+                    focus_relevance,
+                    candidate_index,
+                    _card_matches_topic(
+                        card,
+                        anchor=topic_anchor,
+                        topic_phrase=topic_phrase,
+                    ),
+                )
+            )
+
+        strict_topic_gate = topic_phrase is not None
+        best_focus_relevance = max(
+            (
+                coverage
+                for _, _, coverage, _, topic_match in prepared_candidates
+                if not strict_topic_gate or topic_match
+            ),
+            default=0.0,
+        )
+        admission_floor = best_focus_relevance * 0.75
+        focus_floor = best_focus_relevance * 0.95
+        title_target_set = set(navigation_title_targets)
+        has_focus_duty = True
+        compiler_candidates: list[EvidenceCandidate] = []
+        for (
+            card,
+            is_uncertain,
+            focus_relevance,
+            candidate_index,
+            topic_match,
+        ) in prepared_candidates:
+            if not focus_query and route == "exact":
+                admitted = card.retrieval_channel in {"article_exact", "title_exact"}
+                witnesses_focus = admitted
+            elif strict_topic_gate:
+                admitted = topic_match
+                witnesses_focus = topic_match
+            else:
+                admitted = (
+                    best_focus_relevance > 0.0 and focus_relevance >= admission_floor
+                ) or explicit_document_target
+                if title_target_set:
+                    witnesses_focus = card.document_id in title_target_set
+                else:
+                    witnesses_focus = best_focus_relevance > 0.0 and (
+                        focus_relevance >= focus_floor
+                    )
+            duty_ids: tuple[str, ...] = ()
+            if admitted:
+                obligation_duty_ids = _card_duty_ids(compiled_plan, card) if witnesses_focus else ()
+                if (
+                    topic_anchor is not None
+                    and ObligationId.PRIMARY_RULE.value in obligation_duty_ids
+                    and not _anchor_primary_matches_card(topic_anchor, card)
+                ):
+                    obligation_duty_ids = tuple(
+                        duty_id
+                        for duty_id in obligation_duty_ids
+                        if duty_id != ObligationId.PRIMARY_RULE.value
+                    )
+                duty_ids = tuple(
+                    dict.fromkeys(
+                        (
+                            *(("query_focus",) if witnesses_focus else ()),
+                            *obligation_duty_ids,
+                            "discovery_lead",
+                        )
+                    )
+                )
+            channel_priority = {
+                "article_exact": 3.0,
+                "title_exact": 2.0,
+                "chinese_fts": 1.0,
+            }[card.retrieval_channel]
+            discovery_score = (
+                focus_relevance * 100.0
+                + channel_priority * 10.0
+                + max(0.0, (256 - candidate_index) / 256.0)
+            )
+            compiler_candidates.append(
+                EvidenceCandidate(
+                    candidate_id=card.segment_id,
+                    document_id=card.document_id,
+                    score=discovery_score,
+                    chars=max(1, len(card.excerpt)),
+                    is_uncertain=is_uncertain,
+                    duty_ids=duty_ids,
+                    authority_rank=card.authority_rank,
+                )
+            )
+
+        compilation = compile_evidence(
+            (
+                (
+                    EvidenceDuty(
+                        duty_id="query_focus",
+                        role="identity",
+                        required=True,
+                    ),
+                )
+                if has_focus_duty
+                else ()
+            )
+            + tuple(
+                EvidenceDuty(
+                    duty_id=obligation.id.value,
+                    role=obligation.role.value,
+                    required=obligation.required,
+                )
+                for obligation in compiled_plan.obligations
+            )
+            + (
+                EvidenceDuty(
+                    duty_id="discovery_lead",
+                    role="navigation",
+                    required=False,
+                ),
+            ),
+            tuple(compiler_candidates),
+            max_items=result_limit,
+            max_chars=request.max_chars,
+        )
+        evidence: list[EvidenceCard] = []
+        uncertain_evidence: list[EvidenceCard] = []
+        for candidate_id in compilation.selected_ids:
+            card, is_uncertain = candidate_cards[candidate_id]
             (uncertain_evidence if is_uncertain else evidence).append(card)
+        used_characters = compilation.total_chars
 
         graph_paths = self._graph_paths(
             tuple(evidence),
@@ -335,14 +817,25 @@ class DeepLaw:
             uncertain_evidence=tuple(uncertain_evidence),
             graph_paths=graph_paths,
             as_of=request.as_of,
+            topic_anchor=topic_anchor,
         )
         temporal_uncertain_count = sum(
             temporal_classification == "unverified_metadata"
             for _, temporal_classification in uncertain_rows
         )
+        query_focus_witness = next(
+            (witness for witness in compilation.duty_witnesses if witness.duty_id == "query_focus"),
+            None,
+        )
         gaps = self._search_gaps(
             route=route,
             exact_target_resolved=exact_target_resolved,
+            query_focus_status=(
+                query_focus_witness.status if query_focus_witness is not None else "uncovered"
+            ),
+            query_focus_candidate_count=sum(
+                "query_focus" in candidate.duty_ids for candidate in compiler_candidates
+            ),
             temporal_intent=temporal_intent,
             temporal_uncertain_count=temporal_uncertain_count,
             temporal_outside_count=temporal_outside_count,
@@ -352,27 +845,23 @@ class DeepLaw:
 
         notices: list[str] = [
             "检索结果是研究证据候选，不等同于本案法律适用结论。",
-            "DeepLaw 未使用模型记忆、自动 Web 回退或向量 top-k 注入。",
+            "DeepLaw 2.0 未使用模型记忆、自动 Web 回退或向量 top-k 注入。",
         ]
         if self.collection_scope == "user_private":
             notices.insert(
                 0,
-                "当前结果来自用户私有资料库，未经 DeepLaw 官方团队审核，"
-                "不得冒充官方法源。",
+                "当前结果来自用户私有资料库，未经 DeepLaw 官方团队审核，不得冒充官方法源。",
             )
         all_returned_evidence = (*evidence, *uncertain_evidence)
         if any(
-            card.temporal_classification == "unverified_metadata"
-            for card in uncertain_evidence
+            card.temporal_classification == "unverified_metadata" for card in uncertain_evidence
         ):
             notices.append(
-                "时效检索中，效力起点缺失或状态未验证的候选已从主证据分离；"
-                "正式引用前必须复核。"
+                "时效检索中，效力起点缺失或状态未验证的候选已从主证据分离；正式引用前必须复核。"
             )
         if any(card.extraction_review_required for card in uncertain_evidence):
             notices.append(
-                "存在未完成人工对照的抽取风险，相关候选已从主证据分离；"
-                "引用前必须按页对照原件。"
+                "存在未完成人工对照的抽取风险，相关候选已从主证据分离；引用前必须按页对照原件。"
             )
         if temporal_outside_count:
             notices.append(
@@ -434,8 +923,6 @@ class DeepLaw:
                 "graph_used": graph_used,
                 "temporal_reference_date": temporal_reference_date,
                 "temporal_reference_source": temporal_reference_source,
-                "vector_used": False,
-                "wiki_used": False,
             }
         )
 
@@ -444,6 +931,7 @@ class DeepLaw:
             release_id=self.release_id,
             mode=route,
             query_plan=query_plan,
+            evidence_compilation=compilation.to_dict(),
             evidence=tuple(evidence),
             uncertain_evidence=tuple(uncertain_evidence),
             graph_paths=graph_paths,
@@ -462,8 +950,8 @@ class DeepLaw:
                    d.document_number, d.jurisdiction, d.promulgated_on,
                    d.official_source, d.source_sha256, d.effective_from, d.effective_to,
                    d.status, d.note, d.extraction_method, d.extraction_version,
-                   d.extraction_configuration_json, d.extraction_review_required,
-                   d.extraction_warnings_json
+                   d.extraction_configuration_json,
+                   d.extraction_warnings_json AS document_extraction_warnings_json
             FROM segments s JOIN documents d USING(document_id)
             WHERE s.segment_id = ?
             """,
@@ -509,7 +997,7 @@ class DeepLaw:
             "extraction_version": row["extraction_version"],
             "extraction_configuration": json.loads(row["extraction_configuration_json"]),
             "extraction_review_required": bool(row["extraction_review_required"]),
-            "extraction_warnings": json.loads(row["extraction_warnings_json"]),
+            "extraction_warnings": json.loads(row["extraction_risk_flags_json"]),
         }
 
     def verify(self, segment_id: str, receipt_id: str) -> dict[str, Any]:
@@ -553,7 +1041,26 @@ class DeepLaw:
             return "exact"
         compact = compact_text(request.query)
         if 1 < len(compact) <= 8 and not any(
-            token in request.query for token in ("如何", "是否", "为什么", "构成", "依据", "适用")
+            token in request.query
+            for token in (
+                "如何",
+                "是否",
+                "为什么",
+                "构成",
+                "要件",
+                "数额",
+                "立案",
+                "追诉",
+                "认定",
+                "依据",
+                "适用",
+                "有效",
+                "现行",
+                "生效",
+                "废止",
+                "失效",
+                "版本",
+            )
         ):
             return "navigation"
         return "research"
@@ -630,13 +1137,22 @@ class DeepLaw:
         """Resolve explicit long-form document names inside a research question."""
 
         compact_query = compact_text(query)
+        query_phrases = _focus_phrases(query)
         matches: list[tuple[str, int, int]] = []
         for document_id, identifiers in self.document_identifiers:
             best = max(
                 (
                     (priority, len(identifier))
                     for identifier, priority in identifiers
-                    if priority >= 2 and len(identifier) >= 4 and identifier in compact_query
+                    if priority >= 2
+                    and len(identifier) >= 4
+                    and (
+                        identifier in compact_query
+                        or (
+                            len(query_phrases) >= 2
+                            and all(phrase in identifier for phrase in query_phrases)
+                        )
+                    )
                 ),
                 default=None,
             )
@@ -645,9 +1161,7 @@ class DeepLaw:
         if not matches:
             return ()
         best_priority = max(priority for _, priority, _ in matches)
-        best_length = max(
-            length for _, priority, length in matches if priority == best_priority
-        )
+        best_length = max(length for _, priority, length in matches if priority == best_priority)
         return tuple(
             sorted(
                 document_id
@@ -655,6 +1169,128 @@ class DeepLaw:
                 if priority == best_priority and length == best_length
             )[:100]
         )
+
+    def _matching_document_identifier(self, query: str) -> str | None:
+        """Return the longest reviewed title/alias explicitly present in a query."""
+
+        compact_query = compact_text(query)
+        query_phrases = _focus_phrases(query)
+        matches = {
+            identifier
+            for _, identifiers in self.document_identifiers
+            for identifier, priority in identifiers
+            if priority >= 2
+            and len(identifier) >= 4
+            and (
+                identifier in compact_query
+                or (
+                    len(query_phrases) >= 2
+                    and all(phrase in identifier for phrase in query_phrases)
+                )
+            )
+        }
+        return max(matches, key=lambda value: (len(value), value)) if matches else None
+
+    def _query_focus(self, query: str) -> str:
+        """Remove an explicit document identity so relevance is measured on its issue."""
+
+        identifier = self._matching_document_identifier(query)
+        if identifier is None:
+            return normalize_text(query)
+        compact_query = compact_text(query)
+        if identifier in compact_query:
+            return compact_query.replace(identifier, "", 1)
+        return " ".join(phrase for phrase in _focus_phrases(query) if phrase not in identifier)
+
+    def _navigation_title_document_ids(self, query: str) -> tuple[str, ...]:
+        """Resolve a narrow topic that is visibly present in a title or reviewed alias."""
+
+        compact_query = compact_text(query)
+        if len(compact_query) < 2 or compact_query in _GENERIC_NAVIGATION_TERMS:
+            return ()
+        matches: list[tuple[str, int, int]] = []
+        for document_id, identifiers in self.document_identifiers:
+            best = max(
+                (
+                    (priority, len(identifier))
+                    for identifier, priority in identifiers
+                    if priority >= 2 and compact_query in identifier
+                ),
+                default=None,
+            )
+            if best is not None:
+                matches.append((document_id, *best))
+        # A very broad term matching many titles is not a deterministic anchor.
+        if not matches or len(matches) > 3:
+            return ()
+        best_priority = max(priority for _, priority, _ in matches)
+        return tuple(
+            sorted(document_id for document_id, priority, _ in matches if priority == best_priority)
+        )
+
+    def _navigation_representatives(
+        self,
+        rows: list[sqlite3.Row],
+        *,
+        focus: str,
+        title_targets: tuple[str, ...],
+        topic_anchor: LegalTopicAnchor | None = None,
+        topic_phrase: str | None = None,
+    ) -> list[sqlite3.Row]:
+        """Choose one substantive, query-focused representative for each document."""
+
+        grouped: dict[str, list[tuple[int, sqlite3.Row]]] = {}
+        for index, row in enumerate(rows):
+            grouped.setdefault(str(row["document_id"]), []).append((index, row))
+
+        title_target_set = set(title_targets)
+        representatives: list[tuple[tuple[float, ...], sqlite3.Row]] = []
+        for document_id, document_rows in grouped.items():
+            first_index = document_rows[0][0]
+
+            def row_quality(item: tuple[int, sqlite3.Row]) -> tuple[float, ...]:
+                index, row = item
+                body = f"{row['article_label'] or ''} {row['heading'] or ''} {row['text']}"
+                return (
+                    float(
+                        _row_matches_topic(
+                            row,
+                            anchor=topic_anchor,
+                            topic_phrase=topic_phrase,
+                        )
+                    ),
+                    float(_contains_primary_rule(str(row["text"]))),
+                    float(bool(row["article_label"])),
+                    _focus_relevance(focus, body),
+                    float(-index),
+                )
+
+            _, representative = max(document_rows, key=row_quality)
+            representative_body = (
+                f"{representative['article_label'] or ''} "
+                f"{representative['heading'] or ''} {representative['text']}"
+            )
+            ordering = (
+                float(
+                    _row_matches_topic(
+                        representative,
+                        anchor=topic_anchor,
+                        topic_phrase=topic_phrase,
+                    )
+                ),
+                float(document_id in title_target_set),
+                _focus_relevance(focus, representative_body),
+                float(-first_index),
+            )
+            representatives.append((ordering, representative))
+        return [
+            row
+            for _, row in sorted(
+                representatives,
+                key=lambda item: item[0],
+                reverse=True,
+            )
+        ]
 
     def _temporal_review_required(self, row: sqlite3.Row) -> bool:
         status = str(row["status"])
@@ -665,19 +1301,13 @@ class DeepLaw:
             or not self.temporal_reviewed_on
             or status in {"unknown", "unverified_current"}
             or not effective_from
-            or (
-                status in {"verified_historical", "repealed", "superseded"}
-                and not effective_to
-            )
+            or (status in {"verified_historical", "repealed", "superseded"} and not effective_to)
             or (
                 status == "verified_current"
                 and (
                     not self.temporal_reviewed_on
                     or effective_from > self.temporal_reviewed_on
-                    or (
-                        effective_to is not None
-                        and effective_to <= self.temporal_reviewed_on
-                    )
+                    or (effective_to is not None and effective_to <= self.temporal_reviewed_on)
                 )
             )
         )
@@ -737,13 +1367,53 @@ class DeepLaw:
             or not self.temporal_reviewed_on
             or status in {"unknown", "unverified_current"}
             or not effective_from
-            or (
-                status in {"verified_historical", "repealed", "superseded"}
-                and not effective_to
-            )
+            or (status in {"verified_historical", "repealed", "superseded"} and not effective_to)
         ):
             return "unverified_metadata"
         return "verified_in_scope"
+
+    def _topic_anchor_rows(
+        self,
+        anchor: LegalTopicAnchor,
+        *,
+        document_types: tuple[str, ...] = (),
+    ) -> list[sqlite3.Row]:
+        """Load bounded, source-hash-bound locators outside the FTS top-N."""
+
+        rows: list[sqlite3.Row] = []
+        seen: set[str] = set()
+        allowed_document_types = set(document_types)
+        for locator in anchor.locators:
+            located = self.connection.execute(
+                """
+                SELECT s.*, d.title, d.document_type, d.issuer, d.authority_rank,
+                       d.document_number, d.jurisdiction, d.promulgated_on,
+                       d.official_source, d.source_sha256, d.effective_from,
+                       d.effective_to, d.status, d.note,
+                       d.extraction_method, d.extraction_version,
+                       d.extraction_configuration_json,
+                       d.extraction_warnings_json AS document_extraction_warnings_json,
+                       -1000.0 AS fts_rank, 'article_exact' AS channel
+                FROM segments s JOIN documents d USING(document_id)
+                WHERE d.title = ?
+                  AND d.source_sha256 = ?
+                  AND REPLACE(s.article_label, ' ', '') = REPLACE(?, ' ', '')
+                ORDER BY d.authority_rank DESC, s.ordinal ASC
+                LIMIT 16
+                """,
+                (locator.document_title, locator.source_sha256, locator.article_label),
+            ).fetchall()
+            for row in located:
+                if (
+                    allowed_document_types
+                    and str(row["document_type"]) not in allowed_document_types
+                ):
+                    continue
+                segment_id = str(row["segment_id"])
+                if segment_id not in seen:
+                    seen.add(segment_id)
+                    rows.append(row)
+        return rows[:16]
 
     def _candidate_rows(self, request: SearchRequest, route: str) -> list[sqlite3.Row]:
         terms = search_terms(request.query, limit=36)
@@ -778,7 +1448,7 @@ class DeepLaw:
                            d.effective_to, d.status, d.note,
                            d.extraction_method, d.extraction_version,
                            d.extraction_configuration_json,
-                           d.extraction_review_required, d.extraction_warnings_json,
+                           d.extraction_warnings_json AS document_extraction_warnings_json,
                            bm25(segment_search, 0.0, 8.0, 2.0, 5.0) AS fts_rank,
                            'chinese_fts' AS channel
                     FROM segment_search
@@ -807,7 +1477,7 @@ class DeepLaw:
                        d.effective_to, d.status, d.note,
                        d.extraction_method, d.extraction_version,
                        d.extraction_configuration_json,
-                       d.extraction_review_required, d.extraction_warnings_json,
+                       d.extraction_warnings_json AS document_extraction_warnings_json,
                        -1000.0 AS fts_rank, 'article_exact' AS channel
                 FROM segments s JOIN documents d USING(document_id)
                 WHERE {exact_suffix}
@@ -819,7 +1489,7 @@ class DeepLaw:
 
         title_compact = compact_text(request.query)
         title_rows: list[sqlite3.Row] = []
-        if len(title_compact) >= 4:
+        if len(title_compact) >= (2 if route == "navigation" else 4):
             title_where = "(d.normalized_title LIKE ? OR d.normalized_names LIKE ?)"
             title_parameters: list[Any] = [f"%{title_compact}%", f"%{title_compact}%"]
             document_filter = "" if not filters else " AND " + " AND ".join(filters)
@@ -831,7 +1501,7 @@ class DeepLaw:
                        d.effective_to, d.status, d.note,
                        d.extraction_method, d.extraction_version,
                        d.extraction_configuration_json,
-                       d.extraction_review_required, d.extraction_warnings_json,
+                       d.extraction_warnings_json AS document_extraction_warnings_json,
                        -500.0 AS fts_rank, 'title_exact' AS channel
                 FROM segments s
                 JOIN documents d USING(document_id)
@@ -886,11 +1556,7 @@ class DeepLaw:
         document_matches: dict[str, int] = {}
         for row in ranked:
             matched_length = max(
-                (
-                    len(key)
-                    for key, _ in _document_query_keys(row["title"])
-                    if key in compact_query
-                ),
+                (len(key) for key, _ in _document_query_keys(row["title"]) if key in compact_query),
                 default=0,
             )
             if matched_length:
@@ -987,11 +1653,9 @@ class DeepLaw:
             paragraph_end=row["paragraph_end"],
             temporal_review_required=self._temporal_review_required(row),
             extraction_method=row["extraction_method"],
-            extraction_configuration=tuple(
-                json.loads(row["extraction_configuration_json"])
-            ),
+            extraction_configuration=tuple(json.loads(row["extraction_configuration_json"])),
             extraction_review_required=bool(row["extraction_review_required"]),
-            extraction_warnings=tuple(json.loads(row["extraction_warnings_json"])),
+            extraction_warnings=tuple(json.loads(row["extraction_risk_flags_json"])),
         )
 
     def _graph_paths(
@@ -1025,6 +1689,7 @@ class DeepLaw:
                    ps.document_id AS provenance_document_id,
                    ps.text AS provenance_text,
                    ps.text_sha256 AS provenance_segment_sha256,
+                   ps.extraction_review_required AS provenance_extraction_review_required,
                    pd.source_sha256 AS provenance_source_sha256
             FROM legal_edges e
             JOIN documents sd ON sd.document_id = e.subject_document_id
@@ -1062,12 +1727,11 @@ class DeepLaw:
                     continue
 
                 provenance_segment_sha256 = str(row["provenance_segment_sha256"])
-                actual_provenance_sha256 = sha256_bytes(
-                    str(row["provenance_text"]).encode("utf-8")
-                )
+                actual_provenance_sha256 = sha256_bytes(str(row["provenance_text"]).encode("utf-8"))
                 if (
                     row["evidence_sha256"] != provenance_segment_sha256
                     or actual_provenance_sha256 != provenance_segment_sha256
+                    or bool(row["provenance_extraction_review_required"])
                 ):
                     continue
 
@@ -1163,6 +1827,7 @@ class DeepLaw:
         uncertain_evidence: tuple[EvidenceCard, ...],
         graph_paths: tuple[GraphPath, ...],
         as_of: str | None,
+        topic_anchor: LegalTopicAnchor | None,
     ) -> tuple[ObligationCoverage, ...]:
         coverage: list[ObligationCoverage] = []
         for obligation in plan.obligations:
@@ -1184,12 +1849,20 @@ class DeepLaw:
                     for card in substantive_evidence
                     if card.document_type != "case_reference"
                     and _contains_primary_rule(card.excerpt)
+                    and (
+                        topic_anchor is None
+                        or _anchor_primary_matches_card(topic_anchor, card)
+                    )
                 ]
                 uncertain_cards = [
                     card
                     for card in substantive_uncertain_evidence
                     if card.document_type != "case_reference"
                     and _contains_primary_rule(card.excerpt)
+                    and (
+                        topic_anchor is None
+                        or _anchor_primary_matches_card(topic_anchor, card)
+                    )
                 ]
             elif obligation.id is ObligationId.EXACT_CITATION:
                 primary_cards = [
@@ -1242,20 +1915,14 @@ class DeepLaw:
                     for card in substantive_evidence
                     if card.document_type == "judicial_interpretation"
                     or "解释" in card.title
-                    or any(
-                        marker in card.excerpt
-                        for marker in _INTERPRETATION_EVIDENCE_MARKERS
-                    )
+                    or any(marker in card.excerpt for marker in _INTERPRETATION_EVIDENCE_MARKERS)
                 ]
                 uncertain_cards = [
                     card
                     for card in substantive_uncertain_evidence
                     if card.document_type == "judicial_interpretation"
                     or "解释" in card.title
-                    or any(
-                        marker in card.excerpt
-                        for marker in _INTERPRETATION_EVIDENCE_MARKERS
-                    )
+                    or any(marker in card.excerpt for marker in _INTERPRETATION_EVIDENCE_MARKERS)
                 ]
                 matching_paths = [
                     path
@@ -1274,6 +1941,17 @@ class DeepLaw:
                     for card in substantive_uncertain_evidence
                     if any(marker in card.excerpt for marker in _PROCEDURE_EVIDENCE_MARKERS)
                 ]
+            elif obligation.id is ObligationId.THRESHOLD_STANDARD:
+                primary_cards = [
+                    card
+                    for card in substantive_evidence
+                    if _contains_threshold_standard(obligation, card.excerpt)
+                ]
+                uncertain_cards = [
+                    card
+                    for card in substantive_uncertain_evidence
+                    if _contains_threshold_standard(obligation, card.excerpt)
+                ]
             elif obligation.id is ObligationId.EXCEPTIONS_COUNTEREVIDENCE:
                 primary_cards = [
                     card
@@ -1286,15 +1964,11 @@ class DeepLaw:
                     if any(marker in card.excerpt for marker in _COUNTEREVIDENCE_MARKERS)
                 ]
                 matching_paths = [
-                    path
-                    for path in graph_paths
-                    if path.predicate in _COUNTEREVIDENCE_PREDICATES
+                    path for path in graph_paths if path.predicate in _COUNTEREVIDENCE_PREDICATES
                 ]
             elif obligation.id is ObligationId.CASE_REFERENCE:
                 primary_cards = [
-                    card
-                    for card in substantive_evidence
-                    if card.document_type == "case_reference"
+                    card for card in substantive_evidence if card.document_type == "case_reference"
                 ]
                 uncertain_cards = [
                     card
@@ -1302,9 +1976,7 @@ class DeepLaw:
                     if card.document_type == "case_reference"
                 ]
                 matching_paths = [
-                    path
-                    for path in graph_paths
-                    if path.target_document_type == "case_reference"
+                    path for path in graph_paths if path.target_document_type == "case_reference"
                 ]
 
             if primary_cards:
@@ -1328,9 +2000,7 @@ class DeepLaw:
                     evidence_segment_ids=tuple(
                         dict.fromkeys(card.segment_id for card in selected_cards)
                     ),
-                    graph_path_ids=tuple(
-                        dict.fromkeys(path.path_id for path in selected_paths)
-                    ),
+                    graph_path_ids=tuple(dict.fromkeys(path.path_id for path in selected_paths)),
                 )
             )
         return tuple(coverage)
@@ -1340,6 +2010,8 @@ class DeepLaw:
         *,
         route: str,
         exact_target_resolved: bool,
+        query_focus_status: str,
+        query_focus_candidate_count: int,
         temporal_intent: bool,
         temporal_uncertain_count: int,
         temporal_outside_count: int,
@@ -1375,6 +2047,13 @@ class DeepLaw:
             add_gap(
                 "exact_target_unresolved",
                 "未在当前 release 中解析出精确文件题名、别名或文号，未扩大到相似文件。",
+            )
+        if query_focus_status != "covered":
+            add_gap(
+                "query_focus_unresolved",
+                "未找到能够在同一证据卡中可靠匹配查询主题的证据，已停止用相邻主题补位。",
+                obligation_id="query_focus",
+                candidate_count=query_focus_candidate_count,
             )
         if temporal_intent and temporal_uncertain_count:
             add_gap(

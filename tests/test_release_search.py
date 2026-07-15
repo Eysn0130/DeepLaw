@@ -15,7 +15,12 @@ from deeplaw.extract import ExtractionError
 from deeplaw.ingest import build_release
 from deeplaw.models import SearchRequest
 from deeplaw.search import DeepLaw
-from deeplaw.store import connect_readonly, database_sha256, resolve_active_database
+from deeplaw.store import (
+    connect_readonly,
+    database_sha256,
+    resolve_active_database,
+    verify_release_artifact,
+)
 
 from .helpers import manifest_document, sha256, write_docx, write_manifest
 
@@ -69,6 +74,7 @@ def test_release_is_content_addressed_readonly_and_idempotent(tmp_path: Path) ->
     assert release["release_id"] == release_dir.name
     assert release["derivation_sha256"]
     assert release["database_sha256"] == original_hash
+    assert release["build_report_sha256"] == sha256(release_dir / "build-report.json")
     release_schema = json.loads(
         (
             Path(__file__).resolve().parents[1] / "contracts/corpus-release-manifest.v2.schema.json"
@@ -89,6 +95,39 @@ def test_release_is_content_addressed_readonly_and_idempotent(tmp_path: Path) ->
 
     with DeepLaw(database) as law, pytest.raises(sqlite3.OperationalError):
         law.connection.execute("DELETE FROM segments")
+
+
+def test_release_id_binds_exact_manifest_bytes(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    document = source / "law.docx"
+    write_docx(document, ["测试法", "第一条 exact manifest bytes 必须进入 release 身份。"])
+    manifest_value = {
+        "package": {"name": "测试包", "documentCount": 1},
+        "documents": [manifest_document(source, document.name, title="测试法")],
+    }
+    compact_manifest = source / "compact.json"
+    indented_manifest = source / "indented.json"
+    compact_manifest.write_text(
+        json.dumps(manifest_value, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    indented_manifest.write_text(
+        json.dumps(manifest_value, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    compact_release, _ = build_release(
+        source_root=source,
+        manifest_path=compact_manifest,
+        output_root=tmp_path / "compact-releases",
+    )
+    indented_release, _ = build_release(
+        source_root=source,
+        manifest_path=indented_manifest,
+        output_root=tmp_path / "indented-releases",
+    )
+
+    assert compact_release.name != indented_release.name
 
 
 def test_search_is_bounded_temporal_and_receipted(tmp_path: Path) -> None:
@@ -642,7 +681,10 @@ def test_rebuild_rejects_build_report_tampering(tmp_path: Path) -> None:
     report_path.chmod(0o644)
     report_path.write_bytes(report_path.read_bytes() + b"\n")
 
-    with pytest.raises(RuntimeError, match="existing immutable release failed verification"):
+    with pytest.raises(RuntimeError, match="build report SHA-256"):
+        verify_release_artifact(release_dir / "deeplaw.sqlite3")
+
+    with pytest.raises(RuntimeError, match="build report SHA-256"):
         build_release(
             source_root=manifest.parent,
             manifest_path=manifest,
@@ -765,6 +807,7 @@ def test_evaluation_checks_retrieval_and_noise_constraints(tmp_path: Path) -> No
                         "query": "中华人民共和国测试法 第一条",
                         "expected_titles": ["中华人民共和国测试法"],
                         "expected_articles": ["第一条"],
+                        "forbidden_articles": ["第二条"],
                     },
                     ensure_ascii=False,
                 ),
@@ -777,6 +820,18 @@ def test_evaluation_checks_retrieval_and_noise_constraints(tmp_path: Path) -> No
                         "forbidden_titles": ["测试监督办法"],
                         "expected_empty": True,
                         "max_evidence": 3,
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "id": "missing-exact",
+                        "query": "完全不存在的法律 第一条",
+                        "purpose": "exact_citation",
+                        "expected_empty": True,
+                        "expected_blocking_gap_codes": ["exact_target_unresolved"],
+                        "expected_blocking_gap_obligations": ["query_focus"],
+                        "max_evidence": 0,
                     },
                     ensure_ascii=False,
                 ),
@@ -795,3 +850,111 @@ def test_evaluation_checks_retrieval_and_noise_constraints(tmp_path: Path) -> No
     assert report["receipt_count"] > 0
     assert all(item["receipt_verification_passed"] for item in report["results"])
     assert report["results"][1]["evidence_count"] == 0
+    assert "exact_target_unresolved" in report["results"][2]["blocking_gap_codes"]
+    assert "query_focus" in report["results"][2]["blocking_gap_obligations"]
+
+
+def test_evaluation_rejects_forbidden_articles_and_missing_expected_gaps(
+    tmp_path: Path,
+) -> None:
+    release_dir, _, _ = _build_fixture(tmp_path)
+    cases = tmp_path / "negative-constraints.jsonl"
+    cases.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "id": "forbidden-article",
+                        "query": "中华人民共和国测试法 第一条",
+                        "expected_titles": ["中华人民共和国测试法"],
+                        "forbidden_articles": ["第一条"],
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "id": "missing-gap",
+                        "query": "中华人民共和国测试法 第一条",
+                        "expected_titles": ["中华人民共和国测试法"],
+                        "expected_blocking_gap_codes": ["query_focus_unresolved"],
+                        "expected_blocking_gap_obligations": ["query_focus"],
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = evaluate_file(release_dir / "deeplaw.sqlite3", cases)
+
+    assert report["retrieval_pass_rate"] == 1.0
+    assert report["constraint_pass_rate"] == 0.0
+    assert report["overall_pass_rate"] == 0.0
+    assert report["results"][0]["returned_articles"] == ["第一条"]
+    assert report["results"][1]["blocking_gap_codes"] == []
+    assert report["results"][1]["blocking_gap_obligations"] == []
+
+
+def test_evaluation_matches_expected_blocking_gap_pairs_atomically(tmp_path: Path) -> None:
+    release_dir, _, _ = _build_fixture(tmp_path)
+    cases = tmp_path / "gap-pairs.jsonl"
+    common_case = {
+        "query": "完全不存在的法律 第一条",
+        "purpose": "exact_citation",
+        "expected_empty": True,
+        "max_evidence": 0,
+    }
+    cases.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        **common_case,
+                        "id": "correct-pair",
+                        "expected_blocking_gap_codes": ["required_obligation_uncovered"],
+                        "expected_blocking_gap_obligations": ["exact_citation"],
+                        "expected_blocking_gaps": [
+                            {
+                                "code": "required_obligation_uncovered",
+                                "obligation_id": "exact_citation",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        **common_case,
+                        "id": "cross-paired",
+                        "expected_blocking_gap_codes": ["query_focus_unresolved"],
+                        "expected_blocking_gap_obligations": ["exact_citation"],
+                        "expected_blocking_gaps": [
+                            {
+                                "code": "query_focus_unresolved",
+                                "obligation_id": "exact_citation",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = evaluate_file(release_dir / "deeplaw.sqlite3", cases)
+
+    assert report["retrieval_pass_rate"] == 1.0
+    assert report["constraint_pass_rate"] == 0.5
+    assert report["overall_pass_rate"] == 0.5
+    assert report["results"][0]["passed"] is True
+    assert report["results"][1]["constraints_passed"] is False
+    assert {
+        "code": "required_obligation_uncovered",
+        "obligation_id": "exact_citation",
+    } in report["results"][0]["blocking_gap_pairs"]
+    assert {
+        "code": "query_focus_unresolved",
+        "obligation_id": "exact_citation",
+    } not in report["results"][1]["blocking_gap_pairs"]

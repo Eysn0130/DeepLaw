@@ -97,6 +97,22 @@ def _rewrite_refs(value: Any, references: dict[str, str]) -> Any:
     return rewritten
 
 
+def _rebase_local_refs(value: Any, *, base: str) -> Any:
+    """Rebase document-local JSON pointers before nesting a schema in $defs."""
+
+    if isinstance(value, list):
+        return [_rebase_local_refs(item, base=base) for item in value]
+    if not isinstance(value, dict):
+        return value
+    rebased = {
+        key: _rebase_local_refs(item, base=base) for key, item in value.items()
+    }
+    reference = rebased.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/"):
+        rebased["$ref"] = f"{base}{reference[1:]}"
+    return rebased
+
+
 @lru_cache(maxsize=1)
 def bundled_output_schema() -> dict[str, Any]:
     schema = deepcopy(_load_contract("law-support.output.v2.schema.json"))
@@ -112,6 +128,7 @@ def bundled_output_schema() -> dict[str, Any]:
         definition = deepcopy(_load_contract(filename))
         definition.pop("$schema", None)
         definition.pop("$id", None)
+        definition = _rebase_local_refs(definition, base=f"#/$defs/{name}")
         definitions[name] = _rewrite_refs(definition, references)
     schema.pop("$id", None)
     schema["$defs"] = definitions

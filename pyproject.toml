@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "deeplaw"
 version = "0.3.0"
-description = "Verifiable agent knowledge base for official and user-private Chinese legal sources"
+description = "Verifiable agent knowledge base for official Chinese legal sources and user-private legal references"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "Eysn0130" }]
 keywords = ["law", "mcp", "agent-knowledge-base", "legal-research", "chinese-law"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -27,6 +27,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+document-engine = [
+  "mineru[pipeline]==3.4.4",
+  # MinerU 3.4's pipeline imports six at runtime without declaring it.
+  "six==1.17.0",
+]
 dev = [
   "pytest>=8.4,<9",
   "pytest-cov>=6.2,<7",
@@ -37,6 +42,7 @@ dev = [
 
 [project.scripts]
 deeplaw = "deeplaw.cli:main"
+deeplaw-document-engine = "deeplaw.document_engine_cli:main"
 
 [project.urls]
 Repository = "https://github.com/Eysn0130/DeepLaw"

@@ -14,9 +14,9 @@ from urllib.parse import urlparse
 
 from .evidence_graph import derive_relations
 from .extract import ExtractionError, extract_document
-from .models import BuildReport, Segment, SourceDocument
+from .models import BuildReport, ExtractionResult, Segment, SourceDocument, TextBlock
 from .review_overlay import AppliedReviewOverlay, apply_review_overlay
-from .segment import segment_document
+from .segment import materialize_document_blocks, segment_document
 from .store import (
     SCHEMA_VERSION,
     STORAGE_SCHEMA_VERSION,
@@ -64,6 +64,54 @@ def _bounded_extraction_warnings(values: tuple[str, ...]) -> tuple[str, ...]:
         *unique[:15],
         f"{len(unique) - 15} additional page warnings retained in build-report.json",
     )
+
+
+def _bind_extraction_quality_to_blocks(
+    extraction: ExtractionResult,
+) -> tuple[TextBlock, ...]:
+    """Project page/document quality onto the smallest retrievable evidence unit.
+
+    A warning is audit metadata, not automatically a failed extraction. When page
+    evidence exists, only blocks from a review-required page are quarantined. If an
+    extractor can report only document-level failure, fail closed for every block.
+    """
+
+    evidence_by_page = {
+        page.page: page for page in extraction.quality.page_evidence
+    }
+    document_fallback_risk = (
+        extraction.quality.review_required or extraction.quality.needs_ocr
+    )
+    values: list[TextBlock] = []
+    for block in extraction.blocks:
+        evidence = evidence_by_page.get(block.page) if block.page is not None else None
+        review_required = block.review_required
+        risk_flags = list(block.risk_flags)
+        source = block.source
+        confidence = block.confidence
+        if evidence is not None:
+            review_required = review_required or evidence.review_required
+            risk_flags.extend(evidence.risk_flags)
+            if source == "unknown":
+                source = evidence.selected_source
+            if confidence is None and source == "ocr":
+                confidence = evidence.ocr_confidence
+        elif document_fallback_risk:
+            review_required = True
+            if extraction.quality.needs_ocr:
+                risk_flags.append("document_needs_ocr")
+            if extraction.quality.review_required:
+                risk_flags.append("document_extraction_review_required")
+        values.append(
+            replace(
+                block,
+                source=source,
+                confidence=confidence,
+                review_required=review_required,
+                risk_flags=tuple(dict.fromkeys(risk_flags)),
+            )
+        )
+    return tuple(values)
 
 
 def _validate_public_output_bounds(
@@ -252,6 +300,7 @@ def build_release(
             canonical_date(package[field_name], field=f"package.{field_name}")
     report = BuildReport(schema_version=BUILD_REPORT_SCHEMA, release_id="pending")
     documents: list[SourceDocument] = []
+    all_blocks = []
     all_segments = []
     seen_paths: set[str] = set()
     seen_hashes: set[str] = set()
@@ -461,6 +510,7 @@ def build_release(
         public_extraction_warnings = _bounded_extraction_warnings(
             extraction.quality.warnings
         )
+        qualified_blocks = _bind_extraction_quality_to_blocks(extraction)
         source_document = replace(
             source_document,
             extraction_method=extraction.quality.extractor,
@@ -469,11 +519,13 @@ def build_release(
             extraction_review_required=(
                 extraction.quality.review_required
                 or extraction.quality.needs_ocr
-                or bool(public_extraction_warnings)
             ),
             extraction_warnings=public_extraction_warnings,
         )
-        segments = list(segment_document(document_id, extraction.blocks))
+        document_blocks = list(
+            materialize_document_blocks(document_id, qualified_blocks)
+        )
+        segments = list(segment_document(document_id, document_blocks))
         if not segments:
             raise ExtractionError(f"{relative_path}: extraction produced no segments")
         _validate_public_output_bounds(
@@ -483,6 +535,7 @@ def build_release(
         )
 
         documents.append(source_document)
+        all_blocks.extend(document_blocks)
         all_segments.extend(segments)
         report.document_count += 1
         report.segment_count += len(segments)
@@ -502,11 +555,15 @@ def build_release(
                 "extractor_version": extraction.quality.extractor_version,
                 "extractor_configuration": list(extraction.quality.configuration),
                 "extracted_text_sha256": sha256_bytes(
-                    "\n".join(block.text for block in extraction.blocks).encode("utf-8")
+                    "\n".join(block.text for block in qualified_blocks).encode("utf-8")
                 ),
                 "characters": extraction.quality.character_count,
                 "pages": extraction.quality.page_count,
                 "segments": len(segments),
+                "blocks": len(document_blocks),
+                "review_required_segments": sum(
+                    segment.extraction_review_required for segment in segments
+                ),
                 "needs_ocr": extraction.quality.needs_ocr,
                 "review_required": extraction.quality.review_required,
                 "reviewed_page_count": extraction.quality.reviewed_page_count,
@@ -524,15 +581,30 @@ def build_release(
         "release_schema": SCHEMA_VERSION,
         "storage_schema": STORAGE_SCHEMA_VERSION,
         "storage_engine": {"sqlite": sqlite3.sqlite_version},
+        "source_manifest_sha256": manifest_sha256,
         "segmentation": {"algorithm": "deterministic-article-structure/v1", "max_chars": 4500},
         "source_manifest": payload,
         "documents": [asdict(document) for document in documents],
+        "blocks": [
+            {
+                "block_id": block.block_id,
+                "document_id": block.document_id,
+                "ordinal": block.ordinal,
+                "text_sha256": block.text_sha256,
+                "review_required": block.review_required,
+                "risk_flags": list(block.risk_flags),
+            }
+            for block in all_blocks
+        ],
         "segments": [
             {
                 "segment_id": segment.segment_id,
                 "document_id": segment.document_id,
                 "ordinal": segment.ordinal,
                 "text_sha256": segment.text_sha256,
+                "source_block_ids": list(segment.source_block_ids),
+                "extraction_review_required": segment.extraction_review_required,
+                "extraction_risk_flags": list(segment.extraction_risk_flags),
             }
             for segment in all_segments
         ],
@@ -604,6 +676,10 @@ def build_release(
         )
     if payload["package_qa_reviewed_on"] is not None:
         release_metadata["package_qa_reviewed_on"] = payload["package_qa_reviewed_on"]
+    build_report_payload = (
+        json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    release_metadata["build_report_sha256"] = sha256_bytes(build_report_payload)
     output_root.mkdir(parents=True, exist_ok=True)
     if source_scope == "user_private":
         os.chmod(output_root, 0o700)
@@ -615,6 +691,7 @@ def build_release(
             release_id=release_id,
             release_metadata=release_metadata,
             documents=documents,
+            blocks=all_blocks,
             segments=all_segments,
             relations=relations,
         )
@@ -624,10 +701,7 @@ def build_release(
             json.dumps(release_metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        (staging_dir / "build-report.json").write_text(
-            json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        (staging_dir / "build-report.json").write_bytes(build_report_payload)
         os.chmod(staging_dir / "release.json", artifact_mode)
         os.chmod(staging_dir / "build-report.json", artifact_mode)
         if release_dir.exists():

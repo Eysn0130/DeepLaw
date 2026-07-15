@@ -153,7 +153,11 @@ def _validate_state(value: Any) -> dict[str, Any]:
             raise RuntimeError("private document added_at is invalid")
     if not documents and active_release_id is not None:
         raise RuntimeError("empty private library cannot have an active release")
-    if value.get("pdf_fallback") not in {"off", "vision-consensus"}:
+    if value.get("pdf_fallback") not in {
+        "off",
+        "vision-consensus",
+        "document-engine",
+    }:
         raise RuntimeError("private library PDF fallback is invalid")
     if not isinstance(value.get("allow_needs_ocr"), bool):
         raise RuntimeError("private library OCR policy is invalid")
@@ -304,11 +308,13 @@ def _publish_snapshot(
     allow_needs_ocr: bool,
 ) -> dict[str, Any]:
     previous_active = _read_active(root)
-    effective_pdf_fallback = (
-        "vision-consensus"
-        if "vision-consensus" in {state["pdf_fallback"], pdf_fallback}
-        else "off"
-    )
+    requested_fallbacks = {state["pdf_fallback"], pdf_fallback}
+    if "document-engine" in requested_fallbacks:
+        effective_pdf_fallback = "document-engine"
+    elif "vision-consensus" in requested_fallbacks:
+        effective_pdf_fallback = "vision-consensus"
+    else:
+        effective_pdf_fallback = "off"
     effective_allow_needs_ocr = state["allow_needs_ocr"] or allow_needs_ocr
     next_state = {
         **state,

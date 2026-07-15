@@ -16,9 +16,14 @@ var/releases/*
 !var/releases/.gitkeep
 corpus/raw/
 *.pdf
+*.doc
 *.docx
+*.duckdb
 *.sqlite
 *.sqlite3
 *.db
 .env
+*.key
 *.pem
+*.p12
+*.pfx

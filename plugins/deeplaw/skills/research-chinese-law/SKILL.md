@@ -3,9 +3,9 @@ name: research-chinese-law
 description: "Use only after the user explicitly invokes this skill to retrieve or verify Chinese legal sources, document numbers, exact articles, historical versions, effective dates, elements, legal issues, or citations. Do not invoke implicitly for ordinary coding, data analysis, document extraction, translation, project or case management, private evidence review, or isolated words such as 诈骗, 案件, 法务, fraud, or risk in filenames, columns, or prose."
 ---
 
-# DeepLaw Chinese-Law Research
+# DeepLaw 2.0 Chinese-Law Research
 
-DeepLaw is a read-only Agent legal-knowledge substrate. Use its official catalog
+DeepLaw 2.0 is a read-only Agent legal-knowledge substrate. Use its official catalog
 to collect bounded, version-aware evidence. It may also read a physically
 separate user-private legal-reference library, but those results are
 user-provided and never official DeepLaw sources. Do not use either scope to
@@ -90,11 +90,22 @@ persist private facts in DeepLaw.
    issuer, article label, status, effective interval, official source, hit reason,
    release ID, extraction method/warnings, temporal-review flag, and
    extraction-review flag.
-4. Call `get` only for the one or two segments needed to answer. Do not fetch full
+4. Inspect the complete answer gate before selecting evidence or answering:
+   - every `evidence_compilation.duty_witnesses` entry;
+   - `evidence_compilation.uncertain_duty_ids`;
+   - every `obligation_coverage` entry; and
+   - every gap whose `blocking` value is `true`.
+   Do not infer coverage from evidence-card count or ranking. If any blocking
+   gap exists, do not give a definite conclusion about legal application.
+   Report the blocking gap and limit the answer to verified source statements
+   and the next research step. A later `get` or `verify` result does not clear a
+   blocking gap; only a new, narrower `search` response without that gap can do
+   so.
+5. Call `get` only for the one or two segments needed to answer. Do not fetch full
    text for every hit.
-5. Call `verify` for each segment that will support a material citation. Do not
+6. Call `verify` for each segment that will support a material citation. Do not
    verify unused candidates.
-6. Call `release_info` or `private_info` only when corpus provenance is requested or release state
+7. Call `release_info` or `private_info` only when corpus provenance is requested or release state
    itself is material. Do not add it as a routine token cost.
 
 For an explicit one-word topic, keep `purpose: auto`, return a short navigation

@@ -40,7 +40,7 @@
       "additionalProperties": false,
       "required": ["pdfFallback", "allowNeedsOcr"],
       "properties": {
-        "pdfFallback": { "enum": ["off", "vision-consensus"] },
+        "pdfFallback": { "enum": ["off", "vision-consensus", "document-engine"] },
         "allowNeedsOcr": { "type": "boolean" }
       }
     },

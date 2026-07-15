@@ -1,6 +1,6 @@
 # Third-Party Notices And Research References
 
-Reviewed: 2026-07-15
+Reviewed: 2026-07-16
 
 DeepLaw is licensed separately under the license declared by this repository.
 This document records upstream systems reviewed during architecture work and
@@ -64,6 +64,32 @@ installed executables does not mean DeepLaw bundles them; conversely, any
 future release artifact that bundles or redistributes the executables or data
 must include the exact versions in its SBOM and satisfy all applicable license,
 notice, source, and redistribution obligations.
+
+## Optional Structured Document Engine
+
+- Project: [OpenDataLab/MinerU](https://github.com/opendatalab/MinerU)
+- Version pinned by the `v0.3.0` document-engine extra: `3.4.4`
+- Published terms: [MinerU Open Source License](https://github.com/opendatalab/MinerU/blob/master/LICENSE.md)
+- Integration form: optional build-time dependency behind the
+  `deeplaw[document-engine]` extra and a bounded subprocess adapter
+- Bundled by the base DeepLaw runtime: no
+- Model weights redistributed by this repository: no
+
+The adapter reads only structured content-list JSON for explicitly requested PDF
+page ranges. It rejects symlinks, duplicate JSON keys, non-finite numbers,
+oversized output trees, excessive nesting, out-of-range pages, invalid bounding
+boxes, process timeouts, and unbounded stdout/stderr. Generated Markdown is not
+used as DeepLaw source truth.
+
+DeepLaw treats this engine as one extraction candidate. Its output does not clear
+an extraction gate merely because the process succeeded: admission requires an
+independent OCR candidate, whole-text agreement, lexical and legal-punctuation
+equality, no unresolved table-structure risk, and the page quality policy, or a
+separately bound human review. Operators and
+distributors must review the exact license, model-weight terms, attribution,
+service-use conditions, and any separately granted permission applicable to
+their release. This notice is intentionally retained even where a project team
+has a separate permission grant.
 
 ## Architecture And Algorithm References
 

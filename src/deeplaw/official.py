@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 from datetime import UTC, datetime
@@ -51,6 +52,8 @@ _CATALOG_REQUIRED_FIELDS = {
 }
 _CATALOG_OPTIONAL_FIELDS = {"reviewOverlay", "buildPolicy"}
 _RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+_DEPENDENCY_PROBE_TIMEOUT_SECONDS = 15.0
+_PINNED_DOCUMENT_ENGINE_VERSION = "3.4.4"
 _STATE_FIELDS = {
     "schema_version",
     "enabled",
@@ -462,7 +465,8 @@ def _validate_catalog(value: Any) -> dict[str, Any]:
     if build_policy is not None and (
         not isinstance(build_policy, dict)
         or set(build_policy) != {"pdfFallback", "allowNeedsOcr"}
-        or build_policy.get("pdfFallback") not in {"off", "vision-consensus"}
+        or build_policy.get("pdfFallback")
+        not in {"off", "vision-consensus", "document-engine"}
         or not isinstance(build_policy.get("allowNeedsOcr"), bool)
     ):
         raise ValueError("official catalog buildPolicy is invalid")
@@ -522,6 +526,112 @@ def _validate_catalog(value: Any) -> dict[str, Any]:
             raise ValueError(f"official catalog SHA-256 is invalid or duplicated: {relative_path}")
         seen_hashes.add(source_hash)
     return value
+
+
+def _run_dependency_probe(
+    executable: str,
+    *arguments: str,
+    description: str,
+) -> str:
+    resolved = shutil.which(executable)
+    if resolved is None:
+        raise RuntimeError(
+            f"official PDF build dependency is missing: {description} ({executable})"
+        )
+    try:
+        completed = subprocess.run(
+            [resolved, *arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+            shell=False,
+            timeout=_DEPENDENCY_PROBE_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError(
+            f"official PDF build dependency is not executable: {description} ({executable})"
+        ) from error
+    output = completed.stdout.decode("utf-8", errors="replace").strip()
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"official PDF build dependency probe failed: {description} ({executable})"
+        )
+    return output
+
+
+def _preflight_official_pdf_dependencies() -> dict[str, str]:
+    engine_version = _run_dependency_probe(
+        "deeplaw-document-engine",
+        "--version",
+        description="DeepLaw document engine",
+    )
+    pinned_version = re.escape(_PINNED_DOCUMENT_ENGINE_VERSION)
+    if re.search(rf"(?<![\d.]){pinned_version}(?![\d.])", engine_version) is None:
+        raise RuntimeError(
+            "official PDF build dependency version mismatch: "
+            f"expected {_PINNED_DOCUMENT_ENGINE_VERSION}"
+        )
+
+    renderer_version = _run_dependency_probe(
+        "pdftoppm",
+        "-v",
+        description="PDF renderer",
+    )
+    if not renderer_version:
+        raise RuntimeError("official PDF build dependency version is unavailable: PDF renderer")
+
+    ocr_version = _run_dependency_probe(
+        "tesseract",
+        "--version",
+        description="OCR engine",
+    )
+    if not ocr_version:
+        raise RuntimeError("official PDF build dependency version is unavailable: OCR engine")
+    ocr_languages = _run_dependency_probe(
+        "tesseract",
+        "--list-langs",
+        description="OCR language data",
+    )
+    if "chi_sim" not in {line.strip() for line in ocr_languages.splitlines()}:
+        raise RuntimeError("official PDF build dependency is missing: chi_sim OCR language data")
+
+    return {
+        "document_engine": engine_version.splitlines()[0],
+        "pdf_renderer": renderer_version.splitlines()[0],
+        "ocr_engine": ocr_version.splitlines()[0],
+        "ocr_language": "chi_sim",
+    }
+
+
+def _resolve_official_build_policy(
+    catalog: dict[str, Any],
+    *,
+    signature_verified: bool,
+    requested_pdf_fallback: str | None,
+) -> tuple[str, bool]:
+    declared = catalog.get("buildPolicy", {})
+    declared_pdf_fallback = declared.get("pdfFallback", "off")
+    if (
+        signature_verified
+        and requested_pdf_fallback is not None
+        and requested_pdf_fallback != declared_pdf_fallback
+    ):
+        raise ValueError("signed official catalog buildPolicy cannot be overridden by the CLI")
+    effective_pdf_fallback = (
+        declared_pdf_fallback
+        if signature_verified
+        else requested_pdf_fallback or declared_pdf_fallback
+    )
+    effective_allow_needs_ocr = bool(declared.get("allowNeedsOcr", False))
+    requires_document_engine = (
+        signature_verified
+        and effective_pdf_fallback == "document-engine"
+        and any(document["format"] == "PDF" for document in catalog["documents"])
+    )
+    if requires_document_engine:
+        _preflight_official_pdf_dependencies()
+    return effective_pdf_fallback, effective_allow_needs_ocr
 
 
 def _save_catalog(
@@ -896,9 +1006,11 @@ def sync_official(
         trust_store_path=trust_store_path,
         allow_unsigned_local_catalog=allow_unsigned_local_catalog,
     )
-    declared_build_policy = catalog.get("buildPolicy", {})
-    effective_pdf_fallback = pdf_fallback or declared_build_policy.get("pdfFallback", "off")
-    effective_allow_needs_ocr = bool(declared_build_policy.get("allowNeedsOcr", False))
+    effective_pdf_fallback, effective_allow_needs_ocr = _resolve_official_build_policy(
+        catalog,
+        signature_verified=bool(signature_verification["verified"]),
+        requested_pdf_fallback=pdf_fallback,
+    )
     state = _load_state(home)
     previous = state["catalog"]
     digest = sha256_bytes(payload)

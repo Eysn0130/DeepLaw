@@ -23,7 +23,7 @@ __all__ = [
 
 QUERY_PLAN_SCHEMA = "deeplaw.query-plan/v1"
 MAX_QUERY_CHARS = 8000
-MAX_OBLIGATIONS = 8
+MAX_OBLIGATIONS = 9
 MAX_QUERY_CUES_PER_OBLIGATION = 8
 MAX_QUERY_CUE_CHARS = 64
 
@@ -56,6 +56,7 @@ class ObligationId(StrEnum):
     ELEMENTS_DEFINITIONS = "elements_definitions"
     INTERPRETATION = "interpretation"
     PROCEDURE = "procedure"
+    THRESHOLD_STANDARD = "threshold_standard"
     EXCEPTIONS_COUNTEREVIDENCE = "exceptions_counterevidence"
     CASE_REFERENCE = "case_reference"
 
@@ -75,6 +76,7 @@ _OBLIGATION_ROLES = {
     ObligationId.ELEMENTS_DEFINITIONS: ObligationRole.SUPPORT,
     ObligationId.INTERPRETATION: ObligationRole.SUPPORT,
     ObligationId.PROCEDURE: ObligationRole.SUPPORT,
+    ObligationId.THRESHOLD_STANDARD: ObligationRole.SUPPORT,
     ObligationId.EXCEPTIONS_COUNTEREVIDENCE: ObligationRole.COUNTEREVIDENCE,
     ObligationId.CASE_REFERENCE: ObligationRole.REFERENCE,
 }
@@ -148,6 +150,20 @@ _PROCEDURE_TERMS = (
     "审查",
     "举证",
     "执行",
+)
+_THRESHOLD_STANDARD_TERMS = (
+    "立案追诉标准",
+    "立案标准",
+    "追诉标准",
+    "数额标准",
+    "金额标准",
+    "数量标准",
+    "入罪标准",
+    "定罪标准",
+    "量刑标准",
+    "数额较大标准",
+    "数额巨大标准",
+    "数额特别巨大标准",
 )
 _COUNTEREVIDENCE_TERMS = (
     "例外",
@@ -458,13 +474,25 @@ def compile_query_plan(
             )
         )
 
+    threshold_standard_cues = _term_cues(intent_query, _THRESHOLD_STANDARD_TERMS)
     procedure_cues = _term_cues(intent_query, _PROCEDURE_TERMS)
+    if threshold_standard_cues:
+        procedure_cues = tuple(cue for cue in procedure_cues if cue != "text:立案")
     if procedure_cues:
         obligations.append(
             _obligation(
                 ObligationId.PROCEDURE,
                 required=True,
                 query_cues=procedure_cues,
+            )
+        )
+
+    if threshold_standard_cues:
+        obligations.append(
+            _obligation(
+                ObligationId.THRESHOLD_STANDARD,
+                required=True,
+                query_cues=threshold_standard_cues,
             )
         )
 

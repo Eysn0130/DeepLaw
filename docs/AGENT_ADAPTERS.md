@@ -1,6 +1,6 @@
-# DeepLaw Agent Adapters
+# DeepLaw 2.0 Agent Adapters
 
-DeepLaw integrates with Codex, Claude Code, OpenCode, and, in a later change,
+DeepLaw 2.0 integrates with Codex, Claude Code, OpenCode, and, in a later change,
 Analytix through one local read-only MCP process. The adapter contract is small
 on purpose: the server exposes one tool with leaf name `law_support`, and every
 operation goes through that tool.
@@ -47,20 +47,36 @@ tool as a deployment failure rather than silently continuing.
 ## Runtime prerequisite
 
 Install the `deeplaw` executable into the environment used to launch the Agent
-host. From a DeepLaw checkout, use a user-level tool install for normal use:
+host. The signed official catalog contains PDFs, so a machine that performs its
+first official install or any official update needs the full document build
+runtime plus PDF rendering, OCR, and Simplified Chinese language data:
 
 ```bash
-uv tool install .
+uv tool install '.[document-engine]'
+
+# macOS (Homebrew)
+brew install poppler tesseract tesseract-lang
+
+# Debian / Ubuntu
+sudo apt-get update
+sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-chi-sim
+
 deeplaw --version
+deeplaw-document-engine --version
+pdftoppm -v
+tesseract --list-langs | grep -x 'chi_sim'
 deeplaw official install
 deeplaw official status
 ```
 
 Contributors who intentionally want live source edits can instead use
-`uv tool install --editable .`; a normal user updates checkout code with
-`uv tool install --force .`. A project-only `uv sync` is insufficient when the
-Agent launches the plugin from another working directory unless its environment
-also exposes that project's `.venv/bin`.
+`uv tool install --editable '.[document-engine]'`; a normal user updates checkout
+code with `uv tool install --force '.[document-engine]'`. A machine that only
+reads an already-built immutable release may use the lightweight
+`uv tool install .`, but that installation cannot perform the signed official
+PDF catalog build. A project-only `uv sync` is insufficient when the Agent
+launches the plugin from another working directory unless its environment also
+exposes that project's `.venv/bin`.
 
 The MCP process inherits its environment. Point it at an immutable database with
 `DEEPLAW_DB`, or point `DEEPLAW_HOME` at a directory containing `ACTIVE` and the

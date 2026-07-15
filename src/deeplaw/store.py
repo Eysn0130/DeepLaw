@@ -8,11 +8,18 @@ from pathlib import Path
 from typing import Any
 
 from .evidence_graph import RELATION_TYPES, EvidenceRelation
-from .models import Segment, SourceDocument
-from .util import canonical_date, canonical_json, compact_text, search_terms, sha256_file
+from .models import DocumentBlock, Segment, SourceDocument
+from .util import (
+    canonical_date,
+    canonical_json,
+    compact_text,
+    search_terms,
+    sha256_bytes,
+    sha256_file,
+)
 
 SCHEMA_VERSION = "deeplaw.release/v2"
-STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v4"
+STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v5"
 _RELEASE_ID = re.compile(r"^lawrel_[0-9a-f]{32}$")
 _RELATION_ID = re.compile(r"^lawedge_[0-9a-f]{24}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -29,6 +36,7 @@ _RELEASE_REQUIRED_FIELDS = {
     "storage_schema",
     "storage_engine",
     "database_sha256",
+    "build_report_sha256",
     "temporal_status",
     "redistribution_status",
     "vector_index",
@@ -90,7 +98,12 @@ def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[st
         value = manifest.get(field_name)
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise RuntimeError(f"release {field_name} is invalid")
-    for field_name in ("source_manifest_sha256", "derivation_sha256", "database_sha256"):
+    for field_name in (
+        "source_manifest_sha256",
+        "derivation_sha256",
+        "database_sha256",
+        "build_report_sha256",
+    ):
         value = manifest.get(field_name)
         if not isinstance(value, str) or not _SHA256.fullmatch(value):
             raise RuntimeError(f"release {field_name} is invalid")
@@ -195,6 +208,7 @@ def create_release_database(
     release_id: str,
     release_metadata: dict[str, Any],
     documents: list[SourceDocument],
+    blocks: list[DocumentBlock] | None = None,
     segments: list[Segment],
     relations: tuple[EvidenceRelation, ...] = (),
 ) -> None:
@@ -256,8 +270,32 @@ def create_release_database(
                 paragraph_end INTEGER,
                 text TEXT NOT NULL,
                 text_sha256 TEXT NOT NULL,
+                source_block_ids_json TEXT NOT NULL,
+                extraction_review_required INTEGER NOT NULL,
+                extraction_risk_flags_json TEXT NOT NULL,
                 UNIQUE(document_id, ordinal)
             ) WITHOUT ROWID;
+
+            CREATE TABLE document_blocks (
+                block_id TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL REFERENCES documents(document_id),
+                ordinal INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                page INTEGER,
+                paragraph INTEGER,
+                style TEXT,
+                bbox_json TEXT,
+                source TEXT NOT NULL,
+                confidence REAL,
+                review_required INTEGER NOT NULL,
+                risk_flags_json TEXT NOT NULL,
+                text TEXT NOT NULL,
+                text_sha256 TEXT NOT NULL,
+                UNIQUE(document_id, ordinal)
+            ) WITHOUT ROWID;
+
+            CREATE INDEX document_blocks_page
+                ON document_blocks(document_id, page, ordinal);
 
             CREATE INDEX segments_document_article
                 ON segments(document_id, article_label, ordinal);
@@ -344,11 +382,51 @@ def create_release_database(
             )
 
         by_document = {document.document_id: document for document in documents}
-        for segment in segments:
-            document = by_document[segment.document_id]
+        by_block: dict[str, DocumentBlock] = {}
+        for block in blocks or []:
+            if block.document_id not in by_document:
+                raise ValueError("document block references an unknown document")
+            if block.block_id in by_block:
+                raise ValueError("duplicate document block ID")
+            if sha256_bytes(block.text.encode("utf-8")) != block.text_sha256:
+                raise ValueError("document block text hash does not match its text")
+            by_block[block.block_id] = block
             connection.execute(
                 """
-                INSERT INTO segments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO document_blocks VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    block.block_id,
+                    block.document_id,
+                    block.ordinal,
+                    block.kind,
+                    block.page,
+                    block.paragraph,
+                    block.style,
+                    canonical_json(list(block.bbox)) if block.bbox is not None else None,
+                    block.source,
+                    block.confidence,
+                    int(block.review_required),
+                    canonical_json(list(block.risk_flags)),
+                    block.text,
+                    block.text_sha256,
+                ),
+            )
+        for segment in segments:
+            document = by_document[segment.document_id]
+            if any(
+                block_id not in by_block
+                or by_block[block_id].document_id != segment.document_id
+                for block_id in segment.source_block_ids
+            ):
+                raise ValueError("segment references an unknown or cross-document block")
+            connection.execute(
+                """
+                INSERT INTO segments VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     segment.segment_id,
@@ -364,6 +442,9 @@ def create_release_database(
                     segment.paragraph_end,
                     segment.text,
                     segment.text_sha256,
+                    canonical_json(list(segment.source_block_ids)),
+                    int(segment.extraction_review_required),
+                    canonical_json(list(segment.extraction_risk_flags)),
                 ),
             )
             locator = " ".join(
@@ -476,6 +557,12 @@ def verify_release_artifact(path: Path) -> dict[str, Any]:
     actual_hash = database_sha256(database)
     if expected_hash != actual_hash:
         raise RuntimeError("release database SHA-256 does not match release.json")
+    report_path = database.parent / "build-report.json"
+    if report_path.is_symlink() or not report_path.is_file():
+        raise RuntimeError(f"release build report is missing or unsafe: {report_path}")
+    expected_report_hash = manifest.get("build_report_sha256")
+    if sha256_file(report_path) != expected_report_hash:
+        raise RuntimeError("release build report SHA-256 does not match release.json")
     return manifest
 
 

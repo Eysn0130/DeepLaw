@@ -16,6 +16,7 @@ from .catalog_signing import (
 )
 from .evaluate import evaluate_file
 from .ingest import build_release
+from .markdown_export import export_markdown
 from .mcp_server import run_mcp
 from .models import SearchRequest
 from .official import (
@@ -58,7 +59,7 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--activate", action="store_true")
     build.add_argument(
         "--pdf-fallback",
-        choices=("off", "vision-consensus"),
+        choices=("off", "vision-consensus", "document-engine"),
         default="off",
     )
     build.add_argument("--allow-needs-ocr", action="store_true")
@@ -96,6 +97,13 @@ def _parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--limit", type=int, default=5)
     evaluate.add_argument("--output", type=Path)
 
+    export_md = commands.add_parser(
+        "export-markdown",
+        help="Export deterministic human-readable views from verified Document IR",
+    )
+    export_md.add_argument("--db", type=Path)
+    export_md.add_argument("--output", type=Path, required=True)
+
     mcp = commands.add_parser("mcp", help="Run the read-only MCP server")
     mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     mcp.add_argument(
@@ -126,8 +134,12 @@ def _parser() -> argparse.ArgumentParser:
         )
         sync.add_argument(
             "--pdf-fallback",
-            choices=("off", "vision-consensus"),
+            choices=("off", "vision-consensus", "document-engine"),
             default=None,
+            help=(
+                "PDF fallback for unsigned local development catalogs; a signed catalog's "
+                "buildPolicy is authoritative"
+            ),
         )
         sync.add_argument(
             "--allow-unsigned-local-catalog",
@@ -170,7 +182,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     private_add.add_argument(
         "--pdf-fallback",
-        choices=("off", "vision-consensus"),
+        choices=("off", "vision-consensus", "document-engine"),
         default="off",
     )
     private_add.add_argument("--allow-needs-ocr", action="store_true")
@@ -179,7 +191,7 @@ def _parser() -> argparse.ArgumentParser:
     private_delete.add_argument("--document-id", required=True)
     private_delete.add_argument(
         "--pdf-fallback",
-        choices=("off", "vision-consensus"),
+        choices=("off", "vision-consensus", "document-engine"),
         default="off",
     )
     private_delete.add_argument("--allow-needs-ocr", action="store_true")
@@ -274,6 +286,10 @@ def main(argv: list[str] | None = None) -> None:
             return
         if args.command == "mcp":
             run_mcp(transport="stdio" if args.stdio else args.transport)
+            return
+        if args.command == "export-markdown":
+            database = resolve_active_database(explicit_db=args.db)
+            _print_json(export_markdown(database, args.output))
             return
         if args.command == "official":
             if args.official_command in {"install", "update"}:
