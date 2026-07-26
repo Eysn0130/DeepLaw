@@ -26,9 +26,9 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
 Current decision: none of the reviewed knowledge platforms is a DeepLaw runtime
 authority. No source code from these repositories has been copied into DeepLaw.
 The base MCP runtime stays lightweight. Offline builders may use separately
-installed OCR/PDF tools and the optional `document-engine` dependency; every
-output remains a candidate subject to DeepLaw's own page evidence and admission
-policy.
+installed OCR/PDF tools, the optional `document-engine` dependency, and the
+optional local Discovery runtime; every derived output remains a candidate
+subject to DeepLaw's own source, lifecycle, evidence, and admission policy.
 
 ## Reviewed Snapshot
 
@@ -59,6 +59,10 @@ policy.
 | [Unstructured-IO/unstructured](https://github.com/Unstructured-IO/unstructured) | `c38745b32f53` | Apache-2.0 | Broad ETL reference; not selected as legal canonical representation |
 | [datalab-to/marker](https://github.com/datalab-to/marker) | `ef16c2caa29d` | GPL-3.0 | Not selected for the default Apache-distributed build path |
 | [datalab-to/surya](https://github.com/datalab-to/surya) | `fe8e2d968462` | GPL-3.0 code; separate model terms | Not selected for default redistribution |
+| [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) | `v1.27.0` | MIT | Optional local execution dependency for fixed candidate-discovery models |
+| [huggingface/tokenizers](https://github.com/huggingface/tokenizers) | `v0.22.2` | Apache-2.0 | Optional fixed-tokenizer execution dependency |
+| [xenova/jina-embeddings-v2-small-en](https://huggingface.co/Xenova/jina-embeddings-v2-small-en) | `523cadcb9c2e` | Apache-2.0 model card | Fixed English Discovery profile; weights downloaded explicitly and not redistributed |
+| [jinaai/jina-embeddings-v2-base-zh](https://huggingface.co/jinaai/jina-embeddings-v2-base-zh) | `c1ff9086a89a` | Apache-2.0 model card | Fixed Chinese-English Discovery profile; weights downloaded explicitly and not redistributed |
 
 Commit pins identify the material reviewed; they are not dependency pins
 because these projects are not imported into the DeepLaw runtime.
@@ -337,6 +341,13 @@ MIT-licensed file and add attribution at that time.
 ### Current runtime dependency
 
 None of the reviewed platforms.
+
+The optional `deeplaw[discovery]` extra directly depends on ONNX Runtime,
+Tokenizers, `huggingface_hub`, and NumPy. DeepLaw implements its own small,
+closed local execution and index contract; it does not copy source from a
+knowledge platform. Model setup is explicit, revisions and all five files are
+hash-pinned, query execution is offline, and the feature remains outside the
+base MCP runtime and default Context Compiler.
 
 ### Current optional external build tools
 

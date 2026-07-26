@@ -8,7 +8,7 @@ documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.4.0`, and
+Security fixes are evaluated for the current software release, `v0.5.0`, and
 the `main` branch. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says
 otherwise.
@@ -131,6 +131,23 @@ manifest fields, but they do not yet authenticate a publisher. Every imported
 asset is therefore marked `untrusted` and `quarantined`. Do not treat a valid
 package hash as proof of authorship.
 
+The optional Discovery Index is a derived, removable candidate index and never
+a source of truth. Provisioning downloads only one fixed model profile and
+accepts it only after the exact repository revision, five-file inventory, byte
+sizes, and SHA-256 values pass. Query execution is local-only. The index binds
+the model identity, vault ID/revision/audit head, Asset content and projection,
+record bytes, and vector bytes. It contains only active, human-reviewed,
+non-expired, non-restricted Assets; source-bound results revalidate their
+stored source bytes. Extra files, symlinks, unsafe permissions, model drift,
+dimension/row-width drift, non-finite vectors, source changes, vault changes,
+or post-verification file replacement fail closed.
+
+Discovery remains outside both read-only MCP servers and the default Context
+Compiler. It is operator/research CLI functionality until held-out
+task-success, noise, provenance, lifecycle, poisoning, resource, and cost gates
+pass. Its case-data confirmation is an explicit operator boundary, not a
+personal-data classifier. Analytix case material remains forbidden.
+
 The SQLite event chain plus current-state replay detects accidental or partial
 tampering, including a status-only edit or forged FTS projection. Stable
 database and source-file fingerprints cache only unchanged verified state; a
@@ -197,6 +214,10 @@ uv export --frozen --no-dev --extra document-engine --no-emit-project \
     --ignore-vuln PYSEC-2026-2288 \
     --ignore-vuln PYSEC-2026-2289 \
     --ignore-vuln PYSEC-2026-2290
+
+uv export --frozen --no-dev --extra discovery --no-emit-project \
+  --no-header --format requirements-txt \
+  | uvx pip-audit --no-deps --disable-pip -r /dev/stdin
 ```
 
 The second command is valid only together with the checked-in VEX and its

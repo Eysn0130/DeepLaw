@@ -1,6 +1,6 @@
 # Third-Party Notices And Research References
 
-Reviewed: 2026-07-25
+Reviewed: 2026-07-26
 
 DeepLaw is licensed separately under the license declared by this repository.
 This document records upstream systems reviewed during architecture work and
@@ -107,6 +107,35 @@ distributors must review the exact license, model-weight terms, attribution,
 service-use conditions, and any separately granted permission applicable to
 their release. This notice is intentionally retained even where a project team
 has a separate permission grant.
+
+## Optional Local Candidate Discovery
+
+The `deeplaw[discovery]` extra uses:
+
+- [ONNX Runtime](https://github.com/microsoft/onnxruntime), pinned to `1.27.0`,
+  under the MIT License;
+- [Hugging Face Tokenizers](https://github.com/huggingface/tokenizers), pinned
+  to `0.22.2`, under Apache License 2.0;
+- [huggingface_hub](https://github.com/huggingface/huggingface_hub), pinned to
+  `0.36.2`, under Apache License 2.0;
+- [fsspec](https://github.com/fsspec/filesystem_spec), pinned by platform
+  markers, under its BSD-3-Clause license;
+- [NumPy](https://github.com/numpy/numpy), pinned by platform markers, under
+  its BSD-3-Clause license.
+
+The two selectable model profiles are:
+
+- `xenova/jina-embeddings-v2-small-en` at
+  `523cadcb9c2e71c7153fc46016e1fe79acb4f58f`;
+- `jinaai/jina-embeddings-v2-base-zh` at
+  `c1ff9086a89a1123d7b5eff58055a665db4fb4b9`.
+
+Their model cards publish Apache License 2.0. Model weights are not stored in
+this repository or bundled by the base package. An operator must run the
+explicit model setup command; DeepLaw then copies only the five pinned files
+whose byte sizes and SHA-256 values are compiled into the software. Indexing
+and querying execute locally, and the derived index cannot establish source
+trust, human approval, legal authority, or case applicability.
 
 ## Optional Legacy DOC Converter
 

@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/version-v0.4.0-17202A?style=flat-square" alt="Version v0.4.0" />
+  <img src="https://img.shields.io/badge/version-v0.5.0-17202A?style=flat-square" alt="Version v0.5.0" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
   <img src="https://img.shields.io/badge/MCP-read--only-18A999?style=flat-square" alt="Read-only MCP" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
@@ -54,6 +54,7 @@ owns Analytix case projects.
 | **Knowledge Compiler** | Preserves source bytes and located fragments before producing review candidates; a summary or semantic unit never replaces evidence |
 | **Lifecycle** | `proposed → active → superseded/revoked`, with risky content in `quarantined`; only explicit human review can activate |
 | **Context Compiler** | Prioritizes constraints, decisions, rules, and experience under hard content, provenance-metadata, and serialized-payload budgets |
+| **Candidate discovery** | An optional local derived index finds candidates that do not share query terms; models are pinned, the index is vault/source-bound and off by default, and every candidate still requires exact-ID verification |
 | **Durable knowledge** | Separates working, project, experience, wisdom, and domain tiers; temporary knowledge expires and transcripts are not copied wholesale |
 | **Isolation and sensitivity** | Every vault is a separate owner-only SQLite store; public/internal/private/restricted controls export and Agent visibility |
 | **Verification and transfer** | The event chain is reconciled with current Asset/source/relation/FTS state and selected source bytes are rehashed; every `.dlk` import begins in untrusted quarantine |
@@ -198,12 +199,13 @@ that ordering score cannot raise integrity, temporal, extraction, or human-revie
 Models and derived indexes may help discover candidates; they cannot determine amendment
 or repeal, erase a blocking gap, or turn a research candidate into a case-applicability conclusion.
 
-## Current Version v0.4.0
+## Current Version v0.5.0
 
 | Capability | Current status |
 | --- | --- |
 | Knowledge Assets | Owner-only vaults, source fragments, proposal/quarantine/activation/supersession/revocation, sensitivity, event-chain verification, and current-state reconciliation |
 | Context Capsules | Task priority, item/character budgets, explicit gaps, provenance, one bounded reviewed-relation expansion, selection reasons, digest, and historical audit anchor |
+| Candidate discovery | Optional English or Chinese-English local models, fixed revisions and file manifests, plus derived-index integrity and current-vault binding; excluded from default Context and MCP paths |
 | Experience growth | Debugger and Capsule feedback create review proposals only; an Agent cannot write or self-promote memory |
 | Sharing and human views | Reproducible fixed-revision `.dlk`, untrusted import quarantine, and deterministic Markdown/Obsidian projection |
 | File processing | The official catalog accepts DOCX/PDF; the private library also accepts UTF-8 TXT; block-level locators and extraction evidence are retained |
@@ -277,6 +279,12 @@ or directories; use a new path for each new artifact.
 
 See [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md) for the complete lifecycle,
 exports, feedback, and security boundary.
+
+For explicit local exploration of candidates that do not share query terms,
+install `uv tool install --force --reinstall-package deeplaw '.[discovery]'`
+and follow
+[`Optional candidate discovery`](docs/KNOWLEDGE_OS.md#optional-candidate-discovery).
+It is off by default and is not part of the Agent MCP or Context Compiler.
 
 The official catalog includes PDFs. Before the first official install or any update, also
 install PDF rendering, OCR, and Simplified Chinese language data:

@@ -1,6 +1,6 @@
 # Knowledge OS 研究决策记录
 
-状态：2026-07-26 复核；对应软件基线 `v0.4.0`。
+状态：2026-07-26 复核；对应软件基线 `v0.5.0`。
 
 本文记录 DeepLaw 2.0 通用 Knowledge Asset 核心的研究依据。它解释为什么当前实现选择
 “来源保留、人工批准、显式生命周期、隔离 vault、有界 Context Capsule”，以及哪些能力
@@ -40,8 +40,10 @@
 | [Bad Memory](https://arxiv.org/abs/2607.14611) | 持久记忆可成为跨会话 prompt-injection 通道 | 指令式/不可见文本触发 quarantine；MCP 只读；只有审核规则可成为指令候选 | 不允许外部内容自动进入 active memory |
 | [OWASP Agent Memory Guard](https://owasp.org/www-project-agent-memory-guard/) | 记忆投毒、越权和审计风险需要独立控制面 | restricted 不进入 MCP；owner-only vault；hash-chain audit；导入降权 | 当前不宣称多租户认证或加密隔离 |
 | [W3C PROV-O](https://www.w3.org/TR/prov-o/) | entity/activity/agent provenance 可互操作表达 | compiler、来源、fragment、review 和 mutation 分层记录 | v1 不引入完整 RDF/OWL 运行时 |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) 与 [Hugging Face Tokenizers](https://github.com/huggingface/tokenizers) | 本地、无生成调用的文本表征执行面 | 固定模型 revision/文件清单与封闭输入输出契约；查询期只读、离线 | 不让模型或相似度成为真源、审核或法律效力 |
+| [FastEmbed](https://github.com/qdrant/fastembed)、[FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) 与 [ColBERT](https://github.com/stanford-futuredata/ColBERT) | 本地执行、稀疏/密集/多向量候选发现路线 | 仅用于离线消融与后续具名基线设计 | 当前不引入其运行时或把更复杂索引默认打开 |
 
-以上项目仅作为架构与评价协议参考；`v0.4.0` Knowledge Asset 核心没有复制这些仓库的
+以上项目仅作为架构与评价协议参考；`v0.5.0` Knowledge Asset 核心没有复制这些仓库的
 源代码。许可证和已审阅的代码复用边界见 [`UPSTREAM_REUSE.md`](UPSTREAM_REUSE.md) 与仓库
 根目录的 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)。
 
@@ -104,7 +106,7 @@ coverage、隔离、投毒抵抗和 gap 识别时，才能进入默认路径。�
 
 2026-07-25 复核了 `oomol-lab/wiki-graph` 的
 `7f916f63cfb9df1f5361001167c92a7a7fef2146` 快照。它有五项当前明显强于
-DeepLaw `v0.4.0` 的工程能力：
+DeepLaw `v0.5.0` 的工程能力：
 
 1. `.wikg` 公开标准明确保存 chapter tree、source stream、summary stream、结构化数据库和
    可选全文索引，长材料的层级导航比 DeepLaw 当前的线性 fragment locator 更完整；
@@ -170,16 +172,42 @@ DeepLaw `v0.4.0` 的工程能力：
 集仍显示偏好与改写召回不足，所以语义 discovery 只能以来源绑定、可删除、版本化 sidecar
 进入下一轮外部评测；没有 held-out 净收益前不进入默认运行时。
 
+### v0.5.0 Discovery 消融结论
+
+`v0.5.0` 已把候选发现实现为独立、显式、可删除的本地派生索引，而不是把它接进默认
+Context 或 MCP。模型由 DeepLaw 自己执行固定 ONNX 图；英文与中英 profile 都实际完成模型
+文件验证和推理链路，查询期间不联网。
+
+公开 LongMemEval-S cleaned 60 题开发样本上的同预算检索结果是：
+
+| 路径 | Hit@1 | Recall@5 | MRR | irrelevant rate |
+| --- | ---: | ---: | ---: | ---: |
+| 现有 Context Compiler | 0.8500 | 0.8906 | 0.8742 | 0.3342 |
+| 显式 Discovery 候选 | 0.8500 | 0.9611 | 0.9083 | 0.6794 |
+
+偏好子集 Hit@1 从 `0.20` 提高到 `0.80`，但逐题相对 Context 的 Hit@1 为 6 改善、48
+不变、6 退化，而且无关结果显著增加。这个结果说明候选发现能补召回，却不能直接替代
+Context Compiler。正确组合不是把更多候选全部交给底座模型，而是保持两阶段：显式候选 ID
+发现后回到规范 Asset 精确读取和完整性核验；在秘密 held-out 证明任务净收益与噪声非劣前，
+不允许进入默认 Agent 路径。
+
+对应报告
+[`longmemeval-s-discovery-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-discovery-dev-2026-07-26.json)
+绑定数据、模型 revision、模型文件、实现和逐题结果，并固定
+`claim_eligible=false`。10 万资产派生索引诊断只检验有界构建、打开、内存映射、查询和
+篡改门禁，不作为语义质量证据。
+
 ## 当前结论
 
 DeepLaw 2.0 的可辩护创新不是发明另一个不可解释的召回算法，而是把知识变成具有来源、
-权限、生命周期、审核、上下文预算和可迁移边界的编译资产。`v0.4.0` 实现了这条最小可信
-闭环；自动长期学习、远程多租户、`.dlk` 发布者签名和跨系统质量领先仍是待验证能力。
+权限、生命周期、审核、上下文预算和可迁移边界的编译资产。`v0.5.0` 在最小可信闭环之外
+加入了不改变真源、默认关闭且以消融结果约束激活的候选发现层；自动长期学习、远程多租户、
+`.dlk` 发布者签名和跨系统质量领先仍是待验证能力。
 
 ## 第三次发布级复核形成的实现约束
 
 施工后攻击性 CLI 复核确认了三个不能只靠文档约定的风险：直接改 SQLite 生命周期字段、
-用户自封 `verified_source`、以及只凭形似合法的 Capsule ID 写反馈。`v0.4.0` 当前实现已将
+用户自封 `verified_source`、以及只凭形似合法的 Capsule ID 写反馈。`v0.5.0` 当前实现已将
 它们分别关闭为：
 
 1. event chain 与当前 Asset/source/fragment/relation/FTS 全量重放核对，数据库身份变化即

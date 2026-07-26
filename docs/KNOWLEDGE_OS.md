@@ -1,6 +1,6 @@
 # DeepLaw Knowledge OS
 
-Status: implemented baseline for software version `v0.4.0`, reviewed
+Status: implemented baseline for software version `v0.5.0`, reviewed
 2026-07-26.
 
 DeepLaw 2.0 compiles source material into review-gated Knowledge Assets and
@@ -239,6 +239,70 @@ constraint, rule, or procedure has
 `directive_mode=reviewed_instruction`. It still cannot override system,
 developer, repository, or current user instructions.
 
+## Optional candidate discovery
+
+`v0.5.0` adds a removable local Discovery Index for research and operator use.
+It addresses paraphrases and preference-like queries that may not share literal
+terms with an Asset, without changing the canonical vault or the default
+Context Compiler.
+
+The boundary is deliberately strict:
+
+- model setup is an explicit offline-administration action; query and MCP
+  operations never download a model;
+- the English and Chinese-English profiles pin an exact repository revision,
+  five-file inventory, byte size, SHA-256, dimension, tokenizer, pooling
+  policy, and ONNX input/output contract;
+- only active, human-reviewed, non-expired, non-restricted Assets enter an
+  index;
+- the manifest binds the exact vault ID, revision, audit head, Asset content,
+  projection, model identity, record bytes, and vector bytes;
+- every source-bound candidate still revalidates its stored source bytes;
+- a vault mutation, source change, model drift, vector drift, extra file,
+  permission change, or index replacement invalidates the index;
+- the index is derived, non-authoritative, `legal_authority=false`,
+  `case_data_allowed=false`, and can be deleted and rebuilt;
+- search emits ordinal candidate IDs and short excerpts without exposing an
+  uncalibrated numeric confidence; the canonical Asset must be fetched and
+  verified by exact ID before use.
+
+The surface is not part of `knowledge_support`, is not consulted by
+`knowledge context`, and is off by default. This is a measured product
+decision, not an unfinished implicit fallback: the inspected 60-case public
+development ablation improved Recall@5 but increased irrelevant results and
+regressed Hit@1 on six cases. It therefore failed the activation gate. A
+future release may admit it into a read-only Agent path only after frozen
+held-out task-success, context-noise, provenance, lifecycle, poisoning,
+latency, memory, disk, and cost gates all pass.
+
+Operator workflow:
+
+```bash
+uv tool install '.[discovery]'
+
+deeplaw knowledge discovery-model setup \
+  --profile chinese-english
+
+deeplaw knowledge build-discovery \
+  --vault ~/.deeplaw/vaults/my-project \
+  --output ~/.deeplaw/indexes/my-project \
+  --profile chinese-english \
+  --confirm-no-case-data
+
+deeplaw knowledge verify-discovery \
+  --vault ~/.deeplaw/vaults/my-project \
+  --index ~/.deeplaw/indexes/my-project
+
+deeplaw knowledge search-discovery \
+  --vault ~/.deeplaw/vaults/my-project \
+  --index ~/.deeplaw/indexes/my-project \
+  --query "此前关于发布权限的决定是什么？" \
+  --limit 5
+```
+
+The no-case flag is an operator attestation, not a detector. It never permits
+Analytix case facts, files, chats, or identifiers to enter this index.
+
 ## Memory and learning lifecycle
 
 DeepLaw memory is curated knowledge, not a transcript dump:
@@ -427,9 +491,10 @@ evaluation before their operating envelope is documented.
 
 ## Verification and release gates
 
-The v0.4.0 baseline is covered by contract, lifecycle, isolation, injection,
+The v0.5.0 baseline is covered by contract, lifecycle, isolation, injection,
 database/FTS/source tamper, package, Markdown, Context Capsule, full CLI
-lifecycle, MCP stdio, and existing Legal Pack tests. Before release:
+lifecycle, MCP stdio, Discovery model/index tamper, and existing Legal Pack
+tests. Before release:
 
 ```bash
 uv lock --check

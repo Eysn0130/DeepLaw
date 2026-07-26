@@ -169,7 +169,7 @@ comparison 必须绑定两个规范化报告的 canonical SHA，并由门禁重�
 60 题 LongMemEval-S cleaned 开发诊断已经实际运行，结果见
 [`longmemeval-s-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json)。
 它发现并推动修复了首个长资产独占预算、非查询相关截断、同源分段拥挤和英文问句脚手架噪声。
-最终源码绑定重跑中，Capsule Recall@5 为 `0.8906`、Hit@1 为 `0.85`，重复归零，平均正文
+最终源码绑定重跑后，Capsule Recall@5 为 `0.8906`、Hit@1 为 `0.85`，重复归零，平均正文
 为 `3,646.8` 字符；相对原始 search，Capsule 无关内容率从 `0.6292` 降到 `0.3342`。
 批量 source 审核后，单 case 平均摄取从早期逐 Asset 完整性重放的约 `2.9 s` 降至
 `0.139 s`。报告保留 60 题逐题 ID、返回、预算、延迟、隔离资产计数和实现文件 hash。
@@ -179,9 +179,11 @@ comparison 必须绑定两个规范化报告的 canonical SHA，并由门禁重�
 
 剩余失败集中在偏好和语义改写：10 个 `single-session-preference` case 的 Capsule Hit@1
 为 `0.20`、Recall@5 为 `0.60`、无关率为 `0.85`；其余 50 题 Hit@1 为 `0.98`。原始会话
-reference 因而不能被表述为已提炼的长期偏好。正确下一步是把语义发现做成可删除、非权威
-sidecar，在上述冻结套件中验证它是否提高最终任务成功，同时不损害来源、安全、上下文、延迟
-和成本；在通过前不进入默认路径。
+reference 因而不能被表述为已提炼的长期偏好。`v0.5.0` 已把候选发现做成可删除、非权威、
+显式 CLI sidecar，并完成新的 60 题逐题消融：Recall@5 为 `0.9611`，偏好子集 Hit@1
+为 `0.80`；但整体 Hit@1 没有提高，6 题退化，irrelevant rate 为 `0.6794`。因此机器决策是
+`default_activation=rejected`，它不进入 Context 或 MCP。报告见
+[`longmemeval-s-discovery-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-discovery-dev-2026-07-26.json)。
 
 当前
 [`claim-evidence.pending.json`](../benchmarks/external/claim-evidence.pending.json)
@@ -189,6 +191,12 @@ sidecar，在上述冻结套件中验证它是否提高最终任务成功，同�
 SHA-256 `e80a34d064879189730b55827e724bf4c23405301f602a6ea5c3daeaf4ed5b93`；
 连续两次隔离构建得到相同 wheel 和 sdist hash。证据仍会被门禁明确阻断，因为十套件真实
 run、第三方秘密留出和独立复现尚未到齐。
+
+以上 v2 protocol、commit、wheel 和 pending evidence 都永久属于 `v0.4.0` 候选。`v0.5.0`
+改变了候选发现行为，不能继承、改名或覆盖该协议。v0.5.0 的正确施工顺序是：先固定本次源码
+commit 和可重复 wheel；再在任何外部结果被开发团队查看前冻结一个新协议和隐藏数据
+commitment；最后由独立评测方执行。当前 v0.5.0 状态为
+`pending_new_frozen_protocol`，没有跨系统性能主张资格。
 
 ## 外部评测方交付检查表
 

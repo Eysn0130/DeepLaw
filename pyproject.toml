@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deeplaw"
-version = "0.4.0"
+version = "0.5.0"
 description = "Verifiable Knowledge Assets and Context Capsules for AI agents, with a Chinese Legal Pack"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,10 +37,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+discovery = [
+  "fsspec==2026.4.0; sys_platform != 'win32'",
+  "fsspec==2026.6.0; sys_platform == 'win32'",
+  "huggingface-hub==0.36.2",
+  "numpy==2.2.6; sys_platform != 'win32' or python_version < '3.12'",
+  "numpy==2.5.1; sys_platform == 'win32' and python_version >= '3.12'",
+  "onnxruntime==1.27.0",
+  "tokenizers==0.22.2",
+]
 document-engine = [
   "mineru[pipeline]==3.4.4",
   # Security floors for transitive pipeline dependencies. These exact major
   # lines completed the 28-document release build on the supported macOS host.
+  "fsspec==2026.4.0; sys_platform != 'win32'",
+  "fsspec==2026.6.0; sys_platform == 'win32'",
+  "pillow==12.3.0",
   "setuptools>=83.0.0",
   "torch>=2.13.0,<3",
   "torchvision>=0.28.0",

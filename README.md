@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/version-v0.4.0-17202A?style=flat-square" alt="Version v0.4.0" />
+  <img src="https://img.shields.io/badge/version-v0.5.0-17202A?style=flat-square" alt="Version v0.5.0" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
   <img src="https://img.shields.io/badge/MCP-read--only-18A999?style=flat-square" alt="Read-only MCP" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
@@ -51,6 +51,7 @@ DeepLaw 2.0 为已有 Agent 提供独立知识层，不替代 Codex、Claude Cod
 | **Knowledge Compiler** | 保留原始文件和定位片段，再生成待复核资产；摘要或语义单元不能替代来源 |
 | **生命周期** | `proposed → active → superseded/revoked`，风险内容进入 `quarantined`；只有人工复核可激活 |
 | **Context Compiler** | 依据任务优先选择约束、决策、规则和经验，以正文、来源元数据和完整载荷三重硬预算生成 Capsule |
+| **候选发现** | 可选本地派生索引用于难以用原词定位的候选；固定模型、绑定 vault 与来源、默认关闭，候选仍须按精确 ID 回到规范资产核验 |
 | **长期知识** | 区分 working、project、experience、wisdom、domain；临时知识强制过期，不保存整段会话 |
 | **隔离与敏感级别** | 每个 vault 使用独立 owner-only SQLite；public/internal/private/restricted 决定导出与 Agent 可见性 |
 | **可验证与可迁移** | 事件链与当前 Asset/source/relation/FTS 状态双重核对，所选原件重新验 hash；`.dlk` 导入永远先进入不可信隔离区 |
@@ -178,12 +179,13 @@ Evidence Pack 明确区分：
 抽取质量或人工审核状态。模型或派生索引可以帮助发现候选，不能自行判定修订废止、消除阻断性
 缺口或把研究候选变成案件适用结论。
 
-## 当前版本 v0.4.0
+## 当前版本 v0.5.0
 
 | 能力 | 当前状态 |
 | --- | --- |
 | Knowledge Asset | owner-only vault、来源片段、提议/隔离/激活/替代/撤销生命周期、敏感级别、事件链与当前状态重放核对 |
 | Context Capsule | 任务优先级、正文/来源/完整载荷预算、显式 gaps、来源引用、一次有界人工关系扩展、选择原因、digest 与历史审计锚点 |
+| 候选发现 | 可选英文或中英文本地模型、固定 revision/文件清单、派生索引完整性与当前 vault 绑定；不进入默认 Context 或 MCP |
 | 经验成长 | Debugger 与 Capsule feedback 只生成待复核 proposal，不允许 Agent 自动写入或自我提升 |
 | 共享与人类视图 | 固定 revision 可复现 `.dlk`、不可信导入隔离、确定性 Markdown/Obsidian 投影 |
 | 文件处理 | 官方目录支持 DOCX/PDF；用户私有库另支持 UTF-8 TXT；保留 block 级定位与抽取证据 |
@@ -255,6 +257,11 @@ Capsule、`.dlk` 和 Markdown 导出不会覆盖无关的既有文件或目录�
 
 完整生命周期、导出、反馈与安全边界见
 [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md)。
+
+需要对难以共享原词的候选做显式本地探索时，可另安装
+`uv tool install --force --reinstall-package deeplaw '.[discovery]'`，再按
+[`Knowledge OS：Optional candidate discovery`](docs/KNOWLEDGE_OS.md#optional-candidate-discovery)
+配置固定模型和派生索引。该能力默认关闭，不进入 Agent MCP 或 Context Compiler。
 
 官方目录包含 PDF。首次安装或更新官方 release 前，还需安装 PDF 渲染、OCR 与简体中文语言数据：
 

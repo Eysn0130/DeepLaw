@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-discovery-index.v1.schema.json",
+  "title": "DeepLaw Knowledge Discovery Index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "index_id",
+    "created_at",
+    "vault",
+    "model",
+    "projection",
+    "asset_count",
+    "records",
+    "vectors",
+    "policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-discovery-index/v1"},
+    "index_id": {
+      "type": "string",
+      "pattern": "^discovery_[0-9a-f]{32}$"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "vault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vault_id", "revision", "audit_head"],
+      "properties": {
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "model": {"$ref": "#/$defs/model"},
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "max_chars",
+        "coverage",
+        "conversation_signal"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.knowledge-discovery-projection/v1"
+        },
+        "max_chars": {"const": 2500},
+        "coverage": {"const": "head-middle-tail"},
+        "conversation_signal": {
+          "const": "user-role-first-with-source-preserved"
+        }
+      }
+    },
+    "asset_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "records": {"$ref": "#/$defs/file"},
+    "vectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "dtype",
+        "dimension",
+        "row_bytes",
+        "byte_size",
+        "sha256"
+      ],
+      "properties": {
+        "path": {"const": "vectors.f16"},
+        "dtype": {"const": "float16-le"},
+        "dimension": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "row_bytes": {"type": "integer", "minimum": 2, "maximum": 8192},
+        "byte_size": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 209715200
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "derived",
+        "authoritative",
+        "legal_authority",
+        "case_data_allowed",
+        "active_human_verified_only",
+        "restricted_assets_indexed",
+        "default_runtime_enabled"
+      ],
+      "properties": {
+        "derived": {"const": true},
+        "authoritative": {"const": false},
+        "legal_authority": {"const": false},
+        "case_data_allowed": {"const": false},
+        "active_human_verified_only": {"const": true},
+        "restricted_assets_indexed": {"const": false},
+        "default_runtime_enabled": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256"],
+      "properties": {
+        "path": {"const": "assets.jsonl"},
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "model_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "byte_size": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile",
+        "model_id",
+        "source_repository",
+        "source_revision",
+        "dimension",
+        "max_tokens",
+        "pooling",
+        "license",
+        "runtime",
+        "files"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-discovery-model/v1"},
+        "profile": {"enum": ["english", "chinese-english"]},
+        "model_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "source_repository": {"type": "string", "minLength": 1, "maxLength": 200},
+        "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "dimension": {"enum": [512, 768]},
+        "max_tokens": {"const": 512},
+        "pooling": {"const": "attention-mask-mean"},
+        "license": {"const": "Apache-2.0"},
+        "runtime": {"const": "deeplaw-onnx-text/1"},
+        "files": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/model_file"}
+        }
+      }
+    }
+  }
+}

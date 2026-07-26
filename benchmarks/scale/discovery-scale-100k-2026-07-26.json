@@ -1,0 +1,34 @@
+{
+  "candidate": {
+    "asset_count": 100000,
+    "authoritative": false,
+    "default_runtime_enabled": false,
+    "derived": true,
+    "dimension": 512,
+    "dtype": "float16-le",
+    "implementation_files": {
+      "benchmarks/scale/run_discovery_scale.py": "4015734a7f7a16fee7b2f3126f1a711ad93b82ae8a421a0809f6ee3c9f7c6568",
+      "src/deeplaw/knowledge_discovery.py": "82e03b088e8b9061d11dff10cb4fcf416fe11f0981f494d2cf67b3a71a75bf86"
+    },
+    "index_id": "discovery_dbeb74d77ee0ab89dbfa83e59ba86607",
+    "version": "0.5.0"
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "This diagnostic uses deterministic sparse test vectors and exact synthetic identifiers. It tests bounded index mechanics, not semantic quality.",
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "measurements": {
+    "build_seconds": 18.119972584070638,
+    "hit_at_1": 1.0,
+    "index_bytes": 133891396,
+    "peak_rss_bytes": 441761792,
+    "query_count": 100,
+    "query_p50_ms": 69.15112491697073,
+    "query_p95_ms": 77.25912518799305,
+    "verified_open_seconds": 4.460331207839772
+  },
+  "schema_version": "deeplaw.discovery-scale-diagnostic/v1"
+}

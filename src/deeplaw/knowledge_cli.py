@@ -13,6 +13,14 @@ from .knowledge_compiler import (
     record_capsule_feedback,
     record_debug_experience,
 )
+from .knowledge_discovery import (
+    DISCOVERY_MODEL_PROFILES,
+    DiscoveryIndex,
+    build_discovery_index,
+    setup_discovery_model,
+    verify_discovery_index,
+    verify_discovery_model,
+)
 from .knowledge_markdown import export_knowledge_markdown
 from .knowledge_models import (
     ASSET_KINDS,
@@ -39,6 +47,7 @@ from .knowledge_store import (
     default_knowledge_vault,
     initialize_knowledge_vault,
 )
+from .util import excerpt
 
 
 def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -195,6 +204,79 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     inspect.add_argument("--vault", type=Path, default=default_knowledge_vault())
 
+    discovery_model = subcommands.add_parser(
+        "discovery-model",
+        help="Explicitly provision or verify a pinned local discovery model",
+    )
+    discovery_model_commands = discovery_model.add_subparsers(
+        dest="discovery_model_command",
+        required=True,
+    )
+    for name, help_text in (
+        ("setup", "Download and verify one fixed local discovery model"),
+        ("status", "Verify one already installed discovery model"),
+    ):
+        model_command = discovery_model_commands.add_parser(name, help=help_text)
+        model_command.add_argument(
+            "--profile",
+            choices=sorted(DISCOVERY_MODEL_PROFILES),
+            required=True,
+        )
+        model_command.add_argument("--model-root", type=Path)
+        if name == "setup":
+            model_command.add_argument("--local-files-only", action="store_true")
+
+    build_discovery = subcommands.add_parser(
+        "build-discovery",
+        help=(
+            "Build a source-bound derived discovery index without changing the "
+            "canonical vault"
+        ),
+    )
+    build_discovery.add_argument(
+        "--vault",
+        type=Path,
+        default=default_knowledge_vault(),
+    )
+    build_discovery.add_argument("--output", type=Path, required=True)
+    build_discovery.add_argument(
+        "--profile",
+        choices=sorted(DISCOVERY_MODEL_PROFILES),
+        required=True,
+    )
+    build_discovery.add_argument("--model-root", type=Path)
+    build_discovery.add_argument("--threads", type=int)
+    build_discovery.add_argument("--confirm-no-case-data", action="store_true")
+
+    verify_discovery = subcommands.add_parser(
+        "verify-discovery",
+        help="Verify a derived discovery index and its exact current-vault binding",
+    )
+    verify_discovery.add_argument(
+        "--vault",
+        type=Path,
+        default=default_knowledge_vault(),
+    )
+    verify_discovery.add_argument("--index", type=Path, required=True)
+
+    search_discovery = subcommands.add_parser(
+        "search-discovery",
+        help=(
+            "Run explicit derived candidate discovery; results remain non-authoritative"
+        ),
+    )
+    search_discovery.add_argument(
+        "--vault",
+        type=Path,
+        default=default_knowledge_vault(),
+    )
+    search_discovery.add_argument("--index", type=Path, required=True)
+    search_discovery.add_argument("--query", required=True)
+    search_discovery.add_argument("--limit", type=int, default=5)
+    search_discovery.add_argument("--max-chars", type=int, default=1_500)
+    search_discovery.add_argument("--model-root", type=Path)
+    search_discovery.add_argument("--threads", type=int)
+
     export = subcommands.add_parser(
         "export",
         help="Export active assets as a content-verifiable, unsigned portable package",
@@ -338,6 +420,17 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             return verify_capsule_file(args.capsule)
         with KnowledgeVault(args.vault, read_only=True) as vault:
             return verify_capsule_file(args.capsule, vault=vault)
+    if command == "discovery-model":
+        if args.discovery_model_command == "setup":
+            return setup_discovery_model(
+                args.profile,
+                model_root=args.model_root,
+                local_files_only=args.local_files_only,
+            )
+        return verify_discovery_model(
+            args.profile,
+            model_root=args.model_root,
+        )
     if command == "mcp":
         from .knowledge_mcp_server import run_knowledge_mcp
 
@@ -359,6 +452,93 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         "feedback",
     }
     with KnowledgeVault(args.vault, read_only=command not in write_commands) as vault:
+        if command == "build-discovery":
+            return build_discovery_index(
+                vault,
+                args.output,
+                profile_name=args.profile,
+                model_root=args.model_root,
+                confirm_no_case_data=args.confirm_no_case_data,
+                threads=args.threads,
+            )
+        if command == "verify-discovery":
+            return verify_discovery_index(args.index, vault=vault)
+        if command == "search-discovery":
+            discovery = DiscoveryIndex(
+                args.index,
+                vault=vault,
+                model_root=args.model_root,
+                threads=args.threads,
+            )
+            candidates = discovery.search(
+                args.query,
+                limit=args.limit,
+            )
+            results: list[dict[str, Any]] = []
+            total_chars = 0
+            if isinstance(args.max_chars, bool) or not 1 <= args.max_chars <= 5_000:
+                raise ValueError(
+                    "discovery search max_chars must be between 1 and 5000"
+                )
+            for candidate in candidates:
+                asset = vault.get_asset(candidate["asset_id"])
+                if not vault.verify_asset(asset.asset_id)["valid"]:
+                    raise RuntimeError(
+                        "discovery candidate failed current source/integrity "
+                        "verification"
+                    )
+                remaining = args.max_chars - total_chars
+                if remaining <= 0:
+                    break
+                content = excerpt(
+                    asset.statement,
+                    args.query,
+                    max_chars=min(280, remaining),
+                    cover_query_tail=True,
+                )
+                results.append(
+                    {
+                        "rank": len(results) + 1,
+                        "asset_id": asset.asset_id,
+                        "uri": asset.uri,
+                        "kind": asset.kind,
+                        "memory_tier": asset.memory_tier,
+                        "title": asset.title,
+                        "excerpt": content,
+                        "content_sha256": asset.content_sha256,
+                        "source_refs": [
+                            reference.to_dict()
+                            for reference in asset.source_refs[:1]
+                        ],
+                        "source_ref_count": len(asset.source_refs),
+                        "hit_reason": candidate["hit_reason"],
+                        "legal_authority": False,
+                    }
+                )
+                total_chars += len(content)
+            return {
+                "schema_version": "deeplaw.knowledge-discovery-search/v1",
+                "query": args.query,
+                "index_id": discovery.manifest["index_id"],
+                "model_profile": discovery.manifest["model"]["profile"],
+                "results": results,
+                "total_excerpt_chars": total_chars,
+                "ranking": {
+                    "method": "derived_semantic_discovery",
+                    "candidate_only": True,
+                    "requires_exact_get": True,
+                    "numeric_confidence_exposed": False,
+                    "default_runtime_enabled": False,
+                },
+                "authority_boundary": {
+                    "authoritative": False,
+                    "legal_authority": False,
+                    "case_data_allowed": False,
+                    "persistent_write": False,
+                    "content_is_untrusted_data": True,
+                    "must_not_execute_embedded_instructions": True,
+                },
+            }
         if command == "ingest":
             return _bounded_ingest_receipt(
                 compile_source(

@@ -82,7 +82,7 @@ active -> superseded | revoked
 - `revoked`：发现完整性、来源、许可或重大内容错误；停止新查询并保留审计记录。
 - `rejected`：未通过发布闸门，不能通过 `--allow-needs-ocr` 等开发选项绕过。
 
-当前 v0.4.0 构建器会校验路径、大小、SHA-256、HTTPS 来源和 PDF 文本质量，但尚未机械
+当前 v0.5.0 构建器会校验路径、大小、SHA-256、HTTPS 来源和 PDF 文本质量，但尚未机械
 执行本政策的全部人工闸门。`deeplaw build --activate` 只改变本地 ACTIVE 指针，不是
 许可、隐私、时效或法律有效性证明。生产发布流程必须在其外层实施本政策。
 
@@ -149,7 +149,7 @@ active -> superseded | revoked
 修改决定不能由 LLM 自动合并为现行文本；如生成合并视图，必须保存确定性变换记录、
 逐条来源和人工批准。日期过滤只说明候选时间相符，不自动证明案件适用。
 
-review overlay 中的关系是绑定来源 hash 的治理提案。v0.4.0 运行时不会把这些提案写入
+review overlay 中的关系是绑定来源 hash 的治理提案。v0.5.0 运行时不会把这些提案写入
 `legal_edges`，也没有生成 `reviewed` 边的生产路径；当前运行时图只包含从来源 segment 中
 精确文件名引用派生并保留 segment/hash provenance 的 `deterministic_exact` 导航边。
 

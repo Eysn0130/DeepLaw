@@ -20,4 +20,4 @@ __all__ = [
     "initialize_knowledge_vault",
     "verify_capsule",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"

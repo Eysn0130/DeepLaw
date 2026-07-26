@@ -1,0 +1,53 @@
+{
+  "schema_version": "deeplaw.knowledge-os-candidate/v1",
+  "status": "candidate_development_not_held_out",
+  "recorded_at_utc": "2026-07-26T05:30:00Z",
+  "package_version": "0.5.0",
+  "implementation": {
+    "pyproject_sha256": "146212542a5764f8424eced37f46b8f835094d00e3e2ad18893b5aa2a1c52e09",
+    "uv_lock_sha256": "f0ea52699dcd1dac3adb40146f4c250a94647c6e4bbcf26de2b6db8ecf255ea7",
+    "python_source_tree_sha256": "a8a0561534f85bfd28618a5a9ff99eebc35294793f99f9dfb7ad4b636fb67f38",
+    "python_source_tree_hash_method": "sha256(sorted(path + NUL + bytes + NUL) for src/deeplaw/**/*.py)"
+  },
+  "evidence": {
+    "discovery_development_ablation": {
+      "path": "benchmarks/external/longmemeval-s-discovery-dev-2026-07-26.json",
+      "sha256": "5fdbd6b0c3cdf62dbee8e33467f865b24cf2e3472f95f5570c7d3e1e939dbe97",
+      "claim_eligible": false
+    },
+    "discovery_scale_diagnostic": {
+      "path": "benchmarks/scale/discovery-scale-100k-2026-07-26.json",
+      "sha256": "8f21b13ea712f5f10d23378b257220f98530cd5e3de4cf1ae5908b0d2b1c501d",
+      "claim_eligible": false
+    },
+    "knowledge_core_scale_diagnostic": {
+      "path": "benchmarks/scale/knowledge-scale-100k-2026-07-26.json",
+      "sha256": "74bdb8cf0e193d4829a2cc7ac60f392c63dd7578036e11524bd754f5114ee5e6",
+      "claim_eligible": false,
+      "historical_package_version": "0.4.0"
+    },
+    "legal_pack_smoke_snapshot": {
+      "path": "benchmarks/core-v0.4.0-candidate-2026-07-26.json",
+      "sha256": "5105d0d5fa2ee7db088a6298255bd6bb2772ef4b36bcb41f32f00356ea5e2b54",
+      "historical_package_version": "0.4.0"
+    }
+  },
+  "activation_decision": {
+    "discovery_default": "rejected",
+    "reason": "The inspected development ablation improved Recall@5 but did not improve overall Hit@1, regressed six paired Hit@1 cases, and increased irrelevant results. Discovery remains explicit, removable, and outside MCP and default Context until a frozen held-out gate passes."
+  },
+  "external_proof": {
+    "status": "pending_new_frozen_protocol",
+    "unbounded_claim_allowed": false,
+    "historical_protocol": "deeplaw-external-proof/2026-07-26-v2",
+    "historical_protocol_candidate_version": "0.4.0",
+    "reason": "The frozen v0.4.0 protocol and pending artifact cannot be transferred to v0.5.0. A new protocol must be frozen before the v0.5.0 candidate is delivered to independent evaluators."
+  },
+  "limitations": [
+    "The public LongMemEval-S sample was inspected and used for development, so it is not held-out evidence.",
+    "The 100000-Asset diagnostics use synthetic identifiers and do not establish semantic quality.",
+    "The preserved Legal Pack smoke snapshot binds the v0.4.0 implementation and is historical evidence, not a fresh v0.5.0 legal release rebuild.",
+    "No external hidden-label run or independent attestation exists for v0.5.0.",
+    "This candidate does not support a universal or cross-system superiority claim."
+  ]
+}

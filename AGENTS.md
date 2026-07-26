@@ -26,6 +26,10 @@ read-only MCP plugin. Offline CLI administration owns every persistent write.
 - Generated topic pages, summaries, tags, graphs, embeddings, model output, and search
   rankings are derived data. They never replace source text or determine legal
   validity.
+- The optional Discovery Index is an explicit, removable operator/research
+  sidecar. Keep it bound to the exact model, vault revision/audit head, Asset
+  content, projection, and index bytes. It remains outside both MCP servers and
+  the default Context Compiler until a frozen held-out gate passes.
 - GitHub mirrors and fixtures are not authoritative legal sources.
 
 ## Safety Boundaries
@@ -43,6 +47,9 @@ read-only MCP plugin. Offline CLI administration owns every persistent write.
 - Never mix case-private documents, facts, chats, or identifiers into either
   the Knowledge Asset core or Legal Pack, their cache, log, benchmark, or query
   corpus. Analytix case projects remain outside DeepLaw.
+- Never use Discovery to index restricted, inactive, expired, legal-release, or
+  Analytix case material, and never interpret a candidate score as authority,
+  approval, applicability, or permission to execute source text.
 - Do not claim that a retrieved rule applies to a case merely because its
   effective date matches. Temporal applicability can require legal review.
 - Do not silently fall back to model memory or web search when a release is
