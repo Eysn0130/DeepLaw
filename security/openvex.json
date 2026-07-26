@@ -1,0 +1,83 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/Eysn0130/DeepLaw/security/vex/document-engine-transformers-4.57.6",
+  "author": "https://github.com/Eysn0130",
+  "role": "Project maintainer",
+  "timestamp": "2026-07-25T00:00:00+08:00",
+  "last_updated": "2026-07-25T00:00:00+08:00",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "PYSEC-2025-217"
+      },
+      "products": [
+        {
+          "@id": "pkg:pypi/deeplaw@0.4.0",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/transformers@4.57.6"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected X-CLIP checkpoint conversion path is not used. src/deeplaw/document_engine_cli.py admits only the fixed local pipeline command and rejects alternate models, backends, checkpoints, repositories, and unknown options before importing the optional engine. src/deeplaw/document_engine_models.py verifies the exact pinned local model file set, sizes, and SHA-256 values, strips upstream overrides, and forces offline local-only loading."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-2288"
+      },
+      "products": [
+        {
+          "@id": "pkg:pypi/deeplaw@0.4.0",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/transformers@4.57.6"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected Trainer checkpoint and RNG-state restore path is not used. src/deeplaw/document_engine_cli.py admits only the fixed local document pipeline command and exposes no training or checkpoint-resume option. The engine process receives only the verified pinned local model bundle and a generated offline configuration."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-2289"
+      },
+      "products": [
+        {
+          "@id": "pkg:pypi/deeplaw@0.4.0",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/transformers@4.57.6"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected user-selected causal-language-model repository path is not exposed. src/deeplaw/document_engine_cli.py admits only the fixed local pipeline command and rejects VLM, hybrid, remote-model, repository, configuration, and unknown options before importing the optional engine. Inherited upstream configuration is removed and src/deeplaw/document_engine_models.py supplies only an exact hash-verified local pipeline bundle."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-2290"
+      },
+      "products": [
+        {
+          "@id": "pkg:pypi/deeplaw@0.4.0",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/transformers@4.57.6"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected LightGlue remote-model path is not used. src/deeplaw/document_engine_cli.py admits only the fixed local pipeline command and rejects alternate models, backends, repositories, and unknown options before importing the optional engine. Model loading is forced offline against the exact pinned local file manifest."
+    }
+  ]
+}

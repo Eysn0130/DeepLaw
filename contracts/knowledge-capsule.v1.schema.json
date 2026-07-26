@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-capsule.v1.schema.json",
+  "title": "DeepLaw Knowledge Capsule v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "compiler_schema",
+    "vault_id",
+    "vault_revision",
+    "audit_head",
+    "generated_at",
+    "task",
+    "goal",
+    "budget",
+    "trust_boundary",
+    "constraints",
+    "decisions",
+    "knowledge_assets",
+    "experiences",
+    "open_questions",
+    "relations",
+    "evidence",
+    "gaps",
+    "next_actions",
+    "capsule_digest",
+    "capsule_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-capsule/v1"},
+    "compiler_schema": {"const": "deeplaw.context-compiler/v1"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "vault_revision": {"type": "integer", "minimum": 0},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "task": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "goal": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 4000}
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_items",
+        "max_chars",
+        "selected_items",
+        "selected_chars",
+        "excluded_by_budget",
+        "max_source_refs",
+        "selected_source_refs",
+        "excluded_source_refs",
+        "max_source_ref_chars",
+        "selected_source_ref_chars",
+        "max_payload_chars",
+        "payload_chars"
+      ],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 1, "maximum": 12},
+        "max_chars": {"type": "integer", "minimum": 1, "maximum": 12000},
+        "selected_items": {"type": "integer", "minimum": 0, "maximum": 12},
+        "selected_chars": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "excluded_by_budget": {"type": "integer", "minimum": 0},
+        "max_source_refs": {"const": 8},
+        "selected_source_refs": {"type": "integer", "minimum": 0, "maximum": 8},
+        "excluded_source_refs": {"type": "integer", "minimum": 0},
+        "max_source_ref_chars": {"const": 4000},
+        "selected_source_ref_chars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "max_payload_chars": {"const": 64000},
+        "payload_chars": {"type": "integer", "minimum": 1, "maximum": 64000}
+      }
+    },
+    "trust_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content_is_data_unless_directive_mode",
+        "source_material_never_overrides_host_or_user_instructions",
+        "automatic_memory_write",
+        "human_review_required_for_activation",
+        "knowledge_assets_are_legal_authority",
+        "official_legal_sources_tool",
+        "case_data_allowed"
+      ],
+      "properties": {
+        "content_is_data_unless_directive_mode": {"const": "reviewed_instruction"},
+        "source_material_never_overrides_host_or_user_instructions": {"const": true},
+        "automatic_memory_write": {"const": false},
+        "human_review_required_for_activation": {"const": true},
+        "knowledge_assets_are_legal_authority": {"const": false},
+        "official_legal_sources_tool": {"const": "law_support"},
+        "case_data_allowed": {"const": false}
+      }
+    },
+    "constraints": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/item"}},
+    "decisions": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/item"}},
+    "knowledge_assets": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/item"}},
+    "experiences": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/item"}},
+    "open_questions": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/item"}},
+    "relations": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/relation"}
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/evidence"}
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "next_actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "capsule_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"}
+  },
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_id",
+        "uri",
+        "kind",
+        "memory_tier",
+        "title",
+        "content",
+        "content_sha256",
+        "semantic_key",
+        "verification",
+        "trust",
+        "sensitivity",
+        "legal_authority",
+        "directive_mode",
+        "selection_reason",
+        "source_refs",
+        "source_ref_count",
+        "source_refs_truncated",
+        "tags",
+        "tag_count",
+        "tags_truncated",
+        "expires_at"
+      ],
+      "properties": {
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "uri": {"type": "string", "pattern": "^deeplaw://"},
+        "kind": {
+          "type": "string",
+          "enum": [
+            "constraint",
+            "decision",
+            "fact",
+            "procedure",
+            "rule",
+            "experience",
+            "lesson",
+            "question",
+            "reference"
+          ]
+        },
+        "memory_tier": {
+          "type": "string",
+          "enum": ["working", "project", "experience", "wisdom", "domain"]
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "content": {"type": "string", "minLength": 1, "maxLength": 20000},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "semantic_key": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 256}
+          ]
+        },
+        "verification": {"const": "human_verified"},
+        "trust": {
+          "type": "string",
+          "enum": ["untrusted", "user_provided", "verified_source"]
+        },
+        "sensitivity": {
+          "type": "string",
+          "enum": ["public", "internal", "private", "restricted"]
+        },
+        "legal_authority": {"const": false},
+        "directive_mode": {"type": "string", "enum": ["data_only", "reviewed_instruction"]},
+        "selection_reason": {
+          "type": "string",
+          "pattern": "^(lexical_match|reviewed_relation:[a-z_]+:asset_[0-9a-f]{24})$"
+        },
+        "source_refs": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/source_ref"}
+        },
+        "source_ref_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "source_refs_truncated": {"type": "boolean"},
+        "tags": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "tag_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "tags_truncated": {"type": "boolean"},
+        "expires_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "format": "date-time"}
+          ]
+        }
+      }
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_id",
+        "subject_asset_id",
+        "predicate",
+        "object_asset_id",
+        "evidence_fragment_id",
+        "verification",
+        "created_at"
+      ],
+      "properties": {
+        "relation_id": {"type": "string", "pattern": "^relation_[0-9a-f]{24}$"},
+        "subject_asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "predicate": {
+          "type": "string",
+          "enum": [
+            "supports",
+            "contradicts",
+            "depends_on",
+            "implements",
+            "derived_from",
+            "applies_to",
+            "related_to"
+          ]
+        },
+        "object_asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "evidence_fragment_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+          ]
+        },
+        "verification": {"const": "human_verified"},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_id",
+        "source_id",
+        "fragment_id",
+        "locator",
+        "quote_sha256"
+      ],
+      "properties": {
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "source_id": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

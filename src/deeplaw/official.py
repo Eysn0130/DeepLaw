@@ -21,6 +21,7 @@ from .catalog_signing import (
     CATALOG_SIGNATURE_SUFFIX,
     verify_catalog_signature,
 )
+from .document_engine_models import verify_installed_models
 from .ingest import build_release
 from .models import BuildReport
 from .store import activate_release, default_home, verify_release_artifact
@@ -301,7 +302,9 @@ def _urlopen_with_retry(request: Request, *, timeout: float) -> Any:
     attempts = 5
     for attempt in range(attempts):
         try:
-            return urlopen(request, timeout=timeout)
+            # Both callers validate credential-free HTTPS before this helper,
+            # and validate the final redirect URL before consuming a response.
+            return urlopen(request, timeout=timeout)  # nosec B310
         except HTTPError as error:
             if error.code not in _RETRYABLE_HTTP_STATUS or attempt == attempts - 1:
                 raise
@@ -572,6 +575,7 @@ def _preflight_official_pdf_dependencies() -> dict[str, str]:
             "official PDF build dependency version mismatch: "
             f"expected {_PINNED_DOCUMENT_ENGINE_VERSION}"
         )
+    model_bundle = verify_installed_models()
 
     renderer_version = _run_dependency_probe(
         "pdftoppm",
@@ -598,6 +602,7 @@ def _preflight_official_pdf_dependencies() -> dict[str, str]:
 
     return {
         "document_engine": engine_version.splitlines()[0],
+        "document_model_manifest": model_bundle["manifest_sha256"],
         "pdf_renderer": renderer_version.splitlines()[0],
         "ocr_engine": ocr_version.splitlines()[0],
         "ocr_language": "chi_sim",

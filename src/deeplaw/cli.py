@@ -14,8 +14,10 @@ from .catalog_signing import (
     initialize_signing_key,
     sign_catalog_file,
 )
+from .document_engine_models import install_models, model_status
 from .evaluate import evaluate_file
 from .ingest import build_release
+from .knowledge_cli import add_knowledge_parser, handle_knowledge_command
 from .markdown_export import export_markdown
 from .mcp_server import run_mcp
 from .models import SearchRequest
@@ -46,7 +48,10 @@ def _print_json(value: Any) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="deeplaw", description="Read-only Chinese legal research")
+    parser = argparse.ArgumentParser(
+        prog="deeplaw",
+        description="Verifiable Agent Knowledge Assets with an integrated Chinese Legal Pack",
+    )
     parser.add_argument("--version", action="version", version=f"deeplaw {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -110,6 +115,28 @@ def _parser() -> argparse.ArgumentParser:
         "--stdio",
         action="store_true",
         help="Use stdio transport (explicit alias for host plugin manifests)",
+    )
+
+    document_engine = commands.add_parser(
+        "document-engine",
+        help="Provision and verify the pinned local document model bundle",
+    )
+    document_engine_commands = document_engine.add_subparsers(
+        dest="document_engine_command",
+        required=True,
+    )
+    setup_models = document_engine_commands.add_parser(
+        "setup",
+        help="Explicitly download and verify the pinned model bundle",
+    )
+    setup_models.add_argument(
+        "--local-files-only",
+        action="store_true",
+        help="Use only an already populated local model cache",
+    )
+    document_engine_commands.add_parser(
+        "status",
+        help="Verify the configured local model bundle without changing it",
     )
 
     official = commands.add_parser(
@@ -241,12 +268,18 @@ def _parser() -> argparse.ArgumentParser:
 
     doctor = commands.add_parser("doctor", help="Inspect the active release without changing it")
     doctor.add_argument("--db", type=Path)
+    add_knowledge_parser(commands)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "knowledge":
+            result = handle_knowledge_command(args)
+            if result is not None:
+                _print_json(result)
+            return
         if args.command == "pdf-evidence":
             result = extract_pdf_vision_consensus(
                 args.source.expanduser().resolve(strict=True),
@@ -286,6 +319,19 @@ def main(argv: list[str] | None = None) -> None:
             return
         if args.command == "mcp":
             run_mcp(transport="stdio" if args.stdio else args.transport)
+            return
+        if args.command == "document-engine":
+            if args.document_engine_command == "setup":
+                _print_json(install_models(local_files_only=args.local_files_only))
+            elif args.document_engine_command == "status":
+                status = model_status()
+                _print_json(status)
+                if not status["configured"]:
+                    raise SystemExit(2)
+            else:
+                raise RuntimeError(
+                    f"unhandled document-engine command: {args.document_engine_command}"
+                )
             return
         if args.command == "export-markdown":
             database = resolve_active_database(explicit_db=args.db)

@@ -1,0 +1,88 @@
+{
+  "schema_version": "deeplaw.external-dev-snapshot/v1",
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "The public development sample was selected, inspected, and used to improve the implementation before the external proof protocol was frozen.",
+  "dataset": {
+    "name": "LongMemEval-S cleaned",
+    "upstream_repository": "https://github.com/xiaowu0162/longmemeval",
+    "upstream_revision": "9e0b455f4ef0e2ab8f2e582289761153549043fc",
+    "dataset_revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+    "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442"
+  },
+  "selection": {
+    "method": "ten smallest sha256(question_id) values per question_type",
+    "question_types": 6,
+    "cases_per_type": 10,
+    "case_count": 60
+  },
+  "budget": {
+    "retrieval_limit": 5,
+    "capsule_max_items": 5,
+    "capsule_max_chars": 5000
+  },
+  "implementation_files": {
+    "src/deeplaw/context_compiler.py": "1ee197376588f9898e2825847874ee6da6404576c310f5bd9d91c0dcfa9c64d1",
+    "src/deeplaw/util.py": "fb8a39a2ede9b9550da1ed81f30a54a5a6b2514b3ea86ad329e9aabbd9e388d4",
+    "src/deeplaw/knowledge_compiler.py": "01a05eda7b79b734e88ae130f32100f009c87b09ca7bb3c9f056f12328aaa200",
+    "src/deeplaw/knowledge_store.py": "96a6d22bd452c84424dbb33137163b44b64a10c217196a60ce2ead286c629668",
+    "benchmarks/external/run_longmemeval_s_dev.py": "ae07a8216c35807b58c5019186d30af9c3a238eb2585371b823db2c3423fdce3"
+  },
+  "before": {
+    "raw_report_sha256": "de0e9acd17d8c3e84f3214673c13f36c990a7c17bff238be47bfde8b9aa140c1",
+    "search": {
+      "hit_at_1": 0.85,
+      "recall_at_5": 0.8961111111111111,
+      "mrr": 0.8736111111111111,
+      "irrelevant_context_rate": 0.6744444444444445,
+      "duplicate_count": 0.43333333333333335,
+      "unique_returned": 4.55
+    },
+    "capsule": {
+      "hit_at_1": 0.85,
+      "recall_at_5": 0.6283333333333334,
+      "mrr": 0.8583333333333333,
+      "irrelevant_context_rate": 0.18333333333333332,
+      "duplicate_count": 0.03333333333333333,
+      "unique_returned": 1.1166666666666667,
+      "average_selected_chars": 4999.85,
+      "average_payload_chars": 7774.716666666666
+    }
+  },
+  "after": {
+    "raw_report_sha256": "559f08929d45d1aa33c0c4c8578d8a5e47f9815af7bd29ecd5d6bdbad3a1ea85",
+    "search": {
+      "hit_at_1": 0.85,
+      "recall_at_5": 0.9077777777777778,
+      "mrr": 0.87,
+      "irrelevant_context_rate": 0.6291666666666667,
+      "duplicate_count": 0.5333333333333333,
+      "unique_returned": 4.45
+    },
+    "capsule": {
+      "hit_at_1": 0.85,
+      "recall_at_5": 0.8905555555555555,
+      "mrr": 0.8741666666666668,
+      "irrelevant_context_rate": 0.33416666666666667,
+      "duplicate_count": 0.0,
+      "unique_returned": 2.7,
+      "average_selected_chars": 3646.8,
+      "average_payload_chars": 8134.066666666667
+    },
+    "latency": {
+      "average_ingest_seconds_per_case": 2.919320017976376,
+      "average_search_ms": 46.94914451101795,
+      "average_context_ms": 29.4050825953794
+    }
+  },
+  "interpretation": {
+    "confirmed_improvements": [
+      "A long first-ranked asset no longer consumes the entire Capsule content budget.",
+      "Query-aware excerpts preserve selected evidence near the end of an asset.",
+      "Compiled parts from one logical section no longer crowd out source diversity.",
+      "English question scaffolding no longer drives lexical discovery.",
+      "A deterministic relative-score gate reduces low-value context without hiding budget gaps."
+    ],
+    "remaining_failure_cluster": "single-session preference and paraphrase queries",
+    "next_hypothesis": "Evaluate a removable semantic-discovery sidecar under the frozen external protocol; do not enable it by default until it improves held-out task success without weakening provenance, safety, cost, or latency gates."
+  }
+}

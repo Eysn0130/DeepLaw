@@ -1,0 +1,222 @@
+{
+  "schema_version": "deeplaw.external-proof-protocol/v1",
+  "protocol_id": "deeplaw-external-proof/2026-07-26-v1",
+  "frozen_at": "2026-07-26T00:00:00Z",
+  "candidate": {
+    "system_id": "deeplaw-2.0",
+    "version": "0.4.0",
+    "maintainer_organization": "Eysn0130",
+    "development_suite": "longmemeval-s-cleaned",
+    "development_suite_is_claim_eligible": false
+  },
+  "claim_policy": {
+    "unbounded_universal_claim_allowed": false,
+    "minimum_external_suites": 6,
+    "minimum_distinct_named_baselines": 8,
+    "minimum_independent_evaluators": 2,
+    "requires_external_hidden_labels": true,
+    "requires_all_runs_independently_attested": true,
+    "allowed_claim_template": "DeepLaw 2.0 {version} 在 {protocol_id} 的固定语料、模型、上下文预算和统计协议下，相对列明的 {baseline_count} 个基线，在 {suite_count} 个外部评测套件上通过了预注册门禁。"
+  },
+  "fairness": {
+    "same_corpus_per_suite": true,
+    "same_reader_model_per_suite": true,
+    "same_context_token_budget_per_suite": true,
+    "same_query_set_per_suite": true,
+    "include_index_build_time_and_cost": true,
+    "report_query_latency_memory_disk_and_model_cost": true,
+    "no_candidate_specific_question_rewrites": true,
+    "no_post_freeze_threshold_or_prompt_tuning": true,
+    "all_failures_and_abstentions_retained": true
+  },
+  "statistics": {
+    "paired_bootstrap_samples": 10000,
+    "confidence": 0.95,
+    "seed": 20260726,
+    "familywise_primary_correction": "holm-bonferroni",
+    "superiority_familywise_alpha": 0.05,
+    "minimum_effect_size_must_be_registered_per_suite": true
+  },
+  "required_dimensions": {
+    "task_success": {
+      "direction": "higher",
+      "gate": "superior",
+      "minimum_effect": 0.01,
+      "noninferiority_margin": 0.0
+    },
+    "useful_context_recall": {
+      "direction": "higher",
+      "gate": "superior",
+      "minimum_effect": 0.01,
+      "noninferiority_margin": 0.0
+    },
+    "irrelevant_context_rate": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "provenance_coverage": {
+      "direction": "higher",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "stale_contradiction_detection": {
+      "direction": "higher",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "memory_poisoning_success_rate": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "context_chars": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "query_latency_ms": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    }
+  },
+  "suites": [
+    {
+      "suite_id": "longmemeval-v2",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/xiaowu0162/LongMemEval-V2",
+      "repository_revision": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+      "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+      "required_tier": "small",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "context_chars",
+        "query_latency_ms"
+      ],
+      "named_baselines": [
+        "longmemeval-v2/no_retrieval",
+        "longmemeval-v2/rag_query_to_slice",
+        "longmemeval-v2/rag_query_to_slice_notes",
+        "longmemeval-v2/agentrunbook_r",
+        "longmemeval-v2/codex",
+        "longmemeval-v2/agentrunbook_c"
+      ]
+    },
+    {
+      "suite_id": "memoryagentbench",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/HUST-AI-HYZ/MemoryAgentBench",
+      "repository_revision": "455306dcabc3842526eb83cd4e225e5d486c5c5d",
+      "dataset_revision": "7ea066982b140a19337e17e60d45d4076e042faf",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "stale_contradiction_detection"
+      ],
+      "named_baselines": [
+        "memoryagentbench/long_context",
+        "memoryagentbench/embedding_retriever",
+        "memoryagentbench/raptor",
+        "memoryagentbench/self_rag",
+        "memoryagentbench/graph_rag",
+        "memoryagentbench/zep",
+        "memoryagentbench/mem0"
+      ]
+    },
+    {
+      "suite_id": "legalbench-rag",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/zeroentropy-ai/legalbenchrag",
+      "repository_revision": "431bc8f2488a81569ab7259fa633dcc50ab77f9a",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "context_chars",
+        "query_latency_ms"
+      ],
+      "named_baselines": [
+        "legalbench-rag/openai-embedding-naive-500",
+        "legalbench-rag/openai-embedding-rcts-500",
+        "legalbench-rag/openai-embedding-cohere-rerank-naive-500",
+        "legalbench-rag/openai-embedding-cohere-rerank-rcts-500"
+      ]
+    },
+    {
+      "suite_id": "memoryarena",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/ZexueHe/MemoryArena",
+      "repository_revision": "6cd9de14b71915e39ac742a20dc33785e14b6aab",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "context_chars",
+        "query_latency_ms"
+      ],
+      "named_baselines": [
+        "memoryarena/long_context",
+        "memoryarena/bm25",
+        "memoryarena/text_embedding",
+        "memoryarena/graph_memory",
+        "memoryarena/mem0",
+        "memoryarena/reasoningbank"
+      ]
+    },
+    {
+      "suite_id": "agentlab-memory-poisoning",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/TanqiuJiang/AgentLAB",
+      "repository_revision": "36f58e60c36bbd6d5b8e61d50d7db7d9ea7258d7",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "memory_poisoning_success_rate",
+        "task_success"
+      ],
+      "named_baselines": [
+        "agentlab/mem0"
+      ]
+    },
+    {
+      "suite_id": "independent-hidden-knowledge-os",
+      "role": "external_hidden",
+      "repository": null,
+      "repository_revision": null,
+      "dataset_revision": "third-party-commitment-required-before-candidate-delivery",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "stale_contradiction_detection",
+        "memory_poisoning_success_rate",
+        "context_chars",
+        "query_latency_ms"
+      ],
+      "named_baselines": [
+        "independent/keyword",
+        "independent/vector",
+        "independent/hybrid",
+        "independent/hierarchical",
+        "independent/graph",
+        "independent/wiki",
+        "independent/agentic"
+      ]
+    }
+  ]
+}

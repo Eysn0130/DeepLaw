@@ -3,6 +3,11 @@
 Status: research decision record, reviewed 2026-07-16. This document is not a
 benchmark result or a claim of cross-system superiority.
 
+This matrix primarily governs the Chinese Legal Pack's evidence path. The
+general Knowledge Asset core applies the same separation between source,
+admission, discovery, selection, and derived reasoning; its implemented
+contracts are documented in [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md).
+
 ## 结论
 
 DeepLaw 2.0 的核心不应是把更多检索、图谱、Wiki、Agent 或求解器堆进同一条路径，而是保持：
@@ -31,6 +36,7 @@ evidence status。派生内容可删除、可重建，且必须回到 immutable 
 | 向量检索 | 同义表达与事实模式召回 | 相似度不证明来源、版本、效力或适用；OOD 无通用赢家 | 可选 Discovery sidecar |
 | Reranker | 在首阶段候选内提高相关性排序 | 无法找回首阶段漏项；分数仍只是相关性 | 只重排 candidate IDs |
 | Tree / PageIndex | 长文档层级导航、跨章节定位 | 摘要有损且模型依赖 | 只导航，答案回落 leaf/span |
+| Wiki Graph | 章节归档、统一对象 URI、公共实体 QID grounding、evidence-bound triples、异步构建与 schema upgrade | mutation token 不是内容签名；模型生成关系不能继承审核；公共实体不覆盖多数私有知识 | 借鉴 source hierarchy、URI discovery 和控制面；图与摘要只作隔离 sidecar |
 | Graph-based retrieval | 跨文档专题与 global sensemaking | LLM 实体、关系、claim 和 community summary 可能错误且索引昂贵 | 派生图隔离；权威图只收确定性来源关系 |
 | LLM Wiki | 适合人读的概念页、专题导航和 Obsidian 视图 | 重编译会改写内容；词条不能表达全部页级 provenance/风险 | 只作可重建 Markdown/Explain 视图 |
 | Hybrid search | 词法与语义互补 | fusion 策略无通用赢家，仍不产生权威性 | 可选 Discovery sidecar |
@@ -100,6 +106,7 @@ Markdown 是人读视图，不是 canonical truth。历史 `.doc` 只有在同�
   [PageIndex](https://github.com/VectifyAI/PageIndex),
   [Microsoft GraphRAG](https://github.com/microsoft/graphrag)
 - [gbrain](https://github.com/garrytan/gbrain),
+  [Wiki Graph](https://github.com/oomol-lab/wiki-graph),
   [OpenKB](https://github.com/VectifyAI/OpenKB),
   [OpenSearch hybrid search](https://docs.opensearch.org/latest/vector-search/ai-search/hybrid-search/index/)
 - [OpenSPG/KAG](https://github.com/OpenSPG/KAG),

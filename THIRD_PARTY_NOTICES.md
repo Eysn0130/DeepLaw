@@ -1,6 +1,6 @@
 # Third-Party Notices And Research References
 
-Reviewed: 2026-07-16
+Reviewed: 2026-07-25
 
 DeepLaw is licensed separately under the license declared by this repository.
 This document records upstream systems reviewed during architecture work and
@@ -27,6 +27,19 @@ If that status changes, this file must be updated in the same change with:
 Claims of separate permission are not relied upon for repository distribution
 unless the grant and its scope have been verified through the project's
 release process.
+
+## Safe OOXML XML Parser
+
+- Project: [defusedxml](https://github.com/tiran/defusedxml)
+- Version pinned by the current runtime: `0.7.1`
+- Published terms: Python Software Foundation License
+- Integration form: Python dependency used to reject DTD declarations, entity
+  expansion, and external references while parsing untrusted DOCX XML members
+- Vendored source redistributed by this repository: no
+
+DeepLaw still applies independent DOCX source/member size and ZIP compression
+ratio limits. A successful safe XML parse is only extraction input; it does not
+establish source authority or activate a Knowledge Asset.
 
 ## Optional External OCR Tools: Tesseract And Poppler
 
@@ -68,12 +81,16 @@ notice, source, and redistribution obligations.
 ## Optional Structured Document Engine
 
 - Project: [OpenDataLab/MinerU](https://github.com/opendatalab/MinerU)
-- Version pinned by the `v0.3.0` document-engine extra: `3.4.4`
+- Version pinned by the current document-engine extra: `3.4.4`
 - Published terms: [MinerU Open Source License](https://github.com/opendatalab/MinerU/blob/master/LICENSE.md)
 - Integration form: optional build-time dependency behind the
   `deeplaw[document-engine]` extra and a bounded subprocess adapter
 - Bundled by the base DeepLaw runtime: no
 - Model weights redistributed by this repository: no
+- Model provisioning: an explicit DeepLaw administrative command downloads one
+  pinned upstream revision and accepts it only after the exact file set, sizes,
+  and SHA-256 values pass; parsing itself is local-only and never downloads
+  models
 
 The adapter reads only structured content-list JSON for explicitly requested PDF
 page ranges. It rejects symlinks, duplicate JSON keys, non-finite numbers,
@@ -91,6 +108,23 @@ service-use conditions, and any separately granted permission applicable to
 their release. This notice is intentionally retained even where a project team
 has a separate permission grant.
 
+## Optional Legacy DOC Converter
+
+- Project: [LibreOffice](https://www.libreoffice.org/)
+- Published licensing:
+  [MPL 2.0 / LGPLv3+](https://www.libreoffice.org/about-us/licenses)
+- Integration form: optional, separately installed `soffice` or `libreoffice`
+  executable used for explicit legacy `.doc` ingestion
+- Bundled or redistributed by DeepLaw: no
+
+DeepLaw invokes the converter without a shell, with a timeout, an isolated
+temporary HOME and user profile, and safe/headless flags. It records the
+executable version and converted DOCX SHA-256 before OOXML extraction. A
+successful conversion is not human approval. Deployments processing hostile
+legacy documents should additionally isolate the converter at the operating
+system or container boundary and keep LibreOffice patched; process flags are
+not a substitute for a security sandbox.
+
 ## Architecture And Algorithm References
 
 The following projects were reviewed but are not current DeepLaw dependencies
@@ -98,6 +132,7 @@ and have not contributed copied source code:
 
 | Project | Commit reviewed | Published license at review | Use in DeepLaw |
 | --- | --- | --- | --- |
+| [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI, public-entity grounding, job-control, and schema-upgrade reference |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Hybrid retrieval, evidence, result-budget, and evaluation reference |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-source, annotation-coordinate, and bounded-MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |

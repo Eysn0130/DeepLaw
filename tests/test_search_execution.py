@@ -440,6 +440,39 @@ def test_temporal_intent_without_as_of_excludes_known_non_current_status(
     _validate_search_response(response.to_dict())
 
 
+def test_substantive_query_without_as_of_isolates_known_non_current_status(
+    tmp_path: Path,
+) -> None:
+    database = _build(
+        tmp_path,
+        [
+            (
+                "old.docx",
+                ["旧测试法", "第一条 本文件中的实体规则已经被后续规则替代。"],
+                {
+                    "title": "旧测试法",
+                    "effective_date": "2020-01-01",
+                    "effectiveTo": "2024-01-01",
+                    "status": "superseded",
+                },
+            )
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        response = law.search(SearchRequest(query="旧测试法第一条规定什么"))
+
+    assert not response.evidence
+    assert response.uncertain_evidence
+    assert {
+        card.temporal_classification for card in response.uncertain_evidence
+    } == {"unverified_metadata"}
+    assert any(card.status == "superseded" for card in response.uncertain_evidence)
+    assert any(gap.blocking for gap in response.gaps if gap.code == "no_primary_evidence")
+    assert any("缺少 as_of" in notice for notice in response.notices)
+    _validate_search_response(response.to_dict())
+
+
 def test_explicit_document_name_does_not_return_unrelated_temporal_noise(
     tmp_path: Path,
 ) -> None:
@@ -1063,6 +1096,51 @@ def test_navigation_uses_a_substantive_title_anchor_before_higher_authority_nois
     _validate_search_response(response.to_dict())
 
 
+def test_navigation_does_not_expand_broad_inbound_graph_paths(tmp_path: Path) -> None:
+    database = _build(
+        tmp_path,
+        [
+            (
+                "target.docx",
+                [
+                    "中华人民共和国反电信网络诈骗法",
+                    "第一条 为了治理电信网络诈骗活动，制定本法。",
+                ],
+                {
+                    "title": "中华人民共和国反电信网络诈骗法",
+                    "authorityRank": 70,
+                },
+            ),
+            (
+                "citing.docx",
+                [
+                    "支付机构操作指引",
+                    "第一条 依据《中华人民共和国反电信网络诈骗法》制定本指引。",
+                ],
+                {
+                    "title": "支付机构操作指引",
+                    "documentType": "normative_document",
+                    "authorityRank": 60,
+                },
+            ),
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        response = law.search(
+            SearchRequest(query="电信网络诈骗", purpose="broad_topic", limit=3)
+        )
+
+    assert response.mode == "navigation"
+    assert response.evidence
+    assert response.graph_paths == ()
+    assert response.query_plan["graph_used"] is False
+    assert response.query_plan["max_graph_paths"] == 0
+    assert response.query_plan["max_hops"] == 0
+    assert "legal_graph" not in response.query_plan["channels"]
+    _validate_search_response(response.to_dict())
+
+
 def test_research_focus_is_scored_against_body_after_removing_document_title(
     tmp_path: Path,
 ) -> None:
@@ -1090,3 +1168,32 @@ def test_research_focus_is_scored_against_body_after_removing_document_title(
     assert response.evidence[0].article_label == "第三十九条"
     assert all(card.article_label != "第五十二条" for card in response.evidence)
     _validate_search_response(response.to_dict())
+
+
+def test_legal_document_type_filter_is_bound_not_interpolated(tmp_path: Path) -> None:
+    database = _build(
+        tmp_path,
+        [
+            (
+                "law.docx",
+                ["中华人民共和国测试法", "第一条 动态过滤值必须作为参数绑定。"],
+                {"title": "中华人民共和国测试法", "documentType": "law"},
+            )
+        ],
+    )
+
+    with DeepLaw(database) as law:
+        response = law.search(
+            SearchRequest(
+                query="中华人民共和国测试法 第一条",
+                purpose="exact_citation",
+                document_types=("law') OR 1=1 --",),
+            )
+        )
+        document_count = law.connection.execute(
+            "SELECT COUNT(*) FROM documents"
+        ).fetchone()[0]
+
+    assert response.evidence == ()
+    assert response.uncertain_evidence == ()
+    assert document_count == 1

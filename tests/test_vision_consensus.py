@@ -341,6 +341,10 @@ def test_machine_consensus_rejects_legal_punctuation_disagreement(
     assert page.review_required is True
 
 
+def test_semantic_tokens_ignore_inter_han_layout_whitespace() -> None:
+    assert vision._semantic_tokens("第 一 条 A 12") == vision._semantic_tokens("第一条A12")
+
+
 def test_machine_consensus_does_not_flatten_table_structure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -411,8 +415,8 @@ def test_document_engine_configuration_is_bounded_for_many_page_ranges(
                     blocks=(vision.DocumentEngineBlock("text", good, start_page, 1),),
                 ),
             ),
-            engine="mineru-compatible-cli",
-            engine_version="mineru, version 3.4.4",
+            engine="deeplaw-document-engine",
+            engine_version="deeplaw-document-engine, version 3.4.4",
             output_schema="content_list_v2",
             configuration=(
                 f"method={method}",
@@ -442,8 +446,8 @@ def test_document_engine_configuration_is_bounded_for_many_page_ranges(
     assert candidates[3].method == "ocr"
     assert candidates[5].method == "auto"
     assert configuration == (
-        "document_engine=mineru-compatible-cli",
-        "document_engine_version=mineru, version 3.4.4",
+        "document_engine=deeplaw-document-engine",
+        "document_engine_version=deeplaw-document-engine, version 3.4.4",
         "document_engine_run=schemas=content_list_v2;methods=auto,ocr;"
         "backends=pipeline;languages=ch;ranges=3",
     )

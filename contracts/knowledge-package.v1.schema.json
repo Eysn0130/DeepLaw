@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-package.v1.schema.json",
+  "title": "DeepLaw Knowledge Package Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_id",
+    "created_at",
+    "source_vault",
+    "policy",
+    "asset_count",
+    "source_count",
+    "relation_count",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-package/v1"},
+    "package_id": {
+      "type": "string",
+      "pattern": "^knowledgepkg_[0-9a-f]{32}$"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "source_vault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vault_id", "name", "scope", "revision", "audit_head"],
+      "properties": {
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "scope": {
+          "type": "string",
+          "enum": ["personal", "project", "team", "domain"]
+        },
+        "revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_sensitivity",
+        "include_evidence_text",
+        "include_source_files",
+        "publisher_identity_verified",
+        "import_trust"
+      ],
+      "properties": {
+        "max_sensitivity": {
+          "type": "string",
+          "enum": ["public", "internal", "private", "restricted"]
+        },
+        "include_evidence_text": {"type": "boolean"},
+        "include_source_files": {"type": "boolean"},
+        "publisher_identity_verified": {"const": false},
+        "import_trust": {"const": "quarantined"}
+      }
+    },
+    "asset_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "source_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "relation_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "files": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 20009,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "byte_size", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "byte_size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 134217728
+          },
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

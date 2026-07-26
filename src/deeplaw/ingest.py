@@ -622,14 +622,28 @@ def build_release(
             }
             for item in report.documents
         ],
-    }
-    if source_scope == "user_private":
-        derivation_payload.update(
+        "governance": (
             {
-                "collection_scope": source_scope,
-                "library_id": library_id,
+                "review_overlay_schema": "deeplaw.review-overlay/v1",
+                "review_overlay_sha256": applied_review.overlay_sha256,
+                "reviewed_on": applied_review.reviewed_as_of,
+                "reviewer_kind": applied_review.reviewer_kind,
+                "review_scope": applied_review.review_scope,
+                "temporal_status": applied_review.temporal_status,
+                "redistribution_status": applied_review.redistribution_status,
+                "review_covered_documents": applied_review.covered_documents,
             }
-        )
+            if applied_review is not None
+            else {
+                "temporal_status": "requires_human_review",
+                "redistribution_status": "not_assessed",
+            }
+        ),
+        "build_report": report.to_dict(),
+    }
+    derivation_payload["collection_scope"] = source_scope
+    if library_id is not None:
+        derivation_payload["library_id"] = library_id
     derivation_sha256 = sha256_bytes(canonical_json(derivation_payload).encode("utf-8"))
     release_id = stable_id("lawrel", derivation_sha256, length=32)
     report.release_id = release_id

@@ -1,6 +1,6 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-07-16
+Reviewed: 2026-07-25
 
 This document records the upstream systems examined for DeepLaw 2.0 and the
 technical decision for each. It distinguishes a runtime dependency, an
@@ -34,6 +34,7 @@ policy.
 
 | Project | Commit reviewed | Published license | DeepLaw decision |
 | --- | --- | --- | --- |
+| [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI protocol, public grounding, job control, and schema-upgrade reference |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Architectural and algorithm reference; no whole-system dependency |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-pack, provenance, annotation, and MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |
@@ -56,6 +57,38 @@ Commit pins identify the material reviewed; they are not dependency pins
 because these projects are not imported into the DeepLaw runtime.
 
 ## Detailed Decisions
+
+### Wiki Graph
+
+Relevant upstream areas:
+
+- [`.wikg` archive standard](https://github.com/oomol-lab/wiki-graph/blob/7f916f63cfb9df1f5361001167c92a7a7fef2146/docs/en/wikg-standard.md)
+- [schema upgrade policy](https://github.com/oomol-lab/wiki-graph/blob/7f916f63cfb9df1f5361001167c92a7a7fef2146/docs/schema-upgrade.md)
+- [`knowledge-build`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/graph/knowledge-build)
+- [`evidence-selection`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/graph/evidence-selection)
+- [`archive-view/pack.ts`](https://github.com/oomol-lab/wiki-graph/blob/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/retrieval/query/archive-view/pack.ts)
+- [`wikg-coordinator`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/storage/wikg/wikg-coordinator)
+- [`runtime/jobs`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/runtime/jobs)
+
+Its strongest engineering contributions are a chapter-preserving portable
+archive, one URI grammar for scopes and objects, QID-grounded public entities,
+source-linked triples, build cost/watch workflows, library membership, archive
+coordination, and centralized adjacent schema upgrades.
+
+DeepLaw does not adopt the runtime wholesale. Wiki Graph's mutation token is a
+cache and mutation identity rather than a complete cryptographic content or
+publisher proof. Entity disambiguation, triples, Reading Graphs, and summaries
+can involve LLM output; quote matching may auto-select a candidate above
+heuristic thresholds. Those results are useful discovery material but cannot
+inherit DeepLaw `human_verified`, legal authority, or instruction status.
+Its Node.js build jobs and write-capable CLI also do not fit DeepLaw's one-leaf,
+read-only Agent boundary.
+
+Decision: learn from the archive/URI/control-plane contracts. Future source
+hierarchy, vault libraries, background compilation, public-entity grounding,
+and graph projections remain separate changes gated by migration design,
+quarantine, provenance, cost controls, and held-out evaluation. No Wiki Graph
+source code is currently copied or distributed.
 
 ### gbrain
 
@@ -303,9 +336,16 @@ None of the reviewed platforms.
 - Tesseract OCR plus Poppler `pdftoppm`, only through the explicit first-party
   PDF evidence pipeline; no raw OCR bypass is exposed.
 - MinerU through the optional `deeplaw[document-engine]` build extra and a
-  bounded page-range adapter. It is not imported by, or required for, MCP query
-  runtime. Structured JSON is treated as a candidate; generated Markdown is not
-  accepted as source truth.
+  bounded page-range adapter. The DeepLaw entrypoint admits only the fixed local
+  `pipeline` backend and rejects alternate backends, remote-model/checkpoint
+  parameters, and unknown options before importing the optional package. A
+  separate explicit setup command pins the model repository revision and verifies
+  the exact 15-file size/SHA-256 manifest; ingestion strips upstream model/config
+  overrides and runs local-only without auto-download. It is not imported by, or
+  required for, MCP query runtime. Structured JSON is treated as a candidate;
+  generated Markdown is not accepted as source truth. Dependency findings and
+  their product-level reachability assessment are recorded in
+  [`SECURITY.md`](../SECURITY.md) and [`security/openvex.json`](../security/openvex.json).
 
 ### Suitable for future focused extraction
 
