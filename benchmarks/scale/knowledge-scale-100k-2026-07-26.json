@@ -1,0 +1,55 @@
+{
+  "candidate": {
+    "implementation_files": {
+      "benchmarks/scale/run_knowledge_scale.py": "4a7d4d74ed65011593d096e0f67e33e4a5d8c16b2d321dccca5c1e1c7c3187ee",
+      "src/deeplaw/context_compiler.py": "19027d20817c1e359c9d888f2e3d8a8a7f3781c4910ef0d4261f01a608814f62",
+      "src/deeplaw/knowledge_cli.py": "6035399edae4c87b30926637b1c10e2f6db3fdc4d1e5679ff85cc20cc33a0c9d",
+      "src/deeplaw/knowledge_store.py": "325ee6d7a779d7cb55b38d283e06c822591413a397537cf96468205d25c96431",
+      "src/deeplaw/util.py": "d7fe62c839384b342b106bccf20f88166c78ec6901a5d9682649028d194b1ffb"
+    },
+    "version": "0.4.0"
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "deterministic synthetic corpus created by the DeepLaw development team",
+  "cli_lifecycle": {
+    "approval_seconds": 12.62397183291614,
+    "approved_asset_count": 100000,
+    "capsule_recall": true,
+    "capsule_valid": true,
+    "context_seconds": 5.9744267500936985,
+    "ingest_seconds": 8.5202391250059,
+    "init_seconds": 0.3346590418368578,
+    "search_hit_at_1": true,
+    "search_seconds": 6.049379083095118,
+    "verify_seconds": 5.860015332931653
+  },
+  "corpus": {
+    "asset_count": 100000,
+    "database_bytes": 184733696,
+    "query_count": 100,
+    "source_bytes": 10400000,
+    "source_id": "source_484c12229e5516549e38df6f",
+    "source_sha256": "55c690ea2fb0118340e237cb4ca1a09e1c690f97eafd11d5c49aeb6b07bb0603"
+  },
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "persistent_reader": {
+    "average_payload_chars": 3229.58,
+    "average_selected_chars": 85.0,
+    "capsule_recall": 1.0,
+    "capsule_verification_rate": 1.0,
+    "cold_integrity_seconds": 5.845114041119814,
+    "context_p50_ms": 0.9883539751172066,
+    "context_p95_ms": 1.2841669376939535,
+    "integrity_valid": true,
+    "open_seconds": 0.0008471249602735043,
+    "peak_rss_bytes": 442662912,
+    "search_hit_at_1": 1.0,
+    "search_p50_ms": 0.6011875811964273,
+    "search_p95_ms": 0.820209039375186
+  },
+  "schema_version": "deeplaw.knowledge-scale-diagnostic/v1"
+}

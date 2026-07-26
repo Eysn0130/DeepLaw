@@ -1,6 +1,6 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-07-16
+Reviewed: 2026-07-26
 
 This document records the upstream systems examined for DeepLaw 2.0 and the
 technical decision for each. It distinguishes a runtime dependency, an
@@ -26,14 +26,15 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
 Current decision: none of the reviewed knowledge platforms is a DeepLaw runtime
 authority. No source code from these repositories has been copied into DeepLaw.
 The base MCP runtime stays lightweight. Offline builders may use separately
-installed OCR/PDF tools and the optional `document-engine` dependency; every
-output remains a candidate subject to DeepLaw's own page evidence and admission
-policy.
+installed OCR/PDF tools, the optional `document-engine` dependency, and the
+optional local Discovery runtime; every derived output remains a candidate
+subject to DeepLaw's own source, lifecycle, evidence, and admission policy.
 
 ## Reviewed Snapshot
 
 | Project | Commit reviewed | Published license | DeepLaw decision |
 | --- | --- | --- | --- |
+| [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI protocol, public grounding, job control, and schema-upgrade reference |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Architectural and algorithm reference; no whole-system dependency |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-pack, provenance, annotation, and MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |
@@ -45,17 +46,60 @@ policy.
 | [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) | `0d905e40afa6` | Apache-2.0 | Derived Wiki and Obsidian export reference only |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Retrieval evaluation format and span metrics reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External research benchmark harness reference |
+| [xiaowu0162/LongMemEval-V2](https://github.com/xiaowu0162/LongMemEval-V2) | `6f020ac2fc32` | Apache-2.0 | External long-horizon task/memory protocol and official adapter interface |
+| [HUST-AI-HYZ/MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) | `455306dcabc3` | MIT | External retrieval, learning, long-range understanding, and forgetting benchmark |
+| [geniesinc/Memora](https://github.com/geniesinc/Memora) | `a6493188efc8` | Apache-2.0 | External long-duration remembering/forgetting and cost benchmark |
+| [microsoft/STATE-Bench](https://github.com/microsoft/STATE-Bench) | `4efcbf2d4fe6` | MIT | External Agent Learning task-success benchmark |
+| [agiresearch/ASB](https://github.com/agiresearch/ASB) | `1f561dccf92d` | MIT | External memory-poisoning and observation-injection benchmark |
+| [vectorize-io/agent-memory-benchmark](https://github.com/vectorize-io/agent-memory-benchmark) | `aa9273ab9e34` | Recheck before execution | External Agent task, latency, ingestion, Token, and cost benchmark only |
+| [isaacus-dev/legal-rag-bench](https://github.com/isaacus-dev/legal-rag-bench) | `9e30a36d1ef5` | Recheck before execution | External end-to-end legal retrieval/reasoning benchmark only |
 | [opendatalab/MinerU](https://github.com/opendatalab/MinerU) | `79d6d8d79fb8` | MinerU Open Source License | Optional structured PDF candidate behind the build-only document engine |
 | [PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | `211989f046cc` | Apache-2.0 | Strong candidate for a second Chinese OCR/layout witness; not yet integrated |
 | [docling-project/docling](https://github.com/docling-project/docling) | `e548307e8d32` | MIT | Document IR and provenance reference; not a runtime dependency |
 | [Unstructured-IO/unstructured](https://github.com/Unstructured-IO/unstructured) | `c38745b32f53` | Apache-2.0 | Broad ETL reference; not selected as legal canonical representation |
 | [datalab-to/marker](https://github.com/datalab-to/marker) | `ef16c2caa29d` | GPL-3.0 | Not selected for the default Apache-distributed build path |
 | [datalab-to/surya](https://github.com/datalab-to/surya) | `fe8e2d968462` | GPL-3.0 code; separate model terms | Not selected for default redistribution |
+| [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) | `v1.27.0` | MIT | Optional local execution dependency for fixed candidate-discovery models |
+| [huggingface/tokenizers](https://github.com/huggingface/tokenizers) | `v0.22.2` | Apache-2.0 | Optional fixed-tokenizer execution dependency |
+| [xenova/jina-embeddings-v2-small-en](https://huggingface.co/Xenova/jina-embeddings-v2-small-en) | `523cadcb9c2e` | Apache-2.0 model card | Fixed English Discovery profile; weights downloaded explicitly and not redistributed |
+| [jinaai/jina-embeddings-v2-base-zh](https://huggingface.co/jinaai/jina-embeddings-v2-base-zh) | `c1ff9086a89a` | Apache-2.0 model card | Fixed Chinese-English Discovery profile; weights downloaded explicitly and not redistributed |
 
 Commit pins identify the material reviewed; they are not dependency pins
 because these projects are not imported into the DeepLaw runtime.
 
 ## Detailed Decisions
+
+### Wiki Graph
+
+Relevant upstream areas:
+
+- [`.wikg` archive standard](https://github.com/oomol-lab/wiki-graph/blob/7f916f63cfb9df1f5361001167c92a7a7fef2146/docs/en/wikg-standard.md)
+- [schema upgrade policy](https://github.com/oomol-lab/wiki-graph/blob/7f916f63cfb9df1f5361001167c92a7a7fef2146/docs/schema-upgrade.md)
+- [`knowledge-build`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/graph/knowledge-build)
+- [`evidence-selection`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/graph/evidence-selection)
+- [`archive-view/pack.ts`](https://github.com/oomol-lab/wiki-graph/blob/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/retrieval/query/archive-view/pack.ts)
+- [`wikg-coordinator`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/storage/wikg/wikg-coordinator)
+- [`runtime/jobs`](https://github.com/oomol-lab/wiki-graph/tree/7f916f63cfb9df1f5361001167c92a7a7fef2146/packages/core/src/runtime/jobs)
+
+Its strongest engineering contributions are a chapter-preserving portable
+archive, one URI grammar for scopes and objects, QID-grounded public entities,
+source-linked triples, build cost/watch workflows, library membership, archive
+coordination, and centralized adjacent schema upgrades.
+
+DeepLaw does not adopt the runtime wholesale. Wiki Graph's mutation token is a
+cache and mutation identity rather than a complete cryptographic content or
+publisher proof. Entity disambiguation, triples, Reading Graphs, and summaries
+can involve LLM output; quote matching may auto-select a candidate above
+heuristic thresholds. Those results are useful discovery material but cannot
+inherit DeepLaw `human_verified`, legal authority, or instruction status.
+Its Node.js build jobs and write-capable CLI also do not fit DeepLaw's one-leaf,
+read-only Agent boundary.
+
+Decision: learn from the archive/URI/control-plane contracts. Future source
+hierarchy, vault libraries, background compilation, public-entity grounding,
+and graph projections remain separate changes gated by migration design,
+quarantine, provenance, cost controls, and held-out evaluation. No Wiki Graph
+source code is currently copied or distributed.
 
 ### gbrain
 
@@ -298,14 +342,28 @@ MIT-licensed file and add attribution at that time.
 
 None of the reviewed platforms.
 
+The optional `deeplaw[discovery]` extra directly depends on ONNX Runtime,
+Tokenizers, `huggingface_hub`, and NumPy. DeepLaw implements its own small,
+closed local execution and index contract; it does not copy source from a
+knowledge platform. Model setup is explicit, revisions and all five files are
+hash-pinned, query execution is offline, and the feature remains outside the
+base MCP runtime and default Context Compiler.
+
 ### Current optional external build tools
 
 - Tesseract OCR plus Poppler `pdftoppm`, only through the explicit first-party
   PDF evidence pipeline; no raw OCR bypass is exposed.
 - MinerU through the optional `deeplaw[document-engine]` build extra and a
-  bounded page-range adapter. It is not imported by, or required for, MCP query
-  runtime. Structured JSON is treated as a candidate; generated Markdown is not
-  accepted as source truth.
+  bounded page-range adapter. The DeepLaw entrypoint admits only the fixed local
+  `pipeline` backend and rejects alternate backends, remote-model/checkpoint
+  parameters, and unknown options before importing the optional package. A
+  separate explicit setup command pins the model repository revision and verifies
+  the exact 15-file size/SHA-256 manifest; ingestion strips upstream model/config
+  overrides and runs local-only without auto-download. It is not imported by, or
+  required for, MCP query runtime. Structured JSON is treated as a candidate;
+  generated Markdown is not accepted as source truth. Dependency findings and
+  their product-level reachability assessment are recorded in
+  [`SECURITY.md`](../SECURITY.md) and [`security/openvex.json`](../security/openvex.json).
 
 ### Suitable for future focused extraction
 

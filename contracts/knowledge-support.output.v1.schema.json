@@ -1,0 +1,578 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.output.v1.schema.json",
+  "title": "DeepLaw Knowledge Support Output v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "authority_boundary", "result"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-support-output/v1"},
+    "operation": {
+      "type": "string",
+      "enum": ["search", "get", "context", "verify", "inspect"]
+    },
+    "authority_boundary": {"$ref": "#/$defs/authority_boundary"},
+    "result": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "search"}},
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/search_result"}}}
+    },
+    {
+      "if": {
+        "properties": {"operation": {"const": "get"}},
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/get_result"}}}
+    },
+    {
+      "if": {
+        "properties": {"operation": {"const": "context"}},
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {
+          "result": {"$ref": "knowledge-capsule.v1.schema.json"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"operation": {"const": "verify"}},
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/verify_result"}}}
+    },
+    {
+      "if": {
+        "properties": {"operation": {"const": "inspect"}},
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/inspect_result"}}}
+    }
+  ],
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legal_authority",
+        "official_legal_sources_tool",
+        "persistent_writes",
+        "case_data_allowed"
+      ],
+      "properties": {
+        "legal_authority": {"const": false},
+        "official_legal_sources_tool": {"const": "law_support"},
+        "persistent_writes": {"const": "local_cli_only"},
+        "case_data_allowed": {"const": false}
+      }
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "search_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_id",
+        "uri",
+        "kind",
+        "memory_tier",
+        "title",
+        "excerpt",
+        "semantic_key",
+        "verification",
+        "trust",
+        "sensitivity",
+        "legal_authority",
+        "directive_mode",
+        "source_refs",
+        "source_ref_count",
+        "source_refs_truncated",
+        "tags",
+        "tag_count",
+        "tags_truncated",
+        "content_sha256",
+        "rank",
+        "hit_reason"
+      ],
+      "properties": {
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "uri": {"type": "string", "pattern": "^deeplaw://vault_[0-9a-f]{24}/assets/asset_[0-9a-f]{24}$"},
+        "kind": {"$ref": "#/$defs/kind"},
+        "memory_tier": {"$ref": "#/$defs/memory_tier"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "excerpt": {"type": "string", "minLength": 1, "maxLength": 700},
+        "semantic_key": {"$ref": "#/$defs/semantic_key"},
+        "verification": {"const": "human_verified"},
+        "trust": {"$ref": "#/$defs/trust"},
+        "sensitivity": {"enum": ["public", "internal", "private"]},
+        "legal_authority": {"const": false},
+        "directive_mode": {"enum": ["data_only", "reviewed_instruction"]},
+        "source_refs": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {"$ref": "#/$defs/source_ref"}
+        },
+        "source_ref_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "source_refs_truncated": {"type": "boolean"},
+        "tags": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "tag_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "tags_truncated": {"type": "boolean"},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "rank": {"type": "integer", "minimum": 1, "maximum": 5},
+        "hit_reason": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "search_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "vault_id",
+        "vault_revision",
+        "query",
+        "results",
+        "ranking",
+        "gaps",
+        "total_excerpt_chars"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-search/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "vault_revision": {"type": "integer", "minimum": 0},
+        "query": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "results": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/search_card"}
+        },
+        "ranking": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "numeric_confidence_exposed"],
+          "properties": {
+            "method": {"const": "deterministic_lexical"},
+            "numeric_confidence_exposed": {"const": false}
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "total_excerpt_chars": {"type": "integer", "minimum": 0, "maximum": 6000}
+      }
+    },
+    "get_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "asset_id",
+        "uri",
+        "vault_id",
+        "kind",
+        "memory_tier",
+        "title",
+        "statement",
+        "semantic_key",
+        "status",
+        "verification",
+        "trust",
+        "sensitivity",
+        "legal_authority",
+        "directive_mode",
+        "source_refs",
+        "source_ref_count",
+        "source_refs_truncated",
+        "tags",
+        "tag_count",
+        "tags_truncated",
+        "warnings",
+        "created_at",
+        "activated_at",
+        "expires_at",
+        "supersedes_asset_id",
+        "origin_uri",
+        "content_sha256",
+        "content_truncated"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-asset/v1"},
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "uri": {"type": "string", "pattern": "^deeplaw://vault_[0-9a-f]{24}/assets/asset_[0-9a-f]{24}$"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "kind": {"$ref": "#/$defs/kind"},
+        "memory_tier": {"$ref": "#/$defs/memory_tier"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "statement": {"type": "string", "minLength": 1, "maxLength": 12000},
+        "semantic_key": {"$ref": "#/$defs/semantic_key"},
+        "status": {"const": "active"},
+        "verification": {"const": "human_verified"},
+        "trust": {"$ref": "#/$defs/trust"},
+        "sensitivity": {"enum": ["public", "internal", "private"]},
+        "legal_authority": {"const": false},
+        "directive_mode": {"enum": ["data_only", "reviewed_instruction"]},
+        "source_refs": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/source_ref"}
+        },
+        "source_ref_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "source_refs_truncated": {"type": "boolean"},
+        "tags": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "tag_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "tags_truncated": {"type": "boolean"},
+        "warnings": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "created_at": {"type": "string", "format": "date-time"},
+        "activated_at": {"type": "string", "format": "date-time"},
+        "expires_at": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "format": "date-time"}
+          ]
+        },
+        "supersedes_asset_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}
+          ]
+        },
+        "origin_uri": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 2000}
+          ]
+        },
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "content_truncated": {"type": "boolean"}
+      }
+    },
+    "verification_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fragment_id", "valid", "reason"],
+      "properties": {
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "valid": {"type": "boolean"},
+        "reason": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 200}
+          ]
+        }
+      }
+    },
+    "source_file_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "content_sha256", "valid", "reason"],
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"},
+        "content_sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          ]
+        },
+        "valid": {"type": "boolean"},
+        "reason": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 200}
+          ]
+        }
+      }
+    },
+    "verify_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "vault_id",
+        "vault_revision",
+        "asset_id",
+        "uri",
+        "content_sha256",
+        "status",
+        "verification",
+        "source_references",
+        "source_references_count",
+        "source_references_truncated",
+        "source_files",
+        "source_files_count",
+        "source_files_truncated",
+        "audit_head",
+        "audit_chain_valid",
+        "state_integrity_valid",
+        "integrity_valid",
+        "agent_usable",
+        "valid"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-verification/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "vault_revision": {"type": "integer", "minimum": 0},
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "uri": {"type": "string", "pattern": "^deeplaw://vault_[0-9a-f]{24}/assets/asset_[0-9a-f]{24}$"},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "status": {"const": "active"},
+        "verification": {"const": "human_verified"},
+        "source_references": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/verification_check"}
+        },
+        "source_references_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "source_references_truncated": {"type": "boolean"},
+        "source_files": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/source_file_check"}
+        },
+        "source_files_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "source_files_truncated": {"type": "boolean"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "audit_chain_valid": {"type": "boolean"},
+        "state_integrity_valid": {"type": "boolean"},
+        "integrity_valid": {"type": "boolean"},
+        "agent_usable": {"type": "boolean"},
+        "valid": {"type": "boolean"}
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid", "event_count", "failed_sequence", "reason"],
+      "properties": {
+        "valid": {"type": "boolean"},
+        "event_count": {"type": "integer", "minimum": 0},
+        "failed_sequence": {
+          "oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]
+        },
+        "reason": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 200}
+          ]
+        }
+      }
+    },
+    "state_integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid",
+        "reason",
+        "object_id"
+      ],
+      "properties": {
+        "valid": {"type": "boolean"},
+        "asset_count": {"type": "integer", "minimum": 0},
+        "source_count": {"type": "integer", "minimum": 0},
+        "fragment_count": {"type": "integer", "minimum": 0},
+        "relation_count": {"type": "integer", "minimum": 0},
+        "search_index_count": {"type": "integer", "minimum": 0},
+        "reason": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 200}
+          ]
+        },
+        "object_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 256}
+          ]
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid", "audit", "state"],
+      "properties": {
+        "valid": {"type": "boolean"},
+        "audit": {"$ref": "#/$defs/audit"},
+        "state": {"$ref": "#/$defs/state_integrity"}
+      }
+    },
+    "active_source_integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid",
+        "checked_active_source_files",
+        "invalid_active_source_file_count",
+        "reason"
+      ],
+      "properties": {
+        "valid": {"type": "boolean"},
+        "checked_active_source_files": {"type": "integer", "minimum": 0},
+        "invalid_active_source_file_count": {"type": "integer", "minimum": 0},
+        "reason": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 200}
+          ]
+        }
+      }
+    },
+    "inspect_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "storage_schema",
+        "vault_id",
+        "name",
+        "scope",
+        "created_at",
+        "revision",
+        "audit_head",
+        "audit",
+        "integrity",
+        "source_integrity",
+        "source_count",
+        "fragment_count",
+        "relation_count",
+        "asset_status_counts",
+        "active_memory_tier_counts",
+        "active_kind_counts",
+        "expired_active_count",
+        "usable_active_count",
+        "instruction_risk_source_count",
+        "agent_ready",
+        "next_actions"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-vault/v1"},
+        "storage_schema": {"const": "deeplaw.knowledge-sqlite/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "scope": {"enum": ["personal", "project", "team", "domain"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "audit": {"$ref": "#/$defs/audit"},
+        "integrity": {"$ref": "#/$defs/integrity"},
+        "source_integrity": {"$ref": "#/$defs/active_source_integrity"},
+        "source_count": {"type": "integer", "minimum": 0},
+        "fragment_count": {"type": "integer", "minimum": 0},
+        "relation_count": {"type": "integer", "minimum": 0},
+        "asset_status_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["active", "proposed", "quarantined", "revoked", "superseded"],
+          "properties": {
+            "active": {"type": "integer", "minimum": 0},
+            "proposed": {"type": "integer", "minimum": 0},
+            "quarantined": {"type": "integer", "minimum": 0},
+            "revoked": {"type": "integer", "minimum": 0},
+            "superseded": {"type": "integer", "minimum": 0}
+          }
+        },
+        "active_memory_tier_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["domain", "experience", "project", "wisdom", "working"],
+          "properties": {
+            "domain": {"type": "integer", "minimum": 0},
+            "experience": {"type": "integer", "minimum": 0},
+            "project": {"type": "integer", "minimum": 0},
+            "wisdom": {"type": "integer", "minimum": 0},
+            "working": {"type": "integer", "minimum": 0}
+          }
+        },
+        "active_kind_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "constraint",
+            "decision",
+            "experience",
+            "fact",
+            "lesson",
+            "procedure",
+            "question",
+            "reference",
+            "rule"
+          ],
+          "properties": {
+            "constraint": {"type": "integer", "minimum": 0},
+            "decision": {"type": "integer", "minimum": 0},
+            "experience": {"type": "integer", "minimum": 0},
+            "fact": {"type": "integer", "minimum": 0},
+            "lesson": {"type": "integer", "minimum": 0},
+            "procedure": {"type": "integer", "minimum": 0},
+            "question": {"type": "integer", "minimum": 0},
+            "reference": {"type": "integer", "minimum": 0},
+            "rule": {"type": "integer", "minimum": 0}
+          }
+        },
+        "expired_active_count": {"type": "integer", "minimum": 0},
+        "usable_active_count": {"type": "integer", "minimum": 0},
+        "instruction_risk_source_count": {"type": "integer", "minimum": 0},
+        "agent_ready": {"type": "boolean"},
+        "next_actions": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "kind": {
+      "enum": [
+        "constraint",
+        "decision",
+        "fact",
+        "procedure",
+        "rule",
+        "experience",
+        "lesson",
+        "question",
+        "reference"
+      ]
+    },
+    "memory_tier": {
+      "enum": ["working", "project", "experience", "wisdom", "domain"]
+    },
+    "trust": {
+      "enum": ["untrusted", "user_provided", "verified_source"]
+    },
+    "semantic_key": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 256}
+      ]
+    }
+  }
+}

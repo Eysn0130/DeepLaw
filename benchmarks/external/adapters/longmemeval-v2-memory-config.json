@@ -1,0 +1,9 @@
+{
+  "memory_type": "deeplaw",
+  "memory_params": {
+    "workspace_dir": "/absolute/path/to/a/fresh/deeplaw-lme-v2-workspace",
+    "max_items": 8,
+    "max_chars": 6000,
+    "frozen_fixture_approved": true
+  }
+}

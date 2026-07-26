@@ -1,12 +1,73 @@
 # 首批 28 份官方法律资料来源与构建审计
 
 本文记录 2026-07-14 首批资料从初始输入到后续 schema 候选的历史，不是 DeepLaw 2.0 永久现状，
-也不是发布机关认证、人工法律审查或公开再分发许可。最前面的“当前 v5 构建”由当前源码和同一
-source package 重新生成；后续 v2/v3/v4 章节只用于解释迁移与门禁演进。
+也不是发布机关认证、人工法律审查或公开再分发许可。“历史 v5 构建”是 2026-07-16 使用
+`v0.3.0` 源码和同一 source package 生成的历史快照；后续 v2/v3/v4 章节只用于解释迁移与门禁
+演进。法律语料的最新黑盒重建证据仍以紧随其后的 `v0.4.0` 发布级复核为准；当前软件
+`v0.5.0` 保留该历史快照，但没有把它伪装成一次新的 28 份原件重建。
 
-## 当前 v5 可复现构建（2026-07-16）
+## v0.4.0 发布级复核（2026-07-26，历史快照）
 
-使用 `v0.3.0` 当前源码、相同 source package 和 hash-bound review overlay 完成的最新本地构建：
+使用最终 wheel、固定 `deeplaw-document-engine 3.4.4`、同一 source package 和仓库内签名目录，
+在一个全新本地 home 中完成从原件到活动 release 的黑盒重建。文档模型通过独立管理命令从
+本地缓存配置，固定 revision 的 15 个文件逐项通过大小与 SHA-256 后，摄取进程使用临时
+local-only 配置运行：
+
+- 签名目录：`deeplaw-cn-official`，sequence `2`，签名验证通过；
+- 文档模型 manifest SHA-256：
+  `c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12`；
+- release：`lawrel_5fd93dee88cd55c68706cd1a3dfa527a`；
+- 文档/PDF 页/segment/relation：28 / 472 / 3237 / 111；
+- extractor：OOXML 10、`deeplaw-vision-consensus` 18；
+- database SHA-256：
+  `c5582f5f1553cbcaa4df4a263a16be524307051b7bfa6ded50053dbe3b4287db`；
+- build report SHA-256：
+  `2e94aafa2490b134b9a81eff5c521f859a4ce782fb2d2a6269701ec3ebe9931b`；
+- derivation SHA-256：
+  `fec59cd693a623bea965fbe2c61f4265e9fd03b0a42a119b8ccbb6c7423c1abe`。
+
+本轮复核发现旧 derivation 只绑定了正文、Document IR、segment、关系与 extractor，没有完整
+绑定 review scope、overlay 身份和 build-report 身份；在不同代码阶段可能产生相同逻辑
+`release_id`、不同 SQLite artifact SHA。当前实现已把治理元数据、collection scope 和闭合的
+build-report 内容纳入 derivation，并新增“仅修改 review scope 也必须改变 release ID”的回归
+测试。SQLite 物理 SHA 仍是独立 artifact identity；正式报告和 Agent turn 必须同时固定
+`release_id + database_sha256`。
+
+10 份 DOCX 由 `deeplaw-ooxml/v2` 解析；该版本使用拒绝 DTD、实体展开和外部引用的安全 XML
+解析器。主文与脚注的恶意实体样本均在进入 Document IR 前失败关闭，因此本节不沿用安全解析器
+升级前生成的 release/hash。
+
+本次复核发现并关闭了一个结构化候选适配缺口：文档引擎的新
+`content_list_v2` 使用 `paragraph_content`、`item_content`、页眉页脚及其他封闭源文本字段，
+旧 allowlist 会安全丢弃这些字段。修正后，8 页扫描版《进一步规范刑事诉讼涉案财物处置工作的
+意见》的 8 页结构化候选均有内容，选中字符数依次为
+180 / 381 / 505 / 459 / 513 / 416 / 157 / 43；不再出现“正文已识别但适配层只保留页眉”的
+假性截断。
+
+提高候选完整度没有放宽证据准入。15 个风险页仍分布于 5 份文档，并精确传播到 8/3237 个
+segment。扫描正文的独立 Tesseract 候选与结构化候选尚未逐字一致，表格、低字符页和异常文本层
+也仍带风险标记，因此这些 segment 只进入 `uncertain_evidence`。以该扫描文件完整题名检索时，
+主证据为空，返回一个有界不确定候选和阻断性 gap；不能把“可读”自动升级为“已核验”。
+
+本次还对全部 15 个风险页进行了 AI 视觉复核：
+
+- 公安机关程序规定第 2–3 页是目录；
+- 涉案财物处置意见第 1–7 页为可辨认的通知/正文，第 8 页为印制信息；
+- 外汇管理条例第 13 页含第五十四条；
+- 反洗钱监督办法第 16 页为附件清单续页，第 17 页为审批表，第 22 页为空白页；
+- 非银行支付机构监督管理条例第 22 页含第五十九、六十条。
+
+这项视觉复核用于验证风险分类和候选完整度，不是人类逐字 attestation。DeepLaw 没有生成
+`reviewer.type=human` 的复核文件，也没有把 AI 复核伪装成官方或人工认证。
+
+安装后 CLI 另验证：单主题“诈骗”不展开入站关系图；当前目录中已标记为 `superseded` 的刑法
+候选在未给 `as_of` 时只进入 `uncertain_evidence`，不能覆盖主证据义务。用户私有资料的
+add/search/get/receipt verify/delete 全生命周期在独立快照中通过，删除前后官方 release ID 与
+签名目录均保持不变。
+
+## 历史 v5 可复现构建（2026-07-16）
+
+使用当时的 `v0.3.0` 源码、相同 source package 和 hash-bound review overlay 完成的本地构建：
 
 - release：`lawrel_a77f33377a74be235da19900636dd3a3`；
 - release/storage schema：`deeplaw.release/v2` / `deeplaw.sqlite/v5`；
@@ -28,8 +89,8 @@ source package 重新生成；后续 v2/v3/v4 章节只用于解释迁移与门�
 6/3234 个 segment，不会把同文档的安全条款整份降级。管线版本为
 `deeplaw-vision-consensus/v2`；它还对页数、像素、渲染批次、文本体积、子进程输出、运行时间和
 文档引擎产物设置硬上限，并在官方 PDF 更新前检查固定引擎版本、PDF 渲染器、OCR 引擎及中文
-语言包。这个结果证明候选生成、截断拒绝和精确隔离已按当前代码执行，不表示待复核片段已完成
-人工逐字批准。
+语言包。这个结果证明候选生成、截断拒绝和精确隔离曾按该历史快照执行，不表示待复核片段已完成
+人工逐字批准，也不自动证明后续软件版本具有相同运行结果。
 
 `release.json` 现在同时绑定精确 manifest bytes、SQLite 和 `build-report.json`；篡改、缺失或
 符号链接 build report 会使 release 验证失败。`doctor`、28 份 Markdown 确定性导出和所有返回
@@ -41,7 +102,7 @@ receipt 的往返验证均已在该 release 上通过。
 `covered` 比例为 91/138（0.659）。这说明回归集验证的是命中、隔离、预算、拒答与回执，不应
 被解释为每个问题都已有完整法源覆盖。
 
-当前 release 仍为 `partially_verified`、`restricted`、`ai_precheck`；它不是发布机关认证或逐条
+该历史 release 为 `partially_verified`、`restricted`、`ai_precheck`；它不是发布机关认证或逐条
 人工法律审查，也不随 GitHub 仓库分发原件/SQLite。以上路径仅为本次本地验证证据，不进入仓库。
 
 ## 审计结论（2026-07-14 初始状态）

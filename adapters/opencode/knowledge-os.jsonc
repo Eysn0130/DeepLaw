@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "deeplaw_knowledge": {
+      "type": "local",
+      "command": [
+        "deeplaw",
+        "knowledge",
+        "mcp",
+        "--stdio"
+      ],
+      "enabled": true,
+      "timeout": 5000
+    }
+  },
+  "permission": {
+    "deeplaw_knowledge_*": "deny",
+    "skill": {
+      "use-knowledge-assets": "deny"
+    },
+    "task": {
+      "deeplaw-knowledge": "deny"
+    }
+  }
+}

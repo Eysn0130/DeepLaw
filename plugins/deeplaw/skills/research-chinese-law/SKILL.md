@@ -59,7 +59,8 @@ are explicitly requested.
 
 Never ask for or invent an MCP corpus-write, memory-write, upload, delete,
 reindex, or administration operation. Private add/delete and official updates
-are out-of-band local CLI administration, not Agent tools.
+are out-of-band local CLI administration, not Agent tools. Never use shell or
+filesystem tools to run or bypass those administrative paths.
 
 ## Minimize private facts before retrieval
 

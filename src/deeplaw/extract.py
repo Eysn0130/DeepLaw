@@ -6,6 +6,9 @@ import zipfile
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from defusedxml import ElementTree as DefusedET
+from defusedxml.common import DefusedXmlException
+
 from .models import ExtractionQuality, ExtractionResult, TextBlock
 from .util import normalize_text
 from .vision import (
@@ -90,16 +93,23 @@ def _read_footnotes(archive: zipfile.ZipFile) -> dict[str, str]:
     except KeyError:
         return {}
     try:
-        root = ET.fromstring(payload)
-    except ET.ParseError as error:
+        root = DefusedET.fromstring(payload)
+    except (ET.ParseError, DefusedXmlException) as error:
         raise ExtractionError("invalid DOCX footnotes XML") from error
     values: dict[str, str] = {}
+    character_count = 0
     for footnote in root.findall(f"./{_W}footnote"):
         footnote_id = footnote.attrib.get(f"{_W}id", "")
         if not footnote_id or footnote_id.startswith("-") or footnote_id == "0":
             continue
         text = _paragraph_text(footnote)
         if text:
+            character_count += len(text)
+            if (
+                len(values) >= _MAX_TEXT_BLOCKS
+                or character_count > _MAX_TEXT_CHARACTERS
+            ):
+                raise ExtractionError("DOCX footnotes exceed the extraction budget")
             values[footnote_id] = text
     return values
 
@@ -113,8 +123,8 @@ def extract_docx(path: Path) -> ExtractionResult:
         raise ExtractionError(f"invalid DOCX: {path.name}") from error
 
     try:
-        root = ET.fromstring(payload)
-    except ET.ParseError as error:
+        root = DefusedET.fromstring(payload)
+    except (ET.ParseError, DefusedXmlException) as error:
         raise ExtractionError(f"invalid document XML: {path.name}") from error
     body = root.find(f".//{_W}body")
     if body is None:
@@ -157,11 +167,13 @@ def extract_docx(path: Path) -> ExtractionResult:
     character_count = sum(len(block.text) for block in blocks)
     if character_count < 20:
         raise ExtractionError(f"DOCX contains too little text: {path.name}")
+    if len(blocks) > _MAX_TEXT_BLOCKS or character_count > _MAX_TEXT_CHARACTERS:
+        raise ExtractionError(f"DOCX exceeds the extraction budget: {path.name}")
     return ExtractionResult(
         blocks=tuple(blocks),
         quality=ExtractionQuality(
             extractor="ooxml",
-            extractor_version="deeplaw-ooxml/v1",
+            extractor_version="deeplaw-ooxml/v2",
             block_count=len(blocks),
             page_count=None,
             character_count=character_count,

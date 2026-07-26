@@ -379,8 +379,10 @@ def _run_bounded_pdf_subprocess(
         )
     except OSError as error:
         raise VisionExtractionError(f"PDF helper failed to start: {error}") from error
-    assert process.stdout is not None
-    assert process.stderr is not None
+    if process.stdout is None or process.stderr is None:  # pragma: no cover
+        _kill_process_tree(process)
+        process.wait()
+        raise VisionExtractionError("PDF helper failed to create bounded output pipes")
     stdout = _BoundedStreamCapture(stdout_limit)
     stderr = _BoundedStreamCapture(stderr_limit)
     readers = [
@@ -673,9 +675,10 @@ def _critical_tokens(text: str) -> tuple[str, ...]:
 
 
 def _semantic_tokens(text: str) -> tuple[str, ...]:
-    """Ignore layout punctuation while preserving every lexical source token."""
+    """Ignore layout whitespace/punctuation while preserving every lexical character."""
 
-    return tuple(_SEMANTIC_TOKEN.findall(unicodedata.normalize("NFKC", text)))
+    normalized = unicodedata.normalize("NFKC", text)
+    return tuple(character for token in _SEMANTIC_TOKEN.findall(normalized) for character in token)
 
 
 def _legal_punctuation_tokens(text: str) -> tuple[str, ...]:

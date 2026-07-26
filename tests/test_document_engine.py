@@ -19,6 +19,10 @@ def test_document_engine_extra_declares_runtime_compatibility_dependency() -> No
     dependencies = project["project"]["optional-dependencies"]["document-engine"]
 
     assert "mineru[pipeline]==3.4.4" in dependencies
+    assert "setuptools>=83.0.0" in dependencies
+    assert "torch>=2.13.0,<3" in dependencies
+    assert "torchvision>=0.28.0" in dependencies
+    assert "transformers==4.57.6" in dependencies
     assert "six==1.17.0" in dependencies
 
 
@@ -174,6 +178,76 @@ def test_structured_allowlist_excludes_metadata_and_generated_visual_description
     assert "图片说明" not in joined
 
 
+def test_structured_v2_preserves_source_text_fields_without_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = _fake_engine(
+        tmp_path,
+        {
+            "source_content_list_v2.json": [
+                [
+                    {
+                        "type": "paragraph",
+                        "content": {
+                            "paragraph_content": [
+                                {"type": "text", "content": "第一条 法律正文。"}
+                            ],
+                            "model_name": "must-not-leak",
+                        },
+                    },
+                    {
+                        "type": "list",
+                        "content": {
+                            "list_type": "text",
+                            "list_items": [
+                                {
+                                    "item_type": "text",
+                                    "item_content": [
+                                        {"type": "text", "content": "（一）法定事项。"}
+                                    ],
+                                }
+                            ],
+                        },
+                    },
+                    {
+                        "type": "page_header",
+                        "content": {
+                            "page_header_content": [
+                                {"type": "text", "content": "发布机关规章"}
+                            ]
+                        },
+                    },
+                    {
+                        "type": "equation_interline",
+                        "content": {
+                            "math_content": "x = 1",
+                            "math_type": "latex",
+                            "image_source": {"path": "images/equation.jpg"},
+                        },
+                    },
+                ]
+            ]
+        },
+    )
+    monkeypatch.setenv("DEEPLAW_DOCUMENT_ENGINE", str(engine))
+
+    result = document_engine.extract_pdf_page_range(
+        _pdf(tmp_path), start_page=1, end_page=1, timeout_seconds=3
+    )
+
+    texts = [block.text for block in result.blocks]
+    assert texts == [
+        "第一条 法律正文。",
+        "(一)法定事项。",
+        "发布机关规章",
+        "x = 1",
+    ]
+    joined = "\n".join(texts)
+    assert "must-not-leak" not in joined
+    assert "latex" not in joined
+    assert "equation.jpg" not in joined
+
+
 def test_legacy_content_list_maps_zero_based_pages_and_preserves_empty_pages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -219,6 +293,16 @@ def test_rejects_invalid_page_ranges(
     with pytest.raises(document_engine.DocumentEngineError, match=message):
         document_engine.extract_pdf_page_range(
             _pdf(tmp_path), start_page=start_page, end_page=end_page
+        )
+
+
+def test_rejects_non_pipeline_backend_before_engine_discovery(tmp_path: Path) -> None:
+    with pytest.raises(document_engine.DocumentEngineError, match="unsupported backend"):
+        document_engine.extract_pdf_page_range(
+            _pdf(tmp_path),
+            start_page=1,
+            end_page=1,
+            backend="vlm-engine",
         )
 
 

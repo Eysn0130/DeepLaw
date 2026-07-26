@@ -1,16 +1,20 @@
-# DeepLaw 2.0 Agent Adapters
+# DeepLaw Agent Adapters
 
-DeepLaw 2.0 integrates with Codex, Claude Code, OpenCode, and, in a later change,
-Analytix through one local read-only MCP process. The adapter contract is small
-on purpose: the server exposes one tool with leaf name `law_support`, and every
-operation goes through that tool.
+DeepLaw 2.0 integrates with Codex, Claude Code, OpenCode, and, in a later
+change, Analytix through two separate optional local read-only MCP products.
+They must not be collapsed into one implicit always-on capability:
+
+| Product | Plugin | Process | Single leaf |
+| --- | --- | --- | --- |
+| Chinese Legal Pack | `deeplaw` | `deeplaw mcp --stdio` | `law_support` |
+| Knowledge Asset core | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --stdio` | `knowledge_support` |
 
 This document describes adapter behavior only. Corpus building, release
 governance, and retrieval internals are separate concerns.
 
 ## Stable boundary
 
-The common process command is:
+The Legal Pack process command is:
 
 ```text
 deeplaw mcp --stdio
@@ -62,6 +66,8 @@ sudo apt-get update
 sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-chi-sim
 
 deeplaw --version
+deeplaw document-engine setup
+deeplaw document-engine status
 deeplaw-document-engine --version
 pdftoppm -v
 tesseract --list-langs | grep -x 'chi_sim'
@@ -69,9 +75,16 @@ deeplaw official install
 deeplaw official status
 ```
 
+`document-engine setup` is an explicit operator action, not an Agent or MCP
+operation. It fetches one pinned model revision and writes configuration only
+after the closed 15-file manifest passes size and SHA-256 verification. Build,
+private ingestion, MCP startup, and query paths never download models or honor
+upstream model/configuration environment overrides.
+
 Contributors who intentionally want live source edits can instead use
 `uv tool install --editable '.[document-engine]'`; a normal user updates checkout
-code with `uv tool install --force '.[document-engine]'`. A machine that only
+code with `uv tool install --force --reinstall-package deeplaw '.[document-engine]'`.
+A machine that only
 reads an already-built immutable release may use the lightweight
 `uv tool install .`, but that installation cannot perform the signed official
 PDF catalog build. A project-only `uv sync` is insufficient when the Agent
@@ -101,6 +114,13 @@ imports require `deeplaw private add --confirm-no-case-data`. An MCP process
 pins both available scopes at startup. Restart it after an official update or a
 private mutation; after either managed epoch changes, the old process rejects
 later reads in that scope when its pinned epoch no longer matches.
+
+The Knowledge Asset process selects one vault through
+`DEEPLAW_KNOWLEDGE_VAULT` or `--vault`. It opens the vault read-only for each
+operation, verifies its closed identity, and never imports, approves, revokes,
+or writes feedback. Restart is not required merely to observe a later
+committed vault revision, but a previously compiled Capsule reports staleness
+against the new revision.
 
 ## Explicit invocation policy
 
@@ -170,8 +190,18 @@ Official references:
 
 ## Claude Code
 
-The same plugin root also contains `.claude-plugin/plugin.json`. For a local
-development session:
+Each plugin root contains its own `.claude-plugin/plugin.json`, while the
+repository-level `.claude-plugin/marketplace.json` lists the two products
+separately. Validate and install from a local checkout:
+
+```bash
+claude plugin validate ./.claude-plugin/marketplace.json --strict
+claude plugin marketplace add /absolute/path/to/DeepLaw
+claude plugin install deeplaw@deeplaw
+claude plugin install deeplaw-knowledge-os@deeplaw
+```
+
+For a one-session development load without marketplace installation:
 
 ```bash
 claude plugin validate ./plugins/deeplaw --strict
@@ -242,6 +272,80 @@ Official references:
 - <https://opencode.ai/docs/agents>
 - <https://opencode.ai/docs/skills>
 
+## Optional Knowledge Asset adapter
+
+The Knowledge Asset plugin is rooted at `plugins/deeplaw-knowledge-os` and must
+be installed separately. It is explicit-only:
+
+- Codex skill: `$use-knowledge-assets`
+- Claude Code skill: `/deeplaw-knowledge-os:use-knowledge-assets`
+- OpenCode agent: `@deeplaw-knowledge`
+
+Codex development install:
+
+```bash
+codex plugin marketplace add /absolute/path/to/DeepLaw
+codex plugin add deeplaw-knowledge-os@deeplaw
+```
+
+Claude Code development load:
+
+```bash
+claude plugin validate ./plugins/deeplaw-knowledge-os --strict
+claude --plugin-dir ./plugins/deeplaw-knowledge-os
+```
+
+OpenCode uses
+[`adapters/opencode/knowledge-os.jsonc`](../adapters/opencode/knowledge-os.jsonc)
+and
+[`adapters/opencode/agents/deeplaw-knowledge.md`](../adapters/opencode/agents/deeplaw-knowledge.md).
+Merge the sample rather than overwriting the user's configuration, then copy
+the skill and agent:
+
+```bash
+mkdir -p .opencode/skills/use-knowledge-assets .opencode/agents
+cp plugins/deeplaw-knowledge-os/skills/use-knowledge-assets/SKILL.md \
+  .opencode/skills/use-knowledge-assets/SKILL.md
+cp adapters/opencode/agents/deeplaw-knowledge.md \
+  .opencode/agents/deeplaw-knowledge.md
+```
+
+`knowledge_support` routes five operations:
+
+| Operation | Purpose |
+| --- | --- |
+| `search` | locate at most five active reviewed assets |
+| `get` | read one exact active non-restricted asset |
+| `context` | compile a bounded task-specific Knowledge Capsule |
+| `verify` | verify source binding, current usability, event chain, and current-state reconciliation |
+| `inspect` | inspect sanitized readiness and review backlog |
+
+`context` requires `confirm_no_case_data=true` because its task and goal are
+persisted in the Capsule. A host may send that confirmation only after keeping
+Analytix case facts, chats, identifiers, and attachments out of the request.
+
+The plugin has no `remember`, `learn`, `approve`, `import`, delete, shell, web,
+or case operation. Host configuration is not permission to copy Analytix case
+data into a vault.
+
+This read-only guarantee covers the DeepLaw MCP surface. A host must not give
+the same Agent a separate same-owner shell or filesystem route to
+`deeplaw knowledge approve`, private-library administration, official-library
+administration, or `~/.deeplaw`. Use host tool policy/path denial or a separate
+OS identity for the MCP process when this is a security boundary.
+
+The Knowledge Asset MCP process can initialize and advertise its one closed
+read-only tool before a vault exists. A read then returns a sanitized
+unavailable error; it does not reveal the configured path, create a vault, or
+silently select another vault. This prevents an optional plugin with incomplete
+local setup from breaking host MCP discovery.
+
+Every general result declares `legal_authority=false`; authoritative Chinese
+legal research must use the separate `law_support` plugin. Search returns rank
+and a deterministic hit reason, not a confidence probability. Context items
+identify a lexical or bounded reviewed-relation selection reason, and
+open-question actions contain only an Asset URI.
+
 ## Future Analytix connection
 
 Do not modify Analytix merely to make DeepLaw globally visible. Add the bridge
@@ -275,10 +379,10 @@ non-legal data work.
 
 Before publishing an adapter release:
 
-1. Parse both plugin manifests, `.mcp.json`, `agents/openai.yaml`, and the
-   OpenCode sample.
-2. Run the Codex plugin and Skill validators.
-3. Run `claude plugin validate ./plugins/deeplaw --strict` when Claude Code is
+1. Parse both products' Codex/Claude manifests, `.mcp.json`,
+   `agents/openai.yaml`, and OpenCode samples.
+2. Run the Codex plugin and Skill validators for both plugin roots.
+3. Run `claude plugin validate` for both plugin roots when Claude Code is
    installed.
 4. Validate the OpenCode config and agent with the target OpenCode release.
 5. Start the stdio process and assert `tools/list == [law_support]` by leaf name.
@@ -289,3 +393,6 @@ Before publishing an adapter release:
    host with tool permissions, also confirm the schema is hidden; on an eager
    plugin host, confirm that at most the single `law_support` schema is present
    and no legal source content is retrieved.
+9. For the optional Knowledge Asset plugin, assert
+   `tools/list == [knowledge_support]`, restricted/inactive assets are blocked,
+   local paths are absent, and no persistent write operation exists.

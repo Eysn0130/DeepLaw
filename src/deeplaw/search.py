@@ -806,10 +806,14 @@ class DeepLaw:
             (uncertain_evidence if is_uncertain else evidence).append(card)
         used_characters = compilation.total_chars
 
-        graph_paths = self._graph_paths(
-            tuple(evidence),
-            as_of=request.as_of,
-            temporal_intent=temporal_intent,
+        graph_paths = (
+            ()
+            if route == "navigation"
+            else self._graph_paths(
+                tuple(evidence),
+                as_of=request.as_of,
+                temporal_intent=temporal_intent,
+            )
         )
         obligation_coverage = self._obligation_coverage(
             compiled_plan,
@@ -857,7 +861,11 @@ class DeepLaw:
             card.temporal_classification == "unverified_metadata" for card in uncertain_evidence
         ):
             notices.append(
-                "时效检索中，效力起点缺失或状态未验证的候选已从主证据分离；正式引用前必须复核。"
+                "时效准入中，效力起点缺失或状态未验证的候选已从主证据分离；正式引用前必须复核。"
+            )
+        if any(card.status in _NON_CURRENT_STATUSES for card in uncertain_evidence):
+            notices.append(
+                "已知历史、废止、替代或尚未施行状态的候选不会在缺少 as_of 时进入主证据。"
             )
         if any(card.extraction_review_required for card in uncertain_evidence):
             notices.append(
@@ -918,8 +926,8 @@ class DeepLaw:
                 "document_types": list(request.document_types),
                 "max_evidence": result_limit,
                 "max_chars": request.max_chars,
-                "max_graph_paths": MAX_GRAPH_PATHS,
-                "max_hops": MAX_GRAPH_HOPS,
+                "max_graph_paths": 0 if route == "navigation" else MAX_GRAPH_PATHS,
+                "max_hops": 0 if route == "navigation" else MAX_GRAPH_HOPS,
                 "graph_used": graph_used,
                 "temporal_reference_date": temporal_reference_date,
                 "temporal_reference_source": temporal_reference_source,
@@ -1338,6 +1346,8 @@ class DeepLaw:
     ) -> str:
         if as_of is None:
             if not temporal_intent:
+                if status in _NON_CURRENT_STATUSES:
+                    return "unverified_metadata"
                 return "not_evaluated"
             if status in _NON_CURRENT_STATUSES:
                 return "outside_effective_interval"
@@ -1441,6 +1451,7 @@ class DeepLaw:
         if query:
             rows.extend(
                 self.connection.execute(
+                    # Filters contain closed literals and bound placeholders only.
                     f"""
                     SELECT s.*, d.title, d.document_type, d.issuer, d.authority_rank,
                            d.document_number, d.jurisdiction, d.promulgated_on,
@@ -1470,6 +1481,7 @@ class DeepLaw:
             article_params = [*parameters, article]
             exact_suffix = " AND ".join(article_filters)
             exact_rows = self.connection.execute(
+                # exact_suffix contains closed literals and bound placeholders only.
                 f"""
                 SELECT s.*, d.title, d.document_type, d.issuer, d.authority_rank,
                        d.document_number, d.jurisdiction, d.promulgated_on,
@@ -1494,6 +1506,7 @@ class DeepLaw:
             title_parameters: list[Any] = [f"%{title_compact}%", f"%{title_compact}%"]
             document_filter = "" if not filters else " AND " + " AND ".join(filters)
             title_rows = self.connection.execute(
+                # document_filter contains closed literals and bound placeholders only.
                 f"""
                 SELECT s.*, d.title, d.document_type, d.issuer, d.authority_rank,
                        d.document_number, d.jurisdiction, d.promulgated_on,
@@ -1674,6 +1687,7 @@ class DeepLaw:
         seed_ids = tuple(seed_titles)
         placeholders = ",".join("?" for _ in seed_ids)
         rows = self.connection.execute(
+            # seed_ids determine only the number of bound placeholders.
             f"""
             SELECT e.*,
                    sd.title AS subject_title,

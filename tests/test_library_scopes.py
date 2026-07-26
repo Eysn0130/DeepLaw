@@ -104,6 +104,11 @@ def test_official_pdf_dependency_preflight_probes_versions_and_chinese_ocr(
         "which",
         lambda executable: f"/mock/bin/{executable}",
     )
+    monkeypatch.setattr(
+        official_module,
+        "verify_installed_models",
+        lambda: {"manifest_sha256": "a" * 64},
+    )
 
     def fake_run(command: list[str], **kwargs: object) -> object:
         assert kwargs["shell"] is False
@@ -117,6 +122,7 @@ def test_official_pdf_dependency_preflight_probes_versions_and_chinese_ocr(
 
     assert calls == list(outputs)
     assert result["document_engine"] == "deeplaw-document-engine 3.4.4"
+    assert result["document_model_manifest"] == "a" * 64
     assert result["pdf_renderer"] == "pdftoppm version 25.06.0"
     assert result["ocr_engine"] == "tesseract 5.5.2"
     assert result["ocr_language"] == "chi_sim"
@@ -125,6 +131,11 @@ def test_official_pdf_dependency_preflight_probes_versions_and_chinese_ocr(
 def test_official_pdf_dependency_preflight_requires_chi_sim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        official_module,
+        "verify_installed_models",
+        lambda: {"manifest_sha256": "a" * 64},
+    )
     monkeypatch.setattr(
         official_module,
         "_run_dependency_probe",
@@ -146,6 +157,11 @@ def test_official_pdf_dependency_preflight_requires_chi_sim(
 def test_official_pdf_dependency_preflight_rejects_unpinned_engine_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        official_module,
+        "verify_installed_models",
+        lambda: {"manifest_sha256": "a" * 64},
+    )
     monkeypatch.setattr(
         official_module,
         "_run_dependency_probe",

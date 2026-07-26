@@ -341,3 +341,35 @@ def test_build_binds_review_overlay_and_reviewed_metadata(tmp_path: Path) -> Non
         connection.close()
     assert title == "测试法（核对文本）"
     assert status == "unverified_current"
+
+
+def test_release_identity_binds_review_governance_and_build_report(
+    tmp_path: Path,
+) -> None:
+    manifest, review_document = _fixture(tmp_path)
+    source = tmp_path / "source"
+    manifest_path = source / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+
+    first_release, _ = build_release(
+        source_root=source,
+        manifest_path=manifest_path,
+        review_overlay_path=_write_overlay(
+            tmp_path,
+            review_document,
+            reviewScope="first governance scope",
+        ),
+        output_root=tmp_path / "first-releases",
+    )
+    second_release, _ = build_release(
+        source_root=source,
+        manifest_path=manifest_path,
+        review_overlay_path=_write_overlay(
+            tmp_path,
+            review_document,
+            reviewScope="second governance scope",
+        ),
+        output_root=tmp_path / "second-releases",
+    )
+
+    assert first_release.name != second_release.name

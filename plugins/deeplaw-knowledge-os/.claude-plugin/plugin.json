@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "deeplaw-knowledge-os",
+  "displayName": "DeepLaw Knowledge OS",
+  "version": "0.5.0",
+  "description": "Optional, explicit-use read-only Knowledge Assets and Context Capsules.",
+  "author": {
+    "name": "Eysn0130",
+    "url": "https://github.com/Eysn0130"
+  },
+  "homepage": "https://github.com/Eysn0130/DeepLaw",
+  "repository": "https://github.com/Eysn0130/DeepLaw",
+  "license": "Apache-2.0",
+  "keywords": [
+    "agent-memory",
+    "context-engineering",
+    "knowledge-assets",
+    "mcp",
+    "local-first"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

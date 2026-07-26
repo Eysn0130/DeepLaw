@@ -1,0 +1,37 @@
+{
+  "name": "deeplaw-knowledge-os",
+  "version": "0.5.0+codex.20260726054209",
+  "description": "Optional, explicit-use DeepLaw Knowledge Asset and Context Capsule runtime.",
+  "author": {
+    "name": "Eysn0130",
+    "url": "https://github.com/Eysn0130"
+  },
+  "homepage": "https://github.com/Eysn0130/DeepLaw",
+  "repository": "https://github.com/Eysn0130/DeepLaw",
+  "license": "Apache-2.0",
+  "keywords": [
+    "agent-memory",
+    "context-engineering",
+    "knowledge-assets",
+    "mcp",
+    "local-first"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "DeepLaw Knowledge OS",
+    "shortDescription": "Compile reviewed knowledge into bounded Agent context",
+    "longDescription": "DeepLaw Knowledge OS reads an explicitly selected local vault of human-reviewed Knowledge Assets and compiles task-specific, hash-verifiable Knowledge Capsules. It is isolated from the DeepLaw Legal Pack and exposes no Agent-facing memory writes.",
+    "developerName": "Eysn0130",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/Eysn0130/DeepLaw",
+    "brandColor": "#102A43",
+    "defaultPrompt": [
+      "Compile a verified Knowledge Capsule for this task"
+    ]
+  }
+}

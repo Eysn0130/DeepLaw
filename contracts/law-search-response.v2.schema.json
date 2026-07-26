@@ -131,8 +131,8 @@
         },
         "max_evidence": { "type": "integer", "minimum": 1, "maximum": 5 },
         "max_chars": { "type": "integer", "minimum": 500, "maximum": 6000 },
-        "max_graph_paths": { "const": 4 },
-        "max_hops": { "const": 1 },
+        "max_graph_paths": { "type": "integer", "enum": [0, 4] },
+        "max_hops": { "type": "integer", "enum": [0, 1] },
         "graph_used": { "type": "boolean" },
         "temporal_reference_date": {
           "type": ["string", "null"],
@@ -147,7 +147,31 @@
             "not_evaluated"
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "route": { "const": "navigation" } },
+            "required": ["route"]
+          },
+          "then": {
+            "properties": {
+              "max_graph_paths": { "const": 0 },
+              "max_hops": { "const": 0 },
+              "graph_used": { "const": false },
+              "channels": {
+                "not": { "contains": { "const": "legal_graph" } }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "max_graph_paths": { "const": 4 },
+              "max_hops": { "const": 1 }
+            }
+          }
+        }
+      ]
     },
     "evidence_compilation": {
       "type": "object",

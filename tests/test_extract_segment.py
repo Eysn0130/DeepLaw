@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -33,8 +34,51 @@ def test_docx_preserves_footnote_at_reference(tmp_path: Path) -> None:
     result = extract_docx(path)
 
     assert result.quality.extractor == "ooxml"
-    assert result.quality.extractor_version == "deeplaw-ooxml/v1"
+    assert result.quality.extractor_version == "deeplaw-ooxml/v2"
     assert "[注1: 脚注原文]" in result.blocks[1].text
+
+
+def test_docx_rejects_dtd_entity_expansion(tmp_path: Path) -> None:
+    path = tmp_path / "entity-expansion.docx"
+    document = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<!DOCTYPE w:document [<!ENTITY injected "EXPANDED">]>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>&injected;</w:t></w:r></w:p></w:body>"
+        "</w:document>"
+    )
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document)
+
+    with pytest.raises(ExtractionError, match="invalid document XML"):
+        extract_docx(path)
+
+
+def test_docx_rejects_dtd_entity_expansion_in_footnotes(tmp_path: Path) -> None:
+    path = tmp_path / "footnote-entity-expansion.docx"
+    document = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>安全正文足以通过最小文本门禁。</w:t></w:r>"
+        '<w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:body>'
+        "</w:document>"
+    )
+    footnotes = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<!DOCTYPE w:footnotes [<!ENTITY injected "EXPANDED">]>'
+        '<w:footnotes xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main">'
+        '<w:footnote w:id="1"><w:p><w:r><w:t>&injected;</w:t></w:r></w:p>'
+        "</w:footnote></w:footnotes>"
+    )
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document)
+        archive.writestr("word/footnotes.xml", footnotes)
+
+    with pytest.raises(ExtractionError, match="invalid DOCX footnotes XML"):
+        extract_docx(path)
 
 
 def test_blank_pdf_is_rejected_by_native_quality_gate(tmp_path: Path) -> None:
@@ -157,3 +201,65 @@ def test_excerpt_maps_compact_match_back_to_source_offset() -> None:
 
     assert "关键目标" in value
     assert len(value) <= 700
+
+
+def test_excerpt_preserves_the_source_suffix_when_the_anchor_is_near_the_end() -> None:
+    text = "前文" * 1000 + "关键目标位于结尾"
+
+    value = excerpt(text, "关键目标", max_chars=80)
+
+    assert value.startswith("…")
+    assert value.endswith("关键目标位于结尾")
+    assert value[1:] == text[-79:]
+
+
+def test_search_terms_remove_english_question_scaffolding_but_keep_meaning() -> None:
+    terms = search_terms("What play did I attend at the local community theater?")
+
+    assert terms == ["play", "attend", "local", "community", "theater"]
+
+
+def test_bounded_search_terms_cover_the_end_of_a_long_agent_task() -> None:
+    query = " ".join(
+        [*(f"prefixtoken{index:02d}" for index in range(40)), "quasarneedle"]
+    )
+
+    terms = search_terms(query, limit=32, cover_tail=True)
+
+    assert len(terms) == 32
+    assert terms[0] == "prefixtoken00"
+    assert terms[-1] == "quasarneedle"
+    assert len(terms) == len(set(terms))
+
+
+def test_bounded_search_terms_keep_prefix_semantics_unless_tail_coverage_requested() -> None:
+    query = " ".join(
+        [*(f"prefixtoken{index:02d}" for index in range(40)), "quasarneedle"]
+    )
+
+    terms = search_terms(query, limit=32)
+
+    assert terms == search_terms(query)[:32]
+    assert "quasarneedle" not in terms
+
+
+def test_excerpt_can_anchor_on_a_distinctive_tail_term_without_changing_default() -> None:
+    query = (
+        " ".join(f"irrelevantprefix{index:02d}" for index in range(40))
+        + " cobaltcheckpoint"
+    )
+    text = (
+        "Prefix material that does not answer the task. " * 40
+        + "The recovery procedure requires cobaltcheckpoint before release."
+    )
+
+    default_excerpt = excerpt(text, query, max_chars=180)
+    knowledge_excerpt = excerpt(
+        text,
+        query,
+        max_chars=180,
+        cover_query_tail=True,
+    )
+
+    assert "cobaltcheckpoint" not in default_excerpt
+    assert "cobaltcheckpoint" in knowledge_excerpt

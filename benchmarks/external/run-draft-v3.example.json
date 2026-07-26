@@ -1,0 +1,70 @@
+{
+  "suite_id": "REPLACE_WITH_REGISTERED_SUITE_ID",
+  "repository_revision": "REPLACE_OR_USE_NULL_FOR_HIDDEN_SUITE",
+  "dataset_revision": "REPLACE_WITH_FIXED_DATASET_REVISION",
+  "dataset_sha256": "REPLACE_WITH_64_LOWERCASE_HEX",
+  "dataset_commitment_artifact": {
+    "path": "REPLACE_WITH_RELATIVE_DATASET_COMMITMENT_PATH",
+    "sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+  },
+  "dataset_committed_at": "REPLACE_WITH_RFC3339_TIME_BEFORE_CANDIDATE_DELIVERY",
+  "baseline_commitment_artifact": {
+    "path": "REPLACE_WITH_RELATIVE_BASELINE_COMMITMENT_PATH",
+    "sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+  },
+  "baseline_configs_committed_at": "REPLACE_WITH_RFC3339_TIME_BEFORE_CANDIDATE_DELIVERY",
+  "candidate_received_at": "REPLACE_WITH_RFC3339_CANDIDATE_DELIVERY_TIME",
+  "candidate_artifact_sha256_observed": "e9481f901ab68485d5bcf687263f8fed6538c4343ecc123c260fa5a27941c5fb",
+  "candidate_install_artifact": {
+    "path": "REPLACE_WITH_RELATIVE_WHEEL_PATH",
+    "sha256": "e9481f901ab68485d5bcf687263f8fed6538c4343ecc123c260fa5a27941c5fb"
+  },
+  "candidate_git_commit_observed": "0b7d21bfaadaa2143381b1c585f34ab4e3322999",
+  "candidate_version_observed": "0.5.0",
+  "candidate_profile_id": "knowledge-context-v1",
+  "candidate_install_clean": true,
+  "candidate_query_network_disabled": true,
+  "candidate_telemetry_disabled": true,
+  "candidate_workspace_isolated": true,
+  "candidate_writes_confined": true,
+  "hidden_case_data_not_retained": true,
+  "full_suite": true,
+  "protocol_frozen_before_run": true,
+  "no_post_freeze_tuning": true,
+  "same_reader_model": true,
+  "same_context_budget": true,
+  "all_failures_retained": true,
+  "reader_model": "REPLACE_WITH_READER_MODEL",
+  "reader_model_revision": "REPLACE_WITH_IMMUTABLE_READER_REVISION",
+  "context_token_budget": 4096,
+  "hardware": "REPLACE_WITH_REPRODUCIBLE_HOST_DESCRIPTION",
+  "index_build_seconds": 0.0,
+  "peak_memory_bytes": 0,
+  "disk_bytes": 0,
+  "model_cost_usd": 0.0,
+  "started_at": "REPLACE_WITH_RFC3339_RUN_START",
+  "completed_at": "REPLACE_WITH_RFC3339_RUN_COMPLETION",
+  "labels_access": "REPLACE_WITH_public_frozen_OR_external_evaluator_only",
+  "independent_evaluator": true,
+  "evaluator_organization": "REPLACE_WITH_INDEPENDENT_ORGANIZATION",
+  "raw_output_artifact": {
+    "path": "REPLACE_WITH_RELATIVE_RAW_OUTPUT_PATH",
+    "sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+  },
+  "comparisons": [
+    {
+      "artifact": {
+        "path": "REPLACE_WITH_RELATIVE_COMPARISON_PATH",
+        "sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+      },
+      "candidate_report_artifact": {
+        "path": "REPLACE_WITH_RELATIVE_CANDIDATE_REPORT_PATH",
+        "sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+      },
+      "baseline_report_artifact": {
+        "path": "REPLACE_WITH_RELATIVE_BASELINE_REPORT_PATH",
+        "sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+      }
+    }
+  ]
+}

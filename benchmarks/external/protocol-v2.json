@@ -1,0 +1,361 @@
+{
+  "schema_version": "deeplaw.external-proof-protocol/v2",
+  "protocol_id": "deeplaw-external-proof/2026-07-26-v2",
+  "frozen_at": "2026-07-26T00:00:00Z",
+  "supersedes_protocol_id": "deeplaw-external-proof/2026-07-26-v1",
+  "candidate": {
+    "system_id": "deeplaw-2.0",
+    "version": "0.4.0",
+    "maintainer_organization": "Eysn0130",
+    "development_suites": [
+      "longmemeval-s-cleaned",
+      "deeplaw-knowledge-scale-synthetic"
+    ],
+    "development_suites_are_claim_eligible": false
+  },
+  "claim_policy": {
+    "unbounded_universal_claim_allowed": false,
+    "minimum_external_suites": 10,
+    "minimum_distinct_named_baselines": 24,
+    "minimum_independent_evaluators": 2,
+    "requires_external_hidden_labels": true,
+    "requires_all_runs_independently_attested": true,
+    "allowed_claim_template": "DeepLaw 2.0 {version} 在 {protocol_id} 的固定语料、模型、上下文预算、成本口径和统计协议下，相对列明的 {baseline_count} 个基线，在 {suite_count} 个外部评测套件上通过了全部预注册质量、安全与效率门禁。"
+  },
+  "fairness": {
+    "same_corpus_per_suite": true,
+    "same_reader_model_per_suite": true,
+    "same_context_token_budget_per_suite": true,
+    "same_query_set_per_suite": true,
+    "same_agent_tools_and_action_budget_per_suite": true,
+    "include_index_build_time_and_cost": true,
+    "amortize_ingestion_cost_over_the_same_registered_query_count": true,
+    "report_query_latency_memory_disk_and_model_cost": true,
+    "no_candidate_specific_question_rewrites": true,
+    "no_post_freeze_threshold_prompt_model_or_routing_tuning": true,
+    "all_failures_abstentions_timeouts_and_retries_retained": true,
+    "public_suites_may_not_be_used_for_post_freeze_development": true
+  },
+  "statistics": {
+    "paired_bootstrap_samples": 10000,
+    "confidence": 0.95,
+    "seed": 20260726,
+    "familywise_primary_correction": "holm-bonferroni",
+    "superiority_familywise_alpha": 0.05,
+    "minimum_effect_size_must_be_registered_per_suite": true,
+    "comparison_artifacts_are_recomputed_by_the_claim_gate": true
+  },
+  "required_dimensions": {
+    "task_success": {
+      "direction": "higher",
+      "gate": "superior",
+      "minimum_effect": 0.01,
+      "noninferiority_margin": 0.0
+    },
+    "useful_context_recall": {
+      "direction": "higher",
+      "gate": "superior",
+      "minimum_effect": 0.01,
+      "noninferiority_margin": 0.0
+    },
+    "irrelevant_context_rate": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "provenance_coverage": {
+      "direction": "higher",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "stale_contradiction_detection": {
+      "direction": "higher",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "forgetting_accuracy": {
+      "direction": "higher",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "memory_poisoning_success_rate": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "unauthorized_mutation_success_rate": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "context_chars": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "query_latency_ms": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    },
+    "amortized_total_cost_usd": {
+      "direction": "lower",
+      "gate": "noninferior",
+      "minimum_effect": 0.0,
+      "noninferiority_margin": 0.0
+    }
+  },
+  "suites": [
+    {
+      "suite_id": "longmemeval-v2",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/xiaowu0162/LongMemEval-V2",
+      "repository_revision": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+      "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+      "required_tier": "small",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "longmemeval-v2/no_retrieval",
+        "longmemeval-v2/rag_query_to_slice",
+        "longmemeval-v2/rag_query_to_slice_notes",
+        "longmemeval-v2/agentrunbook_r",
+        "longmemeval-v2/codex",
+        "longmemeval-v2/agentrunbook_c"
+      ]
+    },
+    {
+      "suite_id": "memoryagentbench",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/HUST-AI-HYZ/MemoryAgentBench",
+      "repository_revision": "455306dcabc3842526eb83cd4e225e5d486c5c5d",
+      "dataset_revision": "7ea066982b140a19337e17e60d45d4076e042faf",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "stale_contradiction_detection",
+        "context_chars",
+        "query_latency_ms"
+      ],
+      "named_baselines": [
+        "memoryagentbench/long_context",
+        "memoryagentbench/embedding_retriever",
+        "memoryagentbench/raptor",
+        "memoryagentbench/self_rag",
+        "memoryagentbench/graph_rag",
+        "memoryagentbench/zep",
+        "memoryagentbench/mem0"
+      ]
+    },
+    {
+      "suite_id": "memora",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/geniesinc/Memora",
+      "repository_revision": "a6493188efc836d6511ed5e4163fe3ba87da30ff",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "stale_contradiction_detection",
+        "forgetting_accuracy",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "memora/full_history",
+        "memora/a_mem",
+        "memora/langmem",
+        "memora/mem0",
+        "memora/memobase",
+        "memora/memoryos",
+        "memora/nemori"
+      ]
+    },
+    {
+      "suite_id": "state-bench-agent-learning",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/microsoft/STATE-Bench",
+      "repository_revision": "4efcbf2d4fe60df04878859b692d9391f3d5b33a",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_track": "agent-learning",
+      "required_dimensions": [
+        "task_success",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "state-bench/no_learning",
+        "state-bench/full_train_history",
+        "state-bench/bm25_learning",
+        "state-bench/embedding_learning"
+      ]
+    },
+    {
+      "suite_id": "agent-memory-benchmark",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/vectorize-io/agent-memory-benchmark",
+      "repository_revision": "aa9273ab9e34bbeaff3c6ef2f694142a552d5b22",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "agent-memory-benchmark/full_context",
+        "agent-memory-benchmark/bm25",
+        "agent-memory-benchmark/vector",
+        "agent-memory-benchmark/hybrid"
+      ]
+    },
+    {
+      "suite_id": "legalbench-rag",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/zeroentropy-ai/legalbenchrag",
+      "repository_revision": "431bc8f2488a81569ab7259fa633dcc50ab77f9a",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "legalbench-rag/openai-embedding-naive-500",
+        "legalbench-rag/openai-embedding-rcts-500",
+        "legalbench-rag/openai-embedding-cohere-rerank-naive-500",
+        "legalbench-rag/openai-embedding-cohere-rerank-rcts-500"
+      ]
+    },
+    {
+      "suite_id": "legal-rag-bench",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/isaacus-dev/legal-rag-bench",
+      "repository_revision": "9e30a36d1ef58cd35ec4ed724ef3e5edc6b0d00b",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "legal-rag-bench/kanon2",
+        "legal-rag-bench/openai-text-embedding-3-large",
+        "legal-rag-bench/gemini-embedding-001"
+      ]
+    },
+    {
+      "suite_id": "agent-security-bench",
+      "role": "external_public_frozen",
+      "repository": "https://github.com/agiresearch/ASB",
+      "repository_revision": "1f561dccf92d55302368fa67679b4ba9d9c8fdc4",
+      "dataset_revision": "sha256-required-at-execution",
+      "official_evaluation": true,
+      "required_attack_tracks": [
+        "memory_poisoning",
+        "observation_prompt_injection"
+      ],
+      "required_dimensions": [
+        "task_success",
+        "memory_poisoning_success_rate",
+        "unauthorized_mutation_success_rate"
+      ],
+      "named_baselines": [
+        "agent-security-bench/no_defense",
+        "agent-security-bench/delimiter_defense",
+        "agent-security-bench/instructional_prevention",
+        "agent-security-bench/paraphrase_defense"
+      ]
+    },
+    {
+      "suite_id": "independent-hidden-knowledge-os",
+      "role": "external_hidden",
+      "repository": null,
+      "repository_revision": null,
+      "dataset_revision": "third-party-commitment-required-before-candidate-delivery",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "stale_contradiction_detection",
+        "forgetting_accuracy",
+        "memory_poisoning_success_rate",
+        "unauthorized_mutation_success_rate",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "independent/full_context",
+        "independent/keyword",
+        "independent/vector",
+        "independent/hybrid",
+        "independent/hierarchical",
+        "independent/graph",
+        "independent/wiki",
+        "independent/agentic"
+      ]
+    },
+    {
+      "suite_id": "independent-hidden-cn-legal",
+      "role": "external_hidden",
+      "repository": null,
+      "repository_revision": null,
+      "dataset_revision": "third-party-commitment-required-before-candidate-delivery",
+      "official_evaluation": true,
+      "required_dimensions": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "stale_contradiction_detection",
+        "unauthorized_mutation_success_rate",
+        "context_chars",
+        "query_latency_ms",
+        "amortized_total_cost_usd"
+      ],
+      "named_baselines": [
+        "independent-cn-legal/keyword",
+        "independent-cn-legal/vector",
+        "independent-cn-legal/hybrid",
+        "independent-cn-legal/reranked",
+        "independent-cn-legal/hierarchical",
+        "independent-cn-legal/graph",
+        "independent-cn-legal/wiki",
+        "independent-cn-legal/agentic"
+      ]
+    }
+  ]
+}

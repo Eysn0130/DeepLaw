@@ -82,7 +82,7 @@ active -> superseded | revoked
 - `revoked`：发现完整性、来源、许可或重大内容错误；停止新查询并保留审计记录。
 - `rejected`：未通过发布闸门，不能通过 `--allow-needs-ocr` 等开发选项绕过。
 
-当前 v0.3.0 构建器会校验路径、大小、SHA-256、HTTPS 来源和 PDF 文本质量，但尚未机械
+当前 v0.5.0 构建器会校验路径、大小、SHA-256、HTTPS 来源和 PDF 文本质量，但尚未机械
 执行本政策的全部人工闸门。`deeplaw build --activate` 只改变本地 ACTIVE 指针，不是
 许可、隐私、时效或法律有效性证明。生产发布流程必须在其外层实施本政策。
 
@@ -149,7 +149,7 @@ active -> superseded | revoked
 修改决定不能由 LLM 自动合并为现行文本；如生成合并视图，必须保存确定性变换记录、
 逐条来源和人工批准。日期过滤只说明候选时间相符，不自动证明案件适用。
 
-review overlay 中的关系是绑定来源 hash 的治理提案。v0.3.0 运行时不会把这些提案写入
+review overlay 中的关系是绑定来源 hash 的治理提案。v0.5.0 运行时不会把这些提案写入
 `legal_edges`，也没有生成 `reviewed` 边的生产路径；当前运行时图只包含从来源 segment 中
 精确文件名引用派生并保留 segment/hash provenance 的 `deterministic_exact` 导航边。
 
@@ -211,7 +211,9 @@ review overlay 中的关系是绑定来源 hash 的治理提案。v0.3.0 运行�
 - 法律 release 不得直接打开案件 SQLite/DuckDB，也不得接受案件路径、`caseId` 或完整事实。
 
 OCR、PDF renderer 和可选结构化文档引擎只由显式选择的离线构建路径调用，不是 MCP 运行时
-依赖，也不是操作系统级网络沙箱；需要更强隔离时由构建环境另行实施。
+依赖。文档模型仅由独立的 `deeplaw document-engine setup` 管理命令获取；摄取前会复核固定
+revision 的完整文件集合、大小和 SHA-256，并向引擎注入临时 local-only 配置，摄取过程不会
+下载模型。该控制不是通用操作系统级网络沙箱；需要隔离其他本机工具时仍由构建环境实施。
 
 ## 派生数据政策
 

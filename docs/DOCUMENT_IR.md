@@ -1,6 +1,6 @@
 # DeepLaw 2.0 Document IR 与文件摄取
 
-Status: implemented baseline in `v0.3.0`, 2026-07-16.
+Status: implemented baseline in `v0.5.0`, reviewed 2026-07-26.
 
 ## 结论
 
@@ -25,11 +25,16 @@ Markdown 适合阅读，不适合承担以下规范信息：页面坐标、表�
 | PDF（可靠文本层） | native-first，按页保留文本与定位 | 原 PDF 保留并绑定 hash | 已实现 |
 | PDF（扫描或风险页） | 页面图像、原文本层、独立 OCR 与结构化文档引擎候选进行逐页门控 | 原 PDF 保留并绑定 hash | 已实现 |
 | UTF-8 TXT | 按行/段落形成有序 block | 原字节保留并绑定 hash | 用户私有库已实现 |
-| 历史 DOC | 必须先由受控离线转换器生成 DOCX，并同时保留原 DOC hash、转换器版本和输出 hash | 禁止静默丢弃 DOC 原件 | 尚不接受直接导入 |
+| 历史 DOC | 必须先由受控离线转换器生成 DOCX，并同时保留原 DOC hash、转换器版本和输出 hash | 禁止静默丢弃 DOC 原件 | 通用 vault 已实现；Legal Pack 尚不接受 |
 
-不直接接受历史 DOC 是刻意的 fail-closed 边界：如果只保存转换后的 DOCX，receipt 无法证明它
-来自哪个 DOC；如果只保存 DOC，当前构建器又无法确定性解析。未来直接导入必须先把双 hash 和
-转换 provenance 加入 release contract，不能用“能打开”代替可追溯性。
+这里的“尚不接受直接导入”特指官方 Legal Pack 构建器。通用 Knowledge Compiler 已允许本机
+owner 显式摄取 legacy DOC：原 DOC 字节保存在 owner-only vault，LibreOffice 在独立临时 HOME
+与 profile 中离线生成 DOCX，并记录转换器版本和输出 DOCX hash 后再进入 OOXML 抽取。这个
+转换仍不是安全沙箱或人工审核；处理不可信 DOC 时应在操作系统/容器隔离中执行。官方法源若
+需要 legacy DOC，必须先把同样的双 hash 与转换 provenance 纳入 release contract。
+
+DOCX 抽取器 `deeplaw-ooxml/v2` 在成员大小与压缩比门禁之外，使用拒绝 DTD、实体展开和外部
+引用的安全 XML 解析器；解析器身份变化进入 release 构建记录，不能伪装成旧版抽取结果。
 
 ## Document IR
 
@@ -61,11 +66,12 @@ DeepLaw Document Engine 不是“换一个解析器就相信结果”。流程�
 7. 人工覆盖必须同时绑定 source PDF hash、渲染页 hash、复核人、时间和声明。
 
 这使结构化解析成为候选生成能力，而不是自动获得权威性的捷径。工具输出只读取结构化 JSON，
-不会把引擎生成的 Markdown 当成真源。
+不会把引擎生成的 Markdown 当成真源。`content_list_v2` 的段落、题名、列表项、页眉页脚、
+页码、脚注、公式、代码和表格字段均由显式 allowlist 投影；未知字段不能进入法律正文。
 
 ## Markdown 派生视图
 
-`v0.3.0` 可以从一个已验证的 immutable release 确定性导出 Markdown：
+`v0.5.0` 可以从一个已验证的 immutable release 确定性导出 Markdown：
 
 ```bash
 deeplaw export-markdown \

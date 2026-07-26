@@ -197,8 +197,10 @@ def _run_bounded(
     except OSError as error:
         raise DocumentEngineError(f"document engine failed to start: {error}") from error
 
-    assert process.stdout is not None
-    assert process.stderr is not None
+    if process.stdout is None or process.stderr is None:  # pragma: no cover
+        _kill_process(process)
+        process.wait()
+        raise DocumentEngineError("document engine failed to create bounded output pipes")
     capture = _BoundedCapture(capture_limit)
     readers = [
         threading.Thread(target=capture.drain, args=(process.stdout,), daemon=True),
@@ -425,19 +427,35 @@ def _plain_html(value: str) -> str:
 
 _TEXT_CONTENT_KEYS = frozenset(
     {
+        "algorithm_caption",
+        "algorithm_content",
+        "algorithm_footnote",
+        "chart_caption",
+        "chart_footnote",
+        "code_caption",
         "content",
-        "text",
-        "text_content",
-        "title_content",
+        "code_content",
+        "code_footnote",
+        "equation",
+        "html",
+        "item_content",
+        "latex",
         "list_content",
         "list_items",
+        "math_content",
+        "page_aside_text_content",
+        "page_footer_content",
+        "page_footnote_content",
+        "page_header_content",
+        "page_number_content",
+        "paragraph_content",
+        "reference_content",
         "table_caption",
         "table_body",
         "table_footnote",
-        "html",
-        "code_content",
-        "equation",
-        "latex",
+        "text",
+        "text_content",
+        "title_content",
     }
 )
 _HTML_CONTENT_KEYS = frozenset({"html", "table_body"})
@@ -610,7 +628,7 @@ def extract_pdf_page_range(
         raise DocumentEngineError("timeout_seconds must be a positive number")
     for field, value, allowed in (
         ("method", method, {"auto", "txt", "ocr"}),
-        ("backend", backend, {"pipeline", "vlm-engine", "hybrid-engine"}),
+        ("backend", backend, {"pipeline"}),
     ):
         if value not in allowed:
             raise DocumentEngineError(f"unsupported {field}: {value}")
@@ -666,7 +684,7 @@ def extract_pdf_page_range(
 
     return DocumentEngineResult(
         pages=pages,
-        engine="mineru-compatible-cli",
+        engine="deeplaw-document-engine",
         engine_version=version,
         output_schema=output_schema,
         configuration=(

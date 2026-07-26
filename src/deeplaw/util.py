@@ -17,8 +17,84 @@ _ARTICLE = re.compile(
 _SPACE = re.compile(r"\s+")
 _PUNCT = re.compile(r"[^0-9a-z\u3400-\u4dbf\u4e00-\u9fff]+")
 _CANONICAL_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_INSTRUCTION_PATTERNS = (
+    re.compile(r"\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions?\b", re.I),
+    re.compile(r"\b(?:system|developer)\s+(?:prompt|message|instructions?)\b", re.I),
+    re.compile(r"\byou\s+are\s+(?:chatgpt|claude|an?\s+ai|the\s+assistant)\b", re.I),
+    re.compile(r"(?:调用|使用|执行).{0,20}(?:工具|命令|shell|终端|MCP)", re.I),
+    re.compile(r"(?:忽略|覆盖|替换).{0,20}(?:之前|以上|系统|开发者).{0,20}(?:指令|规则)", re.I),
+    re.compile(r"<(?:script|iframe|object|embed)\b", re.I),
+)
+_INVISIBLE_OR_BIDI = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]")
 
 _STOP_TERMS = {
+    "a",
+    "about",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "been",
+    "being",
+    "can",
+    "could",
+    "did",
+    "do",
+    "does",
+    "for",
+    "from",
+    "had",
+    "has",
+    "have",
+    "he",
+    "her",
+    "hers",
+    "him",
+    "his",
+    "how",
+    "i",
+    "if",
+    "in",
+    "is",
+    "it",
+    "its",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "our",
+    "ours",
+    "please",
+    "she",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "they",
+    "this",
+    "to",
+    "us",
+    "ve",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "with",
+    "would",
+    "you",
+    "your",
+    "yours",
     "什么",
     "如何",
     "是否",
@@ -50,7 +126,38 @@ def sha256_file(path: Path) -> str:
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def has_instruction_risk(text: str) -> bool:
+    return bool(_INVISIBLE_OR_BIDI.search(text)) or any(
+        pattern.search(text) for pattern in _INSTRUCTION_PATTERNS
+    )
+
+
+def strict_json_loads(value: str | bytes | bytearray) -> Any:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON object key: {key}")
+            result[key] = item
+        return result
+
+    def reject_constant(constant: str) -> None:
+        raise ValueError(f"non-finite JSON number is not allowed: {constant}")
+
+    return json.loads(
+        value,
+        object_pairs_hook=unique_object,
+        parse_constant=reject_constant,
+    )
 
 
 def stable_id(prefix: str, *parts: str, length: int = 24) -> str:
@@ -103,7 +210,12 @@ def cjk_ngrams(run: str, sizes: Iterable[int] = (2, 3)) -> list[str]:
     return values
 
 
-def search_terms(text: str, *, limit: int | None = None) -> list[str]:
+def search_terms(
+    text: str,
+    *,
+    limit: int | None = None,
+    cover_tail: bool = False,
+) -> list[str]:
     normalized = normalize_text(text).lower()
     terms: list[str] = []
     for run in _CJK_RUN.findall(normalized):
@@ -121,9 +233,23 @@ def search_terms(text: str, *, limit: int | None = None) -> list[str]:
             continue
         seen.add(term)
         unique.append(term)
-        if limit is not None and len(unique) >= limit:
-            break
-    return unique
+    if limit is None or len(unique) <= limit:
+        return unique
+    if limit <= 0:
+        return []
+    if not cover_tail:
+        return unique[:limit]
+    if limit == 1:
+        return [unique[0]]
+
+    # Long Agent tasks often put the actual entity or acceptance condition
+    # after a sizeable setup paragraph. Taking only the first N terms makes
+    # those tail constraints undiscoverable. Sample the complete ordered term
+    # stream instead, retaining both boundaries and deterministic coverage of
+    # the middle without expanding the FTS query bound.
+    last = len(unique) - 1
+    indexes = [round(index * last / (limit - 1)) for index in range(limit)]
+    return [unique[index] for index in indexes]
 
 
 def fts_query(terms: Iterable[str]) -> str:
@@ -131,13 +257,27 @@ def fts_query(terms: Iterable[str]) -> str:
     return " OR ".join(f'"{term}"' for term in safe)
 
 
-def excerpt(text: str, query: str, max_chars: int = 700) -> str:
+def excerpt(
+    text: str,
+    query: str,
+    max_chars: int = 700,
+    *,
+    cover_query_tail: bool = False,
+) -> str:
     text = normalize_text(text)
     if max_chars <= 0:
         return ""
     if len(text) <= max_chars:
         return text
-    anchors = [term for term in search_terms(query, limit=12) if len(term) >= 2]
+    anchors = [
+        term
+        for term in search_terms(
+            query,
+            limit=12,
+            cover_tail=cover_query_tail,
+        )
+        if len(term) >= 2
+    ]
     offset = 0
     compact_characters: list[str] = []
     source_offsets: list[int] = []
@@ -157,6 +297,8 @@ def excerpt(text: str, query: str, max_chars: int = 700) -> str:
     value = ("…" if start else "") + text[start:end] + ("…" if end < len(text) else "")
     if len(value) <= max_chars:
         return value
+    if value.startswith("…") and not value.endswith("…") and max_chars > 1:
+        return "…" + text[-(max_chars - 1) :]
     if value.endswith("…") and max_chars > 1:
         return value[: max_chars - 1] + "…"
     return value[:max_chars]

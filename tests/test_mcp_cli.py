@@ -47,6 +47,17 @@ def test_cli_accepts_explicit_stdio_alias() -> None:
     assert arguments.stdio is True
 
 
+def test_cli_exposes_explicit_document_model_setup_and_status_only() -> None:
+    setup = _parser().parse_args(
+        ["document-engine", "setup", "--local-files-only"]
+    )
+    status = _parser().parse_args(["document-engine", "status"])
+
+    assert setup.document_engine_command == "setup"
+    assert setup.local_files_only is True
+    assert status.document_engine_command == "status"
+
+
 def test_cli_build_default_uses_shared_deeplaw_home(
     tmp_path: Path,
     monkeypatch,
