@@ -32,9 +32,9 @@ DeepLaw 永久拒绝无边界的世界第一或全面领先文案。可以成立
 ## 已冻结的外部组合
 
 当前机器协议位于
-[`benchmarks/external/protocol-v2.json`](../benchmarks/external/protocol-v2.json)；
-`protocol-v1.json` 只保留为历史记录，claim gate 会明确拒绝它。2026-07-26 冻结的
-v2 组合不是围绕 DeepLaw 自建，而是覆盖互补能力：
+[`benchmarks/external/protocol-v3.json`](../benchmarks/external/protocol-v3.json)；
+`protocol-v1.json` 与 `protocol-v2.json` 只保留为历史记录，claim gate 会明确拒绝它们。
+2026-07-26 冻结的 v3 组合绑定 `v0.5.0` 候选，不是围绕 DeepLaw 自建，而是覆盖互补能力：
 
 | 套件 | 固定上游 | 主要检查 | 证据角色 |
 | --- | --- | --- | --- |
@@ -52,6 +52,19 @@ v2 组合不是围绕 DeepLaw 自建，而是覆盖互补能力：
 协议共要求 10 个套件、55 个预注册具名基线和 11 个不可相互抵消的质量/安全/效率维度。
 公开套件的仓库 commit 固定；数据集完整字节、官方 revision 和 SHA-256 在执行 manifest 中
 再次绑定。两个隐藏套件必须在候选交付前提交 commitment。
+
+v3 还固定 `knowledge-context-v1` 作为候选运行面：每个套件都必须从同一个 SHA-256
+绑定 wheel 干净安装，Discovery 默认关闭，查询期禁止联网和遥测，运行写入只能发生在评测方
+隔离 workspace，生成内容不具权威性，法律权威必须回到精确来源。数据集与全部 baseline
+配置 commitment 必须在评测方接收候选之前产生；每次运行重新核对候选版本、commit 和
+artifact hash。这些事实进入 suite manifest 并由独立评测方签名，不能靠维护者口头声明。
+
+独立评测方可从
+[`run-draft-v3.example.json`](../benchmarks/external/run-draft-v3.example.json)、
+[`dataset-commitment-v1.example.json`](../benchmarks/external/dataset-commitment-v1.example.json)
+和
+[`baseline-commitment-v1.example.json`](../benchmarks/external/baseline-commitment-v1.example.json)
+复制封闭结构；所有 `REPLACE_...` 值都必须替换。示例不是证据，原样提交会被门禁拒绝。
 
 当前提供两类可执行 DeepLaw 适配器：
 
@@ -133,11 +146,15 @@ uv run python benchmarks/external/normalize_metrics.py --help
 uv run python benchmarks/external/compare_reports.py --help
 
 # 生成供独立评测方签名的封闭 suite evidence manifest
-uv run python benchmarks/external/build_suite_manifest.py --help
+uv run python benchmarks/external/build_suite_manifest.py \
+  --protocol benchmarks/external/protocol-v3.json \
+  --candidate benchmarks/external/candidate-v0.5.0.json \
+  --run-draft /absolute/path/to/run-draft.json \
+  --output /absolute/path/to/suite-evidence-manifest.json
 
 # 宣称门禁；pending 证据按设计返回退出码 2
 uv run python benchmarks/external/claim_gate.py \
-  --protocol benchmarks/external/protocol-v2.json \
+  --protocol benchmarks/external/protocol-v3.json \
   --evidence benchmarks/external/claim-evidence.pending.json
 ```
 
@@ -147,7 +164,9 @@ uv run python benchmarks/external/claim_gate.py \
 
 每个 run 的 suite evidence manifest 同时绑定：
 
-- protocol、候选 commit 和 wheel/container SHA；
+- protocol、候选 commit 和归档中可重新计算 SHA 的精确 wheel；
+- 在候选交付之前固定的数据集 commitment，以及覆盖每个具名 baseline 的实现 revision、
+  配置 hash 和环境 hash；
 - 上游 repository/dataset revision 与完整数据 SHA；
 - reader model/revision、Token 预算、硬件、开始/结束时间；
 - 索引时间、峰值内存、磁盘和模型成本；
@@ -187,16 +206,17 @@ reference 因而不能被表述为已提炼的长期偏好。`v0.5.0` 已把候�
 
 当前
 [`claim-evidence.pending.json`](../benchmarks/external/claim-evidence.pending.json)
-已固定候选 commit `51e50172e0c2d920eb51c8105689c74efa9d42da` 与可重复构建 wheel
-SHA-256 `e80a34d064879189730b55827e724bf4c23405301f602a6ea5c3daeaf4ed5b93`；
-连续两次隔离构建得到相同 wheel 和 sdist hash。证据仍会被门禁明确阻断，因为十套件真实
-run、第三方秘密留出和独立复现尚未到齐。
+已按 v3 固定候选 commit `0b7d21bfaadaa2143381b1c585f34ab4e3322999` 与可重复构建
+wheel SHA-256 `e9481f901ab68485d5bcf687263f8fed6538c4343ecc123c260fa5a27941c5fb`。
+协议 canonical SHA-256
+`188414a827d0779c2647e60eaefda3453ac1958e4ce791b9d46772796f636744`
+已硬编码进 claim gate；历史 v0.4.0 pending 证据另存为
+[`claim-evidence-v0.4.0.pending.json`](../benchmarks/external/claim-evidence-v0.4.0.pending.json)，
+没有改名转移。
 
-以上 v2 protocol、commit、wheel 和 pending evidence 都永久属于 `v0.4.0` 候选。`v0.5.0`
-改变了候选发现行为，不能继承、改名或覆盖该协议。v0.5.0 的正确施工顺序是：先固定本次源码
-commit 和可重复 wheel；再在任何外部结果被开发团队查看前冻结一个新协议和隐藏数据
-commitment；最后由独立评测方执行。当前 v0.5.0 状态为
-`pending_new_frozen_protocol`，没有跨系统性能主张资格。
+当前状态已从“等待冻结新协议”推进为 `pending_external_execution`。证据仍会被门禁明确
+阻断，因为十套件真实 run、候选交付前的数据与 baseline commitment、第三方秘密留出和两家
+独立签名复现尚未到齐。完成这些工作需要真正独立的评测方；开发团队自行生成签名不计数。
 
 ## 外部评测方交付检查表
 

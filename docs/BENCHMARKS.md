@@ -22,9 +22,10 @@
   `claim_eligible=false`，不证明自然语言质量。
 
 v0.5.0 没有沿用 v0.4.0 的外部候选 artifact 或 pending evidence。旧 v2 协议已经冻结候选
-版本 `0.4.0`，不能改名后转移给 `0.5.0`。v0.5.0 必须在候选 commit 与 wheel 固定后另行冻结
-新协议，并由外部 held-out 和独立签名运行产生证据；当前状态是
-`pending_new_frozen_protocol`。
+版本 `0.4.0`，不能改名后转移给 `0.5.0`。当前 v3 已绑定候选 commit
+`0b7d21bfaadaa2143381b1c585f34ab4e3322999` 与 wheel SHA-256
+`e9481f901ab68485d5bcf687263f8fed6538c4343ecc123c260fa5a27941c5fb`；
+状态是 `pending_external_execution`，只能由外部 held-out 与独立签名运行补齐。
 
 ## 保留的 v0.4.0 Legal Pack 安装后快照
 
@@ -194,16 +195,16 @@ Recall@5 `0.60`、无关率 `0.85`；其余 50 题 Hit@1 为 `0.98`。这不是�
 ## 外部 held-out 与宣称硬门禁
 
 跨系统性能主张按
-[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md) 执行。历史 v2 协议为
-`0.4.0` 冻结了十个
-互补套件、55 个预注册具名 baseline、11 个质量/安全/效率维度、逐题配对统计、资源计量、
-两个秘密 held-out 和至少两家独立 Ed25519 attestation。机器门禁位于
+[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md) 执行。当前 v3 协议为
+`0.5.0` 冻结了十个互补套件、55 个预注册具名 baseline、11 个质量/安全/效率维度、逐题
+配对统计、资源计量、两个秘密 held-out 和至少两家独立 Ed25519 attestation。机器门禁位于
 [`benchmarks/external/claim_gate.py`](../benchmarks/external/claim_gate.py)；当前 pending
 evidence 按设计返回退出码 `2`。
 
-v0.5.0 新增了会影响检索行为的候选发现实现，不能继承这份冻结协议与 artifact。正确顺序是：
-先冻结 v0.5.0 源码和 wheel，再在任何外部测试结果被开发团队查看前发布新协议与数据
-commitment，最后由独立评测方运行。当前 v0.5.0 候选没有跨系统性能主张资格。
+v3 逐套件要求数据与 baseline 配置 commitment 早于候选交付，重新核验候选 artifact、
+commit、版本与固定 `knowledge-context-v1` 运行面，并签名确认干净安装、隔离 workspace、
+查询期断网/无遥测、写入边界和隐藏数据不保留。当前尚无真实外部运行，所以 v0.5.0
+候选没有跨系统性能主张资格。
 
 中文法律秘密套件仍需要独立专家标注，至少增加：
 

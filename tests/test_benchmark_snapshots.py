@@ -94,5 +94,38 @@ def test_current_knowledge_os_candidate_snapshot_is_source_bound() -> None:
     assert discovery["candidate"]["version"] == snapshot["package_version"]
     assert discovery["decision"]["default_activation"] == "rejected"
     assert scale["candidate"]["version"] == snapshot["package_version"]
-    assert snapshot["external_proof"]["status"] == "pending_new_frozen_protocol"
+    external_proof = snapshot["external_proof"]
+    assert external_proof["status"] == "pending_external_execution"
     assert snapshot["external_proof"]["unbounded_claim_allowed"] is False
+    protocol = json.loads(
+        (
+            repository / "benchmarks/external/protocol-v3.json"
+        ).read_text(encoding="utf-8")
+    )
+    protocol_canonical = json.dumps(
+        protocol,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    assert (
+        hashlib.sha256(protocol_canonical).hexdigest()
+        == external_proof["protocol_canonical_sha256"]
+    )
+    pending = json.loads(
+        (
+            repository / "benchmarks/external/claim-evidence.pending.json"
+        ).read_text(encoding="utf-8")
+    )
+    candidate_identity = json.loads(
+        (
+            repository / "benchmarks/external/candidate-v0.5.0.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert pending["protocol_id"] == external_proof["protocol"]
+    assert candidate_identity == pending["candidate"]
+    assert pending["candidate"]["git_commit"] == external_proof["candidate_git_commit"]
+    assert (
+        pending["candidate"]["artifact_sha256"]
+        == external_proof["candidate_wheel_sha256"]
+    )

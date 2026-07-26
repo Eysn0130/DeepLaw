@@ -38,12 +38,14 @@ else:
         write_json,
     )
 
-PROTOCOL_SCHEMA = "deeplaw.external-proof-protocol/v2"
+PROTOCOL_SCHEMA = "deeplaw.external-proof-protocol/v3"
 EVIDENCE_SCHEMA = "deeplaw.claim-evidence/v1"
 GATE_SCHEMA = "deeplaw.claim-gate/v1"
 SUITE_EVIDENCE_SCHEMA = "deeplaw.external-suite-evidence/v1"
+DATASET_COMMITMENT_SCHEMA = "deeplaw.dataset-commitment/v1"
+BASELINE_COMMITMENT_SCHEMA = "deeplaw.baseline-commitment/v1"
 FROZEN_PROTOCOL_CANONICAL_SHA256 = (
-    "d3a472c48df3d18d7f43310bb55658ad28d46a8691a981bb883074ec39d1f369"
+    "188414a827d0779c2647e60eaefda3453ac1958e4ce791b9d46772796f636744"
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
@@ -130,6 +132,139 @@ def _finite_nonnegative(value: Any) -> bool:
         and math.isfinite(value)
         and value >= 0
     )
+
+
+def _dataset_commitment_errors(
+    artifact: Any,
+    *,
+    base: Path,
+    protocol_id: Any,
+    suite: dict[str, Any],
+    run: dict[str, Any],
+) -> list[str]:
+    try:
+        commitment = _read_bound_json(artifact, base=base)
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        return [f"dataset commitment artifact is invalid: {error}"]
+    expected_fields = {
+        "schema_version",
+        "protocol_id",
+        "suite_id",
+        "evaluator_organization",
+        "repository_revision",
+        "dataset_revision",
+        "dataset_sha256",
+        "case_count",
+        "corpus_record_count",
+        "labels_access",
+        "committed_at",
+    }
+    errors: list[str] = []
+    if set(commitment) != expected_fields:
+        errors.append("dataset commitment does not match the closed shape")
+        return errors
+    expected_labels_access = (
+        "external_evaluator_only"
+        if suite.get("role") == "external_hidden"
+        else "public_frozen"
+    )
+    expected_values = {
+        "schema_version": DATASET_COMMITMENT_SCHEMA,
+        "protocol_id": protocol_id,
+        "suite_id": run.get("suite_id"),
+        "evaluator_organization": run.get("evaluator_organization"),
+        "repository_revision": run.get("repository_revision"),
+        "dataset_revision": run.get("dataset_revision"),
+        "dataset_sha256": run.get("dataset_sha256"),
+        "labels_access": expected_labels_access,
+        "committed_at": run.get("dataset_committed_at"),
+    }
+    if any(commitment.get(field) != value for field, value in expected_values.items()):
+        errors.append("dataset commitment does not bind the complete frozen dataset")
+    for field in ("case_count", "corpus_record_count"):
+        value = commitment.get(field)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not 0 <= value <= 100_000_000
+        ):
+            errors.append(f"dataset commitment {field} is invalid")
+    if not _SHA256.fullmatch(str(commitment.get("dataset_sha256"))):
+        errors.append("dataset commitment SHA-256 is invalid")
+    if _timestamp(commitment.get("committed_at")) is None:
+        errors.append("dataset commitment timestamp is invalid")
+    return errors
+
+
+def _baseline_commitment_errors(
+    artifact: Any,
+    *,
+    base: Path,
+    protocol_id: Any,
+    suite: dict[str, Any],
+    run: dict[str, Any],
+) -> list[str]:
+    try:
+        commitment = _read_bound_json(artifact, base=base)
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        return [f"baseline commitment artifact is invalid: {error}"]
+    expected_fields = {
+        "schema_version",
+        "protocol_id",
+        "suite_id",
+        "evaluator_organization",
+        "baselines",
+        "committed_at",
+    }
+    errors: list[str] = []
+    if set(commitment) != expected_fields:
+        errors.append("baseline commitment does not match the closed shape")
+        return errors
+    if (
+        commitment.get("schema_version") != BASELINE_COMMITMENT_SCHEMA
+        or commitment.get("protocol_id") != protocol_id
+        or commitment.get("suite_id") != run.get("suite_id")
+        or commitment.get("evaluator_organization")
+        != run.get("evaluator_organization")
+        or commitment.get("committed_at")
+        != run.get("baseline_configs_committed_at")
+        or _timestamp(commitment.get("committed_at")) is None
+    ):
+        errors.append("baseline commitment does not bind the suite and evaluator")
+    baselines = commitment.get("baselines")
+    if not isinstance(baselines, list) or not baselines or len(baselines) > 256:
+        errors.append("baseline commitment baselines are invalid")
+        return errors
+    expected_baselines = set(suite.get("named_baselines", []))
+    observed_baselines: set[str] = set()
+    expected_baseline_fields = {
+        "baseline_system_id",
+        "implementation_revision",
+        "configuration_sha256",
+        "environment_sha256",
+    }
+    for baseline in baselines:
+        if not isinstance(baseline, dict) or set(baseline) != expected_baseline_fields:
+            errors.append("baseline commitment entry does not match the closed shape")
+            continue
+        baseline_id = baseline.get("baseline_system_id")
+        if (
+            not isinstance(baseline_id, str)
+            or not baseline_id
+            or baseline_id in observed_baselines
+        ):
+            errors.append("baseline commitment contains an invalid or duplicate ID")
+            continue
+        observed_baselines.add(baseline_id)
+        revision = baseline.get("implementation_revision")
+        if not isinstance(revision, str) or not revision or len(revision) > 500:
+            errors.append(f"baseline {baseline_id} implementation revision is invalid")
+        for field in ("configuration_sha256", "environment_sha256"):
+            if not _SHA256.fullmatch(str(baseline.get(field))):
+                errors.append(f"baseline {baseline_id} {field} is invalid")
+    if observed_baselines != expected_baselines:
+        errors.append("baseline commitment does not cover every registered baseline")
+    return errors
 
 
 def _signed_evaluator_attestations(
@@ -532,6 +667,22 @@ _RUN_FIELDS = {
     "repository_revision",
     "dataset_revision",
     "dataset_sha256",
+    "dataset_commitment_artifact",
+    "dataset_committed_at",
+    "baseline_commitment_artifact",
+    "baseline_configs_committed_at",
+    "candidate_received_at",
+    "candidate_artifact_sha256_observed",
+    "candidate_install_artifact",
+    "candidate_git_commit_observed",
+    "candidate_version_observed",
+    "candidate_profile_id",
+    "candidate_install_clean",
+    "candidate_query_network_disabled",
+    "candidate_telemetry_disabled",
+    "candidate_workspace_isolated",
+    "candidate_writes_confined",
+    "hidden_case_data_not_retained",
     "full_suite",
     "protocol_frozen_before_run",
     "no_post_freeze_tuning",
@@ -593,7 +744,7 @@ def evaluate_claim(
     if protocol.get("schema_version") != PROTOCOL_SCHEMA:
         errors.append("unsupported protocol schema")
     if _canonical_sha256(protocol) != FROZEN_PROTOCOL_CANONICAL_SHA256:
-        errors.append("protocol content differs from the frozen v2 commitment")
+        errors.append("protocol content differs from the frozen v3 commitment")
     if evidence.get("schema_version") != EVIDENCE_SCHEMA:
         errors.append("unsupported evidence schema")
     if set(evidence) != expected_evidence_fields:
@@ -614,6 +765,41 @@ def evaluate_claim(
     if not isinstance(protocol_candidate, dict):
         errors.append("protocol candidate is invalid")
         protocol_candidate = {}
+    evaluation_contract = protocol.get("evaluation_contract")
+    expected_evaluation_contract_fields = {
+        "candidate_profile_id",
+        "candidate_interface",
+        "install_artifact",
+        "artifact_hash",
+        "fresh_workspace_per_suite",
+        "query_network_access",
+        "candidate_telemetry",
+        "candidate_writes",
+        "hidden_case_retention_after_run",
+        "discovery_default_enabled",
+        "generated_knowledge_authoritative",
+        "legal_authority_requires_exact_source",
+    }
+    if (
+        not isinstance(evaluation_contract, dict)
+        or set(evaluation_contract) != expected_evaluation_contract_fields
+        or not isinstance(evaluation_contract.get("candidate_profile_id"), str)
+        or not evaluation_contract["candidate_profile_id"]
+        or evaluation_contract.get("install_artifact") != "wheel"
+        or evaluation_contract.get("artifact_hash") != "sha256"
+        or evaluation_contract.get("fresh_workspace_per_suite") is not True
+        or evaluation_contract.get("query_network_access") != "forbidden"
+        or evaluation_contract.get("candidate_telemetry") != "forbidden"
+        or evaluation_contract.get("candidate_writes")
+        != "evaluator-workspace-only"
+        or evaluation_contract.get("hidden_case_retention_after_run")
+        != "forbidden"
+        or evaluation_contract.get("discovery_default_enabled") is not False
+        or evaluation_contract.get("generated_knowledge_authoritative") is not False
+        or evaluation_contract.get("legal_authority_requires_exact_source") is not True
+    ):
+        errors.append("protocol evaluation_contract is invalid")
+        evaluation_contract = {}
     candidate = evidence.get("candidate")
     if not isinstance(candidate, dict):
         errors.append("candidate evidence is missing")
@@ -685,6 +871,12 @@ def evaluate_claim(
         run_index[suite_id] = run
         suite = suite_index[suite_id]
         for field in (
+            "candidate_install_clean",
+            "candidate_query_network_disabled",
+            "candidate_telemetry_disabled",
+            "candidate_workspace_isolated",
+            "candidate_writes_confined",
+            "hidden_case_data_not_retained",
             "full_suite",
             "protocol_frozen_before_run",
             "no_post_freeze_tuning",
@@ -694,6 +886,70 @@ def evaluate_claim(
         ):
             if run.get(field) is not True:
                 errors.append(f"{suite_id} did not attest {field}")
+        if (
+            run.get("candidate_artifact_sha256_observed")
+            != candidate.get("artifact_sha256")
+            or run.get("candidate_git_commit_observed")
+            != candidate.get("git_commit")
+            or run.get("candidate_version_observed") != candidate.get("version")
+        ):
+            errors.append(
+                f"{suite_id} did not reverify the frozen candidate identity"
+            )
+        if (
+            not _artifact_valid(
+                run.get("candidate_install_artifact"),
+                base=evidence_base,
+            )
+            or not isinstance(run.get("candidate_install_artifact"), dict)
+            or run["candidate_install_artifact"].get("sha256")
+            != candidate.get("artifact_sha256")
+        ):
+            errors.append(f"{suite_id} candidate install artifact is invalid")
+        if run.get("candidate_profile_id") != evaluation_contract.get(
+            "candidate_profile_id"
+        ):
+            errors.append(f"{suite_id} used a non-frozen candidate profile")
+        errors.extend(
+            f"{suite_id} {error}"
+            for error in _dataset_commitment_errors(
+                run.get("dataset_commitment_artifact"),
+                base=evidence_base,
+                protocol_id=protocol.get("protocol_id"),
+                suite=suite,
+                run=run,
+            )
+        )
+        errors.extend(
+            f"{suite_id} {error}"
+            for error in _baseline_commitment_errors(
+                run.get("baseline_commitment_artifact"),
+                base=evidence_base,
+                protocol_id=protocol.get("protocol_id"),
+                suite=suite,
+                run=run,
+            )
+        )
+        protocol_frozen_at = _timestamp(protocol.get("frozen_at"))
+        dataset_committed_at = _timestamp(run.get("dataset_committed_at"))
+        baseline_configs_committed_at = _timestamp(
+            run.get("baseline_configs_committed_at")
+        )
+        candidate_received_at = _timestamp(run.get("candidate_received_at"))
+        if (
+            protocol_frozen_at is None
+            or dataset_committed_at is None
+            or baseline_configs_committed_at is None
+            or candidate_received_at is None
+            or dataset_committed_at < protocol_frozen_at
+            or baseline_configs_committed_at < protocol_frozen_at
+            or dataset_committed_at >= candidate_received_at
+            or baseline_configs_committed_at >= candidate_received_at
+        ):
+            errors.append(
+                f"{suite_id} dataset/baseline commitments did not precede "
+                "candidate delivery under the frozen protocol"
+            )
         if run.get("repository_revision") != suite.get("repository_revision"):
             errors.append(f"{suite_id} repository revision differs from the protocol")
         expected_dataset_revision = suite.get("dataset_revision")
@@ -737,7 +993,13 @@ def evaluate_claim(
                 errors.append(f"{suite_id} {field} is not a finite resource measure")
         started_at = _timestamp(run.get("started_at"))
         completed_at = _timestamp(run.get("completed_at"))
-        if started_at is None or completed_at is None or completed_at < started_at:
+        if (
+            started_at is None
+            or completed_at is None
+            or completed_at < started_at
+            or candidate_received_at is None
+            or candidate_received_at > started_at
+        ):
             errors.append(f"{suite_id} run timestamps are invalid")
         expected_labels_access = (
             "external_evaluator_only"

@@ -1,0 +1,13 @@
+{
+  "schema_version": "deeplaw.dataset-commitment/v1",
+  "protocol_id": "deeplaw-external-proof/2026-07-26-v3",
+  "suite_id": "REPLACE_WITH_REGISTERED_SUITE_ID",
+  "evaluator_organization": "REPLACE_WITH_INDEPENDENT_ORGANIZATION",
+  "repository_revision": "REPLACE_OR_USE_NULL_FOR_HIDDEN_SUITE",
+  "dataset_revision": "REPLACE_WITH_FIXED_DATASET_REVISION",
+  "dataset_sha256": "REPLACE_WITH_64_LOWERCASE_HEX",
+  "case_count": 0,
+  "corpus_record_count": 0,
+  "labels_access": "REPLACE_WITH_public_frozen_OR_external_evaluator_only",
+  "committed_at": "REPLACE_WITH_RFC3339_TIME_BEFORE_CANDIDATE_DELIVERY"
+}

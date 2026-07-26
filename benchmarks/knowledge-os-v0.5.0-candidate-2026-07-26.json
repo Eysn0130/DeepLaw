@@ -1,7 +1,7 @@
 {
   "schema_version": "deeplaw.knowledge-os-candidate/v1",
   "status": "candidate_development_not_held_out",
-  "recorded_at_utc": "2026-07-26T05:30:00Z",
+  "recorded_at_utc": "2026-07-26T06:14:00Z",
   "package_version": "0.5.0",
   "implementation": {
     "pyproject_sha256": "146212542a5764f8424eced37f46b8f835094d00e3e2ad18893b5aa2a1c52e09",
@@ -37,11 +37,15 @@
     "reason": "The inspected development ablation improved Recall@5 but did not improve overall Hit@1, regressed six paired Hit@1 cases, and increased irrelevant results. Discovery remains explicit, removable, and outside MCP and default Context until a frozen held-out gate passes."
   },
   "external_proof": {
-    "status": "pending_new_frozen_protocol",
+    "status": "pending_external_execution",
     "unbounded_claim_allowed": false,
+    "protocol": "deeplaw-external-proof/2026-07-26-v3",
+    "protocol_canonical_sha256": "188414a827d0779c2647e60eaefda3453ac1958e4ce791b9d46772796f636744",
+    "candidate_git_commit": "0b7d21bfaadaa2143381b1c585f34ab4e3322999",
+    "candidate_wheel_sha256": "e9481f901ab68485d5bcf687263f8fed6538c4343ecc123c260fa5a27941c5fb",
     "historical_protocol": "deeplaw-external-proof/2026-07-26-v2",
     "historical_protocol_candidate_version": "0.4.0",
-    "reason": "The frozen v0.4.0 protocol and pending artifact cannot be transferred to v0.5.0. A new protocol must be frozen before the v0.5.0 candidate is delivered to independent evaluators."
+    "reason": "The v0.5.0 candidate and protocol are frozen. Ten real external suite runs, pre-delivery hidden commitments, and two independent signed evaluator attestations remain outstanding."
   },
   "limitations": [
     "The public LongMemEval-S sample was inspected and used for development, so it is not held-out evidence.",

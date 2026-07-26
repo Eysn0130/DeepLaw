@@ -19,7 +19,11 @@ from benchmarks.external.benchlib import (
     score_metrics,
     score_retrieval,
 )
-from benchmarks.external.claim_gate import _expected_run_manifest, evaluate_claim
+from benchmarks.external.claim_gate import (
+    _RUN_FIELDS,
+    _expected_run_manifest,
+    evaluate_claim,
+)
 
 
 def _case(case_id: str, relevant_ids: list[str]) -> dict[str, object]:
@@ -154,7 +158,7 @@ def test_canonical_metric_reports_support_official_task_and_safety_scores() -> N
 
 def test_claim_gate_rejects_universal_language_and_pending_evidence() -> None:
     repository = Path(__file__).resolve().parents[1]
-    protocol_path = repository / "benchmarks/external/protocol-v2.json"
+    protocol_path = repository / "benchmarks/external/protocol-v3.json"
     evidence_path = repository / "benchmarks/external/claim-evidence.pending.json"
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -172,10 +176,10 @@ def test_claim_gate_rejects_universal_language_and_pending_evidence() -> None:
     assert "requested claim is unbounded and cannot be proven" in result["errors"]
 
 
-def test_frozen_v2_protocol_covers_every_registered_suite_dimension_and_baseline() -> None:
+def test_frozen_v3_protocol_covers_every_registered_suite_dimension_and_baseline() -> None:
     repository = Path(__file__).resolve().parents[1]
     protocol = json.loads(
-        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
+        (repository / "benchmarks/external/protocol-v3.json").read_text(encoding="utf-8")
     )
     suites = protocol["suites"]
     dimensions = protocol["required_dimensions"]
@@ -187,6 +191,22 @@ def test_frozen_v2_protocol_covers_every_registered_suite_dimension_and_baseline
     }
 
     assert protocol["claim_policy"]["unbounded_universal_claim_allowed"] is False
+    assert protocol["candidate"]["version"] == "0.5.0"
+    assert protocol["candidate"]["development_suites_are_claim_eligible"] is False
+    assert protocol["evaluation_contract"] == {
+        "candidate_profile_id": "knowledge-context-v1",
+        "candidate_interface": "pinned-suite-adapter",
+        "install_artifact": "wheel",
+        "artifact_hash": "sha256",
+        "fresh_workspace_per_suite": True,
+        "query_network_access": "forbidden",
+        "candidate_telemetry": "forbidden",
+        "candidate_writes": "evaluator-workspace-only",
+        "hidden_case_retention_after_run": "forbidden",
+        "discovery_default_enabled": False,
+        "generated_knowledge_authoritative": False,
+        "legal_authority_requires_exact_source": True,
+    }
     assert len(suites) == protocol["claim_policy"]["minimum_external_suites"] == 10
     assert len(suite_ids) == len(set(suite_ids))
     assert len(baselines) >= protocol["claim_policy"]["minimum_distinct_named_baselines"]
@@ -206,6 +226,12 @@ def test_frozen_v2_protocol_covers_every_registered_suite_dimension_and_baseline
         and set(suite["required_dimensions"]) <= set(dimensions)
         for suite in suites
     )
+    run_example = json.loads(
+        (
+            repository / "benchmarks/external/run-draft-v3.example.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert set(run_example) == _RUN_FIELDS - {"evidence_manifest_artifact"}
 
 
 def test_committed_longmemeval_development_report_is_source_bound() -> None:
@@ -254,7 +280,7 @@ def test_claim_gate_counts_only_cryptographically_signed_independent_evaluators(
 ) -> None:
     repository = Path(__file__).resolve().parents[1]
     protocol = json.loads(
-        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
+        (repository / "benchmarks/external/protocol-v3.json").read_text(encoding="utf-8")
     )
     evidence = deepcopy(
         json.loads(
@@ -316,7 +342,7 @@ def test_claim_gate_counts_only_cryptographically_signed_independent_evaluators(
 def test_claim_gate_rejects_a_weakened_copy_of_the_frozen_protocol() -> None:
     repository = Path(__file__).resolve().parents[1]
     protocol = json.loads(
-        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
+        (repository / "benchmarks/external/protocol-v3.json").read_text(encoding="utf-8")
     )
     evidence_path = repository / "benchmarks/external/claim-evidence.pending.json"
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -329,13 +355,13 @@ def test_claim_gate_rejects_a_weakened_copy_of_the_frozen_protocol() -> None:
     )
 
     assert result["passed"] is False
-    assert "protocol content differs from the frozen v2 commitment" in result["errors"]
+    assert "protocol content differs from the frozen v3 commitment" in result["errors"]
 
 
-def test_claim_gate_rejects_the_superseded_v1_protocol() -> None:
+def test_claim_gate_rejects_the_superseded_v2_protocol() -> None:
     repository = Path(__file__).resolve().parents[1]
     protocol = json.loads(
-        (repository / "benchmarks/external/protocol-v1.json").read_text(encoding="utf-8")
+        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
     )
     evidence_path = repository / "benchmarks/external/claim-evidence.pending.json"
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -349,7 +375,7 @@ def test_claim_gate_rejects_the_superseded_v1_protocol() -> None:
 
     assert result["passed"] is False
     assert "unsupported protocol schema" in result["errors"]
-    assert "protocol content differs from the frozen v2 commitment" in result["errors"]
+    assert "protocol content differs from the frozen v3 commitment" in result["errors"]
 
 
 def test_claim_gate_accepts_only_a_fully_bound_independent_run(
@@ -357,12 +383,27 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
     monkeypatch,
 ) -> None:
     protocol = {
-        "schema_version": "deeplaw.external-proof-protocol/v2",
+        "schema_version": "deeplaw.external-proof-protocol/v3",
         "protocol_id": "synthetic-proof/v1",
+        "frozen_at": "2026-07-26T00:00:00Z",
         "candidate": {
             "system_id": "deeplaw-2.0",
-            "version": "0.4.0",
+            "version": "0.5.0",
             "maintainer_organization": "Eysn0130",
+        },
+        "evaluation_contract": {
+            "candidate_profile_id": "knowledge-context-v1",
+            "candidate_interface": "pinned-suite-adapter",
+            "install_artifact": "wheel",
+            "artifact_hash": "sha256",
+            "fresh_workspace_per_suite": True,
+            "query_network_access": "forbidden",
+            "candidate_telemetry": "forbidden",
+            "candidate_writes": "evaluator-workspace-only",
+            "hidden_case_retention_after_run": "forbidden",
+            "discovery_default_enabled": False,
+            "generated_knowledge_authoritative": False,
+            "legal_authority_requires_exact_source": True,
         },
         "claim_policy": {
             "unbounded_universal_claim_allowed": False,
@@ -458,17 +499,71 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
     baseline_artifact = artifact("baseline.json", baseline_report)
     comparison_artifact = artifact("comparison.json", comparison)
     raw_output_artifact = artifact("raw-output.json", {"complete": True})
+    candidate_install_artifact = artifact(
+        "deeplaw-0.5.0-py3-none-any.whl",
+        {"candidate": "fixed-wheel"},
+    )
+    dataset_commitment_artifact = artifact(
+        "dataset-commitment.json",
+        {
+            "schema_version": "deeplaw.dataset-commitment/v1",
+            "protocol_id": protocol["protocol_id"],
+            "suite_id": "hidden",
+            "evaluator_organization": "Independent Lab",
+            "repository_revision": None,
+            "dataset_revision": "hidden-commitment-sha256",
+            "dataset_sha256": "f" * 64,
+            "case_count": 20,
+            "corpus_record_count": 20,
+            "labels_access": "external_evaluator_only",
+            "committed_at": "2026-07-26T00:00:10Z",
+        },
+    )
+    baseline_commitment_artifact = artifact(
+        "baseline-commitment.json",
+        {
+            "schema_version": "deeplaw.baseline-commitment/v1",
+            "protocol_id": protocol["protocol_id"],
+            "suite_id": "hidden",
+            "evaluator_organization": "Independent Lab",
+            "baselines": [
+                {
+                    "baseline_system_id": "independent/baseline",
+                    "implementation_revision": "fixed-revision",
+                    "configuration_sha256": "1" * 64,
+                    "environment_sha256": "2" * 64,
+                }
+            ],
+            "committed_at": "2026-07-26T00:00:20Z",
+        },
+    )
     candidate = {
         "system_id": "deeplaw-2.0",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "git_commit": "d" * 40,
-        "artifact_sha256": "e" * 64,
+        "artifact_sha256": candidate_install_artifact["sha256"],
     }
     run = {
         "suite_id": "hidden",
         "repository_revision": None,
         "dataset_revision": "hidden-commitment-sha256",
         "dataset_sha256": "f" * 64,
+        "dataset_commitment_artifact": dataset_commitment_artifact,
+        "dataset_committed_at": "2026-07-26T00:00:10Z",
+        "baseline_commitment_artifact": baseline_commitment_artifact,
+        "baseline_configs_committed_at": "2026-07-26T00:00:20Z",
+        "candidate_received_at": "2026-07-26T00:00:30Z",
+        "candidate_artifact_sha256_observed": candidate_install_artifact["sha256"],
+        "candidate_install_artifact": candidate_install_artifact,
+        "candidate_git_commit_observed": "d" * 40,
+        "candidate_version_observed": "0.5.0",
+        "candidate_profile_id": "knowledge-context-v1",
+        "candidate_install_clean": True,
+        "candidate_query_network_disabled": True,
+        "candidate_telemetry_disabled": True,
+        "candidate_workspace_isolated": True,
+        "candidate_writes_confined": True,
+        "hidden_case_data_not_retained": True,
         "full_suite": True,
         "protocol_frozen_before_run": True,
         "no_post_freeze_tuning": True,
@@ -483,8 +578,8 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
         "peak_memory_bytes": 1_024,
         "disk_bytes": 2_048,
         "model_cost_usd": 0.0,
-        "started_at": "2026-07-26T00:00:00Z",
-        "completed_at": "2026-07-26T00:01:00Z",
+        "started_at": "2026-07-26T00:01:00Z",
+        "completed_at": "2026-07-26T00:02:00Z",
         "labels_access": "external_evaluator_only",
         "independent_evaluator": True,
         "evaluator_organization": "Independent Lab",
@@ -515,7 +610,7 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
                 "evidence_manifest_sha256": manifest_artifact["sha256"],
             }
         ],
-        "issued_at": "2026-07-26T00:02:00Z",
+        "issued_at": "2026-07-26T00:03:00Z",
     }
     attestation_payload = (json.dumps(attestation, sort_keys=True) + "\n").encode()
     attestation_path = tmp_path / "attestation.json"
@@ -555,6 +650,47 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
     assert result["independent_evaluator_count"] == 1
     assert result["allowed_claim"] is not None
 
+    run["candidate_artifact_sha256_observed"] = "0" * 64
+    wrong_candidate_manifest = _expected_run_manifest(
+        run,
+        protocol_id=protocol["protocol_id"],
+        candidate=candidate,
+    )
+    wrong_candidate_manifest_artifact = artifact(
+        "suite-manifest.json",
+        wrong_candidate_manifest,
+    )
+    run["evidence_manifest_artifact"] = wrong_candidate_manifest_artifact
+    attestation["suite_runs"][0]["evidence_manifest_sha256"] = (
+        wrong_candidate_manifest_artifact["sha256"]
+    )
+    wrong_candidate_attestation_payload = (
+        json.dumps(attestation, sort_keys=True) + "\n"
+    ).encode()
+    attestation_path.write_bytes(wrong_candidate_attestation_payload)
+    evidence["independent_evaluators"][0]["attestation_artifact"] = {
+        "path": attestation_path.name,
+        "sha256": hashlib.sha256(
+            wrong_candidate_attestation_payload
+        ).hexdigest(),
+    }
+    evidence["independent_evaluators"][0]["signature_base64"] = base64.b64encode(
+        private_key.sign(wrong_candidate_attestation_payload)
+    ).decode()
+
+    wrong_candidate_result = evaluate_claim(
+        protocol,
+        evidence,
+        evidence_path=tmp_path / "evidence.json",
+    )
+
+    assert wrong_candidate_result["passed"] is False
+    assert any(
+        "did not reverify the frozen candidate identity" in error
+        for error in wrong_candidate_result["errors"]
+    )
+
+    run["candidate_artifact_sha256_observed"] = candidate_install_artifact["sha256"]
     forged_comparison = deepcopy(comparison)
     forged_comparison["ci_low"] = -1.0
     run["comparisons"][0]["artifact"] = artifact(

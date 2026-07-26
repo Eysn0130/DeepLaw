@@ -1,0 +1,15 @@
+{
+  "schema_version": "deeplaw.baseline-commitment/v1",
+  "protocol_id": "deeplaw-external-proof/2026-07-26-v3",
+  "suite_id": "REPLACE_WITH_REGISTERED_SUITE_ID",
+  "evaluator_organization": "REPLACE_WITH_INDEPENDENT_ORGANIZATION",
+  "baselines": [
+    {
+      "baseline_system_id": "REPLACE_WITH_EVERY_REGISTERED_BASELINE_ID",
+      "implementation_revision": "REPLACE_WITH_IMMUTABLE_REVISION_OR_MODEL_VERSION",
+      "configuration_sha256": "REPLACE_WITH_64_LOWERCASE_HEX",
+      "environment_sha256": "REPLACE_WITH_64_LOWERCASE_HEX"
+    }
+  ],
+  "committed_at": "REPLACE_WITH_RFC3339_TIME_BEFORE_CANDIDATE_DELIVERY"
+}

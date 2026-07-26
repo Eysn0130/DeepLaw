@@ -8,9 +8,10 @@ evaluation interfaces. They are evaluation glue, not product shortcuts.
 Pinned upstream: `xiaowu0162/LongMemEval-V2` at
 `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`.
 
-1. For the frozen historical v2 protocol, install DeepLaw 0.4.0 into the
-   benchmark's Python 3.11 environment. Do not substitute v0.5.0 without first
-   freezing a new protocol and candidate artifact.
+1. For the current v3 protocol, install only the DeepLaw 0.5.0 wheel whose
+   SHA-256 is bound by `claim-evidence.pending.json` into a clean benchmark
+   Python 3.11 environment. The historical v2 protocol remains bound to
+   DeepLaw 0.4.0 and must not be mixed with this run.
 2. Copy `longmemeval_v2_deeplaw.py` into upstream `memory_modules/`.
 3. Add `from .longmemeval_v2_deeplaw import DeepLawMemory` to the pinned
    upstream `memory_modules/memory.py`.
