@@ -185,7 +185,10 @@ sidecar，在上述冻结套件中验证它是否提高最终任务成功，同�
 
 当前
 [`claim-evidence.pending.json`](../benchmarks/external/claim-evidence.pending.json)
-会被门禁明确阻断。只有外部完整运行、第三方秘密留出和独立复现到齐后，状态才能改变。
+已固定候选 commit `51e50172e0c2d920eb51c8105689c74efa9d42da` 与可重复构建 wheel
+SHA-256 `e80a34d064879189730b55827e724bf4c23405301f602a6ea5c3daeaf4ed5b93`；
+连续两次隔离构建得到相同 wheel 和 sdist hash。证据仍会被门禁明确阻断，因为十套件真实
+run、第三方秘密留出和独立复现尚未到齐。
 
 ## 外部评测方交付检查表
 

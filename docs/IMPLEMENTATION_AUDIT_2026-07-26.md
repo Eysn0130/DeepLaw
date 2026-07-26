@@ -168,7 +168,10 @@ v1 只保留历史且被门禁拒绝。
   全部失败关闭。
 
 完整 synthetic pass-path 和所有 pending/篡改负例均有测试。真实外部结果尚未运行，因此当前
-不会生成任何领先声明。
+不会生成任何领先声明。外部候选已经冻结为 commit
+`51e50172e0c2d920eb51c8105689c74efa9d42da`；连续两次隔离构建生成相同 wheel SHA-256
+`e80a34d064879189730b55827e724bf4c23405301f602a6ea5c3daeaf4ed5b93` 和 sdist SHA-256
+`e16a993dc367eabedccdd852639663f0fe1acfd1546384c81e77a9468aa82c7c`。
 
 ## 当前证据与不能宣称的内容
 
@@ -191,8 +194,8 @@ v1 只保留历史且被门禁拒绝。
 
 ## 下一步执行顺序
 
-1. 固定提交、wheel/container SHA 和协议，不再用测试结果调阈值；
-2. 由独立评测方运行 v2 中的 LongMemEval-V2、MemoryAgentBench、Memora、STATE-Bench、
+1. 已固定候选提交、可重复构建 wheel SHA 和协议；后续不得用测试结果调本候选阈值；
+2. 由独立评测方接收固定 wheel，运行 v2 中的 LongMemEval-V2、MemoryAgentBench、Memora、STATE-Bench、
    Agent Memory Benchmark、LegalBench-RAG、Legal RAG Bench、Agent Security Bench，
    以及两个秘密套件；
 3. 在相同 reader、语料、问题和 Token 预算下运行协议列出的全部 baseline；
