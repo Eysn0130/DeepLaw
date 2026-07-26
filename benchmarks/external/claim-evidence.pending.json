@@ -1,6 +1,6 @@
 {
   "schema_version": "deeplaw.claim-evidence/v1",
-  "protocol_id": "deeplaw-external-proof/2026-07-26-v1",
+  "protocol_id": "deeplaw-external-proof/2026-07-26-v2",
   "candidate": {
     "system_id": "deeplaw-2.0",
     "version": "0.4.0",

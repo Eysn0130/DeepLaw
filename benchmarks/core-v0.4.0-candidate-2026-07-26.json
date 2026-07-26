@@ -1,7 +1,7 @@
 {
   "schema_version": "deeplaw.benchmark-summary/v3",
   "status": "candidate_smoke_not_held_out",
-  "recorded_at_utc": "2026-07-26T01:05:10Z",
+  "recorded_at_utc": "2026-07-26T02:49:25Z",
   "package_version": "0.4.0",
   "release_id": "lawrel_5fd93dee88cd55c68706cd1a3dfa527a",
   "release_schema": "deeplaw.release/v2",
@@ -48,13 +48,13 @@
   "uncertain_required_duty_count": 26,
   "uncovered_required_duty_count": 44,
   "required_duty_covered_rate": 0.4927536231884058,
-  "p50_latency_ms": 16.502,
-  "p95_latency_ms": 28.871,
+  "p50_latency_ms": 16.868,
+  "p95_latency_ms": 28.951,
   "latency_scope": "search_only_receipt_verification_and_json_serialization_excluded",
   "implementation": {
     "pyproject_sha256": "6ffd25bf6bbe324c496b790a5a2e83b2483fe7a0918a9ea08e8cef5210bfdd1c",
     "uv_lock_sha256": "6f02254dcc66e7be1fa848a86723966ec5af023c8d3f886b37596410c5c753c9",
-    "python_source_tree_sha256": "3f2587933b1100e9e9f14d9d94697dba4d69529987cf9c543d6078baa7793e96",
+    "python_source_tree_sha256": "3cafb2ff24760b5369e3679b223a6223131c8c69d1c7badfa580095ee93e099c",
     "python_source_tree_hash_method": "sha256(sorted(path + NUL + bytes + NUL) for src/deeplaw/**/*.py)",
     "ingest_sha256": "6b751796ff7bf9af0975d49dbacbd53876bffe863aeec10de6fc413ae5c56807",
     "search_sha256": "45737a0d205a3bf06520f34c4bd724981f36bbc65ed397754f693b5f944d81d7",
@@ -70,7 +70,7 @@
   "environment": {
     "os": "macOS 26.5.2 arm64",
     "cpu": "Apple M4 Pro",
-    "python": "3.13.13",
+    "python": "3.12.13",
     "sqlite": "3.50.4"
   },
   "limitations": [

@@ -77,6 +77,7 @@ _MAX_MANIFEST_BYTES = 64 * 1024
 _MAX_SOURCE_BYTES = 512 * 1024 * 1024
 _MAX_FRAGMENT_CHARS = 20_000
 _MAX_FRAGMENTS_PER_SOURCE = 100_000
+_MAX_BATCH_APPROVAL_ASSETS = _MAX_FRAGMENTS_PER_SOURCE
 _MAX_SEARCH_LIMIT = 20
 _MAX_SEARCH_CHARS = 20_000
 _MAX_EVENT_PAYLOAD_BYTES = 1024 * 1024
@@ -201,6 +202,17 @@ def _token_string(text: str) -> str:
     return " ".join(search_terms(text))
 
 
+def _source_membership_sha256(
+    fragment_ids: Iterable[str],
+    asset_ids: Iterable[str],
+) -> str:
+    pairs = [
+        {"fragment_id": fragment_id, "asset_id": asset_id}
+        for fragment_id, asset_id in zip(fragment_ids, asset_ids, strict=True)
+    ]
+    return sha256_bytes(canonical_json(pairs).encode("utf-8"))
+
+
 def initialize_knowledge_vault(
     path: str | Path,
     *,
@@ -323,6 +335,8 @@ def initialize_knowledge_vault(
                 CHECK(subject_asset_id <> object_asset_id),
                 UNIQUE(subject_asset_id, predicate, object_asset_id)
             ) WITHOUT ROWID;
+            CREATE INDEX relations_object_asset_id
+                ON relations(object_asset_id);
 
             CREATE TABLE events (
                 sequence INTEGER PRIMARY KEY,
@@ -918,8 +932,12 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 object_id=source_id,
                 payload={
                     "source_sha256": content_sha256,
-                    "fragment_ids": fragment_ids,
-                    "asset_ids": asset_ids,
+                    "fragment_count": len(fragment_ids),
+                    "asset_count": len(asset_ids),
+                    "membership_sha256": _source_membership_sha256(
+                        fragment_ids,
+                        asset_ids,
+                    ),
                     "instruction_risk": instruction_risk,
                     "compiler": compiler,
                 },
@@ -1143,6 +1161,89 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             self.connection.rollback()
             raise
 
+    def _approve_asset_in_transaction(
+        self,
+        asset_id: str,
+        *,
+        confirm_quarantined: bool,
+        source_file_cache: dict[str, dict[str, Any]],
+    ) -> KnowledgeAsset:
+        asset = self.get_asset(asset_id, include_inactive=True)
+        if asset.status not in {"proposed", "quarantined"}:
+            raise ValueError("only proposed or quarantined assets can be approved")
+        if asset.status == "quarantined" and not confirm_quarantined:
+            raise ValueError(
+                "quarantined asset approval requires a separate explicit "
+                "quarantine-risk confirmation"
+            )
+        if asset.expires_at is not None and asset.expires_at <= utc_now():
+            raise ValueError("expired working memory cannot be approved")
+        invalid_sources = [
+            reference.source_id
+            for reference in asset.source_refs
+            if not self._source_file_check(
+                reference.source_id,
+                cache=source_file_cache,
+            )["valid"]
+        ]
+        if invalid_sources:
+            raise RuntimeError(
+                "source-bound knowledge cannot be approved because its stored "
+                "source file is missing or has changed"
+            )
+        if asset.semantic_key is not None:
+            current = self.connection.execute(
+                """
+                SELECT asset_id FROM assets
+                WHERE semantic_key = ? AND status = 'active'
+                """,
+                (asset.semantic_key,),
+            ).fetchone()
+            if current is not None:
+                if asset.supersedes_asset_id != current["asset_id"]:
+                    raise ValueError(
+                        "semantic_key already has an active asset; propose an explicit "
+                        "superseding asset instead"
+                    )
+                self.connection.execute(
+                    "UPDATE assets SET status = 'superseded' WHERE asset_id = ?",
+                    (current["asset_id"],),
+                )
+        if asset.supersedes_asset_id is not None:
+            superseded = self.connection.execute(
+                "SELECT status, semantic_key FROM assets WHERE asset_id = ?",
+                (asset.supersedes_asset_id,),
+            ).fetchone()
+            if superseded is None or superseded["status"] not in {
+                "active",
+                "superseded",
+            }:
+                raise ValueError("superseded asset is missing or not reviewable")
+            if superseded["semantic_key"] != asset.semantic_key:
+                raise ValueError("superseded asset semantic_key mismatch")
+            self.connection.execute(
+                "UPDATE assets SET status = 'superseded' WHERE asset_id = ?",
+                (asset.supersedes_asset_id,),
+            )
+        activated_at = utc_now()
+        self.connection.execute(
+            """
+            UPDATE assets
+            SET status = 'active', verification = 'human_verified', activated_at = ?
+            WHERE asset_id = ?
+            """,
+            (activated_at, asset_id),
+        )
+        self._append_event(
+            event_type="asset_approved",
+            object_id=asset_id,
+            payload={
+                "content_sha256": asset.content_sha256,
+                "supersedes_asset_id": asset.supersedes_asset_id,
+            },
+        )
+        return self.get_asset(asset_id, include_inactive=True)
+
     def approve_asset(
         self,
         asset_id: str,
@@ -1156,72 +1257,106 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             self._require_healthy_integrity()
-            asset = self.get_asset(asset_id, include_inactive=True)
-            if asset.status not in {"proposed", "quarantined"}:
-                raise ValueError("only proposed or quarantined assets can be approved")
-            if asset.status == "quarantined" and not confirm_quarantined:
-                raise ValueError(
-                    "quarantined asset approval requires a separate explicit "
-                    "quarantine-risk confirmation"
-                )
-            if asset.expires_at is not None and asset.expires_at <= utc_now():
-                raise ValueError("expired working memory cannot be approved")
-            if asset.semantic_key is not None:
-                current = self.connection.execute(
-                    """
-                    SELECT asset_id FROM assets
-                    WHERE semantic_key = ? AND status = 'active'
-                    """,
-                    (asset.semantic_key,),
-                ).fetchone()
-                if current is not None:
-                    if asset.supersedes_asset_id != current["asset_id"]:
-                        raise ValueError(
-                            "semantic_key already has an active asset; propose an explicit "
-                            "superseding asset instead"
-                        )
-                    self.connection.execute(
-                        "UPDATE assets SET status = 'superseded' WHERE asset_id = ?",
-                        (current["asset_id"],),
-                    )
-            if asset.supersedes_asset_id is not None:
-                superseded = self.connection.execute(
-                    "SELECT status, semantic_key FROM assets WHERE asset_id = ?",
-                    (asset.supersedes_asset_id,),
-                ).fetchone()
-                if superseded is None or superseded["status"] not in {
-                    "active",
-                    "superseded",
-                }:
-                    raise ValueError("superseded asset is missing or not reviewable")
-                if superseded["semantic_key"] != asset.semantic_key:
-                    raise ValueError("superseded asset semantic_key mismatch")
-                self.connection.execute(
-                    "UPDATE assets SET status = 'superseded' WHERE asset_id = ?",
-                    (asset.supersedes_asset_id,),
-                )
-            activated_at = utc_now()
-            self.connection.execute(
-                """
-                UPDATE assets
-                SET status = 'active', verification = 'human_verified', activated_at = ?
-                WHERE asset_id = ?
-                """,
-                (activated_at, asset_id),
-            )
-            self._append_event(
-                event_type="asset_approved",
-                object_id=asset_id,
-                payload={
-                    "content_sha256": asset.content_sha256,
-                    "supersedes_asset_id": asset.supersedes_asset_id,
-                },
+            approved = self._approve_asset_in_transaction(
+                asset_id,
+                confirm_quarantined=confirm_quarantined,
+                source_file_cache={},
             )
             self.connection.commit()
-            return self.get_asset(asset_id, include_inactive=True)
+            return approved
         except BaseException:
             self.connection.rollback()
             raise
+
+    def approve_source_assets(
+        self,
+        source_id: str,
+        *,
+        confirm_reviewed: bool,
+        confirm_quarantined: bool = False,
+    ) -> dict[str, Any]:
+        """Atomically approve one reviewed compiled source without N integrity replays."""
+        self._require_write()
+        if not confirm_reviewed:
+            raise ValueError("source approval requires explicit reviewed confirmation")
+        if not isinstance(source_id, str) or not _SOURCE_ID.fullmatch(source_id):
+            raise ValueError("knowledge source ID is invalid")
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            source = self.connection.execute(
+                "SELECT source_id FROM sources WHERE source_id = ?",
+                (source_id,),
+            ).fetchone()
+            if source is None:
+                raise KeyError(f"knowledge source is unavailable: {source_id}")
+            if not self._source_file_check(source_id)["valid"]:
+                raise RuntimeError(
+                    "compiled source cannot be approved because its stored source "
+                    "file is missing or has changed"
+                )
+            rows = self.connection.execute(
+                """
+                SELECT DISTINCT assets.asset_id, assets.status
+                FROM assets, json_each(assets.source_refs_json) AS reference
+                WHERE json_extract(reference.value, '$.source_id') = ?
+                  AND json_array_length(assets.source_refs_json) = 1
+                ORDER BY assets.asset_id
+                """,
+                (source_id,),
+            ).fetchall()
+            fragment_count = self.connection.execute(
+                "SELECT COUNT(*) FROM source_fragments WHERE source_id = ?",
+                (source_id,),
+            ).fetchone()[0]
+            if not rows or len(rows) != fragment_count:
+                raise RuntimeError(
+                    "compiled knowledge source membership is incomplete or ambiguous"
+                )
+            if len(rows) > _MAX_BATCH_APPROVAL_ASSETS:
+                raise ValueError(
+                    "source approval exceeds the 100000-asset atomic review bound"
+                )
+            unsupported = [
+                row["asset_id"]
+                for row in rows
+                if row["status"] not in {"proposed", "quarantined", "active"}
+            ]
+            if unsupported:
+                raise ValueError(
+                    "compiled source contains revoked or superseded assets and cannot "
+                    "be batch-approved"
+                )
+            source_file_cache: dict[str, dict[str, Any]] = {}
+            approved_ids: list[str] = []
+            already_active = 0
+            for row in rows:
+                if row["status"] == "active":
+                    already_active += 1
+                    continue
+                approved = self._approve_asset_in_transaction(
+                    row["asset_id"],
+                    confirm_quarantined=confirm_quarantined,
+                    source_file_cache=source_file_cache,
+                )
+                approved_ids.append(approved.asset_id)
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        visible_ids = approved_ids[:100]
+        return {
+            "schema_version": "deeplaw.knowledge-source-approval/v1",
+            "vault_id": self.vault_id,
+            "source_id": source_id,
+            "reviewed_asset_count": len(rows),
+            "approved_asset_count": len(approved_ids),
+            "already_active_asset_count": already_active,
+            "approved_asset_ids": visible_ids,
+            "approved_asset_ids_truncated": len(visible_ids) < len(approved_ids),
+            "revision": self.revision,
+            "audit_head": self.audit_head,
+        }
 
     def revoke_asset(
         self,
@@ -1580,7 +1715,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             raise ValueError("knowledge search contains an unsupported asset kind")
         if any(tier not in MEMORY_TIERS for tier in selected_tiers):
             raise ValueError("knowledge search contains an unsupported memory tier")
-        terms = search_terms(query, limit=32)
+        terms = search_terms(query, limit=32, cover_tail=True)
         if not terms:
             raise ValueError("knowledge query has no searchable terms")
         conditions = ["asset_search MATCH ?"]
@@ -1650,7 +1785,12 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             ):
                 excluded_by_source_integrity += 1
                 continue
-            card_excerpt = excerpt(asset.statement, query, max_chars=min(700, remaining))
+            card_excerpt = excerpt(
+                asset.statement,
+                query,
+                max_chars=min(700, remaining),
+                cover_query_tail=True,
+            )
             if not card_excerpt:
                 continue
             cards.append(
@@ -1707,19 +1847,28 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         # identifiers determine only the number of bound placeholders.
         rows = self.connection.execute(
             f"""
+            WITH candidate_relations AS MATERIALIZED (
+                SELECT relation_id
+                FROM relations
+                WHERE subject_asset_id IN ({placeholders})
+                UNION
+                SELECT relation_id
+                FROM relations
+                WHERE object_asset_id IN ({placeholders})
+            )
             SELECT relations.*
-            FROM relations
-            JOIN assets AS subject ON subject.asset_id = relations.subject_asset_id
-            JOIN assets AS object ON object.asset_id = relations.object_asset_id
+            FROM candidate_relations
+            CROSS JOIN relations
+              ON relations.relation_id = candidate_relations.relation_id
+            CROSS JOIN assets AS subject
+              ON subject.asset_id = relations.subject_asset_id
+            CROSS JOIN assets AS object
+              ON object.asset_id = relations.object_asset_id
             LEFT JOIN source_fragments AS relation_fragment
               ON relation_fragment.fragment_id = relations.evidence_fragment_id
             LEFT JOIN sources AS relation_source
               ON relation_source.source_id = relation_fragment.source_id
-            WHERE (
-                relations.subject_asset_id IN ({placeholders})
-                OR relations.object_asset_id IN ({placeholders})
-            )
-              AND subject.status = 'active'
+            WHERE subject.status = 'active'
               AND object.status = 'active'
               AND (subject.expires_at IS NULL OR subject.expires_at > ?)
               AND (object.expires_at IS NULL OR object.expires_at > ?)
@@ -1815,14 +1964,16 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         }
 
     def verify_audit_chain(self) -> dict[str, Any]:
-        rows = self.connection.execute("SELECT * FROM events ORDER BY sequence").fetchall()
+        event_count = self.connection.execute(
+            "SELECT COUNT(*) FROM events"
+        ).fetchone()[0]
         previous_hash: str | None = None
         expected_sequence = 0
-        for row in rows:
+        for row in self.connection.execute("SELECT * FROM events ORDER BY sequence"):
             if row["sequence"] != expected_sequence or row["previous_hash"] != previous_hash:
                 return {
                     "valid": False,
-                    "event_count": len(rows),
+                    "event_count": event_count,
                     "failed_sequence": expected_sequence,
                     "reason": "sequence_or_previous_hash_mismatch",
                 }
@@ -1831,7 +1982,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             except (json.JSONDecodeError, ValueError):
                 return {
                     "valid": False,
-                    "event_count": len(rows),
+                    "event_count": event_count,
                     "failed_sequence": expected_sequence,
                     "reason": "event_payload_invalid",
                 }
@@ -1848,49 +1999,41 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             if event_hash != row["event_hash"]:
                 return {
                     "valid": False,
-                    "event_count": len(rows),
+                    "event_count": event_count,
                     "failed_sequence": expected_sequence,
                     "reason": "event_hash_mismatch",
                 }
             previous_hash = event_hash
             expected_sequence += 1
-        valid = bool(rows) and previous_hash == self.audit_head and len(rows) == self.revision + 1
+        valid = (
+            event_count > 0
+            and previous_hash == self.audit_head
+            and event_count == self.revision + 1
+        )
         return {
             "valid": valid,
-            "event_count": len(rows),
+            "event_count": event_count,
             "failed_sequence": None if valid else expected_sequence,
             "reason": None if valid else "audit_head_or_revision_mismatch",
         }
 
     def verify_state_integrity(self) -> dict[str, Any]:
-        asset_rows = self.connection.execute(
-            "SELECT * FROM assets ORDER BY asset_id"
-        ).fetchall()
-        source_rows = self.connection.execute(
-            "SELECT * FROM sources ORDER BY source_id"
-        ).fetchall()
-        fragment_rows = self.connection.execute(
-            "SELECT * FROM source_fragments ORDER BY fragment_id"
-        ).fetchall()
-        relation_rows = self.connection.execute(
-            "SELECT * FROM relations ORDER BY relation_id"
-        ).fetchall()
-        search_rows = self.connection.execute(
-            """
-            SELECT asset_id, title_tokens, statement_tokens, semantic_tokens, tag_tokens
-            FROM asset_search
-            ORDER BY asset_id
-            """
-        ).fetchall()
-        event_rows = self.connection.execute(
-            "SELECT * FROM events ORDER BY sequence"
-        ).fetchall()
         counts = {
-            "asset_count": len(asset_rows),
-            "source_count": len(source_rows),
-            "fragment_count": len(fragment_rows),
-            "relation_count": len(relation_rows),
-            "search_index_count": len(search_rows),
+            "asset_count": self.connection.execute(
+                "SELECT COUNT(*) FROM assets"
+            ).fetchone()[0],
+            "source_count": self.connection.execute(
+                "SELECT COUNT(*) FROM sources"
+            ).fetchone()[0],
+            "fragment_count": self.connection.execute(
+                "SELECT COUNT(*) FROM source_fragments"
+            ).fetchone()[0],
+            "relation_count": self.connection.execute(
+                "SELECT COUNT(*) FROM relations"
+            ).fetchone()[0],
+            "search_index_count": self.connection.execute(
+                "SELECT COUNT(*) FROM asset_search"
+            ).fetchone()[0],
         }
 
         def failed(reason: str, object_id: str | None = None) -> dict[str, Any]:
@@ -1902,43 +2045,73 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             }
 
         try:
-            assets = {
-                row["asset_id"]: self._row_to_asset(row)
-                for row in asset_rows
-            }
-            sources = {
-                row["source_id"]: self._source_row(row)
-                for row in source_rows
-            }
-            source_records = {
-                row["source_id"]: row
-                for row in source_rows
-            }
-            fragments = {
-                row["fragment_id"]: dict(row)
-                for row in fragment_rows
-            }
-            relations = {
-                row["relation_id"]: dict(row)
-                for row in relation_rows
-            }
+            assets: dict[str, KnowledgeAsset] = {}
+            for row in self.connection.execute(
+                "SELECT * FROM assets ORDER BY asset_id"
+            ):
+                asset_id = row["asset_id"]
+                if asset_id in assets:
+                    return failed("duplicate_asset_identity")
+                assets[asset_id] = self._row_to_asset(row)
+            sources: dict[str, dict[str, Any]] = {}
+            source_instruction_risk: dict[str, int] = {}
+            for row in self.connection.execute(
+                "SELECT * FROM sources ORDER BY source_id"
+            ):
+                source_id = row["source_id"]
+                if source_id in sources:
+                    return failed("duplicate_source_identity")
+                sources[source_id] = self._source_row(row)
+                source_instruction_risk[source_id] = row["instruction_risk"]
+            fragments: dict[str, dict[str, Any]] = {}
+            for row in self.connection.execute(
+                "SELECT * FROM source_fragments ORDER BY fragment_id"
+            ):
+                fragment_id = row["fragment_id"]
+                if fragment_id in fragments:
+                    return failed("duplicate_fragment_identity")
+                fragments[fragment_id] = dict(row)
+            relations: dict[str, dict[str, Any]] = {}
+            for row in self.connection.execute(
+                "SELECT * FROM relations ORDER BY relation_id"
+            ):
+                relation_id = row["relation_id"]
+                if relation_id in relations:
+                    return failed("duplicate_relation_identity")
+                relations[relation_id] = dict(row)
         except (KeyError, TypeError, ValueError):
             return failed("stored_record_contract_invalid")
-        if len(assets) != len(asset_rows):
+        if len(assets) != counts["asset_count"]:
             return failed("duplicate_asset_identity")
-        if len(sources) != len(source_rows):
+        if len(sources) != counts["source_count"]:
             return failed("duplicate_source_identity")
-        if len(fragments) != len(fragment_rows):
+        if len(fragments) != counts["fragment_count"]:
             return failed("duplicate_fragment_identity")
-        if len(relations) != len(relation_rows):
+        if len(relations) != counts["relation_count"]:
             return failed("duplicate_relation_identity")
+
+        fragment_ids_by_source: dict[str, list[tuple[int, str]]] = {}
+        for fragment_id, fragment in fragments.items():
+            fragment_ids_by_source.setdefault(fragment["source_id"], []).append(
+                (fragment["ordinal"], fragment_id)
+            )
+        asset_id_by_fragment: dict[str, str] = {}
+        duplicate_asset_fragments: set[str] = set()
+        for asset_id, asset in assets.items():
+            if len(asset.source_refs) != 1:
+                continue
+            fragment_id = asset.source_refs[0].fragment_id
+            if fragment_id in asset_id_by_fragment:
+                duplicate_asset_fragments.add(fragment_id)
+                continue
+            asset_id_by_fragment[fragment_id] = asset_id
 
         expected_assets: dict[str, dict[str, Any]] = {}
         expected_sources: set[str] = set()
         expected_fragments: set[str] = set()
         expected_relations: dict[str, dict[str, Any]] = {}
         previous_event_at: str | None = None
-        for event in event_rows:
+        for event in self.connection.execute("SELECT * FROM events ORDER BY sequence"):
             event_type = event["event_type"]
             object_id = event["object_id"]
             if (
@@ -1974,26 +2147,33 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 continue
 
             if event_type == "source_compiled":
-                expected_payload = {
+                legacy_payload = {
                     "source_sha256",
                     "fragment_ids",
                     "asset_ids",
                     "instruction_risk",
                     "compiler",
                 }
+                compact_payload = {
+                    "source_sha256",
+                    "fragment_count",
+                    "asset_count",
+                    "membership_sha256",
+                    "instruction_risk",
+                    "compiler",
+                }
+                payload_fields = frozenset(payload)
                 if (
-                    set(payload) != expected_payload
+                    payload_fields
+                    not in {frozenset(legacy_payload), frozenset(compact_payload)}
                     or not isinstance(object_id, str)
                     or object_id not in sources
                     or object_id in expected_sources
-                    or not isinstance(payload["fragment_ids"], list)
-                    or not isinstance(payload["asset_ids"], list)
                     or not isinstance(payload["instruction_risk"], bool)
                     or not isinstance(payload["compiler"], dict)
                 ):
                     return failed("source_compiled_event_invalid", object_id)
                 source = sources[object_id]
-                source_record = source_records[object_id]
                 expected_source_id = stable_id(
                     "source",
                     self.vault_id,
@@ -2035,7 +2215,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     or Path(source["stored_name"]).name != source["stored_name"]
                     or not source["stored_name"].startswith(source["content_sha256"])
                     or not 64 <= len(source["stored_name"]) <= 80
-                    or source_record["instruction_risk"] not in {0, 1}
+                    or source_instruction_risk[object_id] not in {0, 1}
                     or not isinstance(source["warnings"], list)
                     or len(source["warnings"]) > 64
                     or any(
@@ -2059,8 +2239,46 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     )
                 except (TypeError, ValueError):
                     return failed("source_timestamp_invalid", object_id)
-                fragment_ids = payload["fragment_ids"]
-                asset_ids = payload["asset_ids"]
+                if payload_fields == frozenset(legacy_payload):
+                    fragment_ids = payload["fragment_ids"]
+                    asset_ids = payload["asset_ids"]
+                    if not isinstance(fragment_ids, list) or not isinstance(
+                        asset_ids,
+                        list,
+                    ):
+                        return failed("source_compiled_event_invalid", object_id)
+                else:
+                    ordered_fragments = sorted(
+                        fragment_ids_by_source.get(object_id, []),
+                    )
+                    fragment_ids = [
+                        fragment_id for _, fragment_id in ordered_fragments
+                    ]
+                    if (
+                        isinstance(payload["fragment_count"], bool)
+                        or not isinstance(payload["fragment_count"], int)
+                        or isinstance(payload["asset_count"], bool)
+                        or not isinstance(payload["asset_count"], int)
+                        or payload["fragment_count"] != len(fragment_ids)
+                        or payload["asset_count"] != len(fragment_ids)
+                        or not isinstance(payload["membership_sha256"], str)
+                        or not _SHA256.fullmatch(payload["membership_sha256"])
+                        or any(
+                            fragment_id in duplicate_asset_fragments
+                            or fragment_id not in asset_id_by_fragment
+                            for fragment_id in fragment_ids
+                        )
+                    ):
+                        return failed("source_compiled_membership_invalid", object_id)
+                    asset_ids = [
+                        asset_id_by_fragment[fragment_id]
+                        for fragment_id in fragment_ids
+                    ]
+                    if payload["membership_sha256"] != _source_membership_sha256(
+                        fragment_ids,
+                        asset_ids,
+                    ):
+                        return failed("source_compiled_membership_invalid", object_id)
                 if (
                     not fragment_ids
                     or len(fragment_ids) != len(set(fragment_ids))
@@ -2289,10 +2507,16 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             except (TypeError, ValueError):
                 return failed("relation_timestamp_invalid", relation_id)
 
-        if len(search_rows) != len(assets):
+        if counts["search_index_count"] != len(assets):
             return failed("search_index_inventory_mismatch")
         indexed_assets: set[str] = set()
-        for row in search_rows:
+        for row in self.connection.execute(
+            """
+            SELECT asset_id, title_tokens, statement_tokens, semantic_tokens, tag_tokens
+            FROM asset_search
+            ORDER BY asset_id
+            """
+        ):
             asset_id = row["asset_id"]
             asset = assets.get(asset_id)
             if asset is None or asset_id in indexed_assets:

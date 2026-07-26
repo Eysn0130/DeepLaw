@@ -21,9 +21,11 @@ else:
     from benchlib import write_json
 
 DATASET_NAME = "LongMemEval-S cleaned"
+UPSTREAM_REPOSITORY = "https://github.com/xiaowu0162/longmemeval"
+UPSTREAM_REVISION = "9e0b455f4ef0e2ab8f2e582289761153549043fc"
 DATASET_REVISION = "98d7416c24c778c2fee6e6f3006e7a073259d48f"
 DATASET_SHA256 = "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442"
-SCHEMA_VERSION = "deeplaw.external-dev-diagnostic/v1"
+SCHEMA_VERSION = "deeplaw.external-dev-diagnostic/v2"
 
 
 def _value_text(value: Any) -> str:
@@ -185,13 +187,12 @@ def run_diagnostic(
             )
             for asset_id in compiled["asset_ids"]:
                 asset = vault.get_asset(asset_id, include_inactive=True)
-                quarantined = asset.status == "quarantined"
-                quarantined_assets += int(quarantined)
-                vault.approve_asset(
-                    asset_id,
-                    confirm_reviewed=True,
-                    confirm_quarantined=quarantined,
-                )
+                quarantined_assets += int(asset.status == "quarantined")
+            vault.approve_source_assets(
+                compiled["source"]["source_id"],
+                confirm_reviewed=True,
+                confirm_quarantined=bool(compiled["source"]["instruction_risk"]),
+            )
         ingest_seconds = time.perf_counter() - ingest_started
         session_ids = set(case["haystack_session_ids"])
         with KnowledgeVault(vault_root, read_only=True) as vault:
@@ -259,20 +260,42 @@ def run_diagnostic(
             )
         }
 
+    repository = Path(__file__).resolve().parents[2]
     return {
         "schema_version": SCHEMA_VERSION,
         "claim_eligible": False,
-        "reason": "public development sample selected and inspected before protocol freeze",
+        "claim_ineligibility_reason": (
+            "The public development sample was selected, inspected, and used to "
+            "improve the implementation before the external proof protocol was frozen."
+        ),
         "dataset": {
             "name": DATASET_NAME,
-            "revision": DATASET_REVISION,
+            "upstream_repository": UPSTREAM_REPOSITORY,
+            "upstream_revision": UPSTREAM_REVISION,
+            "dataset_revision": DATASET_REVISION,
             "sha256": DATASET_SHA256,
         },
-        "selection": "smallest sha256(question_id) values per question_type",
-        "sample_per_question_type": sample_per_type,
-        "case_count": len(results),
-        "limit": limit,
-        "max_chars": max_chars,
+        "selection": {
+            "method": "smallest sha256(question_id) values per question_type",
+            "question_types": len({case["type"] for case in results}),
+            "cases_per_type": sample_per_type,
+            "case_count": len(results),
+        },
+        "budget": {
+            "retrieval_limit": limit,
+            "capsule_max_items": limit,
+            "capsule_max_chars": max_chars,
+        },
+        "implementation_files": {
+            path: sha256_file(repository / path)
+            for path in (
+                "src/deeplaw/context_compiler.py",
+                "src/deeplaw/util.py",
+                "src/deeplaw/knowledge_compiler.py",
+                "src/deeplaw/knowledge_store.py",
+                "benchmarks/external/run_longmemeval_s_dev.py",
+            )
+        },
         "search": aggregate("search"),
         "context": aggregate("context"),
         "avg_selected_chars": statistics.fmean(
@@ -284,6 +307,9 @@ def run_diagnostic(
         "avg_ingest_s": statistics.fmean(float(case["ingest_s"]) for case in results),
         "avg_search_ms": statistics.fmean(float(case["search_ms"]) for case in results),
         "avg_context_ms": statistics.fmean(float(case["context_ms"]) for case in results),
+        "quarantined_asset_count": sum(
+            int(case["quarantined_assets"]) for case in results
+        ),
         "cases": results,
     }
 

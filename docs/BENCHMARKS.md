@@ -32,7 +32,7 @@ tree、固定文档模型文件清单、review governance/build-report 身份和
 - 34 个有排名目标的用例为 Hit@1 0.971、MRR 0.985；
 - 37 张返回卡 receipt 往返核验通过率为 1.0；
 - 平均 evidence excerpt 为 230.541 字符，平均完整 search response 为 5985.676 字符；
-- 已打开数据库后的 `law.search()` 为 p50 16.502 ms、p95 28.871 ms；
+- 已打开数据库后的 `law.search()` 为 p50 16.868 ms、p95 28.951 ms；
 - 25/37 个用例保留 83 个 blocking gap；138 个必需 Duty 中 68 个 covered、26 个 uncertain、
   44 个 uncovered，covered rate 为 0.493。
 
@@ -113,12 +113,49 @@ deeplaw eval \
 Code、OpenCode 或未来 Analytix 的模型一定遵守 Skill；必须在每个宿主测试“未安装/已安装但
 未激活/显式激活”三种状态的 provider-visible schema、路由、Token 和工具调用。
 
+## 通用 Knowledge OS 规模与公开开发诊断
+
+10 万资产报告位于
+[`knowledge-scale-100k-2026-07-26.json`](../benchmarks/scale/knowledge-scale-100k-2026-07-26.json)。
+它实际通过 subprocess 执行 `deeplaw knowledge` 的 init、ingest、approve-source、search、
+context 和 verify-capsule 命令，并在同一只读进程内执行 100 个长任务查询：
+
+| 指标 | 实测 |
+| --- | ---: |
+| source-bound Asset | 100,000 |
+| 原子 source 审核 | 100,000/100,000，12.62 s |
+| search Hit@1 | 1.0 |
+| Capsule recall / verification | 1.0 / 1.0 |
+| 常驻进程 search p50 / p95 | 0.60 / 0.82 ms |
+| 常驻进程 context p50 / p95 | 0.99 / 1.28 ms |
+| 冷完整性重放 | 5.85 s |
+| SQLite / 进程峰值 RSS | 184,733,696 / 442,662,912 bytes |
+
+这是合成唯一标识语料，报告固定 `claim_eligible=false`。它验证已编码的规模、长查询尾部实体、
+Capsule 和完整性路径，不代表自然语言语义泛化，不外推百万资产，也不用于跨系统比较。宿主
+应使用常驻只读 MCP 复用已验证快照；超过该工作区间时，应按 project/domain vault 分区并重新
+执行冻结的质量与资源门禁。
+
+公开 LongMemEval-S cleaned 诊断位于
+[`longmemeval-s-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json)。
+最终源码绑定重跑覆盖 6 类、每类 10 题：search Hit@1 `0.85`、Recall@5 `0.9078`；
+Capsule Hit@1 `0.85`、Recall@5 `0.8906`、无关率 `0.3342`、重复数 `0`，平均选择正文
+`3646.8` 字符。批量 source 审核后的平均单 case 摄取为 `0.139 s`。
+
+该公开样本已经用于开发，且隔离评测 vault 中有 1,040 个指令风险候选由 frozen fixture
+授权路径显式激活；因此它不能证明投毒安全，也永久标记为 `claim_eligible=false`。剩余失败
+集中于偏好与语义改写：10 个 `single-session-preference` case 的 Capsule Hit@1 仅 `0.20`、
+Recall@5 `0.60`、无关率 `0.85`；其余 50 题 Hit@1 为 `0.98`。这不是可隐藏的平均分噪声，
+也说明原始会话直接编译成 reference 不等于形成了已审核的长期偏好。DeepLaw 默认只存储经
+判断、提议和人工审核的 durable Asset；任何补足语义发现的 sidecar 都必须可删除、来源绑定，
+并在未见数据上证明任务收益和安全非劣后才能进入默认路径。
+
 ## 外部 held-out 与宣称硬门禁
 
 跨系统性能主张按
-[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md) 执行。协议已冻结六个互补
-套件、全部预注册 baseline × dimension、逐题配对统计、资源计量、秘密 held-out 和两家独立
-Ed25519 attestation。机器门禁位于
+[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md) 执行。v2 协议已冻结十个
+互补套件、55 个预注册具名 baseline、11 个质量/安全/效率维度、逐题配对统计、资源计量、
+两个秘密 held-out 和至少两家独立 Ed25519 attestation。机器门禁位于
 [`benchmarks/external/claim_gate.py`](../benchmarks/external/claim_gate.py)；当前 pending
 evidence 按设计返回退出码 `2`。
 
@@ -138,5 +175,5 @@ evidence 按设计返回退出码 `2`。
 错误版本率、来源/hash 覆盖率和引用区间错误率是硬门禁，不能用平均召回率抵消。公开
 LongMemEval-S 60 题诊断已经参与开发，只能作为
 [`claim_eligible=false`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json) 的调试证据。
-在六套件、隐藏数据和独立复现齐备前，只能表述为“该 candidate smoke snapshot 覆盖了已编码
-的版本、证据和预算回归”；不能表述为跨系统领先。
+在十套件、两个隐藏数据集和独立复现齐备前，只能表述为“该 candidate smoke snapshot
+覆盖了已编码的版本、证据和预算回归”；不能表述为跨系统领先。

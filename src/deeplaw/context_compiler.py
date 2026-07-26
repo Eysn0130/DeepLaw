@@ -246,7 +246,12 @@ def _project_asset_contents(
             MAX_CAPSULE_ITEM_CHARS,
             max(minimum, min(fair_share, remaining_chars - reserved_after)),
         )
-        content = excerpt(asset.statement, query, max_chars=allocation)
+        content = excerpt(
+            asset.statement,
+            query,
+            max_chars=allocation,
+            cover_query_tail=True,
+        )
         if not content:
             raise RuntimeError("selected knowledge asset produced empty Capsule content")
         projected.append(content)
@@ -282,13 +287,26 @@ def _context_candidate_admitted(
         if (compact_term := compact_text(term))
     ):
         return True
-    matched = sum(
-        bool(compact_term) and compact_term in haystack
+    matched_terms = [
+        compact_term
         for term in terms
         if (compact_term := compact_text(term))
-    )
+        and compact_term in haystack
+    ]
+    if any(
+        (
+            (any(character.isdigit() for character in term) or len(term) >= 12)
+            if term.isascii()
+            else len(term) >= 4
+        )
+        for term in matched_terms
+    ):
+        # A long identifier or complete entity can be the only useful token in
+        # a verbose Agent task. Requiring several unrelated setup terms would
+        # discard the exact FTS hit before Capsule compilation.
+        return True
     required = 1 if len(terms) <= 3 else min(3, max(2, (len(terms) + 6) // 7))
-    return matched >= required
+    return len(matched_terms) >= required
 
 
 def _is_ordered_subset(values: list[Any], expected: list[Any]) -> bool:
@@ -332,7 +350,7 @@ def compile_context(
     if not vault.verify_integrity()["valid"]:
         raise RuntimeError("knowledge vault integrity is invalid; context compilation stopped")
     context_query = f"{task} {goal or ''}".strip()
-    query_terms = tuple(search_terms(context_query, limit=32))
+    query_terms = tuple(search_terms(context_query, limit=32, cover_tail=True))
     search = vault.search(
         context_query,
         limit=min(20, max_items * 3),

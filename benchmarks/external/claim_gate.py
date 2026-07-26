@@ -19,6 +19,7 @@ if __package__:
         SCHEMA_METRIC_REPORT,
         SCHEMA_REPORT,
         canonical_json,
+        paired_comparison,
         read_json,
         sha256_file,
         strict_json_loads,
@@ -30,18 +31,19 @@ else:
         SCHEMA_METRIC_REPORT,
         SCHEMA_REPORT,
         canonical_json,
+        paired_comparison,
         read_json,
         sha256_file,
         strict_json_loads,
         write_json,
     )
 
-PROTOCOL_SCHEMA = "deeplaw.external-proof-protocol/v1"
+PROTOCOL_SCHEMA = "deeplaw.external-proof-protocol/v2"
 EVIDENCE_SCHEMA = "deeplaw.claim-evidence/v1"
 GATE_SCHEMA = "deeplaw.claim-gate/v1"
 SUITE_EVIDENCE_SCHEMA = "deeplaw.external-suite-evidence/v1"
 FROZEN_PROTOCOL_CANONICAL_SHA256 = (
-    "2c1947a989631622c60f2aa25d3b918f56b18f920976963b5345e38947dbea5d"
+    "d3a472c48df3d18d7f43310bb55658ad28d46a8691a981bb883074ec39d1f369"
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
@@ -416,6 +418,28 @@ def _comparison_checks(
         ):
             errors.append(f"{prefix} differs from the frozen statistical protocol")
             continue
+        try:
+            recomputed = paired_comparison(
+                candidate_report,
+                baseline_report,
+                metric=metric,
+                direction=expected["direction"],
+                samples=statistics["paired_bootstrap_samples"],
+                confidence=statistics["confidence"],
+                seed=statistics["seed"],
+                noninferiority_margin=expected["noninferiority_margin"],
+                minimum_effect=expected["minimum_effect"],
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            errors.append(
+                f"{prefix} could not be deterministically recomputed: {error}"
+            )
+            continue
+        if comparison != recomputed:
+            errors.append(
+                f"{prefix} differs from deterministic paired-bootstrap recomputation"
+            )
+            continue
         candidate_items = {
             item["case_id"]: item for item in candidate_report["per_case"]
         }
@@ -558,12 +582,24 @@ def evaluate_claim(
     requested_claim: str | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
+    expected_evidence_fields = {
+        "schema_version",
+        "protocol_id",
+        "candidate",
+        "runs",
+        "independent_evaluators",
+        "status",
+    }
     if protocol.get("schema_version") != PROTOCOL_SCHEMA:
         errors.append("unsupported protocol schema")
     if _canonical_sha256(protocol) != FROZEN_PROTOCOL_CANONICAL_SHA256:
-        errors.append("protocol content differs from the frozen v1 commitment")
+        errors.append("protocol content differs from the frozen v2 commitment")
     if evidence.get("schema_version") != EVIDENCE_SCHEMA:
         errors.append("unsupported evidence schema")
+    if set(evidence) != expected_evidence_fields:
+        errors.append("claim evidence does not match the closed top-level shape")
+    if evidence.get("status") != "complete":
+        errors.append("claim evidence status is not complete")
     if protocol.get("protocol_id") != evidence.get("protocol_id"):
         errors.append("evidence does not bind the frozen protocol")
     claim_policy = protocol.get("claim_policy")

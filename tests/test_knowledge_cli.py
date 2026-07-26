@@ -194,3 +194,102 @@ def test_knowledge_cli_does_not_offer_verified_source_as_user_input(
 
     assert result.returncode == 2
     assert "invalid choice" in result.stderr
+
+
+def test_knowledge_cli_approves_one_exact_compiled_source_atomically(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    source = tmp_path / "scale-guide.md"
+    source.write_text(
+        "# Alpha\n"
+        "The alpha batch fact uses token alphaquartz.\n"
+        "# Beta\n"
+        "The beta batch fact uses token betajade.\n",
+        encoding="utf-8",
+    )
+    assert (
+        _run_cli(
+            "knowledge",
+            "init",
+            "--vault",
+            str(vault),
+            "--name",
+            "batch-review",
+        ).returncode
+        == 0
+    )
+    ingested = _run_cli(
+        "knowledge",
+        "ingest",
+        "--vault",
+        str(vault),
+        "--source",
+        str(source),
+        "--confirm-no-case-data",
+    )
+    assert ingested.returncode == 0, ingested.stderr
+    source_id = json.loads(ingested.stdout)["source"]["source_id"]
+
+    approved = _run_cli(
+        "knowledge",
+        "approve-source",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+        "--confirm-reviewed",
+    )
+    assert approved.returncode == 0, approved.stderr
+    assert json.loads(approved.stdout)["approved_asset_count"] == 2
+
+    searched = _run_cli(
+        "knowledge",
+        "search",
+        "--vault",
+        str(vault),
+        "--query",
+        "betajade",
+    )
+    assert searched.returncode == 0, searched.stderr
+    assert json.loads(searched.stdout)["results"][0]["title"] == "Beta"
+
+
+def test_knowledge_cli_bounds_large_ingest_receipts(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    source = tmp_path / "large-guide.md"
+    source.write_text(
+        "".join(
+            f"# Record {index:03d}\n"
+            f"Reviewed record {index:03d} keeps token glyph{index:03d}.\n"
+            for index in range(105)
+        ),
+        encoding="utf-8",
+    )
+    assert (
+        _run_cli(
+            "knowledge",
+            "init",
+            "--vault",
+            str(vault),
+            "--name",
+            "bounded-receipt",
+        ).returncode
+        == 0
+    )
+
+    ingested = _run_cli(
+        "knowledge",
+        "ingest",
+        "--vault",
+        str(vault),
+        "--source",
+        str(source),
+        "--confirm-no-case-data",
+    )
+
+    assert ingested.returncode == 0, ingested.stderr
+    receipt = json.loads(ingested.stdout)
+    assert receipt["asset_count"] == 105
+    assert len(receipt["asset_ids"]) == 100
+    assert receipt["asset_ids_truncated"] is True

@@ -115,6 +115,22 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     approve.add_argument("--confirm-reviewed", action="store_true")
     approve.add_argument("--confirm-quarantine", action="store_true")
 
+    approve_source = subcommands.add_parser(
+        "approve-source",
+        help=(
+            "Atomically activate every reviewed candidate from one exact compiled "
+            "source"
+        ),
+    )
+    approve_source.add_argument(
+        "--vault",
+        type=Path,
+        default=default_knowledge_vault(),
+    )
+    approve_source.add_argument("--source-id", required=True)
+    approve_source.add_argument("--confirm-reviewed", action="store_true")
+    approve_source.add_argument("--confirm-quarantine", action="store_true")
+
     revoke = subcommands.add_parser("revoke", help="Revoke one knowledge asset")
     revoke.add_argument("--vault", type=Path, default=default_knowledge_vault())
     revoke.add_argument("--asset-id", required=True)
@@ -293,6 +309,20 @@ def _write_capsule(path: Path, capsule: dict[str, Any]) -> None:
         raise
 
 
+def _bounded_ingest_receipt(result: dict[str, Any]) -> dict[str, Any]:
+    """Keep CLI/tool output bounded while preserving the full compiler API."""
+    asset_ids = result.get("asset_ids")
+    if not isinstance(asset_ids, list):
+        return result
+    visible_ids = asset_ids[:100]
+    return {
+        **result,
+        "asset_count": len(asset_ids),
+        "asset_ids": visible_ids,
+        "asset_ids_truncated": len(visible_ids) < len(asset_ids),
+    }
+
+
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "init":
@@ -321,6 +351,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         "ingest",
         "propose",
         "approve",
+        "approve-source",
         "revoke",
         "relate",
         "import-package",
@@ -329,16 +360,18 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     }
     with KnowledgeVault(args.vault, read_only=command not in write_commands) as vault:
         if command == "ingest":
-            return compile_source(
-                vault,
-                args.source,
-                source_kind=cast(SourceKind, args.source_kind),
-                title=args.title,
-                origin_uri=args.origin_uri,
-                trust=cast(TrustLevel, args.trust),
-                sensitivity=cast(Sensitivity, args.sensitivity),
-                confirm_no_case_data=args.confirm_no_case_data,
-                pdf_fallback=args.pdf_fallback,
+            return _bounded_ingest_receipt(
+                compile_source(
+                    vault,
+                    args.source,
+                    source_kind=cast(SourceKind, args.source_kind),
+                    title=args.title,
+                    origin_uri=args.origin_uri,
+                    trust=cast(TrustLevel, args.trust),
+                    sensitivity=cast(Sensitivity, args.sensitivity),
+                    confirm_no_case_data=args.confirm_no_case_data,
+                    pdf_fallback=args.pdf_fallback,
+                )
             )
         if command == "propose":
             if not args.confirm_no_case_data:
@@ -365,6 +398,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 confirm_reviewed=args.confirm_reviewed,
                 confirm_quarantined=args.confirm_quarantine,
             ).to_dict()
+        if command == "approve-source":
+            return vault.approve_source_assets(
+                args.source_id,
+                confirm_reviewed=args.confirm_reviewed,
+                confirm_quarantined=args.confirm_quarantine,
+            )
         if command == "revoke":
             return vault.revoke_asset(
                 args.asset_id,

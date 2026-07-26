@@ -654,7 +654,7 @@ rather than claiming to sanitize arbitrary uploads.
 
 The frozen cross-system protocol is documented in
 [`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md). Its real
-six-suite runs, hidden labels, and independent reproductions remain pending.
+ten-suite runs, hidden labels, and independent reproductions remain pending.
 The Chinese hidden component should add cases for:
 
 - title, alias, document number, and article precision;

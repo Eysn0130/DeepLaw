@@ -2,7 +2,7 @@
   <a href="README.md">简体中文</a> · <strong>English</strong>
 </p>
 
-<h1 align="center">DeepLaw 2.0</h1>
+<h1 align="center">DeepLaw - 2.0</h1>
 
 <p align="center">
   <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 wordmark" />
@@ -242,13 +242,19 @@ deeplaw knowledge ingest \
   --confirm-no-case-data
 ```
 
-Ingestion produces only `proposed` or `quarantined` assets. Review an `asset_id`, activate
-it explicitly, and compile task context:
+Ingestion produces only `proposed` or `quarantined` assets. Review an `asset_id` to
+activate one Asset. If the complete source has been reviewed, use its exact `source_id`
+to activate all candidates from that source in one transaction:
 
 ```bash
 deeplaw knowledge approve \
   --vault "$HOME/.deeplaw/vaults/my-project" \
   --asset-id "asset_..." \
+  --confirm-reviewed
+
+deeplaw knowledge approve-source \
+  --vault "$HOME/.deeplaw/vaults/my-project" \
+  --source-id "source_..." \
   --confirm-reviewed
 
 deeplaw knowledge context \
@@ -473,6 +479,17 @@ machine-enforced claim gate are frozen. Evidence remains `pending_external_execu
 DeepLaw does not emit a cross-system leadership claim. See
 [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md).
 
+The general Knowledge OS also has a source-bound, claim-ineligible 100,000-Asset
+diagnostic. Across 100 long-task queries, search Hit@1, Capsule recall, and Capsule
+verification were all `1.0`; the persistent read-only process measured `0.82 ms` search
+p95 and `1.28 ms` context p95. A cold CLI process first replays full audit and state
+integrity, taking about `5.85 s` with about `443 MB` peak RSS in this run, so host
+integrations should use the persistent MCP process. The environment, implementation
+hashes, and limits are recorded in
+[`benchmarks/scale/knowledge-scale-100k-2026-07-26.json`](benchmarks/scale/knowledge-scale-100k-2026-07-26.json).
+This synthetic diagnostic is permanently `claim_eligible=false` and is not extrapolated
+to one million Assets.
+
 ## Safety and Responsibility
 
 - DeepLaw 2.0 returns verifiable research evidence; it does not replace legal advice,
@@ -501,8 +518,8 @@ See [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) for corpus governan
 - [x] Knowledge Asset vaults, human-reviewed lifecycle, Context Capsules, and read-only MCP
 - [x] Experience feedback proposals, reproducible `.dlk`, and Markdown/Obsidian projection
 - [ ] Add independent publisher signing, revocation, and monotonic updates for `.dlk`
-- [x] Freeze the six-suite held-out protocol, per-case statistics, signed evidence chain, and claim gate
-- [ ] Complete all six real runs, a third-party hidden set, and two independent reproductions
+- [x] Freeze the ten-suite held-out protocol, per-case statistics, signed evidence chain, and claim gate
+- [ ] Complete all ten real runs, two third-party hidden sets, and two independent reproductions
 - [ ] Extend the complete legal hierarchy and bitemporal legal-event ledger
 - [ ] Add a Corpus Coverage Manifest and release approval/revocation metadata
 - [ ] Establish an external held-out Chinese legal-evidence benchmark

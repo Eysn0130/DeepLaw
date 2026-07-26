@@ -217,3 +217,49 @@ def test_search_terms_remove_english_question_scaffolding_but_keep_meaning() -> 
     terms = search_terms("What play did I attend at the local community theater?")
 
     assert terms == ["play", "attend", "local", "community", "theater"]
+
+
+def test_bounded_search_terms_cover_the_end_of_a_long_agent_task() -> None:
+    query = " ".join(
+        [*(f"prefixtoken{index:02d}" for index in range(40)), "quasarneedle"]
+    )
+
+    terms = search_terms(query, limit=32, cover_tail=True)
+
+    assert len(terms) == 32
+    assert terms[0] == "prefixtoken00"
+    assert terms[-1] == "quasarneedle"
+    assert len(terms) == len(set(terms))
+
+
+def test_bounded_search_terms_keep_prefix_semantics_unless_tail_coverage_requested() -> None:
+    query = " ".join(
+        [*(f"prefixtoken{index:02d}" for index in range(40)), "quasarneedle"]
+    )
+
+    terms = search_terms(query, limit=32)
+
+    assert terms == search_terms(query)[:32]
+    assert "quasarneedle" not in terms
+
+
+def test_excerpt_can_anchor_on_a_distinctive_tail_term_without_changing_default() -> None:
+    query = (
+        " ".join(f"irrelevantprefix{index:02d}" for index in range(40))
+        + " cobaltcheckpoint"
+    )
+    text = (
+        "Prefix material that does not answer the task. " * 40
+        + "The recovery procedure requires cobaltcheckpoint before release."
+    )
+
+    default_excerpt = excerpt(text, query, max_chars=180)
+    knowledge_excerpt = excerpt(
+        text,
+        query,
+        max_chars=180,
+        cover_query_tail=True,
+    )
+
+    assert "cobaltcheckpoint" not in default_excerpt
+    assert "cobaltcheckpoint" in knowledge_excerpt

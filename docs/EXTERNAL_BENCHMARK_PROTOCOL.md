@@ -31,25 +31,38 @@ DeepLaw 永久拒绝无边界的世界第一或全面领先文案。可以成立
 
 ## 已冻结的外部组合
 
-机器协议位于
-[`benchmarks/external/protocol-v1.json`](../benchmarks/external/protocol-v1.json)。
-2026-07-26 冻结的组合不是围绕 DeepLaw 自建，而是覆盖互补能力：
+当前机器协议位于
+[`benchmarks/external/protocol-v2.json`](../benchmarks/external/protocol-v2.json)；
+`protocol-v1.json` 只保留为历史记录，claim gate 会明确拒绝它。2026-07-26 冻结的
+v2 组合不是围绕 DeepLaw 自建，而是覆盖互补能力：
 
 | 套件 | 固定上游 | 主要检查 | 证据角色 |
 | --- | --- | --- | --- |
 | LongMemEval-V2 | `xiaowu0162/LongMemEval-V2@6f020ac2` | 静态/动态状态、流程、环境陷阱、错误前提、任务成功与延迟 | 外部公开冻结 |
 | MemoryAgentBench | `HUST-AI-HYZ/MemoryAgentBench@455306dc` | 准确检索、测试时学习、长程理解、冲突解决 | 外部公开冻结 |
+| Memora | `geniesinc/Memora@a6493188` | 长周期 remembering/forgetting、偏好更新和成本 | 外部公开冻结 |
+| STATE-Bench Agent Learning | `microsoft/STATE-Bench@4efcbf2d` | 从训练轨迹学习后完成未见企业任务 | 外部公开冻结 |
+| Agent Memory Benchmark | `vectorize-io/agent-memory-benchmark@aa9273ab` | Agent 任务准确率、摄取/查询速度、上下文和成本 | 外部公开冻结 |
 | LegalBench-RAG | `zeroentropy-ai/legalbenchrag@431bc8f2` | 法律合同片段的字符级 precision/recall | 外部公开冻结 |
-| MemoryArena | `ZexueHe/MemoryArena@6cd9de14` | 多 session 中记忆是否真正改善后续 Agent 行动 | 外部公开冻结 |
-| AgentLAB memory poisoning | `TanqiuJiang/AgentLAB@36f58e60` | 长程存储型注入与污染成功率 | 外部公开冻结 |
-| Independent Knowledge OS | 第三方在交付候选前提交数据承诺 | 来源、更新、冲突、污染、预算和任务成功的综合盲测 | 外部秘密 held-out |
+| Legal RAG Bench | `isaacus-dev/legal-rag-bench@9e30a36d` | 端到端法律检索与推理、来源和无关上下文 | 外部公开冻结 |
+| Agent Security Bench | `agiresearch/ASB@1f561dcc` | memory poisoning 与 observation injection | 外部公开冻结 |
+| Independent Knowledge OS | 第三方在交付候选前提交数据承诺 | 来源、更新、遗忘、冲突、污染、预算和任务成功的综合盲测 | 外部秘密 held-out |
+| Independent CN Legal | 第三方法律评测方在交付候选前提交数据承诺 | 中文法源版本、时效、近似条款、无答案、引用和越权变更 | 外部秘密 held-out |
 
-LongMemEval-V2 官方接口已提供可提交的单文件 DeepLaw 适配器：
+协议共要求 10 个套件、55 个预注册具名基线和 11 个不可相互抵消的质量/安全/效率维度。
+公开套件的仓库 commit 固定；数据集完整字节、官方 revision 和 SHA-256 在执行 manifest 中
+再次绑定。两个隐藏套件必须在候选交付前提交 commitment。
+
+当前提供两类可执行 DeepLaw 适配器：
 
 - [`longmemeval_v2_deeplaw.py`](../benchmarks/external/adapters/longmemeval_v2_deeplaw.py)
+- [`jsonl_corpus_deeplaw.py`](../benchmarks/external/adapters/jsonl_corpus_deeplaw.py)
 - [`适配说明`](../benchmarks/external/adapters/README.md)
 
-它目前是明确标注的 text operating point，不会把忽略 query image 的结果伪装成多模态结果。
+前者是 LongMemEval-V2 官方接口的 text operating point，不会把忽略 query image 的结果
+伪装成多模态结果；后者把评测方的封闭 `{id,title,text}` 语料和 `{case_id,query}` 问题通过
+真实 Knowledge Compiler、人工 fixture 审核边界和 Context Compiler，保留原始评测 ID，
+便于接入法律片段与秘密检索套件。它不是通用“自动适配所有 benchmark”的宣称。
 
 ## 相同条件
 
@@ -71,7 +84,7 @@ LongMemEval-V2 官方接口已提供可提交的单文件 DeepLaw 适配器：
 候选在协议冻结后不得根据测试结果修改阈值、提示词、模型、切分或查询路由。任何修改都形成
 新版本和新协议，旧结果不能继续挂到新版本上。
 
-## 不允许被平均分隐藏的八个维度
+## 不允许被平均分隐藏的十一个维度
 
 协议要求同时覆盖：
 
@@ -80,9 +93,12 @@ LongMemEval-V2 官方接口已提供可提交的单文件 DeepLaw 适配器：
 - `irrelevant_context_rate`：送入模型的无关内容比例；
 - `provenance_coverage`：返回内容是否可回到固定来源；
 - `stale_contradiction_detection`：过期和冲突是否被识别；
+- `forgetting_accuracy`：明确退出、撤销或过期的知识是否不再影响任务；
 - `memory_poisoning_success_rate`：攻击内容是否成功影响后续 Agent；
+- `unauthorized_mutation_success_rate`：Agent 是否能越过只读边界修改知识；
 - `context_chars`：完整上下文负担；
 - `query_latency_ms`：查询延迟。
+- `amortized_total_cost_usd`：索引、模型与查询成本按相同注册查询量摊销。
 
 主指标使用配对 bootstrap 10,000 次和 95% 置信区间。任务成功与必要上下文召回预注册至少
 `1%` 的绝对优势，并对全部优势假设实际执行 Holm–Bonferroni family-wise 校正。安全、来源、
@@ -121,7 +137,7 @@ uv run python benchmarks/external/build_suite_manifest.py --help
 
 # 宣称门禁；pending 证据按设计返回退出码 2
 uv run python benchmarks/external/claim_gate.py \
-  --protocol benchmarks/external/protocol-v1.json \
+  --protocol benchmarks/external/protocol-v2.json \
   --evidence benchmarks/external/claim-evidence.pending.json
 ```
 
@@ -153,15 +169,19 @@ comparison 必须绑定两个规范化报告的 canonical SHA，并由门禁重�
 60 题 LongMemEval-S cleaned 开发诊断已经实际运行，结果见
 [`longmemeval-s-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json)。
 它发现并推动修复了首个长资产独占预算、非查询相关截断、同源分段拥挤和英文问句脚手架噪声。
-修复后 Capsule Recall@5 从 `0.6283` 提升到 `0.8906`，重复归零，正文从约 `5,000`
-降到 `3,647` 字符；相对原始搜索，Capsule 无关内容率从 `0.6292` 降到 `0.3342`。
+最终源码绑定重跑中，Capsule Recall@5 为 `0.8906`、Hit@1 为 `0.85`，重复归零，平均正文
+为 `3,646.8` 字符；相对原始 search，Capsule 无关内容率从 `0.6292` 降到 `0.3342`。
+批量 source 审核后，单 case 平均摄取从早期逐 Asset 完整性重放的约 `2.9 s` 降至
+`0.139 s`。报告保留 60 题逐题 ID、返回、预算、延迟、隔离资产计数和实现文件 hash。
 
 这组数据已经被开发团队查看并用于改进，因而机器标记为 `claim_eligible=false`。它只证明
 诊断和修复过程，不证明 DeepLaw 对外领先。
 
-剩余失败集中在偏好和语义改写。正确下一步是把语义发现做成可删除、非权威 sidecar，在上述
-冻结套件中验证它是否提高最终任务成功，同时不损害来源、安全、上下文、延迟和成本；在通过
-前不进入默认路径。
+剩余失败集中在偏好和语义改写：10 个 `single-session-preference` case 的 Capsule Hit@1
+为 `0.20`、Recall@5 为 `0.60`、无关率为 `0.85`；其余 50 题 Hit@1 为 `0.98`。原始会话
+reference 因而不能被表述为已提炼的长期偏好。正确下一步是把语义发现做成可删除、非权威
+sidecar，在上述冻结套件中验证它是否提高最终任务成功，同时不损害来源、安全、上下文、延迟
+和成本；在通过前不进入默认路径。
 
 当前
 [`claim-evidence.pending.json`](../benchmarks/external/claim-evidence.pending.json)
@@ -184,6 +204,9 @@ comparison 必须绑定两个规范化报告的 canonical SHA，并由门禁重�
 
 - [LongMemEval-V2 official repository](https://github.com/xiaowu0162/LongMemEval-V2)
 - [MemoryAgentBench official repository](https://github.com/HUST-AI-HYZ/MemoryAgentBench)
+- [Memora official repository](https://github.com/geniesinc/Memora)
+- [STATE-Bench official repository](https://github.com/microsoft/STATE-Bench)
+- [Agent Memory Benchmark official repository](https://github.com/vectorize-io/agent-memory-benchmark)
 - [LegalBench-RAG official repository](https://github.com/zeroentropy-ai/legalbenchrag)
-- [MemoryArena official project](https://memoryarena.github.io/)
-- [AgentLAB official repository](https://github.com/TanqiuJiang/AgentLAB)
+- [Legal RAG Bench official repository](https://github.com/isaacus-dev/legal-rag-bench)
+- [Agent Security Bench official repository](https://github.com/agiresearch/ASB)

@@ -10,14 +10,22 @@ Legal Pack 重建和评测/宣称门禁。
 当前工作树中没有已知未关闭的 P0/P1 实现缺陷。这里的“关闭”只表示已发现的软件安全、隔离、
 一致性、可复现性和上下文正确性问题已由代码与测试处理，不表示外部性能领先已经得到证明。
 
-本轮实际发现并关闭四类 P1：
+本轮实际发现并关闭九类 P1：
 
 1. Context Capsule 可能被首个长 Asset 独占，且前缀截断可能丢失真正命中位置；
-2. Legal Pack `release_id` 的 derivation 未完整绑定 review governance 与 build-report 身份，
+2. 超长 Agent task 只保留前 32 个检索词，尾部实体即使明确也可能完全不可发现；初次修复后，
+   excerpt 仍可能围绕任务前缀截取，形成“命中 Asset、交付错误片段”；
+3. 大 source 逐 Asset 审核会重复执行全库完整性重放，10 万候选无法形成可用 CLI 闭环；
+4. `source_compiled` 事件直接携带全部 fragment/Asset ID，在 10 万规模超过事件载荷上限；
+5. 完整性核对同时 `fetchall()` 多份大表，关系查询计划在无边时可能扫描整个 Asset inventory，
+   CLI 摄取回执也可能返回无界 ID 数组；
+6. Legal Pack `release_id` 的 derivation 未完整绑定 review governance 与 build-report 身份，
    不同治理元数据可能落入同一逻辑 ID；
-3. 本机默认 `ACTIVE` 曾指向历史 release，不能把它误写成当前 v0.4 构建证据；
-4. 初版外部宣称门禁虽检查签名，却还允许证据拼接、无贡献评测方计数、结果布尔值自报，且
+7. 本机默认 `ACTIVE` 曾指向历史 release，不能把它误写成当前 v0.4 构建证据；
+8. 初版外部宣称门禁虽检查签名，却还允许证据拼接、无贡献评测方计数、结果布尔值自报，且
    Holm–Bonferroni 只写在协议中而未执行。
+9. 宣称门禁后来仍信任评测方提交的 bootstrap CI、p 值和 `superior` 布尔值；现在从精确绑定
+   的候选/基线逐题报告重新计算完整比较，伪造并重新签名也不能通过。
 
 关闭后的边界：
 
@@ -87,6 +95,8 @@ MCP 的 `readOnlyHint` 能约束通用 Shell。
 | 五种封闭 MCP operation | input/output JSON Schema | Draft 2020-12 + stdio tests | 闭环 |
 | 未配置 vault 的安全发现 | MCP 启动与无路径错误 | missing-vault stdio test | 闭环 |
 | CLI 全生命周期 | `knowledge_cli.py` | `test_knowledge_cli_acceptance.py` | 闭环 |
+| 大 source 原子审核 | `approve-source`、source membership commitment | 10 万资产 CLI 与篡改/幂等/回滚测试 | 闭环 |
+| 大 vault 完整性与关系读取 | 流式 event/search replay、有界 relation candidate CTE | 10 万资产诊断与 SQLite progress-handler 负例 | 10 万工作区间闭环 |
 | 三宿主适配 | plugin bundles、OpenCode agent/config | plugin tests | 闭环 |
 | Legal Pack 保留 | 原有 CLI/MCP/search/build | 全仓 Legal Pack tests | 闭环 |
 | 文档 IR v2 字段适配 | document engine adapter | structured-content tests | 闭环 |
@@ -110,7 +120,10 @@ MCP 的 `readOnlyHint` 能约束通用 Shell。
 
 60 题公开开发诊断记录在
 [`longmemeval-s-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json)。
-它已被开发团队看过并用于修改，机器标记为 `claim_eligible=false`。
+它已被开发团队看过并用于修改，机器标记为 `claim_eligible=false`。逐类型复核没有用总平均
+掩盖弱项：10 个偏好 case 的 Capsule Hit@1 为 `0.20`、Recall@5 为 `0.60`、无关率为
+`0.85`，其余 50 题 Hit@1 为 `0.98`。当前实现擅长已明确写入的事实、更新和时间信息，不把
+原始会话中的隐含偏好伪装成已经可靠提炼的 durable Asset。
 
 ### Legal Pack release 身份
 
@@ -123,17 +136,34 @@ derivation 现在除来源、Document IR、segment、关系和 extractor 外，�
 SQLite 的物理 SHA 仍作为独立 artifact identity；`release_id` 表示逻辑 derivation，正式报告和
 Agent turn 必须同时固定 `release_id + database_sha256`。
 
+### 规模与 Context 正确性
+
+- 长任务检索按固定上限覆盖头、中、尾，并优先保留可识别的精确标识；
+- 通用 Knowledge OS 的 excerpt 使用同一尾部覆盖，Legal Pack 继续使用原有前缀语义，37 项
+  法律 smoke 的结果、Duty 与 gap 完全未漂移；
+- `approve-source` 对精确 source membership 做一次完整性重放和一个原子事务，来源缺失、
+  篡改、歧义、撤销/替代或 quarantine 未二次确认均失败关闭；
+- source 编译事件由无界 ID 列表改为 count + membership SHA-256，验证器同时兼容历史事件并
+  从当前 fragment/Asset 绑定重算；
+- 10 万资产、100 个长查询的真实 CLI/常驻读取报告绑定实现 hash；常驻 search p95
+  `0.82 ms`、context p95 `1.28 ms`，冷完整性重放 `5.85 s`、峰值约 `443 MB`；
+- 当前只承诺 10 万已测工作区间；更大规模需按 project/domain vault 分区并重新冻结评测。
+
 ### 外部证明链
 
-[`protocol-v1.json`](../benchmarks/external/protocol-v1.json) 已被 canonical SHA-256 冻结。
+[`protocol-v2.json`](../benchmarks/external/protocol-v2.json) 已被 canonical SHA-256
+`d3a472c48df3d18d7f43310bb55658ad28d46a8691a981bb883074ec39d1f369` 冻结；
+v1 只保留历史且被门禁拒绝。
 声明门禁要求：
 
-- 六个预注册套件及每个套件的全部预注册 baseline × dimension 比较，不能挑结果；
+- 十个预注册套件、55 个具名 baseline 及每个套件的全部预注册 baseline × dimension 比较，
+  不能挑结果；
 - 候选和基线逐题报告、比较、原始输出、模型/预算/成本/硬件与时间记录进入同一 suite manifest；
 - 独立评测方用 Ed25519 attestation 绑定 suite manifest，而不是只签一张平均分截图；
 - 至少两家真正对某个当前 run 有贡献的机构；签署无关 suite 的“幽灵评测方”不计数；
 - 1% 预注册最小优势（任务成功、必要上下文召回）、严格非劣安全门禁；
 - 配对 bootstrap、逐题均值复算和 Holm–Bonferroni family-wise gate；
+- 门禁从候选/基线逐题报告重算完整 comparison，不能自报 CI、p 值或通过布尔值；
 - public development、缺失 case、重复 ID、开放 JSON、路径逃逸、symlink、hash 不符和证据拼接
   全部失败关闭。
 
@@ -147,8 +177,9 @@ Agent turn 必须同时固定 `release_id + database_sha256`。
 | 全仓与攻击性测试 | 通过后方可提交 | 已编码契约无已知回归 | 未编码世界的正确性 |
 | Legal Pack 37 case | 37/37 smoke | 当前 28 份资料的定位/分桶/receipt | 法律充分性、专家认证 |
 | 60 题公开开发诊断 | `claim_eligible=false` | 发现并修复 Context 缺陷 | 对外领先 |
-| 六套件外部协议 | 已冻结、门禁可执行 | 未来结果的公平边界 | 当前已有成绩 |
-| 第三方 hidden + 独立复现 | 尚未取得 | 完成后可生成协议限定文案 | “全面超过所有知识库” |
+| 10 万资产规模诊断 | `claim_eligible=false` | 当前本地 vault 已测工作区间 | 自然语言泛化或百万规模 |
+| 十套件外部协议 | 已冻结、门禁可执行 | 未来结果的公平边界 | 当前已有成绩 |
+| 两个第三方 hidden + 独立复现 | 尚未取得 | 完成后可生成协议限定文案 | “全面超过所有知识库” |
 
 永久不能宣称：
 
@@ -161,8 +192,9 @@ Agent turn 必须同时固定 `release_id + database_sha256`。
 ## 下一步执行顺序
 
 1. 固定提交、wheel/container SHA 和协议，不再用测试结果调阈值；
-2. 由独立评测方运行 LongMemEval-V2、MemoryAgentBench、LegalBench-RAG、MemoryArena、
-   AgentLAB 和秘密 Knowledge OS 套件；
+2. 由独立评测方运行 v2 中的 LongMemEval-V2、MemoryAgentBench、Memora、STATE-Bench、
+   Agent Memory Benchmark、LegalBench-RAG、Legal RAG Bench、Agent Security Bench，
+   以及两个秘密套件；
 3. 在相同 reader、语料、问题和 Token 预算下运行协议列出的全部 baseline；
 4. 两家机构分别签名 suite evidence manifest；
 5. 运行 `claim_gate.py`；只有退出码 `0` 时使用其自动生成的限定文案；

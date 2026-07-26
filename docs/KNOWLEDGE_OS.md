@@ -159,6 +159,16 @@ conservative: ordinary manual proposals pass through the same detector.
 Activating any quarantined Asset requires both reviewed confirmation and a
 separate quarantine-risk confirmation. The Agent cannot promote it.
 
+For a fully reviewed compiled source,
+`deeplaw knowledge approve-source --source-id ... --confirm-reviewed` activates
+its exact one-to-one fragment/Asset membership atomically. It performs one
+complete integrity replay, rechecks the stored source bytes, rejects ambiguous,
+revoked, or superseded membership, and returns a bounded receipt. It is not an
+automatic approval shortcut: the source ID is content-derived, review
+confirmation is mandatory, and risky sources additionally require
+`--confirm-quarantine`. Per-Asset approval remains available for selective
+review.
+
 The compiler requires `--confirm-no-case-data`. This is an explicit product
 boundary, not a personal-information detector. Analytix case materials belong
 in the case project and must not be copied into a DeepLaw vault.
@@ -173,17 +183,22 @@ committed snapshot. It then applies:
 1. explicit task and optional goal;
 2. optional kind and memory-tier filters;
 3. bounded lexical candidate discovery;
-4. deterministic admission that rejects a weak one-term match in a longer task;
-5. relevance order with a bounded preference for constraints, decisions, rules,
+4. deterministic coverage of the beginning, middle, and tail of long Agent
+   tasks so a late entity or acceptance identifier is not silently discarded;
+5. deterministic admission that rejects a weak one-term match in a longer task
+   while retaining a distinctive exact identifier;
+6. relevance order with a bounded preference for constraints, decisions, rules,
    and procedures;
-6. one bounded hop over explicit human-reviewed relations, never free graph
+7. one bounded hop over explicit human-reviewed relations, never free graph
    traversal;
-7. current source/integrity verification for every selected Asset;
-8. fair item/content allocation so one long Asset cannot starve the remaining
+8. current source/integrity verification for every selected Asset;
+9. fair item/content allocation so one long Asset cannot starve the remaining
    selected evidence;
-9. an eight-reference / 4,000-character provenance-metadata budget;
-10. a 64,000-character hard limit for the complete serialized Capsule;
-11. explicit selection reasons, reviewed contradictions, and gaps.
+10. query-tail-aware excerpts so a hit is not followed by an unrelated prefix
+    fragment;
+11. an eight-reference / 4,000-character provenance-metadata budget;
+12. a 64,000-character hard limit for the complete serialized Capsule;
+13. explicit selection reasons, reviewed contradictions, and gaps.
 
 It emits `deeplaw.knowledge-capsule/v1`:
 
@@ -342,6 +357,13 @@ deeplaw knowledge approve \
   --asset-id asset_... \
   --confirm-reviewed
 
+# Or, only after reviewing the complete source, activate its exact membership
+# atomically from the source_id returned by ingest.
+deeplaw knowledge approve-source \
+  --vault ~/.deeplaw/vaults/my-project \
+  --source-id source_... \
+  --confirm-reviewed
+
 # Required in addition when the proposal is quarantined:
 #   --confirm-quarantine
 
@@ -379,6 +401,29 @@ Set `DEEPLAW_KNOWLEDGE_VAULT` to select the default vault for a host process.
 If that vault does not exist, the MCP process still completes capability
 discovery but every read fails with a sanitized unavailable error. It never
 creates a vault or falls back to another path.
+
+## Validated scale envelope
+
+[`knowledge-scale-100k-2026-07-26.json`](../benchmarks/scale/knowledge-scale-100k-2026-07-26.json)
+records a real CLI and persistent-reader run over 100,000 synthetic,
+source-bound Assets. It binds the implementation file hashes and is explicitly
+`claim_eligible=false`.
+
+- CLI init, ingest, atomic source approval, long-query search, Context
+  compilation, and Capsule verification all completed;
+- all 100 deterministic tail-entity queries returned the expected top result,
+  included it in the Capsule, and passed Capsule verification;
+- the persistent reader measured search p95 `0.82 ms` and context p95
+  `1.28 ms`;
+- one cold full audit/state replay took `5.85 s`; the measured in-process peak
+  RSS was about `443 MB`, and the SQLite file was about `185 MB`.
+
+This is the currently validated local-vault working envelope, not a million-
+Asset extrapolation and not evidence of cross-system superiority. A host should
+keep the read-only MCP process alive so its snapshot and successful integrity
+verification are reused. Larger corpora should be partitioned by the existing
+project/domain vault boundary and must pass a new frozen scale and retrieval
+evaluation before their operating envelope is documented.
 
 ## Verification and release gates
 

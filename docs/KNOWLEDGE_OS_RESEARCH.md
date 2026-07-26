@@ -32,6 +32,11 @@
 | [ACE](https://arxiv.org/abs/2510.04618) | 识别反复重写上下文可能产生 context collapse | 资产不可静默重写；替代和撤销均显式；Capsule 有硬预算 | 不把自动合并摘要写回长期真源 |
 | [MemoryAgentBench](https://arxiv.org/abs/2507.05257) | 评估准确检索、测试时学习、长程理解和选择性遗忘 | 后续 benchmark 必须覆盖生命周期与选择性退出，而非只测命中率 | 单元测试不作为跨系统领先证据 |
 | [LongMemEval](https://arxiv.org/abs/2410.10813) 与 [LongMemEval V2](https://arxiv.org/abs/2605.12493) | 长期记忆的抽取、时间推理、知识更新、拒答与主动回忆 | benchmark 增加 stale、contradiction、gap 和 irrelevant-context 指标 | 不用单一问答准确率代表长期知识质量 |
+| [Memora](https://github.com/geniesinc/Memora) | 以周/月/季度跨度检验 remembering、forgetting、偏好变化和摊销成本 | 把 `forgetting_accuracy` 与旧偏好污染设为独立门禁 | 不把公开结果当作未见题 |
+| [STATE-Bench](https://github.com/microsoft/STATE-Bench) | 用训练轨迹改善未见企业 Agent 任务 | 长期知识必须提高最终任务成功，而不只是召回片段 | 不把宿主 Agent 学习与 DeepLaw 自动写入混为一体 |
+| [Agent Memory Benchmark](https://github.com/vectorize-io/agent-memory-benchmark) | 同时度量 Agent 任务、摄取、查询速度、Token 与成本 | 索引成本按相同注册查询量摊销；保留冷/热路径 | 不用单次热查询掩盖构建成本 |
+| [Legal RAG Bench](https://github.com/isaacus-dev/legal-rag-bench) | 检查端到端法律检索和推理 | 中文秘密法律集也必须有 task success、来源和错误版本硬门禁 | 英文公开集不替代中国法时效金标 |
+| [Agent Security Bench](https://github.com/agiresearch/ASB) | memory poisoning 与 observation injection | 投毒成功和越权修改成为独立零抵消指标 | 不用冻结 fixture 的人工激活结果证明安全 |
 | [Bad Memory](https://arxiv.org/abs/2607.14611) | 持久记忆可成为跨会话 prompt-injection 通道 | 指令式/不可见文本触发 quarantine；MCP 只读；只有审核规则可成为指令候选 | 不允许外部内容自动进入 active memory |
 | [OWASP Agent Memory Guard](https://owasp.org/www-project-agent-memory-guard/) | 记忆投毒、越权和审计风险需要独立控制面 | restricted 不进入 MCP；owner-only vault；hash-chain audit；导入降权 | 当前不宣称多租户认证或加密隔离 |
 | [W3C PROV-O](https://www.w3.org/TR/prov-o/) | entity/activity/agent provenance 可互操作表达 | compiler、来源、fragment、review 和 mutation 分层记录 | v1 不引入完整 RDF/OWL 运行时 |
@@ -149,14 +154,21 @@ DeepLaw `v0.4.0` 的工程能力：
 | provenance coverage | 每个来源型结论可回链 fragment |
 | update handling | 能识别 superseded、revoked、expired 和 stale |
 | contradiction handling | 不静默选择冲突结论，输出 gap |
+| forgetting | 明确撤销、过期和退出知识不再影响任务 |
 | poisoning resistance | 恶意资料不能获得 active/directive 权限 |
+| unauthorized mutation | Agent 不能越过只读接口修改 vault 或 Legal Pack |
 | isolation | 跨 vault、restricted 和案件资料零泄漏 |
-| budget | Capsule 条目、字符、延迟、内存和成本 |
+| budget | Capsule 条目、字符、延迟、内存、索引和摊销成本 |
 | abstention | 缺少证据时明确拒绝编造 |
 
-对照实验必须固定 corpus、问题、模型、prompt、工具权限和预算，公开失败样本。六套件真实
-运行、秘密 held-out 和两家独立签名复现尚未完成。只有机器 claim gate 通过，才能声称某种
-sidecar 或策略相对列明基线更好；“功能更多”和单元测试通过都不构成领先证据。
+对照实验必须固定 corpus、问题、模型、prompt、工具权限和预算，公开失败样本。十套件真实
+运行、两个秘密 held-out 和两家独立签名复现尚未完成。只有机器 claim gate 通过，才能声称
+某种 sidecar 或策略相对列明基线更好；“功能更多”和单元测试通过都不构成领先证据。
+
+10 万资产合成诊断只建立当前本地 vault 的已测工作区间。它证明尾部实体、Capsule、审计重放
+和常驻读路径在该规模下按契约工作，但唯一标识查询不能替代自然语言语义泛化。当前公开开发
+集仍显示偏好与改写召回不足，所以语义 discovery 只能以来源绑定、可删除、版本化 sidecar
+进入下一轮外部评测；没有 held-out 净收益前不进入默认运行时。
 
 ## 当前结论
 

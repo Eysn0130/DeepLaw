@@ -168,14 +168,11 @@ class DeepLawMemory(Memory):
                 sensitivity="private",
                 confirm_no_case_data=True,
             )
-            for asset_id in result["asset_ids"]:
-                asset = vault.get_asset(asset_id, include_inactive=True)
-                if asset.status in {"proposed", "quarantined"}:
-                    vault.approve_asset(
-                        asset_id,
-                        confirm_reviewed=True,
-                        confirm_quarantined=asset.status == "quarantined",
-                    )
+            vault.approve_source_assets(
+                result["source"]["source_id"],
+                confirm_reviewed=True,
+                confirm_quarantined=bool(result["source"]["instruction_risk"]),
+            )
 
     def query(
         self,

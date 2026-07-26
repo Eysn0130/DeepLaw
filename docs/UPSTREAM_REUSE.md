@@ -1,6 +1,6 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-07-25
+Reviewed: 2026-07-26
 
 This document records the upstream systems examined for DeepLaw 2.0 and the
 technical decision for each. It distinguishes a runtime dependency, an
@@ -46,6 +46,13 @@ policy.
 | [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) | `0d905e40afa6` | Apache-2.0 | Derived Wiki and Obsidian export reference only |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Retrieval evaluation format and span metrics reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External research benchmark harness reference |
+| [xiaowu0162/LongMemEval-V2](https://github.com/xiaowu0162/LongMemEval-V2) | `6f020ac2fc32` | Apache-2.0 | External long-horizon task/memory protocol and official adapter interface |
+| [HUST-AI-HYZ/MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) | `455306dcabc3` | MIT | External retrieval, learning, long-range understanding, and forgetting benchmark |
+| [geniesinc/Memora](https://github.com/geniesinc/Memora) | `a6493188efc8` | Apache-2.0 | External long-duration remembering/forgetting and cost benchmark |
+| [microsoft/STATE-Bench](https://github.com/microsoft/STATE-Bench) | `4efcbf2d4fe6` | MIT | External Agent Learning task-success benchmark |
+| [agiresearch/ASB](https://github.com/agiresearch/ASB) | `1f561dccf92d` | MIT | External memory-poisoning and observation-injection benchmark |
+| [vectorize-io/agent-memory-benchmark](https://github.com/vectorize-io/agent-memory-benchmark) | `aa9273ab9e34` | Recheck before execution | External Agent task, latency, ingestion, Token, and cost benchmark only |
+| [isaacus-dev/legal-rag-bench](https://github.com/isaacus-dev/legal-rag-bench) | `9e30a36d1ef5` | Recheck before execution | External end-to-end legal retrieval/reasoning benchmark only |
 | [opendatalab/MinerU](https://github.com/opendatalab/MinerU) | `79d6d8d79fb8` | MinerU Open Source License | Optional structured PDF candidate behind the build-only document engine |
 | [PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | `211989f046cc` | Apache-2.0 | Strong candidate for a second Chinese OCR/layout witness; not yet integrated |
 | [docling-project/docling](https://github.com/docling-project/docling) | `e548307e8d32` | MIT | Document IR and provenance reference; not a runtime dependency |

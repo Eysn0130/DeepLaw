@@ -2,7 +2,7 @@
   <strong>简体中文</strong> · <a href="README_EN.md">English</a>
 </p>
 
-<h1 align="center">DeepLaw 2.0</h1>
+<h1 align="center">DeepLaw - 2.0</h1>
 
 <p align="center">
   <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 品牌字标" />
@@ -222,13 +222,19 @@ deeplaw knowledge ingest \
   --confirm-no-case-data
 ```
 
-摄取只会生成 `proposed` 或 `quarantined` 资产。人工检查输出中的 `asset_id` 后，逐项激活并为任务
-编译上下文：
+摄取只会生成 `proposed` 或 `quarantined` 资产。人工检查输出中的 `asset_id` 后，可以逐项激活；
+若已完整复核同一份原件，也可以用输出中的精确 `source_id` 在一个事务内激活该原件的全部
+候选：
 
 ```bash
 deeplaw knowledge approve \
   --vault "$HOME/.deeplaw/vaults/my-project" \
   --asset-id "asset_..." \
+  --confirm-reviewed
+
+deeplaw knowledge approve-source \
+  --vault "$HOME/.deeplaw/vaults/my-project" \
+  --source-id "source_..." \
   --confirm-reviewed
 
 deeplaw knowledge context \
@@ -426,6 +432,13 @@ Knowledge OS 测试另覆盖 vault 权限与隔离、生命周期与显式替代
 `pending_external_execution`，因此不会生成跨系统领先文案。协议与当前限制见
 [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md)。
 
+通用 Knowledge OS 另有一份源码绑定、但不参与领先宣称的 10 万资产诊断：
+100 个长任务查询的 search Hit@1、Capsule 召回和 Capsule 校验均为 `1.0`；常驻只读进程
+search p95 为 `0.82 ms`、context p95 为 `1.28 ms`。冷 CLI 会先完整重放审计与当前状态，
+本次约 `5.85 s`、峰值约 `443 MB`，因此宿主运行时应使用常驻 MCP。完整环境、实现 hash 和
+限制见 [`benchmarks/scale/knowledge-scale-100k-2026-07-26.json`](benchmarks/scale/knowledge-scale-100k-2026-07-26.json)；
+该合成诊断固定为 `claim_eligible=false`，也不外推到百万资产。
+
 ## 安全与责任边界
 
 - DeepLaw 2.0 返回可复核的研究证据，不替代法律意见、事实认定或裁判结论；
@@ -448,8 +461,8 @@ Knowledge OS 测试另覆盖 vault 权限与隔离、生命周期与显式替代
 - [x] Knowledge Asset vault、人工复核生命周期、Context Capsule 与只读 MCP
 - [x] Experience feedback proposal、可复现 `.dlk` 与 Markdown/Obsidian 投影
 - [ ] 为 `.dlk` 建立独立发布者签名、撤销和单调更新策略
-- [x] 冻结六套件 held-out 协议、逐题统计、独立签名证据链与宣称门禁
-- [ ] 完成六套件真实运行、第三方秘密留出与两家独立复现
+- [x] 冻结十套件 held-out 协议、逐题统计、独立签名证据链与宣称门禁
+- [ ] 完成十套件真实运行、两个第三方秘密留出与两家独立复现
 - [ ] 扩展完整法律层级与双时态法律事件账本
 - [ ] 增加 Corpus Coverage Manifest 与 release 审批/撤销元数据
 - [ ] 建立外部 held-out 中文法律证据 benchmark

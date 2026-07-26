@@ -154,7 +154,7 @@ def test_canonical_metric_reports_support_official_task_and_safety_scores() -> N
 
 def test_claim_gate_rejects_universal_language_and_pending_evidence() -> None:
     repository = Path(__file__).resolve().parents[1]
-    protocol_path = repository / "benchmarks/external/protocol-v1.json"
+    protocol_path = repository / "benchmarks/external/protocol-v2.json"
     evidence_path = repository / "benchmarks/external/claim-evidence.pending.json"
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -172,12 +172,89 @@ def test_claim_gate_rejects_universal_language_and_pending_evidence() -> None:
     assert "requested claim is unbounded and cannot be proven" in result["errors"]
 
 
+def test_frozen_v2_protocol_covers_every_registered_suite_dimension_and_baseline() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    protocol = json.loads(
+        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
+    )
+    suites = protocol["suites"]
+    dimensions = protocol["required_dimensions"]
+    suite_ids = [suite["suite_id"] for suite in suites]
+    baselines = {
+        baseline
+        for suite in suites
+        for baseline in suite["named_baselines"]
+    }
+
+    assert protocol["claim_policy"]["unbounded_universal_claim_allowed"] is False
+    assert len(suites) == protocol["claim_policy"]["minimum_external_suites"] == 10
+    assert len(suite_ids) == len(set(suite_ids))
+    assert len(baselines) >= protocol["claim_policy"]["minimum_distinct_named_baselines"]
+    assert {suite["role"] for suite in suites} == {
+        "external_public_frozen",
+        "external_hidden",
+    }
+    assert sum(suite["role"] == "external_hidden" for suite in suites) == 2
+    assert set(dimensions) == {
+        dimension
+        for suite in suites
+        for dimension in suite["required_dimensions"]
+    }
+    assert all(
+        suite["named_baselines"]
+        and len(suite["named_baselines"]) == len(set(suite["named_baselines"]))
+        and set(suite["required_dimensions"]) <= set(dimensions)
+        for suite in suites
+    )
+
+
+def test_committed_longmemeval_development_report_is_source_bound() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    report = json.loads(
+        (
+            repository
+            / "benchmarks/external/longmemeval-s-dev-2026-07-26.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert report["schema_version"] == "deeplaw.external-dev-diagnostic/v2"
+    assert report["claim_eligible"] is False
+    assert len(report["cases"]) == report["selection"]["case_count"] == 60
+    assert report["context"]["recall5"] == 0.8905555555555555
+    assert report["context"]["duplicate_count"] == 0
+    preference_cases = [
+        case
+        for case in report["cases"]
+        if case["type"] == "single-session-preference"
+    ]
+    other_cases = [
+        case
+        for case in report["cases"]
+        if case["type"] != "single-session-preference"
+    ]
+    assert len(preference_cases) == 10
+    assert sum(case["context"]["hit1"] for case in preference_cases) / 10 == 0.2
+    assert (
+        sum(case["context"]["recall5"] for case in preference_cases) / 10 == 0.6
+    )
+    assert (
+        sum(case["context"]["irrelevant_rate"] for case in preference_cases) / 10
+        == 0.85
+    )
+    assert sum(case["context"]["hit1"] for case in other_cases) / 50 == 0.98
+    for relative_path, expected_sha256 in report["implementation_files"].items():
+        assert (
+            hashlib.sha256((repository / relative_path).read_bytes()).hexdigest()
+            == expected_sha256
+        )
+
+
 def test_claim_gate_counts_only_cryptographically_signed_independent_evaluators(
     tmp_path: Path,
 ) -> None:
     repository = Path(__file__).resolve().parents[1]
     protocol = json.loads(
-        (repository / "benchmarks/external/protocol-v1.json").read_text(encoding="utf-8")
+        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
     )
     evidence = deepcopy(
         json.loads(
@@ -239,7 +316,7 @@ def test_claim_gate_counts_only_cryptographically_signed_independent_evaluators(
 def test_claim_gate_rejects_a_weakened_copy_of_the_frozen_protocol() -> None:
     repository = Path(__file__).resolve().parents[1]
     protocol = json.loads(
-        (repository / "benchmarks/external/protocol-v1.json").read_text(encoding="utf-8")
+        (repository / "benchmarks/external/protocol-v2.json").read_text(encoding="utf-8")
     )
     evidence_path = repository / "benchmarks/external/claim-evidence.pending.json"
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -252,7 +329,27 @@ def test_claim_gate_rejects_a_weakened_copy_of_the_frozen_protocol() -> None:
     )
 
     assert result["passed"] is False
-    assert "protocol content differs from the frozen v1 commitment" in result["errors"]
+    assert "protocol content differs from the frozen v2 commitment" in result["errors"]
+
+
+def test_claim_gate_rejects_the_superseded_v1_protocol() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    protocol = json.loads(
+        (repository / "benchmarks/external/protocol-v1.json").read_text(encoding="utf-8")
+    )
+    evidence_path = repository / "benchmarks/external/claim-evidence.pending.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence["protocol_id"] = protocol["protocol_id"]
+
+    result = evaluate_claim(
+        protocol,
+        evidence,
+        evidence_path=evidence_path,
+    )
+
+    assert result["passed"] is False
+    assert "unsupported protocol schema" in result["errors"]
+    assert "protocol content differs from the frozen v2 commitment" in result["errors"]
 
 
 def test_claim_gate_accepts_only_a_fully_bound_independent_run(
@@ -260,7 +357,7 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
     monkeypatch,
 ) -> None:
     protocol = {
-        "schema_version": "deeplaw.external-proof-protocol/v1",
+        "schema_version": "deeplaw.external-proof-protocol/v2",
         "protocol_id": "synthetic-proof/v1",
         "candidate": {
             "system_id": "deeplaw-2.0",
@@ -428,6 +525,7 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
         "schema_version": "deeplaw.claim-evidence/v1",
         "protocol_id": protocol["protocol_id"],
         "candidate": candidate,
+        "status": "complete",
         "runs": [run],
         "independent_evaluators": [
             {
@@ -456,6 +554,46 @@ def test_claim_gate_accepts_only_a_fully_bound_independent_run(
     assert result["passed"] is True
     assert result["independent_evaluator_count"] == 1
     assert result["allowed_claim"] is not None
+
+    forged_comparison = deepcopy(comparison)
+    forged_comparison["ci_low"] = -1.0
+    run["comparisons"][0]["artifact"] = artifact(
+        "comparison.json",
+        forged_comparison,
+    )
+    forged_manifest = _expected_run_manifest(
+        run,
+        protocol_id=protocol["protocol_id"],
+        candidate=candidate,
+    )
+    forged_manifest_artifact = artifact("suite-manifest.json", forged_manifest)
+    run["evidence_manifest_artifact"] = forged_manifest_artifact
+    attestation["suite_runs"][0]["evidence_manifest_sha256"] = (
+        forged_manifest_artifact["sha256"]
+    )
+    forged_attestation_payload = (
+        json.dumps(attestation, sort_keys=True) + "\n"
+    ).encode()
+    attestation_path.write_bytes(forged_attestation_payload)
+    evidence["independent_evaluators"][0]["attestation_artifact"] = {
+        "path": attestation_path.name,
+        "sha256": hashlib.sha256(forged_attestation_payload).hexdigest(),
+    }
+    evidence["independent_evaluators"][0]["signature_base64"] = base64.b64encode(
+        private_key.sign(forged_attestation_payload)
+    ).decode()
+
+    forged_result = evaluate_claim(
+        protocol,
+        evidence,
+        evidence_path=tmp_path / "evidence.json",
+    )
+
+    assert forged_result["passed"] is False
+    assert any(
+        "differs from deterministic paired-bootstrap recomputation" in error
+        for error in forged_result["errors"]
+    )
 
 
 def test_longmemeval_v2_adapter_exercises_the_real_knowledge_vault(

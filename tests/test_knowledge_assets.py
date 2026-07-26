@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sqlite3
@@ -122,6 +123,29 @@ def test_proposed_assets_are_invisible_until_explicit_human_approval(
     assert active.verification == "human_verified"
     assert active.directive_mode == "reviewed_instruction"
     assert [card.asset_id for card in response.results] == [proposal.asset_id]
+
+
+def test_long_agent_query_keeps_a_tail_entity_discoverable(tmp_path: Path) -> None:
+    root = _vault(tmp_path)
+    with KnowledgeVault(root, read_only=False) as vault:
+        asset_id = _propose_and_approve(
+            vault,
+            title="Quasar Needle",
+            statement="The recovery codename is quasarneedle.",
+        )
+    prefix = " ".join(f"prefixtoken{index:02d}" for index in range(40))
+
+    with KnowledgeVault(root, read_only=True) as vault:
+        query = f"{prefix} quasarneedle"
+        response = vault.search(query)
+        capsule = compile_context(
+            vault,
+            task=query,
+            confirm_no_case_data=True,
+        )
+
+    assert [card.asset_id for card in response.results] == [asset_id]
+    assert capsule["knowledge_assets"][0]["asset_id"] == asset_id
 
 
 def test_dynamic_knowledge_filters_keep_all_values_parameterized(tmp_path: Path) -> None:
@@ -371,6 +395,141 @@ def test_source_compiler_keeps_fragments_and_quarantines_instruction_like_conten
     assert all(asset.source_refs for asset in assets)
     assert info["instruction_risk_source_count"] == 1
     assert info["agent_ready"] is False
+
+
+def test_compiled_source_assets_can_be_reviewed_in_one_atomic_batch(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    source = tmp_path / "reviewed-guide.md"
+    source.write_text(
+        "# First boundary\n"
+        "The first reviewed boundary preserves exact source evidence.\n"
+        "# Second boundary\n"
+        "The second reviewed boundary remains independently retrievable.\n",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        approval = vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+        )
+        repeated = vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+        )
+        integrity = vault.verify_integrity()
+
+    assert approval["reviewed_asset_count"] == 2
+    assert approval["approved_asset_count"] == 2
+    assert approval["approved_asset_ids_truncated"] is False
+    assert repeated["approved_asset_count"] == 0
+    assert repeated["already_active_asset_count"] == 2
+    assert integrity["valid"] is True
+
+
+def test_source_compilation_event_uses_bounded_membership_commitment(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    source = tmp_path / "bounded-event.md"
+    source.write_text(
+        "# First\nFirst source-bound asset.\n"
+        "# Second\nSecond source-bound asset.\n",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        row = vault.connection.execute(
+            "SELECT payload_json FROM events WHERE event_type = 'source_compiled'"
+        ).fetchone()
+        integrity = vault.verify_integrity()
+
+    payload = json.loads(row["payload_json"])
+    assert payload["fragment_count"] == 2
+    assert payload["asset_count"] == 2
+    assert len(payload["membership_sha256"]) == 64
+    assert "fragment_ids" not in payload
+    assert "asset_ids" not in payload
+    assert integrity["valid"] is True
+
+
+def test_empty_relation_expansion_does_not_scan_the_asset_inventory(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    source = tmp_path / "relation-scale.md"
+    source.write_text(
+        "".join(
+            f"# Record {index:04d}\n"
+            f"Reviewed record {index:04d} preserves glyph{index:04d}.\n"
+            for index in range(1_000)
+        ),
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+        )
+        target = vault.search("glyph0500").results[0].asset_id
+        progress_callbacks = 0
+
+        def stop_unbounded_plan() -> int:
+            nonlocal progress_callbacks
+            progress_callbacks += 1
+            return int(progress_callbacks > 10)
+
+        vault.connection.set_progress_handler(stop_unbounded_plan, 100)
+        try:
+            relations = vault.relations_for_assets([target])
+        finally:
+            vault.connection.set_progress_handler(None, 0)
+
+    assert relations == []
+    assert progress_callbacks <= 10
+
+
+def test_source_bound_asset_cannot_be_approved_after_source_tampering(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    source = tmp_path / "approval-source.txt"
+    source.write_text(
+        "Approval must remain bound to these exact reviewed source bytes.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        stored = vault.source_file_path(compiled["source"]["source_id"])
+        stored.write_text("tampered source bytes", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="stored source file"):
+            vault.approve_asset(
+                compiled["asset_ids"][0],
+                confirm_reviewed=True,
+            )
 
 
 def test_source_compiler_preserves_code_line_structure_and_internal_indentation(

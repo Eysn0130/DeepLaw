@@ -210,7 +210,12 @@ def cjk_ngrams(run: str, sizes: Iterable[int] = (2, 3)) -> list[str]:
     return values
 
 
-def search_terms(text: str, *, limit: int | None = None) -> list[str]:
+def search_terms(
+    text: str,
+    *,
+    limit: int | None = None,
+    cover_tail: bool = False,
+) -> list[str]:
     normalized = normalize_text(text).lower()
     terms: list[str] = []
     for run in _CJK_RUN.findall(normalized):
@@ -228,9 +233,23 @@ def search_terms(text: str, *, limit: int | None = None) -> list[str]:
             continue
         seen.add(term)
         unique.append(term)
-        if limit is not None and len(unique) >= limit:
-            break
-    return unique
+    if limit is None or len(unique) <= limit:
+        return unique
+    if limit <= 0:
+        return []
+    if not cover_tail:
+        return unique[:limit]
+    if limit == 1:
+        return [unique[0]]
+
+    # Long Agent tasks often put the actual entity or acceptance condition
+    # after a sizeable setup paragraph. Taking only the first N terms makes
+    # those tail constraints undiscoverable. Sample the complete ordered term
+    # stream instead, retaining both boundaries and deterministic coverage of
+    # the middle without expanding the FTS query bound.
+    last = len(unique) - 1
+    indexes = [round(index * last / (limit - 1)) for index in range(limit)]
+    return [unique[index] for index in indexes]
 
 
 def fts_query(terms: Iterable[str]) -> str:
@@ -238,13 +257,27 @@ def fts_query(terms: Iterable[str]) -> str:
     return " OR ".join(f'"{term}"' for term in safe)
 
 
-def excerpt(text: str, query: str, max_chars: int = 700) -> str:
+def excerpt(
+    text: str,
+    query: str,
+    max_chars: int = 700,
+    *,
+    cover_query_tail: bool = False,
+) -> str:
     text = normalize_text(text)
     if max_chars <= 0:
         return ""
     if len(text) <= max_chars:
         return text
-    anchors = [term for term in search_terms(query, limit=12) if len(term) >= 2]
+    anchors = [
+        term
+        for term in search_terms(
+            query,
+            limit=12,
+            cover_tail=cover_query_tail,
+        )
+        if len(term) >= 2
+    ]
     offset = 0
     compact_characters: list[str] = []
     source_offsets: list[int] = []
