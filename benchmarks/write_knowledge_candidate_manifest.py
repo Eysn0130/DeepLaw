@@ -43,6 +43,9 @@ def build_manifest(
     candidate_commit: str,
     reproducible_build: bool,
 ) -> dict[str, object]:
+    candidate_commit = _git(repository, "rev-parse", f"{candidate_commit}^{{commit}}")
+    if len(candidate_commit) != 40:
+        raise RuntimeError("candidate commit did not resolve to a full Git identity")
     diagnostic_report = json.loads(diagnostic.read_text(encoding="utf-8"))
     if diagnostic_report["implementation"]["python_source_tree_sha256"] != _source_tree_sha256(
         repository
