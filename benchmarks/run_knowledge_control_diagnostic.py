@@ -310,8 +310,8 @@ def run_diagnostic(repository: Path) -> dict[str, Any]:
             "recorded_at": utc_now(),
             "claim_eligible": False,
             "claim_ineligibility_reason": (
-                "Synthetic development fixture executed in a dirty local working tree; "
-                "not a secret held-out or independent evaluation."
+                "Synthetic development fixture; not a secret held-out or independent "
+                f"evaluation. Tracked working tree dirty={bool(git_status)}."
             ),
             "implementation": {
                 "package_version": __version__,
