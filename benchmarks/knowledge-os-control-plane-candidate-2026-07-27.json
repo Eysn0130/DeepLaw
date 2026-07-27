@@ -20,17 +20,17 @@
     "unbounded_claim_allowed": false
   },
   "implementation": {
-    "candidate_code_commit": "0348737bdc40e4e176588234cbed3913240ed1d3",
+    "candidate_code_commit": "aea0c319bdd72c2c5e3ed2a26bd71a97f6fa686f",
     "local_build_artifacts": {
       "external_candidate_frozen": false,
       "fresh_wheel_lifecycle_verified": true,
       "sdist_path": "dist/deeplaw-0.6.0.tar.gz",
-      "sdist_sha256": "43e2f6a86d7aa20aabba2c16ebcf80382fdc320682308229986e6df16defd7ca",
+      "sdist_sha256": "dd01213fd82e636e22676392c1d3cbfa0958d8ae55cb6db880d295444fb97093",
       "two_consecutive_builds_byte_identical": true,
       "wheel_path": "dist/deeplaw-0.6.0-py3-none-any.whl",
-      "wheel_sha256": "6de2da3d8cc357d8b2ff1b26b51886255038502bdbe9f77ddb79ff85f9342bdb"
+      "wheel_sha256": "04523ef7fef320a4a7452eb6aefeebfe1dcb745ac2a2d48edafa795a62f7ab7a"
     },
-    "manifest_generation_head": "0348737bdc40e4e176588234cbed3913240ed1d3",
+    "manifest_generation_head": "aea0c319bdd72c2c5e3ed2a26bd71a97f6fa686f",
     "pyproject_sha256": "f1a7dba03940e095748b1e3020acbc87cccc38a36bd0cff7e45946bd96ec7066",
     "python_source_tree_hash_method": "sha256(sorted(path + NUL + bytes + NUL) for src/deeplaw/**/*.py)",
     "python_source_tree_sha256": "4302ba55322553d64680ee5a612f1b828be93fa7106e4f37a8601f57a1710a11",
@@ -44,7 +44,7 @@
     "No secret held-out run or independent evaluator signature exists for v0.6.0."
   ],
   "package_version": "0.6.0",
-  "recorded_at_utc": "2026-07-27T12:35:20Z",
+  "recorded_at_utc": "2026-07-27T12:59:34Z",
   "schema_version": "deeplaw.knowledge-os-candidate/v1",
   "status": "release_candidate_internal_not_held_out"
 }
