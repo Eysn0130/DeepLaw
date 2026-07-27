@@ -1,11 +1,54 @@
 # DeepLaw 2.0 评测说明
 
-## 当前 v0.5.0 Knowledge OS 候选快照
+## 当前 v0.6.0 control-plane 内部发布候选
 
-当前候选摘要位于
+当前源码绑定摘要位于
+[`knowledge-os-control-plane-candidate-2026-07-27.json`](../benchmarks/knowledge-os-control-plane-candidate-2026-07-27.json)，
+机器诊断位于
+[`knowledge-control-diagnostic-2026-07-27.json`](../benchmarks/knowledge-control-diagnostic-2026-07-27.json)。
+两者均明确 `claim_eligible=false`：运行使用 24 个合成同名章节来源、20 个唯一标识查询和
+单台 macOS arm64 机器，不是隐藏评测或外部复现。诊断绑定 clean tracked tree
+`bdef19555e6adfe1be3be15073356c4d93076a78`；最终内部候选 manifest 绑定包含诊断和候选生成器的
+commit `3633258a4a83f1aafc6497b5467e464a4a9fb326`，两者的 Python source tree、`pyproject.toml`
+和 `uv.lock` 身份一致。
+
+本次诊断实测：
+
+| 项目 | 结果 |
+| --- | ---: |
+| 目录摄取（24 文件） | 64.221 ms |
+| 精确查询 Hit@1 | 1.0 |
+| source-bound item 来源引用覆盖 | 1.0 |
+| 跨来源同名章节 | 两个来源均保留 |
+| 原子来源更新 | 审核前旧版可见；审核后旧版不可见、新版可见 |
+| 常驻 MCP handler search p50 / p95 | 0.502 / 0.711 ms |
+| 常驻 MCP handler context p50 / p95 | 2.606 / 2.923 ms |
+| 冷 CLI search p50 / p95（5 次） | 270.901 / 272.933 ms |
+| Review Receipt / Run Receipt / Feedback / replay | 全部完整性通过 |
+| SQLite / 进程峰值 RSS | 266,240 / 65,765,376 bytes |
+
+这些数字只证明本轮 CLI control plane、同名章节、逐项来源、更新、回执和反馈路径在该合成
+fixture 上闭环。它不证明同义检索、自然语言泛化、Windows ACL、并发服务或跨系统领先；冷
+CLI 与资源数字也不能外推到其他机器。
+
+候选 commit 已连续两次生成字节一致的本地 wheel/sdist，并在全新临时虚拟环境中从 wheel
+完成 `init → source add → review → context → verify-capsule`：
+
+- wheel SHA-256：`6de2da3d8cc357d8b2ff1b26b51886255038502bdbe9f77ddb79ff85f9342bdb`；
+- sdist SHA-256：`e08dfcf9fbf4edf56ea132e30bd0ef7126e45332f79ffae8f59d074b1eebc50d`。
+
+这形成的是内部发布候选，不会替换 2026-07-26 已冻结的外部 v0.5.0 候选。v0.6.0 新的外部
+执行必须在评测方预交付 secret dataset/baseline commitment 后另行冻结并由两家真实独立机构
+签名运行。当前外部状态仍是 `pending_external_execution`。
+当前候选摘要是包外 artifact manifest，构建配置明确不把它写入 sdist，避免 manifest
+记录 sdist hash 时形成自引用；机器诊断报告仍随 sdist 保留。
+
+## 冻结的 v0.5.0 Knowledge OS 历史候选
+
+2026-07-26 候选摘要位于
 [`knowledge-os-v0.5.0-candidate-2026-07-26.json`](../benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json)。
 它绑定 `pyproject.toml`、`uv.lock`、完整 Python source tree，以及两份 v0.5.0 Discovery
-报告；同时把 v0.4.0 Legal Pack 与 Knowledge Core 规模结果明确标成历史证据，避免把旧实现
+报告；它现在与 v0.4.0 Legal Pack、Knowledge Core 规模结果同样作为历史证据保留，避免把旧实现
 的数字移植到新版本。
 
 本轮新增的真实证据：
