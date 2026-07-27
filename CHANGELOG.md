@@ -21,6 +21,8 @@ versions follow semantic versioning independently.
   verification, and recoverable atomic rollback.
 - Stable `json`, `jsonl`, and human-readable Knowledge CLI output modes.
 - macOS and Windows CLI/MCP smoke jobs in CI; Windows ACL equivalence remains a separate gate.
+- Chinese-default GitHub product page with a versioned Image2 hero, restored Knowledge Cycle and
+  Evidence Core visuals, a reviewable Mermaid architecture, and a complete English counterpart.
 
 ### Fixed
 
