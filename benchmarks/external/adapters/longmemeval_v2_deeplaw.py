@@ -168,10 +168,14 @@ class DeepLawMemory(Memory):
                 sensitivity="private",
                 confirm_no_case_data=True,
             )
+            review_manifest = vault.source_review_manifest(
+                result["source"]["source_id"]
+            )
             vault.approve_source_assets(
                 result["source"]["source_id"],
                 confirm_reviewed=True,
                 confirm_quarantined=bool(result["source"]["instruction_risk"]),
+                review_manifest_sha256=review_manifest["review_manifest_sha256"],
             )
 
     def query(

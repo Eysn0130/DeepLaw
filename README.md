@@ -2,550 +2,385 @@
   <strong>简体中文</strong> · <a href="README_EN.md">English</a>
 </p>
 
-<h1 align="center">DeepLaw - 2.0</h1>
+<h1 align="center">DeepLaw 2.0</h1>
 
 <p align="center">
   <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 品牌字标" />
 </p>
 
 <p align="center">
-  <strong>面向下一代 AI Agent 的本地优先知识操作系统。</strong><br />
-  将信息、项目经验、工具结果与领域资料编译为可验证、可演化的 Knowledge Assets。
+  <strong>为长期运行的 AI Agent 编译可验证知识。</strong><br />
+  本地优先 · 来源可追溯 · 人工审核 · 生命周期治理 · 有界上下文 · 受控反馈
 </p>
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/version-v0.5.0-17202A?style=flat-square" alt="Version v0.5.0" />
+  <img src="https://img.shields.io/badge/version-v0.6.0-17202A?style=flat-square" alt="Version v0.6.0" />
+  <img src="https://img.shields.io/badge/status-release%20candidate-36CDBB?style=flat-square" alt="Release candidate" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
-  <img src="https://img.shields.io/badge/MCP-read--only-18A999?style=flat-square" alt="Read-only MCP" />
+  <img src="https://img.shields.io/badge/MCP-read--only-18A999?style=flat-square" alt="只读 MCP" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
 <p align="center">
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#deeplaw-架构">系统架构</a> ·
-  <a href="#evidence-compiler">Evidence Compiler</a> ·
+  <a href="#从-v050-到-v060">版本亮点</a> ·
+  <a href="#90-秒本地闭环">快速开始</a> ·
+  <a href="#系统架构">系统架构</a> ·
+  <a href="#已验证能力矩阵">能力矩阵</a> ·
   <a href="#agent-接入">Agent 接入</a> ·
-  <a href="#当前收录与更新">当前收录</a> ·
+  <a href="#信任边界">安全边界</a> ·
   <a href="#文档">文档</a>
+</p>
+
+<p align="center">
+  <img src="assets/brand/deeplaw-knowledge-os-hero-v0.6.png" width="1180" alt="来源经过版本控制、验证核心和人工审核后编译为有界 Knowledge Capsule，交付给 Agent，并形成受控反馈回路" />
 </p>
 
 ---
 
-<p align="center">
-  <img src="assets/readme/product-flow-glass.png" width="1180" alt="文件进入 DeepLaw 2.0 知识库，经定位、连接和解释形成证据包并交付给 Agent" />
-</p>
+> **v0.6.0 状态：商业级内部发布候选。** CLI 控制面与可信闭环已通过 Python 3.11–3.13、
+> macOS、Windows CI；跨系统领先仍等待秘密 held-out 与两家独立机构签名，不提前宣传。
 
-DeepLaw 2.0 为已有 Agent 提供独立知识层，不替代 Codex、Claude Code、OpenCode 的推理与执行。
-它把文件、项目决策、约束、经验和工具结果保存为有来源、有生命周期、有敏感级别的
-**Knowledge Assets**，再按具体任务编译为小型、可核验的 **Knowledge Capsule**。
-
-中国法律能力作为首个严格领域包继续独立运行：法源进入不可变、版本化的 Legal Pack，Agent
-只接收当前问题需要的 **Evidence Pack**。通用知识与法律知识不混库、不共享更新权限，也都不
-接管 Analytix 案件项目。
-
-## 核心能力
-
-| 能力 | DeepLaw 2.0 的做法 |
-| --- | --- |
-| **Knowledge Compiler** | 保留原始文件和定位片段，再生成待复核资产；摘要或语义单元不能替代来源 |
-| **生命周期** | `proposed → active → superseded/revoked`，风险内容进入 `quarantined`；只有人工复核可激活 |
-| **Context Compiler** | 依据任务优先选择约束、决策、规则和经验，以正文、来源元数据和完整载荷三重硬预算生成 Capsule |
-| **候选发现** | 可选本地派生索引用于难以用原词定位的候选；固定模型、绑定 vault 与来源、默认关闭，候选仍须按精确 ID 回到规范资产核验 |
-| **长期知识** | 区分 working、project、experience、wisdom、domain；临时知识强制过期，不保存整段会话 |
-| **隔离与敏感级别** | 每个 vault 使用独立 owner-only SQLite；public/internal/private/restricted 决定导出与 Agent 可见性 |
-| **可验证与可迁移** | 事件链与当前 Asset/source/relation/FTS 状态双重核对，所选原件重新验 hash；`.dlk` 导入永远先进入不可信隔离区 |
-| **人类可维护** | SQLite 是规范存储，Markdown/Obsidian 是可重建视图，关系和反向链接用于审阅 |
-| **严格领域包** | Legal Pack 继续提供版本、时效、来源、Evidence Pack 与 receipt，不被通用知识层降级 |
-| **宿主低干扰** | 两个独立、显式使用、只读的单 leaf MCP 插件；普通代码和数据任务不自动激活 |
-
-## DeepLaw 架构
-
-DeepLaw 使用一个通用内核和一个独立 Legal Pack：
+DeepLaw 是 Codex、Claude Code、OpenCode 等 Agent 宿主之外的独立知识层。它不替代模型、
+Agent Runtime、IDE、向量数据库或人类笔记工具，而是把知识从“搜到一段文本”升级为一条
+可检查、可更新、可重放的供应链：
 
 ```text
-Project Sources / Decisions / Experience / Tool Results
-  → Knowledge Compiler
-  → owner-only Knowledge Asset Vault
-  → human review + lifecycle
-  → Context Compiler
-  → bounded Knowledge Capsule
-  → knowledge_support → Agent
-
-Reviewed Legal Sources
-  → Document IR
-  → immutable Legal Pack Release
-  → Evidence Compiler
-  → bounded Evidence Pack
-  → law_support → Agent
+来源 → 不可变版本 → 片段 → proposal → 人工审核
+     → active Knowledge Assets → 有界 Capsule → Agent 任务
+     → Run Receipt → 结构化反馈 → proposal / regression case
 ```
 
-- **Knowledge Asset Vault**：保存来源片段、资产状态、显式关系和审计链；持久写入只在本地
-  CLI 发生，Agent 只读；
-- **Knowledge Capsule**：保存任务、预算、所选资产、来源、缺口、摘要和 vault 审计锚点；
-- **Legal Pack Release**：仍以 `mode=ro&immutable=1` 打开，保存法源版本、block、segment、
-  时效、关系、风险与 hash；
-- **Markdown 派生视图**：供人工浏览、校对和 Obsidian 使用，可删除重建，不是运行时真源；
-- **插件隔离**：`knowledge_support` 与 `law_support` 属于不同插件、不同进程和不同激活意图。
+与普通 RAG 不同，检索命中不会让内容自动变得可信。DeepLaw 将原始字节、精确 locator、hash、
+审核决定、生命周期和任务回执分别保存；任何绑定失效时都失败关闭。
 
-### Knowledge Asset 闭环
+中国法律能力是第一个严格 Domain Pack，使用独立进程和存储，保留官方来源、不可变 release、
+时效和 receipt 规则。通用项目知识不能继承法律权威，案件私有资料不进入任何一个产品。
 
-```text
-Ingest → Propose/Quarantine → Human Review → Active
-  → Search/Context → Verify → Feedback Proposal
-  → Human Review → Supersede/Revoke
-```
-
-DeepLaw 不向 Agent 暴露 `remember` 或 `learn` 写工具。调试经验和 Capsule 反馈只能形成 proposal，
-且反馈必须绑定一份验证通过的 Capsule 文件，不能伪造 Capsule ID。带有指令式文本或不可见
-控制字符的来源会失败关闭到 quarantine；激活这类资产除 `--confirm-reviewed` 外还必须显式提供
-`--confirm-quarantine`。即使是已复核资产，也只有 constraint/rule/procedure 可以标记为
-`reviewed_instruction`，且不能覆盖宿主、仓库或用户指令。
-
-通用 Knowledge Asset 一律输出 `legal_authority: false`。它可以保存项目规则或用户提供的领域
-参考，但不能冒充官方法源；需要中国法律权威来源时必须切换到独立的 `law_support`。
-
-### Legal Pack：从文件到证据的知识闭环
-
-<p align="center">
-  <img src="assets/readme/knowledge-cycle.png" width="1120" alt="DeepLaw 2.0 的 Ingest、Organize、Locate、Connect、Explain 与 Verify 知识闭环" />
-</p>
-
-| 动作 | 作用 | 约束 |
+| Compile | Govern | Deliver |
 | --- | --- | --- |
-| **Ingest** | 校验文件、解析内容并建立 Document IR | 处理成功不等于人工审核通过 |
-| **Organize** | 保存层级、顺序、版本与 Knowledge Map | 派生摘要不能覆盖原文 |
-| **Locate** | 定位题名、文号、条款、关键词与相关片段 | 泛词不会展开成无限候选 |
-| **Connect** | 连接引用、修订、废止、替代、定义与例外 | 关系连接本身不是法律结论 |
-| **Explain** | 生成有来源的导航、短摘要与问题分解 | 派生解释必须回到精确来源片段 |
-| **Verify** | 检查来源、时效、证据义务、预算、缺口与回执 | 不为看起来完整而补造答案 |
+| 文件与目录成为带精确定位和不可变版本的 Knowledge Assets | proposal、quarantine、人工 Review Receipt 与显式 supersede/revoke | Context Compiler 只交付有预算、有来源、有 gaps 的 Knowledge Capsule |
 
-`Deliver` 是最终动作：只把完成当前任务所需的证据、限制、缺口和回执交给 Agent。
+## 从 v0.5.0 到 v0.6.0
 
-### Evidence Core
+v0.5.0 建立了“可验证知识内核”；v0.6.0 将它推进为可由 CLI 日常管理的完整控制面。
+
+| v0.6.0 新闭环 | 交付结果 |
+| --- | --- |
+| **Source Control Plane** | 稳定 `source_key`、不可变版本、目录 manifest、diff/update/remove 与审核后原子切换 |
+| **Review Workbench** | 精确 membership hash、reviewer identity、批量事务与不可变 Review Receipt |
+| **Verified execution** | Capsule 验证后才能创建 Run Receipt，任务、来源、资产和 Vault revision 全部绑定 |
+| **Feedback Compiler** | helpful/irrelevant/harmful/stale/missing 分类，生成 proposal、regression case 与 replay 对比 |
+| **Safe operations** | migration plan/backup/apply/verify/rollback、权限 doctor、稳定 JSON/JSONL/human 输出 |
+| **Release discipline** | 可重复 wheel/sdist、fresh-wheel 验收、Linux/macOS/Windows CI 与明确外部证据边界 |
+
+## 为什么是 DeepLaw
+
+| 常见知识系统 | DeepLaw 2.0 |
+| --- | --- |
+| chunk 或生成摘要逐渐成为实际真源 | 原始字节和定位片段始终是证据；摘要、图、embedding、Wiki 页面均为派生数据 |
+| 文件更新后静默重复或覆盖旧知识 | 稳定 `source_key` 管理不可变版本、审核 diff 和显式 supersede/revoke |
+| Agent 可以直接写入“记忆” | Agent MCP 永久只读；成长必须经过不可信 proposal 和人工审核 |
+| 相似度被当作可信度或权威 | Discovery、Admission、Selection、Authority 分层处理 |
+| Top-k 上下文噪声大、缺少来源 | Capsule 有条目、载荷、来源硬预算；每个 source-bound item 至少保留一条紧凑来源引用 |
+| 反馈是脱离任务的自由文本 | 反馈绑定已验证 Capsule 与 Run Receipt，区分有用、无关、有害、过期和缺失知识，并形成可重放回归用例 |
+
+<p align="center">
+  <img src="assets/readme/product-flow-glass.png" width="1180" alt="文件进入 DeepLaw，经定位、连接和编译形成交给 Agent 的有界证据包" />
+</p>
+
+## 90 秒本地闭环
+
+需要 Python 3.11+ 与 [`uv`](https://docs.astral.sh/uv/)。以下流程不下载可选模型，且只写入
+临时 Vault。
+
+```bash
+git clone https://github.com/Eysn0130/DeepLaw.git
+cd DeepLaw
+uv sync --frozen
+
+QUICKSTART_ROOT="$(mktemp -d)"
+QUICKSTART_VAULT="$QUICKSTART_ROOT/vault"
+printf '# Decision\nUse SQLite as the canonical local store.\n' > "$QUICKSTART_ROOT/project.md"
+
+uv run deeplaw knowledge init \
+  --vault "$QUICKSTART_VAULT" \
+  --name quickstart \
+  --scope project
+
+SOURCE_RESULT="$(uv run deeplaw knowledge source add \
+  --vault "$QUICKSTART_VAULT" \
+  --source "$QUICKSTART_ROOT/project.md" \
+  --typed-extraction deterministic-v1 \
+  --confirm-no-case-data)"
+SOURCE_ID="$(printf '%s' "$SOURCE_RESULT" | uv run python -c \
+  'import json,sys; print(json.load(sys.stdin)["source"]["source_id"])')"
+
+REVIEW_MANIFEST="$(uv run deeplaw knowledge review manifest \
+  --vault "$QUICKSTART_VAULT" \
+  --source-id "$SOURCE_ID")"
+REVIEW_SHA="$(printf '%s' "$REVIEW_MANIFEST" | uv run python -c \
+  'import json,sys; print(json.load(sys.stdin)["review_manifest_sha256"])')"
+
+uv run deeplaw knowledge review approve-source \
+  --vault "$QUICKSTART_VAULT" \
+  --source-id "$SOURCE_ID" \
+  --review-manifest-sha256 "$REVIEW_SHA" \
+  --reviewer-id local-operator \
+  --reason 'Reviewed the exact source and proposal.' \
+  --confirm-reviewed
+
+uv run deeplaw knowledge context \
+  --vault "$QUICKSTART_VAULT" \
+  --task 'Which local store must this project use?' \
+  --confirm-no-case-data \
+  --output "$QUICKSTART_ROOT/capsule.json"
+
+uv run deeplaw knowledge verify-capsule \
+  --vault "$QUICKSTART_VAULT" \
+  --capsule "$QUICKSTART_ROOT/capsule.json"
+```
+
+命令默认返回稳定 JSON。在 `knowledge` 后使用 `--format jsonl` 或 `--format human`，可分别
+获得紧凑机器事件或人类可读输出。审核步骤绑定精确 proposal membership；如果来源或队列
+发生变化，批准会停止，而不是对移动目标继续执行。
+
+## 系统架构
+
+```mermaid
+flowchart LR
+  subgraph KOS["General Knowledge OS"]
+    S["Files & Directories"] --> SC["Source Control Plane<br/>identity · version · diff"]
+    SC --> KC["Knowledge Compiler<br/>fragment · typed proposal"]
+    KC --> RW["Review Workbench<br/>manifest · receipt"]
+    RW --> V["Knowledge Asset Vault<br/>lifecycle · scope · audit"]
+    V --> CC["Context Compiler<br/>budget · provenance · gaps"]
+    CC --> CAP["Knowledge Capsule"]
+  end
+
+  subgraph LEGAL["Strict Legal Pack"]
+    LS["Reviewed Legal Sources"] --> LP["Immutable Release"]
+    LP --> EC["Evidence Compiler"]
+    EC --> EP["Evidence Pack"]
+  end
+
+  CAP --> KMCP["knowledge_support<br/>read-only"]
+  EP --> LMCP["law_support<br/>read-only"]
+  KMCP --> AGENT["Codex · Claude Code · OpenCode"]
+  LMCP --> AGENT
+  AGENT -. "Run Receipt + Feedback" .-> RW
+```
+
+SQLite 与内容寻址的 source fragment 是规范真源。Markdown/Obsidian 导出只是确定性人类视图，
+永远不是第二数据库。
+
+<p align="center">
+  <img src="assets/readme/knowledge-cycle.png" width="1120" alt="DeepLaw 的 Ingest、Organize、Locate、Connect、Explain、Verify 与 Deliver 知识闭环" />
+</p>
+
+这套循环保留了 v0.5.0 的 Evidence Core，并在 v0.6.0 增加 Source Version、Review Receipt、
+Run Receipt 和结构化 Feedback，使每一次“成长”都能回到真实来源与人工门禁。
+
+### 来源版本与原子更新
+
+```bash
+uv run deeplaw knowledge source list --vault "$QUICKSTART_VAULT"
+uv run deeplaw knowledge source update \
+  --vault "$QUICKSTART_VAULT" \
+  --source-key sourcekey_REPLACE_WITH_EXACT_ID \
+  --source ./project.md \
+  --typed-extraction deterministic-v1 \
+  --confirm-no-case-data
+uv run deeplaw knowledge source diff \
+  --vault "$QUICKSTART_VAULT" \
+  --old-source-id source_REPLACE_OLD \
+  --new-source-id source_REPLACE_NEW
+```
+
+后继版本的精确审核清单通过前，旧 active 版本继续可用。系统拒绝单项批准后继来源资产，因为
+这会破坏原子切换。完整批准后，在一个事务内显式 supersede 对应知识并 revoke 已删除章节；
+历史版本、原始字节和审计记录都保留。
+
+目录摄取使用有界、可重放 manifest。每个文件是独立原子来源事务；失败文件不会损坏已成功
+文件，并会在结果中明确列出。
+
+```bash
+uv run deeplaw knowledge source add-dir \
+  --vault "$QUICKSTART_VAULT" \
+  --directory ./docs \
+  --recursive \
+  --include '*.md' \
+  --exclude 'archive/**' \
+  --dry-run \
+  --confirm-no-case-data
+```
+
+### Typed proposal 不是自动真相
+
+`deterministic-v1` 只识别 Decision、Constraint、Procedure、Rule、Fact、Lesson、Question 等明确
+标题线索。它是本地、确定性、可选且刻意受限的提取器。全部结果仍为 `proposed` 或
+`quarantined`，永远不会依据提取器分数自动 active。通用模型提炼仍是实验能力，不进入默认
+运行路径。
+
+### Run Receipt 与反馈重放
+
+```bash
+uv run deeplaw knowledge run-receipt create \
+  --vault "$QUICKSTART_VAULT" \
+  --capsule "$QUICKSTART_ROOT/capsule.json" \
+  --status partial \
+  --host-name codex \
+  --host-version local
+
+uv run deeplaw knowledge feedback record \
+  --vault "$QUICKSTART_VAULT" \
+  --run-id run_REPLACE_WITH_EXACT_ID \
+  --outcome partial \
+  --missing-knowledge 'The rollback owner is not documented.' \
+  --observation 'The storage decision was useful.' \
+  --recommended-action 'Review a source-bound rollback owner decision.' \
+  --confirm-no-case-data
+```
+
+反馈会形成需审核的 lesson proposal 和不含真实来源文本的 regression case。Replay 只比较历史
+已验证 Capsule 与当前检索，不推断任务已经成功；所有开发结果都保持
+`claim_eligible=false`。
+
+## 已验证能力矩阵
+
+这里的状态表示“实现 + 测试 + 可用 CLI/MCP 路径”，不是市场领先声明。
+
+| 能力 | 状态 | 边界 |
+| --- | --- | --- |
+| 原始字节、fragment、locator、hash | **Supported** | 来源文本是不可信数据；选中原件会重新验 hash |
+| 逻辑来源、不可变版本、diff/update/remove | **Supported** | 后继版本必须通过精确来源审核才能激活 |
+| 单文件与有界目录摄取 | **Supported** | PDF、DOCX、受控转换的 legacy DOC、Markdown/TXT、代码、JSON/JSONL、YAML/TOML、CSV/TSV、SQL、XML/HTML/CSS/log 文本 |
+| Review queue、manifest、本地 Review Receipt | **Supported** | v1 绑定 reviewer 与内容；签名明确为 `null` |
+| Knowledge Asset 生命周期 | **Supported** | `proposed/quarantined → active → superseded/revoked`，仅人工审核可激活 |
+| 确定性 typed extraction | **Operator-only** | 只识别明确标题线索，不宣称通用语义理解 |
+| Context Capsule 与验证 | **Supported** | 条目、字符、载荷、来源硬预算；gaps 显式保留 |
+| Task Run Receipt 与结构化 Feedback Ledger | **Supported** | Run 身份由已验证 Capsule 派生；replay 不推断任务成功 |
+| 旧 Vault control migration 恢复 | **Supported** | apply 前验证备份、apply 后审计/生命周期验证、显式原子回滚 |
+| 本地语义 Discovery Index | **Experimental** | 可删除、固定模型并绑定 Vault；不进入默认 Context/MCP |
+| Markdown/Obsidian 投影 | **Supported (minimal)** | 单向 Asset/INDEX 投影；SQLite 仍是规范真源；丰富视图仍在规划 |
+| `.dlk` 可移植包 | **Supported with restriction** | 只有内容完整性；导入后一律不可信隔离 |
+| `knowledge_support` 与 `law_support` MCP | **Supported** | 独立进程、显式激活、只读、有界输出 |
+| Windows 等价 owner-only ACL 证明 | **Not verified** | `knowledge doctor --permissions` 返回 `not_verified`；原生 ACL 门禁仍在路线图 |
+| URL/Git connector、watch job、TUI/Web 审核台 | **Planned** | 不以空命令或文档占位冒充实现 |
+| 跨系统性能领先 | **External verification pending** | 需要冻结 artifact、秘密 held-out 和两家真实独立机构签名 |
+
+旧 v0.5 Vault 可以查看、应用、验证并回滚增量 control-plane migration。应用前会自动创建并
+验证备份，数据库不会在无有效备份时进入迁移：
+
+```bash
+uv run deeplaw knowledge migrate --vault /path/to/vault
+uv run deeplaw knowledge migrate --vault /path/to/vault --apply --backup /safe/vault-backup
+uv run deeplaw knowledge migrate --vault /path/to/vault --verify --backup /safe/vault-backup
+uv run deeplaw knowledge migrate --vault /path/to/vault \
+  --rollback --backup /safe/vault-backup --confirm-rollback
+uv run deeplaw knowledge doctor --vault /path/to/vault --permissions
+```
+
+## Agent 接入
+
+DeepLaw 提供两个可选插件：
+
+- `plugins/deeplaw-knowledge-os`：通用 `knowledge_support` leaf；
+- `plugins/deeplaw`：中国 Legal Pack `law_support` leaf。
+
+两个 MCP 均永久只读。导入、审核、激活、记录反馈、删除和迁移仍是离线 CLI 管理操作。
+Codex、Claude Code、OpenCode 配置和“实机验证/仅静态验证”的区别见
+[`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md)。
+
+```json
+{
+  "operation": "context",
+  "task": "Prepare the migration while preserving reviewed project constraints",
+  "confirm_no_case_data": true
+}
+```
+
+面向 Provider 的 search 最多返回五张 evidence card；完整内容按精确 Asset 或 segment ID 获取。
+`restricted` Knowledge Asset 永远不会越过 Agent MCP 边界。
+
+## 中国 Legal Pack
+
+Legal Pack 不是通用 Vault 的一个 preset。它将官方目录、用户私有法律参考、不可变 release、
+时效、Evidence Duties 和 receipts 物理及语义隔离。HTTPS 官方目录必须通过精确字节 Ed25519
+验签；私有参考永远不能继承官方 authority、排名或审核状态。
 
 <p align="center">
   <img src="assets/readme/evidence-core.png" width="1120" alt="Evidence Core 由来源与版本、知识地图、证据义务、限制与缺口、回执与重放组成" />
 </p>
 
-Evidence Core 将五类信息保持在同一条可复核链路中：
+详见 [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) 与
+[`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md)。DeepLaw 提供法律研究证据，不会仅凭
+检索结果判断某条规则适用于具体案件。
 
-- **Sources & Versions**：固定 release、来源 URL、source hash、segment hash 与精确定位；
-- **Knowledge Map**：只让有来源的关系进入权威路径，派生关系只能用于发现候选；
-- **Evidence Duties**：把问题编译为封闭的证据要求，包括主规则、精确引文、时效、定义、
-  解释、程序、数额/立案标准、反证和案例参考；
-- **Limits & Gaps**：限制卡片、字符、关系路径和 hop；区分证据缺口、语料缺口、复核缺口、
-  时效缺口和抽取缺口；
-- **Receipts & Replay**：记录选择结果所绑定的 release、segment 与 hash，使结果可验证、可重放。
+## 信任边界
 
-## Evidence Compiler
+- Agent MCP 没有 write、learn、remember、approve、import、revoke 或 delete 操作；
+- MCP 只读不等于操作系统沙箱。如果宿主授予 Agent 同账户任意 Shell，它仍可能调用离线管理
+  CLI；必须由宿主工具策略或独立 OS 身份阻断；
+- Vault 拒绝 symlink root 和受保护文件，并检查 POSIX owner-only mode；当前尚未机械证明
+  Windows NTFS ACL 的等价隔离；
+- 导入文本可能包含 prompt injection。只有 active、human-reviewed 的 constraint/rule/procedure
+  可以携带 `reviewed_instruction`，且仍不能覆盖宿主、仓库、开发者或当前用户指令；
+- 案件私有文件、事实、聊天和标识符不得进入 Knowledge OS 或 Legal Pack，测试必须使用隔离
+  合成 fixture；
+- `.dlk` v1 只验证内容完整性，不认证发布者身份；导入永远失去来源 trust 并进入 quarantine。
 
-Evidence Compiler 是 DeepLaw 2.0 的核心查询路径。它不直接截取“分数最高的若干片段”，而是
-先定义什么才算足以回答当前问题，再选择内容：
+在向宿主开放本地 Shell 或文件系统前，请阅读 [`SECURITY.md`](SECURITY.md)。
+
+## Benchmark 与证据状态
+
+开发评测会尽量绑定源码、依赖锁、语料/查询 hash、参数和硬件。它们只用于诊断，不是外部
+声明，统一标记 `claim_eligible=false`。
+
+外部协议和 evaluator tooling 已准备，但当前状态仍是：
 
 ```text
-Question
-  → closed Evidence Duties
-  → bounded candidate discovery
-  → integrity / relevance / temporal-intent / extraction admission
-  → coverage witnesses
-  → limitation and counterevidence challenges
-  → bounded coverage-first evidence set
-  → evidence + uncertain evidence + gaps + receipts
+pending_external_execution
 ```
 
-在有限候选池和上下文预算内，编译器按确定性优先级先满足精确目标与必需证据义务，再处理
-定义、限制、例外、反证和版本变化；只有能新增或改善 witness 的候选才进入结果。这个过程追求
-有界覆盖与去冗余，不宣称求解全局最小集合。大量同主题片段不能挤掉精确条文或必要限制；没有
-通过能力条件的候选不能产生 coverage witness，也不能把必需证据标记为已覆盖。
+本版本尚未取得秘密 held-out 运行结果，也没有两家真正独立机构的签名复现。因此 DeepLaw
+不会宣称“最好”“世界第一”或全面超过所有 RAG、GraphRAG、Memory、Wiki 或笔记系统。详见
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) 与
+[`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md)。
 
-单一主题词使用导航模式：只返回经来源锚定的主规则和极短追问，不展开入站引用图。只有明确的
-研究问题需要版本、例外、替代或反证关系时，才允许一跳确定性关系进入结果。
-
-Evidence Pack 明确区分：
-
-| 输出 | 含义 |
-| --- | --- |
-| `evidence` | 通过完整性、相关性及本次查询实际启用的时效/抽取门禁的研究证据；不等于来源身份或现行效力已完成人工审核 |
-| `uncertain_evidence` | 与问题相关，但至少一项准入条件尚未满足 |
-| `obligation_coverage` | 每项证据义务由哪些可检查 witness 覆盖 |
-| `gaps` | 尚未覆盖或无法确认的证据、语料、时效、复核与抽取缺口 |
-| `receipt_id` | 可对固定 release 中的片段重新计算 hash 的回执 |
-
-即使问题没有显式询问时效，已知历史、废止、替代或尚未施行的候选在缺少 `as_of` 时也只能进入
-`uncertain_evidence`，不能被 Agent 当作主证据。
-
-候选发现可综合题名、条文、相关性和来源层级用于排序，但这个排序分数不能提升完整性、时效、
-抽取质量或人工审核状态。模型或派生索引可以帮助发现候选，不能自行判定修订废止、消除阻断性
-缺口或把研究候选变成案件适用结论。
-
-## 当前版本 v0.5.0
-
-| 能力 | 当前状态 |
-| --- | --- |
-| Knowledge Asset | owner-only vault、来源片段、提议/隔离/激活/替代/撤销生命周期、敏感级别、事件链与当前状态重放核对 |
-| Context Capsule | 任务优先级、正文/来源/完整载荷预算、显式 gaps、来源引用、一次有界人工关系扩展、选择原因、digest 与历史审计锚点 |
-| 候选发现 | 可选英文或中英文本地模型、固定 revision/文件清单、派生索引完整性与当前 vault 绑定；不进入默认 Context 或 MCP |
-| 经验成长 | Debugger 与 Capsule feedback 只生成待复核 proposal，不允许 Agent 自动写入或自我提升 |
-| 共享与人类视图 | 固定 revision 可复现 `.dlk`、不可信导入隔离、确定性 Markdown/Obsidian 投影 |
-| 文件处理 | 官方目录支持 DOCX/PDF；用户私有库另支持 UTF-8 TXT；保留 block 级定位与抽取证据 |
-| 数据表示 | 不可变原件、Document IR、只读 SQLite release 与可重建 Markdown 派生视图分层 |
-| 官方目录 | Ed25519 验签、HTTPS 更新、sequence 防回滚/改写、逐来源大小与 SHA-256 校验 |
-| 用户私有库 | owner-only 物理目录、显式增删、独立不可变快照，不与官方结果混排 |
-| 定位与连接 | 题名、别名、文号、条款、中文全文检索、来源绑定主题定位与有限关系路径 |
-| 证据交付 | 封闭 QueryPlan、启发式证据义务、按查询启用的时效/抽取门禁、有界证据、显式缺口与 receipt |
-| Agent 接口 | 两个可独立安装的只读 MCP 插件；每个插件只有一个 leaf tool，没有持久写工具 |
-| 宿主 | Codex、Claude Code 与 OpenCode 适配；Analytix 案件项目仍在 DeepLaw 2.0 范围之外 |
-
-## 快速开始
-
-需要 Python 3.11+ 和 [`uv`](https://docs.astral.sh/uv/)：
-
-```bash
-git clone https://github.com/Eysn0130/DeepLaw.git
-cd DeepLaw
-uv tool install '.[document-engine]'
-deeplaw --version
-```
-
-先创建一个独立项目知识 vault：
-
-```bash
-deeplaw knowledge init \
-  --vault "$HOME/.deeplaw/vaults/my-project" \
-  --name my-project \
-  --scope project
-
-deeplaw knowledge ingest \
-  --vault "$HOME/.deeplaw/vaults/my-project" \
-  --source "./ARCHITECTURE.md" \
-  --source-kind document \
-  --sensitivity internal \
-  --confirm-no-case-data
-```
-
-摄取只会生成 `proposed` 或 `quarantined` 资产。人工检查输出中的 `asset_id` 后，可以逐项激活；
-若已完整复核同一份原件，也可以用输出中的精确 `source_id` 在一个事务内激活该原件的全部
-候选：
-
-```bash
-deeplaw knowledge approve \
-  --vault "$HOME/.deeplaw/vaults/my-project" \
-  --asset-id "asset_..." \
-  --confirm-reviewed
-
-deeplaw knowledge approve-source \
-  --vault "$HOME/.deeplaw/vaults/my-project" \
-  --source-id "source_..." \
-  --confirm-reviewed
-
-deeplaw knowledge context \
-  --vault "$HOME/.deeplaw/vaults/my-project" \
-  --task "在不破坏现有存储契约的前提下实施迁移" \
-  --confirm-no-case-data \
-  --output "./capsule.json"
-```
-
-`task` 和 `goal` 会进入 Capsule 文件，因此 context 同样要求
-`--confirm-no-case-data`；该确认只允许非案件项目知识，不能把案件事实、聊天或附件带入
-DeepLaw。
-
-若资产状态是 `quarantined`，必须在复核风险文本后额外传入
-`--confirm-quarantine`；普通 `--confirm-reviewed` 不足以激活。
-
-Capsule、`.dlk` 和 Markdown 导出不会覆盖无关的既有文件或目录；请为新产物选择新路径。
-
-完整生命周期、导出、反馈与安全边界见
-[`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md)。
-
-需要对难以共享原词的候选做显式本地探索时，可另安装
-`uv tool install --force --reinstall-package deeplaw '.[discovery]'`，再按
-[`Knowledge OS：Optional candidate discovery`](docs/KNOWLEDGE_OS.md#optional-candidate-discovery)
-配置固定模型和派生索引。该能力默认关闭，不进入 Agent MCP 或 Context Compiler。
-
-官方目录包含 PDF。首次安装或更新官方 release 前，还需安装 PDF 渲染、OCR 与简体中文语言数据：
-
-```bash
-# macOS (Homebrew)
-brew install poppler tesseract tesseract-lang
-
-# Debian / Ubuntu
-sudo apt-get update
-sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-chi-sim
-```
-
-文档模型只通过一次显式管理命令获取；固定 revision 中 15 个文件的大小与 SHA-256 全部通过
-后才写入 owner-only 配置。日常摄取不会自动下载模型，也不读取上游环境变量或用户级模型配置：
-
-```bash
-deeplaw document-engine setup
-deeplaw document-engine status
-deeplaw-document-engine --version
-pdftoppm -v
-tesseract --version
-tesseract --list-langs | grep -x 'chi_sim'
-```
-
-签名官方目录声明的构建策略是强制策略。`official install` 与 `official update` 会在下载任何官方
-原件、构建 release 或切换激活版本前执行同样的严格预检，包括完整重算本地文档模型清单；
-缺少或篡改任一文件即终止，不会静默降级，也不能通过 CLI 弱化目录策略。首次 `setup` 会从
-固定来源下载约 1.1 GB 模型；已有完整本地缓存时可使用
-`deeplaw document-engine setup --local-files-only`。若机器只读取已经构建好的 release，可改用轻量安装
-`uv tool install .`。处理用户自己的风险 PDF 时显式选择：
-
-```bash
-uv tool install --force --reinstall-package deeplaw '.[document-engine]'
-deeplaw document-engine setup
-deeplaw private add \
-  --source "/path/to/scanned-legal-reference.pdf" \
-  --pdf-fallback document-engine \
-  --allow-needs-ocr \
-  --confirm-no-case-data
-```
-
-安装 DeepLaw 2.0 团队维护的官方目录。客户端先验证签名，再从目录记录的官方来源下载原件并在
-本机构建不可变 release；仓库不重新分发这些原件。
-
-```bash
-deeplaw official install
-deeplaw official status
-deeplaw doctor
-```
-
-需要人工浏览或校对时，可从不可变 release 确定性导出 Markdown；该目录是派生视图，可随时删除
-并重建：
-
-```bash
-deeplaw export-markdown --output "/path/to/deeplaw-markdown"
-```
-
-团队发布新目录后，由用户显式更新：
-
-```bash
-deeplaw official update
-```
-
-已经持有与目录完全一致的 source package 时，可以复用本地原件：
-
-```bash
-deeplaw official install --source-root "/path/to/legal-source-package"
-```
-
-官方目录是可选能力，停用或卸载不会触碰用户私有库：
-
-```bash
-deeplaw official disable
-deeplaw official enable
-deeplaw official uninstall
-```
-
-用户自己的法律参考资料进入独立的本机私有库。导入需要确认文件不是案件材料；Agent 只能
-读取，不能通过 MCP 上传或删除。
-
-```bash
-deeplaw private add \
-  --source "/path/to/user-legal-reference.docx" \
-  --confirm-no-case-data
-deeplaw private list
-deeplaw private search --query "资料题名 第一条"
-deeplaw private delete --document-id "doc_..."
-```
-
-## Agent 接入
-
-| 宿主 | 入口 | 激活边界 |
-| --- | --- | --- |
-| Codex | [`plugins/deeplaw`](plugins/deeplaw) / [`plugins/deeplaw-knowledge-os`](plugins/deeplaw-knowledge-os) | 法律与通用知识为两个独立显式 Skill |
-| Claude Code | 同上 | 两个独立插件分别注册单 leaf 只读 MCP |
-| OpenCode | [`adapters/opencode`](adapters/opencode) | 默认 deny，由两个专用 agent 分别显式授权 |
-| Analytix | [`docs/ANALYTIX_INTEGRATION.md`](docs/ANALYTIX_INTEGRATION.md) | 未来按 turn 接入；案件项目库不属于 DeepLaw 2.0 |
-
-Codex 本地安装：
-
-```bash
-codex plugin marketplace add /absolute/path/to/DeepLaw
-codex plugin add deeplaw@deeplaw
-codex plugin add deeplaw-knowledge-os@deeplaw
-```
-
-Claude Code 本地安装：
-
-```bash
-claude plugin validate --strict /absolute/path/to/DeepLaw/.claude-plugin/marketplace.json
-claude plugin marketplace add /absolute/path/to/DeepLaw
-claude plugin install deeplaw@deeplaw
-claude plugin install deeplaw-knowledge-os@deeplaw
-```
-
-每个插件只暴露一个 MCP leaf tool。Legal Pack 的 `law_support` 使用
-`search/get/verify/release_info`，用户私有库使用
-`private_search/private_get/private_verify/private_info`；Knowledge OS 的
-`knowledge_support` 使用 `search/get/context/verify/inspect`。全部 operation 只读。安装插件不会
-在后台下载、学习或修改资料，更新、摄取和审核只能由用户显式运行 CLI。
-
-普通任务不应自动激活任一插件。只有用户明确要求项目长期知识或 Knowledge Capsule 时才使用
-Knowledge OS；只有明确法律研究时才使用 Legal Pack。宿主应尽可能在工具 schema 进入模型上下文
-前完成选择，避免 Token、延迟和任务路由退化。
-
-## 知识边界
-
-| 范围 | 谁可以更新 | 不可变/禁止事项 | Agent 访问 |
-| --- | --- | --- | --- |
-| 通用 Knowledge Asset vault | 本机 owner 通过 CLI 提议、审核、替代、撤销；原文修改必须生成新 Asset | Agent 不得持久写；source bytes 不原地改；全部资产 `legal_authority=false`；restricted 不出 MCP | 独立 `knowledge_support`；只读 active、非 restricted 资产 |
-| 官方团队法律目录 | DeepLaw 团队发布 sequence 递增、Ed25519 验签的新目录；用户只能显式安装、更新、停用或卸载 | Agent 和用户都不能改 release 内法条、版本、时效、来源、segment、关系或审核状态；修正必须新建不可变 release | `law_support` 官方四个只读 operation |
-| 用户私有法律资料 | 当前 OS 用户通过 `private add/delete` 增删；每次产生新的独立快照 | 不得进入或覆盖官方目录，不得继承官方权威、排序或审核状态；Agent 不得上传、删除或改写 | 仅显式 `private_*`，始终标记用户提供 |
-| Analytix 案件项目 | 仅由 Analytix 的案件项目存储管理 | 案件附件、事实、对话、身份、交易和 SQLite/DuckDB 永不进入 DeepLaw 任一 scope | DeepLaw 不读取、不索引、不共享 |
-
-当前 vault 与本地私有库依赖操作系统账户和 owner-only 文件权限，不是共享服务的多租户认证或
-静态加密。案件证据、事实、聊天、身份和交易不能进入任何 DeepLaw scope；Agent 对话也不能整段
-自动复制，只有经复核的非案件决策、约束、事实或经验可进入通用 vault。
-
-这里的“Agent 只读”是 DeepLaw 插件/MCP 的接口边界，不是对宿主通用 Shell 的替代沙箱。若宿主
-另行授予 Agent 与本机 owner 相同的任意 Shell/文件写权限，它也能触达离线管理 CLI；接入时必须
-禁止 Agent 写入 `~/.deeplaw` 和调用管理命令，或让只读 MCP 使用独立 OS 身份运行。
-
-## 文件处理与质量门禁
-
-- **DOCX**：直接解析 OOXML，保留段落、表格行、样式与脚注引用；
-- **PDF**：按页保留原生文本、版面块、定位、抽取方法、置信信息与风险标记；低质量页面进入
-  多路径解析和视觉复核流程；
-- **TXT**：以严格 UTF-8 解析，保存稳定行序与段落定位；
-- **Document IR**：为每个 block 建立稳定 ID、顺序、文本 hash、页码/段落、类型、来源和质量状态；
-- **Markdown**：只从 IR 生成用于浏览与校对的派生视图，不作为切分、检索或法律引用的真源。
-
-质量判断落实在页和 segment，而不是粗暴地污染整份文档。未通过抽取门禁的片段只进入
-`uncertain_evidence`，不会成为已核验主证据；详细逐页状态、方法、hash 与审计记录保存在
-release 构建报告中，修正通过新的不可变 release 发布。
-
-## 质量验证
+## 开发与验证
 
 ```bash
 uv lock --check
 uv run ruff check .
 uv run pytest
-uv run deeplaw eval --cases evals/core-v0.4.0-2026-07-25.jsonl --limit 5
+uv build
+uv run --frozen python benchmarks/verify_fresh_wheel.py --dist dist
 git diff --check
 ```
 
-当前可复现 smoke 集覆盖精确定位、时效分桶、抽取门禁、官方/私有隔离和 receipt 往返校验。
-Knowledge OS 测试另覆盖 vault 权限与隔离、生命周期与显式替代、数据库/FTS/源文件篡改、
-来源指令隔离和双重风险确认、Context 预算与有界关系扩展、Capsule ID 伪造/篡改/过期/撤销、
-`.dlk` 结构与 trust laundering、Markdown 安全替换、完整 CLI 生命周期和真实 stdio MCP。
-测试所绑定的 release、database、case、源码、环境、hash 与指标见
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)。跨系统性能结论需要在相同语料、问题、模型和上下文
-预算下使用外部 held-out 数据验证。
-
-外部证明协议、逐题评分器、独立签名证据清单和机器宣称门禁已经冻结；当前证据状态仍是
-`pending_external_execution`，因此不会生成跨系统领先文案。协议与当前限制见
-[`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md)。
-
-通用 Knowledge OS 另有一份源码绑定、但不参与领先宣称的 10 万资产诊断：
-100 个长任务查询的 search Hit@1、Capsule 召回和 Capsule 校验均为 `1.0`；常驻只读进程
-search p95 为 `0.82 ms`、context p95 为 `1.28 ms`。冷 CLI 会先完整重放审计与当前状态，
-本次约 `5.85 s`、峰值约 `443 MB`，因此宿主运行时应使用常驻 MCP。完整环境、实现 hash 和
-限制见 [`benchmarks/scale/knowledge-scale-100k-2026-07-26.json`](benchmarks/scale/knowledge-scale-100k-2026-07-26.json)；
-该合成诊断固定为 `claim_eligible=false`，也不外推到百万资产。
-
-## 安全与责任边界
-
-- DeepLaw 2.0 返回可复核的研究证据，不替代法律意见、事实认定或裁判结论；
-- Knowledge Asset 的 `trust` 是来源标签，不是真实性评分；模型输出和反馈不能自动激活；
-- 普通用户不能自行声明 `verified_source`；通用资产永远不是法律权威，法源研究必须走 Legal Pack；
-- `.dlk` v1 校验内容完整性但尚未签名发布者身份，任何导入都先进入 untrusted quarantine；
-- 查询时不会把公网内容直接加入主证据，模型也不能自行决定修订、废止、冲突或优先级；
-- 用户私有资料不能改变官方 release、审核状态、排序或更新生命周期；
-- 受限法源与案件信息不得进入 issue、PR、日志、截图或公开 benchmark。
-
-语料治理见 [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md)，安全报告流程见
-[`SECURITY.md`](SECURITY.md)。
-
-## 路线图
-
-- [x] 不可变 Knowledge Release、Document IR、receipt 与只读 MCP
-- [x] 官方签名目录生命周期与用户私有法律资料物理隔离
-- [x] 精确定位、证据义务、时效/抽取门禁和显式 gaps
-- [x] Codex、Claude Code 与 OpenCode 适配
-- [x] Knowledge Asset vault、人工复核生命周期、Context Capsule 与只读 MCP
-- [x] Experience feedback proposal、可复现 `.dlk` 与 Markdown/Obsidian 投影
-- [ ] 为 `.dlk` 建立独立发布者签名、撤销和单调更新策略
-- [x] 冻结十套件 held-out 协议、逐题统计、独立签名证据链与宣称门禁
-- [ ] 完成十套件真实运行、两个第三方秘密留出与两家独立复现
-- [ ] 扩展完整法律层级与双时态法律事件账本
-- [ ] 增加 Corpus Coverage Manifest 与 release 审批/撤销元数据
-- [ ] 建立外部 held-out 中文法律证据 benchmark
-- [ ] 完成 Analytix turn-scoped 激活与 inactive zero-impact A/B gate
+运行时支持 Python 3.11–3.13。任何可选文档引擎模型变更都要求重新安全审计、更新 OpenVEX，
+并执行真实 PDF 抽取测试。
 
 ## 文档
 
-| 文档 | 内容 |
+| 文档 | 用途 |
 | --- | --- |
-| [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md) | Knowledge Asset、Context Capsule、记忆生命周期、包格式与安全边界 |
-| [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | Legal Pack 技术设计、形式化不变量与研究门禁 |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 系统架构、存储与运行时事实 |
-| [`docs/DOCUMENT_IR.md`](docs/DOCUMENT_IR.md) | DOCX/PDF/TXT 摄取、Document IR、PDF 多候选门禁与 Markdown 定位 |
-| [`docs/CORPUS_GOVERNANCE.md`](docs/CORPUS_GOVERNANCE.md) | 法源、复核、许可、发布与更新治理 |
-| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | 可复现验证结果与下一阶段评价协议 |
-| [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md) | 外部 held-out、公平对照、签名证据与宣称门禁 |
-| [`docs/IMPLEMENTATION_AUDIT_2026-07-26.md`](docs/IMPLEMENTATION_AUDIT_2026-07-26.md) | 施工方案、源码、功能和剩余边界逐项复核 |
-| [`docs/RESEARCH_MATRIX.md`](docs/RESEARCH_MATRIX.md) | Agent 知识库技术研究矩阵、分层边界与对照门禁 |
-| [`docs/KNOWLEDGE_OS_RESEARCH.md`](docs/KNOWLEDGE_OS_RESEARCH.md) | 长期知识、记忆安全、隔离与 Context Capsule 的研究决策 |
-| [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) | Codex、Claude Code 与 OpenCode 适配 |
-| [`docs/ANALYTIX_INTEGRATION.md`](docs/ANALYTIX_INTEGRATION.md) | Analytix 未来接入与 zero-impact 门禁 |
-| [`docs/SOURCE_AUDIT_2026-07-14.md`](docs/SOURCE_AUDIT_2026-07-14.md) | 首批 28 份资料的来源与构建历史审计 |
+| [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md) | Knowledge Asset、Context、生命周期和安全契约真源 |
+| [`docs/CLI_LIFECYCLE.md`](docs/CLI_LIFECYCLE.md) | Source → review → Capsule → run → feedback → update 完整流程 |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 产品隔离与运行架构 |
+| [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | 中国 Legal Pack 设计与当前边界 |
+| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | 可复现内部证据与限制 |
+| [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md) | 独立秘密评测协议 |
+| [`ROADMAP.md`](ROADMAP.md) | 未完成事项、依赖与验收门禁 |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`SECURITY.md`](SECURITY.md) | 贡献与安全政策 |
 
-## 当前收录与更新
+历史施工方案位于 [`docs/archive/`](docs/archive/)，不再充当当前实现真源。
 
-DeepLaw 2.0 是通用法律知识库。当前官方目录收录截至 **2026-07-14** 的 **28** 份资料，包括
-**10 DOCX** 和 **18 PDF**；这只是当前覆盖情况，不限定未来法域和资料类型。仓库分发签名目录、
-公钥信任根、来源 URL、大小和 hash，原件在安装时从官方来源获取。
+## 贡献与许可证
 
-| 当前法源分组 | 数量 | 覆盖内容 |
-| --- | ---: | --- |
-| 核心法源 | 4 | 刑法、刑诉法、修正案与立案追诉标准 |
-| 金融与非法集资 | 4 | 洗钱、反洗钱、非法集资及取缔规则 |
-| 数据与网络 | 3 | 个人信息、数据安全与反电信网络诈骗 |
-| 案例参考 | 4 | 人民法院案例库公开案例 |
-| 办案程序与证据 | 4 | 经侦办案、刑事程序与涉案财物处置 |
-| 反洗钱、支付与主体穿透 | 8 | 外汇、受益所有人、客户尽调、支付机构等 |
-| 罪名专题 | 1 | 危害税收征管刑事案件司法解释 |
-| **合计** | **28** | **10 DOCX + 18 PDF** |
+欢迎提交 Issue 和范围明确的 Pull Request。请保留来源、审计与生命周期边界，为每项契约变更
+增加测试，并且不要提交法律原件、生成 release 数据库、凭据或私有笔记。
 
-DeepLaw 2.0 分别记录**发布机关**与**官方托管下载站点**：前者用于识别来源权威，后者记录原件的
-实际取得位置。
-
-这里的“官方目录”指 DeepLaw 团队维护、签名并从下列官方站点取材的下载目录；它不表示发布机关
-对 DeepLaw 构建结果作出认证，也不等同于逐条人工法律审查。
-
-| 官方下载来源 | 数量 | 当前取得的文件 |
-| --- | ---: | --- |
-| [国家法律法规数据库](https://flk.npc.gov.cn/) | 10 | DOCX：法律、修正案、司法解释等 |
-| [司法部行政法规库](https://xzfg.moj.gov.cn/) | 4 | PDF：行政法规及相关规范 |
-| [中国人民银行](https://www.pbc.gov.cn/)及其官方分支站点 | 6 | PDF：反洗钱、支付、客户尽调与修改决定 |
-| [山东法院官网](https://www.sdcourt.gov.cn/)官方托管页 | 5 | PDF：人民法院案例库参考案例及程序文件 |
-| [证监会](https://www.csrc.gov.cn/)、[国家移民管理局](https://www.nia.gov.cn/)、[深交所](https://www.szse.cn/)官方托管页 | 3 | PDF：发布机关文件的官方托管原件 |
-| **合计** | **28** | **每份均记录 URL、格式、字节数与 SHA-256** |
-
-使用者获取团队更新只需显式运行：
-
-```bash
-deeplaw official update
-```
-
-团队维护目录时遵循三个步骤：
-
-1. 以题名、文号、发布机关、公布/施行日期和时效状态定位资料；
-2. 从发布机关或官方托管页面取得原件，不猜测下载 URL，也不把网页正文另存为原件；
-3. 校验格式、首页身份、大小与 SHA-256，记录版本关系后构建新的不可变 release。
-
-草案、征求意见稿、仅有网页正文的材料、商业数据库转载和案件私有材料不进入公共目录。案例
-只用于检索与论证参考，不能替代法律规范的效力判断。
-
-## 社区与许可
-
-欢迎使用 synthetic fixture 提交可复现的定位、版本、解析和安全问题。参见
-[`CONTRIBUTING.md`](CONTRIBUTING.md)、[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) 和
-[`SECURITY.md`](SECURITY.md)。
-
-DeepLaw 源代码按 [Apache License 2.0](LICENSE) 发布。外部法源、案例、网站版式和第三方资产的
-相关权利仍由各权利人保留；可选文档处理依赖的许可、模型与再分发边界见
+DeepLaw 使用 [Apache License 2.0](LICENSE)。上游说明见
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

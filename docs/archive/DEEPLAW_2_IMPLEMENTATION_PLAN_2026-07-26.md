@@ -1,4 +1,6 @@
-# DeepLaw 2.0 改造施工方案
+# DeepLaw 2.0 改造施工方案（历史快照）
+
+> 本文绑定 2026-07-26 的 v0.5.0 施工状态，仅用于保留设计决策与修复历史；当前实现、能力边界和未完成事项分别以源码、测试、[`../KNOWLEDGE_OS.md`](../KNOWLEDGE_OS.md) 与 [`../../ROADMAP.md`](../../ROADMAP.md) 为准。
 
 状态：已推进至 `v0.5.0` 候选并完成第四次 P0/P1 复核，2026-07-26。新增候选发现层已完成
 英文与中文模型实机、60 题开发消融和 10 万 Asset 规模诊断，但因噪声非劣与外部 held-out
@@ -445,7 +447,7 @@ git diff --check
 
 “全面超过所有知识库”在逻辑上无法覆盖未公开、未来出现或未参评系统，因而永久不能成为
 可验证主张。最高等级文案只能由
-[`benchmarks/external/claim_gate.py`](benchmarks/external/claim_gate.py) 在完整证据到齐后生成
+[`benchmarks/external/claim_gate.py`](../../benchmarks/external/claim_gate.py) 在完整证据到齐后生成
 协议限定的比较结论；维护者不能手写替代。
 
 ## 十四、最终验收标准
@@ -467,11 +469,11 @@ DeepLaw 2.0 的正确性不是“功能最多”，而是同时满足：
 
 对应实现细节见：
 
-- [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md)
-- [`docs/KNOWLEDGE_OS_RESEARCH.md`](docs/KNOWLEDGE_OS_RESEARCH.md)
-- [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md)
-- [`benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json`](benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json)
-- [`docs/IMPLEMENTATION_AUDIT_2026-07-26.md`](docs/IMPLEMENTATION_AUDIT_2026-07-26.md)（v0.4 历史复核）
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md)
-- [`SECURITY.md`](SECURITY.md)
+- [`docs/KNOWLEDGE_OS.md`](../KNOWLEDGE_OS.md)
+- [`docs/KNOWLEDGE_OS_RESEARCH.md`](../KNOWLEDGE_OS_RESEARCH.md)
+- [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](../EXTERNAL_BENCHMARK_PROTOCOL.md)
+- [`benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json`](../../benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json)
+- [`docs/IMPLEMENTATION_AUDIT_2026-07-26.md`](../IMPLEMENTATION_AUDIT_2026-07-26.md)（v0.4 历史复核）
+- [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
+- [`docs/AGENT_ADAPTERS.md`](../AGENT_ADAPTERS.md)
+- [`SECURITY.md`](../../SECURITY.md)

@@ -401,6 +401,10 @@
         "fragment_count": {"type": "integer", "minimum": 0},
         "relation_count": {"type": "integer", "minimum": 0},
         "search_index_count": {"type": "integer", "minimum": 0},
+        "source_lifecycle_count": {"type": "integer", "minimum": 0},
+        "review_receipt_count": {"type": "integer", "minimum": 0},
+        "run_receipt_count": {"type": "integer", "minimum": 0},
+        "feedback_count": {"type": "integer", "minimum": 0},
         "reason": {
           "oneOf": [
             {"type": "null"},

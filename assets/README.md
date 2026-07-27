@@ -1,7 +1,8 @@
 # DeepLaw 2.0 visual system
 
-The public visual system uses two coordinated levels:
+The public visual system uses three coordinated levels:
 
+- a dark flagship Knowledge OS hero for the full trusted supply chain;
 - light frosted glass for the wordmark and the five-second product flow;
 - dark technical diagrams for the knowledge cycle and Evidence Core.
 
@@ -11,6 +12,9 @@ visible word, label, arrow, and relationship at full resolution before publishin
 ## Files
 
 - `brand/deeplaw-2-glass.png`: primary DeepLaw 2.0 wordmark.
+- `brand/deeplaw-knowledge-os-hero-v0.6.png`: Image2-generated v0.6 hero showing
+  source inputs, the verifiable knowledge core, bounded Capsule delivery, and the reviewed
+  feedback loop. Its generation record and alt text live in the adjacent `.prompt.md` file.
 - `readme/product-flow-glass.png`: Files → DeepLaw Knowledge Base → Locate / Connect /
   Explain → Evidence Pack → Agent. Here “DeepLaw Knowledge Base” labels the functional
   component inside the product; the public product name remains `DeepLaw 2.0`.
@@ -30,7 +34,8 @@ visible word, label, arrow, and relationship at full resolution before publishin
   gap-amber accent.
 - Avoid legal-industry clichés, national or official symbols, fake awards, unsupported
   ranking badges, and visuals that imply adjudication.
-- Keep the light product flow first. Use dark diagrams only for internal technical detail.
+- Use the dark Knowledge OS hero once near the top of the README. Keep the light product flow
+  for the five-second explanation, and use dark diagrams only for deeper technical detail.
 
 Apache License 2.0 applies to copyrightable project assets in this repository. It does not
 grant rights in third-party source material or constitute trademark clearance.

@@ -8,7 +8,7 @@ documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.5.0`, and
+Security fixes are evaluated for the current software release, `v0.6.0`, and
 the `main` branch. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says
 otherwise.
@@ -90,6 +90,12 @@ multi-tenant authorization or encryption at rest. Deployments that serve
 multiple users require an external authenticated service boundary; sharing one
 vault path is unsupported.
 
+`deeplaw knowledge doctor --permissions` verifies owner-only mode and symlink safety for the
+Vault root, manifest, database, source directory, and stored source files on POSIX systems. It
+does not treat those mode bits as proof of equivalent NTFS ACL isolation. On Windows it returns
+`not_verified`; use a dedicated OS identity and native ACL review until a Windows-specific gate
+is implemented.
+
 Source files, conversation exports, tool results, packages, and generated
 lessons are untrusted inputs. They compile to proposed or quarantined assets.
 They do not become Agent-visible until a human explicitly approves each asset.
@@ -130,6 +136,24 @@ Portable `.dlk` v1 packages hash every payload and all identity-bearing
 manifest fields, but they do not yet authenticate a publisher. Every imported
 asset is therefore marked `untrusted` and `quarantined`. Do not treat a valid
 package hash as proof of authorship.
+
+Local Review Receipts, Task Run Receipts, and structured Feedback Ledger records are closed,
+hash-bound contracts reconciled against their audit events and current stored records. Ordinary
+record/hash tampering fails integrity verification. Review Receipt v1 deliberately contains a
+`null` signature, so it is not proof of an independent signer or team authorization.
+
+A Task Run Receipt can be created only from a Capsule that passes current Vault verification.
+The Store derives and cross-checks the Capsule identity, digest, historical audit anchor, selected
+Asset IDs, and embedded source IDs instead of trusting caller-supplied inventories. Every
+source-bound Capsule item must carry at least one matching compact source reference; a resealed
+Capsule with all embedded provenance removed is invalid.
+
+Control-plane migration creates a verified owner-only backup before applying database changes,
+verifies lifecycle coverage and the complete audit replay afterward, and supports explicit atomic
+rollback. Rollback retains the replaced Vault in a sibling recovery directory instead of deleting
+it. Backup markers commit the manifest, consistent SQLite backup, stored-source inventory,
+revision, and audit head. Operators must still place backups on storage with an appropriate
+confidentiality and durability policy.
 
 The optional Discovery Index is a derived, removable candidate index and never
 a source of truth. Provisioning downloads only one fixed model profile and

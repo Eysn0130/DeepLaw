@@ -537,6 +537,236 @@ def test_context_does_not_expose_a_relation_bound_to_restricted_evidence(
     assert capsule["relations"] == []
 
 
+def test_context_keeps_same_titled_sections_from_different_sources(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="cross-source-sections", scope="project")
+    first_source = tmp_path / "alpha.md"
+    second_source = tmp_path / "beta.md"
+    first_source.write_text(
+        "# Architecture\n"
+        "The Orion migration architecture requires the alpha integrity boundary.",
+        encoding="utf-8",
+    )
+    second_source.write_text(
+        "# Architecture\n"
+        "The Orion migration architecture requires the beta recovery boundary.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        first = compile_source(
+            vault,
+            first_source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        second = compile_source(
+            vault,
+            second_source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        first_manifest = vault.source_review_manifest(first["source"]["source_id"])
+        second_manifest = vault.source_review_manifest(second["source"]["source_id"])
+        vault.approve_source_assets(
+            first["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=first_manifest["review_manifest_sha256"],
+        )
+        vault.approve_source_assets(
+            second["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=second_manifest["review_manifest_sha256"],
+        )
+        capsule = compile_context(
+            vault,
+            task=(
+                "Compare the alpha integrity boundary and beta recovery boundary "
+                "in the Orion migration architecture."
+            ),
+            confirm_no_case_data=True,
+            max_items=4,
+            max_chars=2_000,
+        )
+
+    selected = [
+        item
+        for group in (
+            "constraints",
+            "decisions",
+            "knowledge_assets",
+            "experiences",
+            "open_questions",
+        )
+        for item in capsule[group]
+    ]
+    selected_source_ids = {
+        reference["source_id"]
+        for item in selected
+        for reference in item["source_refs"]
+    }
+    assert selected_source_ids == {
+        first["source"]["source_id"],
+        second["source"]["source_id"],
+    }
+
+
+def test_context_keeps_distinct_same_titled_sections_within_one_source(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="same-source-sections", scope="project")
+    source = tmp_path / "architecture.md"
+    source.write_text(
+        "# Architecture\n"
+        "The Orion alpha boundary preserves immutable receipts.\n"
+        "# Architecture\n"
+        "The Orion beta boundary preserves atomic rollback.\n",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+        )
+        capsule = compile_context(
+            vault,
+            task="Compare Orion alpha immutable receipts with Orion beta atomic rollback.",
+            confirm_no_case_data=True,
+            max_items=4,
+            max_chars=2_000,
+        )
+
+    selected = [
+        item
+        for group in (
+            "constraints",
+            "decisions",
+            "knowledge_assets",
+            "experiences",
+            "open_questions",
+        )
+        for item in capsule[group]
+    ]
+    assert {item["asset_id"] for item in selected} == set(compiled["asset_ids"])
+
+
+def test_context_never_selects_more_source_bound_items_than_it_can_prove(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="source-reference-budget", scope="project")
+    with KnowledgeVault(root, read_only=False) as vault:
+        for index in range(context_compiler.MAX_CAPSULE_SOURCE_REFS + 1):
+            source = tmp_path / f"boundary-{index}.md"
+            source.write_text(
+                f"# Boundary {index}\n"
+                f"Omega migration boundary record {index} preserves source provenance.",
+                encoding="utf-8",
+            )
+            compiled = compile_source(
+                vault,
+                source,
+                source_kind="document",
+                confirm_no_case_data=True,
+            )
+            review_manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+            vault.approve_source_assets(
+                compiled["source"]["source_id"],
+                confirm_reviewed=True,
+                review_manifest_sha256=review_manifest["review_manifest_sha256"],
+            )
+        capsule = compile_context(
+            vault,
+            task="Review every Omega migration boundary record and source provenance.",
+            confirm_no_case_data=True,
+            max_items=context_compiler.MAX_CAPSULE_SOURCE_REFS + 1,
+            max_chars=8_000,
+        )
+
+    selected = [
+        item
+        for group in (
+            "constraints",
+            "decisions",
+            "knowledge_assets",
+            "experiences",
+            "open_questions",
+        )
+        for item in capsule[group]
+    ]
+    assert len(selected) <= context_compiler.MAX_CAPSULE_SOURCE_REFS
+    assert selected
+    assert all(item["source_refs"] for item in selected)
+    assert all(item["source_ref_count"] >= 1 for item in selected)
+    assert capsule["budget"]["selected_source_refs"] >= len(selected)
+
+
+def test_capsule_verifier_rejects_source_bound_items_without_embedded_provenance(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="source-reference-verifier", scope="project")
+    source = tmp_path / "boundary.md"
+    source.write_text(
+        "# Boundary\nThe Atlas release must retain compact source provenance.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+        )
+        capsule = compile_context(
+            vault,
+            task="Apply the Atlas release source-provenance boundary.",
+            confirm_no_case_data=True,
+        )
+
+    forged = deepcopy(capsule)
+    selected = next(
+        item
+        for group_name in (
+            "constraints",
+            "decisions",
+            "knowledge_assets",
+            "experiences",
+            "open_questions",
+        )
+        for item in forged[group_name]
+    )
+    assert selected["source_ref_count"] > 0
+    selected["source_refs"] = []
+    selected["source_refs_truncated"] = True
+    forged["evidence"] = []
+    forged["budget"]["selected_source_refs"] = 0
+    forged["budget"]["selected_source_ref_chars"] = 0
+    context_compiler._seal_capsule(forged)
+
+    with (
+        KnowledgeVault(root, read_only=True) as vault,
+        pytest.raises(ValueError, match="source-bound asset without embedded provenance"),
+    ):
+        verify_capsule(forged, vault=vault)
+
+
 def test_context_fairly_budgets_long_assets_and_uses_query_aware_excerpts(
     tmp_path: Path,
 ) -> None:

@@ -53,6 +53,7 @@ from .util import (
 KNOWLEDGE_VAULT_SCHEMA = "deeplaw.knowledge-vault/v1"
 KNOWLEDGE_STORAGE_SCHEMA = "deeplaw.knowledge-sqlite/v1"
 KNOWLEDGE_EVENT_SCHEMA = "deeplaw.knowledge-event/v1"
+KNOWLEDGE_CONTROL_SCHEMA = "deeplaw.knowledge-control/v1"
 
 VaultScope = Literal["personal", "project", "team", "domain"]
 VAULT_SCOPES = frozenset(VaultScope.__args__)
@@ -71,7 +72,11 @@ RELATION_PREDICATES = frozenset(
 _VAULT_ID = re.compile(r"^vault_[0-9a-f]{24}$")
 _ASSET_ID = re.compile(r"^asset_[0-9a-f]{24}$")
 _SOURCE_ID = re.compile(r"^source_[0-9a-f]{24}$")
+_SOURCE_KEY = re.compile(r"^sourcekey_[0-9a-f]{24}$")
 _FRAGMENT_ID = re.compile(r"^fragment_[0-9a-f]{24}$")
+_REVIEW_RECEIPT_ID = re.compile(r"^review_[0-9a-f]{24}$")
+_RUN_RECEIPT_ID = re.compile(r"^run_[0-9a-f]{24}$")
+_FEEDBACK_ID = re.compile(r"^feedback_[0-9a-f]{24}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_MANIFEST_BYTES = 64 * 1024
 _MAX_SOURCE_BYTES = 512 * 1024 * 1024
@@ -83,6 +88,9 @@ _MAX_SEARCH_CHARS = 20_000
 _MAX_EVENT_PAYLOAD_BYTES = 1024 * 1024
 _MAX_COMPILER_BYTES = 64 * 1024
 _MAX_INTEGRITY_CACHE_ENTRIES = 32
+_MAX_PERMISSION_REPORT_SOURCE_DETAILS = 10_000
+_MIGRATION_BACKUP_MANIFEST = "migration-backup.json"
+_MIGRATION_BACKUP_SCHEMA = "deeplaw.knowledge-migration-backup/v1"
 _INTEGRITY_CACHE: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 _INTEGRITY_CACHE_LOCK = RLock()
 _MAX_SOURCE_HASH_CACHE_ENTRIES = 256
@@ -96,8 +104,16 @@ _KNOWN_EVENT_TYPES = frozenset(
         "asset_approved",
         "asset_revoked",
         "relation_added",
+        "knowledge_control_migrated",
+        "source_activated",
+        "source_removed",
+        "review_recorded",
+        "run_receipt_recorded",
+        "feedback_recorded",
     }
 )
+
+SOURCE_VERSION_STATUSES = frozenset({"pending", "active", "superseded", "removed"})
 
 
 def default_knowledge_vault() -> Path:
@@ -157,6 +173,395 @@ def _database_path(root: Path) -> Path:
     return root / "vault.sqlite3"
 
 
+def _migration_backup_manifest_path(root: Path) -> Path:
+    return root / _MIGRATION_BACKUP_MANIFEST
+
+
+def _stored_source_inventory(root: Path) -> dict[str, Any]:
+    sources = root / "sources"
+    if sources.is_symlink() or not sources.is_dir():
+        raise RuntimeError("knowledge vault sources directory is missing or unsafe")
+    inventory: list[dict[str, Any]] = []
+    for source in sorted(sources.iterdir(), key=lambda item: item.name):
+        if source.is_symlink() or not source.is_file():
+            raise RuntimeError("knowledge vault backup contains an unsafe stored source")
+        size = source.stat().st_size
+        if not 0 <= size <= _MAX_SOURCE_BYTES:
+            raise RuntimeError("knowledge vault backup source exceeds its size bound")
+        inventory.append(
+            {
+                "stored_name": source.name,
+                "byte_size": size,
+                "content_sha256": sha256_file(source),
+            }
+        )
+    return {
+        "source_count": len(inventory),
+        "inventory_sha256": sha256_bytes(canonical_json(inventory).encode("utf-8")),
+    }
+
+
+def _copy_vault_payload(source_root: Path, destination_root: Path) -> None:
+    if destination_root.exists() or destination_root.is_symlink():
+        raise FileExistsError(f"knowledge vault copy target already exists: {destination_root}")
+    _owner_directory(destination_root)
+    _owner_directory(destination_root / "sources")
+    try:
+        for source_file in sorted((source_root / "sources").iterdir(), key=lambda item: item.name):
+            if source_file.is_symlink() or not source_file.is_file():
+                raise RuntimeError("knowledge vault contains an unsafe stored source")
+            destination = destination_root / "sources" / source_file.name
+            shutil.copyfile(source_file, destination)
+            os.chmod(destination, 0o600)
+        manifest_destination = _manifest_path(destination_root)
+        shutil.copyfile(_manifest_path(source_root), manifest_destination)
+        os.chmod(manifest_destination, 0o600)
+        source_database = sqlite3.connect(
+            f"{_database_path(source_root).as_uri()}?mode=ro",
+            uri=True,
+        )
+        destination_database = sqlite3.connect(_database_path(destination_root))
+        try:
+            source_database.execute("PRAGMA query_only = ON")
+            source_database.backup(destination_database)
+            destination_database.commit()
+        finally:
+            destination_database.close()
+            source_database.close()
+        os.chmod(_database_path(destination_root), 0o600)
+    except BaseException:
+        shutil.rmtree(destination_root, ignore_errors=True)
+        raise
+
+
+def create_knowledge_migration_backup(
+    path: str | Path,
+    *,
+    output: str | Path | None = None,
+) -> dict[str, Any]:
+    """Create and verify a recoverable, owner-only Vault backup before migration."""
+    root = _validate_vault_path(Path(path), must_exist=True)
+    with KnowledgeVault(root, read_only=True) as vault:
+        integrity = vault.verify_integrity()
+        if not integrity["valid"]:
+            raise RuntimeError("knowledge migration backup requires a healthy source Vault")
+        vault_id = vault.vault_id
+        revision = vault.revision
+        audit_head = vault.audit_head
+        control_schema = KNOWLEDGE_CONTROL_SCHEMA if vault.control_enabled else None
+    if output is None:
+        suffix = utc_now().replace(":", "").replace("-", "")
+        destination = root.with_name(
+            f"{root.name}.migration-backup-{suffix}-{secrets.token_hex(4)}"
+        )
+    else:
+        destination = Path(output).expanduser().absolute()
+    if destination.parent != root.parent:
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _copy_vault_payload(root, destination)
+    inventory = _stored_source_inventory(destination)
+    body = {
+        "schema_version": _MIGRATION_BACKUP_SCHEMA,
+        "vault_id": vault_id,
+        "created_at": utc_now(),
+        "revision": revision,
+        "audit_head": audit_head,
+        "control_schema": control_schema,
+        "manifest_sha256": sha256_file(_manifest_path(destination)),
+        "database_sha256": sha256_file(_database_path(destination)),
+        **inventory,
+    }
+    backup_sha256 = sha256_bytes(canonical_json(body).encode("utf-8"))
+    marker = {**body, "backup_sha256": backup_sha256}
+    _write_owner_file(
+        _migration_backup_manifest_path(destination),
+        (json.dumps(marker, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
+    verification = verify_knowledge_migration_backup(destination, expected_vault_id=vault_id)
+    if not verification["valid"]:
+        raise RuntimeError("knowledge migration backup verification failed")
+    return {
+        "schema_version": "deeplaw.knowledge-migration-backup-result/v1",
+        "backup_path": str(destination),
+        **marker,
+        "valid": True,
+    }
+
+
+def verify_knowledge_migration_backup(
+    path: str | Path,
+    *,
+    expected_vault_id: str | None = None,
+) -> dict[str, Any]:
+    root = _validate_vault_path(Path(path), must_exist=True)
+    marker_path = _migration_backup_manifest_path(root)
+    try:
+        if (
+            marker_path.is_symlink()
+            or not marker_path.is_file()
+            or not 1 <= marker_path.stat().st_size <= _MAX_MANIFEST_BYTES
+            or (
+                os.name != "nt"
+                and stat.S_IMODE(marker_path.stat().st_mode) & 0o077
+            )
+        ):
+            raise ValueError("knowledge migration backup marker is unsafe")
+        marker = strict_json_loads(marker_path.read_bytes())
+        expected_fields = {
+            "schema_version",
+            "vault_id",
+            "created_at",
+            "revision",
+            "audit_head",
+            "control_schema",
+            "manifest_sha256",
+            "database_sha256",
+            "source_count",
+            "inventory_sha256",
+            "backup_sha256",
+        }
+        if not isinstance(marker, dict) or set(marker) != expected_fields:
+            raise ValueError("knowledge migration backup marker contract is invalid")
+        body = {key: marker[key] for key in expected_fields if key != "backup_sha256"}
+        marker_valid = (
+            marker["schema_version"] == _MIGRATION_BACKUP_SCHEMA
+            and isinstance(marker["vault_id"], str)
+            and bool(_VAULT_ID.fullmatch(marker["vault_id"]))
+            and (expected_vault_id is None or marker["vault_id"] == expected_vault_id)
+            and canonical_timestamp(marker["created_at"], field="backup created_at")
+            == marker["created_at"]
+            and isinstance(marker["revision"], int)
+            and not isinstance(marker["revision"], bool)
+            and marker["revision"] >= 0
+            and isinstance(marker["audit_head"], str)
+            and bool(_SHA256.fullmatch(marker["audit_head"]))
+            and marker["control_schema"] in {None, KNOWLEDGE_CONTROL_SCHEMA}
+            and isinstance(marker["source_count"], int)
+            and not isinstance(marker["source_count"], bool)
+            and marker["source_count"] >= 0
+            and all(
+                isinstance(marker[field], str) and bool(_SHA256.fullmatch(marker[field]))
+                for field in (
+                    "manifest_sha256",
+                    "database_sha256",
+                    "inventory_sha256",
+                    "backup_sha256",
+                )
+            )
+            and marker["backup_sha256"]
+            == sha256_bytes(canonical_json(body).encode("utf-8"))
+            and marker["manifest_sha256"] == sha256_file(_manifest_path(root))
+            and marker["database_sha256"] == sha256_file(_database_path(root))
+        )
+        inventory = _stored_source_inventory(root)
+        inventory_valid = (
+            inventory["source_count"] == marker["source_count"]
+            and inventory["inventory_sha256"] == marker["inventory_sha256"]
+        )
+        with KnowledgeVault(root, read_only=True) as vault:
+            vault_valid = (
+                vault.vault_id == marker["vault_id"]
+                and vault.revision == marker["revision"]
+                and vault.audit_head == marker["audit_head"]
+                and vault.verify_integrity()["valid"]
+            )
+    except (KeyError, OSError, RuntimeError, sqlite3.DatabaseError, TypeError, ValueError):
+        marker = {}
+        marker_valid = False
+        inventory_valid = False
+        vault_valid = False
+    return {
+        "schema_version": "deeplaw.knowledge-migration-backup-verification/v1",
+        "backup_path": str(root),
+        "vault_id": marker.get("vault_id"),
+        "marker_valid": marker_valid,
+        "inventory_valid": inventory_valid,
+        "vault_valid": vault_valid,
+        "valid": bool(marker_valid and inventory_valid and vault_valid),
+    }
+
+
+def restore_knowledge_migration_backup(
+    path: str | Path,
+    *,
+    backup: str | Path,
+    confirm: bool,
+) -> dict[str, Any]:
+    """Atomically restore a verified backup while retaining the replaced Vault."""
+    if not confirm:
+        raise ValueError("knowledge migration rollback requires explicit confirmation")
+    root = _validate_vault_path(Path(path), must_exist=True)
+    with KnowledgeVault(root, read_only=True) as vault:
+        vault_id = vault.vault_id
+    backup_root = _validate_vault_path(Path(backup), must_exist=True)
+    verification = verify_knowledge_migration_backup(
+        backup_root,
+        expected_vault_id=vault_id,
+    )
+    if not verification["valid"]:
+        raise RuntimeError("knowledge migration rollback requires a valid matching backup")
+    token = secrets.token_hex(6)
+    replacement = root.with_name(f".{root.name}.restore-{token}.tmp")
+    retained = root.with_name(f"{root.name}.pre-rollback-{token}")
+    _copy_vault_payload(backup_root, replacement)
+    try:
+        with KnowledgeVault(replacement, read_only=True) as restored:
+            if restored.vault_id != vault_id or not restored.verify_integrity()["valid"]:
+                raise RuntimeError("restored knowledge Vault failed pre-swap verification")
+        os.replace(root, retained)
+        try:
+            os.replace(replacement, root)
+        except BaseException:
+            os.replace(retained, root)
+            raise
+        with KnowledgeVault(root, read_only=True) as restored:
+            restored_valid = restored.verify_integrity()["valid"]
+            revision = restored.revision
+            audit_head = restored.audit_head
+        if not restored_valid:
+            failed = root.with_name(f"{root.name}.failed-rollback-{token}")
+            os.replace(root, failed)
+            os.replace(retained, root)
+            raise RuntimeError("restored knowledge Vault failed post-swap verification")
+    except BaseException:
+        if replacement.exists():
+            shutil.rmtree(replacement)
+        raise
+    return {
+        "schema_version": "deeplaw.knowledge-migration-rollback/v1",
+        "vault_id": vault_id,
+        "backup_path": str(backup_root),
+        "retained_previous_vault": str(retained),
+        "revision": revision,
+        "audit_head": audit_head,
+        "restored": True,
+        "valid": True,
+    }
+
+
+def knowledge_vault_permission_report(path: str | Path) -> dict[str, Any]:
+    """Inspect filesystem isolation without treating POSIX modes as Windows ACLs."""
+    root = Path(path).expanduser().absolute()
+    protected = (
+        ("vault_root", root, "directory"),
+        ("manifest", _manifest_path(root), "file"),
+        ("database", _database_path(root), "file"),
+        ("sources", root / "sources", "directory"),
+    )
+    entries: list[dict[str, Any]] = []
+    for label, protected_path, expected_kind in protected:
+        symlink = protected_path.is_symlink()
+        exists = protected_path.exists() or symlink
+        actual_kind = (
+            "symlink"
+            if symlink
+            else "directory"
+            if protected_path.is_dir()
+            else "file"
+            if protected_path.is_file()
+            else "missing"
+        )
+        mode: str | None = None
+        owner_only: bool | None = None
+        if exists and not symlink and os.name != "nt":
+            mode_bits = stat.S_IMODE(protected_path.stat().st_mode)
+            mode = f"{mode_bits:04o}"
+            owner_only = not bool(mode_bits & 0o077)
+        entries.append(
+            {
+                "label": label,
+                "expected_kind": expected_kind,
+                "actual_kind": actual_kind,
+                "symlink": symlink,
+                "posix_mode": mode,
+                "owner_only": owner_only,
+            }
+        )
+
+    stored_sources: list[dict[str, Any]] = []
+    stored_source_files_checked = 0
+    stored_sources_scan_complete = True
+    stored_sources_structural_valid = True
+    stored_sources_owner_only = True
+    sources = root / "sources"
+    if sources.is_dir() and not sources.is_symlink():
+        try:
+            for stored_path in sources.iterdir():
+                stored_source_files_checked += 1
+                symlink = stored_path.is_symlink()
+                regular_file = stored_path.is_file() and not symlink
+                mode = None
+                owner_only = None
+                if regular_file and os.name != "nt":
+                    mode_bits = stat.S_IMODE(stored_path.stat().st_mode)
+                    mode = f"{mode_bits:04o}"
+                    owner_only = not bool(mode_bits & 0o077)
+                    stored_sources_owner_only = stored_sources_owner_only and owner_only
+                kind = "symlink" if symlink else "file" if regular_file else "other"
+                stored_sources_structural_valid = (
+                    stored_sources_structural_valid and kind == "file"
+                )
+                if len(stored_sources) < _MAX_PERMISSION_REPORT_SOURCE_DETAILS:
+                    stored_sources.append(
+                        {
+                            "stored_name": stored_path.name,
+                            "kind": kind,
+                            "posix_mode": mode,
+                            "owner_only": owner_only,
+                        }
+                    )
+        except OSError:
+            stored_sources_scan_complete = False
+
+    stored_sources.sort(key=lambda item: item["stored_name"])
+    stored_sources_truncated = stored_source_files_checked > len(stored_sources)
+
+    structural_valid = all(
+        entry["actual_kind"] == entry["expected_kind"] and not entry["symlink"] for entry in entries
+    ) and stored_sources_structural_valid
+    if os.name == "nt":
+        status = "not_verified"
+        permissions_verified = False
+        security_model = "windows_acl_requires_native_verification"
+        notes = [
+            "Python POSIX mode bits do not prove equivalent NTFS ACL isolation.",
+            "Use a dedicated OS identity and verify that Users/Everyone cannot write the vault.",
+        ]
+    else:
+        owner_only = (
+            all(entry["owner_only"] is True for entry in entries)
+            and stored_sources_owner_only
+        )
+        permissions_verified = structural_valid and owner_only and stored_sources_scan_complete
+        status = (
+            "verified"
+            if permissions_verified
+            else "not_verified"
+            if not stored_sources_scan_complete
+            else "failed"
+        )
+        security_model = "posix_owner_only_mode"
+        notes = (
+            []
+            if stored_sources_scan_complete
+            else ["Stored source permission scan did not complete; isolation is not verified."]
+        )
+    return {
+        "schema_version": "deeplaw.knowledge-permission-report/v1",
+        "platform": os.name,
+        "status": status,
+        "permissions_verified": permissions_verified,
+        "structural_valid": structural_valid,
+        "security_model": security_model,
+        "entries": entries,
+        "stored_source_files_checked": stored_source_files_checked,
+        "stored_source_files_returned": len(stored_sources),
+        "stored_source_files_truncated": stored_sources_truncated,
+        "stored_sources": stored_sources,
+        "notes": notes,
+    }
+
+
 def _validate_manifest(value: Any) -> dict[str, Any]:
     expected = {
         "schema_version",
@@ -213,6 +618,79 @@ def _source_membership_sha256(
     return sha256_bytes(canonical_json(pairs).encode("utf-8"))
 
 
+def knowledge_source_key(
+    *,
+    vault_id: str,
+    source_kind: SourceKind,
+    source_path: str | Path,
+    origin_uri: str | None,
+) -> str:
+    """Return an opaque logical identity without persisting a local source path."""
+    if source_kind not in SOURCE_KINDS:
+        raise ValueError("unsupported knowledge source kind")
+    if origin_uri is not None:
+        identity = f"origin:{origin_uri}"
+    else:
+        identity = f"local-path:{Path(source_path).expanduser().absolute()}"
+    return stable_id("sourcekey", vault_id, source_kind, identity)
+
+
+def _control_tables_sql() -> str:
+    return """
+        CREATE TABLE IF NOT EXISTS source_lifecycle (
+            source_id TEXT PRIMARY KEY REFERENCES sources(source_id),
+            source_key TEXT NOT NULL,
+            previous_source_id TEXT REFERENCES sources(source_id),
+            status TEXT NOT NULL,
+            activated_at TEXT,
+            superseded_at TEXT,
+            removed_at TEXT
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS source_lifecycle_key_status
+            ON source_lifecycle(source_key, status);
+        CREATE UNIQUE INDEX IF NOT EXISTS active_source_key
+            ON source_lifecycle(source_key)
+            WHERE status = 'active';
+
+        CREATE TABLE IF NOT EXISTS review_receipts (
+            review_receipt_id TEXT PRIMARY KEY,
+            reviewer_id TEXT NOT NULL,
+            reviewed_at TEXT NOT NULL,
+            policy_id TEXT NOT NULL,
+            source_id TEXT REFERENCES sources(source_id),
+            proposal_ids_json TEXT NOT NULL,
+            asset_hashes_json TEXT NOT NULL,
+            decisions_json TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            review_manifest_sha256 TEXT NOT NULL,
+            signature_json TEXT,
+            receipt_sha256 TEXT NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS run_receipts (
+            run_id TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            receipt_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS feedback_records (
+            feedback_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES run_receipts(run_id),
+            payload_json TEXT NOT NULL,
+            receipt_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            proposal_asset_id TEXT REFERENCES assets(asset_id)
+        ) WITHOUT ROWID;
+    """
+
+
+def _install_control_tables(connection: sqlite3.Connection) -> None:
+    for statement in _control_tables_sql().split(";"):
+        if statement.strip():
+            connection.execute(statement)
+
+
 def initialize_knowledge_vault(
     path: str | Path,
     *,
@@ -246,9 +724,7 @@ def initialize_knowledge_vault(
     }
     _write_owner_file(
         _manifest_path(root),
-        (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
-            "utf-8"
-        ),
+        (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
     database = _database_path(root)
     if database.exists() or database.is_symlink():
@@ -359,8 +835,10 @@ def initialize_knowledge_vault(
             );
             """
         )
+        _install_control_tables(connection)
         metadata = {
             "schema_version": KNOWLEDGE_STORAGE_SCHEMA,
+            "control_schema": KNOWLEDGE_CONTROL_SCHEMA,
             "vault_id": vault_id,
             "name": name,
             "scope": scope,
@@ -456,8 +934,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             self._validate_identity()
             if (
                 self.read_only
-                and self._database_file_fingerprint()
-                != self._opened_database_fingerprint
+                and self._database_file_fingerprint() != self._opened_database_fingerprint
             ):
                 raise RuntimeError(
                     "knowledge vault database changed while its read snapshot was opening"
@@ -503,7 +980,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
     def _validate_identity(self) -> None:
         rows = self.connection.execute("SELECT key, value FROM metadata").fetchall()
         metadata = {row["key"]: row["value"] for row in rows}
-        expected = {
+        base_expected = {
             "schema_version",
             "vault_id",
             "name",
@@ -512,10 +989,30 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "revision",
             "audit_head",
         }
-        if set(metadata) != expected:
+        control_expected = {*base_expected, "control_schema"}
+        metadata_fields = frozenset(metadata)
+        if metadata_fields not in {frozenset(base_expected), frozenset(control_expected)}:
             raise RuntimeError("knowledge vault metadata does not match its closed contract")
         if metadata["schema_version"] != KNOWLEDGE_STORAGE_SCHEMA:
             raise RuntimeError("unsupported knowledge vault database schema")
+        self.control_enabled = "control_schema" in metadata
+        if self.control_enabled:
+            if metadata["control_schema"] != KNOWLEDGE_CONTROL_SCHEMA:
+                raise RuntimeError("unsupported knowledge control schema")
+            required_tables = {
+                "source_lifecycle",
+                "review_receipts",
+                "run_receipts",
+                "feedback_records",
+            }
+            available_tables = {
+                row["name"]
+                for row in self.connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            if not required_tables.issubset(available_tables):
+                raise RuntimeError("knowledge control tables are missing")
         for field in ("vault_id", "name", "scope", "created_at"):
             if metadata[field] != str(self.manifest[field]):
                 raise RuntimeError(f"knowledge vault manifest/database {field} mismatch")
@@ -526,12 +1023,163 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         if self.read_only:
             raise RuntimeError("knowledge vault is open read-only")
 
+    def _require_control(self) -> None:
+        if not self.control_enabled:
+            raise RuntimeError(
+                "knowledge control schema is not installed; run knowledge migrate --apply"
+            )
+
+    def verify_knowledge_control_migration(self) -> dict[str, Any]:
+        source_count = self.connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        if not self.control_enabled:
+            return {
+                "schema_version": "deeplaw.knowledge-migration-verification/v1",
+                "vault_id": self.vault_id,
+                "control_schema": None,
+                "source_count": source_count,
+                "source_lifecycle_count": 0,
+                "integrity_valid": self.verify_integrity()["valid"],
+                "valid": False,
+            }
+        lifecycle_count = self.connection.execute(
+            "SELECT COUNT(*) FROM source_lifecycle"
+        ).fetchone()[0]
+        missing_lifecycle = self.connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM sources
+            LEFT JOIN source_lifecycle USING(source_id)
+            WHERE source_lifecycle.source_id IS NULL
+            """
+        ).fetchone()[0]
+        invalid_status = self.connection.execute(
+            """
+            SELECT COUNT(*) FROM source_lifecycle
+            WHERE status NOT IN ('pending', 'active', 'superseded', 'removed')
+            """
+        ).fetchone()[0]
+        integrity_valid = self.verify_integrity()["valid"]
+        valid = (
+            lifecycle_count == source_count
+            and missing_lifecycle == 0
+            and invalid_status == 0
+            and integrity_valid
+        )
+        return {
+            "schema_version": "deeplaw.knowledge-migration-verification/v1",
+            "vault_id": self.vault_id,
+            "control_schema": KNOWLEDGE_CONTROL_SCHEMA,
+            "source_count": source_count,
+            "source_lifecycle_count": lifecycle_count,
+            "missing_lifecycle_count": missing_lifecycle,
+            "invalid_status_count": invalid_status,
+            "integrity_valid": integrity_valid,
+            "valid": valid,
+        }
+
+    def migrate_knowledge_control(
+        self,
+        *,
+        apply: bool,
+        backup_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """Install the additive v1 control-plane schema for a legacy vault."""
+        source_count = self.connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        plan = {
+            "schema_version": "deeplaw.knowledge-migration-plan/v1",
+            "vault_id": self.vault_id,
+            "from_control_schema": (KNOWLEDGE_CONTROL_SCHEMA if self.control_enabled else None),
+            "to_control_schema": KNOWLEDGE_CONTROL_SCHEMA,
+            "source_count": source_count,
+            "required": not self.control_enabled,
+            "applied": False,
+            "backup_required": not self.control_enabled,
+        }
+        if not apply or self.control_enabled:
+            return plan
+        self._require_write()
+        backup = create_knowledge_migration_backup(self.root, output=backup_path)
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            _install_control_tables(self.connection)
+            mappings: list[dict[str, Any]] = []
+            for source in self.connection.execute(
+                "SELECT source_id FROM sources ORDER BY source_id"
+            ):
+                source_id = source["source_id"]
+                active = self.connection.execute(
+                    """
+                    SELECT MAX(activated_at) AS activated_at
+                    FROM assets, json_each(assets.source_refs_json) AS reference
+                    WHERE json_extract(reference.value, '$.source_id') = ?
+                      AND assets.status = 'active'
+                    """,
+                    (source_id,),
+                ).fetchone()
+                status = "active" if active["activated_at"] is not None else "pending"
+                source_key = stable_id(
+                    "sourcekey",
+                    self.vault_id,
+                    "legacy-source",
+                    source_id,
+                )
+                self.connection.execute(
+                    """
+                    INSERT INTO source_lifecycle(
+                        source_id, source_key, previous_source_id, status,
+                        activated_at, superseded_at, removed_at
+                    ) VALUES (?, ?, NULL, ?, ?, NULL, NULL)
+                    """,
+                    (source_id, source_key, status, active["activated_at"]),
+                )
+                mappings.append(
+                    {
+                        "source_id": source_id,
+                        "source_key": source_key,
+                        "status": status,
+                    }
+                )
+            mapping_sha256 = sha256_bytes(canonical_json(mappings).encode("utf-8"))
+            self.connection.execute(
+                "INSERT INTO metadata(key, value) VALUES ('control_schema', ?)",
+                (KNOWLEDGE_CONTROL_SCHEMA,),
+            )
+            revision, audit_head = self._append_event(
+                event_type="knowledge_control_migrated",
+                object_id=self.vault_id,
+                payload={
+                    "control_schema": KNOWLEDGE_CONTROL_SCHEMA,
+                    "source_count": len(mappings),
+                    "mapping_sha256": mapping_sha256,
+                },
+            )
+            self.connection.commit()
+            self.control_enabled = True
+        except BaseException:
+            self.connection.rollback()
+            raise
+        verification = self.verify_knowledge_control_migration()
+        if not verification["valid"]:
+            raise RuntimeError(
+                "knowledge control migration committed but failed verification; "
+                f"restore the verified backup at {backup['backup_path']}"
+            )
+        return {
+            **plan,
+            "required": True,
+            "applied": True,
+            "backup": backup,
+            "verification": verification,
+            "revision": revision,
+            "audit_head": audit_head,
+            "mapping_sha256": mapping_sha256,
+        }
+
     def _require_healthy_integrity(self) -> None:
         integrity = self.verify_integrity()
         if not integrity["valid"]:
-            raise RuntimeError(
-                "knowledge vault integrity is invalid; persistent operation stopped"
-            )
+            raise RuntimeError("knowledge vault integrity is invalid; persistent operation stopped")
 
     def _database_file_fingerprint(self) -> tuple[int, int, int, int, int]:
         stat_result = self.database.stat()
@@ -603,6 +1251,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
     def _source_by_identity(
         self,
         *,
+        source_key: str,
         content_sha256: str,
         source_kind: SourceKind,
         title: str,
@@ -647,10 +1296,70 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "compiler": strict_json_loads(row["compiler_json"]),
         }
 
+    def source_info(self, source_id: str) -> dict[str, Any]:
+        if not isinstance(source_id, str) or not _SOURCE_ID.fullmatch(source_id):
+            raise ValueError("knowledge source ID is invalid")
+        row = self.connection.execute(
+            "SELECT * FROM sources WHERE source_id = ?",
+            (source_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"knowledge source is unavailable: {source_id}")
+        source = self._source_row(row)
+        if not self.control_enabled:
+            return {
+                **source,
+                "source_key": None,
+                "previous_source_id": None,
+                "status": "legacy",
+                "activated_at": None,
+                "superseded_at": None,
+                "removed_at": None,
+            }
+        lifecycle = self.connection.execute(
+            "SELECT * FROM source_lifecycle WHERE source_id = ?",
+            (source_id,),
+        ).fetchone()
+        if lifecycle is None:
+            raise RuntimeError("knowledge source lifecycle is missing")
+        return {
+            **source,
+            "source_key": lifecycle["source_key"],
+            "previous_source_id": lifecycle["previous_source_id"],
+            "status": lifecycle["status"],
+            "activated_at": lifecycle["activated_at"],
+            "superseded_at": lifecycle["superseded_at"],
+            "removed_at": lifecycle["removed_at"],
+        }
+
+    def active_source_for_key(self, source_key: str) -> dict[str, Any] | None:
+        self._require_control()
+        if not isinstance(source_key, str) or not _SOURCE_KEY.fullmatch(source_key):
+            raise ValueError("knowledge source key is invalid")
+        row = self.connection.execute(
+            """
+            SELECT source_id FROM source_lifecycle
+            WHERE source_key = ? AND status = 'active'
+            """,
+            (source_key,),
+        ).fetchone()
+        return self.source_info(row["source_id"]) if row is not None else None
+
+    def active_asset_for_semantic_key(self, semantic_key: str) -> KnowledgeAsset | None:
+        row = self.connection.execute(
+            """
+            SELECT * FROM assets
+            WHERE semantic_key = ? AND status = 'active'
+            """,
+            (semantic_key,),
+        ).fetchone()
+        return self._row_to_asset(row) if row is not None else None
+
     def add_compiled_source(
         self,
         *,
         source_path: Path,
+        source_key: str,
         expected_byte_size: int,
         expected_content_sha256: str,
         source_kind: SourceKind,
@@ -666,9 +1375,12 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         asset_specs: tuple[dict[str, Any], ...],
     ) -> dict[str, Any]:
         self._require_write()
+        self._require_control()
         self._require_healthy_integrity()
         if source_kind not in SOURCE_KINDS:
             raise ValueError("unsupported knowledge source kind")
+        if not isinstance(source_key, str) or not _SOURCE_KEY.fullmatch(source_key):
+            raise ValueError("knowledge source key is invalid")
         if trust == "verified_source":
             raise ValueError(
                 "verified_source is reserved for a future publisher-verification "
@@ -700,6 +1412,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         if (
             not isinstance(compiler, dict)
             or compiler.get("schema_version") != "deeplaw.knowledge-compiler/v1"
+            or compiler.get("source_key") != source_key
         ):
             raise ValueError("knowledge source compiler identity is invalid")
         try:
@@ -733,10 +1446,9 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             or not _SHA256.fullmatch(expected_content_sha256)
             or expected_content_sha256 != content_sha256
         ):
-            raise RuntimeError(
-                "knowledge source changed while it was being compiled"
-            )
+            raise RuntimeError("knowledge source changed while it was being compiled")
         existing = self._source_by_identity(
+            source_key=source_key,
             content_sha256=content_sha256,
             source_kind=source_kind,
             title=title,
@@ -753,9 +1465,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 or existing_path.stat().st_size != existing["byte_size"]
                 or sha256_file(existing_path) != existing["content_sha256"]
             ):
-                raise RuntimeError(
-                    "existing knowledge source failed its content-integrity check"
-                )
+                raise RuntimeError("existing knowledge source failed its content-integrity check")
             asset_rows = self.connection.execute(
                 """
                 SELECT DISTINCT assets.asset_id
@@ -769,7 +1479,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 "schema_version": "deeplaw.knowledge-ingest/v1",
                 "vault_id": self.vault_id,
                 "revision": self.revision,
-                "source": existing,
+                "source": self.source_info(existing["source_id"]),
                 "asset_ids": [row["asset_id"] for row in asset_rows],
                 "idempotent": True,
             }
@@ -799,9 +1509,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     temporary.stat().st_size != byte_size
                     or sha256_file(temporary) != content_sha256
                 ):
-                    raise RuntimeError(
-                        "copied knowledge source failed its integrity check"
-                    )
+                    raise RuntimeError("copied knowledge source failed its integrity check")
                 os.chmod(temporary, 0o600)
                 os.replace(temporary, destination)
             except BaseException:
@@ -812,12 +1520,12 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             or destination.stat().st_size != byte_size
             or sha256_file(destination) != content_sha256
         ):
-            raise RuntimeError(
-                "existing knowledge source file does not match its content identity"
-            )
+            raise RuntimeError("existing knowledge source file does not match its content identity")
         else:
             os.chmod(destination, 0o600)
         imported_at = utc_now()
+        previous_source = self.active_source_for_key(source_key)
+        previous_source_id = previous_source["source_id"] if previous_source is not None else None
         asset_ids: list[str] = []
         fragment_ids: list[str] = []
         try:
@@ -841,6 +1549,15 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     canonical_json(list(warnings)),
                     compiler_json,
                 ),
+            )
+            self.connection.execute(
+                """
+                INSERT INTO source_lifecycle(
+                    source_id, source_key, previous_source_id, status,
+                    activated_at, superseded_at, removed_at
+                ) VALUES (?, ?, ?, 'pending', NULL, NULL, NULL)
+                """,
+                (source_id, source_key, previous_source_id),
             )
             for ordinal, fragment in enumerate(fragments, start=1):
                 text = fragment["text"]
@@ -940,6 +1657,9 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     ),
                     "instruction_risk": instruction_risk,
                     "compiler": compiler,
+                    "source_key": source_key,
+                    "previous_source_id": previous_source_id,
+                    "source_status": "pending",
                 },
             )
             self.connection.commit()
@@ -951,22 +1671,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "vault_id": self.vault_id,
             "revision": revision,
             "audit_head": audit_head,
-            "source": {
-                "source_id": source_id,
-                "kind": source_kind,
-                "title": title,
-                "origin_uri": origin_uri,
-                "stored_name": stored_name,
-                "media_type": media_type,
-                "byte_size": byte_size,
-                "content_sha256": content_sha256,
-                "trust": trust,
-                "sensitivity": sensitivity,
-                "imported_at": imported_at,
-                "instruction_risk": instruction_risk,
-                "warnings": list(warnings),
-                "compiler": compiler,
-            },
+            "source": self.source_info(source_id),
             "asset_ids": asset_ids,
             "idempotent": False,
         }
@@ -1161,12 +1866,833 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             self.connection.rollback()
             raise
 
+    def source_review_manifest(self, source_id: str) -> dict[str, Any]:
+        self._require_control()
+        source = self.source_info(source_id)
+        rows = self.connection.execute(
+            """
+            SELECT DISTINCT assets.asset_id, assets.status, assets.content_sha256
+            FROM assets, json_each(assets.source_refs_json) AS reference
+            WHERE json_extract(reference.value, '$.source_id') = ?
+              AND json_array_length(assets.source_refs_json) = 1
+            ORDER BY assets.asset_id
+            """,
+            (source_id,),
+        ).fetchall()
+        membership = [
+            {
+                "asset_id": row["asset_id"],
+                "content_sha256": row["content_sha256"],
+                "status": row["status"],
+            }
+            for row in rows
+        ]
+        membership_sha256 = sha256_bytes(canonical_json(membership).encode("utf-8"))
+        visible_asset_ids = [item["asset_id"] for item in membership[:100]]
+        body = {
+            "schema_version": "deeplaw.knowledge-review-manifest/v1",
+            "vault_id": self.vault_id,
+            "source_key": source["source_key"],
+            "source_id": source_id,
+            "source_content_sha256": source["content_sha256"],
+            "source_status": source["status"],
+            "proposal_count": sum(
+                item["status"] in {"proposed", "quarantined"} for item in membership
+            ),
+            "quarantine_count": sum(item["status"] == "quarantined" for item in membership),
+            "asset_count": len(membership),
+            "membership_sha256": membership_sha256,
+            "asset_ids": visible_asset_ids,
+            "asset_ids_truncated": len(visible_asset_ids) < len(membership),
+        }
+        return {
+            **body,
+            "review_manifest_sha256": sha256_bytes(canonical_json(body).encode("utf-8")),
+        }
+
+    def _record_review_receipt(
+        self,
+        *,
+        assets: list[KnowledgeAsset],
+        source_id: str | None,
+        reviewer_id: str,
+        policy_id: str,
+        reason: str,
+        review_manifest_sha256: str,
+        decision: Literal["approve", "reject"] = "approve",
+    ) -> dict[str, Any]:
+        reviewer_id = reviewer_id.strip()
+        policy_id = policy_id.strip()
+        reason = reason.strip()
+        if not 1 <= len(reviewer_id) <= 200:
+            raise ValueError("reviewer_id must be between 1 and 200 characters")
+        if not 1 <= len(policy_id) <= 200:
+            raise ValueError("review policy_id must be between 1 and 200 characters")
+        if not 1 <= len(reason) <= 2_000:
+            raise ValueError("review reason must be between 1 and 2000 characters")
+        if not _SHA256.fullmatch(review_manifest_sha256):
+            raise ValueError("review manifest hash is invalid")
+        reviewed_at = utc_now()
+        proposal_ids = [asset.asset_id for asset in assets]
+        asset_hashes = [asset.content_sha256 for asset in assets]
+        decisions = [{"asset_id": asset.asset_id, "decision": decision} for asset in assets]
+        body = {
+            "schema_version": "deeplaw.knowledge-review-receipt/v1",
+            "vault_id": self.vault_id,
+            "reviewer_id": reviewer_id,
+            "reviewed_at": reviewed_at,
+            "policy_id": policy_id,
+            "source_id": source_id,
+            "proposal_ids": proposal_ids,
+            "asset_hashes": asset_hashes,
+            "decisions": decisions,
+            "reason": reason,
+            "review_manifest_sha256": review_manifest_sha256,
+            "signature": None,
+        }
+        receipt_sha256 = sha256_bytes(canonical_json(body).encode("utf-8"))
+        receipt_id = stable_id(
+            "review",
+            self.vault_id,
+            receipt_sha256,
+            str(self.revision + 1),
+        )
+        self.connection.execute(
+            """
+            INSERT INTO review_receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                receipt_id,
+                reviewer_id,
+                reviewed_at,
+                policy_id,
+                source_id,
+                canonical_json(proposal_ids),
+                canonical_json(asset_hashes),
+                canonical_json(decisions),
+                reason,
+                review_manifest_sha256,
+                None,
+                receipt_sha256,
+            ),
+        )
+        self._append_event(
+            event_type="review_recorded",
+            object_id=receipt_id,
+            payload={
+                "receipt_sha256": receipt_sha256,
+                "review_manifest_sha256": review_manifest_sha256,
+                "source_id": source_id,
+                "asset_count": len(assets),
+            },
+        )
+        return {
+            **body,
+            "review_receipt_id": receipt_id,
+            "receipt_sha256": receipt_sha256,
+        }
+
+    def get_review_receipt(self, review_receipt_id: str) -> dict[str, Any]:
+        self._require_control()
+        if not isinstance(review_receipt_id, str) or not _REVIEW_RECEIPT_ID.fullmatch(
+            review_receipt_id
+        ):
+            raise ValueError("review receipt ID is invalid")
+        row = self.connection.execute(
+            "SELECT * FROM review_receipts WHERE review_receipt_id = ?",
+            (review_receipt_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"review receipt is unavailable: {review_receipt_id}")
+        body = {
+            "schema_version": "deeplaw.knowledge-review-receipt/v1",
+            "vault_id": self.vault_id,
+            "reviewer_id": row["reviewer_id"],
+            "reviewed_at": row["reviewed_at"],
+            "policy_id": row["policy_id"],
+            "source_id": row["source_id"],
+            "proposal_ids": strict_json_loads(row["proposal_ids_json"]),
+            "asset_hashes": strict_json_loads(row["asset_hashes_json"]),
+            "decisions": strict_json_loads(row["decisions_json"]),
+            "reason": row["reason"],
+            "review_manifest_sha256": row["review_manifest_sha256"],
+            "signature": (
+                strict_json_loads(row["signature_json"])
+                if row["signature_json"] is not None
+                else None
+            ),
+        }
+        record_valid = sha256_bytes(canonical_json(body).encode("utf-8")) == row[
+            "receipt_sha256"
+        ]
+        vault_integrity_valid = self.verify_integrity()["valid"]
+        return {
+            **body,
+            "review_receipt_id": review_receipt_id,
+            "receipt_sha256": row["receipt_sha256"],
+            "record_valid": record_valid,
+            "vault_integrity_valid": vault_integrity_valid,
+            "valid": bool(record_valid and vault_integrity_valid),
+        }
+
+    def review_queue(
+        self,
+        *,
+        source_id: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        self._require_control()
+        if isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise ValueError("review queue limit must be between 1 and 500")
+        if kind is not None and kind not in ASSET_KINDS:
+            raise ValueError("review queue kind is invalid")
+        if status is not None and status not in {"proposed", "quarantined"}:
+            raise ValueError("review queue status is invalid")
+        if source_id is not None and not _SOURCE_ID.fullmatch(source_id):
+            raise ValueError("review queue source ID is invalid")
+        clauses = ["assets.status IN ('proposed', 'quarantined')"]
+        parameters: list[Any] = []
+        if kind is not None:
+            clauses.append("assets.kind = ?")
+            parameters.append(kind)
+        if status is not None:
+            clauses.append("assets.status = ?")
+            parameters.append(status)
+        if source_id is not None:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM json_each(assets.source_refs_json) AS ref "
+                "WHERE json_extract(ref.value, '$.source_id') = ?)"
+            )
+            parameters.append(source_id)
+        where = " AND ".join(clauses)
+        total = self.connection.execute(
+            f"SELECT COUNT(*) FROM assets WHERE {where}",
+            parameters,
+        ).fetchone()[0]
+        rows = self.connection.execute(
+            f"SELECT * FROM assets WHERE {where} ORDER BY created_at, asset_id LIMIT ?",
+            (*parameters, limit),
+        ).fetchall()
+        items = []
+        for row in rows:
+            asset = self._row_to_asset(row)
+            items.append(
+                {
+                    "asset_id": asset.asset_id,
+                    "kind": asset.kind,
+                    "title": asset.title,
+                    "status": asset.status,
+                    "sensitivity": asset.sensitivity,
+                    "source_ids": sorted({reference.source_id for reference in asset.source_refs}),
+                    "content_sha256": asset.content_sha256,
+                    "instruction_risk": bool(asset.warnings),
+                    "created_at": asset.created_at,
+                }
+            )
+        return {
+            "schema_version": "deeplaw.knowledge-review-queue/v1",
+            "vault_id": self.vault_id,
+            "total": total,
+            "returned": len(items),
+            "truncated": len(items) < total,
+            "items": items,
+        }
+
+    def latest_review_receipt_for_asset(self, asset_id: str) -> dict[str, Any] | None:
+        self._require_control()
+        if not isinstance(asset_id, str) or not _ASSET_ID.fullmatch(asset_id):
+            raise ValueError("knowledge asset ID is invalid")
+        row = self.connection.execute(
+            """
+            SELECT review_receipts.review_receipt_id
+            FROM review_receipts,
+                 json_each(review_receipts.decisions_json) AS decision
+            WHERE json_extract(decision.value, '$.asset_id') = ?
+            ORDER BY review_receipts.reviewed_at DESC,
+                     review_receipts.review_receipt_id DESC
+            LIMIT 1
+            """,
+            (asset_id,),
+        ).fetchone()
+        return self.get_review_receipt(row["review_receipt_id"]) if row is not None else None
+
+    def reject_asset(
+        self,
+        asset_id: str,
+        *,
+        reason: str,
+        reviewer_id: str,
+        confirm_reviewed: bool,
+    ) -> dict[str, Any]:
+        self._require_write()
+        self._require_control()
+        if not confirm_reviewed:
+            raise ValueError("asset rejection requires explicit reviewed confirmation")
+        reason = reason.strip()
+        if not 1 <= len(reason) <= 2_000:
+            raise ValueError("review rejection reason must be between 1 and 2000 characters")
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            proposal = self.get_asset(asset_id, include_inactive=True)
+            if proposal.status not in {"proposed", "quarantined"}:
+                raise ValueError("only proposed or quarantined assets can be rejected")
+            manifest_body = {
+                "schema_version": "deeplaw.knowledge-review-manifest/v1",
+                "vault_id": self.vault_id,
+                "source_id": None,
+                "asset_id": proposal.asset_id,
+                "content_sha256": proposal.content_sha256,
+                "status": proposal.status,
+            }
+            manifest_sha256 = sha256_bytes(canonical_json(manifest_body).encode("utf-8"))
+            self.connection.execute(
+                "UPDATE assets SET status = 'revoked' WHERE asset_id = ?",
+                (asset_id,),
+            )
+            self._append_event(
+                event_type="asset_revoked",
+                object_id=asset_id,
+                payload={"reason": reason, "content_sha256": proposal.content_sha256},
+            )
+            receipt = self._record_review_receipt(
+                assets=[proposal],
+                source_id=None,
+                reviewer_id=reviewer_id,
+                policy_id="deeplaw.local-review/v1",
+                reason=reason,
+                review_manifest_sha256=manifest_sha256,
+                decision="reject",
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        return {
+            "schema_version": "deeplaw.knowledge-review-decision/v1",
+            "asset_id": asset_id,
+            "decision": "reject",
+            "status": "revoked",
+            "review_receipt": receipt,
+            "revision": self.revision,
+            "audit_head": self.audit_head,
+        }
+
+    def record_run_receipt(
+        self,
+        payload: dict[str, Any],
+        *,
+        capsule: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_write()
+        self._require_control()
+        if not isinstance(capsule, dict):
+            raise ValueError("run receipt requires a verified knowledge Capsule")
+        from .context_compiler import verify_capsule
+
+        try:
+            capsule_verification = verify_capsule(capsule, vault=self)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("run receipt requires a verified knowledge Capsule") from error
+        if not capsule_verification["valid"]:
+            raise ValueError("run receipt requires a verified knowledge Capsule")
+        expected = {
+            "schema_version",
+            "vault_id",
+            "vault_revision",
+            "audit_head",
+            "capsule_id",
+            "capsule_digest",
+            "task_sha256",
+            "goal_sha256",
+            "selected_asset_ids",
+            "source_ids",
+            "host",
+            "model",
+            "started_at",
+            "finished_at",
+            "status",
+            "outcome_artifact_sha256",
+            "metrics",
+        }
+        if not isinstance(payload, dict) or set(payload) != expected:
+            raise ValueError("run receipt payload does not match its closed contract")
+        if (
+            payload["schema_version"] != "deeplaw.knowledge-run-receipt/v1"
+            or payload["vault_id"] != self.vault_id
+            or isinstance(payload["vault_revision"], bool)
+            or not isinstance(payload["vault_revision"], int)
+            or not 0 <= payload["vault_revision"] <= self.revision
+            or not _SHA256.fullmatch(payload["audit_head"])
+            or self.audit_hash_at(payload["vault_revision"]) != payload["audit_head"]
+            or not isinstance(payload["capsule_id"], str)
+            or not payload["capsule_id"].startswith("capsule_")
+            or not _SHA256.fullmatch(payload["capsule_digest"])
+            or not _SHA256.fullmatch(payload["task_sha256"])
+            or (
+                payload["goal_sha256"] is not None and not _SHA256.fullmatch(payload["goal_sha256"])
+            )
+            or payload["status"] not in {"success", "partial", "failure", "refusal", "timeout"}
+            or (
+                payload["outcome_artifact_sha256"] is not None
+                and not _SHA256.fullmatch(payload["outcome_artifact_sha256"])
+            )
+        ):
+            raise ValueError("run receipt identity or status is invalid")
+        selected_asset_ids = payload["selected_asset_ids"]
+        source_ids = payload["source_ids"]
+        if (
+            not isinstance(selected_asset_ids, list)
+            or len(selected_asset_ids) > 100
+            or len(selected_asset_ids) != len(set(selected_asset_ids))
+            or any(
+                not isinstance(asset_id, str) or not _ASSET_ID.fullmatch(asset_id)
+                for asset_id in selected_asset_ids
+            )
+            or not isinstance(source_ids, list)
+            or len(source_ids) > 100
+            or len(source_ids) != len(set(source_ids))
+            or any(
+                not isinstance(source_id, str) or not _SOURCE_ID.fullmatch(source_id)
+                for source_id in source_ids
+            )
+        ):
+            raise ValueError("run receipt asset/source inventory is invalid")
+        selected_capsule_items = [
+            item
+            for group_name in (
+                "constraints",
+                "decisions",
+                "knowledge_assets",
+                "experiences",
+                "open_questions",
+            )
+            for item in capsule[group_name]
+        ]
+        expected_asset_ids = [item["asset_id"] for item in selected_capsule_items]
+        expected_source_ids = sorted(
+            {
+                reference["source_id"]
+                for item in selected_capsule_items
+                for reference in item["source_refs"]
+            }
+        )
+        expected_capsule_binding = {
+            "vault_id": capsule["vault_id"],
+            "vault_revision": capsule["vault_revision"],
+            "audit_head": capsule["audit_head"],
+            "capsule_id": capsule["capsule_id"],
+            "capsule_digest": capsule["capsule_digest"],
+            "task_sha256": sha256_bytes(capsule["task"].encode("utf-8")),
+            "goal_sha256": (
+                sha256_bytes(capsule["goal"].encode("utf-8"))
+                if capsule["goal"] is not None
+                else None
+            ),
+            "selected_asset_ids": expected_asset_ids,
+            "source_ids": expected_source_ids,
+        }
+        if any(payload[field] != value for field, value in expected_capsule_binding.items()):
+            raise ValueError("run receipt does not match its verified knowledge Capsule")
+        for asset_id in selected_asset_ids:
+            self.get_asset(asset_id, include_inactive=True)
+        for source_id in source_ids:
+            self.source_info(source_id)
+        host = payload["host"]
+        model = payload["model"]
+        metrics = payload["metrics"]
+        if (
+            not isinstance(host, dict)
+            or set(host) != {"name", "version"}
+            or any(
+                not isinstance(host[field], str) or not 1 <= len(host[field].strip()) <= 200
+                for field in host
+            )
+            or (
+                model is not None
+                and (
+                    not isinstance(model, dict)
+                    or set(model) != {"name", "version"}
+                    or any(
+                        not isinstance(model[field], str)
+                        or not 1 <= len(model[field].strip()) <= 200
+                        for field in model
+                    )
+                )
+            )
+            or not isinstance(metrics, dict)
+            or set(metrics) != {"input_tokens", "output_tokens", "latency_ms", "cost", "currency"}
+        ):
+            raise ValueError("run receipt host, model, or metrics are invalid")
+        for field in ("input_tokens", "output_tokens"):
+            value = metrics[field]
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value < 0
+            ):
+                raise ValueError("run receipt token metrics are invalid")
+        for field in ("latency_ms", "cost"):
+            value = metrics[field]
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0
+            ):
+                raise ValueError("run receipt numeric metrics are invalid")
+        if metrics["currency"] is not None and (
+            not isinstance(metrics["currency"], str) or not 1 <= len(metrics["currency"]) <= 16
+        ):
+            raise ValueError("run receipt currency is invalid")
+        started_at = canonical_timestamp(payload["started_at"], field="run started_at")
+        finished_at = canonical_timestamp(payload["finished_at"], field="run finished_at")
+        if finished_at < started_at:
+            raise ValueError("run receipt finished_at precedes started_at")
+        body = deepcopy(payload)
+        body["started_at"] = started_at
+        body["finished_at"] = finished_at
+        receipt_sha256 = sha256_bytes(canonical_json(body).encode("utf-8"))
+        run_id = stable_id("run", self.vault_id, receipt_sha256)
+        existing = self.connection.execute(
+            "SELECT receipt_sha256 FROM run_receipts WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if existing is not None:
+            if existing["receipt_sha256"] != receipt_sha256:
+                raise RuntimeError("run receipt identity collision")
+            return self.get_run_receipt(run_id)
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            self.connection.execute(
+                "INSERT INTO run_receipts VALUES (?, ?, ?, ?)",
+                (run_id, canonical_json(body), receipt_sha256, finished_at),
+            )
+            revision, audit_head = self._append_event(
+                event_type="run_receipt_recorded",
+                object_id=run_id,
+                payload={"receipt_sha256": receipt_sha256},
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        return {
+            **body,
+            "run_id": run_id,
+            "receipt_sha256": receipt_sha256,
+            "revision": revision,
+            "current_audit_head": audit_head,
+            "valid": True,
+        }
+
+    def get_run_receipt(self, run_id: str) -> dict[str, Any]:
+        self._require_control()
+        if not isinstance(run_id, str) or not _RUN_RECEIPT_ID.fullmatch(run_id):
+            raise ValueError("run receipt ID is invalid")
+        row = self.connection.execute(
+            "SELECT * FROM run_receipts WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"run receipt is unavailable: {run_id}")
+        payload = strict_json_loads(row["payload_json"])
+        record_valid = (
+            isinstance(payload, dict)
+            and sha256_bytes(canonical_json(payload).encode("utf-8")) == row["receipt_sha256"]
+            and stable_id("run", self.vault_id, row["receipt_sha256"]) == run_id
+        )
+        vault_integrity_valid = self.verify_integrity()["valid"]
+        return {
+            **payload,
+            "run_id": run_id,
+            "receipt_sha256": row["receipt_sha256"],
+            "record_valid": record_valid,
+            "vault_integrity_valid": vault_integrity_valid,
+            "valid": bool(record_valid and vault_integrity_valid),
+        }
+
+    def list_run_receipts(self, *, limit: int = 100) -> dict[str, Any]:
+        self._require_control()
+        if isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise ValueError("run receipt list limit must be between 1 and 500")
+        total = self.connection.execute("SELECT COUNT(*) FROM run_receipts").fetchone()[0]
+        rows = self.connection.execute(
+            "SELECT run_id FROM run_receipts ORDER BY created_at DESC, run_id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return {
+            "schema_version": "deeplaw.knowledge-run-receipt-list/v1",
+            "vault_id": self.vault_id,
+            "total": total,
+            "runs": [self.get_run_receipt(row["run_id"]) for row in rows],
+            "truncated": len(rows) < total,
+        }
+
+    def record_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_write()
+        self._require_control()
+        expected = {
+            "schema_version",
+            "vault_id",
+            "run_id",
+            "capsule_id",
+            "capsule_digest",
+            "vault_revision",
+            "outcome",
+            "helpful_asset_ids",
+            "irrelevant_asset_ids",
+            "harmful_asset_ids",
+            "stale_asset_ids",
+            "missing_knowledge",
+            "missing_sources",
+            "incorrect_relations",
+            "budget_failures",
+            "observation",
+            "recommended_action",
+            "review_status",
+            "created_at",
+            "regression_case",
+            "sensitivity",
+        }
+        if not isinstance(payload, dict) or set(payload) != expected:
+            raise ValueError("feedback payload does not match its closed contract")
+        if (
+            payload["schema_version"] != "deeplaw.knowledge-feedback-ledger/v1"
+            or payload["vault_id"] != self.vault_id
+            or payload["outcome"] not in {"success", "partial", "failure"}
+            or payload["review_status"] != "proposed"
+            or payload["sensitivity"] not in SENSITIVITY_LEVELS
+            or not _RUN_RECEIPT_ID.fullmatch(payload["run_id"])
+            or not _SHA256.fullmatch(payload["capsule_digest"])
+            or isinstance(payload["vault_revision"], bool)
+            or not isinstance(payload["vault_revision"], int)
+        ):
+            raise ValueError("feedback identity, outcome, or sensitivity is invalid")
+        run = self.get_run_receipt(payload["run_id"])
+        if (
+            not run["valid"]
+            or run["capsule_id"] != payload["capsule_id"]
+            or run["capsule_digest"] != payload["capsule_digest"]
+            or run["vault_revision"] != payload["vault_revision"]
+        ):
+            raise ValueError("feedback does not match its verified run receipt")
+        selected_asset_ids = set(run["selected_asset_ids"])
+        asset_fields = (
+            "helpful_asset_ids",
+            "irrelevant_asset_ids",
+            "harmful_asset_ids",
+            "stale_asset_ids",
+        )
+        inventories: list[list[str]] = []
+        for field in asset_fields:
+            values = payload[field]
+            if (
+                not isinstance(values, list)
+                or len(values) > 100
+                or len(values) != len(set(values))
+                or any(
+                    not isinstance(asset_id, str) or not _ASSET_ID.fullmatch(asset_id)
+                    for asset_id in values
+                )
+            ):
+                raise ValueError(f"feedback {field} is invalid")
+            for asset_id in values:
+                self.get_asset(asset_id, include_inactive=True)
+                if asset_id not in selected_asset_ids:
+                    raise ValueError(
+                        "feedback asset classifications must refer to the bound run Capsule"
+                    )
+            inventories.append(values)
+        flattened = [asset_id for values in inventories for asset_id in values]
+        if len(flattened) != len(set(flattened)):
+            raise ValueError("feedback asset classifications must be mutually exclusive")
+        text_list_fields = (
+            "missing_knowledge",
+            "missing_sources",
+            "incorrect_relations",
+            "budget_failures",
+        )
+        for field in text_list_fields:
+            values = payload[field]
+            if (
+                not isinstance(values, list)
+                or len(values) > 32
+                or any(
+                    not isinstance(value, str) or not 1 <= len(value.strip()) <= 1_000
+                    for value in values
+                )
+            ):
+                raise ValueError(f"feedback {field} is invalid")
+        for field in ("observation", "recommended_action"):
+            if not isinstance(payload[field], str) or not 1 <= len(payload[field].strip()) <= 5_000:
+                raise ValueError(f"feedback {field} is invalid")
+        created_at = canonical_timestamp(payload["created_at"], field="feedback created_at")
+        regression = payload["regression_case"]
+        expected_regression_fields = {
+            "case_id",
+            "run_id",
+            "capsule_id",
+            "capsule_digest",
+            "vault_revision",
+            "task_sha256",
+            "selected_asset_ids",
+            "source_ids",
+            "expected_helpful_asset_ids",
+        }
+        if (
+            not isinstance(regression, dict)
+            or set(regression) != expected_regression_fields
+            or regression["run_id"] != payload["run_id"]
+            or regression["capsule_id"] != run["capsule_id"]
+            or regression["capsule_digest"] != run["capsule_digest"]
+            or regression["vault_revision"] != run["vault_revision"]
+            or regression["task_sha256"] != run["task_sha256"]
+            or regression["selected_asset_ids"] != run["selected_asset_ids"]
+            or regression["source_ids"] != run["source_ids"]
+            or regression["expected_helpful_asset_ids"] != payload["helpful_asset_ids"]
+            or regression["case_id"]
+            != stable_id(
+                "case",
+                self.vault_id,
+                payload["run_id"],
+                payload["capsule_digest"],
+                canonical_json(payload["helpful_asset_ids"]),
+                canonical_json(payload["missing_knowledge"]),
+            )
+        ):
+            raise ValueError("feedback regression case is invalid")
+        statement = (
+            f"Outcome: {payload['outcome']}\n"
+            f"Observation: {payload['observation'].strip()}\n"
+            f"Recommended action: {payload['recommended_action'].strip()}\n"
+            f"Helpful assets: {', '.join(payload['helpful_asset_ids']) or 'none'}\n"
+            f"Missing knowledge: {'; '.join(payload['missing_knowledge']) or 'none'}"
+        )
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            proposal, inserted = self._insert_asset(
+                kind="lesson",
+                memory_tier="experience",
+                title=f"Run feedback: {payload['outcome']} · {payload['run_id']}",
+                statement=statement,
+                semantic_key=None,
+                status=("quarantined" if has_instruction_risk(statement) else "proposed"),
+                verification="unverified",
+                trust="user_provided",
+                sensitivity=cast(Sensitivity, payload["sensitivity"]),
+                source_refs=(),
+                tags=("structured-feedback", payload["outcome"]),
+                warnings=(
+                    ("instruction-like feedback requires explicit review",)
+                    if has_instruction_risk(statement)
+                    else ()
+                ),
+                expires_at=None,
+                supersedes_asset_id=None,
+                origin_uri=f"deeplaw://{self.vault_id}/runs/{payload['run_id']}",
+                created_at=created_at,
+            )
+            if inserted:
+                self._append_event(
+                    event_type="asset_proposed",
+                    object_id=proposal.asset_id,
+                    payload={
+                        "content_sha256": proposal.content_sha256,
+                        "status": proposal.status,
+                    },
+                )
+            body = {**deepcopy(payload), "created_at": created_at}
+            body["proposal_asset_id"] = proposal.asset_id
+            receipt_sha256 = sha256_bytes(canonical_json(body).encode("utf-8"))
+            feedback_id = stable_id("feedback", self.vault_id, receipt_sha256)
+            self.connection.execute(
+                "INSERT INTO feedback_records VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    feedback_id,
+                    payload["run_id"],
+                    canonical_json(body),
+                    receipt_sha256,
+                    created_at,
+                    proposal.asset_id,
+                ),
+            )
+            revision, audit_head = self._append_event(
+                event_type="feedback_recorded",
+                object_id=feedback_id,
+                payload={
+                    "receipt_sha256": receipt_sha256,
+                    "run_id": payload["run_id"],
+                    "proposal_asset_id": proposal.asset_id,
+                },
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        return {
+            **body,
+            "feedback_id": feedback_id,
+            "receipt_sha256": receipt_sha256,
+            "proposal": proposal.to_dict(),
+            "revision": revision,
+            "audit_head": audit_head,
+            "valid": True,
+        }
+
+    def get_feedback(self, feedback_id: str) -> dict[str, Any]:
+        self._require_control()
+        if not isinstance(feedback_id, str) or not _FEEDBACK_ID.fullmatch(feedback_id):
+            raise ValueError("feedback ID is invalid")
+        row = self.connection.execute(
+            "SELECT * FROM feedback_records WHERE feedback_id = ?",
+            (feedback_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"feedback record is unavailable: {feedback_id}")
+        payload = strict_json_loads(row["payload_json"])
+        receipt_sha256 = sha256_bytes(canonical_json(payload).encode("utf-8"))
+        record_valid = bool(
+            receipt_sha256 == row["receipt_sha256"]
+            and stable_id("feedback", self.vault_id, receipt_sha256) == feedback_id
+            and row["proposal_asset_id"] == payload.get("proposal_asset_id")
+        )
+        vault_integrity_valid = self.verify_integrity()["valid"]
+        return {
+            **payload,
+            "feedback_id": feedback_id,
+            "receipt_sha256": row["receipt_sha256"],
+            "record_valid": record_valid,
+            "vault_integrity_valid": vault_integrity_valid,
+            "valid": bool(record_valid and vault_integrity_valid),
+        }
+
+    def list_feedback(self, *, limit: int = 100) -> dict[str, Any]:
+        self._require_control()
+        if isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise ValueError("feedback list limit must be between 1 and 500")
+        total = self.connection.execute("SELECT COUNT(*) FROM feedback_records").fetchone()[0]
+        rows = self.connection.execute(
+            """
+            SELECT feedback_id FROM feedback_records
+            ORDER BY created_at DESC, feedback_id LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return {
+            "schema_version": "deeplaw.knowledge-feedback-list/v1",
+            "vault_id": self.vault_id,
+            "total": total,
+            "feedback": [self.get_feedback(row["feedback_id"]) for row in rows],
+            "truncated": len(rows) < total,
+        }
+
     def _approve_asset_in_transaction(
         self,
         asset_id: str,
         *,
         confirm_quarantined: bool,
         source_file_cache: dict[str, dict[str, Any]],
+        allow_source_successor: bool = False,
     ) -> KnowledgeAsset:
         asset = self.get_asset(asset_id, include_inactive=True)
         if asset.status not in {"proposed", "quarantined"}:
@@ -1191,6 +2717,24 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 "source-bound knowledge cannot be approved because its stored "
                 "source file is missing or has changed"
             )
+        if not allow_source_successor:
+            for reference in asset.source_refs:
+                lifecycle = self.connection.execute(
+                    """
+                    SELECT status, previous_source_id FROM source_lifecycle
+                    WHERE source_id = ?
+                    """,
+                    (reference.source_id,),
+                ).fetchone()
+                if (
+                    lifecycle is not None
+                    and lifecycle["status"] == "pending"
+                    and lifecycle["previous_source_id"] is not None
+                ):
+                    raise ValueError(
+                        "a successor source version must be activated through an exact "
+                        "source review manifest; individual approval would break atomic update"
+                    )
         if asset.semantic_key is not None:
             current = self.connection.execute(
                 """
@@ -1250,17 +2794,39 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         *,
         confirm_reviewed: bool,
         confirm_quarantined: bool = False,
+        reviewer_id: str = "local-operator",
+        review_reason: str = "Explicit human review completed.",
+        policy_id: str = "deeplaw.local-review/v1",
     ) -> KnowledgeAsset:
         self._require_write()
+        self._require_control()
         if not confirm_reviewed:
             raise ValueError("asset approval requires explicit reviewed confirmation")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             self._require_healthy_integrity()
+            proposal = self.get_asset(asset_id, include_inactive=True)
+            manifest_body = {
+                "schema_version": "deeplaw.knowledge-review-manifest/v1",
+                "vault_id": self.vault_id,
+                "source_id": None,
+                "asset_id": proposal.asset_id,
+                "content_sha256": proposal.content_sha256,
+                "status": proposal.status,
+            }
+            manifest_sha256 = sha256_bytes(canonical_json(manifest_body).encode("utf-8"))
             approved = self._approve_asset_in_transaction(
                 asset_id,
                 confirm_quarantined=confirm_quarantined,
                 source_file_cache={},
+            )
+            self._record_review_receipt(
+                assets=[proposal],
+                source_id=None,
+                reviewer_id=reviewer_id,
+                policy_id=policy_id,
+                reason=review_reason,
+                review_manifest_sha256=manifest_sha256,
             )
             self.connection.commit()
             return approved
@@ -1274,13 +2840,22 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         *,
         confirm_reviewed: bool,
         confirm_quarantined: bool = False,
+        review_manifest_sha256: str,
+        reviewer_id: str = "local-operator",
+        review_reason: str = "The exact compiled source manifest was reviewed.",
+        policy_id: str = "deeplaw.local-source-review/v1",
     ) -> dict[str, Any]:
         """Atomically approve one reviewed compiled source without N integrity replays."""
         self._require_write()
+        self._require_control()
         if not confirm_reviewed:
             raise ValueError("source approval requires explicit reviewed confirmation")
         if not isinstance(source_id, str) or not _SOURCE_ID.fullmatch(source_id):
             raise ValueError("knowledge source ID is invalid")
+        if not isinstance(review_manifest_sha256, str) or not _SHA256.fullmatch(
+            review_manifest_sha256
+        ):
+            raise ValueError("source approval requires an exact review manifest SHA-256")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             self._require_healthy_integrity()
@@ -1294,6 +2869,11 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 raise RuntimeError(
                     "compiled source cannot be approved because its stored source "
                     "file is missing or has changed"
+                )
+            manifest = self.source_review_manifest(source_id)
+            if review_manifest_sha256 != manifest["review_manifest_sha256"]:
+                raise RuntimeError(
+                    "review manifest changed; inspect the exact current source membership"
                 )
             rows = self.connection.execute(
                 """
@@ -1314,9 +2894,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "compiled knowledge source membership is incomplete or ambiguous"
                 )
             if len(rows) > _MAX_BATCH_APPROVAL_ASSETS:
-                raise ValueError(
-                    "source approval exceeds the 100000-asset atomic review bound"
-                )
+                raise ValueError("source approval exceeds the 100000-asset atomic review bound")
             unsupported = [
                 row["asset_id"]
                 for row in rows
@@ -1329,8 +2907,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 )
             source_file_cache: dict[str, dict[str, Any]] = {}
             approved_ids: list[str] = []
+            reviewed_assets: list[KnowledgeAsset] = []
             already_active = 0
             for row in rows:
+                reviewed_assets.append(self.get_asset(row["asset_id"], include_inactive=True))
                 if row["status"] == "active":
                     already_active += 1
                     continue
@@ -1338,8 +2918,91 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     row["asset_id"],
                     confirm_quarantined=confirm_quarantined,
                     source_file_cache=source_file_cache,
+                    allow_source_successor=True,
                 )
                 approved_ids.append(approved.asset_id)
+            source_info = self.source_info(source_id)
+            activated_source = False
+            revoked_ids: list[str] = []
+            if (
+                source_info["status"] == "pending"
+                and len(rows) == len(approved_ids) + already_active
+            ):
+                previous_source_id = source_info["previous_source_id"]
+                current = self.active_source_for_key(source_info["source_key"])
+                if current is not None and current["source_id"] != previous_source_id:
+                    raise RuntimeError(
+                        "source activation is stale because the logical source changed"
+                    )
+                if previous_source_id is not None:
+                    remaining = self.connection.execute(
+                        """
+                        SELECT DISTINCT assets.asset_id, assets.content_sha256
+                        FROM assets, json_each(assets.source_refs_json) AS reference
+                        WHERE json_extract(reference.value, '$.source_id') = ?
+                          AND assets.status = 'active'
+                        ORDER BY assets.asset_id
+                        """,
+                        (previous_source_id,),
+                    ).fetchall()
+                    for stale in remaining:
+                        self.connection.execute(
+                            "UPDATE assets SET status = 'revoked' WHERE asset_id = ?",
+                            (stale["asset_id"],),
+                        )
+                        self._append_event(
+                            event_type="asset_revoked",
+                            object_id=stale["asset_id"],
+                            payload={
+                                "reason": (
+                                    "Source version was replaced and this section "
+                                    "is absent from the reviewed successor."
+                                ),
+                                "content_sha256": stale["content_sha256"],
+                            },
+                        )
+                        revoked_ids.append(stale["asset_id"])
+                    switched_at = utc_now()
+                    self.connection.execute(
+                        """
+                        UPDATE source_lifecycle
+                        SET status = 'superseded', superseded_at = ?
+                        WHERE source_id = ? AND status = 'active'
+                        """,
+                        (switched_at, previous_source_id),
+                    )
+                else:
+                    switched_at = utc_now()
+                self.connection.execute(
+                    """
+                    UPDATE source_lifecycle
+                    SET status = 'active', activated_at = ?
+                    WHERE source_id = ? AND status = 'pending'
+                    """,
+                    (switched_at, source_id),
+                )
+                self._append_event(
+                    event_type="source_activated",
+                    object_id=source_id,
+                    payload={
+                        "source_key": source_info["source_key"],
+                        "previous_source_id": previous_source_id,
+                        "activated_at": switched_at,
+                        "revoked_asset_count": len(revoked_ids),
+                        "revoked_assets_sha256": sha256_bytes(
+                            canonical_json(revoked_ids).encode("utf-8")
+                        ),
+                    },
+                )
+                activated_source = True
+            receipt = self._record_review_receipt(
+                assets=reviewed_assets,
+                source_id=source_id,
+                reviewer_id=reviewer_id,
+                policy_id=policy_id,
+                reason=review_reason,
+                review_manifest_sha256=manifest["review_manifest_sha256"],
+            )
             self.connection.commit()
         except BaseException:
             self.connection.rollback()
@@ -1354,6 +3017,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "already_active_asset_count": already_active,
             "approved_asset_ids": visible_ids,
             "approved_asset_ids_truncated": len(visible_ids) < len(approved_ids),
+            "review_manifest_sha256": manifest["review_manifest_sha256"],
+            "review_receipt": receipt,
+            "source_activated": activated_source,
+            "revoked_prior_asset_count": len(revoked_ids),
             "revision": self.revision,
             "audit_head": self.audit_head,
         }
@@ -1453,9 +3120,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             ).fetchone()
             if conflicting is not None:
                 self.connection.rollback()
-                raise ValueError(
-                    "knowledge relation already exists with different evidence"
-                )
+                raise ValueError("knowledge relation already exists with different evidence")
             created_at = utc_now()
             self.connection.execute(
                 "INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1579,11 +3244,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         if row is None or not isinstance(row["stored_name"], str):
             raise KeyError(f"knowledge source file is unavailable: {source_id}")
         stored_name = row["stored_name"]
-        if (
-            not stored_name
-            or Path(stored_name).name != stored_name
-            or len(stored_name) > 100
-        ):
+        if not stored_name or Path(stored_name).name != stored_name or len(stored_name) > 100:
             raise RuntimeError("knowledge source stored name is unsafe")
         return self.root / "sources" / stored_name
 
@@ -1611,8 +3272,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     not source_path.is_symlink()
                     and source_path.is_file()
                     and source_path.stat().st_size == source["byte_size"]
-                    and self._cached_source_sha256(source_path)
-                    == source["content_sha256"]
+                    and self._cached_source_sha256(source_path) == source["content_sha256"]
                 ):
                     source_valid = True
                     reason = None
@@ -1622,9 +3282,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 reason = "source_file_missing_or_hash_mismatch"
         result = {
             "source_id": source_id,
-            "content_sha256": (
-                source["content_sha256"] if source is not None else None
-            ),
+            "content_sha256": (source["content_sha256"] if source is not None else None),
             "valid": source_valid,
             "reason": reason,
         }
@@ -1678,10 +3336,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         if len(identifiers) > _MAX_FRAGMENTS_PER_SOURCE:
             raise ValueError("source-file verification exceeds its record bound")
         cache: dict[str, dict[str, Any]] = {}
-        checks = [
-            self._source_file_check(source_id, cache=cache)
-            for source_id in identifiers
-        ]
+        checks = [self._source_file_check(source_id, cache=cache) for source_id in identifiers]
         return {
             "valid": all(check["valid"] for check in checks),
             "checked_source_files": len(checks),
@@ -1706,9 +3361,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         if isinstance(limit, bool) or not 1 <= limit <= _MAX_SEARCH_LIMIT:
             raise ValueError(f"knowledge search limit must be between 1 and {_MAX_SEARCH_LIMIT}")
         if isinstance(max_chars, bool) or not 1 <= max_chars <= _MAX_SEARCH_CHARS:
-            raise ValueError(
-                f"knowledge max_chars must be between 1 and {_MAX_SEARCH_CHARS}"
-            )
+            raise ValueError(f"knowledge max_chars must be between 1 and {_MAX_SEARCH_CHARS}")
         selected_kinds = tuple(dict.fromkeys(kinds))
         selected_tiers = tuple(dict.fromkeys(memory_tiers))
         if any(kind not in ASSET_KINDS for kind in selected_kinds):
@@ -1727,14 +3380,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         if not include_restricted:
             conditions.append("assets.sensitivity <> 'restricted'")
         if selected_kinds:
-            conditions.append(
-                f"assets.kind IN ({','.join('?' for _ in selected_kinds)})"
-            )
+            conditions.append(f"assets.kind IN ({','.join('?' for _ in selected_kinds)})")
             parameters.extend(selected_kinds)
         if selected_tiers:
-            conditions.append(
-                f"assets.memory_tier IN ({','.join('?' for _ in selected_tiers)})"
-            )
+            conditions.append(f"assets.memory_tier IN ({','.join('?' for _ in selected_tiers)})")
             parameters.extend(selected_tiers)
         parameters.append(64)
         # Every SQL fragment above is a closed literal; caller values remain
@@ -1744,7 +3393,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             SELECT assets.*, bm25(asset_search, 0.0, 8.0, 3.0, 10.0, 2.0) AS rank
             FROM asset_search
             JOIN assets USING(asset_id)
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
             ORDER BY rank, assets.asset_id
             LIMIT ?
             """,
@@ -1917,8 +3566,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 fragment["source_id"] == reference.source_id
                 and fragment["locator"] == reference.locator
                 and fragment["text_sha256"] == reference.quote_sha256
-                and sha256_bytes(fragment["text"].encode("utf-8"))
-                == reference.quote_sha256
+                and sha256_bytes(fragment["text"].encode("utf-8")) == reference.quote_sha256
             )
             valid = valid and reference_valid
             reference_checks.append(
@@ -1964,9 +3612,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         }
 
     def verify_audit_chain(self) -> dict[str, Any]:
-        event_count = self.connection.execute(
-            "SELECT COUNT(*) FROM events"
-        ).fetchone()[0]
+        event_count = self.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         previous_hash: str | None = None
         expected_sequence = 0
         for row in self.connection.execute("SELECT * FROM events ORDER BY sequence"):
@@ -2019,21 +3665,37 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
 
     def verify_state_integrity(self) -> dict[str, Any]:
         counts = {
-            "asset_count": self.connection.execute(
-                "SELECT COUNT(*) FROM assets"
-            ).fetchone()[0],
-            "source_count": self.connection.execute(
-                "SELECT COUNT(*) FROM sources"
-            ).fetchone()[0],
+            "asset_count": self.connection.execute("SELECT COUNT(*) FROM assets").fetchone()[0],
+            "source_count": self.connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0],
             "fragment_count": self.connection.execute(
                 "SELECT COUNT(*) FROM source_fragments"
             ).fetchone()[0],
-            "relation_count": self.connection.execute(
-                "SELECT COUNT(*) FROM relations"
-            ).fetchone()[0],
+            "relation_count": self.connection.execute("SELECT COUNT(*) FROM relations").fetchone()[
+                0
+            ],
             "search_index_count": self.connection.execute(
                 "SELECT COUNT(*) FROM asset_search"
             ).fetchone()[0],
+            "source_lifecycle_count": (
+                self.connection.execute("SELECT COUNT(*) FROM source_lifecycle").fetchone()[0]
+                if self.control_enabled
+                else 0
+            ),
+            "review_receipt_count": (
+                self.connection.execute("SELECT COUNT(*) FROM review_receipts").fetchone()[0]
+                if self.control_enabled
+                else 0
+            ),
+            "run_receipt_count": (
+                self.connection.execute("SELECT COUNT(*) FROM run_receipts").fetchone()[0]
+                if self.control_enabled
+                else 0
+            ),
+            "feedback_count": (
+                self.connection.execute("SELECT COUNT(*) FROM feedback_records").fetchone()[0]
+                if self.control_enabled
+                else 0
+            ),
         }
 
         def failed(reason: str, object_id: str | None = None) -> dict[str, Any]:
@@ -2046,18 +3708,14 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
 
         try:
             assets: dict[str, KnowledgeAsset] = {}
-            for row in self.connection.execute(
-                "SELECT * FROM assets ORDER BY asset_id"
-            ):
+            for row in self.connection.execute("SELECT * FROM assets ORDER BY asset_id"):
                 asset_id = row["asset_id"]
                 if asset_id in assets:
                     return failed("duplicate_asset_identity")
                 assets[asset_id] = self._row_to_asset(row)
             sources: dict[str, dict[str, Any]] = {}
             source_instruction_risk: dict[str, int] = {}
-            for row in self.connection.execute(
-                "SELECT * FROM sources ORDER BY source_id"
-            ):
+            for row in self.connection.execute("SELECT * FROM sources ORDER BY source_id"):
                 source_id = row["source_id"]
                 if source_id in sources:
                     return failed("duplicate_source_identity")
@@ -2072,13 +3730,49 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     return failed("duplicate_fragment_identity")
                 fragments[fragment_id] = dict(row)
             relations: dict[str, dict[str, Any]] = {}
-            for row in self.connection.execute(
-                "SELECT * FROM relations ORDER BY relation_id"
-            ):
+            for row in self.connection.execute("SELECT * FROM relations ORDER BY relation_id"):
                 relation_id = row["relation_id"]
                 if relation_id in relations:
                     return failed("duplicate_relation_identity")
                 relations[relation_id] = dict(row)
+            source_lifecycles = (
+                {
+                    row["source_id"]: dict(row)
+                    for row in self.connection.execute(
+                        "SELECT * FROM source_lifecycle ORDER BY source_id"
+                    )
+                }
+                if self.control_enabled
+                else {}
+            )
+            review_receipts = (
+                {
+                    row["review_receipt_id"]: dict(row)
+                    for row in self.connection.execute(
+                        "SELECT * FROM review_receipts ORDER BY review_receipt_id"
+                    )
+                }
+                if self.control_enabled
+                else {}
+            )
+            run_receipts = (
+                {
+                    row["run_id"]: dict(row)
+                    for row in self.connection.execute("SELECT * FROM run_receipts ORDER BY run_id")
+                }
+                if self.control_enabled
+                else {}
+            )
+            feedback_records = (
+                {
+                    row["feedback_id"]: dict(row)
+                    for row in self.connection.execute(
+                        "SELECT * FROM feedback_records ORDER BY feedback_id"
+                    )
+                }
+                if self.control_enabled
+                else {}
+            )
         except (KeyError, TypeError, ValueError):
             return failed("stored_record_contract_invalid")
         if len(assets) != counts["asset_count"]:
@@ -2110,6 +3804,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         expected_sources: set[str] = set()
         expected_fragments: set[str] = set()
         expected_relations: dict[str, dict[str, Any]] = {}
+        expected_source_lifecycles: dict[str, dict[str, Any]] = {}
+        expected_review_receipts: set[str] = set()
+        expected_run_receipts: set[str] = set()
+        expected_feedback_records: set[str] = set()
         previous_event_at: str | None = None
         for event in self.connection.execute("SELECT * FROM events ORDER BY sequence"):
             event_type = event["event_type"]
@@ -2162,10 +3860,20 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "instruction_risk",
                     "compiler",
                 }
+                control_payload = {
+                    *compact_payload,
+                    "source_key",
+                    "previous_source_id",
+                    "source_status",
+                }
                 payload_fields = frozenset(payload)
                 if (
                     payload_fields
-                    not in {frozenset(legacy_payload), frozenset(compact_payload)}
+                    not in {
+                        frozenset(legacy_payload),
+                        frozenset(compact_payload),
+                        frozenset(control_payload),
+                    }
                     or not isinstance(object_id, str)
                     or object_id not in sources
                     or object_id in expected_sources
@@ -2174,17 +3882,53 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 ):
                     return failed("source_compiled_event_invalid", object_id)
                 source = sources[object_id]
-                expected_source_id = stable_id(
-                    "source",
-                    self.vault_id,
-                    source["kind"],
-                    source["content_sha256"],
-                    source["title"],
-                    source["origin_uri"] or "",
-                    source["trust"],
-                    source["sensitivity"],
-                    canonical_json(source["compiler"]),
-                )
+                if payload_fields == frozenset(control_payload):
+                    source_key = payload["source_key"]
+                    previous_source_id = payload["previous_source_id"]
+                    if (
+                        not isinstance(source_key, str)
+                        or not _SOURCE_KEY.fullmatch(source_key)
+                        or payload["source_status"] != "pending"
+                        or (
+                            previous_source_id is not None
+                            and (
+                                not isinstance(previous_source_id, str)
+                                or previous_source_id not in sources
+                            )
+                        )
+                    ):
+                        return failed("source_lifecycle_event_invalid", object_id)
+                    expected_source_id = stable_id(
+                        "source",
+                        self.vault_id,
+                        source["kind"],
+                        source["content_sha256"],
+                        source["title"],
+                        source["origin_uri"] or "",
+                        source["trust"],
+                        source["sensitivity"],
+                        canonical_json(source["compiler"]),
+                    )
+                    expected_source_lifecycles[object_id] = {
+                        "source_key": source_key,
+                        "previous_source_id": previous_source_id,
+                        "status": "pending",
+                        "activated_at": None,
+                        "superseded_at": None,
+                        "removed_at": None,
+                    }
+                else:
+                    expected_source_id = stable_id(
+                        "source",
+                        self.vault_id,
+                        source["kind"],
+                        source["content_sha256"],
+                        source["title"],
+                        source["origin_uri"] or "",
+                        source["trust"],
+                        source["sensitivity"],
+                        canonical_json(source["compiler"]),
+                    )
                 if (
                     expected_source_id != object_id
                     or source["content_sha256"] != payload["source_sha256"]
@@ -2224,12 +3968,9 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         or not 1 <= len(warning) <= 500
                         for warning in source["warnings"]
                     )
-                    or source["compiler"].get("schema_version")
-                    != "deeplaw.knowledge-compiler/v1"
-                    or source["compiler"].get("source_sha256")
-                    != source["content_sha256"]
-                    or len(canonical_json(source["compiler"]).encode("utf-8"))
-                    > _MAX_COMPILER_BYTES
+                    or source["compiler"].get("schema_version") != "deeplaw.knowledge-compiler/v1"
+                    or source["compiler"].get("source_sha256") != source["content_sha256"]
+                    or len(canonical_json(source["compiler"]).encode("utf-8")) > _MAX_COMPILER_BYTES
                 ):
                     return failed("source_state_mismatch", object_id)
                 try:
@@ -2251,9 +3992,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     ordered_fragments = sorted(
                         fragment_ids_by_source.get(object_id, []),
                     )
-                    fragment_ids = [
-                        fragment_id for _, fragment_id in ordered_fragments
-                    ]
+                    fragment_ids = [fragment_id for _, fragment_id in ordered_fragments]
                     if (
                         isinstance(payload["fragment_count"], bool)
                         or not isinstance(payload["fragment_count"], int)
@@ -2270,10 +4009,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         )
                     ):
                         return failed("source_compiled_membership_invalid", object_id)
-                    asset_ids = [
-                        asset_id_by_fragment[fragment_id]
-                        for fragment_id in fragment_ids
-                    ]
+                    asset_ids = [asset_id_by_fragment[fragment_id] for fragment_id in fragment_ids]
                     if payload["membership_sha256"] != _source_membership_sha256(
                         fragment_ids,
                         asset_ids,
@@ -2342,24 +4078,303 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         }
                     )
                     expected_assets[asset_id] = {
-                        "status": (
-                            "quarantined"
-                            if payload["instruction_risk"]
-                            else "proposed"
-                        ),
+                        "status": ("quarantined" if payload["instruction_risk"] else "proposed"),
                         "verification": "source_bound",
                         "content_sha256": asset.content_sha256,
                         "approved": False,
                     }
                     expected_fragments.add(fragment_id)
-                if (
-                    payload["compiler"].get("compiled_fragment_sha256")
-                    != sha256_bytes(
-                        canonical_json(compiled_sections).encode("utf-8")
-                    )
+                if payload["compiler"].get("compiled_fragment_sha256") != sha256_bytes(
+                    canonical_json(compiled_sections).encode("utf-8")
                 ):
                     return failed("compiled_fragment_digest_mismatch", object_id)
                 expected_sources.add(object_id)
+                continue
+
+            if event_type == "knowledge_control_migrated":
+                if (
+                    set(payload) != {"control_schema", "source_count", "mapping_sha256"}
+                    or object_id != self.vault_id
+                    or payload["control_schema"] != KNOWLEDGE_CONTROL_SCHEMA
+                    or payload["source_count"] != len(expected_sources)
+                    or not isinstance(payload["mapping_sha256"], str)
+                    or not _SHA256.fullmatch(payload["mapping_sha256"])
+                ):
+                    return failed("knowledge_control_migration_event_invalid", object_id)
+                migrated_lifecycles: dict[str, dict[str, Any]] = {}
+                mappings: list[dict[str, Any]] = []
+                for source_id in sorted(expected_sources):
+                    source_key = stable_id(
+                        "sourcekey",
+                        self.vault_id,
+                        "legacy-source",
+                        source_id,
+                    )
+                    active_asset_ids = [
+                        asset_id
+                        for asset_id, state in expected_assets.items()
+                        if state["status"] == "active"
+                        and any(
+                            reference.source_id == source_id
+                            for reference in assets[asset_id].source_refs
+                        )
+                    ]
+                    activated_at = max(
+                        (
+                            assets[asset_id].activated_at
+                            for asset_id in active_asset_ids
+                            if assets[asset_id].activated_at is not None
+                        ),
+                        default=None,
+                    )
+                    status = "active" if activated_at is not None else "pending"
+                    mappings.append(
+                        {
+                            "source_id": source_id,
+                            "source_key": source_key,
+                            "status": status,
+                        }
+                    )
+                    migrated_lifecycles[source_id] = {
+                        "source_key": source_key,
+                        "previous_source_id": None,
+                        "status": status,
+                        "activated_at": activated_at,
+                        "superseded_at": None,
+                        "removed_at": None,
+                    }
+                if payload["mapping_sha256"] != sha256_bytes(
+                    canonical_json(mappings).encode("utf-8")
+                ):
+                    return failed("knowledge_control_migration_state_mismatch", object_id)
+                expected_source_lifecycles = migrated_lifecycles
+                continue
+
+            if event_type == "source_activated":
+                activation_fields = {
+                    "source_key",
+                    "previous_source_id",
+                    "activated_at",
+                    "revoked_asset_count",
+                    "revoked_assets_sha256",
+                }
+                if (
+                    set(payload) != activation_fields
+                    or not isinstance(object_id, str)
+                    or object_id not in expected_source_lifecycles
+                    or expected_source_lifecycles[object_id]["status"] != "pending"
+                    or payload["source_key"] != expected_source_lifecycles[object_id]["source_key"]
+                    or payload["previous_source_id"]
+                    != expected_source_lifecycles[object_id]["previous_source_id"]
+                    or isinstance(payload["revoked_asset_count"], bool)
+                    or not isinstance(payload["revoked_asset_count"], int)
+                    or payload["revoked_asset_count"] < 0
+                    or not isinstance(payload["revoked_assets_sha256"], str)
+                    or not _SHA256.fullmatch(payload["revoked_assets_sha256"])
+                ):
+                    return failed("source_activation_event_invalid", object_id)
+                try:
+                    activated_at = canonical_timestamp(
+                        payload["activated_at"],
+                        field="source activated_at",
+                    )
+                except (TypeError, ValueError):
+                    return failed("source_activation_timestamp_invalid", object_id)
+                previous_source_id = payload["previous_source_id"]
+                if previous_source_id is not None:
+                    previous = expected_source_lifecycles.get(previous_source_id)
+                    if previous is None or previous["status"] != "active":
+                        return failed("source_activation_predecessor_invalid", object_id)
+                    previous["status"] = "superseded"
+                    previous["superseded_at"] = activated_at
+                expected_source_lifecycles[object_id]["status"] = "active"
+                expected_source_lifecycles[object_id]["activated_at"] = activated_at
+                continue
+
+            if event_type == "source_removed":
+                removal_fields = {
+                    "reason",
+                    "removed_at",
+                    "removed_asset_count",
+                    "removed_assets_sha256",
+                }
+                if (
+                    set(payload) != removal_fields
+                    or not isinstance(object_id, str)
+                    or object_id not in expected_source_lifecycles
+                    or expected_source_lifecycles[object_id]["status"] == "removed"
+                    or not isinstance(payload["reason"], str)
+                    or not 1 <= len(payload["reason"]) <= 2_000
+                    or isinstance(payload["removed_asset_count"], bool)
+                    or not isinstance(payload["removed_asset_count"], int)
+                    or payload["removed_asset_count"] < 0
+                    or not isinstance(payload["removed_assets_sha256"], str)
+                    or not _SHA256.fullmatch(payload["removed_assets_sha256"])
+                ):
+                    return failed("source_removal_event_invalid", object_id)
+                try:
+                    removed_at = canonical_timestamp(
+                        payload["removed_at"],
+                        field="source removed_at",
+                    )
+                except (TypeError, ValueError):
+                    return failed("source_removal_timestamp_invalid", object_id)
+                expected_source_lifecycles[object_id]["status"] = "removed"
+                expected_source_lifecycles[object_id]["removed_at"] = removed_at
+                continue
+
+            if event_type == "review_recorded":
+                if (
+                    set(payload)
+                    != {
+                        "receipt_sha256",
+                        "review_manifest_sha256",
+                        "source_id",
+                        "asset_count",
+                    }
+                    or not isinstance(object_id, str)
+                    or object_id not in review_receipts
+                    or object_id in expected_review_receipts
+                ):
+                    return failed("review_receipt_event_invalid", object_id)
+                row = review_receipts[object_id]
+                try:
+                    proposal_ids = strict_json_loads(row["proposal_ids_json"])
+                    asset_hashes = strict_json_loads(row["asset_hashes_json"])
+                    decisions = strict_json_loads(row["decisions_json"])
+                    reviewed_at = canonical_timestamp(
+                        row["reviewed_at"],
+                        field="review receipt reviewed_at",
+                    )
+                    signature = (
+                        strict_json_loads(row["signature_json"])
+                        if row["signature_json"] is not None
+                        else None
+                    )
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    return failed("review_receipt_record_invalid", object_id)
+                body = {
+                    "schema_version": "deeplaw.knowledge-review-receipt/v1",
+                    "vault_id": self.vault_id,
+                    "reviewer_id": row["reviewer_id"],
+                    "reviewed_at": reviewed_at,
+                    "policy_id": row["policy_id"],
+                    "source_id": row["source_id"],
+                    "proposal_ids": proposal_ids,
+                    "asset_hashes": asset_hashes,
+                    "decisions": decisions,
+                    "reason": row["reason"],
+                    "review_manifest_sha256": row["review_manifest_sha256"],
+                    "signature": signature,
+                }
+                receipt_sha256 = sha256_bytes(canonical_json(body).encode("utf-8"))
+                if (
+                    not isinstance(proposal_ids, list)
+                    or not proposal_ids
+                    or len(proposal_ids) != len(asset_hashes)
+                    or len(proposal_ids) != len(decisions)
+                    or any(asset_id not in expected_assets for asset_id in proposal_ids)
+                    or any(
+                        expected_assets[asset_id]["content_sha256"] != digest
+                        for asset_id, digest in zip(proposal_ids, asset_hashes, strict=True)
+                    )
+                    or any(
+                        not isinstance(decision, dict)
+                        or set(decision) != {"asset_id", "decision"}
+                        or decision.get("asset_id") != asset_id
+                        or decision.get("decision") not in {"approve", "reject"}
+                        for asset_id, decision in zip(proposal_ids, decisions, strict=True)
+                    )
+                    or row["source_id"] != payload["source_id"]
+                    or row["review_manifest_sha256"] != payload["review_manifest_sha256"]
+                    or row["receipt_sha256"] != receipt_sha256
+                    or payload["receipt_sha256"] != receipt_sha256
+                    or payload["asset_count"] != len(proposal_ids)
+                    or stable_id(
+                        "review",
+                        self.vault_id,
+                        receipt_sha256,
+                        str(event["sequence"]),
+                    )
+                    != object_id
+                    or not isinstance(row["reviewer_id"], str)
+                    or not 1 <= len(row["reviewer_id"]) <= 200
+                    or not isinstance(row["policy_id"], str)
+                    or not 1 <= len(row["policy_id"]) <= 200
+                    or not isinstance(row["reason"], str)
+                    or not 1 <= len(row["reason"]) <= 2_000
+                    or not _SHA256.fullmatch(row["review_manifest_sha256"])
+                ):
+                    return failed("review_receipt_state_mismatch", object_id)
+                expected_review_receipts.add(object_id)
+                continue
+
+            if event_type == "run_receipt_recorded":
+                if (
+                    set(payload) != {"receipt_sha256"}
+                    or not isinstance(object_id, str)
+                    or object_id not in run_receipts
+                    or object_id in expected_run_receipts
+                ):
+                    return failed("run_receipt_event_invalid", object_id)
+                row = run_receipts[object_id]
+                try:
+                    run_payload = strict_json_loads(row["payload_json"])
+                    canonical_timestamp(
+                        row["created_at"],
+                        field="run receipt created_at",
+                    )
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    return failed("run_receipt_record_invalid", object_id)
+                receipt_sha256 = sha256_bytes(canonical_json(run_payload).encode("utf-8"))
+                if (
+                    not isinstance(run_payload, dict)
+                    or run_payload.get("schema_version") != "deeplaw.knowledge-run-receipt/v1"
+                    or run_payload.get("vault_id") != self.vault_id
+                    or row["receipt_sha256"] != receipt_sha256
+                    or payload["receipt_sha256"] != receipt_sha256
+                    or stable_id("run", self.vault_id, receipt_sha256) != object_id
+                    or row["created_at"] != run_payload.get("finished_at")
+                ):
+                    return failed("run_receipt_state_mismatch", object_id)
+                expected_run_receipts.add(object_id)
+                continue
+
+            if event_type == "feedback_recorded":
+                if (
+                    set(payload) != {"receipt_sha256", "run_id", "proposal_asset_id"}
+                    or not isinstance(object_id, str)
+                    or object_id not in feedback_records
+                    or object_id in expected_feedback_records
+                    or payload["run_id"] not in expected_run_receipts
+                    or payload["proposal_asset_id"] not in expected_assets
+                ):
+                    return failed("feedback_record_event_invalid", object_id)
+                row = feedback_records[object_id]
+                try:
+                    feedback_payload = strict_json_loads(row["payload_json"])
+                    canonical_timestamp(
+                        row["created_at"],
+                        field="feedback record created_at",
+                    )
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    return failed("feedback_record_invalid", object_id)
+                receipt_sha256 = sha256_bytes(canonical_json(feedback_payload).encode("utf-8"))
+                if (
+                    not isinstance(feedback_payload, dict)
+                    or feedback_payload.get("schema_version")
+                    != "deeplaw.knowledge-feedback-ledger/v1"
+                    or feedback_payload.get("vault_id") != self.vault_id
+                    or row["run_id"] != payload["run_id"]
+                    or feedback_payload.get("run_id") != payload["run_id"]
+                    or row["proposal_asset_id"] != payload["proposal_asset_id"]
+                    or feedback_payload.get("proposal_asset_id") != payload["proposal_asset_id"]
+                    or row["receipt_sha256"] != receipt_sha256
+                    or payload["receipt_sha256"] != receipt_sha256
+                    or stable_id("feedback", self.vault_id, receipt_sha256) != object_id
+                ):
+                    return failed("feedback_record_state_mismatch", object_id)
+                expected_feedback_records.add(object_id)
                 continue
 
             if event_type == "asset_proposed":
@@ -2385,10 +4400,8 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     set(payload) != {"content_sha256", "supersedes_asset_id"}
                     or not isinstance(object_id, str)
                     or object_id not in expected_assets
-                    or expected_assets[object_id]["status"]
-                    not in {"proposed", "quarantined"}
-                    or payload["content_sha256"]
-                    != expected_assets[object_id]["content_sha256"]
+                    or expected_assets[object_id]["status"] not in {"proposed", "quarantined"}
+                    or payload["content_sha256"] != expected_assets[object_id]["content_sha256"]
                 ):
                     return failed("asset_approved_event_invalid", object_id)
                 supersedes = payload["supersedes_asset_id"]
@@ -2396,10 +4409,8 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     if (
                         not isinstance(supersedes, str)
                         or supersedes not in expected_assets
-                        or expected_assets[supersedes]["status"]
-                        not in {"active", "superseded"}
-                        or assets[supersedes].semantic_key
-                        != assets[object_id].semantic_key
+                        or expected_assets[supersedes]["status"] not in {"active", "superseded"}
+                        or assets[supersedes].semantic_key != assets[object_id].semantic_key
                     ):
                         return failed("asset_supersession_event_invalid", object_id)
                     expected_assets[supersedes]["status"] = "superseded"
@@ -2416,8 +4427,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     or not isinstance(payload["reason"], str)
                     or not payload["reason"]
                     or len(payload["reason"]) > 2_000
-                    or payload["content_sha256"]
-                    != expected_assets[object_id]["content_sha256"]
+                    or payload["content_sha256"] != expected_assets[object_id]["content_sha256"]
                 ):
                     return failed("asset_revoked_event_invalid", object_id)
                 expected_assets[object_id]["status"] = "revoked"
@@ -2436,10 +4446,8 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     or object_id in expected_relations
                     or payload["subject_asset_id"] not in expected_assets
                     or payload["object_asset_id"] not in expected_assets
-                    or expected_assets[payload["subject_asset_id"]]["status"]
-                    != "active"
-                    or expected_assets[payload["object_asset_id"]]["status"]
-                    != "active"
+                    or expected_assets[payload["subject_asset_id"]]["status"] != "active"
+                    or expected_assets[payload["object_asset_id"]]["status"] != "active"
                     or payload["subject_asset_id"] == payload["object_asset_id"]
                     or payload["predicate"] not in RELATION_PREDICATES
                     or (
@@ -2462,6 +4470,19 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
 
         if set(expected_sources) != set(sources):
             return failed("source_event_inventory_mismatch")
+        if self.control_enabled:
+            if set(expected_source_lifecycles) != set(source_lifecycles):
+                return failed("source_lifecycle_inventory_mismatch")
+            for source_id, expected in expected_source_lifecycles.items():
+                lifecycle = source_lifecycles[source_id]
+                if any(lifecycle[field] != value for field, value in expected.items()):
+                    return failed("source_lifecycle_state_mismatch", source_id)
+        if self.control_enabled and expected_review_receipts != set(review_receipts):
+            return failed("review_receipt_event_inventory_mismatch")
+        if self.control_enabled and expected_run_receipts != set(run_receipts):
+            return failed("run_receipt_event_inventory_mismatch")
+        if self.control_enabled and expected_feedback_records != set(feedback_records):
+            return failed("feedback_event_inventory_mismatch")
         if set(expected_fragments) != set(fragments):
             return failed("fragment_event_inventory_mismatch")
         if set(expected_assets) != set(assets):
@@ -2494,8 +4515,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 relation["subject_asset_id"] != expected["subject_asset_id"]
                 or relation["predicate"] != expected["predicate"]
                 or relation["object_asset_id"] != expected["object_asset_id"]
-                or relation["evidence_fragment_id"]
-                != expected["evidence_fragment_id"]
+                or relation["evidence_fragment_id"] != expected["evidence_fragment_id"]
                 or relation["verification"] != "human_verified"
             ):
                 return failed("relation_state_mismatch", relation_id)
@@ -2548,10 +4568,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             self.revision,
             self.audit_head,
         )
-        if (
-            self._integrity_cache_key == cache_key
-            and self._integrity_cache_value is not None
-        ):
+        if self._integrity_cache_key == cache_key and self._integrity_cache_value is not None:
             return deepcopy(self._integrity_cache_value)
         with _INTEGRITY_CACHE_LOCK:
             cached = _INTEGRITY_CACHE.get(cache_key)
@@ -2576,9 +4593,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "state": state,
         }
         if self._database_file_fingerprint() != file_fingerprint:
-            raise RuntimeError(
-                "knowledge vault database changed during integrity verification"
-            )
+            raise RuntimeError("knowledge vault database changed during integrity verification")
         self._integrity_cache_key = cache_key
         self._integrity_cache_value = deepcopy(result)
         with _INTEGRITY_CACHE_LOCK:
@@ -2677,12 +4692,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             ).fetchall()
             for row in active_rows:
                 active_source_ids.update(
-                    reference.source_id
-                    for reference in self._row_to_asset(row).source_refs
+                    reference.source_id for reference in self._row_to_asset(row).source_refs
                 )
             source_checks = [
-                self._source_file_check(source_id)
-                for source_id in sorted(active_source_ids)
+                self._source_file_check(source_id) for source_id in sorted(active_source_ids)
             ]
             invalid_source_ids = [
                 check["source_id"] for check in source_checks if not check["valid"]
@@ -2746,16 +4759,12 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "active_memory_tier_counts": {
                 tier: tier_counts.get(tier, 0) for tier in sorted(MEMORY_TIERS)
             },
-            "active_kind_counts": {
-                kind: kind_counts.get(kind, 0) for kind in sorted(ASSET_KINDS)
-            },
+            "active_kind_counts": {kind: kind_counts.get(kind, 0) for kind in sorted(ASSET_KINDS)},
             "expired_active_count": expired_count,
             "usable_active_count": usable_active_count,
             "instruction_risk_source_count": instruction_risk_count,
             "agent_ready": (
-                integrity["valid"]
-                and source_integrity["valid"]
-                and usable_active_count > 0
+                integrity["valid"] and source_integrity["valid"] and usable_active_count > 0
             ),
             "next_actions": next_actions,
         }
@@ -2777,8 +4786,189 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         return tuple(self._row_to_asset(row) for row in rows)
 
     def all_sources(self) -> tuple[dict[str, Any], ...]:
-        rows = self.connection.execute("SELECT * FROM sources ORDER BY source_id").fetchall()
-        return tuple(self._source_row(row) for row in rows)
+        rows = self.connection.execute(
+            "SELECT source_id FROM sources ORDER BY imported_at, source_id"
+        ).fetchall()
+        return tuple(self.source_info(row["source_id"]) for row in rows)
+
+    def source_versions(self, source_key: str) -> tuple[dict[str, Any], ...]:
+        self._require_control()
+        if not isinstance(source_key, str) or not _SOURCE_KEY.fullmatch(source_key):
+            raise ValueError("knowledge source key is invalid")
+        rows = self.connection.execute(
+            """
+            SELECT source_id FROM source_lifecycle
+            WHERE source_key = ?
+            ORDER BY source_id
+            """,
+            (source_key,),
+        ).fetchall()
+        return tuple(self.source_info(row["source_id"]) for row in rows)
+
+    def source_diff(self, old_source_id: str, new_source_id: str) -> dict[str, Any]:
+        self._require_control()
+        old = self.source_info(old_source_id)
+        new = self.source_info(new_source_id)
+        if old["source_key"] != new["source_key"]:
+            raise ValueError("source diff requires two versions of the same source key")
+
+        def sections(source_id: str) -> dict[str, dict[str, str]]:
+            rows = self.connection.execute(
+                """
+                SELECT assets.asset_id, assets.semantic_key,
+                       source_fragments.text_sha256
+                FROM assets
+                JOIN json_each(assets.source_refs_json) AS reference
+                JOIN source_fragments
+                  ON source_fragments.fragment_id =
+                     json_extract(reference.value, '$.fragment_id')
+                WHERE json_extract(reference.value, '$.source_id') = ?
+                ORDER BY assets.asset_id
+                """,
+                (source_id,),
+            ).fetchall()
+            return {
+                row["semantic_key"] or row["asset_id"]: {
+                    "asset_id": row["asset_id"],
+                    "text_sha256": row["text_sha256"],
+                }
+                for row in rows
+            }
+
+        old_sections = sections(old_source_id)
+        new_sections = sections(new_source_id)
+        unchanged = sorted(
+            key
+            for key in old_sections.keys() & new_sections.keys()
+            if old_sections[key]["text_sha256"] == new_sections[key]["text_sha256"]
+        )
+        changed = sorted(
+            key
+            for key in old_sections.keys() & new_sections.keys()
+            if old_sections[key]["text_sha256"] != new_sections[key]["text_sha256"]
+        )
+        added = sorted(new_sections.keys() - old_sections.keys())
+        removed = sorted(old_sections.keys() - new_sections.keys())
+        return {
+            "schema_version": "deeplaw.knowledge-source-diff/v1",
+            "vault_id": self.vault_id,
+            "source_key": old["source_key"],
+            "old_source_id": old_source_id,
+            "new_source_id": new_source_id,
+            "old_content_sha256": old["content_sha256"],
+            "new_content_sha256": new["content_sha256"],
+            "unchanged_count": len(unchanged),
+            "changed_count": len(changed),
+            "added_count": len(added),
+            "removed_count": len(removed),
+            "changed_semantic_keys": changed[:100],
+            "added_semantic_keys": added[:100],
+            "removed_semantic_keys": removed[:100],
+            "details_truncated": any(len(values) > 100 for values in (changed, added, removed)),
+        }
+
+    def remove_source(
+        self,
+        source_id: str,
+        *,
+        reason: str,
+        confirm: bool,
+    ) -> dict[str, Any]:
+        self._require_write()
+        self._require_control()
+        if not confirm:
+            raise ValueError("source removal requires explicit confirmation")
+        reason = reason.strip()
+        if not 1 <= len(reason) <= 2_000:
+            raise ValueError("source removal reason must be between 1 and 2000 characters")
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            source = self.source_info(source_id)
+            if source["status"] == "removed":
+                self.connection.rollback()
+                return {
+                    "schema_version": "deeplaw.knowledge-source-removal/v1",
+                    "vault_id": self.vault_id,
+                    "source_id": source_id,
+                    "source_key": source["source_key"],
+                    "removed_asset_count": 0,
+                    "idempotent": True,
+                    "revision": self.revision,
+                    "audit_head": self.audit_head,
+                }
+            rows = self.connection.execute(
+                """
+                SELECT DISTINCT assets.asset_id, assets.content_sha256
+                FROM assets, json_each(assets.source_refs_json) AS reference
+                WHERE json_extract(reference.value, '$.source_id') = ?
+                  AND assets.status IN ('proposed', 'quarantined', 'active')
+                ORDER BY assets.asset_id
+                """,
+                (source_id,),
+            ).fetchall()
+            removed_ids: list[str] = []
+            for row in rows:
+                self.connection.execute(
+                    "UPDATE assets SET status = 'revoked' WHERE asset_id = ?",
+                    (row["asset_id"],),
+                )
+                self._append_event(
+                    event_type="asset_revoked",
+                    object_id=row["asset_id"],
+                    payload={
+                        "reason": f"Source removed: {reason}",
+                        "content_sha256": row["content_sha256"],
+                    },
+                )
+                removed_ids.append(row["asset_id"])
+            removed_at = utc_now()
+            self.connection.execute(
+                """
+                UPDATE source_lifecycle
+                SET status = 'removed', removed_at = ?
+                WHERE source_id = ?
+                """,
+                (removed_at, source_id),
+            )
+            revision, audit_head = self._append_event(
+                event_type="source_removed",
+                object_id=source_id,
+                payload={
+                    "reason": reason,
+                    "removed_at": removed_at,
+                    "removed_asset_count": len(removed_ids),
+                    "removed_assets_sha256": sha256_bytes(
+                        canonical_json(removed_ids).encode("utf-8")
+                    ),
+                },
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        return {
+            "schema_version": "deeplaw.knowledge-source-removal/v1",
+            "vault_id": self.vault_id,
+            "source_id": source_id,
+            "source_key": source["source_key"],
+            "removed_asset_count": len(removed_ids),
+            "idempotent": False,
+            "revision": revision,
+            "audit_head": audit_head,
+        }
+
+    def verify_source(self, source_id: str) -> dict[str, Any]:
+        source = self.source_info(source_id)
+        file_check = self._source_file_check(source_id)
+        return {
+            "schema_version": "deeplaw.knowledge-source-verification/v1",
+            "vault_id": self.vault_id,
+            "source": source,
+            "file": file_check,
+            "database_integrity_valid": self.verify_integrity()["valid"],
+            "valid": bool(file_check["valid"] and self.verify_integrity()["valid"]),
+        }
 
     def all_relations(self) -> tuple[dict[str, Any], ...]:
         rows = self.connection.execute("SELECT * FROM relations ORDER BY relation_id").fetchall()

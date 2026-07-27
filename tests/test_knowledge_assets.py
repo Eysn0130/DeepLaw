@@ -416,13 +416,17 @@ def test_compiled_source_assets_can_be_reviewed_in_one_atomic_batch(
             source_kind="document",
             confirm_no_case_data=True,
         )
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
         approval = vault.approve_source_assets(
             compiled["source"]["source_id"],
             confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
         )
+        repeated_manifest = vault.source_review_manifest(compiled["source"]["source_id"])
         repeated = vault.approve_source_assets(
             compiled["source"]["source_id"],
             confirm_reviewed=True,
+            review_manifest_sha256=repeated_manifest["review_manifest_sha256"],
         )
         integrity = vault.verify_integrity()
 
@@ -431,6 +435,11 @@ def test_compiled_source_assets_can_be_reviewed_in_one_atomic_batch(
     assert approval["approved_asset_ids_truncated"] is False
     assert repeated["approved_asset_count"] == 0
     assert repeated["already_active_asset_count"] == 2
+    assert repeated["review_receipt"] is not None
+    assert repeated["review_receipt"]["review_manifest_sha256"] == repeated[
+        "review_manifest_sha256"
+    ]
+    assert len(repeated["review_receipt"]["proposal_ids"]) == 2
     assert integrity["valid"] is True
 
 
@@ -485,9 +494,11 @@ def test_empty_relation_expansion_does_not_scan_the_asset_inventory(
             source_kind="document",
             confirm_no_case_data=True,
         )
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
         vault.approve_source_assets(
             compiled["source"]["source_id"],
             confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
         )
         target = vault.search("glyph0500").results[0].asset_id
         progress_callbacks = 0

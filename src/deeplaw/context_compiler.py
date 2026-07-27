@@ -178,24 +178,83 @@ def _content_matches_asset(statement: str, projected: Any) -> bool:
     return trailing or normalized.endswith(value)
 
 
-def _compiled_section_group(asset: KnowledgeAsset) -> str:
+_SECTION_GROUP_TAG_PREFIX = "section-group:"
+
+
+def _compiled_section_group(
+    asset: KnowledgeAsset,
+    *,
+    legacy_part_groups: set[tuple[tuple[str, ...], str]],
+) -> tuple[tuple[str, ...], str]:
+    source_identity = tuple(
+        sorted({reference.source_id for reference in asset.source_refs})
+    ) or (asset.asset_id,)
+    group_tags = [
+        tag.removeprefix(_SECTION_GROUP_TAG_PREFIX)
+        for tag in asset.tags
+        if tag.startswith(_SECTION_GROUP_TAG_PREFIX)
+    ]
+    if len(group_tags) == 1 and group_tags[0]:
+        return source_identity, f"tag:{group_tags[0]}"
     match = _COMPILED_PART_SUFFIX.fullmatch(asset.title)
-    return match.group("title") if match else asset.title
+    if match is not None:
+        return source_identity, f"legacy:{match.group('title')}"
+    legacy_group = (source_identity, asset.title)
+    if legacy_group in legacy_part_groups:
+        return source_identity, f"legacy:{asset.title}"
+    return source_identity, f"asset:{asset.asset_id}"
 
 
 def _deduplicate_compiled_parts(
     assets: list[KnowledgeAsset],
 ) -> tuple[list[KnowledgeAsset], int]:
     selected: list[KnowledgeAsset] = []
-    seen_groups: set[str] = set()
+    seen_groups: set[tuple[tuple[str, ...], str]] = set()
+    legacy_part_groups = {
+        (
+            tuple(sorted({reference.source_id for reference in asset.source_refs}))
+            or (asset.asset_id,),
+            match.group("title"),
+        )
+        for asset in assets
+        if (match := _COMPILED_PART_SUFFIX.fullmatch(asset.title)) is not None
+    }
     excluded = 0
     for asset in assets:
-        group = _compiled_section_group(asset)
+        group = _compiled_section_group(
+            asset,
+            legacy_part_groups=legacy_part_groups,
+        )
         if group in seen_groups:
             excluded += 1
             continue
         seen_groups.add(group)
         selected.append(asset)
+    return selected, excluded
+
+
+def _select_provenance_budgeted_assets(
+    assets: list[KnowledgeAsset],
+) -> tuple[list[KnowledgeAsset], int]:
+    """Reserve one compact source reference for every source-bound item."""
+    selected: list[KnowledgeAsset] = []
+    reserved_refs = 0
+    reserved_chars = 0
+    excluded = 0
+    for asset in assets:
+        if not asset.source_refs:
+            selected.append(asset)
+            continue
+        reference_chars = len(canonical_json(asset.source_refs[0].to_dict()))
+        if (
+            reserved_refs >= MAX_CAPSULE_SOURCE_REFS
+            or reserved_chars + reference_chars > MAX_CAPSULE_SOURCE_REF_CHARS
+        ):
+            excluded += 1
+            continue
+        selected.append(asset)
+        reserved_refs += 1
+        reserved_chars += reference_chars
     return selected, excluded
 
 
@@ -426,20 +485,40 @@ def compile_context(
         max_items=max_items,
         max_chars=max_chars,
     )
+    selected, excluded_by_provenance_budget = _select_provenance_budgeted_assets(
+        selected
+    )
+    excluded_by_budget += excluded_by_provenance_budget
     projected_contents = _project_asset_contents(
         selected,
         query=context_query,
         max_chars=max_chars,
     )
 
-    item_payloads: list[dict[str, Any]] = []
-    selected_chars = 0
+    source_refs_by_asset: dict[str, list[dict[str, str]]] = {
+        asset.asset_id: [] for asset in selected
+    }
     selected_source_refs = 0
     selected_source_ref_chars = 0
     excluded_source_refs = 0
-    for asset, content in zip(selected, projected_contents, strict=True):
-        source_refs: list[dict[str, str]] = []
-        for reference in asset.source_refs:
+    for asset in selected:
+        if not asset.source_refs:
+            continue
+        reference_payload = asset.source_refs[0].to_dict()
+        reference_chars = len(canonical_json(reference_payload))
+        if (
+            selected_source_refs >= MAX_CAPSULE_SOURCE_REFS
+            or selected_source_ref_chars + reference_chars
+            > MAX_CAPSULE_SOURCE_REF_CHARS
+        ):
+            raise RuntimeError(
+                "selected source-bound knowledge lost its reserved provenance budget"
+            )
+        source_refs_by_asset[asset.asset_id].append(reference_payload)
+        selected_source_refs += 1
+        selected_source_ref_chars += reference_chars
+    for asset in selected:
+        for reference in asset.source_refs[1:]:
             reference_payload = reference.to_dict()
             reference_chars = len(canonical_json(reference_payload))
             if (
@@ -449,14 +528,18 @@ def compile_context(
             ):
                 excluded_source_refs += 1
                 continue
-            source_refs.append(reference_payload)
+            source_refs_by_asset[asset.asset_id].append(reference_payload)
             selected_source_refs += 1
             selected_source_ref_chars += reference_chars
+
+    item_payloads: list[dict[str, Any]] = []
+    selected_chars = 0
+    for asset, content in zip(selected, projected_contents, strict=True):
         item_payloads.append(
             _capsule_item(
                 asset,
                 content=content,
-                source_refs=source_refs,
+                source_refs=source_refs_by_asset[asset.asset_id],
                 selection_reason=selection_reasons[asset.asset_id],
             )
         )
@@ -650,6 +733,7 @@ def verify_capsule(
             or not isinstance(item.get("source_ref_count"), int)
             or isinstance(item.get("source_ref_count"), bool)
             or item["source_ref_count"] < len(source_refs)
+            or (item["source_ref_count"] > 0 and not source_refs)
             or item.get("source_refs_truncated")
             is not (item["source_ref_count"] > len(source_refs))
             or not isinstance(tags, list)
@@ -660,6 +744,15 @@ def verify_capsule(
             or item["tag_count"] < len(tags)
             or item.get("tags_truncated") is not (item["tag_count"] > len(tags))
         ):
+            if (
+                isinstance(item.get("source_ref_count"), int)
+                and not isinstance(item.get("source_ref_count"), bool)
+                and item["source_ref_count"] > 0
+                and source_refs == []
+            ):
+                raise ValueError(
+                    "knowledge capsule contains a source-bound asset without embedded provenance"
+                )
             raise ValueError("knowledge capsule contains an invalid asset item")
     asset_ids = [item["asset_id"] for item in all_items]
     if len(all_items) > MAX_CAPSULE_ITEMS or len(set(asset_ids)) != len(asset_ids):

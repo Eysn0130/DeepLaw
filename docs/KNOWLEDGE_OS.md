@@ -1,7 +1,8 @@
 # DeepLaw Knowledge OS
 
-Status: implemented baseline for software version `v0.5.0`, reviewed
-2026-07-26.
+Status: implemented baseline for software version `v0.6.0`, reviewed
+2026-07-27. The source-version, review-receipt, run-receipt, and structured-feedback
+control plane on `main` is documented in [`CLI_LIFECYCLE.md`](CLI_LIFECYCLE.md).
 
 DeepLaw 2.0 compiles source material into review-gated Knowledge Assets and
 then compiles only the assets needed for a task into a bounded Knowledge
@@ -105,9 +106,11 @@ vault roots. DeepLaw does not merge them at query time.
 The SQLite database contains:
 
 - content-addressed source identities and source fragments;
+- stable logical source keys and immutable source-version lifecycle records;
 - lifecycle-managed assets;
 - a small reviewed relation vocabulary;
 - a full-text discovery index;
+- immutable local Review Receipts, Task Run Receipts, and structured Feedback Ledger records;
 - a hash-chained mutation event log.
 
 Every persistent operation and Agent read first reconciles the event inventory
@@ -144,6 +147,17 @@ source bytes
   -> proposed Knowledge Asset candidates
 ```
 
+The current control plane separates a stable opaque `source_key` from each exact `source_id`.
+Re-ingesting unchanged bytes and compiler identity is idempotent. A changed logical source
+creates a pending immutable successor, exposes an explicit diff, and leaves the prior active
+version usable until the successor's exact review manifest is approved. Matching Assets are
+then superseded and deleted sections revoked in the same transaction. Individual approval of a
+pending successor Asset is rejected because it would break the atomic switch.
+
+`deeplaw knowledge source add-dir` creates a relative-path/size/hash manifest for at most 10,000
+admitted files. A dry run performs no Vault write; a real run uses per-file atomicity and reports
+bounded failures explicitly.
+
 Markdown headings can define section boundaries, but Markdown is not the
 canonical store. PDF ingestion fails closed when the native text layer requires
 OCR unless the operator selects the evidence-preserving document engine.
@@ -159,15 +173,23 @@ conservative: ordinary manual proposals pass through the same detector.
 Activating any quarantined Asset requires both reviewed confirmation and a
 separate quarantine-risk confirmation. The Agent cannot promote it.
 
-For a fully reviewed compiled source,
-`deeplaw knowledge approve-source --source-id ... --confirm-reviewed` activates
-its exact one-to-one fragment/Asset membership atomically. It performs one
+For a fully reviewed compiled source, the `knowledge review manifest` and
+`knowledge review approve-source` commands commit to its exact one-to-one
+fragment/Asset membership and activate it atomically. The operation performs one
 complete integrity replay, rechecks the stored source bytes, rejects ambiguous,
-revoked, or superseded membership, and returns a bounded receipt. It is not an
+revoked, superseded, stale, or changed membership, and records an immutable local Review
+Receipt. Receipt v1 binds reviewer, reason, policy, membership hash, decisions, and Asset
+hashes; its signature is explicitly `null` and does not claim independent reviewer identity.
+It is not an
 automatic approval shortcut: the source ID is content-derived, review
 confirmation is mandatory, and risky sources additionally require
 `--confirm-quarantine`. Per-Asset approval remains available for selective
-review.
+review except for a pending successor of an active source.
+
+Optional `deterministic-v1` typed extraction recognizes only explicit heading cues for
+decision, constraint, procedure, rule, fact, lesson, and question proposals. It is deliberately
+narrow, local, and deterministic. Extracted content remains proposed or quarantined and never
+becomes active from an extractor score.
 
 The compiler requires `--confirm-no-case-data`. This is an explicit product
 boundary, not a personal-information detector. Analytix case materials belong
@@ -196,7 +218,8 @@ committed snapshot. It then applies:
    selected evidence;
 10. query-tail-aware excerpts so a hit is not followed by an unrelated prefix
     fragment;
-11. an eight-reference / 4,000-character provenance-metadata budget;
+11. an eight-reference / 4,000-character provenance-metadata budget allocated in two passes,
+    reserving at least one compact reference for every selected source-bound item;
 12. a 64,000-character hard limit for the complete serialized Capsule;
 13. explicit selection reasons, reviewed contradictions, and gaps.
 
@@ -215,14 +238,15 @@ task + goal
 ```
 
 Weak lexical candidates and excluded source references are counted and surfaced
-as gaps; the Agent can use the asset URI for focused verification instead of
-receiving an unbounded reference dump. Excerpts are query-aware rather than
-prefix-only, must remain exactly reproducible from the current statement, and
-compiler parts from one logical section are diversified before filling the
-item budget. Capsule verification first enforces the
+as gaps. If one compact reference cannot fit for another source-bound item, that item is not
+selected. Excerpts are query-aware rather than prefix-only, must remain exactly reproducible
+from the current statement, and compiler parts are grouped by source plus logical section
+identity before filling the item budget, so equal section titles from different sources are not
+deduplicated. Capsule verification first enforces the
 packaged Draft 2020-12 JSON contract, then covers every field other than its ID
 and digest, verifies payload accounting and projected content against the
-current asset, checks relations and the historical audit anchor, and rejects
+current asset, requires at least one embedded compact source reference for every
+source-bound item, checks relations and the historical audit anchor, and rejects
 missing, revoked, superseded, expired, or changed assets when the vault is
 available. A stale capsule can remain integrity-valid when an unrelated later
 mutation occurred; `stale` is reported separately.
@@ -241,7 +265,7 @@ developer, repository, or current user instructions.
 
 ## Optional candidate discovery
 
-`v0.5.0` adds a removable local Discovery Index for research and operator use.
+`v0.6.0` retains the removable local Discovery Index for research and operator use.
 It addresses paraphrases and preference-like queries that may not share literal
 terms with an Asset, without changing the canonical vault or the default
 Context Compiler.
@@ -315,11 +339,16 @@ DeepLaw memory is curated knowledge, not a transcript dump:
 | wisdom | stable cross-project patterns | deliberate promotion, never automatic |
 | domain | durable references and domain rules | source-bound and separately governed |
 
-`deeplaw knowledge debug` and `deeplaw knowledge feedback` create proposals.
-Feedback requires a real Capsule file whose digest, ID, audit anchor, selected
-Assets, and current vault binding verify; a shaped Capsule ID is insufficient.
-They never self-promote. There is deliberately no Agent-facing `remember`,
-`learn`, `approve`, `import`, or delete operation.
+`deeplaw knowledge debug` and the legacy Capsule feedback path create proposals.
+The structured path first records a Task Run Receipt bound to a verified Capsule, historical
+Vault anchor, task/goal hashes, selected Asset/source inventory, host/model identity, timestamps,
+outcome artifact hash, and optional observed metrics. Feedback then classifies helpful,
+irrelevant, harmful, stale, missing-source, missing-knowledge, relation, and budget outcomes.
+It produces a review-gated lesson proposal and a deterministic regression case. Replay compares
+historical and current selection without inferring task success and remains
+`claim_eligible=false`. A shaped Capsule or Run ID is insufficient; stored receipts and their
+audit events must verify. None of these records self-promote. There is deliberately no
+Agent-facing `remember`, `learn`, `approve`, `import`, or delete operation.
 
 Conversation history remains the host's responsibility. DeepLaw should retain
 only a reviewed decision, constraint, fact, lesson, or source fragment that is
@@ -421,11 +450,18 @@ deeplaw knowledge approve \
   --asset-id asset_... \
   --confirm-reviewed
 
-# Or, only after reviewing the complete source, activate its exact membership
+# Or, inspect and commit to the exact source membership, then activate it
 # atomically from the source_id returned by ingest.
-deeplaw knowledge approve-source \
+deeplaw knowledge review manifest \
+  --vault ~/.deeplaw/vaults/my-project \
+  --source-id source_...
+
+deeplaw knowledge review approve-source \
   --vault ~/.deeplaw/vaults/my-project \
   --source-id source_... \
+  --review-manifest-sha256 REVIEW_MANIFEST_SHA256 \
+  --reviewer-id local-operator \
+  --reason "Reviewed the exact source membership." \
   --confirm-reviewed
 
 # Required in addition when the proposal is quarantined:
@@ -491,7 +527,7 @@ evaluation before their operating envelope is documented.
 
 ## Verification and release gates
 
-The v0.5.0 baseline is covered by contract, lifecycle, isolation, injection,
+The v0.6.0 baseline is covered by contract, lifecycle, isolation, injection,
 database/FTS/source tamper, package, Markdown, Context Capsule, full CLI
 lifecycle, MCP stdio, Discovery model/index tamper, and existing Legal Pack
 tests. Before release:

@@ -11,11 +11,17 @@ from deeplaw import __version__
 def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     repository = Path(__file__).resolve().parents[1]
     root = repository / "plugins" / "deeplaw-knowledge-os"
-    codex = json.loads((root / ".codex-plugin" / "plugin.json").read_text())
-    claude = json.loads((root / ".claude-plugin" / "plugin.json").read_text())
-    mcp = json.loads((root / ".mcp.json").read_text())
+    codex = json.loads(
+        (root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )
+    claude = json.loads(
+        (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )
+    mcp = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
     openai = yaml.safe_load(
-        (root / "skills" / "use-knowledge-assets" / "agents" / "openai.yaml").read_text()
+        (
+            root / "skills" / "use-knowledge-assets" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
     )
 
     codex_base, marker, cachebuster = codex["version"].partition("+codex.")
@@ -42,7 +48,7 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
 
     knowledge_skill = (
         root / "skills" / "use-knowledge-assets" / "SKILL.md"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     legal_skill = (
         repository
         / "plugins"
@@ -50,7 +56,7 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
         / "skills"
         / "research-chinese-law"
         / "SKILL.md"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "Never invent one or use shell/filesystem tools to bypass" in knowledge_skill
     assert "Never use shell or\nfilesystem tools to run or bypass" in legal_skill
 
@@ -58,7 +64,9 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
 def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
     repository = Path(__file__).resolve().parents[1]
     codex_marketplace = json.loads(
-        (repository / ".agents" / "plugins" / "marketplace.json").read_text()
+        (repository / ".agents" / "plugins" / "marketplace.json").read_text(
+            encoding="utf-8"
+        )
     )
     codex_entries = {
         plugin["name"]: plugin for plugin in codex_marketplace["plugins"]
@@ -71,7 +79,9 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
     )
 
     claude_marketplace = json.loads(
-        (repository / ".claude-plugin" / "marketplace.json").read_text()
+        (repository / ".claude-plugin" / "marketplace.json").read_text(
+            encoding="utf-8"
+        )
     )
     claude_entries = {
         plugin["name"]: plugin for plugin in claude_marketplace["plugins"]
@@ -82,10 +92,12 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
         assert claude_entries[name]["version"] == __version__
         assert claude_entries[name]["source"] == f"./plugins/{name}"
 
-    config = (repository / "adapters" / "opencode" / "knowledge-os.jsonc").read_text()
+    config = (
+        repository / "adapters" / "opencode" / "knowledge-os.jsonc"
+    ).read_text(encoding="utf-8")
     agent = (
         repository / "adapters" / "opencode" / "agents" / "deeplaw-knowledge.md"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert '"deeplaw_knowledge_*": "deny"' in config
     assert "deeplaw_knowledge_knowledge_support: allow" in agent
     assert "deeplaw_law_support" not in agent

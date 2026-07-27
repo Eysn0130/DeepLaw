@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Eysn0130/DeepLaw/contracts/knowledge-feedback-ledger.v1.schema.json",
+  "title": "DeepLaw Knowledge Feedback Ledger v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vault_id",
+    "run_id",
+    "capsule_id",
+    "capsule_digest",
+    "vault_revision",
+    "outcome",
+    "helpful_asset_ids",
+    "irrelevant_asset_ids",
+    "harmful_asset_ids",
+    "stale_asset_ids",
+    "missing_knowledge",
+    "missing_sources",
+    "incorrect_relations",
+    "budget_failures",
+    "observation",
+    "recommended_action",
+    "review_status",
+    "created_at",
+    "regression_case",
+    "sensitivity",
+    "proposal_asset_id",
+    "feedback_id",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-feedback-ledger/v1"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "run_id": {"type": "string", "pattern": "^run_[0-9a-f]{24}$"},
+    "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+    "capsule_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "vault_revision": {"type": "integer", "minimum": 0},
+    "outcome": {"enum": ["success", "partial", "failure"]},
+    "helpful_asset_ids": {"$ref": "#/$defs/assetIds"},
+    "irrelevant_asset_ids": {"$ref": "#/$defs/assetIds"},
+    "harmful_asset_ids": {"$ref": "#/$defs/assetIds"},
+    "stale_asset_ids": {"$ref": "#/$defs/assetIds"},
+    "missing_knowledge": {"$ref": "#/$defs/textList"},
+    "missing_sources": {"$ref": "#/$defs/textList"},
+    "incorrect_relations": {"$ref": "#/$defs/textList"},
+    "budget_failures": {"$ref": "#/$defs/textList"},
+    "observation": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "recommended_action": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "review_status": {"const": "proposed"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "regression_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "run_id",
+        "capsule_id",
+        "capsule_digest",
+        "vault_revision",
+        "task_sha256",
+        "selected_asset_ids",
+        "source_ids",
+        "expected_helpful_asset_ids"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^case_[0-9a-f]{24}$"},
+        "run_id": {"type": "string", "pattern": "^run_[0-9a-f]{24}$"},
+        "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+        "capsule_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "vault_revision": {"type": "integer", "minimum": 0},
+        "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "selected_asset_ids": {"$ref": "#/$defs/assetIds"},
+        "source_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"}
+        },
+        "expected_helpful_asset_ids": {"$ref": "#/$defs/assetIds"}
+      }
+    },
+    "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "proposal_asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+    "feedback_id": {"type": "string", "pattern": "^feedback_[0-9a-f]{24}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "assetIds": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  }
+}

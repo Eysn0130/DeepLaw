@@ -42,13 +42,13 @@ def test_historical_legal_benchmark_fixtures_are_immutable() -> None:
     _assert_snapshot(repository, "core-v5-candidate-2026-07-15.json")
 
 
-def test_current_knowledge_os_candidate_snapshot_is_source_bound() -> None:
+def test_current_knowledge_control_candidate_snapshot_is_source_bound() -> None:
     repository = Path(__file__).resolve().parents[1]
     snapshot = json.loads(
         (
             repository
             / "benchmarks"
-            / "knowledge-os-v0.5.0-candidate-2026-07-26.json"
+            / "knowledge-os-control-plane-candidate-2026-07-27.json"
         ).read_text(encoding="utf-8")
     )
     implementation = snapshot["implementation"]
@@ -57,8 +57,12 @@ def test_current_knowledge_os_candidate_snapshot_is_source_bound() -> None:
     )
 
     assert snapshot["schema_version"] == "deeplaw.knowledge-os-candidate/v1"
-    assert snapshot["status"] == "candidate_development_not_held_out"
-    assert snapshot["package_version"] == project["project"]["version"] == "0.5.0"
+    assert snapshot["status"] == "release_candidate_internal_not_held_out"
+    assert snapshot["package_version"] == project["project"]["version"] == "0.6.0"
+    assert (
+        "/benchmarks/knowledge-os-control-plane-candidate-2026-07-27.json"
+        in project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"]
+    )
     assert (
         hashlib.sha256((repository / "pyproject.toml").read_bytes()).hexdigest()
         == implementation["pyproject_sha256"]
@@ -71,6 +75,9 @@ def test_current_knowledge_os_candidate_snapshot_is_source_bound() -> None:
         _python_source_tree_sha256(repository)
         == implementation["python_source_tree_sha256"]
     )
+    assert len(implementation["candidate_code_commit"]) == 40
+    assert implementation["tracked_worktree_dirty_at_manifest_generation"] is False
+    assert implementation["local_build_artifacts"]["fresh_wheel_lifecycle_verified"] is True
 
     for evidence in snapshot["evidence"].values():
         path = repository / evidence["path"]
@@ -79,24 +86,41 @@ def test_current_knowledge_os_candidate_snapshot_is_source_bound() -> None:
         if "claim_eligible" in evidence:
             assert report["claim_eligible"] is evidence["claim_eligible"]
 
-    discovery = json.loads(
+    diagnostic = json.loads(
         (
             repository
-            / snapshot["evidence"]["discovery_development_ablation"]["path"]
+            / snapshot["evidence"]["knowledge_control_diagnostic"]["path"]
         ).read_text(encoding="utf-8")
     )
-    scale = json.loads(
-        (
-            repository
-            / snapshot["evidence"]["discovery_scale_diagnostic"]["path"]
-        ).read_text(encoding="utf-8")
-    )
-    assert discovery["candidate"]["version"] == snapshot["package_version"]
-    assert discovery["decision"]["default_activation"] == "rejected"
-    assert scale["candidate"]["version"] == snapshot["package_version"]
+    assert diagnostic["implementation"]["python_source_tree_sha256"] == implementation[
+        "python_source_tree_sha256"
+    ]
+    assert diagnostic["quality"]["exact_hit1"] == 1.0
+    assert diagnostic["quality"]["source_ref_coverage"] == 1.0
+    assert diagnostic["quality"]["same_title_cross_source_preserved"] is True
+    assert diagnostic["quality"]["source_update"]["atomic_switch_passed"] is True
+    assert diagnostic["quality"]["final_integrity"] is True
     external_proof = snapshot["external_proof"]
     assert external_proof["status"] == "pending_external_execution"
-    assert snapshot["external_proof"]["unbounded_claim_allowed"] is False
+    assert external_proof["current_candidate_frozen"] is False
+    assert external_proof["unbounded_claim_allowed"] is False
+
+
+def test_frozen_v050_external_candidate_keeps_its_historical_identity() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    snapshot = json.loads(
+        (
+            repository
+            / "benchmarks"
+            / "knowledge-os-v0.5.0-candidate-2026-07-26.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert snapshot["implementation"]["python_source_tree_sha256"] == (
+        "a8a0561534f85bfd28618a5a9ff99eebc35294793f99f9dfb7ad4b636fb67f38"
+    )
+    external_proof = snapshot["external_proof"]
+    assert external_proof["status"] == "pending_external_execution"
+    assert external_proof["unbounded_claim_allowed"] is False
     protocol = json.loads(
         (
             repository / "benchmarks/external/protocol-v3.json"

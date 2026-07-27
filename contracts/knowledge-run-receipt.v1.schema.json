@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Eysn0130/DeepLaw/contracts/knowledge-run-receipt.v1.schema.json",
+  "title": "DeepLaw Knowledge Run Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vault_id",
+    "vault_revision",
+    "audit_head",
+    "capsule_id",
+    "capsule_digest",
+    "task_sha256",
+    "goal_sha256",
+    "selected_asset_ids",
+    "source_ids",
+    "host",
+    "model",
+    "started_at",
+    "finished_at",
+    "status",
+    "outcome_artifact_sha256",
+    "metrics",
+    "run_id",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-run-receipt/v1"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "vault_revision": {"type": "integer", "minimum": 0},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+    "capsule_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "goal_sha256": {
+      "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]
+    },
+    "selected_asset_ids": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}
+    },
+    "source_ids": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"}
+    },
+    "host": {"$ref": "#/$defs/identity"},
+    "model": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/identity"}]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["success", "partial", "failure", "refusal", "timeout"]},
+    "outcome_artifact_sha256": {
+      "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_tokens", "output_tokens", "latency_ms", "cost", "currency"],
+      "properties": {
+        "input_tokens": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "output_tokens": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "latency_ms": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": 0}]},
+        "cost": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": 0}]},
+        "currency": {"oneOf": [{"type": "null"}, {"type": "string", "minLength": 1, "maxLength": 16}]}
+      }
+    },
+    "run_id": {"type": "string", "pattern": "^run_[0-9a-f]{24}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "version": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    }
+  }
+}

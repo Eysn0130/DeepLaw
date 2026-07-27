@@ -379,9 +379,11 @@ def test_discovery_build_rejects_changed_source_and_asset_overflow(
             source_kind="document",
             confirm_no_case_data=True,
         )
+        review_manifest = vault.source_review_manifest(compiled["source"]["source_id"])
         vault.approve_source_assets(
             compiled["source"]["source_id"],
             confirm_reviewed=True,
+            review_manifest_sha256=review_manifest["review_manifest_sha256"],
         )
 
     profile = DISCOVERY_MODEL_PROFILES["english"]

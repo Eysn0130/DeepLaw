@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Eysn0130/DeepLaw/contracts/knowledge-review-receipt.v1.schema.json",
+  "title": "DeepLaw Knowledge Review Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vault_id",
+    "reviewer_id",
+    "reviewed_at",
+    "policy_id",
+    "source_id",
+    "proposal_ids",
+    "asset_hashes",
+    "decisions",
+    "reason",
+    "review_manifest_sha256",
+    "signature",
+    "review_receipt_id",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-review-receipt/v1"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "reviewer_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "policy_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "source_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^source_[0-9a-f]{24}$"}
+      ]
+    },
+    "proposal_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}
+    },
+    "asset_hashes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "decision"],
+        "properties": {
+          "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+          "decision": {"enum": ["approve", "reject"]}
+        }
+      }
+    },
+    "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "review_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "signature": {"type": "null"},
+    "review_receipt_id": {"type": "string", "pattern": "^review_[0-9a-f]{24}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
