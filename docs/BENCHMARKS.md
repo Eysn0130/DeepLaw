@@ -35,7 +35,7 @@ CLI 与资源数字也不能外推到其他机器。
 完成 `init → source add → review → context → verify-capsule`：
 
 - wheel SHA-256：`6de2da3d8cc357d8b2ff1b26b51886255038502bdbe9f77ddb79ff85f9342bdb`；
-- sdist SHA-256：`e08dfcf9fbf4edf56ea132e30bd0ef7126e45332f79ffae8f59d074b1eebc50d`。
+- sdist SHA-256 仅记录在被 sdist 排除的候选 manifest 中，避免自引用。
 
 这形成的是内部发布候选，不会替换 2026-07-26 已冻结的外部 v0.5.0 候选。v0.6.0 新的外部
 执行必须在评测方预交付 secret dataset/baseline commitment 后另行冻结并由两家真实独立机构
