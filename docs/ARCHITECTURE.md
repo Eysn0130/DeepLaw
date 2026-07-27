@@ -1,7 +1,7 @@
 # DeepLaw Architecture
 
 Status: current architecture baseline, reviewed against software version
-`v0.5.0` on 2026-07-26.
+`v0.6.0` on 2026-07-27.
 
 DeepLaw 2.0 is a local-first Agent Knowledge OS with two isolated products:
 
@@ -164,7 +164,7 @@ flowchart LR
 
 Knowledge compilation, approval, revocation, package import, Legal Pack
 building, official updates, and private add/delete are offline administrative
-surfaces. The software version `v0.5.0` MCP runtimes use
+surfaces. The software version `v0.6.0` MCP runtimes use
 the SDK's low-level `Server` over local stdio only; it has no HTTP listener and
 no write operation. The Legal Pack process lifespan resolves and verifies one
 available release, computes database hashes once during startup, keeps each
@@ -277,7 +277,7 @@ normalized legal text, review governance, or build evidence creates a different
 logical release. SQLite binary bytes remain a separate artifact-integrity value;
 consumers bind both `release_id` and `database_sha256`.
 
-### Known Legal Pack release limitations in `v0.5.0`
+### Known Legal Pack release limitations in `v0.6.0`
 
 The current implementation is not itself a legal publication authority. The
 following gaps must remain visible until code and tests close them:
@@ -478,7 +478,7 @@ When the caller supplies `as_of`, candidates are classified as
 `verified_in_scope`, `unverified_metadata`, or `outside_effective_interval`.
 Only the first class can enter primary evidence for that temporal query;
 unknown or unreviewed dates are isolated in `uncertain_evidence`, and known
-out-of-scope material is excluded. Without temporal intent, `v0.5.0` records
+out-of-scope material is excluded. Without temporal intent, `v0.6.0` records
 `not_evaluated` for candidates that are not already known to be non-current.
 Known historical, repealed, superseded, or not-yet-effective candidates remain
 in `uncertain_evidence` until the caller supplies an applicable `as_of`; they
@@ -495,7 +495,7 @@ source hash for source comparison.
 
 The current model accepts document numbers, aliases, promulgation dates,
 jurisdiction, effective intervals, issuer/status fields, and hash-bound review
-metadata. SQLite v5 includes `legal_edges`, but the `v0.5.0` runtime produces only
+metadata. SQLite v5 includes `legal_edges`, but the `v0.6.0` runtime produces only
 `deterministic_exact` edges derived from an exact known-document-name reference
 in a source segment. Review-overlay relations are hash-bound governance
 proposals; they are not inserted into the runtime graph, and no current producer
@@ -531,7 +531,7 @@ review accepts it.
 
 The provider-facing schemas live in [`contracts`](../contracts):
 
-- DeepLaw 2.0 software version `v0.5.0` advertises `law-support.input` v2 for the eight official/private
+- DeepLaw 2.0 software version `v0.6.0` advertises `law-support.input` v2 for the eight official/private
   operations and retains input v1 as the official-only compatibility contract.
   Verification remains v1; the output union, search response, segment,
   release-info, evidence-card, and corpus release-manifest contracts are v2.
@@ -616,7 +616,7 @@ Derived layers are permitted only when all of the following hold:
   segment;
 - evaluated against exact/lexical-only retrieval before activation.
 
-The software version `v0.5.0` deterministic Legal Pack graph supports only `cites`, `amends`, `repeals`,
+The software version `v0.6.0` deterministic Legal Pack graph supports only `cites`, `amends`, `repeals`,
 `replaces`, `implements`, and `exception_to`. Each runtime edge is
 `deterministic_exact` and retains the source segment and evidence hash. Relations
 declared in a review overlay remain governance proposals; the current runtime

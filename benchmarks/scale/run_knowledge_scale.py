@@ -100,6 +100,15 @@ def run_diagnostic(
         "--confirm-no-case-data",
     )
     source_id = ingested["source"]["source_id"]
+    review_manifest, _ = _run_cli(
+        "knowledge",
+        "review",
+        "manifest",
+        "--vault",
+        str(vault_root),
+        "--source-id",
+        source_id,
+    )
     approved, approval_seconds = _run_cli(
         "knowledge",
         "approve-source",
@@ -107,6 +116,8 @@ def run_diagnostic(
         str(vault_root),
         "--source-id",
         source_id,
+        "--review-manifest-sha256",
+        review_manifest["review_manifest_sha256"],
         "--confirm-reviewed",
     )
 

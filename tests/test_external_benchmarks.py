@@ -234,7 +234,7 @@ def test_frozen_v3_protocol_covers_every_registered_suite_dimension_and_baseline
     assert set(run_example) == _RUN_FIELDS - {"evidence_manifest_artifact"}
 
 
-def test_committed_longmemeval_development_report_is_source_bound() -> None:
+def test_historical_longmemeval_development_report_keeps_its_frozen_identity() -> None:
     repository = Path(__file__).resolve().parents[1]
     report = json.loads(
         (
@@ -268,11 +268,23 @@ def test_committed_longmemeval_development_report_is_source_bound() -> None:
         == 0.85
     )
     assert sum(case["context"]["hit1"] for case in other_cases) / 50 == 0.98
-    for relative_path, expected_sha256 in report["implementation_files"].items():
-        assert (
-            hashlib.sha256((repository / relative_path).read_bytes()).hexdigest()
-            == expected_sha256
-        )
+    assert report["implementation_files"] == {
+        "src/deeplaw/context_compiler.py": (
+            "19027d20817c1e359c9d888f2e3d8a8a7f3781c4910ef0d4261f01a608814f62"
+        ),
+        "src/deeplaw/util.py": (
+            "d7fe62c839384b342b106bccf20f88166c78ec6901a5d9682649028d194b1ffb"
+        ),
+        "src/deeplaw/knowledge_compiler.py": (
+            "01a05eda7b79b734e88ae130f32100f009c87b09ca7bb3c9f056f12328aaa200"
+        ),
+        "src/deeplaw/knowledge_store.py": (
+            "325ee6d7a779d7cb55b38d283e06c822591413a397537cf96468205d25c96431"
+        ),
+        "benchmarks/external/run_longmemeval_s_dev.py": (
+            "fc59e76548adf0de19c8cbf695463d10e891ea0f537c1c8b0f5c9f484b6f88e8"
+        ),
+    }
 
 
 def test_claim_gate_counts_only_cryptographically_signed_independent_evaluators(

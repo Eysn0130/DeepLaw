@@ -17,7 +17,11 @@ from .catalog_signing import (
 from .document_engine_models import install_models, model_status
 from .evaluate import evaluate_file
 from .ingest import build_release
-from .knowledge_cli import add_knowledge_parser, handle_knowledge_command
+from .knowledge_cli import (
+    add_knowledge_parser,
+    handle_knowledge_command,
+    render_knowledge_result,
+)
 from .markdown_export import export_markdown
 from .mcp_server import run_mcp
 from .models import SearchRequest
@@ -278,7 +282,12 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "knowledge":
             result = handle_knowledge_command(args)
             if result is not None:
-                _print_json(result)
+                print(
+                    render_knowledge_result(
+                        result,
+                        output_format=args.knowledge_format,
+                    )
+                )
             return
         if args.command == "pdf-evidence":
             result = extract_pdf_vision_consensus(

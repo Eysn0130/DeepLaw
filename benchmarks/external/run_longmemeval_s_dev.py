@@ -188,10 +188,14 @@ def run_diagnostic(
             for asset_id in compiled["asset_ids"]:
                 asset = vault.get_asset(asset_id, include_inactive=True)
                 quarantined_assets += int(asset.status == "quarantined")
+            review_manifest = vault.source_review_manifest(
+                compiled["source"]["source_id"]
+            )
             vault.approve_source_assets(
                 compiled["source"]["source_id"],
                 confirm_reviewed=True,
                 confirm_quarantined=bool(compiled["source"]["instruction_risk"]),
+                review_manifest_sha256=review_manifest["review_manifest_sha256"],
             )
         ingest_seconds = time.perf_counter() - ingest_started
         session_ids = set(case["haystack_session_ids"])

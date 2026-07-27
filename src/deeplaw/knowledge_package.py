@@ -376,7 +376,16 @@ def export_knowledge_package(
         {
             key: value
             for key, value in source.items()
-            if key not in {"stored_name"}
+            if key
+            not in {
+                "stored_name",
+                "source_key",
+                "previous_source_id",
+                "status",
+                "activated_at",
+                "superseded_at",
+                "removed_at",
+            }
         }
         for source in all_sources.values()
         if source["source_id"] in source_ids

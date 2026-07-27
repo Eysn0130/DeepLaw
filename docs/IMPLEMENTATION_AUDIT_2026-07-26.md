@@ -2,12 +2,12 @@
 
 复核日期：2026-07-26
 目标版本：`0.4.0` 候选
-复核对象：[`改造施工方案.md`](../改造施工方案.md)、当前源码、CLI、MCP、插件、数据契约、
+复核对象：历史 [`DEEPLAW_2_IMPLEMENTATION_PLAN_2026-07-26.md`](archive/DEEPLAW_2_IMPLEMENTATION_PLAN_2026-07-26.md)、当时源码、CLI、MCP、插件、数据契约、
 Legal Pack 重建和评测/宣称门禁。
 
 > 历史快照说明：本文绑定 `v0.4.0` 施工阶段，不作为当前 `v0.5.0` 源码或性能证明。
 > `v0.5.0` 的当前状态、Discovery 消融、规模证据和未满足外部门禁见
-> [`改造施工方案.md`](../改造施工方案.md) 与
+> 历史 [`DEEPLAW_2_IMPLEMENTATION_PLAN_2026-07-26.md`](archive/DEEPLAW_2_IMPLEMENTATION_PLAN_2026-07-26.md) 与
 > [`benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json`](../benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json)。
 
 ## 结论

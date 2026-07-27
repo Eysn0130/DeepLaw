@@ -9,7 +9,11 @@ from typing import Any
 
 from benchmarks.external.benchlib import SCHEMA_RUN, strict_json_loads
 from deeplaw.context_compiler import compile_context
-from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.knowledge_store import (
+    KnowledgeVault,
+    initialize_knowledge_vault,
+    knowledge_source_key,
+)
 from deeplaw.util import (
     canonical_json,
     has_instruction_risk,
@@ -187,12 +191,19 @@ class DeepLawJsonlCorpus:
             )
         self.workspace.mkdir(parents=True, mode=0o700)
         fragments, corpus_sha256 = _read_corpus(corpus)
-        initialize_knowledge_vault(
+        initialized = initialize_knowledge_vault(
             self.vault_root,
             name=f"External suite {self.suite_id}",
             scope="domain",
         )
         instruction_risk = any(has_instruction_risk(item.text) for item in fragments)
+        origin_uri = f"benchmark://{self.suite_id}"
+        source_key = knowledge_source_key(
+            vault_id=initialized["vault_id"],
+            source_kind="document",
+            source_path=corpus,
+            origin_uri=origin_uri,
+        )
         compiled_sections = [
             {
                 "title": (
@@ -213,6 +224,7 @@ class DeepLawJsonlCorpus:
         ]
         compiler = {
             "schema_version": "deeplaw.knowledge-compiler/v1",
+            "source_key": source_key,
             "adapter_schema": ADAPTER_SCHEMA,
             "format": "external-jsonl/v1",
             "source_sha256": corpus_sha256,
@@ -230,11 +242,12 @@ class DeepLawJsonlCorpus:
         with KnowledgeVault(self.vault_root, read_only=False) as vault:
             result = vault.add_compiled_source(
                 source_path=corpus,
+                source_key=source_key,
                 expected_byte_size=corpus.stat().st_size,
                 expected_content_sha256=corpus_sha256,
                 source_kind="document",
                 title=f"Frozen external corpus: {self.suite_id}",
-                origin_uri=f"benchmark://{self.suite_id}/{corpus_sha256}",
+                origin_uri=origin_uri,
                 media_type="application/x-ndjson",
                 trust="untrusted",
                 sensitivity="private",
@@ -275,10 +288,16 @@ class DeepLawJsonlCorpus:
                     "quarantined_asset_count": len(result["asset_ids"]),
                 }
             else:
+                review_manifest = vault.source_review_manifest(
+                    result["source"]["source_id"]
+                )
                 approval = vault.approve_source_assets(
                     result["source"]["source_id"],
                     confirm_reviewed=True,
                     confirm_quarantined=instruction_risk,
+                    review_manifest_sha256=review_manifest[
+                        "review_manifest_sha256"
+                    ],
                 )
             self._asset_to_document = {
                 asset_id: fragment.document_id

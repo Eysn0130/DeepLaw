@@ -7,13 +7,15 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, replace
+from fnmatch import fnmatch
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from .context_compiler import verify_capsule_file
 from .extract import ExtractionError, extract_document
 from .knowledge_models import Sensitivity, SourceKind, TrustLevel
-from .knowledge_store import KnowledgeVault
+from .knowledge_store import KnowledgeVault, knowledge_source_key
 from .models import ExtractionQuality, ExtractionResult, TextBlock
 from .util import (
     canonical_json,
@@ -21,6 +23,7 @@ from .util import (
     normalize_text,
     sha256_bytes,
     sha256_file,
+    stable_id,
 )
 
 KNOWLEDGE_COMPILER_SCHEMA = "deeplaw.knowledge-compiler/v1"
@@ -59,18 +62,48 @@ _TEXT_SUFFIXES = {
 }
 _MARKDOWN_SUFFIXES = {".md", ".markdown"}
 _MARKDOWN_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+_COMPILED_PART_SUFFIX = re.compile(r"^(?P<title>.+) · part [2-9][0-9]*$")
 _MAX_SECTION_CHARS = 12_000
 _MAX_SOURCE_BYTES = 512 * 1024 * 1024
 _MAX_TEXT_SOURCE_BYTES = 64 * 1024 * 1024
 _MAX_TEXT_CHARACTERS = 20 * 1024 * 1024
 _MAX_TEXT_LINE_CHARACTERS = 2 * 1024 * 1024
 _MAX_TEXT_BLOCKS = 200_000
+_MAX_DIRECTORY_ENTRIES = 100_000
+
+
 @dataclass(frozen=True, slots=True)
 class _CompiledSection:
     title: str
     text: str
     locator: str
     instruction_risk: bool
+
+
+def _typed_section_kind(section: _CompiledSection, *, extractor: str) -> str:
+    if extractor == "off":
+        return "reference"
+    if extractor != "deterministic-v1":
+        raise ValueError("typed extraction must be off or deterministic-v1")
+    title = normalize_text(section.title).casefold()
+    statement = normalize_text(section.text).casefold()
+    if title.startswith(("decision", "decision record", "决策", "决定")):
+        return "decision"
+    if title.startswith(("constraint", "policy", "约束", "限制", "边界")):
+        return "constraint"
+    if title.startswith(("procedure", "workflow", "steps", "流程", "步骤")):
+        return "procedure"
+    if title.startswith(("lesson", "postmortem", "教训", "经验", "复盘")):
+        return "lesson"
+    if title.startswith(("question", "open question", "问题", "待确认")) or statement.endswith(
+        ("?", "\uff1f")
+    ):
+        return "question"
+    if title.startswith(("rule", "规则")):
+        return "rule"
+    if title.startswith(("fact", "事实")):
+        return "fact"
+    return "reference"
 
 
 def _source_format(path: Path) -> str:
@@ -121,9 +154,7 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ExtractionError("LibreOffice version check failed") from error
-    version = _bounded_process_text(
-        version_process.stdout or version_process.stderr or "unknown"
-    )
+    version = _bounded_process_text(version_process.stdout or version_process.stderr or "unknown")
     if version_process.returncode != 0 or not version or version == "unknown":
         raise ExtractionError("LibreOffice version identity is unavailable")
     with tempfile.TemporaryDirectory(prefix="deeplaw-doc-") as temporary:
@@ -155,9 +186,7 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
         except (OSError, subprocess.TimeoutExpired) as error:
             raise ExtractionError("legacy DOC conversion failed") from error
         candidates = [
-            candidate
-            for candidate in output_root.iterdir()
-            if candidate.suffix.lower() == ".docx"
+            candidate for candidate in output_root.iterdir() if candidate.suffix.lower() == ".docx"
         ]
         converted = candidates[0] if len(candidates) == 1 else output_root / "missing.docx"
         if (
@@ -167,9 +196,7 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
             or converted.stat().st_size == 0
         ):
             detail = _bounded_process_text(process.stderr or process.stdout)
-            raise ExtractionError(
-                f"legacy DOC conversion did not produce a safe DOCX: {detail}"
-            )
+            raise ExtractionError(f"legacy DOC conversion did not produce a safe DOCX: {detail}")
         converted_sha256 = sha256_file(converted)
         extraction = extract_document(converted, "DOCX")
     return ExtractionResult(
@@ -192,9 +219,7 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
 
 def _extract_knowledge_text(path: Path) -> ExtractionResult:
     if path.stat().st_size > _MAX_TEXT_SOURCE_BYTES:
-        raise ExtractionError(
-            "knowledge text source exceeds the 64 MiB extraction limit"
-        )
+        raise ExtractionError("knowledge text source exceeds the 64 MiB extraction limit")
     blocks: list[TextBlock] = []
     character_count = 0
     try:
@@ -206,9 +231,7 @@ def _extract_knowledge_text(path: Path) -> ExtractionResult:
                         "knowledge text source exceeds the 20 MiB character limit"
                     )
                 if len(raw_line) > _MAX_TEXT_LINE_CHARACTERS:
-                    raise ExtractionError(
-                        "knowledge text source contains an oversized line"
-                    )
+                    raise ExtractionError("knowledge text source contains an oversized line")
                 text = raw_line.removesuffix("\n").removesuffix("\r")
                 blocks.append(
                     TextBlock(
@@ -219,9 +242,7 @@ def _extract_knowledge_text(path: Path) -> ExtractionResult:
                     )
                 )
                 if len(blocks) > _MAX_TEXT_BLOCKS:
-                    raise ExtractionError(
-                        "knowledge text source exceeds the line-count limit"
-                    )
+                    raise ExtractionError("knowledge text source exceeds the line-count limit")
     except UnicodeDecodeError as error:
         raise ExtractionError("knowledge text source must be UTF-8 encoded") from error
     except OSError as error:
@@ -380,6 +401,8 @@ def compile_source(
     sensitivity: Sensitivity = "private",
     confirm_no_case_data: bool,
     pdf_fallback: str = "off",
+    source_key: str | None = None,
+    typed_extraction: str = "off",
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
         raise ValueError(
@@ -396,6 +419,12 @@ def compile_source(
     if not 1 <= source_size <= _MAX_SOURCE_BYTES:
         raise ValueError("knowledge source is empty or exceeds 512 MiB")
     source_content_sha256 = sha256_file(path)
+    logical_source_key = source_key or knowledge_source_key(
+        vault_id=vault.vault_id,
+        source_kind=source_kind,
+        source_path=path,
+        origin_uri=origin_uri,
+    )
     format_name = _source_format(path)
     extraction = (
         _extract_legacy_doc(path)
@@ -429,10 +458,7 @@ def compile_source(
         ),
         title=source_title,
     )
-    if (
-        path.stat().st_size != source_size
-        or sha256_file(path) != source_content_sha256
-    ):
+    if path.stat().st_size != source_size or sha256_file(path) != source_content_sha256:
         raise RuntimeError("knowledge source changed while it was being compiled")
     source_risk = any(section.instruction_risk for section in sections)
     warnings = tuple(
@@ -458,26 +484,73 @@ def compile_source(
         }
         for section in sections
     )
-    memory_tier = (
-        "project"
-        if source_kind in {"conversation", "tool_result", "code"}
-        else "domain"
-    )
-    asset_specs = tuple(
-        {
-            "kind": "reference",
-            "memory_tier": memory_tier,
-            "title": section.title,
-            "statement": section.text,
-            "tags": (source_kind, path.suffix.lower().lstrip(".") or "text"),
-            "warnings": (
-                ("section contains instruction-like content",)
-                if section.instruction_risk
-                else ()
-            ),
-        }
-        for section in sections
-    )
+    memory_tier = "project" if source_kind in {"conversation", "tool_result", "code"} else "domain"
+    section_occurrences: dict[str, int] = {}
+    current_section_groups: dict[str, str] = {}
+    asset_specs_list: list[dict[str, Any]] = []
+    for section in sections:
+        match = _COMPILED_PART_SUFFIX.fullmatch(section.title)
+        section_title = match.group("title") if match else section.title
+        if match is None:
+            occurrence = section_occurrences.get(section_title, 0) + 1
+            section_occurrences[section_title] = occurrence
+            section_group_id = stable_id(
+                "sectiongroup",
+                logical_source_key,
+                section_title,
+                str(occurrence),
+            )
+            current_section_groups[section_title] = section_group_id
+        else:
+            occurrence = section_occurrences.get(section_title, 1)
+            section_group_id = current_section_groups.get(section_title)
+            if section_group_id is None:
+                section_group_id = stable_id(
+                    "sectiongroup",
+                    logical_source_key,
+                    section_title,
+                    str(occurrence),
+                )
+                current_section_groups[section_title] = section_group_id
+        section_id = stable_id(
+            "section",
+            logical_source_key,
+            section_group_id,
+            section.title,
+        )
+        semantic_key = f"compiled:{logical_source_key}:{section_id}"
+        active = vault.active_asset_for_semantic_key(semantic_key)
+        kind = _typed_section_kind(section, extractor=typed_extraction)
+        asset_specs_list.append(
+            {
+                "kind": kind,
+                "memory_tier": memory_tier,
+                "title": section.title,
+                "statement": section.text,
+                "semantic_key": semantic_key,
+                "supersedes_asset_id": active.asset_id if active is not None else None,
+                "tags": tuple(
+                    dict.fromkeys(
+                        (
+                            source_kind,
+                            path.suffix.lower().lstrip(".") or "text",
+                            f"section-group:{section_group_id}",
+                            *(
+                                ("typed-extractor:deterministic-v1",)
+                                if typed_extraction == "deterministic-v1"
+                                else ()
+                            ),
+                        )
+                    )
+                ),
+                "warnings": (
+                    ("section contains instruction-like content",)
+                    if section.instruction_risk
+                    else ()
+                ),
+            }
+        )
+    asset_specs = tuple(asset_specs_list)
     compiled_fragment_sha256 = sha256_bytes(
         canonical_json(
             [
@@ -493,6 +566,7 @@ def compile_source(
     )
     compiler = {
         "schema_version": KNOWLEDGE_COMPILER_SCHEMA,
+        "source_key": logical_source_key,
         "format": format_name,
         "source_sha256": source_content_sha256,
         "extractor": extraction.quality.extractor,
@@ -505,10 +579,12 @@ def compile_source(
         "section_count": len(sections),
         "compiled_fragment_sha256": compiled_fragment_sha256,
         "instruction_risk": source_risk,
+        "typed_extraction": typed_extraction,
         "policy": "source fragments are evidence; compiled assets are review candidates",
     }
     result = vault.add_compiled_source(
         source_path=path,
+        source_key=logical_source_key,
         expected_byte_size=source_size,
         expected_content_sha256=source_content_sha256,
         source_kind=source_kind,
@@ -525,6 +601,159 @@ def compile_source(
     )
     result["compiler"] = compiler
     return result
+
+
+def compile_directory(
+    vault: KnowledgeVault,
+    directory: str | Path,
+    *,
+    recursive: bool,
+    include: tuple[str, ...] = (),
+    exclude: tuple[str, ...] = (),
+    source_kind: SourceKind = "document",
+    trust: TrustLevel = "user_provided",
+    sensitivity: Sensitivity = "private",
+    confirm_no_case_data: bool,
+    pdf_fallback: str = "off",
+    typed_extraction: str = "off",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    if not confirm_no_case_data:
+        raise ValueError(
+            "directory ingestion requires confirmation that sources contain no case data"
+        )
+    root_input = Path(directory).expanduser().absolute()
+    if root_input.is_symlink():
+        raise ValueError("knowledge source directory must not be a symbolic link")
+    root = root_input.resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("knowledge source directory must be a directory")
+    if len(include) > 32 or len(exclude) > 32:
+        raise ValueError("directory include/exclude patterns exceed the bound")
+    patterns = (*include, *exclude)
+    if any(not pattern or len(pattern) > 500 for pattern in patterns):
+        raise ValueError("directory include/exclude pattern is invalid")
+    iterator = root.rglob("*") if recursive else root.glob("*")
+    candidates: list[tuple[str, Path, int, str]] = []
+    skipped = 0
+    entries_seen = 0
+    for path in iterator:
+        entries_seen += 1
+        if entries_seen > _MAX_DIRECTORY_ENTRIES:
+            raise ValueError("directory ingestion exceeds the 100000-entry scan bound")
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink() or not path.is_file():
+            skipped += 1
+            continue
+        if any(part in {".git", "node_modules", "__pycache__"} for part in path.parts):
+            skipped += 1
+            continue
+        if include and not any(fnmatch(relative, pattern) for pattern in include):
+            skipped += 1
+            continue
+        if any(fnmatch(relative, pattern) for pattern in exclude):
+            skipped += 1
+            continue
+        try:
+            _source_format(path)
+        except ExtractionError:
+            skipped += 1
+            continue
+        size = path.stat().st_size
+        if not 1 <= size <= _MAX_SOURCE_BYTES:
+            skipped += 1
+            continue
+        candidates.append((relative, path, size, sha256_file(path)))
+        if len(candidates) > 10_000:
+            raise ValueError("directory ingestion exceeds the 10000-file job bound")
+    candidates.sort(key=lambda item: item[0])
+    manifest_entries = [
+        {"path": relative, "byte_size": size, "content_sha256": digest}
+        for relative, _, size, digest in candidates
+    ]
+    manifest_body = {
+        "schema_version": "deeplaw.knowledge-directory-manifest/v1",
+        "vault_id": vault.vault_id,
+        "recursive": recursive,
+        "include": list(include),
+        "exclude": list(exclude),
+        "source_kind": source_kind,
+        "trust": trust,
+        "sensitivity": sensitivity,
+        "typed_extraction": typed_extraction,
+        "files": manifest_entries,
+    }
+    manifest_sha256 = sha256_bytes(canonical_json(manifest_body).encode("utf-8"))
+    job_id = stable_id("job", vault.vault_id, manifest_sha256)
+    if dry_run:
+        visible = manifest_entries[:100]
+        return {
+            "schema_version": "deeplaw.knowledge-directory-job/v1",
+            "job_id": job_id,
+            "manifest_sha256": manifest_sha256,
+            "dry_run": True,
+            "files_seen": entries_seen,
+            "files_admitted": len(candidates),
+            "files_skipped": skipped,
+            "files_failed": 0,
+            "total_bytes": sum(item[2] for item in candidates),
+            "files": visible,
+            "files_truncated": len(visible) < len(manifest_entries),
+            "write_performed": False,
+        }
+
+    started = perf_counter()
+    compiled: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
+    for relative, path, _, expected_hash in candidates:
+        try:
+            if sha256_file(path) != expected_hash:
+                raise RuntimeError("file changed after directory manifest creation")
+            compiled.append(
+                compile_source(
+                    vault,
+                    path,
+                    source_kind=source_kind,
+                    trust=trust,
+                    sensitivity=sensitivity,
+                    confirm_no_case_data=True,
+                    pdf_fallback=pdf_fallback,
+                    typed_extraction=typed_extraction,
+                )
+            )
+        except (OSError, RuntimeError, ValueError, ExtractionError) as error:
+            failures.append({"path": relative, "error": f"{type(error).__name__}: {error}"[:1_000]})
+    source_ids = [result["source"]["source_id"] for result in compiled]
+    source_keys = [result["source"]["source_key"] for result in compiled]
+    proposal_count = sum(len(result["asset_ids"]) for result in compiled)
+    quarantine_count = sum(
+        len(result["asset_ids"]) for result in compiled if result["source"]["instruction_risk"]
+    )
+    return {
+        "schema_version": "deeplaw.knowledge-directory-job/v1",
+        "job_id": job_id,
+        "manifest_sha256": manifest_sha256,
+        "dry_run": False,
+        "partial_success": bool(compiled and failures),
+        "atomic": False,
+        "failure_semantics": (
+            "each file is an independent atomic source transaction; failed files "
+            "do not roll back successful files"
+        ),
+        "files_seen": entries_seen,
+        "files_admitted": len(compiled),
+        "files_skipped": skipped,
+        "files_failed": len(failures),
+        "total_bytes": sum(item[2] for item in candidates),
+        "source_keys": source_keys[:100],
+        "source_ids": source_ids[:100],
+        "sources_truncated": len(source_ids) > 100,
+        "proposal_count": proposal_count,
+        "quarantine_count": quarantine_count,
+        "failures": failures[:100],
+        "failures_truncated": len(failures) > 100,
+        "elapsed_seconds": round(perf_counter() - started, 6),
+    }
 
 
 def record_debug_experience(
@@ -585,14 +814,10 @@ def record_capsule_feedback(
     sensitivity: Sensitivity = "private",
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
-        raise ValueError(
-            "capsule feedback requires confirmation that it contains no case data"
-        )
+        raise ValueError("capsule feedback requires confirmation that it contains no case data")
     capsule_verification = verify_capsule_file(capsule_path, vault=vault)
     if not capsule_verification["valid"]:
-        raise ValueError(
-            "capsule feedback requires a valid Capsule bound to the selected vault"
-        )
+        raise ValueError("capsule feedback requires a valid Capsule bound to the selected vault")
     capsule_id = capsule_verification["capsule_id"]
     if not isinstance(capsule_id, str):
         raise ValueError("capsule feedback verification did not return a Capsule ID")
@@ -607,11 +832,8 @@ def record_capsule_feedback(
         raise ValueError("feedback lesson must be between 1 and 5000 characters")
     if next_action is not None and len(next_action) > 5_000:
         raise ValueError("feedback next_action exceeds 5000 characters")
-    statement = (
-        f"Outcome: {outcome}\n"
-        f"Observation: {observation}\n"
-        f"Lesson: {lesson}"
-        + (f"\nNext action: {next_action}" if next_action else "")
+    statement = f"Outcome: {outcome}\nObservation: {observation}\nLesson: {lesson}" + (
+        f"\nNext action: {next_action}" if next_action else ""
     )
     asset = vault.propose_asset(
         kind="lesson",

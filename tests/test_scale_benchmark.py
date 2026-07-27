@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 from benchmarks.scale.run_knowledge_scale import run_diagnostic
-from deeplaw import __version__
 
 
 def test_scale_diagnostic_uses_the_real_cli_and_verified_capsules(
@@ -49,7 +48,7 @@ def test_historical_100k_knowledge_scale_report_is_preserved() -> None:
     assert report["candidate"]["version"] == "0.4.0"
 
 
-def test_current_100k_discovery_scale_report_is_source_bound() -> None:
+def test_historical_v050_100k_discovery_scale_report_is_source_bound() -> None:
     repository = Path(__file__).resolve().parents[1]
     report = json.loads(
         (
@@ -60,7 +59,7 @@ def test_current_100k_discovery_scale_report_is_source_bound() -> None:
 
     assert report["schema_version"] == "deeplaw.discovery-scale-diagnostic/v1"
     assert report["claim_eligible"] is False
-    assert report["candidate"]["version"] == __version__ == "0.5.0"
+    assert report["candidate"]["version"] == "0.5.0"
     assert report["candidate"]["asset_count"] == 100_000
     assert report["candidate"]["default_runtime_enabled"] is False
     assert report["measurements"]["query_count"] == 100
