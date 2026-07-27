@@ -1,0 +1,97 @@
+{
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Synthetic development fixture; not a secret held-out or independent evaluation. Tracked working tree dirty=False.",
+  "environment": {
+    "logical_cpu_count": 12,
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.12.13"
+  },
+  "fixture": {
+    "fixture_sha256": "ccc22c6a504e0ea41f7183ca3213328380c2065faa6d64686a027e76cabf9adf",
+    "query_count": 20,
+    "query_sha256": "6781c48be00b03a953e0e2939a8080b663ed73ad5c4bdada33030ad83caf18db",
+    "source_count": 24,
+    "synthetic": true
+  },
+  "implementation": {
+    "git_head": "bdef19555e6adfe1be3be15073356c4d93076a78",
+    "package_version": "0.6.0",
+    "pyproject_sha256": "f1a7dba03940e095748b1e3020acbc87cccc38a36bd0cff7e45946bd96ec7066",
+    "python_source_tree_sha256": "4302ba55322553d64680ee5a612f1b828be93fa7106e4f37a8601f57a1710a11",
+    "uv_lock_sha256": "d1f3989517706a2d23daa3f755ce27423e011db1735599757aec1a9171c93df8",
+    "working_tree_dirty": false
+  },
+  "limits": [
+    "Synthetic exact-token fixture does not establish semantic retrieval quality.",
+    "Persistent MCP measurements exercise the in-process MCP handler and integrity cache, not transport or concurrent multi-client load.",
+    "Cold CLI samples include process startup and are machine-specific.",
+    "No optional discovery model, external baseline, hidden label, or evaluator signature was used."
+  ],
+  "performance": {
+    "cold_cli_search": {
+      "max_ms": 272.933,
+      "p50_ms": 270.901,
+      "p95_ms": 272.933,
+      "p99_ms": 272.933,
+      "samples": 5
+    },
+    "directory_ingest_ms": 64.221,
+    "feedback_replay_ms": 4.789,
+    "persistent_mcp_context": {
+      "max_ms": 3.034,
+      "p50_ms": 2.606,
+      "p95_ms": 2.923,
+      "p99_ms": 3.034,
+      "samples": 20
+    },
+    "persistent_mcp_search": {
+      "max_ms": 0.805,
+      "p50_ms": 0.502,
+      "p95_ms": 0.711,
+      "p99_ms": 0.805,
+      "samples": 20
+    },
+    "run_receipt_ms": 12.63,
+    "source_reviews": {
+      "max_ms": 4.902,
+      "p50_ms": 3.661,
+      "p95_ms": 4.502,
+      "p99_ms": 4.902,
+      "samples": 24
+    },
+    "source_update_compile_ms": 2.102,
+    "source_update_review_ms": 1.136,
+    "structured_feedback_ms": 4.416
+  },
+  "quality": {
+    "exact_hit1": 1.0,
+    "feedback_valid": true,
+    "final_integrity": true,
+    "integrity_after_review": true,
+    "replay_task_success_inferred": false,
+    "run_receipt_valid": true,
+    "same_title_cross_source_preserved": true,
+    "source_ref_coverage": 1.0,
+    "source_update": {
+      "atomic_switch_passed": true,
+      "diff_changed_count": 1,
+      "new_visible_after_review": true,
+      "old_visible_after_review": false,
+      "old_visible_before_review": true
+    }
+  },
+  "recorded_at": "2026-07-27T12:21:58Z",
+  "resources": {
+    "asset_count": 26,
+    "database_bytes": 266240,
+    "feedback_count": 1,
+    "fragment_count": 25,
+    "peak_process_rss_bytes": 65765376,
+    "review_receipt_count": 25,
+    "run_receipt_count": 1,
+    "source_count": 25
+  },
+  "schema_version": "deeplaw.knowledge-control-diagnostic/v1"
+}
