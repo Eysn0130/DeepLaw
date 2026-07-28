@@ -167,7 +167,7 @@ def test_checked_in_actual_pdf_diagnostic_is_bound_to_current_engine() -> None:
     Draft202012Validator(schema).validate(report)
 
     assert report["claim_eligible"] is False
-    assert report["candidate"]["worktree_dirty"] is True
+    assert report["candidate"]["worktree_dirty"] is False
     assert report["models"]["verified"] is True
     assert report["models"]["network_during_ingest"] is False
     assert report["result"]["success"] is True
