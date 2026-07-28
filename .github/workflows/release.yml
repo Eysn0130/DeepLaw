@@ -11,6 +11,11 @@ on:
         required: true
         type: string
         default: "v0.7.0"
+      post_release_only:
+        description: Verify an already published release without rebuilding or resigning it.
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,6 +66,7 @@ jobs:
   commercial-gates:
     name: Reuse exact commercial GA evidence
     needs: release-context
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.post_release_only }}
     uses: ./.github/workflows/commercial-gates.yml
     with:
       release_ref: ${{ needs.release-context.outputs.tag }}
@@ -72,6 +78,7 @@ jobs:
     needs:
       - release-context
       - commercial-gates
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.post_release_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -299,6 +306,10 @@ jobs:
     needs:
       - release-context
       - publish
+    if: >-
+      ${{ always() && needs.release-context.result == 'success' &&
+      (needs.publish.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && inputs.post_release_only)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
