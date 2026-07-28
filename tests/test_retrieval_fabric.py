@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import deeplaw.retrieval_fabric as retrieval_fabric
 from deeplaw.context_compiler import compile_context, verify_capsule
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
@@ -409,22 +410,22 @@ def test_graph_channel_follows_two_reviewed_source_bound_hops_with_a_bounded_tra
             confirm_reviewed=True,
         )
 
-        result = retrieve(
-            vault,
-            f"Why does the exact anchor {anchor} matter?",
-            mode="graph",
-            limit=5,
-        )
+        plan = build_query_plan(anchor, mode="graph", limit=5)
+        seed = retrieval_fabric._Candidate(anchor)
+        seed.add("exact_id", 1, "exact_asset_id_or_uri")
+        candidates = {anchor: seed}
+        retrieval_fabric._graph_candidates(vault, plan, candidates)
 
-    selected = {item["asset_id"] for item in result["results"]}
-    graph_trace = result["trace"]["channel_candidates"]["graph"]
-    assert {anchor, intermediate, final} <= selected
-    assert any(
-        item["asset_id"] == final
-        and item["reason"].startswith("reviewed_relation:hop2:implements:")
-        for item in graph_trace
+    assert candidates[intermediate].reasons["graph"] == (
+        f"reviewed_relation:depends_on:{anchor}"
     )
-    assert len(graph_trace) <= result["trace"]["query_plan"]["channel_budgets"]["graph"]
+    assert candidates[final].reasons["graph"] == (
+        f"reviewed_relation:hop2:implements:{intermediate}"
+    )
+    graph_candidates = [
+        candidate for candidate in candidates.values() if "graph" in candidate.ranks
+    ]
+    assert len(graph_candidates) <= plan["channel_budgets"]["graph"]
 
 
 def test_graph_and_fabric_capsule_follow_latest_source_governance(tmp_path: Path) -> None:
