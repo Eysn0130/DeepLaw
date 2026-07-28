@@ -364,7 +364,12 @@ def promote_inbox_proposal(
         raise ValueError("inbox artifact verification failed")
     if verification["state"] != "pending" or artifact["artifact_type"] != "proposal":
         raise ValueError("only pending proposal artifacts can be promoted")
-    source_path, _ = _resolve_artifact(vault, artifact_id)
+    source_path = (
+        _inbox_directory(vault, "pending", create=False)
+        / f"{artifact_id}{_EXTENSIONS['proposal']}"
+    )
+    if source_path.is_symlink() or not source_path.is_file():
+        raise RuntimeError("verified pending inbox artifact changed before promotion")
     payload = artifact["payload"]
     title = payload["title"].strip()
     statement = payload["statement"].strip()
@@ -433,96 +438,111 @@ def promote_inbox_proposal(
         "typed_extractor": None,
         "policy": "Agent artifacts remain untrusted, source-bound review candidates",
     }
-    compiled = vault.add_compiled_source(
-        source_path=source_path,
-        source_key=source_key,
-        expected_byte_size=source_path.stat().st_size,
-        expected_content_sha256=content_sha256,
-        source_kind="conversation",
-        title=f"Inbox proposal {artifact_id}",
-        origin_uri=None,
-        media_type="application/vnd.deeplaw.proposal+json",
-        trust="untrusted",
-        sensitivity=cast(Sensitivity, artifact["sensitivity"]),
-        instruction_risk=instruction_risk,
-        warnings=("Agent-generated proposal artifact requires explicit human review",),
-        compiler=compiler,
-        fragments=(
-            {
-                "text": fragment_text,
-                "locator": "json:/payload",
-                "instruction_risk": instruction_risk,
-                "logical_node_key": logical_node_key,
-                "logical_node_keys": (logical_node_key,),
-                "source_span": {
-                    "json_pointer": "/payload",
-                    "fields": ["title", "statement"],
-                },
-            },
-        ),
-        asset_specs=(
-            {
-                "kind": cast(AssetKind, payload["kind"]),
-                "memory_tier": cast(MemoryTier, payload["memory_tier"]),
-                "title": title,
-                "statement": statement,
-                "knowledge_key": knowledge_key,
-                "proposal_role": f"inbox:{payload['kind']}",
-                "logical_node_keys": (logical_node_key,),
-                "source_ref_indexes": (0,),
-                "applicability": {
-                    "episode_type": "agent_proposal",
-                    "artifact_id": artifact_id,
-                    "capsule_id": payload.get("capsule_id"),
-                    "run_id": payload.get("run_id"),
-                },
-                "observed_at": artifact["created_at"],
-                "expires_at": payload.get("expires_at"),
-                "project_scope": collection_id,
-                "repository_scope": None,
-                "branch_scope": None,
-                "version_scope": None,
-                "environment_scope": None,
-                "supersedes_asset_id": supersedes_asset_id,
-                "trust": "untrusted",
-                "quarantined": True,
-                "tags": ("proposal-inbox", *tuple(payload.get("tags", ()))),
-                "warnings": (
-                    "Agent-generated content cannot inherit source trust or approval",
-                ),
-                "origin_uri": (
-                    payload.get("origin_uri")
-                    or f"deeplaw-inbox://{vault.vault_id}/{artifact_id}"
-                ),
-            },
-        ),
-        source_ir_nodes=(
-            {
-                "logical_node_key": logical_node_key,
-                "parent_logical_node_key": None,
-                "ordinal": 1,
-                "node_type": "agent_proposal",
-                "title": title,
-                "text": fragment_text,
-                "locator": "json:/payload",
-                "source_span": {
-                    "json_pointer": "/payload",
-                    "fields": ["title", "statement"],
-                },
-                "content_sha256": fragment_sha256,
-                "quality_flags": ["agent_generated", "review_required"],
-                "instruction_risk": instruction_risk,
-                "fragment_id": None,
-            },
-        ),
-    )
-    if len(compiled["asset_ids"]) != 1:
-        raise RuntimeError("Inbox proposal compilation did not produce exactly one proposal")
-    asset = vault.get_asset(compiled["asset_ids"][0], include_inactive=True)
+    source_size = source_path.stat().st_size
     destination = _inbox_directory(vault, "processed") / source_path.name
     if destination.exists() or destination.is_symlink():
         raise RuntimeError("processed inbox destination is unsafe")
     os.replace(source_path, destination)
+    canonical_write_completed = False
+    try:
+        compiled = vault.add_compiled_source(
+            source_path=destination,
+            source_key=source_key,
+            expected_byte_size=source_size,
+            expected_content_sha256=content_sha256,
+            source_kind="conversation",
+            title=f"Inbox proposal {artifact_id}",
+            origin_uri=None,
+            media_type="application/vnd.deeplaw.proposal+json",
+            trust="untrusted",
+            sensitivity=cast(Sensitivity, artifact["sensitivity"]),
+            instruction_risk=instruction_risk,
+            warnings=("Agent-generated proposal artifact requires explicit human review",),
+            compiler=compiler,
+            fragments=(
+                {
+                    "text": fragment_text,
+                    "locator": "json:/payload",
+                    "instruction_risk": instruction_risk,
+                    "logical_node_key": logical_node_key,
+                    "logical_node_keys": (logical_node_key,),
+                    "source_span": {
+                        "json_pointer": "/payload",
+                        "fields": ["title", "statement"],
+                    },
+                },
+            ),
+            asset_specs=(
+                {
+                    "kind": cast(AssetKind, payload["kind"]),
+                    "memory_tier": cast(MemoryTier, payload["memory_tier"]),
+                    "title": title,
+                    "statement": statement,
+                    "knowledge_key": knowledge_key,
+                    "proposal_role": f"inbox:{payload['kind']}",
+                    "logical_node_keys": (logical_node_key,),
+                    "source_ref_indexes": (0,),
+                    "applicability": {
+                        "episode_type": "agent_proposal",
+                        "artifact_id": artifact_id,
+                        "capsule_id": payload.get("capsule_id"),
+                        "run_id": payload.get("run_id"),
+                    },
+                    "observed_at": artifact["created_at"],
+                    "expires_at": payload.get("expires_at"),
+                    "project_scope": collection_id,
+                    "repository_scope": None,
+                    "branch_scope": None,
+                    "version_scope": None,
+                    "environment_scope": None,
+                    "supersedes_asset_id": supersedes_asset_id,
+                    "trust": "untrusted",
+                    "quarantined": True,
+                    "tags": ("proposal-inbox", *tuple(payload.get("tags", ()))),
+                    "warnings": (
+                        "Agent-generated content cannot inherit source trust or approval",
+                    ),
+                    "origin_uri": (
+                        payload.get("origin_uri")
+                        or f"deeplaw-inbox://{vault.vault_id}/{artifact_id}"
+                    ),
+                },
+            ),
+            source_ir_nodes=(
+                {
+                    "logical_node_key": logical_node_key,
+                    "parent_logical_node_key": None,
+                    "ordinal": 1,
+                    "node_type": "agent_proposal",
+                    "title": title,
+                    "text": fragment_text,
+                    "locator": "json:/payload",
+                    "source_span": {
+                        "json_pointer": "/payload",
+                        "fields": ["title", "statement"],
+                    },
+                    "content_sha256": fragment_sha256,
+                    "quality_flags": ["agent_generated", "review_required"],
+                    "instruction_risk": instruction_risk,
+                    "fragment_id": None,
+                },
+            ),
+        )
+        canonical_write_completed = True
+        if len(compiled["asset_ids"]) != 1:
+            raise RuntimeError("Inbox proposal compilation did not produce exactly one proposal")
+        asset = vault.get_asset(compiled["asset_ids"][0], include_inactive=True)
+    except BaseException:
+        if not canonical_write_completed:
+            try:
+                if source_path.exists() or source_path.is_symlink():
+                    raise RuntimeError("pending inbox rollback destination is unsafe")
+                os.replace(destination, source_path)
+            except BaseException as rollback_error:
+                raise RuntimeError(
+                    "inbox promotion failed and the pending artifact could not be restored"
+                ) from rollback_error
+        raise
     return {
         "schema_version": "deeplaw.knowledge-inbox-promotion/v1",
         "artifact_id": artifact_id,

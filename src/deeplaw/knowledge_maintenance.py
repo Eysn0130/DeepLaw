@@ -5,6 +5,7 @@ import os
 import secrets
 import shutil
 import sqlite3
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -264,6 +265,13 @@ def _copy_snapshot_payload(source: Path, destination: Path) -> None:
     _safe_copy_tree(source, destination)
 
 
+def _remove_restore_candidate(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path)
+
+
 def restore_knowledge_snapshot(
     destination: str | Path,
     *,
@@ -316,8 +324,25 @@ def restore_knowledge_snapshot(
             revision = restored.revision
             audit_head = restored.audit_head
     except BaseException:
+        rollback_error: BaseException | None = None
+        if retained.exists():
+            failed = target.with_name(f".{target.name}.failed-restore-{token}.tmp")
+            try:
+                if failed.exists() or failed.is_symlink():
+                    raise RuntimeError("snapshot restore rollback path already exists")
+                if target.exists() or target.is_symlink():
+                    os.replace(target, failed)
+                os.replace(retained, target)
+                with suppress(OSError):
+                    _remove_restore_candidate(failed)
+            except BaseException as error:
+                rollback_error = error
         if stage.exists():
             shutil.rmtree(stage)
+        if rollback_error is not None:
+            raise RuntimeError(
+                "snapshot restore failed and the retained vault could not be restored"
+            ) from rollback_error
         raise
     return {
         "schema_version": "deeplaw.knowledge-snapshot-restore/v1",

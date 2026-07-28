@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_maintenance import (
     create_knowledge_snapshot,
@@ -74,6 +76,46 @@ def test_snapshot_verification_detects_file_tampering(tmp_path: Path) -> None:
     source_copy = next((snapshot / "vault" / "sources").iterdir())
     source_copy.write_bytes(source_copy.read_bytes() + b"tampered")
     assert verify_knowledge_snapshot(snapshot)["valid"] is False
+
+
+def test_failed_post_swap_verification_restores_the_previous_vault(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _ = _active_vault(tmp_path)
+    snapshot = tmp_path / "snapshot"
+    with KnowledgeVault(root, read_only=True) as vault:
+        create_knowledge_snapshot(vault, snapshot)
+    with KnowledgeVault(root, read_only=False) as vault:
+        proposal = vault.propose_asset(
+            kind="question",
+            memory_tier="project",
+            title="Retained state",
+            statement="This post-snapshot state must survive a failed restore.",
+        )
+        expected_revision = vault.revision
+
+    original_verify = KnowledgeVault.verify_integrity
+    failed_once = False
+
+    def fail_post_swap_once(vault: KnowledgeVault) -> dict[str, object]:
+        nonlocal failed_once
+        result = original_verify(vault)
+        if vault.root == root and not failed_once:
+            failed_once = True
+            return {**result, "valid": False}
+        return result
+
+    monkeypatch.setattr(KnowledgeVault, "verify_integrity", fail_post_swap_once)
+    with pytest.raises(RuntimeError, match="post-swap verification"):
+        restore_knowledge_snapshot(root, snapshot=snapshot, confirm=True)
+
+    assert failed_once is True
+    with KnowledgeVault(root, read_only=True) as vault:
+        assert vault.revision == expected_revision
+        assert vault.get_asset(proposal.asset_id, include_inactive=True).title == "Retained state"
+        assert vault.verify_integrity()["valid"] is True
+    assert not list(tmp_path.glob(".vault.failed-restore-*.tmp"))
 
 
 def test_doctor_and_gc_only_repair_removable_state(tmp_path: Path) -> None:

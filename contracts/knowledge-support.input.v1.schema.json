@@ -47,7 +47,7 @@
     },
     "kinds": {
       "type": "array",
-      "maxItems": 9,
+      "maxItems": 14,
       "uniqueItems": true,
       "items": {
         "type": "string",

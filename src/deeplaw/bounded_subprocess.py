@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import math
 import os
 import signal
@@ -76,10 +77,39 @@ def _kill(process: subprocess.Popen[bytes]) -> None:
     try:
         if os.name == "posix":
             os.killpg(process.pid, signal.SIGKILL)
+        elif os.name == "nt" and _kill_windows_process_tree(process.pid):
+            return
         else:
             process.kill()
     except ProcessLookupError:
         return
+
+
+def _kill_windows_process_tree(pid: int) -> bool:
+    try:
+        buffer = ctypes.create_unicode_buffer(32_768)
+        length = ctypes.windll.kernel32.GetSystemDirectoryW(buffer, len(buffer))
+    except (AttributeError, OSError):
+        return False
+    if not 0 < length < len(buffer):
+        return False
+    taskkill = Path(buffer.value) / "taskkill.exe"
+    if not taskkill.is_file():
+        return False
+    try:
+        completed = subprocess.run(
+            [str(taskkill), "/PID", str(pid), "/T", "/F"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
 
 
 def run_bounded_subprocess(
@@ -112,6 +142,11 @@ def run_bounded_subprocess(
             stderr=subprocess.PIPE,
             shell=False,
             start_new_session=os.name == "posix",
+            creationflags=(
+                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                if os.name == "nt"
+                else 0
+            ),
         )
     except OSError as error:
         raise BoundedSubprocessError("bounded subprocess failed to start") from error

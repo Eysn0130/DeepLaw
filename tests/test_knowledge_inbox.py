@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import deeplaw.knowledge_inbox as knowledge_inbox_module
 from deeplaw.knowledge_inbox import (
     list_inbox_artifacts,
     promote_inbox_proposal,
@@ -135,6 +136,143 @@ def test_inbox_proposal_requires_review_and_remains_quarantined(tmp_path: Path) 
     assert promoted["source_revision_id"].startswith("sourcerev_")
     assert not (root / "inbox" / "pending" / f"{artifact['artifact_id']}.dlproposal").exists()
     assert (root / "inbox" / "processed" / f"{artifact['artifact_id']}.dlproposal").is_file()
+
+
+def test_inbox_promotion_preflights_processed_destination_before_canonical_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _vault(tmp_path)
+    with KnowledgeVault(root, read_only=True) as vault:
+        artifact = submit_inbox_artifact(
+            vault,
+            artifact_type="proposal",
+            payload={
+                "kind": "lesson",
+                "memory_tier": "experience",
+                "title": "Collision",
+                "statement": "Do not overwrite a processed Inbox artifact.",
+            },
+            producer_name="codex",
+            producer_version="test",
+            confirm_no_case_data=True,
+        )
+    pending = root / "inbox" / "pending" / f"{artifact['artifact_id']}.dlproposal"
+    processed = root / "inbox" / "processed" / pending.name
+    original_verify = knowledge_inbox_module.verify_inbox_artifact
+
+    def verify_then_create_collision(
+        vault: KnowledgeVault,
+        artifact_id: str,
+    ) -> dict[str, object]:
+        result = original_verify(vault, artifact_id)
+        processed.parent.mkdir(mode=0o700)
+        processed.write_text("occupied", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(
+        knowledge_inbox_module,
+        "verify_inbox_artifact",
+        verify_then_create_collision,
+    )
+
+    with KnowledgeVault(root, read_only=False) as vault:
+        before = (vault.revision, len(vault.all_sources()), vault.review_queue()["total"])
+        with pytest.raises(RuntimeError, match="processed inbox destination is unsafe"):
+            promote_inbox_proposal(
+                vault,
+                artifact_id=artifact["artifact_id"],
+                confirm_reviewed=True,
+            )
+        after = (vault.revision, len(vault.all_sources()), vault.review_queue()["total"])
+
+    assert after == before
+    assert pending.is_file()
+    assert processed.read_text(encoding="utf-8") == "occupied"
+
+
+def test_inbox_promotion_restores_pending_artifact_when_canonical_write_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _vault(tmp_path)
+    with KnowledgeVault(root, read_only=True) as vault:
+        artifact = submit_inbox_artifact(
+            vault,
+            artifact_type="proposal",
+            payload={
+                "kind": "decision",
+                "memory_tier": "project",
+                "title": "Atomic promotion",
+                "statement": "Restore the artifact when the canonical write fails.",
+            },
+            producer_name="codex",
+            producer_version="test",
+            confirm_no_case_data=True,
+        )
+    pending = root / "inbox" / "pending" / f"{artifact['artifact_id']}.dlproposal"
+    processed = root / "inbox" / "processed" / pending.name
+
+    def fail_write(*_args: object, **_kwargs: object) -> dict[str, object]:
+        assert processed.is_file()
+        raise RuntimeError("injected canonical write failure")
+
+    monkeypatch.setattr(KnowledgeVault, "add_compiled_source", fail_write)
+    with KnowledgeVault(root, read_only=False) as vault:
+        before = (vault.revision, len(vault.all_sources()), vault.review_queue()["total"])
+        with pytest.raises(RuntimeError, match="injected canonical write failure"):
+            promote_inbox_proposal(
+                vault,
+                artifact_id=artifact["artifact_id"],
+                confirm_reviewed=True,
+            )
+        after = (vault.revision, len(vault.all_sources()), vault.review_queue()["total"])
+
+    assert after == before
+    assert pending.is_file()
+    assert not processed.exists()
+
+
+def test_inbox_promotion_rename_failure_never_writes_canonical_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _vault(tmp_path)
+    with KnowledgeVault(root, read_only=True) as vault:
+        artifact = submit_inbox_artifact(
+            vault,
+            artifact_type="proposal",
+            payload={
+                "kind": "risk",
+                "memory_tier": "project",
+                "title": "Rename failure",
+                "statement": "Do not commit when the Inbox move fails.",
+            },
+            producer_name="codex",
+            producer_version="test",
+            confirm_no_case_data=True,
+        )
+    pending = root / "inbox" / "pending" / f"{artifact['artifact_id']}.dlproposal"
+    original_replace = knowledge_inbox_module.os.replace
+
+    def fail_pending_move(source: object, destination: object) -> None:
+        if Path(source) == pending:
+            raise OSError("injected Inbox move failure")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(knowledge_inbox_module.os, "replace", fail_pending_move)
+    with KnowledgeVault(root, read_only=False) as vault:
+        before = (vault.revision, len(vault.all_sources()), vault.review_queue()["total"])
+        with pytest.raises(OSError, match="injected Inbox move failure"):
+            promote_inbox_proposal(
+                vault,
+                artifact_id=artifact["artifact_id"],
+                confirm_reviewed=True,
+            )
+        after = (vault.revision, len(vault.all_sources()), vault.review_queue()["total"])
+
+    assert after == before
+    assert pending.is_file()
 
 
 def test_inbox_tamper_is_detected_and_rejection_never_writes_canonical(

@@ -79,6 +79,15 @@ def test_knowledge_mcp_is_a_separate_single_read_only_tool(tmp_path: Path) -> No
             "confirm_no_case_data": True,
         }
     )
+    all_kinds = tool.inputSchema["properties"]["kinds"]["items"]["enum"]
+    assert len(all_kinds) == 14
+    input_validator.validate(
+        {
+            "operation": "search",
+            "query": "all supported knowledge kinds",
+            "kinds": all_kinds,
+        }
+    )
 
     result = handle_knowledge_support(
         operation="get",

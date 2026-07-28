@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,36 @@ def test_bounded_subprocess_kills_timeout(tmp_path: Path) -> None:
             max_stdout_bytes=1_024,
             max_stderr_bytes=1_024,
         )
+
+
+def test_bounded_subprocess_kills_descendants_that_inherit_output_pipes(
+    tmp_path: Path,
+) -> None:
+    started = tmp_path / "child-started"
+    survived = tmp_path / "child-survived"
+    child = (
+        "import pathlib,time;"
+        f"pathlib.Path({str(started)!r}).write_text('started', encoding='utf-8');"
+        "time.sleep(1);"
+        f"pathlib.Path({str(survived)!r}).write_text('survived', encoding='utf-8');"
+        "time.sleep(10)"
+    )
+    parent = tmp_path / "process-tree.py"
+    parent.write_text(
+        "import subprocess,sys,time\n"
+        f"subprocess.Popen([sys.executable, '-c', {child!r}])\n"
+        "time.sleep(10)\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BoundedSubprocessError, match="timed out"):
+        run_bounded_subprocess(
+            [sys.executable, str(parent)],
+            timeout_seconds=0.5,
+            max_stdout_bytes=1_024,
+            max_stderr_bytes=1_024,
+        )
+
+    assert started.is_file()
+    time.sleep(1)
+    assert not survived.exists()
