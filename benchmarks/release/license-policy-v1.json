@@ -19,10 +19,90 @@
     "SSPL"
   ],
   "reviewed_exceptions": {
+    "cuda-bindings": {
+      "version": "13.3.1",
+      "license_evidence": "LicenseRef-NVIDIA-SOFTWARE-LICENSE",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "cuda-toolkit": {
+      "version": "13.0.3.0",
+      "license_evidence": null,
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
     "mineru": {
       "version": "3.4.4",
       "license_evidence": "LicenseRef-MinerU-Open-Source-License",
       "notice_marker": "Optional Structured Document Engine"
+    },
+    "nvidia-cublas": {
+      "version": "13.1.1.3",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cuda-cupti": {
+      "version": "13.0.85",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cuda-nvrtc": {
+      "version": "13.0.88",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cuda-runtime": {
+      "version": "13.0.96",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cudnn-cu13": {
+      "version": "9.20.0.48",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cufft": {
+      "version": "12.0.0.61",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cufile": {
+      "version": "1.15.1.6",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-curand": {
+      "version": "10.4.0.35",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cusolver": {
+      "version": "12.0.4.66",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cusparse": {
+      "version": "12.6.3.3",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-cusparselt-cu13": {
+      "version": "0.8.1",
+      "license_evidence": "NVIDIA Proprietary Software",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-nccl-cu13": {
+      "version": "2.29.7",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-nvjitlink": {
+      "version": "13.3.33",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
+    },
+    "nvidia-nvshmem-cu13": {
+      "version": "3.4.5",
+      "license_evidence": "LicenseRef-NVIDIA-Proprietary",
+      "notice_marker": "Optional Linux CUDA Runtime Dependencies"
     }
   }
 }

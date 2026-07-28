@@ -146,6 +146,34 @@ service-use conditions, and any separately granted permission applicable to
 their release. This notice is intentionally retained even where a project team
 has a separate permission grant.
 
+## Optional Linux CUDA Runtime Dependencies
+
+On Linux, the pinned `torch==2.13.0` dependency selected only by the optional
+`deeplaw[document-engine]` extra resolves the following NVIDIA packages:
+
+- `cuda-bindings==13.3.1` and `cuda-toolkit==13.0.3.0`;
+- `nvidia-cublas==13.1.1.3`, `nvidia-cuda-cupti==13.0.85`,
+  `nvidia-cuda-nvrtc==13.0.88`, and `nvidia-cuda-runtime==13.0.96`;
+- `nvidia-cudnn-cu13==9.20.0.48`, `nvidia-cufft==12.0.0.61`,
+  `nvidia-cufile==1.15.1.6`, and `nvidia-curand==10.4.0.35`;
+- `nvidia-cusolver==12.0.4.66`, `nvidia-cusparse==12.6.3.3`,
+  `nvidia-cusparselt-cu13==0.8.1`, and `nvidia-nccl-cu13==2.29.7`;
+- `nvidia-nvjitlink==13.3.33` and `nvidia-nvshmem-cu13==3.4.5`.
+
+The installed distributions identify NVIDIA software or proprietary terms;
+`cuda-toolkit==13.0.3.0` publishes no license field in its installed metadata.
+They are exact-version reviewed exceptions in the generated license inventory,
+not open-source approvals. NVIDIA publishes the governing
+[CUDA Toolkit EULA](https://docs.nvidia.com/cuda/eula/index.html), including
+use, redistribution, notice, and export-control conditions.
+
+DeepLaw's wheel, sdist, and default OCI image do not contain or redistribute
+these NVIDIA package bytes. A package installer downloads them separately only
+when an operator explicitly installs the `document-engine` extra on Linux. The
+operator is responsible for accepting and complying with NVIDIA's current terms;
+any version, metadata, bundling, or distribution change returns the release
+license gate to `review_required`.
+
 ## Optional Local Candidate Discovery
 
 The `deeplaw[discovery]` extra uses:

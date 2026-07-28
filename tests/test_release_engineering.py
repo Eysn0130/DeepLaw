@@ -9,7 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from benchmarks.release.evidence import verify_record_digest
-from benchmarks.release.inventory_licenses import inventory
+from benchmarks.release.inventory_licenses import _reviewed_exception_matches, inventory
 from benchmarks.release.verify_reproducible_build import (
     DEFAULT_SOURCE_DATE_EPOCH,
     _verify_build_inputs,
@@ -30,6 +30,28 @@ def test_license_inventory_has_no_unreviewed_installed_distribution() -> None:
     assert report["blocked"] == []
     assert report["review_required"] == []
     assert report["package_count"] == len(report["packages"])
+
+
+def test_reviewed_license_exception_requires_exact_empty_metadata_and_notice() -> None:
+    exception = {
+        "version": "13.0.3.0",
+        "license_evidence": None,
+        "notice_marker": "Optional Linux CUDA Runtime Dependencies",
+    }
+    notices = "## Optional Linux CUDA Runtime Dependencies\n"
+
+    assert _reviewed_exception_matches(
+        exception, version="13.0.3.0", evidence="", notices=notices
+    )
+    assert not _reviewed_exception_matches(
+        exception,
+        version="13.0.3.0",
+        evidence="LicenseRef-NVIDIA-Proprietary",
+        notices=notices,
+    )
+    assert not _reviewed_exception_matches(
+        exception, version="13.0.4.0", evidence="", notices=notices
+    )
 
 
 def test_distribution_inventory_rejects_parent_path(tmp_path: Path) -> None:

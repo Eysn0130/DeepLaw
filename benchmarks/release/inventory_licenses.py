@@ -38,7 +38,40 @@ def _load_policy(path: Path) -> dict[str, Any]:
             raise RuntimeError(f"license policy {field} is invalid")
     if not isinstance(policy.get("reviewed_exceptions"), dict):
         raise RuntimeError("license policy reviewed_exceptions is invalid")
+    for name, exception in policy["reviewed_exceptions"].items():
+        if (
+            not isinstance(name, str)
+            or not name
+            or not isinstance(exception, dict)
+            or set(exception) != {"version", "license_evidence", "notice_marker"}
+            or not isinstance(exception.get("version"), str)
+            or not exception["version"]
+            or not (
+                exception.get("license_evidence") is None
+                or (
+                    isinstance(exception.get("license_evidence"), str)
+                    and exception["license_evidence"]
+                )
+            )
+            or not isinstance(exception.get("notice_marker"), str)
+            or not exception["notice_marker"]
+        ):
+            raise RuntimeError(f"license policy exception for {name!r} is invalid")
     return policy
+
+
+def _reviewed_exception_matches(
+    exception: dict[str, Any], *, version: str, evidence: str, notices: str
+) -> bool:
+    expected_evidence = exception["license_evidence"]
+    evidence_matches = (
+        not evidence if expected_evidence is None else expected_evidence in evidence
+    )
+    return (
+        exception["version"] == version
+        and evidence_matches
+        and exception["notice_marker"] in notices
+    )
 
 
 def inventory(*, policy_path: Path, notices_path: Path) -> dict[str, Any]:
@@ -76,10 +109,11 @@ def inventory(*, policy_path: Path, notices_path: Path) -> dict[str, Any]:
             status = "blocked"
             reason = "forbidden_license_marker:" + ",".join(forbidden)
         elif isinstance(exception, dict):
-            if (
-                exception.get("version") == distribution.version
-                and exception.get("license_evidence") in evidence
-                and exception.get("notice_marker") in notices
+            if _reviewed_exception_matches(
+                exception,
+                version=distribution.version,
+                evidence=evidence,
+                notices=notices,
             ):
                 status = "reviewed_exception"
                 reason = "exact_version_notice_review"
