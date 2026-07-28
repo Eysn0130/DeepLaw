@@ -138,6 +138,10 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
         in workflow
     )
     assert 'repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}' in workflow
+    assert (
+        "{tag_name, target_commitish, name, body, draft, prerelease, make_latest}"
+        in workflow
+    )
     assert workflow.count('remote_digest=$(jq -r --arg name "${name}"') == 2
     assert '[[ "${remote_digest}" == "${local_digest}" ]]' in workflow
     assert workflow.count('gh release upload "${RELEASE_TAG}" "${asset}"') == 1
