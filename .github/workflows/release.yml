@@ -390,6 +390,7 @@ jobs:
             gh attestation verify "${RUNNER_TEMP}/downloads/${name}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+            printf 'verified provenance: %s\n' "${name}"
           done < "${RUNNER_TEMP}/downloads/SHA256SUMS" \
             2>&1 | tee "${RUNNER_TEMP}/post-evidence/provenance-verification.log"
           for name in \
@@ -400,6 +401,7 @@ jobs:
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
               --predicate-type https://cyclonedx.org/bom
+            printf 'verified CycloneDX SBOM: %s\n' "${name}"
           done 2>&1 | tee "${RUNNER_TEMP}/post-evidence/sbom-verification.log"
 
       - name: Build exact v0.6.0 upgrade fixture
