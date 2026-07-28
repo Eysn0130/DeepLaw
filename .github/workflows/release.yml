@@ -210,50 +210,84 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            is_draft=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-              --json isDraft --jq .isDraft)
-            is_prerelease=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-              --json isPrerelease --jq .isPrerelease)
-            [[ "${is_prerelease}" == "false" ]]
-            if [[ "${is_draft}" == "true" ]]; then
-              gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-                --draft --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
-                --notes-file docs/RELEASE_NOTES_v0.7.0.md
-            fi
-          else
+          releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
+          matching_releases=$(jq -c --arg tag "${RELEASE_TAG}" \
+            '[.[] | select(.tag_name == $tag)]' <<< "${releases_json}")
+          release_count=$(jq 'length' <<< "${matching_releases}")
+          [[ "${release_count}" -le 1 ]]
+          if [[ "${release_count}" -eq 0 ]]; then
             gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
               --verify-tag --target "${RELEASE_COMMIT}" --draft \
               --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
               --notes-file docs/RELEASE_NOTES_v0.7.0.md
+            releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
+            matching_releases=$(jq -c --arg tag "${RELEASE_TAG}" \
+              '[.[] | select(.tag_name == $tag)]' <<< "${releases_json}")
+            [[ "$(jq 'length' <<< "${matching_releases}")" -eq 1 ]]
           fi
-          release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          release_json=$(jq -c '.[0]' <<< "${matching_releases}")
+          release_id=$(jq -r '.id' <<< "${release_json}")
+          release_is_draft=$(jq -r '.draft' <<< "${release_json}")
+          [[ "$(jq -r '.tag_name' <<< "${release_json}")" == "${RELEASE_TAG}" ]]
+          [[ "$(jq -r '.target_commitish' <<< "${release_json}")" == "${RELEASE_COMMIT}" ]]
+          [[ "$(jq -r '.prerelease' <<< "${release_json}")" == "false" ]]
+          [[ "${release_is_draft}" == "true" || "${release_is_draft}" == "false" ]]
+          echo "RELEASE_ID=${release_id}" >> "${GITHUB_ENV}"
           for asset in "${RUNNER_TEMP}"/publish/*; do
             name=$(basename "${asset}")
+            [[ "${name}" =~ ^[A-Za-z0-9._-]+$ ]]
             local_digest="sha256:$(sha256sum "${asset}" | cut -d ' ' -f 1)"
-            remote_digest=$(jq -r --arg name "${name}" \
-              '.assets[] | select(.name == $name) | .digest // empty' <<< "${release_json}")
-            if [[ -n "${remote_digest}" ]]; then
+            matching_assets=$(jq -c --arg name "${name}" \
+              '[.assets[] | select(.name == $name)]' <<< "${release_json}")
+            asset_count=$(jq 'length' <<< "${matching_assets}")
+            [[ "${asset_count}" -le 1 ]]
+            if [[ "${asset_count}" -eq 1 ]]; then
+              remote_digest=$(jq -r '.[0].digest // empty' <<< "${matching_assets}")
+              test -n "${remote_digest}"
               [[ "${remote_digest}" == "${local_digest}" ]]
             else
-              gh release upload "${RELEASE_TAG}" "${asset}" \
-                --repo "${GITHUB_REPOSITORY}"
-              release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+              [[ "${release_is_draft}" == "true" ]]
+              curl --fail-with-body --silent --show-error --request POST \
+                --header "Authorization: Bearer ${GH_TOKEN}" \
+                --header "Accept: application/vnd.github+json" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                --header "Content-Type: application/octet-stream" \
+                --data-binary "@${asset}" \
+                --output "${RUNNER_TEMP}/uploaded-release-asset.json" \
+                "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?name=${name}"
+              release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}")
+              remote_digest=$(jq -r --arg name "${name}" \
+                '.assets[] | select(.name == $name) | .digest // empty' <<< "${release_json}")
+              [[ "${remote_digest}" == "${local_digest}" ]]
             fi
           done
 
       - name: Publish the fully populated release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ needs.release-context.outputs.commit }}
           RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-            --draft=false --latest
-          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-            --json isDraft,isPrerelease,url --jq \
-            'select(.isDraft == false and .isPrerelease == false) | .url'
+          release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")
+          [[ "$(jq -r '.tag_name' <<< "${release_json}")" == "${RELEASE_TAG}" ]]
+          [[ "$(jq -r '.prerelease' <<< "${release_json}")" == "false" ]]
+          if [[ "$(jq -r '.draft' <<< "${release_json}")" == "true" ]]; then
+            jq --arg tag "${RELEASE_TAG}" --arg commit "${RELEASE_COMMIT}" \
+              '.tag_name = $tag | .target_commitish = $commit \
+              | .draft = false | .prerelease = false | .make_latest = "true" \
+              | {tag_name, target_commitish, name, body, draft, prerelease, make_latest}' \
+              <<< "${release_json}" > "${RUNNER_TEMP}/publish-release.json"
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              --input "${RUNNER_TEMP}/publish-release.json" \
+              > "${RUNNER_TEMP}/published-release.json"
+          fi
+          release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")
+          jq -er --arg tag "${RELEASE_TAG}" \
+            'select(.tag_name == $tag and .draft == false and .prerelease == false) | .html_url' \
+            <<< "${release_json}"
 
   post-release:
     name: Verify public release download and clean reinstall

@@ -131,6 +131,18 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
     assert "sha256sum --check SHA256SUMS" not in validation
     assert "Create or resume the release without overwriting assets" in workflow
     assert "Attach or verify post-release evidence without overwriting assets" in workflow
+    assert 'releases?per_page=100' in workflow
+    assert "release_id=$(jq -r '.id'" in workflow
+    assert (
+        "uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets"
+        in workflow
+    )
+    assert 'repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}' in workflow
+    assert (
+        "{tag_name, target_commitish, name, body, draft, prerelease, make_latest}"
+        in workflow
+    )
     assert workflow.count('remote_digest=$(jq -r --arg name "${name}"') == 2
     assert '[[ "${remote_digest}" == "${local_digest}" ]]' in workflow
+    assert workflow.count('gh release upload "${RELEASE_TAG}" "${asset}"') == 1
     assert "--clobber" not in workflow
