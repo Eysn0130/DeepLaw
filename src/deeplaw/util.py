@@ -11,6 +11,9 @@ from typing import Any
 
 _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
 _ASCII_TOKEN = re.compile(r"[a-zA-Z0-9]+(?:[-_.][a-zA-Z0-9]+)*")
+_QUOTED_PHRASE = re.compile(r'"([^"\n]{2,200})"|“([^”\n]{2,200})”|`([^`\n]{2,200})`')
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+_ASCII_PART = re.compile(r"[A-Za-z]+|[0-9]+")
 _ARTICLE = re.compile(
     r"第\s*([〇零一二两三四五六七八九十百千万亿0-9]+)\s*条(?:\s*之\s*([〇零一二两三四五六七八九十百0-9]+))?"
 )
@@ -112,6 +115,97 @@ _STOP_TERMS = {
     "需要",
 }
 
+# This deliberately small compatibility table is a retrieval aid, not a text
+# conversion authority.  It covers high-frequency query vocabulary without
+# rewriting stored evidence or identities.
+_TRADITIONAL_QUERY_TRANSLATION = str.maketrans(
+    {
+        "與": "与",
+        "為": "为",
+        "於": "于",
+        "後": "后",
+        "前": "前",
+        "發": "发",
+        "現": "现",
+        "變": "变",
+        "更": "更",
+        "刪": "删",
+        "除": "除",
+        "檔": "档",
+        "資": "资",
+        "料": "料",
+        "來": "来",
+        "源": "源",
+        "關": "关",
+        "係": "系",
+        "規": "规",
+        "則": "则",
+        "設": "设",
+        "定": "定",
+        "執": "执",
+        "行": "行",
+        "錯": "错",
+        "誤": "误",
+        "經": "经",
+        "驗": "验",
+        "問": "问",
+        "題": "题",
+        "說": "说",
+        "明": "明",
+        "應": "应",
+        "該": "该",
+        "權": "权",
+        "限": "限",
+        "審": "审",
+        "核": "核",
+        "實": "实",
+        "體": "体",
+        "網": "网",
+        "頁": "页",
+        "專": "专",
+        "倉": "仓",
+        "庫": "库",
+        "軟": "软",
+        "數": "数",
+        "據": "据",
+        "層": "层",
+        "級": "级",
+        "節": "节",
+        "點": "点",
+        "標": "标",
+        "總": "总",
+        "結": "结",
+        "衝": "冲",
+        "突": "突",
+        "過": "过",
+        "期": "期",
+        "當": "当",
+        "歷": "历",
+        "史": "史",
+    }
+)
+
+_QUERY_SYNONYMS = {
+    "当前": ("最新", "现行"),
+    "最新": ("当前", "现行"),
+    "删除": ("移除", "忘记"),
+    "移除": ("删除", "忘记"),
+    "更新": ("变更", "修改"),
+    "变更": ("更新", "修改"),
+    "配置": ("设定", "设置"),
+    "错误": ("故障", "失败"),
+    "故障": ("错误", "失败"),
+    "步骤": ("流程", "过程"),
+    "流程": ("步骤", "过程"),
+    "约束": ("限制", "边界"),
+    "关系": ("关联", "联系"),
+    "定义": ("含义", "术语"),
+    "例外": ("异常", "除外"),
+    "原因": ("缘由",),
+    "项目": ("工程",),
+    "仓库": ("代码库",),
+}
+
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -182,6 +276,35 @@ def normalize_text(text: str) -> str:
     return _SPACE.sub(" ", text).strip()
 
 
+def normalize_query_text(text: str) -> str:
+    """Normalize query typography without changing stored canonical content."""
+    normalized = normalize_text(text)
+    for traditional, simplified in (
+        ("軟體", "软件"),
+        ("資料庫", "数据库"),
+        ("程式碼", "代码"),
+        ("設定檔", "配置文件"),
+    ):
+        normalized = normalized.replace(traditional, simplified)
+    return normalized.translate(_TRADITIONAL_QUERY_TRANSLATION)
+
+
+def query_phrases(text: str) -> list[str]:
+    """Return bounded explicit phrases from quotes and inline-code markers."""
+    normalized = normalize_query_text(text)
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for match in _QUOTED_PHRASE.finditer(normalized):
+        phrase = normalize_text(next(value for value in match.groups() if value is not None))
+        key = phrase.casefold()
+        if key not in seen:
+            seen.add(key)
+            phrases.append(phrase)
+        if len(phrases) == 8:
+            break
+    return phrases
+
+
 def compact_text(text: str) -> str:
     return _PUNCT.sub("", normalize_text(text).lower())
 
@@ -216,11 +339,32 @@ def search_terms(
     limit: int | None = None,
     cover_tail: bool = False,
 ) -> list[str]:
-    normalized = normalize_text(text).lower()
+    normalized_source = normalize_query_text(text)
+    normalized = normalized_source.lower()
     terms: list[str] = []
     for run in _CJK_RUN.findall(normalized):
         terms.extend(cjk_ngrams(run))
-    terms.extend(_ASCII_TOKEN.findall(normalized))
+    ascii_tokens = _ASCII_TOKEN.findall(normalized_source)
+    for token in ascii_tokens:
+        lowered = token.lower()
+        terms.append(lowered)
+        separated = re.sub(r"[-_.]+", " ", token)
+        camel_parts = [
+            part.lower()
+            for component in separated.split()
+            for part in _CAMEL_BOUNDARY.sub(" ", component).split()
+        ]
+        terms.extend(camel_parts)
+        for part in camel_parts:
+            terms.extend(_english_stems(part))
+        # Version numbers, error codes and symbol paths remain searchable both
+        # as an exact token and as their meaningful components.
+        if any(separator in token for separator in "-_."):
+            terms.extend(part.lower() for part in _ASCII_PART.findall(token))
+
+    for phrase, synonyms in _QUERY_SYNONYMS.items():
+        if phrase in normalized:
+            terms.extend(synonyms)
 
     article = normalize_article_label(normalized)
     if article:
@@ -250,6 +394,45 @@ def search_terms(
     last = len(unique) - 1
     indexes = [round(index * last / (limit - 1)) for index in range(limit)]
     return [unique[index] for index in indexes]
+
+
+def search_terms_v1(text: str) -> list[str]:
+    """Reproduce the v0.6 tokenizer solely for additive migration verification."""
+    normalized = normalize_text(text).lower()
+    terms: list[str] = []
+    for run in _CJK_RUN.findall(normalized):
+        terms.extend(cjk_ngrams(run))
+    terms.extend(_ASCII_TOKEN.findall(normalized))
+    article = normalize_article_label(normalized)
+    if article:
+        terms.append(compact_text(article))
+    unique: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        if len(term) < 2 or term in _STOP_TERMS or term in seen:
+            continue
+        seen.add(term)
+        unique.append(term)
+    return unique
+
+
+def _english_stems(token: str) -> list[str]:
+    """Return conservative search expansions, never a canonical word form."""
+    if not token.isascii() or not token.isalpha() or len(token) < 5:
+        return []
+    values: list[str] = []
+    if token.endswith("ies") and len(token) > 5:
+        values.append(f"{token[:-3]}y")
+    elif token.endswith("ing") and len(token) > 6:
+        base = token[:-3]
+        values.append(base)
+        if len(base) > 2 and base[-1] == base[-2]:
+            values.append(base[:-1])
+    elif token.endswith(("ed", "es")) and len(token) > 5:
+        values.append(token[:-2])
+    elif token.endswith("s") and not token.endswith("ss") and len(token) > 4:
+        values.append(token[:-1])
+    return values
 
 
 def fts_query(terms: Iterable[str]) -> str:

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/evaluator-retrieval-profile-commitment.v1.schema.json",
+  "title": "Frozen tokenizer, fusion and DeepLaw index operating-point commitment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "candidate_commit", "tokenizer_profile",
+    "tokenizer_version", "fusion_profile", "candidate_profiles",
+    "implementation_files", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.evaluator-retrieval-profile-commitment/v1"},
+    "candidate_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "tokenizer_profile": {"type": "string", "minLength": 3, "maxLength": 200},
+    "tokenizer_version": {"type": "string", "minLength": 1, "maxLength": 40},
+    "fusion_profile": {"type": "string", "minLength": 3, "maxLength": 200},
+    "candidate_profiles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["system_id", "configuration", "model_aliases"],
+        "properties": {
+          "system_id": {"enum": ["deeplaw/lexical", "deeplaw/hybrid", "deeplaw/full"]},
+          "configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "profile", "top_k", "context_token_budget", "query_mode",
+              "official_defaults_documented"
+            ],
+            "properties": {
+              "profile": {"type": "string", "minLength": 1, "maxLength": 300},
+              "top_k": {"type": "integer", "minimum": 1, "maximum": 100},
+              "context_token_budget": {"type": "integer", "minimum": 256, "maximum": 100000},
+              "query_mode": {"type": "string", "minLength": 1, "maxLength": 100},
+              "official_defaults_documented": {"const": true}
+            }
+          },
+          "model_aliases": {
+            "type": "array",
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 80}
+          }
+        }
+      }
+    },
+    "implementation_files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byte_size"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807}
+      }
+    }
+  }
+}

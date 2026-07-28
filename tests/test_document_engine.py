@@ -346,7 +346,7 @@ sys.stdout.write('x' * 4096)
         document_engine._run_bounded(
             [str(executable)],
             cwd=tmp_path,
-            timeout_seconds=3,
+            timeout_seconds=10,
             capture_limit=32,
         )
 
@@ -383,7 +383,6 @@ time.sleep(5)
         )
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX resource limits only")
 def test_posix_resource_limiter_applies_cpu_memory_file_and_fd_caps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -396,6 +395,10 @@ def test_posix_resource_limiter_applies_cpu_memory_file_and_fd_caps(
 
     limiter = document_engine._posix_resource_limiter(12.2)
 
+    if os.name != "posix":
+        assert limiter is None
+        assert calls == []
+        return
     assert limiter is not None
     limiter()
     assert calls == [

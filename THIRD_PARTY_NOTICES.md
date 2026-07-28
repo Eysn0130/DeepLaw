@@ -1,6 +1,6 @@
 # Third-Party Notices And Research References
 
-Reviewed: 2026-07-26
+Reviewed: 2026-07-28
 
 DeepLaw is licensed separately under the license declared by this repository.
 This document records upstream systems reviewed during architecture work and
@@ -37,9 +37,47 @@ release process.
   expansion, and external references while parsing untrusted DOCX XML members
 - Vendored source redistributed by this repository: no
 
-DeepLaw still applies independent DOCX source/member size and ZIP compression
-ratio limits. A successful safe XML parse is only extraction input; it does not
-establish source authority or activate a Knowledge Asset.
+DeepLaw still applies an independent bounded whole-archive inventory, member and
+expanded-size limits, compression-ratio limits, duplicate/path/encryption/symlink
+rejection, and footnote/endnote budgets. A successful safe XML parse is only
+extraction input; it does not establish source authority or activate a Knowledge
+Asset.
+
+## Compiler-Grade Code Grammar Dependencies
+
+DeepLaw's base runtime uses the official Tree-sitter Python binding and five
+language-grammar distributions for local Source IR construction:
+
+- `tree-sitter==0.26.0`;
+- `tree-sitter-javascript==0.25.0` for JavaScript and JSX;
+- `tree-sitter-typescript==0.23.2` for TypeScript and TSX;
+- `tree-sitter-java==0.23.5`;
+- `tree-sitter-go==0.25.0`;
+- `tree-sitter-rust==0.24.2`.
+
+Each listed distribution includes MIT license metadata and its own license file.
+They are installed as ordinary pinned dependencies; their source is not copied
+into this repository. DeepLaw binds the exact core and grammar versions into
+`adapter_version`, caps input and syntax-tree inventories, records syntax recovery
+as a quality flag, and uses a bounded lexical fallback only when the explicit
+size or node limit is exceeded. Parser output remains untrusted derived structure:
+it cannot establish source trust, approval, authority, or permission to execute
+source code.
+
+## Compiler-Grade SQL Parser Dependency
+
+- Project: [SQLGlot](https://github.com/tobymao/sqlglot)
+- Exact runtime version: `30.13.0`
+- Published terms: MIT
+- Integration form: in-process local parsing through the published Python API
+- Network or model dependency: none
+- Vendored source redistributed by this repository: no
+
+DeepLaw binds the exact SQLGlot version and generic dialect profile into
+`adapter_version`. It emits bounded statement, CTE, table, column, and line-span
+Source IR and records an explicit bounded lexical fallback when the closed parser
+rejects input or an input/tree limit is exceeded. SQL text and parser output remain
+untrusted data and are never executed by the Source Adapter.
 
 ## Optional External OCR Tools: Tesseract And Poppler
 
@@ -108,6 +146,34 @@ service-use conditions, and any separately granted permission applicable to
 their release. This notice is intentionally retained even where a project team
 has a separate permission grant.
 
+## Optional Linux CUDA Runtime Dependencies
+
+On Linux, the pinned `torch==2.13.0` dependency selected only by the optional
+`deeplaw[document-engine]` extra resolves the following NVIDIA packages:
+
+- `cuda-bindings==13.3.1` and `cuda-toolkit==13.0.3.0`;
+- `nvidia-cublas==13.1.1.3`, `nvidia-cuda-cupti==13.0.85`,
+  `nvidia-cuda-nvrtc==13.0.88`, and `nvidia-cuda-runtime==13.0.96`;
+- `nvidia-cudnn-cu13==9.20.0.48`, `nvidia-cufft==12.0.0.61`,
+  `nvidia-cufile==1.15.1.6`, and `nvidia-curand==10.4.0.35`;
+- `nvidia-cusolver==12.0.4.66`, `nvidia-cusparse==12.6.3.3`,
+  `nvidia-cusparselt-cu13==0.8.1`, and `nvidia-nccl-cu13==2.29.7`;
+- `nvidia-nvjitlink==13.3.33` and `nvidia-nvshmem-cu13==3.4.5`.
+
+The installed distributions identify NVIDIA software or proprietary terms;
+`cuda-toolkit==13.0.3.0` publishes no license field in its installed metadata.
+They are exact-version reviewed exceptions in the generated license inventory,
+not open-source approvals. NVIDIA publishes the governing
+[CUDA Toolkit EULA](https://docs.nvidia.com/cuda/eula/index.html), including
+use, redistribution, notice, and export-control conditions.
+
+DeepLaw's wheel, sdist, and default OCI image do not contain or redistribute
+these NVIDIA package bytes. A package installer downloads them separately only
+when an operator explicitly installs the `document-engine` extra on Linux. The
+operator is responsible for accepting and complying with NVIDIA's current terms;
+any version, metadata, bundling, or distribution change returns the release
+license gate to `review_required`.
+
 ## Optional Local Candidate Discovery
 
 The `deeplaw[discovery]` extra uses:
@@ -171,6 +237,14 @@ and have not contributed copied source code:
 | [infiniflow/ragflow](https://github.com/infiniflow/ragflow) | `14d361aa5116` | Apache-2.0 | Parser-adapter and legal-heading research reference |
 | [microsoft/graphrag](https://github.com/microsoft/graphrag) | `dac4f721ddc1` | MIT | Derived broad-topic graph research reference |
 | [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) | `0d905e40afa6` | Apache-2.0 | Derived LLM Wiki and Obsidian export reference |
+| [HKUDS/LightRAG](https://github.com/HKUDS/LightRAG) | `bbebdd64272d` | MIT | Local/global/hybrid graph-retrieval and rebuild reference |
+| [getzep/graphiti](https://github.com/getzep/graphiti) | `9140123a7282` | Apache-2.0 | Episode, valid-time fact, and incremental graph reference |
+| [mem0ai/mem0](https://github.com/mem0ai/mem0) | `b357a5a1b03c` | Apache-2.0 | Low-friction memory API and feedback reference |
+| [letta-ai/letta](https://github.com/letta-ai/letta) | `b76da9092518` | Apache-2.0 | Persistent memory-block reference |
+| [letta-ai/letta-code](https://github.com/letta-ai/letta-code) | `bd06074da707` | Apache-2.0 | Coding-Agent context and skill host reference |
+| [topoteretes/cognee](https://github.com/topoteretes/cognee) | `325acf356a81` | Apache-2.0 | Agent-hook and memory-pipeline reference |
+| [MemTensor/MemOS](https://github.com/MemTensor/MemOS) | `344cab73c2d0` | Apache-2.0 | Unified memory, correction, and asynchronous-ingest reference |
+| [obsidianmd/jsoncanvas](https://github.com/obsidianmd/jsoncanvas) | `456f843cb293` | MIT | Public JSON Canvas format |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Character-span retrieval metric reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External legal retrieval benchmark reference |
 
@@ -183,7 +257,8 @@ not assert that their full license texts are incorporated into DeepLaw.
 Results published by an upstream project may use different languages,
 corpora, labels, retrieval budgets, models, hardware, and cost assumptions.
 DeepLaw does not claim to outperform gbrain, PageIndex, KAG, RAGFlow,
-GraphRAG, OpenKB, LegalBench-RAG, LRAGE, or all RAG/LLM Wiki systems.
+GraphRAG, LightRAG, Graphiti, Mem0, Letta, Cognee, MemOS, OpenKB,
+WikiGraph, Obsidian, LegalBench-RAG, LRAGE, or all RAG/LLM Wiki systems.
 
 Any future comparative claim must be supported by a reproducible held-out
 Chinese legal benchmark that reports source/version correctness, citation-span

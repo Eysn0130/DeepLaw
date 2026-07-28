@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
+import stat
 import xml.etree.ElementTree as ET
 import zipfile
 from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from defusedxml import ElementTree as DefusedET
 from defusedxml.common import DefusedXmlException
@@ -18,7 +19,9 @@ from .vision import (
 )
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_MAX_OOXML_MEMBERS = 20_000
 _MAX_OOXML_MEMBER_BYTES = 64 * 1024 * 1024
+_MAX_OOXML_EXPANDED_BYTES = 512 * 1024 * 1024
 _MAX_TEXT_SOURCE_BYTES = 64 * 1024 * 1024
 _MAX_TEXT_CHARACTERS = 20 * 1024 * 1024
 _MAX_TEXT_LINE_CHARACTERS = 2 * 1024 * 1024
@@ -57,6 +60,7 @@ def _paragraph_text(
     element: ET.Element,
     *,
     footnotes: dict[str, str] | None = None,
+    endnotes: dict[str, str] | None = None,
 ) -> str:
     values: list[str] = []
     for node in element.iter():
@@ -68,6 +72,10 @@ def _paragraph_text(
             footnote_id = node.attrib.get(f"{_W}id", "")
             if footnote_text := footnotes.get(footnote_id):
                 values.append(f" [注{footnote_id}: {footnote_text}] ")
+        elif node.tag == f"{_W}endnoteReference" and endnotes:
+            endnote_id = node.attrib.get(f"{_W}id", "")
+            if endnote_text := endnotes.get(endnote_id):
+                values.append(f" [尾注{endnote_id}: {endnote_text}] ")
     return normalize_text("".join(values))
 
 
@@ -87,38 +95,111 @@ def _read_ooxml_member(archive: zipfile.ZipFile, member: str) -> bytes:
     return archive.read(member)
 
 
-def _read_footnotes(archive: zipfile.ZipFile) -> dict[str, str]:
+def _validate_ooxml_inventory(archive: zipfile.ZipFile) -> None:
+    infos = archive.infolist()
+    if not 1 <= len(infos) <= _MAX_OOXML_MEMBERS:
+        raise ExtractionError("DOCX archive member inventory exceeds its bound")
+    names: set[str] = set()
+    expanded_bytes = 0
+    for info in infos:
+        name = info.filename
+        path = PurePosixPath(name)
+        mode = info.external_attr >> 16
+        if (
+            not name
+            or name in names
+            or name.startswith("/")
+            or "\\" in name
+            or ".." in path.parts
+            or path.as_posix() != name.rstrip("/")
+            or any(ord(character) < 32 or ord(character) == 127 for character in name)
+            or info.flag_bits & 0x1
+            or stat.S_ISLNK(mode)
+        ):
+            raise ExtractionError("DOCX archive contains an unsafe or duplicate member")
+        names.add(name)
+        if info.is_dir():
+            continue
+        if info.file_size > _MAX_OOXML_MEMBER_BYTES:
+            raise ExtractionError(f"OOXML member is too large: {name}")
+        if info.compress_size and info.file_size / info.compress_size > 200:
+            raise ExtractionError(
+                f"OOXML member has an unsafe compression ratio: {name}"
+            )
+        expanded_bytes += info.file_size
+        if expanded_bytes > _MAX_OOXML_EXPANDED_BYTES:
+            raise ExtractionError("DOCX archive expanded size exceeds its bound")
+
+
+def _read_notes(
+    archive: zipfile.ZipFile,
+    *,
+    member: str,
+    note_tag: str,
+    label: str,
+) -> dict[str, str]:
     try:
-        payload = _read_ooxml_member(archive, "word/footnotes.xml")
+        payload = _read_ooxml_member(archive, member)
     except KeyError:
         return {}
     try:
         root = DefusedET.fromstring(payload)
     except (ET.ParseError, DefusedXmlException) as error:
-        raise ExtractionError("invalid DOCX footnotes XML") from error
+        raise ExtractionError(f"invalid DOCX {label} XML") from error
     values: dict[str, str] = {}
+    seen_ids: set[str] = set()
     character_count = 0
-    for footnote in root.findall(f"./{_W}footnote"):
-        footnote_id = footnote.attrib.get(f"{_W}id", "")
-        if not footnote_id or footnote_id.startswith("-") or footnote_id == "0":
+    for note in root.findall(f"./{_W}{note_tag}"):
+        note_id = note.attrib.get(f"{_W}id", "")
+        if not note_id or note_id.startswith("-") or note_id == "0":
             continue
-        text = _paragraph_text(footnote)
+        if note_id in seen_ids:
+            raise ExtractionError(f"DOCX {label} contains a duplicate note ID")
+        seen_ids.add(note_id)
+        text = _paragraph_text(note)
         if text:
             character_count += len(text)
             if (
                 len(values) >= _MAX_TEXT_BLOCKS
                 or character_count > _MAX_TEXT_CHARACTERS
             ):
-                raise ExtractionError("DOCX footnotes exceed the extraction budget")
-            values[footnote_id] = text
+                raise ExtractionError(f"DOCX {label} exceed the extraction budget")
+            values[note_id] = text
     return values
+
+
+def _read_footnotes(archive: zipfile.ZipFile) -> dict[str, str]:
+    return _read_notes(
+        archive,
+        member="word/footnotes.xml",
+        note_tag="footnote",
+        label="footnotes",
+    )
+
+
+def _read_endnotes(archive: zipfile.ZipFile) -> dict[str, str]:
+    return _read_notes(
+        archive,
+        member="word/endnotes.xml",
+        note_tag="endnote",
+        label="endnotes",
+    )
+
+
+def _paragraph_kind(element: ET.Element) -> str:
+    style = (_paragraph_style(element) or "").casefold()
+    if element.find(f"./{_W}pPr/{_W}numPr") is not None or style.startswith("list"):
+        return "list_item"
+    return "paragraph"
 
 
 def extract_docx(path: Path) -> ExtractionResult:
     try:
         with zipfile.ZipFile(path) as archive:
+            _validate_ooxml_inventory(archive)
             payload = _read_ooxml_member(archive, "word/document.xml")
             footnotes = _read_footnotes(archive)
+            endnotes = _read_endnotes(archive)
     except (OSError, KeyError, zipfile.BadZipFile) as error:
         raise ExtractionError(f"invalid DOCX: {path.name}") from error
 
@@ -134,7 +215,7 @@ def extract_docx(path: Path) -> ExtractionResult:
     paragraph_index = 0
     for child in body:
         if child.tag == f"{_W}p":
-            text = _paragraph_text(child, footnotes=footnotes)
+            text = _paragraph_text(child, footnotes=footnotes, endnotes=endnotes)
             if text:
                 paragraph_index += 1
                 blocks.append(
@@ -142,14 +223,15 @@ def extract_docx(path: Path) -> ExtractionResult:
                         text=text,
                         paragraph=paragraph_index,
                         style=_paragraph_style(child),
-                        kind="paragraph",
+                        kind=_paragraph_kind(child),
                         source="ooxml",
                     )
                 )
         elif child.tag == f"{_W}tbl":
             for row in child.findall(f"./{_W}tr"):
                 cells = [
-                    _paragraph_text(cell, footnotes=footnotes) for cell in row.findall(f"./{_W}tc")
+                    _paragraph_text(cell, footnotes=footnotes, endnotes=endnotes)
+                    for cell in row.findall(f"./{_W}tc")
                 ]
                 text = normalize_text(" | ".join(value for value in cells if value))
                 if text:
@@ -173,7 +255,7 @@ def extract_docx(path: Path) -> ExtractionResult:
         blocks=tuple(blocks),
         quality=ExtractionQuality(
             extractor="ooxml",
-            extractor_version="deeplaw-ooxml/v2",
+            extractor_version="deeplaw-ooxml/v3",
             block_count=len(blocks),
             page_count=None,
             character_count=character_count,

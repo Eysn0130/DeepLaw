@@ -68,7 +68,12 @@ def _secure_directory(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     if not path.is_dir():
         raise RuntimeError(f"private library path is not a directory: {path}")
-    os.chmod(path, 0o700)
+    if os.name == "posix":
+        os.chmod(path, 0o700)
+    else:
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(path)
     return path
 
 
@@ -270,19 +275,33 @@ def _restore_active(root: Path, release_id: str | None) -> None:
     os.chmod(root / "ACTIVE", 0o600)
 
 
-def _cleanup_releases(root: Path, *, keep: str | None) -> None:
+def _cleanup_releases(root: Path, *, keep: str | None) -> tuple[str, ...]:
     releases = root / "releases"
     if not releases.exists():
-        return
+        return ()
     if releases.is_symlink() or not releases.is_dir():
         raise RuntimeError("private releases directory is unsafe")
+    pending: list[str] = []
     for child in releases.iterdir():
         if child.name == keep:
             continue
         if child.is_symlink():
             raise RuntimeError(f"private release must not be a symbolic link: {child}")
         if child.is_dir():
-            shutil.rmtree(child)
+            try:
+                shutil.rmtree(child)
+            except PermissionError as error:
+                if os.name != "nt" or getattr(error, "winerror", None) != 32:
+                    raise
+                pending.append(child.name)
+    return tuple(sorted(pending))
+
+
+def _harden_private_tree(root: Path) -> None:
+    if os.name == "nt":
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(root)
 
 
 def _cleanup_sources(root: Path, documents: list[dict[str, Any]]) -> None:
@@ -306,7 +325,7 @@ def _publish_snapshot(
     *,
     pdf_fallback: str,
     allow_needs_ocr: bool,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], tuple[str, ...]]:
     previous_active = _read_active(root)
     requested_fallbacks = {state["pdf_fallback"], pdf_fallback}
     if "document-engine" in requested_fallbacks:
@@ -331,9 +350,9 @@ def _publish_snapshot(
         except BaseException:
             _restore_active(root, previous_active)
             raise
-        _cleanup_releases(root, keep=None)
+        pending_cleanup = _cleanup_releases(root, keep=None)
         _cleanup_sources(root, documents)
-        return next_state
+        return next_state, pending_cleanup
 
     workspace = Path(tempfile.mkdtemp(prefix=".private-build-", dir=root))
     try:
@@ -381,9 +400,10 @@ def _publish_snapshot(
         except BaseException:
             _restore_active(root, previous_active)
             raise
-        _cleanup_releases(root, keep=release_dir.name)
+        pending_cleanup = _cleanup_releases(root, keep=release_dir.name)
         _cleanup_sources(root, documents)
-        return next_state
+        _harden_private_tree(root)
+        return next_state, pending_cleanup
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -482,7 +502,7 @@ def add_private_document(
         "added_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
     try:
-        next_state = _publish_snapshot(
+        next_state, pending_cleanup = _publish_snapshot(
             root,
             state,
             [*state["documents"], document],
@@ -497,6 +517,7 @@ def add_private_document(
         "document": document,
         "active_release_id": next_state["active_release_id"],
         "document_count": len(next_state["documents"]),
+        "pending_cleanup_release_ids": list(pending_cleanup),
     }
 
 
@@ -513,7 +534,7 @@ def delete_private_document(
     documents = [item for item in state["documents"] if item["document_id"] != document_id]
     if len(documents) == len(state["documents"]):
         raise KeyError(f"unknown private document: {document_id}")
-    next_state = _publish_snapshot(
+    next_state, pending_cleanup = _publish_snapshot(
         root,
         state,
         documents,
@@ -525,6 +546,8 @@ def delete_private_document(
         "active_release_id": next_state["active_release_id"],
         "document_count": len(documents),
         "restart_required": True,
+        "deletion_complete": not pending_cleanup,
+        "pending_cleanup_release_ids": list(pending_cleanup),
     }
 
 

@@ -1,7 +1,7 @@
 # DeepLaw Architecture
 
-Status: current architecture baseline, reviewed against software version
-`v0.6.0` on 2026-07-27.
+Status: released `v0.7.0` architecture, reviewed 2026-07-28. Commercial GA eligibility is separate
+from competitive leadership eligibility.
 
 DeepLaw 2.0 is a local-first Agent Knowledge OS with two isolated products:
 
@@ -12,9 +12,9 @@ DeepLaw 2.0 is a local-first Agent Knowledge OS with two isolated products:
    version-aware releases and bounded legal evidence.
 
 Both Agent/MCP surfaces are read-only and optional. Offline CLI administration
-owns persistent writes. DeepLaw is used by Codex, Claude Code, and OpenCode and
-is designed for later scoped Analytix integration. It is not an Agent runtime,
-case workspace, transcript mirror, multi-tenant service, or LLM-authored legal
+owns persistent writes. DeepLaw is permanently local and single-user; it is not
+an Agent runtime, case workspace, transcript mirror, multi-tenant service,
+remote database, team RBAC system, enterprise SaaS, or LLM-authored legal
 authority.
 
 ## Decision Summary
@@ -23,10 +23,11 @@ authority.
   existing Legal Pack.
 - Keep source material, source fragments, reviewed assets, and derived views
   separate.
-- Use owner-only physical vaults, explicit lifecycle states, source hashes,
-  semantic-key supersession, a mutation audit chain, and current-state
-  reconciliation.
-- Compile task-specific Knowledge Capsules under item and character budgets.
+- Use Identity v2 for stable logical sources, immutable source/compilation/
+  proposal/Knowledge/governance revisions, many-to-many evidence, lineage,
+  temporal relations, owner-only physical vaults, and an audit chain.
+- Compile task-specific Knowledge Capsules through an evidence-governed
+  Retrieval Fabric under item, character, payload, source, and token budgets.
 - Keep every persistent knowledge write in the local CLI; the optional
   `knowledge_support` MCP server is read-only and excludes restricted data.
 - Treat portable `.dlk` v1 packages as content-verifiable but
@@ -40,8 +41,9 @@ authority.
 - Return at most five evidence cards, then fetch normalized extracted text by
   stable `segment_id`; `get` exposes truncation and accepts `max_chars` up to
   6000, while the official source and locator remain the comparison authority.
-- Keep semantic discovery, relationship discovery, reranking, and source-bound
-  explanations optional, derived, replaceable, and outside the authority decision.
+- Keep semantic discovery and reranking optional, pinned, derived, replaceable,
+  candidate-only, and outside authority. Reviewed relations and Source Tree are
+  bounded default candidates, never authority.
 - Keep the v0.5 Discovery Index outside default Context and MCP paths until a
   frozen held-out gate proves task benefit without context-noise, provenance,
   lifecycle, poisoning, or resource regressions.
@@ -52,6 +54,8 @@ authority.
   their candidate ranking or authority.
 - Never place case-private documents, conversations, facts, or identifiers in
   either DeepLaw scope.
+- Do not add multi-tenancy, team RBAC, a remote canonical database, default
+  telemetry, or a hosted control plane to the roadmap.
 
 The general core and Legal Pack share invariants, not mutable storage. Sources
 remain reproducible, generated knowledge remains derived, provider context is
@@ -141,9 +145,11 @@ flowchart LR
     A["Codex / Claude Code / OpenCode"] --> KS["knowledge_support\nexplicit read-only plugin"]
     A --> LS["law_support\nexplicit read-only plugin"]
 
-    KIN["Project sources / decisions /\nexperience / tool results"] --> KC["Knowledge Compiler"]
-    KC --> KV["Owner-only Knowledge Asset vault"]
-    KV --> CC["Context Compiler"]
+    KIN["Local sources / explicit URL or Git snapshots /\ndecisions / experience / tool results"] --> SA["Source Adapters / Source IR"]
+    SA --> KC["Many-to-Many Compiler"]
+    KC --> KV["Identity v2 owner-only vault"]
+    KV --> RF["Retrieval Fabric / Query Plan"]
+    RF --> CC["Admission + Context Compiler"]
     KV --> DI["Optional derived Discovery Index\ndefault off"]
     DI --> DR["Operator research\ncandidate IDs only"]
     CC --> KP["Bounded Knowledge Capsule"]
@@ -162,9 +168,9 @@ flowchart LR
     CASE -. "never enters" .-> LP
 ```
 
-Knowledge compilation, approval, revocation, package import, Legal Pack
+Knowledge compilation, Inbox promotion, approval, revocation, package import, Legal Pack
 building, official updates, and private add/delete are offline administrative
-surfaces. The software version `v0.6.0` MCP runtimes use
+surfaces. The current MCP runtimes use
 the SDK's low-level `Server` over local stdio only; it has no HTTP listener and
 no write operation. The Legal Pack process lifespan resolves and verifies one
 available release, computes database hashes once during startup, keeps each
@@ -199,6 +205,15 @@ separate per configured scope. Markdown is a deterministic projection. A
 portable `.dlk` package is deterministic for a fixed revision, but v1 has no
 publisher signature and imports only into quarantine.
 
+Local-path ingestion and explicit connector capture are separate operator surfaces. HTTPS capture
+creates a one-shot owner-only snapshot only after public-DNS/port-443/redirect/TLS/size/type/hash
+checks; its bytes remain `untrusted`. Local exact-Git capture reads bounded regular blobs from one
+full commit without clone, checkout, or lazy fetch. Both create the same closed v2 resumable job,
+then enter Source IR and proposal review. They never become a background service, implicit web
+fallback, MCP write tool, or authority source. Connector origin commitments contain the canonical
+HTTPS URL or a synthetic repository-ID/commit/relative-path URI; absolute Git paths remain private
+operator hints.
+
 Agent reads reconcile the hash-chained event inventory with current Asset,
 source, fragment, relation, and FTS state. A stable filesystem fingerprint
 allows reuse across unchanged reads; any file-identity or audit change forces a
@@ -206,9 +221,10 @@ full replay. Returned source-bound Assets additionally verify stored source
 bytes. Quarantined Assets require a second, explicit risk confirmation before
 human activation.
 
-Context selection starts with deterministic lexical admission and may expand
-exactly one bounded hop over a human-reviewed relation. Every Capsule item says
-why it was selected; untrusted question text is converted only into a fixed
+Context selection consumes the bounded Evidence-Governed Retrieval Fabric result. The default
+`auto` plan combines exact identifiers, fielded lexical retrieval, and only the Source Tree,
+reviewed relation, temporal, or feedback channels required by the parsed intent. Every Capsule
+item records its selected channel; untrusted question text is converted only into a fixed
 URI-based review action.
 
 The optional Discovery Index in
@@ -231,11 +247,11 @@ bounds selected content, source-reference metadata, and the complete serialized
 Capsule; the MCP envelope fails closed above 64 KiB. Its output schema is
 closed and operation-discriminated, with the Capsule schema bundled for hosts.
 
-The general core currently uses bounded lexical discovery plus deterministic
-kind priority and explicit reviewed relations. Embeddings, model-generated
-graph edges, ontology inference, and autonomous memory promotion are not
-required for correctness. They can be evaluated later as derived candidate
-channels, but may not bypass lifecycle, source, sensitivity, or budget gates.
+The general core uses a versioned Query Plan, bounded multi-channel candidate discovery, central
+admission, deterministic fusion and Duty-aware selection. Embeddings, model-generated graph edges,
+ontology inference, and autonomous memory promotion are not required for correctness. Optional
+Dense and reranker sidecars may only contribute candidates or rank changes and may not bypass
+lifecycle, source, sensitivity, or budget gates.
 
 ## Release Build Pipeline
 
@@ -277,7 +293,7 @@ normalized legal text, review governance, or build evidence creates a different
 logical release. SQLite binary bytes remain a separate artifact-integrity value;
 consumers bind both `release_id` and `database_sha256`.
 
-### Known Legal Pack release limitations in `v0.6.0`
+### Known Legal Pack release limitations in `v0.7.0`
 
 The current implementation is not itself a legal publication authority. The
 following gaps must remain visible until code and tests close them:
@@ -478,7 +494,7 @@ When the caller supplies `as_of`, candidates are classified as
 `verified_in_scope`, `unverified_metadata`, or `outside_effective_interval`.
 Only the first class can enter primary evidence for that temporal query;
 unknown or unreviewed dates are isolated in `uncertain_evidence`, and known
-out-of-scope material is excluded. Without temporal intent, `v0.6.0` records
+out-of-scope material is excluded. Without temporal intent, `v0.7.0` records
 `not_evaluated` for candidates that are not already known to be non-current.
 Known historical, repealed, superseded, or not-yet-effective candidates remain
 in `uncertain_evidence` until the caller supplies an applicable `as_of`; they
@@ -495,7 +511,7 @@ source hash for source comparison.
 
 The current model accepts document numbers, aliases, promulgation dates,
 jurisdiction, effective intervals, issuer/status fields, and hash-bound review
-metadata. SQLite v5 includes `legal_edges`, but the `v0.6.0` runtime produces only
+metadata. SQLite v5 includes `legal_edges`, but the `v0.7.0` runtime produces only
 `deterministic_exact` edges derived from an exact known-document-name reference
 in a source segment. Review-overlay relations are hash-bound governance
 proposals; they are not inserted into the runtime graph, and no current producer
@@ -531,7 +547,7 @@ review accepts it.
 
 The provider-facing schemas live in [`contracts`](../contracts):
 
-- DeepLaw 2.0 software version `v0.6.0` advertises `law-support.input` v2 for the eight official/private
+- DeepLaw 2.0 software version `v0.7.0` advertises `law-support.input` v2 for the eight official/private
   operations and retains input v1 as the official-only compatibility contract.
   Verification remains v1; the output union, search response, segment,
   release-info, evidence-card, and corpus release-manifest contracts are v2.
@@ -616,7 +632,7 @@ Derived layers are permitted only when all of the following hold:
   segment;
 - evaluated against exact/lexical-only retrieval before activation.
 
-The software version `v0.6.0` deterministic Legal Pack graph supports only `cites`, `amends`, `repeals`,
+The software version `v0.7.0` deterministic Legal Pack graph supports only `cites`, `amends`, `repeals`,
 `replaces`, `implements`, and `exception_to`. Each runtime edge is
 `deterministic_exact` and retains the source segment and evidence hash. Relations
 declared in a review overlay remain governance proposals; the current runtime

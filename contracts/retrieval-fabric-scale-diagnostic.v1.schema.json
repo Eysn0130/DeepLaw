@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/retrieval-fabric-scale-diagnostic.v1.schema.json",
+  "title": "DeepLaw Retrieval Fabric scale diagnostic v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "claim_eligible",
+    "claim_ineligibility_reason",
+    "candidate",
+    "environment",
+    "corpus",
+    "build",
+    "measurements",
+    "lifecycle",
+    "thresholds",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.retrieval-fabric-scale-diagnostic/v1"
+    },
+    "claim_eligible": { "const": false },
+    "claim_ineligibility_reason": { "type": "string", "minLength": 1 },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_line",
+        "package_version",
+        "commit",
+        "tracked_or_untracked_worktree_dirty",
+        "implementation_files"
+      ],
+      "properties": {
+        "candidate_line": { "const": "0.7.0-unreleased" },
+        "package_version": { "type": "string", "minLength": 1 },
+        "commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tracked_or_untracked_worktree_dirty": { "type": "boolean" },
+        "implementation_files": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^(src|benchmarks)/" },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "platform", "machine"],
+      "properties": {
+        "python": { "type": "string", "minLength": 1 },
+        "platform": { "type": "string", "minLength": 1 },
+        "machine": { "type": "string", "minLength": 1 }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_count",
+        "query_count",
+        "source_count",
+        "stored_asset_count_before_lifecycle_probe",
+        "stored_asset_count_after_lifecycle_probe",
+        "active_asset_count_after_lifecycle_probe",
+        "database_bytes",
+        "sources"
+      ],
+      "properties": {
+        "asset_count": { "type": "integer", "minimum": 100 },
+        "query_count": { "type": "integer", "minimum": 1 },
+        "source_count": { "type": "integer", "minimum": 1 },
+        "stored_asset_count_before_lifecycle_probe": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "stored_asset_count_after_lifecycle_probe": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "active_asset_count_after_lifecycle_probe": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "database_bytes": { "type": "integer", "minimum": 1 },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_id",
+              "source_revision_id",
+              "content_sha256",
+              "asset_count",
+              "compile_seconds",
+              "approval_seconds",
+              "approved_asset_count"
+            ],
+            "properties": {
+              "source_id": {
+                "type": "string",
+                "pattern": "^source_[0-9a-f]{24}$"
+              },
+              "source_revision_id": {
+                "type": "string",
+                "pattern": "^sourcerev_[0-9a-f]{24}$"
+              },
+              "content_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "asset_count": { "type": "integer", "minimum": 1 },
+              "compile_seconds": { "type": "number", "minimum": 0 },
+              "approval_seconds": { "type": "number", "minimum": 0 },
+              "approved_asset_count": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_seconds",
+        "open_seconds",
+        "cold_integrity_seconds",
+        "integrity_valid",
+        "final_integrity_cache_lookup_seconds",
+        "peak_rss_bytes",
+        "cold_cli_process_ms",
+        "cold_cli_exit_code",
+        "cold_cli_capsule_valid"
+      ],
+      "properties": {
+        "total_seconds": { "type": "number", "minimum": 0 },
+        "open_seconds": { "type": "number", "minimum": 0 },
+        "cold_integrity_seconds": { "type": "number", "minimum": 0 },
+        "integrity_valid": { "type": "boolean" },
+        "final_integrity_cache_lookup_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "peak_rss_bytes": { "type": ["integer", "null"], "minimum": 1 },
+        "cold_cli_process_ms": { "type": "number", "minimum": 0 },
+        "cold_cli_exit_code": { "type": "integer" },
+        "cold_cli_capsule_valid": { "type": "boolean" }
+      }
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lexical_hit_at_1",
+        "hybrid_hit_at_1",
+        "capsule_recall",
+        "capsule_verification_rate",
+        "provenance_coverage",
+        "no_answer_empty",
+        "lexical_p50_ms",
+        "lexical_p95_ms",
+        "hybrid_p50_ms",
+        "hybrid_p95_ms",
+        "recall_and_context_p50_ms",
+        "recall_and_context_p95_ms",
+        "average_selected_tokens_estimated",
+        "token_count_mode"
+      ],
+      "properties": {
+        "lexical_hit_at_1": { "$ref": "#/$defs/rate" },
+        "hybrid_hit_at_1": { "$ref": "#/$defs/rate" },
+        "capsule_recall": { "$ref": "#/$defs/rate" },
+        "capsule_verification_rate": { "$ref": "#/$defs/rate" },
+        "provenance_coverage": { "$ref": "#/$defs/rate" },
+        "no_answer_empty": { "type": "boolean" },
+        "lexical_p50_ms": { "type": "number", "minimum": 0 },
+        "lexical_p95_ms": { "type": "number", "minimum": 0 },
+        "hybrid_p50_ms": { "type": "number", "minimum": 0 },
+        "hybrid_p95_ms": { "type": "number", "minimum": 0 },
+        "recall_and_context_p50_ms": { "type": "number", "minimum": 0 },
+        "recall_and_context_p95_ms": { "type": "number", "minimum": 0 },
+        "average_selected_tokens_estimated": { "type": "number", "minimum": 0 },
+        "token_count_mode": { "const": "estimated" }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initial_compile_and_approval_seconds",
+        "source_update_seconds",
+        "selective_forgetting_seconds",
+        "post_forgetting_retrieval_and_integrity_seconds",
+        "final_integrity_cache_lookup_seconds",
+        "final_integrity_valid",
+        "initial_source_id",
+        "updated_source_id",
+        "source_key_stable",
+        "source_revision_changed",
+        "initial_approved_asset_count",
+        "updated_approved_asset_count",
+        "update_correct",
+        "updated_asset_id",
+        "updated_knowledge_key",
+        "forgetting_correct",
+        "forgotten_asset_id",
+        "forgotten_knowledge_key",
+        "history_retained",
+        "stored_asset_count",
+        "active_asset_count"
+      ],
+      "properties": {
+        "initial_compile_and_approval_seconds": { "type": "number", "minimum": 0 },
+        "source_update_seconds": { "type": "number", "minimum": 0 },
+        "selective_forgetting_seconds": { "type": "number", "minimum": 0 },
+        "post_forgetting_retrieval_and_integrity_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "final_integrity_cache_lookup_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "final_integrity_valid": { "type": "boolean" },
+        "initial_source_id": { "$ref": "#/$defs/source_id" },
+        "updated_source_id": { "$ref": "#/$defs/source_id" },
+        "source_key_stable": { "type": "boolean" },
+        "source_revision_changed": { "type": "boolean" },
+        "initial_approved_asset_count": { "type": "integer", "minimum": 1 },
+        "updated_approved_asset_count": { "type": "integer", "minimum": 1 },
+        "update_correct": { "type": "boolean" },
+        "updated_asset_id": { "$ref": "#/$defs/asset_id" },
+        "updated_knowledge_key": { "$ref": "#/$defs/knowledge_key" },
+        "forgetting_correct": { "type": "boolean" },
+        "forgotten_asset_id": { "$ref": "#/$defs/asset_id" },
+        "forgotten_knowledge_key": { "$ref": "#/$defs/knowledge_key" },
+        "history_retained": { "type": "boolean" },
+        "stored_asset_count": { "type": "integer", "minimum": 1 },
+        "active_asset_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formal_100k_run",
+        "million_asset_diagnostic_run",
+        "warm_lexical_p95_lt_50_ms",
+        "warm_hybrid_p95_lt_500_ms",
+        "recall_and_context_p95_lt_750_ms",
+        "quality_and_integrity_passed"
+      ],
+      "properties": {
+        "formal_100k_run": { "type": "boolean" },
+        "million_asset_diagnostic_run": { "type": "boolean" },
+        "warm_lexical_p95_lt_50_ms": { "type": "boolean" },
+        "warm_hybrid_p95_lt_500_ms": { "type": "boolean" },
+        "recall_and_context_p95_lt_750_ms": { "type": "boolean" },
+        "quality_and_integrity_passed": { "type": "boolean" }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "source_id": {
+      "type": "string",
+      "pattern": "^source_[0-9a-f]{24}$"
+    },
+    "asset_id": {
+      "type": "string",
+      "pattern": "^asset_[0-9a-f]{24}$"
+    },
+    "knowledge_key": {
+      "type": "string",
+      "pattern": "^knowledge_[0-9a-f]{24}$"
+    }
+  }
+}

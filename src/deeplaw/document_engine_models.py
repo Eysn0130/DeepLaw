@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import shutil
 import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -159,6 +160,12 @@ def _load_model_config() -> dict[str, Any]:
     if path.stat().st_size > _MAX_CONFIG_BYTES:
         raise RuntimeError("DeepLaw document model configuration exceeds 64 KiB")
     _check_owner_writable_path(path, description="DeepLaw document model configuration")
+    if os.name == "nt":
+        from .windows_acl import native_windows_acl_report
+
+        acl = native_windows_acl_report(path.parent)
+        if not acl["permissions_verified"]:
+            raise RuntimeError("DeepLaw document model configuration ACL is not owner-only")
     try:
         value = strict_json_loads(path.read_bytes())
     except (OSError, UnicodeDecodeError, ValueError) as error:
@@ -200,7 +207,11 @@ def _model_tree_files(root: Path) -> set[str]:
     return files
 
 
-def verify_model_root(model_root: str | Path) -> dict[str, Any]:
+def verify_model_root(
+    model_root: str | Path,
+    *,
+    _require_windows_acl: bool = True,
+) -> dict[str, Any]:
     root = Path(model_root).expanduser()
     if not root.is_absolute():
         raise RuntimeError("DeepLaw document model root must be absolute")
@@ -211,6 +222,12 @@ def verify_model_root(model_root: str | Path) -> dict[str, Any]:
     if not root.is_dir():
         raise RuntimeError("DeepLaw document model root is not a directory")
     _check_owner_writable_path(root, description="DeepLaw document model root")
+    if os.name == "nt" and _require_windows_acl:
+        from .windows_acl import native_windows_acl_report
+
+        acl = native_windows_acl_report(root)
+        if not acl["permissions_verified"]:
+            raise RuntimeError("DeepLaw document model Windows ACL is not owner-only")
 
     expected_paths = {item.path for item in _PINNED_MODEL_FILES}
     if _model_tree_files(root) != expected_paths:
@@ -302,9 +319,48 @@ def _write_model_config(model_root: Path) -> Path:
         os.replace(temporary, path)
         if os.name == "posix":
             os.chmod(path, 0o600)
+        else:
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(root)
     finally:
         temporary.unlink(missing_ok=True)
     return path
+
+
+def _copy_windows_model_bundle(downloaded: Path) -> Path:
+    root = default_home().expanduser().absolute() / "document-engine" / "model-bundles"
+    destination = root / MODEL_REVISION
+    if destination.exists():
+        return destination
+    if root.is_symlink():
+        raise RuntimeError("DeepLaw Windows model bundle root must not be a reparse point")
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = root / f".{MODEL_REVISION}.{secrets.token_hex(8)}.tmp"
+    temporary.mkdir(mode=0o700)
+    try:
+        for item in _PINNED_MODEL_FILES:
+            source = downloaded / item.path
+            resolved = source.resolve(strict=True)
+            if (
+                not resolved.is_file()
+                or resolved.stat().st_size != item.byte_size
+                or sha256_file(resolved) != item.sha256
+            ):
+                raise RuntimeError(
+                    f"downloaded document model file failed its pin: {item.path}"
+                )
+            target = temporary / item.path
+            target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            shutil.copyfile(resolved, target)
+        os.replace(temporary, destination)
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(destination)
+    except BaseException:
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise
+    return destination
 
 
 def install_models(*, local_files_only: bool = False) -> dict[str, Any]:
@@ -326,7 +382,13 @@ def install_models(*, local_files_only: bool = False) -> dict[str, Any]:
     except Exception as error:
         mode = "local cache" if local_files_only else "pinned model source"
         raise RuntimeError(f"DeepLaw could not provision models from the {mode}") from error
-    verified = verify_model_root(Path(downloaded))
+    downloaded_root = Path(downloaded)
+    if os.name == "nt":
+        verify_model_root(downloaded_root, _require_windows_acl=False)
+        model_root = _copy_windows_model_bundle(downloaded_root)
+    else:
+        model_root = downloaded_root
+    verified = verify_model_root(model_root)
     path = _write_model_config(Path(verified["model_root"]))
     return {**verified, "config_path": str(path)}
 

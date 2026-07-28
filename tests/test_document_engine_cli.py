@@ -182,6 +182,9 @@ def test_openvex_records_the_exact_reviewed_transformers_exceptions() -> None:
         == "deeplaw/security/openvex.json"
     )
     assert {statement["vulnerability"]["name"] for statement in statements} == {
+        "GHSA-29pf-2h5f-8g72",
+        "GHSA-69w3-r845-3855",
+        "GHSA-fgcw-684q-jj6r",
         "PYSEC-2025-217",
         "PYSEC-2026-2288",
         "PYSEC-2026-2289",
@@ -190,7 +193,7 @@ def test_openvex_records_the_exact_reviewed_transformers_exceptions() -> None:
     for statement in statements:
         assert statement["products"] == [
             {
-                "@id": "pkg:pypi/deeplaw@0.6.0",
+                "@id": "pkg:pypi/deeplaw@0.7.0",
                 "subcomponents": [{"@id": "pkg:pypi/transformers@4.57.6"}],
             }
         ]

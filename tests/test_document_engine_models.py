@@ -34,6 +34,10 @@ def _fake_bundle(
     (root / "models/ocr").mkdir(parents=True)
     (root / files[0].path).write_bytes(b"layout")
     (root / files[1].path).write_bytes(b"ocr")
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_vault
+
+        harden_windows_vault(root)
     return root
 
 
@@ -77,16 +81,20 @@ def test_rejects_extra_or_tampered_model_files(
         document_engine_models.verify_model_root(root)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX permission policy")
 def test_rejects_a_group_writable_model_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = _fake_bundle(tmp_path, monkeypatch)
-    root.chmod(0o770)
+    if os.name == "posix":
+        root.chmod(0o770)
+        with pytest.raises(RuntimeError, match="group- or world-writable"):
+            document_engine_models.verify_model_root(root)
+    else:
+        from deeplaw.windows_acl import native_windows_acl_report
 
-    with pytest.raises(RuntimeError, match="group- or world-writable"):
-        document_engine_models.verify_model_root(root)
+        assert native_windows_acl_report(root)["permissions_verified"] is True
+        assert document_engine_models.verify_model_root(root)["configured"] is True
 
 
 def test_setup_is_explicit_and_writes_an_owner_only_verified_config(
@@ -120,8 +128,24 @@ def test_setup_is_explicit_and_writes_an_owner_only_verified_config(
     ]
     assert result["configured"] is True
     config = Path(result["config_path"])
-    assert config.stat().st_mode & 0o777 == 0o600
-    assert document_engine_models.verify_installed_models()["model_root"] == str(root.resolve())
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_acl_report
+
+        assert native_windows_acl_report(config.parent)["permissions_verified"] is True
+    else:
+        assert config.stat().st_mode & 0o777 == 0o600
+    installed_root = Path(document_engine_models.verify_installed_models()["model_root"])
+    if os.name == "nt":
+        expected_root = (
+            home
+            / "document-engine"
+            / "model-bundles"
+            / document_engine_models.MODEL_REVISION
+        )
+        assert installed_root == expected_root.resolve()
+        assert installed_root != root.resolve()
+    else:
+        assert installed_root == root.resolve()
 
 
 def test_ingest_environment_ignores_upstream_overrides_and_forces_local_offline_models(

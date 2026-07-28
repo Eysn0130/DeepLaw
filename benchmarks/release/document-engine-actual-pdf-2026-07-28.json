@@ -1,0 +1,67 @@
+{
+  "candidate": {
+    "candidate_line": "0.7.0-unreleased",
+    "commit": "9a189e02834642471840446b3210bad0cc8bffc3",
+    "implementation_files": {
+      "benchmarks/release/run_document_engine_actual_pdf.py": "75245cd51a8da5b48a3cdb4ebbff1e39d34ba161144bcbd550e7888b6744ce25",
+      "src/deeplaw/document_engine.py": "44d297394b89e53fe0a1ece6c5906dba2036b840090e992a6c9879bd8d3fbc4c",
+      "src/deeplaw/document_engine_cli.py": "791d1b738f64594d17278280435418865586e3f5963a37938138bba75005af40",
+      "src/deeplaw/document_engine_models.py": "949a2f3305324ccdb8665ef60a3be75738a92f943c3f7e629c0aaf3c7c6c7556"
+    },
+    "package_version": "0.7.0",
+    "worktree_dirty": false
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "single synthetic PDF in one local environment; not a frozen release, real-document corpus, or cross-platform gate",
+  "engine": {
+    "configuration": [
+      "method=txt",
+      "backend=pipeline",
+      "language=en",
+      "pages=1-1"
+    ],
+    "name": "deeplaw-document-engine",
+    "output_schema": "content_list_v2",
+    "version": "deeplaw-document-engine 3.4.4 model-manifest-sha256=c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12"
+  },
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "fixture": {
+    "generator": "reportlab",
+    "generator_version": "4.5.1",
+    "page_count": 1,
+    "pdf_bytes": 1483,
+    "pdf_sha256": "c3c396707be8de22d947f4f2cb99adef6f51ff6add58223e409e6096882e1039",
+    "source_text_sha256": "138cc5b28c525bd1f67be8badde862a88389e9867f37ed7b1974daa70774d7de"
+  },
+  "limitations": [
+    "The fixture is a generated text-only one-page PDF.",
+    "It does not cover OCR, tables, figures, damaged files, or multilingual layout.",
+    "A single-environment synthetic diagnostic cannot become competitive-claim evidence."
+  ],
+  "models": {
+    "file_count": 15,
+    "manifest_sha256": "c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12",
+    "network_during_ingest": false,
+    "repository": "opendatalab/PDF-Extract-Kit-1.0",
+    "revision": "ed6b654c018d742e65a17671e379c5e6ecc87ec9",
+    "total_bytes": 1082446509,
+    "verified": true
+  },
+  "result": {
+    "block_count": 2,
+    "block_types": [
+      "paragraph"
+    ],
+    "elapsed_seconds": 11.665683208964765,
+    "expected_text_observed": true,
+    "output_characters": 109,
+    "output_text_sha256": "138cc5b28c525bd1f67be8badde862a88389e9867f37ed7b1974daa70774d7de",
+    "page_count": 1,
+    "success": true
+  },
+  "schema_version": "deeplaw.document-engine-actual-pdf-diagnostic/v1"
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/baseline-adapter-registry.v1.schema.json",
+  "title": "DeepLaw named-baseline adapter registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate_line", "reviewed_at", "purpose", "shared_models", "fairness", "systems", "result_policy"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.baseline-adapter-registry/v1"},
+    "candidate_line": {
+      "enum": ["0.7.0-unreleased", "0.7.0-frozen-evaluation-candidate"]
+    },
+    "reviewed_at": {"type": "string", "format": "date"},
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "shared_models": {"type": "object", "minProperties": 1, "maxProperties": 16, "additionalProperties": {"type": "object"}},
+    "fairness": {"type": "object", "minProperties": 9, "maxProperties": 9, "additionalProperties": {"const": true}},
+    "systems": {"type": "array", "minItems": 17, "maxItems": 64, "items": {"type": "object"}},
+    "result_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_status", "claim_eligible", "required_before_claim"],
+      "properties": {
+        "current_status": {"const": "pending_execution"},
+        "claim_eligible": {"const": false},
+        "required_before_claim": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "string", "minLength": 1, "maxLength": 1000}}
+      }
+    }
+  }
+}

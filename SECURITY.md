@@ -1,6 +1,6 @@
 # Security Policy
 
-DeepLaw 2.0 is a local-first Agent Knowledge OS with a separate Chinese Legal
+DeepLaw 2.0 is a local, single-OS-user Agent Knowledge OS with a separate Chinese Legal
 Pack. Both Agent/MCP surfaces are read-only; persistent Knowledge Asset and
 Legal Pack administration is local CLI work. The repository distributes code
 under Apache License 2.0; it does not distribute legal-source packages, case
@@ -8,8 +8,9 @@ documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.6.0`, and
-the `main` branch. Older versions, local knowledge-release artifacts, and
+Security fixes are evaluated for the current software release, `v0.7.0`, and the `main` branch.
+The release manifest records `commercial_release_eligible=true`; competitive leadership remains
+separate with `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says
 otherwise.
 
@@ -85,16 +86,21 @@ not an online revocation or freeze-detection service.
 ## Knowledge Asset threat boundary
 
 Knowledge vaults are isolated by physical directories and operating-system
-owner permissions. This is a single-user local security boundary, not
-multi-tenant authorization or encryption at rest. Deployments that serve
-multiple users require an external authenticated service boundary; sharing one
-vault path is unsupported.
+owner permissions. This is intentionally a single-user local security boundary,
+not multi-tenant authorization or application-level encryption at rest. DeepLaw
+does not plan a team-RBAC, remote-database, or hosted-SaaS mode. Sharing one
+vault path between OS users is unsupported; use separate vaults and OS identities.
+Use the operating system's full-disk encryption when confidentiality at rest is
+required.
 
-`deeplaw knowledge doctor --permissions` verifies owner-only mode and symlink safety for the
-Vault root, manifest, database, source directory, and stored source files on POSIX systems. It
-does not treat those mode bits as proof of equivalent NTFS ACL isolation. On Windows it returns
-`not_verified`; use a dedicated OS identity and native ACL review until a Windows-specific gate
-is implemented.
+`deeplaw knowledge doctor --permissions` verifies owner-only permissions and
+link safety for the Vault root, manifest, database, stored sources, model files,
+and derived index files. POSIX uses ownership and mode checks. Windows uses
+native security descriptors: it verifies the owner SID, rejects broad grants to
+Users or Everyone, and rejects reparse points and junctions. Initialization and
+administrative write paths apply owner-only ACL hardening. The release workflow runs the
+Windows-only native ACL, junction, and reparse-point tests on `windows-latest` with zero mandatory
+skips and publishes the bound platform report.
 
 Source files, conversation exports, tool results, packages, and generated
 lessons are untrusted inputs. They compile to proposed or quarantined assets.
@@ -103,6 +109,31 @@ Instruction-like and invisible-control content quarantines both compiled and
 manual proposals. Quarantine activation requires an additional explicit risk
 confirmation. Even approved source content is data unless the asset is an approved
 constraint/rule/procedure.
+
+Explicit Source Snapshot connectors are offline administration, not Agent retrieval. HTTPS
+preflight never resolves DNS or opens a connection. Capture requires `--confirm-network`, permits
+only canonical public-DNS HTTPS on port 443, rejects credentials/query/fragment/IP literals and any
+non-global or mixed DNS answer, pins the chosen IP while validating TLS SNI, and repeats the check
+for every redirect. It accepts at most five redirects and 64 MiB, requests identity encoding,
+rejects compressed or ambiguous-length responses, and can require an expected SHA-256. It does not
+honor proxy variables or fall back to another fetcher; networks that expose only private,
+benchmark, or interception DNS addresses fail closed. Remote bytes are always `untrusted` and
+review-gated.
+
+The Git connector accepts only an existing non-symlink local directory, a stable non-secret
+repository ID, and an exact full commit object ID. It executes only bounded `rev-parse`, `ls-tree`,
+and `cat-file` plumbing with shell disabled, replacement objects and lazy fetch disabled, prompts
+disabled, and global/system Git config ignored. It performs no clone or checkout. Only regular
+supported blobs enter snapshots, and each returned byte sequence is checked against its Git object
+ID. The absolute repository path is owner-only operational metadata; canonical identity contains
+only the synthetic repository ID, commit, and encoded relative path.
+
+Snapshot directories, manifests, and bytes are owner-only and hash-bound to the Vault, connector,
+origin, logical path, and content. Resumable ingest re-verifies the snapshot record and bytes before
+compilation. Snapshot jobs are not registered for watch/sync, connector commands are absent from
+both MCP servers, and capture success never grants review, applicability, legal authority, or
+activation. These checks reduce SSRF and accidental provenance drift; they do not defend against
+arbitrary same-owner code execution that can rewrite all local files and audit state.
 
 DOCX is treated as an untrusted ZIP container. OOXML members have byte and
 compression-ratio bounds, and XML parsing rejects DTD declarations, entity
@@ -213,10 +244,11 @@ legal authority.
 The frozen default dependency graph has no findings in the documented
 `pip-audit` gate. The optional document-engine graph currently includes
 `transformers==4.57.6` because the pinned pipeline dependency requires
-`transformers<5`. `pip-audit` reports four unique PYSEC identifiers (five
-records) against code paths for X-CLIP conversion, Trainer checkpoint restore,
-user-selected causal-model repositories, and LightGlue remote models. Those
-paths are outside DeepLaw's closed pipeline execution surface. The
+`transformers<5`. The current audit reports the exact PYSEC/GHSA identifiers
+recorded in the checked-in OpenVEX document against code paths for X-CLIP
+conversion, Trainer checkpoint restore, user-selected causal-model
+repositories, and LightGlue remote models. Those paths are outside DeepLaw's
+closed pipeline execution surface. The
 [OpenVEX statement](security/openvex.json) records that product-level
 assessment; it is not a claim that the upstream `transformers` distribution
 has no advisories.
@@ -224,7 +256,14 @@ has no advisories.
 Any change to the DeepLaw version, document-engine dependency, `transformers`
 version, backend, accepted arguments, model-loading path, or MCP exposure
 invalidates that assessment and requires a new audit, VEX version, and actual
-document-engine test. The reproducible gates are:
+document-engine test. The current dirty-worktree construction diagnostic is
+recorded in
+[`benchmarks/release/document-engine-actual-pdf-2026-07-28.json`](benchmarks/release/document-engine-actual-pdf-2026-07-28.json):
+the pinned 15-file model bundle was fully rehashed, a generated one-page PDF was
+processed through the real `pipeline/txt/en` entrypoint without ingest-time
+network access, and the expected text hash matched. It is narrow local evidence,
+not a frozen release, OCR/layout corpus, or cross-platform security claim. The
+reproducible gates are:
 
 ```bash
 uv export --frozen --no-dev --no-emit-project --no-header \
@@ -234,6 +273,9 @@ uv export --frozen --no-dev --no-emit-project --no-header \
 uv export --frozen --no-dev --extra document-engine --no-emit-project \
   --no-header --format requirements-txt \
   | uvx pip-audit --no-deps --disable-pip -r /dev/stdin \
+    --ignore-vuln GHSA-29pf-2h5f-8g72 \
+    --ignore-vuln GHSA-69w3-r845-3855 \
+    --ignore-vuln GHSA-fgcw-684q-jj6r \
     --ignore-vuln PYSEC-2025-217 \
     --ignore-vuln PYSEC-2026-2288 \
     --ignore-vuln PYSEC-2026-2289 \

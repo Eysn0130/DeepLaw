@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/manual-baseline-execution-receipt.v1.schema.json",
+  "title": "DeepLaw scripted-human baseline execution receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "plan_sha256", "registry_sha256", "system_id",
+    "implementation_revision", "evaluation_environment_record_sha256",
+    "execution_status", "raw_output", "resource_record", "resource_record_sha256",
+    "manual_record", "manual_record_sha256", "query_case_count",
+    "query_case_ids_sha256", "output_case_count", "output_case_ids_sha256",
+    "output_validation", "resource_validation", "manual_validation", "failure_reason",
+    "claim_eligible", "claim_ineligibility_reason", "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.manual-baseline-execution-receipt/v1"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "registry_sha256": {"$ref": "#/$defs/sha256"},
+    "system_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "implementation_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "evaluation_environment_record_sha256": {"$ref": "#/$defs/sha256"},
+    "execution_status": {
+      "enum": ["succeeded", "output_invalid", "resource_invalid", "manual_record_invalid"]
+    },
+    "raw_output": {"$ref": "#/$defs/nullable_artifact"},
+    "resource_record": {"$ref": "#/$defs/nullable_small_artifact"},
+    "resource_record_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "manual_record": {"$ref": "#/$defs/nullable_small_artifact"},
+    "manual_record_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "query_case_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "query_case_ids_sha256": {"$ref": "#/$defs/sha256"},
+    "output_case_count": {"type": ["integer", "null"], "minimum": 1, "maximum": 1000000},
+    "output_case_ids_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "output_validation": {"enum": ["passed", "failed"]},
+    "resource_validation": {"enum": ["passed", "failed"]},
+    "manual_validation": {"enum": ["passed", "failed"]},
+    "failure_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 1000},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reason": {"type": "string", "minLength": 1, "maxLength": 500},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 536870912}
+      }
+    },
+    "small_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 4194304}
+      }
+    },
+    "nullable_artifact": {"anyOf": [{"$ref": "#/$defs/artifact"}, {"type": "null"}]},
+    "nullable_small_artifact": {
+      "anyOf": [{"$ref": "#/$defs/small_artifact"}, {"type": "null"}]
+    }
+  }
+}

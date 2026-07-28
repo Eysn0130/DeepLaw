@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/benchmark-corpus-commitment.v1.schema.json",
+  "title": "Pre-delivery benchmark corpus and query commitment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "commitment_id", "evaluator_organization",
+    "commitment_stage", "corpus_sha256", "queries_sha256",
+    "query_case_ids_sha256", "corpus_record_count", "query_case_count",
+    "labels_access", "committed_at", "claim_eligible", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.benchmark-corpus-commitment/v1"},
+    "commitment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "evaluator_organization": {"type": "string", "minLength": 1, "maxLength": 200},
+    "commitment_stage": {"const": "before_candidate_delivery"},
+    "corpus_sha256": {"$ref": "#/$defs/sha256"},
+    "queries_sha256": {"$ref": "#/$defs/sha256"},
+    "query_case_ids_sha256": {"$ref": "#/$defs/sha256"},
+    "corpus_record_count": {"type": "integer", "minimum": 1, "maximum": 100000000},
+    "query_case_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "labels_access": {"enum": ["public_frozen", "external_evaluator_only"]},
+    "committed_at": {"type": "string", "format": "date-time", "maxLength": 40},
+    "claim_eligible": {"const": false},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

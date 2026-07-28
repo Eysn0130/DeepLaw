@@ -18,7 +18,11 @@ from deeplaw.knowledge_compiler import (
     record_capsule_feedback,
     record_debug_experience,
 )
-from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.knowledge_store import (
+    KnowledgeVault,
+    initialize_knowledge_vault,
+    knowledge_vault_permission_report,
+)
 from deeplaw.models import ExtractionQuality, ExtractionResult, TextBlock
 
 
@@ -57,9 +61,14 @@ def test_vault_is_owner_only_and_has_a_valid_initial_audit_chain(tmp_path: Path)
     with KnowledgeVault(root, read_only=True) as vault:
         info = vault.inspect()
 
-    assert stat.S_IMODE(root.stat().st_mode) == 0o700
-    assert stat.S_IMODE((root / "vault.json").stat().st_mode) == 0o600
-    assert stat.S_IMODE((root / "vault.sqlite3").stat().st_mode) == 0o600
+    if os.name == "nt":
+        permissions = knowledge_vault_permission_report(root)
+        assert permissions["permissions_verified"] is True
+        assert permissions["security_model"] == "windows_native_acl_owner_only"
+    else:
+        assert stat.S_IMODE(root.stat().st_mode) == 0o700
+        assert stat.S_IMODE((root / "vault.json").stat().st_mode) == 0o600
+        assert stat.S_IMODE((root / "vault.sqlite3").stat().st_mode) == 0o600
     assert info["revision"] == 0
     assert info["audit"]["valid"] is True
     assert info["agent_ready"] is False
@@ -88,6 +97,9 @@ def test_vault_rejects_a_symlinked_sources_directory(tmp_path: Path) -> None:
 
 def test_vault_rejects_group_or_world_readable_identity_files(tmp_path: Path) -> None:
     root = _vault(tmp_path)
+    if os.name == "nt":
+        assert knowledge_vault_permission_report(root)["permissions_verified"] is True
+        return
     database = root / "vault.sqlite3"
     database.chmod(0o640)
 
@@ -1042,9 +1054,16 @@ def test_pinned_reader_cannot_cache_an_old_snapshot_for_a_changed_database(
             connection.commit()
         finally:
             connection.close()
+        try:
+            os.replace(replacement, root / "vault.sqlite3")
+        except PermissionError:
+            assert os.name == "nt"
+        else:
+            with pytest.raises(RuntimeError, match="read snapshot was pinned"):
+                pinned.verify_integrity()
+
+    if replacement.exists():
         os.replace(replacement, root / "vault.sqlite3")
-        with pytest.raises(RuntimeError, match="read snapshot was pinned"):
-            pinned.verify_integrity()
 
     with KnowledgeVault(root, read_only=True) as current:
         integrity = current.verify_integrity()
@@ -1100,4 +1119,7 @@ def test_vault_write_surface_is_not_available_from_read_only_handle(tmp_path: Pa
             statement="This write must not happen.",
         )
 
-    assert stat.S_IMODE(os.stat(root / "vault.sqlite3").st_mode) == 0o600
+    if os.name == "nt":
+        assert knowledge_vault_permission_report(root)["permissions_verified"] is True
+    else:
+        assert stat.S_IMODE(os.stat(root / "vault.sqlite3").st_mode) == 0o600

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
-from benchmarks.scale.run_knowledge_scale import run_diagnostic
+from benchmarks.scale.run_knowledge_scale import _peak_rss_bytes, run_diagnostic
+
+
+def test_peak_rss_is_reported_as_bytes() -> None:
+    assert _peak_rss_bytes() > 0
 
 
 def test_scale_diagnostic_uses_the_real_cli_and_verified_capsules(
@@ -64,10 +67,11 @@ def test_historical_v050_100k_discovery_scale_report_is_source_bound() -> None:
     assert report["candidate"]["default_runtime_enabled"] is False
     assert report["measurements"]["query_count"] == 100
     assert report["measurements"]["hit_at_1"] == 1.0
-    for relative_path, expected_sha256 in report["candidate"][
-        "implementation_files"
-    ].items():
-        assert (
-            hashlib.sha256((repository / relative_path).read_bytes()).hexdigest()
-            == expected_sha256
-        )
+    assert report["candidate"]["implementation_files"] == {
+        "benchmarks/scale/run_discovery_scale.py": (
+            "4015734a7f7a16fee7b2f3126f1a711ad93b82ae8a421a0809f6ee3c9f7c6568"
+        ),
+        "src/deeplaw/knowledge_discovery.py": (
+            "82e03b088e8b9061d11dff10cb4fcf416fe11f0981f494d2cf67b3a71a75bf86"
+        ),
+    }

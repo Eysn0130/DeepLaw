@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/skill-bundle.v1.schema.json",
+  "title": "DeepLaw revision-bound read-only Agent Skill bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "skill_name",
+    "description",
+    "source_vault",
+    "scope",
+    "context_budget",
+    "knowledge_keys",
+    "asset_revisions",
+    "source_hashes",
+    "targets",
+    "generated_files",
+    "tests",
+    "read_only",
+    "canonical_authority",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.skill-bundle/v1"},
+    "bundle_id": {"type": "string", "pattern": "^skillbundle_[0-9a-f]{24}$"},
+    "skill_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+    },
+    "description": {"type": "string", "minLength": 1, "maxLength": 500},
+    "source_vault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vault_id", "vault_revision", "audit_head"],
+      "properties": {
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "vault_revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_sensitivity", "memory_tiers", "kinds"],
+      "properties": {
+        "max_sensitivity": {
+          "enum": ["public", "internal", "private", "restricted"]
+        },
+        "memory_tiers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["working", "project", "experience", "wisdom", "domain"]}
+        },
+        "kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "constraint", "decision", "fact", "procedure", "rule", "experience",
+              "lesson", "question", "exception", "definition", "requirement", "risk",
+              "assumption", "reference"
+            ]
+          }
+        }
+      }
+    },
+    "context_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_items", "max_chars", "max_tokens"],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_chars": {"type": "integer", "minimum": 1000, "maximum": 200000},
+        "max_tokens": {"type": "integer", "minimum": 256, "maximum": 100000}
+      }
+    },
+    "knowledge_keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+    },
+    "asset_revisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "knowledge_key", "asset_revision_id", "content_sha256"],
+        "properties": {
+          "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+          "knowledge_key": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+          "asset_revision_id": {"type": "string", "pattern": "^assetrev_[0-9a-f]{24}$"},
+          "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "source_hashes": {
+      "type": "array",
+      "maxItems": 50000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "source_revision_id", "content_sha256"],
+        "properties": {
+          "source_id": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"},
+          "source_revision_id": {
+            "type": ["string", "null"],
+            "pattern": "^sourcerev_[0-9a-f]{24}$"
+          },
+          "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["codex", "claude-code", "opencode", "generic"]}
+    },
+    "generated_files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "count", "sha256"],
+      "properties": {
+        "path": {"const": "tests.json"},
+        "count": {"type": "integer", "minimum": 1, "maximum": 500},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "read_only": {"const": true},
+    "canonical_authority": {"const": false},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 500},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

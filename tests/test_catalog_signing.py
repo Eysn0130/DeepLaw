@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -47,14 +48,22 @@ def test_signing_key_is_owner_only_idempotent_and_never_committed(tmp_path: Path
     assert created["created"] is True
     assert existing["created"] is False
     assert created["key_id"] == existing["key_id"]
-    assert stat.S_IMODE(key_path.parent.stat().st_mode) == 0o700
-    assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_acl_report
+
+        assert native_windows_acl_report(key_path.parent)["permissions_verified"] is True
+    else:
+        assert stat.S_IMODE(key_path.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
     assert "PRIVATE KEY" in key_path.read_text(encoding="ascii")
     assert key_path.name.endswith(".pem")
 
-    key_path.chmod(0o644)
-    with pytest.raises(RuntimeError, match="only by its owner"):
-        load_signing_key(key_path)
+    if os.name == "posix":
+        key_path.chmod(0o644)
+        with pytest.raises(RuntimeError, match="only by its owner"):
+            load_signing_key(key_path)
+    else:
+        assert load_signing_key(key_path).public_key() is not None
 
 
 def test_detached_signature_binds_exact_catalog_bytes_and_closed_contract(

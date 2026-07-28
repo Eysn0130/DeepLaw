@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -126,8 +127,13 @@ def test_discovery_index_is_derived_source_bound_and_stale_after_mutation(
     assert result["policy"]["legal_authority"] is False
     assert result["policy"]["restricted_assets_indexed"] is False
     assert result["policy"]["default_runtime_enabled"] is False
-    assert stat.S_IMODE(shared_parent.stat().st_mode) == 0o755
-    assert stat.S_IMODE(output.stat().st_mode) == 0o700
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_acl_report
+
+        assert native_windows_acl_report(output)["permissions_verified"] is True
+    else:
+        assert stat.S_IMODE(shared_parent.stat().st_mode) == 0o755
+        assert stat.S_IMODE(output.stat().st_mode) == 0o700
     assert verification["valid"] is True
     assert verification["model_identity_valid"] is True
     assert verification["asset_count"] == 2
@@ -309,14 +315,19 @@ def test_discovery_model_inventory_and_hash_are_fail_closed(
     model_file.parent.chmod(0o700)
     model_file.chmod(0o600)
     manifest.chmod(0o600)
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_vault
+
+        harden_windows_vault(directory)
 
     status = verify_discovery_model(profile.profile, model_root=tmp_path)
     assert status["installed"] is True
 
-    model_file.parent.chmod(0o755)
-    with pytest.raises(RuntimeError, match="directories must be owner-only"):
-        verify_discovery_model(profile.profile, model_root=tmp_path)
-    model_file.parent.chmod(0o700)
+    if os.name == "posix":
+        model_file.parent.chmod(0o755)
+        with pytest.raises(RuntimeError, match="directories must be owner-only"):
+            verify_discovery_model(profile.profile, model_root=tmp_path)
+        model_file.parent.chmod(0o700)
 
     extra = directory / "unexpected.bin"
     extra.write_bytes(b"not allowed")

@@ -1,0 +1,22 @@
+{
+  "schema_version": "deeplaw.opencode-adapter-manifest/v1",
+  "version": "0.7.0",
+  "host": "opencode",
+  "products": [
+    {
+      "id": "deeplaw",
+      "config": "opencode.jsonc",
+      "agent": "agents/deeplaw.md",
+      "skill": "../../plugins/deeplaw/skills/research-chinese-law",
+      "mcp_server": "deeplaw"
+    },
+    {
+      "id": "deeplaw-knowledge-os",
+      "config": "knowledge-os.jsonc",
+      "agent": "agents/deeplaw-knowledge.md",
+      "skill": "../../plugins/deeplaw-knowledge-os/skills/use-knowledge-assets",
+      "mcp_server": "deeplaw_knowledge"
+    }
+  ],
+  "model_or_api_call_required_for_lifecycle": false
+}

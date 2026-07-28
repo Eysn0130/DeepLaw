@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/internal-baseline-gate.v1.schema.json",
+  "title": "Evaluator-owned v0.7 internal named-baseline release gate record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "candidate_commit", "registry_sha256",
+    "collection_report_sha256", "statistical_protocol_sha256",
+    "case_results_manifest_sha256", "comparisons_manifest_sha256",
+    "paired_bootstrap_iterations", "confidence_level",
+    "multiple_comparison_correction", "threshold_adjustments_used",
+    "thresholds_frozen_at", "gate_completed_at",
+    "thresholds_frozen_before_held_out", "case_level_results_retained",
+    "failures_retained", "professional_baseline_gates_passed",
+    "aggregate_gate_passed", "security_regression_count", "gate_status",
+    "claim_eligible", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.internal-baseline-gate/v1"},
+    "candidate_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "registry_sha256": {"$ref": "#/$defs/sha256"},
+    "collection_report_sha256": {"$ref": "#/$defs/sha256"},
+    "statistical_protocol_sha256": {"$ref": "#/$defs/sha256"},
+    "case_results_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "comparisons_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "paired_bootstrap_iterations": {"const": 10000},
+    "confidence_level": {"const": 0.95},
+    "multiple_comparison_correction": {"const": "holm-bonferroni"},
+    "threshold_adjustments_used": {"type": "integer", "minimum": 0, "maximum": 1},
+    "thresholds_frozen_at": {"type": "string", "format": "date-time", "maxLength": 40},
+    "gate_completed_at": {"type": "string", "format": "date-time", "maxLength": 40},
+    "thresholds_frozen_before_held_out": {"const": true},
+    "case_level_results_retained": {"const": true},
+    "failures_retained": {"const": true},
+    "professional_baseline_gates_passed": {"const": true},
+    "aggregate_gate_passed": {"const": true},
+    "security_regression_count": {"const": 0},
+    "gate_status": {"const": "passed"},
+    "claim_eligible": {"const": false},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

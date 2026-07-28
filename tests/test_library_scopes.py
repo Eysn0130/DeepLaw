@@ -14,6 +14,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 import deeplaw.official as official_module
+from deeplaw.bounded_subprocess import BoundedProcessResult
 from deeplaw.catalog_signing import (
     export_trust_store,
     initialize_signing_key,
@@ -110,13 +111,17 @@ def test_official_pdf_dependency_preflight_probes_versions_and_chinese_ocr(
         lambda: {"manifest_sha256": "a" * 64},
     )
 
-    def fake_run(command: list[str], **kwargs: object) -> object:
-        assert kwargs["shell"] is False
+    def fake_run(command: list[str], **kwargs: object) -> BoundedProcessResult:
+        assert kwargs == {
+            "timeout_seconds": 15.0,
+            "max_stdout_bytes": 64 * 1024,
+            "max_stderr_bytes": 64 * 1024,
+        }
         key = (Path(command[0]).name, command[1])
         calls.append(key)
-        return official_module.subprocess.CompletedProcess(command, 0, stdout=outputs[key])
+        return BoundedProcessResult(returncode=0, stdout=outputs[key], stderr=b"")
 
-    monkeypatch.setattr(official_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(official_module, "run_bounded_subprocess", fake_run)
 
     result = official_module._preflight_official_pdf_dependencies()
 
@@ -587,16 +592,23 @@ def test_private_library_is_physical_separate_explicit_and_deletable(tmp_path: P
         home=home,
     )
     document_id = added["document"]["document_id"]
+    assert added["pending_cleanup_release_ids"] == []
     private_database = resolve_private_database(home=home)
     root = private_home(home)
 
     assert private_database.parent.parent == root / "releases"
-    assert stat.S_IMODE(root.stat().st_mode) == 0o700
-    assert stat.S_IMODE((root / "library.json").stat().st_mode) == 0o600
-    assert stat.S_IMODE(private_database.stat().st_mode) == 0o400
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_acl_report
+
+        assert native_windows_acl_report(root)["permissions_verified"] is True
+    else:
+        assert stat.S_IMODE(root.stat().st_mode) == 0o700
+        assert stat.S_IMODE((root / "library.json").stat().st_mode) == 0o600
+        assert stat.S_IMODE(private_database.stat().st_mode) == 0o400
     private_sources = list((root / "sources").iterdir())
     assert len(private_sources) == 1
-    assert stat.S_IMODE(private_sources[0].stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(private_sources[0].stat().st_mode) == 0o600
     assert str(private_source) not in (root / "library.json").read_text(encoding="utf-8")
     assert (official_release / "release.json").read_bytes() == official_hash
 
@@ -621,6 +633,8 @@ def test_private_library_is_physical_separate_explicit_and_deletable(tmp_path: P
     deleted = delete_private_document(document_id, home=home)
     assert deleted["document_count"] == 0
     assert deleted["restart_required"] is True
+    assert deleted["deletion_complete"] is True
+    assert deleted["pending_cleanup_release_ids"] == []
     assert not (root / "ACTIVE").exists()
     assert not list((root / "sources").iterdir())
     assert not list((root / "releases").iterdir())
@@ -748,7 +762,17 @@ def test_mcp_rejects_private_reads_after_the_snapshot_is_deleted(tmp_path: Path)
             )
             assert before.isError is False
 
-            delete_private_document(added["document"]["document_id"], home=home)
+            deleted = delete_private_document(
+                added["document"]["document_id"], home=home
+            )
+            if os.name == "nt":
+                assert deleted["deletion_complete"] is False
+                assert deleted["pending_cleanup_release_ids"] == [
+                    added["active_release_id"]
+                ]
+            else:
+                assert deleted["deletion_complete"] is True
+                assert deleted["pending_cleanup_release_ids"] == []
             after = await session.call_tool(
                 "law_support",
                 {"operation": "private_info"},

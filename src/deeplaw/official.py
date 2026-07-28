@@ -5,7 +5,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 from datetime import UTC, datetime
@@ -17,6 +16,7 @@ from urllib.request import Request, urlopen
 
 from . import __version__
 from .admin_lock import administration_locked
+from .bounded_subprocess import BoundedSubprocessError, run_bounded_subprocess
 from .catalog_signing import (
     CATALOG_SIGNATURE_SUFFIX,
     verify_catalog_signature,
@@ -128,6 +128,10 @@ def _secure_directory(path: Path, *, mode: int = 0o700) -> Path:
     if not path.is_dir():
         raise RuntimeError(f"official library path is not a directory: {path}")
     return path
+
+
+def _set_cached_artifact_mode(path: Path) -> None:
+    os.chmod(path, 0o444 if os.name == "posix" else 0o600)
 
 
 def _state_path(home: str | Path | None = None) -> Path:
@@ -542,20 +546,19 @@ def _run_dependency_probe(
             f"official PDF build dependency is missing: {description} ({executable})"
         )
     try:
-        completed = subprocess.run(
+        completed = run_bounded_subprocess(
             [resolved, *arguments],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-            shell=False,
-            timeout=_DEPENDENCY_PROBE_TIMEOUT_SECONDS,
+            timeout_seconds=_DEPENDENCY_PROBE_TIMEOUT_SECONDS,
+            max_stdout_bytes=64 * 1024,
+            max_stderr_bytes=64 * 1024,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except BoundedSubprocessError as error:
         raise RuntimeError(
             f"official PDF build dependency is not executable: {description} ({executable})"
         ) from error
-    output = completed.stdout.decode("utf-8", errors="replace").strip()
+    output = (completed.stdout + completed.stderr).decode(
+        "utf-8", errors="replace"
+    ).strip()
     if completed.returncode != 0:
         raise RuntimeError(
             f"official PDF build dependency probe failed: {description} ({executable})"
@@ -661,7 +664,7 @@ def _save_catalog(
             )
         temporary.unlink(missing_ok=True)
         temporary.write_bytes(payload)
-        os.chmod(temporary, 0o444)
+        _set_cached_artifact_mode(temporary)
         os.replace(temporary, path)
     if signature_payload is not None:
         signature_sha256 = signature_verification["signature_sha256"]
@@ -682,7 +685,7 @@ def _save_catalog(
                 )
             temporary.unlink(missing_ok=True)
             temporary.write_bytes(signature_payload)
-            os.chmod(temporary, 0o444)
+            _set_cached_artifact_mode(temporary)
             os.replace(temporary, signature_path)
     return path
 
@@ -720,7 +723,7 @@ def _resolve_review_overlay(
         )
     temporary.unlink(missing_ok=True)
     temporary.write_bytes(payload)
-    os.chmod(temporary, 0o444)
+    _set_cached_artifact_mode(temporary)
     os.replace(temporary, path)
     return path
 
@@ -773,7 +776,7 @@ def _download_source(document: dict[str, Any], destination: Path) -> None:
             raise RuntimeError(f"official source byte size changed: {document['path']}")
         if digest.hexdigest() != document["sha256"]:
             raise RuntimeError(f"official source SHA-256 changed: {document['path']}")
-        os.chmod(temporary, 0o444)
+        _set_cached_artifact_mode(temporary)
         os.replace(temporary, destination)
     except BaseException:
         temporary.unlink(missing_ok=True)

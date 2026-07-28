@@ -53,10 +53,76 @@ jobs:
         run: uv run --frozen pytest
 
       - name: Build distribution
-        run: uv build
+        run: uv build --build-constraints benchmarks/release/build-constraints.txt
 
       - name: Verify fresh wheel lifecycle
-        run: uv run --frozen python benchmarks/verify_fresh_wheel.py --dist dist
+        run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+  supply-chain:
+    name: Supply chain and reproducible release
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Audit default dependencies
+        run: uv run --frozen python -m benchmarks.release.audit_dependencies --profile default
+
+      - name: Audit Discovery extra
+        run: uv run --frozen python -m benchmarks.release.audit_dependencies --profile discovery
+
+      - name: Audit document-engine extra with OpenVEX enforcement
+        run: >-
+          uv run --frozen python -m benchmarks.release.audit_dependencies
+          --profile document-engine
+
+      - name: Audit exact build environment
+        run: uv run --frozen python -m benchmarks.release.audit_dependencies --profile build
+
+      - name: Install all locked release profiles
+        run: uv sync --frozen --extra dev --extra discovery --extra document-engine
+
+      - name: Verify reproducible wheel, sdist, and package inventory
+        run: >-
+          uv run --frozen python -m benchmarks.release.verify_reproducible_build
+          --output "${{ runner.temp }}/reproducible-build.json"
+
+      - name: Generate CycloneDX SBOM
+        run: >-
+          uv export --quiet --frozen --all-extras --no-extra dev --no-dev
+          --format cyclonedx1.5 --output-file "${{ runner.temp }}/deeplaw.cdx.json"
+
+      - name: Scan installed licenses
+        run: >-
+          uv run --frozen python -m benchmarks.release.inventory_licenses
+          --output "${{ runner.temp }}/installed-licenses.json"
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-evidence
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/deeplaw.cdx.json
+            ${{ runner.temp }}/installed-licenses.json
+            ${{ runner.temp }}/reproducible-build.json
 
   cross-platform-smoke:
     name: ${{ matrix.os }} smoke
@@ -88,14 +154,17 @@ jobs:
       - name: Run CLI and MCP smoke tests
         run: >-
           uv run --frozen pytest
+          tests/test_golden_cli.py
           tests/test_knowledge_cli_acceptance.py
           tests/test_knowledge_control.py
           tests/test_knowledge_mcp.py
           tests/test_knowledge_plugin.py
           tests/test_mcp_cli.py
+          tests/test_operator_workbench.py
+          tests/test_windows_acl.py
 
       - name: Build distribution
-        run: uv build
+        run: uv build --build-constraints benchmarks/release/build-constraints.txt
 
       - name: Verify fresh wheel lifecycle
-        run: uv run --frozen python benchmarks/verify_fresh_wheel.py --dist dist
+        run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist

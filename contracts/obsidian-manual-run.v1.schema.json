@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/obsidian-manual-run.v1.schema.json",
+  "title": "DeepLaw Obsidian scripted-human run record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "system_id", "implementation_revision", "registry_sha256",
+    "corpus_sha256", "queries_sha256", "query_case_ids_sha256",
+    "evaluation_environment_record_sha256", "workflow_sha256", "screen_recording",
+    "vault_before_archive", "vault_after_archive", "case_count", "cases",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.obsidian-manual-run/v1"},
+    "system_id": {"const": "obsidian-native"},
+    "implementation_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "registry_sha256": {"$ref": "#/$defs/sha256"},
+    "corpus_sha256": {"$ref": "#/$defs/sha256"},
+    "queries_sha256": {"$ref": "#/$defs/sha256"},
+    "query_case_ids_sha256": {"$ref": "#/$defs/sha256"},
+    "evaluation_environment_record_sha256": {"$ref": "#/$defs/sha256"},
+    "workflow_sha256": {"$ref": "#/$defs/sha256"},
+    "screen_recording": {"$ref": "#/$defs/capture"},
+    "vault_before_archive": {"$ref": "#/$defs/capture"},
+    "vault_after_archive": {"$ref": "#/$defs/capture"},
+    "case_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id", "task_success", "useful_context_recall",
+          "irrelevant_context_rate", "source_provenance_coverage",
+          "span_provenance_coverage", "stale_leakage", "context_tokens",
+          "indexing_seconds", "query_seconds", "operator_seconds",
+          "source_locator_sha256", "failure_kind", "failure_detail_sha256"
+        ],
+        "properties": {
+          "case_id": {"type": "string", "minLength": 1, "maxLength": 500},
+          "task_success": {"type": "boolean"},
+          "useful_context_recall": {"type": "number", "minimum": 0, "maximum": 1},
+          "irrelevant_context_rate": {"type": "number", "minimum": 0, "maximum": 1},
+          "source_provenance_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+          "span_provenance_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+          "stale_leakage": {"type": "boolean"},
+          "context_tokens": {"type": "integer", "minimum": 0, "maximum": 100000},
+          "indexing_seconds": {"type": "number", "minimum": 0},
+          "query_seconds": {"type": "number", "minimum": 0},
+          "operator_seconds": {"type": "number", "minimum": 0},
+          "source_locator_sha256": {"$ref": "#/$defs/nullable_sha256"},
+          "failure_kind": {
+            "type": ["string", "null"],
+            "enum": ["error", "timeout", "abstention", null]
+          },
+          "failure_detail_sha256": {"$ref": "#/$defs/nullable_sha256"}
+        }
+      }
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807}
+      }
+    }
+  }
+}

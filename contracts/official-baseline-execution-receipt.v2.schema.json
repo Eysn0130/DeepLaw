@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/official-baseline-execution-receipt.v2.schema.json",
+  "title": "DeepLaw official-baseline execution receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "plan_sha256", "registry_sha256", "system_id",
+    "implementation_revision", "evaluation_environment_record_sha256",
+    "execution_status", "elapsed_seconds", "exit_code", "stdout", "stderr",
+    "raw_output", "resource_record", "resource_record_sha256", "query_case_count",
+    "query_case_ids_sha256", "output_case_count", "output_case_ids_sha256",
+    "output_validation", "resource_validation", "failure_reason", "claim_eligible",
+    "claim_ineligibility_reason", "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.official-baseline-execution-receipt/v2"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "registry_sha256": {"$ref": "#/$defs/sha256"},
+    "system_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "implementation_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "evaluation_environment_record_sha256": {"$ref": "#/$defs/sha256"},
+    "execution_status": {
+      "enum": [
+        "succeeded", "command_failed", "bounded_subprocess_failed",
+        "output_invalid", "resource_invalid"
+      ]
+    },
+    "elapsed_seconds": {"type": "number", "minimum": 0},
+    "exit_code": {"type": ["integer", "null"]},
+    "stdout": {"$ref": "#/$defs/log"},
+    "stderr": {"$ref": "#/$defs/log"},
+    "raw_output": {
+      "anyOf": [{"$ref": "#/$defs/raw_artifact"}, {"type": "null"}]
+    },
+    "resource_record": {
+      "anyOf": [{"$ref": "#/$defs/resource_artifact"}, {"type": "null"}]
+    },
+    "resource_record_sha256": {
+      "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "query_case_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "query_case_ids_sha256": {"$ref": "#/$defs/sha256"},
+    "output_case_count": {"type": ["integer", "null"], "minimum": 1, "maximum": 1000000},
+    "output_case_ids_sha256": {
+      "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "output_validation": {"enum": ["passed", "failed", "not_run"]},
+    "resource_validation": {"enum": ["passed", "failed", "not_run"]},
+    "failure_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 1000},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reason": {"type": "string", "minLength": 1, "maxLength": 500},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"execution_status": {"const": "succeeded"}}},
+      "then": {
+        "properties": {
+          "exit_code": {"const": 0},
+          "output_validation": {"const": "passed"},
+          "resource_validation": {"const": "passed"},
+          "failure_reason": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "failure_reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "execution_status": {"enum": ["command_failed", "bounded_subprocess_failed"]}
+        }
+      },
+      "then": {
+        "properties": {
+          "output_validation": {"const": "not_run"},
+          "resource_validation": {"const": "not_run"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"execution_status": {"const": "output_invalid"}}},
+      "then": {
+        "properties": {
+          "exit_code": {"const": 0},
+          "output_validation": {"const": "failed"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"execution_status": {"const": "resource_invalid"}}},
+      "then": {
+        "properties": {
+          "exit_code": {"const": 0},
+          "output_validation": {"const": "passed"},
+          "resource_validation": {"const": "failed"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"output_validation": {"const": "passed"}}},
+      "then": {
+        "properties": {
+          "raw_output": {"$ref": "#/$defs/raw_artifact"},
+          "output_case_count": {"type": "integer", "minimum": 1},
+          "output_case_ids_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"resource_validation": {"const": "passed"}}},
+      "then": {
+        "properties": {
+          "resource_record": {"$ref": "#/$defs/resource_artifact"},
+          "resource_record_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      },
+      "else": {"properties": {"resource_record_sha256": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "raw_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 536870912}
+      }
+    },
+    "resource_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 4194304}
+      }
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size", "truncated"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 4194304},
+        "truncated": {"type": "boolean"}
+      }
+    }
+  }
+}

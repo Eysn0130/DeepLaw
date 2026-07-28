@@ -516,6 +516,12 @@ def test_context_does_not_expose_a_relation_bound_to_restricted_evidence(
             sensitivity="restricted",
             confirm_no_case_data=True,
         )
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+        )
         evidence_asset = vault.get_asset(
             compiled["asset_ids"][0],
             include_inactive=True,

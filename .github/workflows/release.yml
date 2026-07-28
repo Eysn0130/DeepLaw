@@ -1,0 +1,394 @@
+name: Publish DeepLaw v0.7.0
+
+on:
+  push:
+    tags:
+      - "v0.7.0"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable tag to publish or resume.
+        required: true
+        type: string
+        default: "v0.7.0"
+
+permissions:
+  contents: read
+
+jobs:
+  release-context:
+    name: Resolve immutable release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      commit: ${{ steps.release.outputs.commit }}
+
+    steps:
+      - name: Check out the requested tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+
+      - name: Validate exact tag, version, and commit
+        id: release
+        env:
+          TARGET_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${TARGET_TAG}" == "v0.7.0" ]]
+          commit=$(git rev-parse HEAD)
+          tag_commit=$(git rev-list -n 1 "${TARGET_TAG}")
+          [[ "${commit}" == "${tag_commit}" ]]
+          python - "${TARGET_TAG}" <<'PY'
+          import pathlib
+          import sys
+          import tomllib
+
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())[
+              "project"
+          ]["version"]
+          if sys.argv[1] != f"v{version}" or version != "0.7.0":
+              raise SystemExit("tag and package version are not the v0.7.0 release")
+          PY
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
+
+  commercial-gates:
+    name: Reuse exact commercial GA evidence
+    needs: release-context
+    uses: ./.github/workflows/commercial-gates.yml
+    with:
+      release_ref: ${{ needs.release-context.outputs.tag }}
+    permissions:
+      contents: read
+
+  publish:
+    name: Sign, attest, and publish exact verified bytes
+    needs:
+      - release-context
+      - commercial-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Check out exact release tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.release-context.outputs.tag }}
+
+      - name: Download exact verified release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: commercial-release-assets
+          path: ${{ runner.temp }}/release-assets
+
+      - name: Validate the frozen commercial decision
+        env:
+          RELEASE_COMMIT: ${{ needs.release-context.outputs.commit }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          release = manifest.get("release", {})
+          if (
+              manifest.get("commercial_release_eligible") is not True
+              or manifest.get("competitive_claim_eligible") is not False
+              or release.get("tag") != os.environ["RELEASE_TAG"]
+              or release.get("commit") != os.environ["RELEASE_COMMIT"]
+          ):
+              raise SystemExit("commercial release decision does not bind the exact tag")
+          PY
+          cd "${RUNNER_TEMP}/release-assets"
+          sha256sum --check SHA256SUMS
+
+      - name: Create and verify Sigstore OIDC bundles
+        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
+        with:
+          inputs: |
+            ${{ runner.temp }}/release-assets/dist/*.whl
+            ${{ runner.temp }}/release-assets/dist/*.tar.gz
+            ${{ runner.temp }}/release-assets/oci/*.oci.tar
+            ${{ runner.temp }}/release-assets/sbom/*.json
+            ${{ runner.temp }}/release-assets/licenses/*.json
+            ${{ runner.temp }}/release-assets/security/openvex.json
+            ${{ runner.temp }}/release-assets/commercial-release-manifest.json
+            ${{ runner.temp }}/release-assets/SHA256SUMS
+          verify: true
+          verify-cert-identity: https://github.com/${{ github.workflow_ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+          release-signing-artifacts: false
+          upload-signing-artifacts: false
+
+      - name: Attest provenance for every checksummed asset
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-checksums: ${{ runner.temp }}/release-assets/SHA256SUMS
+
+      - name: Attest CycloneDX SBOM for every checksummed asset
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-checksums: ${{ runner.temp }}/release-assets/SHA256SUMS
+          sbom-path: ${{ runner.temp }}/release-assets/sbom/deeplaw-0.7.0.cdx.json
+
+      - name: Flatten uniquely named release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "${RUNNER_TEMP}/release-assets" "${RUNNER_TEMP}/publish" <<'PY'
+          import pathlib
+          import shutil
+          import sys
+
+          source = pathlib.Path(sys.argv[1]).resolve(strict=True)
+          target = pathlib.Path(sys.argv[2])
+          target.mkdir(parents=True)
+          files = sorted(path for path in source.rglob("*") if path.is_file())
+          names = [path.name for path in files]
+          if not files or len(names) != len(set(names)):
+              raise SystemExit("release asset basenames must be unique")
+          for path in files:
+              shutil.copyfile(path, target / path.name)
+          PY
+
+      - name: Create or resume the release without overwriting assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ needs.release-context.outputs.commit }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            is_draft=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --json isDraft --jq .isDraft)
+            is_prerelease=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --json isPrerelease --jq .isPrerelease)
+            [[ "${is_prerelease}" == "false" ]]
+            if [[ "${is_draft}" == "true" ]]; then
+              gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+                --draft --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
+                --notes-file docs/RELEASE_NOTES_v0.7.0.md
+            fi
+          else
+            gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag --target "${RELEASE_COMMIT}" --draft \
+              --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
+              --notes-file docs/RELEASE_NOTES_v0.7.0.md
+          fi
+          release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          for asset in "${RUNNER_TEMP}"/publish/*; do
+            name=$(basename "${asset}")
+            local_digest="sha256:$(sha256sum "${asset}" | cut -d ' ' -f 1)"
+            remote_digest=$(jq -r --arg name "${name}" \
+              '.assets[] | select(.name == $name) | .digest // empty' <<< "${release_json}")
+            if [[ -n "${remote_digest}" ]]; then
+              [[ "${remote_digest}" == "${local_digest}" ]]
+            else
+              gh release upload "${RELEASE_TAG}" "${asset}" \
+                --repo "${GITHUB_REPOSITORY}"
+              release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+            fi
+          done
+
+      - name: Publish the fully populated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --draft=false --latest
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --json isDraft,isPrerelease,url --jq \
+            'select(.isDraft == false and .isPrerelease == false) | .url'
+
+  post-release:
+    name: Verify public release download and clean reinstall
+    needs:
+      - release-context
+      - publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      id-token: write
+      attestations: read
+
+    steps:
+      - name: Check out exact public release tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.release-context.outputs.tag }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download public GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/downloads" "${RUNNER_TEMP}/post-evidence"
+          gh release download "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --dir "${RUNNER_TEMP}/downloads"
+          release_url=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --json isDraft,url --jq 'select(.isDraft == false) | .url')
+          test -n "${release_url}"
+          echo "RELEASE_URL=${release_url}" >> "${GITHUB_ENV}"
+
+      - name: Verify SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/downloads"
+          sha256sum --check SHA256SUMS \
+            | tee "${RUNNER_TEMP}/post-evidence/checksum-verification.log"
+
+      - name: Verify Sigstore identity bundles
+        shell: bash
+        env:
+          CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          exec > >(tee "${RUNNER_TEMP}/post-evidence/sigstore-verification.log") 2>&1
+          for artifact_name in \
+            deeplaw-0.7.0-py3-none-any.whl \
+            deeplaw-0.7.0.tar.gz \
+            deeplaw-0.7.0-linux-amd64.oci.tar \
+            deeplaw-0.7.0.cdx.json \
+            deeplaw-0.7.0-licenses.json \
+            openvex.json \
+            commercial-release-manifest.json \
+            SHA256SUMS; do
+            artifact="${RUNNER_TEMP}/downloads/${artifact_name}"
+            bundle="${artifact}.sigstore.json"
+            uvx --from sigstore==4.3.0 sigstore verify identity \
+              --bundle "${bundle}" \
+              --cert-identity "${CERT_IDENTITY}" \
+              --cert-oidc-issuer https://token.actions.githubusercontent.com \
+              "${artifact}"
+          done
+
+      - name: Verify GitHub provenance and SBOM attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r _digest name; do
+            gh attestation verify "${RUNNER_TEMP}/downloads/${name}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          done < "${RUNNER_TEMP}/downloads/SHA256SUMS" \
+            2>&1 | tee "${RUNNER_TEMP}/post-evidence/provenance-verification.log"
+          for name in \
+            deeplaw-0.7.0-py3-none-any.whl \
+            deeplaw-0.7.0.tar.gz \
+            deeplaw-0.7.0-linux-amd64.oci.tar; do
+            gh attestation verify "${RUNNER_TEMP}/downloads/${name}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+              --predicate-type https://cyclonedx.org/bom
+          done 2>&1 | tee "${RUNNER_TEMP}/post-evidence/sbom-verification.log"
+
+      - name: Build exact v0.6.0 upgrade fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          legacy_source="${RUNNER_TEMP}/deeplaw-v060-source"
+          legacy_dist="${RUNNER_TEMP}/deeplaw-v060-dist"
+          git worktree add --detach "${legacy_source}" e0f1fe3ff01d3026df12673d57c69014c2c4dca4
+          uv build --project "${legacy_source}" --wheel --out-dir "${legacy_dist}"
+          legacy_wheel=$(find "${legacy_dist}" -maxdepth 1 -type f \
+            -name 'deeplaw-0.6.0-*.whl' -print -quit)
+          test -n "${legacy_wheel}"
+          echo "LEGACY_WHEEL=${legacy_wheel}" >> "${GITHUB_ENV}"
+
+      - name: Clean-install formal wheel and sdist, upgrade, and uninstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+          uv run --frozen python -m benchmarks.release.run_distribution_lifecycle \
+            --dist "${RUNNER_TEMP}/downloads" \
+            --legacy-wheel "${LEGACY_WHEEL}" \
+            --output "${RUNNER_TEMP}/post-evidence/post-release-distribution-lifecycle.json"
+          uv run --frozen python -m benchmarks.release.post_release_verify \
+            --downloads "${RUNNER_TEMP}/downloads" \
+            --lifecycle \
+              "${RUNNER_TEMP}/post-evidence/post-release-distribution-lifecycle.json" \
+            --checksum-log "${RUNNER_TEMP}/post-evidence/checksum-verification.log" \
+            --signature-log "${RUNNER_TEMP}/post-evidence/sigstore-verification.log" \
+            --provenance-log "${RUNNER_TEMP}/post-evidence/provenance-verification.log" \
+            --release-url "${RELEASE_URL}" \
+            --output "${RUNNER_TEMP}/post-evidence/post-release-verification.json"
+
+      - name: Sign and verify post-release verification
+        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
+        with:
+          inputs: ${{ runner.temp }}/post-evidence/post-release-verification.json
+          verify: true
+          verify-cert-identity: https://github.com/${{ github.workflow_ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+          release-signing-artifacts: false
+          upload-signing-artifacts: false
+
+      - name: Attach or verify post-release evidence without overwriting assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          for asset in \
+            "${RUNNER_TEMP}/post-evidence/checksum-verification.log" \
+            "${RUNNER_TEMP}/post-evidence/sigstore-verification.log" \
+            "${RUNNER_TEMP}/post-evidence/provenance-verification.log" \
+            "${RUNNER_TEMP}/post-evidence/sbom-verification.log" \
+            "${RUNNER_TEMP}/post-evidence/post-release-distribution-lifecycle.json" \
+            "${RUNNER_TEMP}/post-evidence/post-release-verification.json" \
+            "${RUNNER_TEMP}/post-evidence/post-release-verification.json.sigstore.json"; do
+            name=$(basename "${asset}")
+            local_digest="sha256:$(sha256sum "${asset}" | cut -d ' ' -f 1)"
+            remote_digest=$(jq -r --arg name "${name}" \
+              '.assets[] | select(.name == $name) | .digest // empty' <<< "${release_json}")
+            if [[ -n "${remote_digest}" ]]; then
+              [[ "${remote_digest}" == "${local_digest}" ]]
+            else
+              gh release upload "${RELEASE_TAG}" "${asset}" \
+                --repo "${GITHUB_REPOSITORY}"
+              release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+            fi
+          done
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --json isDraft,isPrerelease,url --jq \
+            'select(.isDraft == false and .isPrerelease == false) | .url'

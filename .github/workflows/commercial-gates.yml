@@ -1,0 +1,427 @@
+name: Commercial GA gates
+
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      release_ref:
+        description: Exact tag or commit to validate; defaults to the triggering commit.
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Exact tag or commit to validate; defaults to the triggering commit.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build-distributions:
+    name: Reproducible wheel and sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Verify source and build exact distributions
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv sync --frozen --extra dev
+          uv run --frozen ruff check .
+          uv run --frozen python -m benchmarks.release.verify_reproducible_build \
+            --artifact-dir dist \
+            --output "${RUNNER_TEMP}/reproducible-build.json"
+          uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
+          git diff --check
+          cp "${RUNNER_TEMP}/reproducible-build.json" dist/reproducible-build.json
+
+      - name: Upload verified distribution bytes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-dist
+          if-no-files-found: error
+          path: dist/
+
+  platform-gates:
+    name: ${{ matrix.system }} mandatory gate
+    needs: build-distributions
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    env:
+      PYTHONUTF8: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: Linux
+            slug: linux
+            marker: not windows_native
+          - os: macos-latest
+            system: Darwin
+            slug: darwin
+            marker: not windows_native
+          - os: windows-latest
+            system: Windows
+            slug: windows
+            marker: all
+
+    steps:
+      - name: Check out exact candidate and history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download exact verified distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-dist
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Build exact historical v0.6.0 migration and upgrade fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          legacy_source="${RUNNER_TEMP}/deeplaw-v060-source"
+          legacy_dist="${RUNNER_TEMP}/deeplaw-v060-dist"
+          git worktree add --detach "${legacy_source}" e0f1fe3ff01d3026df12673d57c69014c2c4dca4
+          uv build --project "${legacy_source}" --wheel --out-dir "${legacy_dist}"
+          python - "${legacy_dist}" >> "${GITHUB_ENV}" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          wheels = list(pathlib.Path(sys.argv[1]).glob("deeplaw-0.6.0-*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit("expected exactly one v0.6.0 wheel")
+          wheel = wheels[0].resolve()
+          print(f"DEEPLAW_V060_WHEEL={wheel}")
+          print(f"DEEPLAW_V060_WHEEL_SHA256={hashlib.sha256(wheel.read_bytes()).hexdigest()}")
+          PY
+
+      - name: Install mandatory test profile
+        run: uv sync --frozen --extra dev --extra discovery
+
+      - name: Run full mandatory suite with zero skips
+        shell: bash
+        env:
+          MATRIX_MARKER: ${{ matrix.marker }}
+          JUNIT_PATH: ${{ runner.temp }}/pytest-${{ matrix.slug }}.xml
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv run --frozen ruff check .
+          if [[ "${MATRIX_MARKER}" == "all" ]]; then
+            uv run --frozen pytest --strict-markers --junitxml="${JUNIT_PATH}"
+          else
+            uv run --frozen pytest --strict-markers -m "${MATRIX_MARKER}" \
+              --junitxml="${JUNIT_PATH}"
+          fi
+          git diff --check
+
+      - name: Exercise exact distribution lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.run_distribution_lifecycle \
+            --dist "${RUNNER_TEMP}/verified-dist" \
+            --legacy-wheel "${DEEPLAW_V060_WHEEL}" \
+            --output "${RUNNER_TEMP}/distribution-lifecycle-${{ matrix.slug }}.json"
+
+      - name: Freeze platform report
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.platform_gate \
+            --junit "${RUNNER_TEMP}/pytest-${{ matrix.slug }}.xml" \
+            --lifecycle "${RUNNER_TEMP}/distribution-lifecycle-${{ matrix.slug }}.json" \
+            --expected-system "${{ matrix.system }}" \
+            --output "${RUNNER_TEMP}/platform-${{ matrix.slug }}.json"
+          mkdir -p "${RUNNER_TEMP}/platform-evidence"
+          cp "${RUNNER_TEMP}/pytest-${{ matrix.slug }}.xml" \
+            "${RUNNER_TEMP}/platform-evidence/pytest-${{ matrix.slug }}.xml"
+          cp "${RUNNER_TEMP}/distribution-lifecycle-${{ matrix.slug }}.json" \
+            "${RUNNER_TEMP}/platform-evidence/distribution-lifecycle-${{ matrix.slug }}.json"
+          cp "${RUNNER_TEMP}/platform-${{ matrix.slug }}.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-${{ matrix.slug }}.json"
+
+      - name: Upload platform evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: platform-${{ matrix.slug }}
+          if-no-files-found: error
+          path: ${{ runner.temp }}/platform-evidence/
+
+  no-model-hosts:
+    name: Official CLI no-model host acceptance
+    needs: build-distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out exact candidate and history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Download exact verified wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-dist
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Install candidate and pinned official host CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+          uv venv --python 3.12 --no-project "${RUNNER_TEMP}/host-runtime"
+          uv pip install --python "${RUNNER_TEMP}/host-runtime/bin/python" \
+            "${RUNNER_TEMP}"/verified-dist/deeplaw-0.7.0-*.whl
+          npm install --global --prefix "${RUNNER_TEMP}/host-clis" \
+            @openai/codex@0.145.0 \
+            @anthropic-ai/claude-code@2.1.220 \
+            opencode-ai@1.18.8
+          echo "${RUNNER_TEMP}/host-clis/bin" >> "${GITHUB_PATH}"
+
+      - name: Run isolated lifecycle and MCP handshake without a model
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.hosts.run_no_model_host_acceptance \
+            --codex "${RUNNER_TEMP}/host-clis/bin/codex" \
+            --claude "${RUNNER_TEMP}/host-clis/bin/claude" \
+            --opencode "${RUNNER_TEMP}/host-clis/bin/opencode" \
+            --deeplaw "${RUNNER_TEMP}/host-runtime/bin/deeplaw" \
+            --codex-version 0.145.0 \
+            --claude-version 2.1.220 \
+            --opencode-version 1.18.8 \
+            --output "${RUNNER_TEMP}/no-model-host-acceptance.json"
+
+      - name: Upload host evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: no-model-host-acceptance
+          if-no-files-found: error
+          path: ${{ runner.temp }}/no-model-host-acceptance.json
+
+  oci:
+    name: Non-root networkless OCI
+    needs: build-distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Download exact verified wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-dist
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Build and exercise OCI
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+          context="${RUNNER_TEMP}/oci-context"
+          evidence="${RUNNER_TEMP}/oci-evidence"
+          mkdir -p "${context}" "${evidence}"
+          cp packaging/oci/Dockerfile "${context}/Dockerfile"
+          cp "${RUNNER_TEMP}"/verified-dist/deeplaw-0.7.0-py3-none-any.whl "${context}/"
+          release_commit=$(git rev-parse HEAD)
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt \
+            --output-file "${context}/runtime-requirements.txt"
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --build-arg DEEPLAW_VERSION=0.7.0 \
+            --build-arg VCS_REF="${release_commit}" \
+            --build-arg SOURCE_DATE_EPOCH=946684800 \
+            --output "type=oci,dest=${evidence}/deeplaw-0.7.0-linux-amd64.oci.tar" \
+            "${context}"
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --build-arg DEEPLAW_VERSION=0.7.0 \
+            --build-arg VCS_REF="${release_commit}" \
+            --build-arg SOURCE_DATE_EPOCH=946684800 \
+            --load \
+            --tag deeplaw:0.7.0-local \
+            "${context}"
+          container_id=$(docker create \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            deeplaw:0.7.0-local)
+          docker inspect "${container_id}" > "${evidence}/container-inspect.json"
+          docker start --attach "${container_id}" > "${evidence}/runtime-output.txt"
+          docker rm "${container_id}"
+          cp "${context}/runtime-requirements.txt" "${evidence}/runtime-requirements.txt"
+          uv run --frozen python -m benchmarks.release.verify_oci \
+            --archive "${evidence}/deeplaw-0.7.0-linux-amd64.oci.tar" \
+            --requirements "${evidence}/runtime-requirements.txt" \
+            --container-inspect "${evidence}/container-inspect.json" \
+            --output "${evidence}/oci-release-report.json"
+
+      - name: Upload OCI evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-oci
+          if-no-files-found: error
+          path: ${{ runner.temp }}/oci-evidence/
+
+  assemble:
+    name: Assemble commercial manifest
+    needs:
+      - build-distributions
+      - platform-gates
+      - no-model-hosts
+      - oci
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download gate evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*"
+          path: ${{ runner.temp }}/gate-evidence
+
+      - name: Audit all profiles and assemble normalized assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv sync --frozen --extra dev --extra discovery --extra document-engine
+          assets="${RUNNER_TEMP}/release-assets"
+          mkdir -p "${assets}/dist" "${assets}/evidence" "${assets}/oci" \
+            "${assets}/security" "${assets}/sbom" "${assets}/licenses"
+          cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-0.7.0-*.whl "${assets}/dist/"
+          cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-0.7.0.tar.gz "${assets}/dist/"
+          cp "${RUNNER_TEMP}/gate-evidence/verified-dist/reproducible-build.json" \
+            "${assets}/evidence/reproducible-build.json"
+          cp "${RUNNER_TEMP}"/gate-evidence/platform-*/* "${assets}/evidence/"
+          cp "${RUNNER_TEMP}/gate-evidence/no-model-host-acceptance/no-model-host-acceptance.json" \
+            "${assets}/evidence/no-model-host-acceptance.json"
+          cp "${RUNNER_TEMP}/gate-evidence/verified-oci/deeplaw-0.7.0-linux-amd64.oci.tar" \
+            "${assets}/oci/"
+          cp "${RUNNER_TEMP}/gate-evidence/verified-oci/oci-release-report.json" \
+            "${assets}/evidence/oci-release-report.json"
+          cp "${RUNNER_TEMP}/gate-evidence/verified-oci/runtime-requirements.txt" \
+            "${assets}/oci/runtime-requirements.txt"
+          for profile in default build discovery document-engine; do
+            uv run --frozen python -m benchmarks.release.audit_dependencies \
+              --profile "${profile}" \
+              --output "${assets}/security/audit-${profile}.json"
+          done
+          uv export --quiet --frozen --all-extras --no-extra dev --no-dev \
+            --format cyclonedx1.5 \
+            --output-file "${assets}/sbom/deeplaw-0.7.0.cdx.json"
+          uv run --frozen python -m benchmarks.release.inventory_licenses \
+            --output "${assets}/licenses/deeplaw-0.7.0-licenses.json"
+          cp security/openvex.json "${assets}/security/openvex.json"
+          uv run --frozen python -m benchmarks.release.commercial_release \
+            --assets-root "${assets}" \
+            --platform "${assets}/evidence/platform-linux.json" \
+            --platform "${assets}/evidence/platform-darwin.json" \
+            --platform "${assets}/evidence/platform-windows.json" \
+            --host "${assets}/evidence/no-model-host-acceptance.json" \
+            --reproducible "${assets}/evidence/reproducible-build.json" \
+            --oci-report "${assets}/evidence/oci-release-report.json" \
+            --audit "${assets}/security/audit-default.json" \
+            --audit "${assets}/security/audit-build.json" \
+            --audit "${assets}/security/audit-discovery.json" \
+            --audit "${assets}/security/audit-document-engine.json" \
+            --sbom "${assets}/sbom/deeplaw-0.7.0.cdx.json" \
+            --licenses "${assets}/licenses/deeplaw-0.7.0-licenses.json" \
+            --openvex "${assets}/security/openvex.json" \
+            --output "${assets}/commercial-release-manifest.json"
+          uv run --frozen python -m benchmarks.release.write_checksums \
+            --assets-root "${assets}" \
+            --output "${assets}/SHA256SUMS"
+          git diff --check
+
+      - name: Upload exact commercial release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: commercial-release-assets
+          if-no-files-found: error
+          path: ${{ runner.temp }}/release-assets/

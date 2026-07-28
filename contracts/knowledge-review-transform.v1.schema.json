@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/knowledge-review-transform.v1.schema.json",
+  "title": "DeepLaw atomic Knowledge review transformation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vault_id",
+    "action",
+    "input_asset_ids",
+    "created_proposals",
+    "created_proposal_count",
+    "decisions",
+    "lineage_review",
+    "review_required",
+    "approval_inherited",
+    "atomic",
+    "revision",
+    "audit_head"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.knowledge-review-transform/v1"
+    },
+    "vault_id": {
+      "type": "string",
+      "pattern": "^vault_[0-9a-f]{24}$"
+    },
+    "action": {
+      "enum": ["edit", "split", "merge"]
+    },
+    "input_asset_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^asset_[0-9a-f]{24}$"
+      }
+    },
+    "created_proposals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "$ref": "https://deeplaw.dev/contracts/knowledge-asset.v1.schema.json"
+      }
+    },
+    "created_proposal_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "decisions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "decision", "status", "review_receipt"],
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "pattern": "^asset_[0-9a-f]{24}$"
+          },
+          "decision": {"const": "reject"},
+          "status": {"const": "revoked"},
+          "review_receipt": {
+            "$ref": "https://github.com/Eysn0130/DeepLaw/contracts/knowledge-review-receipt.v1.schema.json"
+          }
+        }
+      }
+    },
+    "lineage_review": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "$ref": "https://deeplaw.local/contracts/knowledge-lineage-review.v1.schema.json"
+        }
+      ]
+    },
+    "review_required": {"const": true},
+    "approval_inherited": {"const": false},
+    "atomic": {"const": true},
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "audit_head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

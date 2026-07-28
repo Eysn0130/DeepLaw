@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-inbox-artifact.v1.schema.json",
+  "title": "DeepLaw isolated Agent proposal inbox artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "vault_id",
+    "artifact_type",
+    "created_at",
+    "producer",
+    "priority_signals",
+    "review_priority",
+    "sensitivity",
+    "payload",
+    "payload_sha256",
+    "authority",
+    "canonical_write_performed",
+    "artifact_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-inbox-artifact/v1"},
+    "artifact_id": {"type": "string", "pattern": "^inbox_[0-9a-f]{24}$"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "artifact_type": {
+      "enum": ["proposal", "feedback", "run", "eval"]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "version": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "priority_signals": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "user_confirmed",
+          "repeated_success",
+          "failure_fixed",
+          "decision_landed",
+          "tool_result_validated",
+          "superseded_rule",
+          "repeated_gap"
+        ]
+      }
+    },
+    "review_priority": {"type": "integer", "minimum": 0, "maximum": 16},
+    "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "payload": {"type": "object"},
+    "payload_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority": {"const": "isolated-proposal-only"},
+    "canonical_write_performed": {"const": false},
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

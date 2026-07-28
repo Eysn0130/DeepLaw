@@ -1,6 +1,121 @@
 # DeepLaw 2.0 评测说明
 
-## 当前 v0.6.0 control-plane 内部发布候选
+## v0.7.0 商业发布与竞争证据边界
+
+v0.7.0 商业清单固定 `commercial_release_eligible=true`，同时固定
+`competitive_claim_eligible=false`。wheel、sdist、OCI、SBOM、lock、contracts、三 OS、无模型
+宿主生命周期、签名和 provenance 属于商业发布证据；真实模型任务、17 项具名基线、秘密
+held-out 和独立机构签名属于竞争性领先证据，尚未完成。
+
+### 具名基线
+
+[`registry-v0.7.json`](../benchmarks/baselines/registry-v0.7.json) 登记 17 个系统/配置：BM25、
+Dense、BM25+Dense+Reranker、RAGFlow、Microsoft GraphRAG、LightRAG、Graphiti、Mem0、Cognee、
+MemOS、PageIndex、OpenKB、WikiGraph、Obsidian native workflow，以及 DeepLaw lexical、hybrid、
+full。每项固定官方 upstream、commit/version、推荐配置、模型 revision、adapter policy 和结果
+状态。无法合理自动化的 Obsidian 任务使用固定人工操作/计时协议。
+
+```bash
+uv run python -m benchmarks.baselines.registry
+```
+
+当前 17 项结果全部为 `pending_execution`。仓库没有实现简陋竞争系统来冒充官方基线。正式
+比较必须固定语料、问题、Token、硬件、网络政策，记录构建/查询成本、失败和原始输出，并对逐题
+结果执行 paired bootstrap、置信区间和 Holm–Bonferroni。
+
+subprocess-capable systems 使用 execution-plan/receipt v2。新增的 closed environment record 固定
+hardware、software artifact、系统模型、共同 reader、query-offline 声明和统一计量协议；resource
+record 固定记录 build/query time、peak memory、index/workspace bytes、model calls/tokens/cost 与逐项
+failure inventory。collection gate 会对 17 项 plan/receipt、clean checkout、冻结输入和保留产物重新
+验 hash，并检查同语料、问题、case inventory、硬件、reader、Token/top-k 和 evaluator run。该门禁
+只证明收集完整性，永久输出 `claim_eligible=false`，不能替代统计结果或独立签名。
+
+Obsidian 不被伪装为 subprocess：`manual_adapter.py` 先冻结人工执行 plan，再校验并封存同一 JSONL
+输出、resource record、逐题人工指标、screen recording 与执行前后 vault archive。任务失败可作为
+有效数据保留；seal 成功只表示三套记录一致，不表示任务全部成功。
+
+`benchmarks.release.evaluator_candidate` 是最后的 portable freeze/verify 层：它要求上述 17 项全部
+成功、统计 gate 已通过，并重新绑定完整 model file manifests、预交付 corpus commitment、Git
+source/archive/contracts、tokenizer/fusion/index profiles、release bytes 与 commit/version-labeled OCI
+archive。content-addressed kit 和 detached signature 仍不改变 `claim_eligible=false`；验签必须使用
+attestation 之外获得的 trusted public key，且不能自动证明机构身份或独立性。
+
+### Typed Compiler 评分契约
+
+[`typed_compiler/score.py`](../benchmarks/typed_compiler/score.py) 对显式 evaluator label 计算
+precision、recall、F1、hallucinated/unsupported claim rate、source-span correctness、duplicate
+rate、review acceptance 和 cross-document synthesis correctness。闭合输入要求每条预测绑定已知
+source ref，并明确 claim equivalence、support 和 review label；scorer 不从相似度或 confidence
+伪造金标。
+
+仓库内 [`dev fixture`](../benchmarks/typed_compiler/dev-fixture-v1.json) 与
+[`checked report`](../benchmarks/typed_compiler/dev-fixture-report-2026-07-28.json) 只验证计分语义，
+预测和标签都是开发团队嵌入的，永久 `claim_eligible=false`，不是 deterministic-v2 质量结果。
+真实 compiler benchmark 仍须冻结真实来源、span、gold claims、raw outputs、review decisions 和
+失败样本。
+
+### Retrieval Fabric 规模诊断
+
+[`run_retrieval_fabric_scale.py`](../benchmarks/scale/run_retrieval_fabric_scale.py) 通过真实
+Identity v2 compile/review、lexical/hybrid recall、Capsule 验证、no-answer、provenance 和完整性
+路径运行 100k 或 1m 诊断。语料使用开发团队生成的 exact token，因此只能验证机械规模、延迟、
+生命周期和来源，不验证自然语言质量，也不参与竞争宣传。
+
+100k 实测报告已登记为
+[`retrieval-fabric-100k-2026-07-27.json`](../benchmarks/scale/retrieval-fabric-100k-2026-07-27.json)。
+它实际完成 100,000 个 source-bound Asset 的 Identity v2 编译与逐项审核、完整性重放、100 次
+lexical/hybrid/Capsule 查询、一次独立冷进程 Golden `recall`，并在同一 100k Vault 中完成真实
+Source Revision 更新、原子审核切换、Lineage 检查和选择性遗忘。更新前旧版仍可检索，审核后
+旧版退出且新版进入；遗忘后当前召回为空、历史记录仍保留，最终完整性有效。本机 macOS arm64
+实测：主语料构建 `88.76 s`、冷完整性 `16.69 s`、冷 CLI `17.28 s`、峰值 RSS
+`1,548,713,984 bytes`、SQLite `739,250,176 bytes`；warm lexical p50/p95
+`0.34/0.56 ms`、warm hybrid `3.03/3.51 ms`、recall+Context `3.35/3.99 ms`。
+生命周期探针初始编译与审核 `25.17 s`、来源更新与原子审核 `25.70 s`、选择性遗忘
+`4.37 s`；遗忘后的召回加完整性检查 `17.15 s`，随后同一 audit head 的完整性缓存读取
+`0.026 ms`。Hit@1、Capsule recall、Capsule 验证和 provenance coverage 均为 `1.0`，
+no-answer 为空，更新、遗忘和历史保留检查均为真。报告绑定当前实现文件 hash，但运行时工作树
+非 clean 且使用开发团队生成的 exact-token 合成语料，因此固定
+`claim_eligible=false`：它是正式数量级的施工诊断，不是自然语言、第三方复现或领先性证据。
+
+100 万实测报告登记为
+[`retrieval-fabric-1m-2026-07-28.json`](../benchmarks/scale/retrieval-fabric-1m-2026-07-28.json)。
+它不是从 100k 外推，而是实际编译、审核并检索 `1,000,000` 个 source-bound Asset（10 个
+来源），随后运行同一批 100 次 lexical/hybrid/Capsule、冷进程 Golden `recall`、来源更新、
+Lineage 和选择性遗忘工作负载。本机实测：构建 `6,003.04 s`、冷完整性 `384.71 s`、冷 CLI
+`425.35 s`、峰值 RSS `4,857,741,312 bytes`、SQLite `7,380,508,672 bytes`；warm lexical
+p50/p95 `2.27/3.97 ms`、warm hybrid `27.73/30.05 ms`、recall+Context
+`28.61/30.91 ms`。生命周期初始编译与审核 `542.65 s`、来源更新与审核 `572.93 s`、选择性
+遗忘 `71.98 s`、遗忘后召回加完整性 `388.02 s`，缓存读取 `0.033 ms`。三项发布延迟门禁、
+Hit@1、Capsule/provenance、no-answer、更新、遗忘、历史保留和最终完整性均通过。该工作树仍非
+clean，语料仍为开发团队生成的 exact-token 合成数据，所以报告同样固定
+`claim_eligible=false`，不支持自然语言质量、竞争领先或可发布版本声明。
+
+发布性能门禁为 warm lexical p95 `< 50 ms`、warm hybrid p95 `< 500 ms`、无外部 LLM 的
+recall+Context p95 `< 750 ms`，同时记录 cold open/integrity、build time、峰值 RSS、数据库/
+索引大小、Hit@1、Capsule/provenance、no-answer 和失败样本。看到 held-out 结果后不得降低门禁。
+
+### 发布工程证据
+
+[`document-engine-actual-pdf-2026-07-28.json`](../benchmarks/release/document-engine-actual-pdf-2026-07-28.json)
+记录了一次真实引擎路径的本机诊断：DeepLaw 校验固定 `MinerU 3.4.4` 和 15 个模型文件
+（`1,082,446,509 bytes`，manifest SHA-256
+`c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12`），在不联网的摄取阶段
+以固定 `pipeline/txt/en` 参数处理一页 ReportLab 生成的 PDF。最新绑定重跑耗时 `13.88 s`，输出 2 个
+paragraph block，预期文本和输出 SHA-256 均精确匹配。该诊断覆盖真实 PDF 解析入口、固定模型
+校验、closed argv 和结构化输出，不覆盖 OCR、表格、图片、损坏文件、多语言版面或跨平台；工作树
+非 clean 且 fixture 为开发团队生成，因此仍固定 `claim_eligible=false`。
+
+CI 分开审核 default、Discovery 和 document-engine 依赖；document-engine 只有精确
+OpenVEX `not_affected` 路径才可忽略 advisory。release job 生成 CycloneDX SBOM、安装环境
+license inventory、wheel/sdist package inventory、两次 byte-identical build、fresh-wheel 结果、
+Sigstore signature 和 GitHub provenance/SBOM attestation。工作树非 clean 时，可复现构建报告
+明确 `release_claim_eligible=false`。
+
+原生 Windows ACL、Linux/macOS/Windows clean install、Golden CLI、TUI、MCP、migration、
+Codex/Claude Code/OpenCode/通用 Skill 和两个独立秘密 held-out 的最终结果仍是
+`External verification pending`。
+
+## 历史 v0.6.0 control-plane 内部候选
 
 当前源码绑定摘要位于
 [`knowledge-os-control-plane-candidate-2026-07-27.json`](../benchmarks/knowledge-os-control-plane-candidate-2026-07-27.json)，
@@ -248,6 +363,13 @@ v3 逐套件要求数据与 baseline 配置 commitment 早于候选交付，重�
 commit、版本与固定 `knowledge-context-v1` 运行面，并签名确认干净安装、隔离 workspace、
 查询期断网/无遥测、写入边界和隐藏数据不保留。当前尚无真实外部运行，所以 v0.5.0
 候选没有跨系统性能主张资格。
+
+v0.7 的 17 项 named-baseline construction kit 另有 closed execution-plan/receipt v2。runner
+会在启动前重新核验 exact registry、clean Git revision/submodule、corpus/query/case inventory、
+wrapper/executable，以及固定 hardware/software/models/common reader/network/measurement 的环境
+记录；raw output、resource/failure record 和 bounded stdout/stderr 都被绑定保留。独立 collection
+gate 会检测运行后 artifact drift 和跨系统公平条件，但它不实现 OS 级断网，也不把本地
+plan/receipt/report 升格为 v3 suite manifest、独立 attestation 或 claim evidence。
 
 中文法律秘密套件仍需要独立专家标注，至少增加：
 

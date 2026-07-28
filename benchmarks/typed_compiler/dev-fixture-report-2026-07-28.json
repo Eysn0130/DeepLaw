@@ -1,0 +1,101 @@
+{
+  "candidate_line": "0.7.0-unreleased",
+  "case_count": 2,
+  "claim_eligible": false,
+  "compiler_identity": "development-fixture/mixed-predictions-v1",
+  "counts": {
+    "accepted_predictions": 2,
+    "correct_cross_document_claims": 1,
+    "cross_document_gold_claims": 1,
+    "cross_document_predictions": 1,
+    "duplicate_predictions": 0,
+    "exact_source_span_claims": 2,
+    "gold_claims": 2,
+    "hallucinated_predictions": 1,
+    "predicted_claims": 3,
+    "reviewed_predictions": 3,
+    "true_positive_gold_claims": 2,
+    "true_positive_predictions": 2,
+    "unsupported_predictions": 1
+  },
+  "limitations": [
+    "Synthetic scorer fixture; it tests metric semantics and is not compiler-quality evidence.",
+    "Predictions and evaluator labels are embedded, not independently produced or reviewed."
+  ],
+  "metrics": {
+    "cross_document_synthesis_correctness": 1.0,
+    "duplicate_claim_rate": 0.0,
+    "f1": 0.8,
+    "hallucinated_claim_rate": 0.3333333333333333,
+    "precision": 0.6666666666666666,
+    "recall": 1.0,
+    "review_acceptance_rate": 0.6666666666666666,
+    "source_span_correctness": 1.0,
+    "unsupported_claim_rate": 0.3333333333333333
+  },
+  "per_case": [
+    {
+      "case_id": "single-source",
+      "counts": {
+        "accepted_predictions": 1,
+        "correct_cross_document_claims": 0,
+        "cross_document_gold_claims": 0,
+        "cross_document_predictions": 0,
+        "duplicate_predictions": 0,
+        "exact_source_span_claims": 1,
+        "gold_claims": 1,
+        "hallucinated_predictions": 1,
+        "predicted_claims": 2,
+        "reviewed_predictions": 2,
+        "true_positive_gold_claims": 1,
+        "true_positive_predictions": 1,
+        "unsupported_predictions": 1
+      },
+      "metrics": {
+        "cross_document_synthesis_correctness": 0.0,
+        "duplicate_claim_rate": 0.0,
+        "f1": 0.6666666666666666,
+        "hallucinated_claim_rate": 0.5,
+        "precision": 0.5,
+        "recall": 1.0,
+        "review_acceptance_rate": 0.5,
+        "source_span_correctness": 1.0,
+        "unsupported_claim_rate": 0.5
+      }
+    },
+    {
+      "case_id": "cross-document",
+      "counts": {
+        "accepted_predictions": 1,
+        "correct_cross_document_claims": 1,
+        "cross_document_gold_claims": 1,
+        "cross_document_predictions": 1,
+        "duplicate_predictions": 0,
+        "exact_source_span_claims": 1,
+        "gold_claims": 1,
+        "hallucinated_predictions": 0,
+        "predicted_claims": 1,
+        "reviewed_predictions": 1,
+        "true_positive_gold_claims": 1,
+        "true_positive_predictions": 1,
+        "unsupported_predictions": 0
+      },
+      "metrics": {
+        "cross_document_synthesis_correctness": 1.0,
+        "duplicate_claim_rate": 0.0,
+        "f1": 1.0,
+        "hallucinated_claim_rate": 0.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "review_acceptance_rate": 1.0,
+        "source_span_correctness": 1.0,
+        "unsupported_claim_rate": 0.0
+      }
+    }
+  ],
+  "report_sha256": "1d63af18302174b87ca76ea9af6905f09e1c69cf8dbc5b4cab7566bf44a6b4ac",
+  "schema_version": "deeplaw.typed-compiler-benchmark/v1",
+  "scorer_sha256": "c4bd6a7c90fdd549b50359a905458f5d49d67ef2087d5b3c67a45b91a4a17485",
+  "suite_id": "typed-compiler-dev-fixture-v1",
+  "suite_sha256": "24c0d7bfcc928b1e637eca25cdc639da926380d87b739dd49efa3c392c3113dd"
+}

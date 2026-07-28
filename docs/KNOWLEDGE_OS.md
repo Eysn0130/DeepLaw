@@ -1,563 +1,348 @@
 # DeepLaw Knowledge OS
 
-Status: implemented baseline for software version `v0.6.0`, reviewed
-2026-07-27. The source-version, review-receipt, run-receipt, and structured-feedback
-control plane on `main` is documented in [`CLI_LIFECYCLE.md`](CLI_LIFECYCLE.md).
+Status: released `v0.7.0` contract, reviewed 2026-07-28. Runtime behavior is defined by code, tests,
+JSON Schemas, SQLite migrations, and the lockfile—not by this document. Competitive model/baseline
+evidence remains pending and does not change the commercial runtime contract.
 
-DeepLaw 2.0 compiles source material into review-gated Knowledge Assets and
-then compiles only the assets needed for a task into a bounded Knowledge
-Capsule. It is infrastructure for an existing Agent host, not a replacement
-for Codex, Claude Code, OpenCode, their reasoning loop, or their project
-session store.
+## Product boundary
 
-The Chinese Legal Pack remains a separate trusted domain product. Its
-immutable signed-catalog lifecycle and `law_support` server are not replaced
-by the general Knowledge Asset vault.
+DeepLaw is permanently a local, single-user Agent Knowledge OS. It compiles durable, verifiable,
+review-gated knowledge for long-running Agents without becoming an Agent runtime, hosted RAG
+service, remote database, team collaboration service, or general Markdown editor.
 
-## Corrected product boundary
+There are two isolated products:
 
-The reviewed construction plan originally proposed "de-legalizing" the
-repository and allowing Agent-facing memory writes. Both choices would weaken
-the existing product:
+1. the general Knowledge Asset core, exposed only through optional read-only `knowledge_support`;
+2. the version-aware Chinese Legal Pack, exposed only through optional read-only `law_support`.
 
-- replacing the Legal Pack would discard its authority, version, temporal,
-  source, and immutable-release invariants;
-- allowing an Agent to call `remember` or `learn` would convert model output
-  and source prompt injection into durable instructions;
-- replacing source fragments with semantic atoms would make knowledge
-  impossible to reproduce from evidence;
-- treating Markdown as canonical would weaken transactions, lifecycle
-  constraints, isolation, and auditability;
-- automatically trusting a portable package would launder another vault's
-  review status.
+They do not share canonical storage, authority, cache, ranking, receipts, lifecycle, or MCP process.
+Neither plugin auto-activates. Case-private documents, facts, chats, and identifiers belong outside
+both products.
 
-The implemented architecture is additive:
+## Canonical state and trust
 
-```text
-                               Agent host
-                    Codex / Claude Code / OpenCode
-                                 |
-                 explicit Skill + one read-only MCP leaf
-                         /                         \
-        knowledge_support                         law_support
-               |                                      |
-     Knowledge Asset Core                      Chinese Legal Pack
-  owner-only mutable vault                 immutable signed releases
-  review-gated administration              official/private legal scopes
-               |                                      |
- project knowledge, decisions,              statutes, interpretations,
- experience, constraints, tools             legal references and receipts
+A Vault's canonical state is:
 
- Analytix case projects, attachments, chats and case databases stay outside.
-```
+- owner-only SQLite;
+- immutable, content-addressed source bytes and fragments;
+- append-only audit and Identity snapshots.
 
-Installing either plugin does not authorize the other product. Ordinary host
-work must not auto-activate either one.
+Markdown, Obsidian pages, JSON Canvas, summaries, tags, graphs, embeddings, model output, search
+ranks, and confidence values are derived data. They cannot replace evidence, activate knowledge,
+establish authority, prove applicability, or grant permission to execute text.
 
-## Knowledge Asset model
+Source text is always untrusted input. Only an active, human-verified constraint/rule/procedure may
+carry `directive_mode=reviewed_instruction`, and it remains subordinate to host, repository,
+developer, and current-user instructions.
 
-An asset is a lifecycle-managed claim or instruction candidate, not an
-arbitrary text chunk:
+## Knowledge Identity v2
 
-| Field | Purpose |
-| --- | --- |
-| `kind` | constraint, decision, fact, procedure, rule, experience, lesson, question, or reference |
-| `memory_tier` | working, project, experience, wisdom, or domain |
-| `statement` | bounded canonical content |
-| `semantic_key` | optional identity used for explicit supersession |
-| `status` | proposed, active, superseded, revoked, or quarantined |
-| `verification` | unverified, source-bound, or human-verified |
-| `trust` | untrusted, user-provided, or verified-source provenance |
-| `sensitivity` | public, internal, private, or restricted |
-| `legal_authority` | always `false` for the general Knowledge Asset core |
-| `source_refs` | exact fragment IDs, locators, and quote hashes |
-| `content_sha256` | hash of immutable identity-bearing content |
+The v2 schema separates identities that v0.6 previously coupled:
 
-`trust` records provenance; it is not a truth score. DeepLaw does not emit a
-synthetic numeric confidence and does not infer approval from model agreement.
-`verified_source` is reserved for a future publisher-authenticated Knowledge
-Asset channel and is rejected by the current user CLI and store API. It is not
-the status of a manually entered statement. `human_verified` means a human
-reviewed activation, not that a factual or legal proposition is independently
-proven.
-Only explicit human review can move an asset to `active`. A semantic key can
-have only one active asset, and replacement requires an explicit
-`supersedes_asset_id`.
-
-Source fragments remain independent evidence. A Knowledge Asset may summarize
-or classify a fragment, but never replaces it.
-
-## Vaults and isolation
-
-Each vault is a physical owner-only directory:
-
-```text
-vault/
-  vault.json
-  vault.sqlite3
-  sources/
-```
-
-The manifest and SQLite identity must agree. On POSIX systems the directory is
-`0700` and identity files are `0600`; a group/world-readable or symlinked vault
-fails closed. Separate users, projects, teams, and domains should use separate
-vault roots. DeepLaw does not merge them at query time.
-
-The SQLite database contains:
-
-- content-addressed source identities and source fragments;
-- stable logical source keys and immutable source-version lifecycle records;
-- lifecycle-managed assets;
-- a small reviewed relation vocabulary;
-- a full-text discovery index;
-- immutable local Review Receipts, Task Run Receipts, and structured Feedback Ledger records;
-- a hash-chained mutation event log.
-
-Every persistent operation and Agent read first reconciles the event inventory
-against current Asset lifecycle state, sources, fragments, reviewed relations,
-and exact FTS projection. A valid event chain with a directly edited `status`
-or search row therefore fails closed. Stable database fingerprints cache a
-successful reconciliation; inode, size, mtime, ctime, revision, or audit-head
-change forces replay. A pinned reader refuses a changed database instead of
-authenticating its old snapshot as the new file. Selected source-bound Assets
-also recheck the stored source size and SHA-256, with a file-identity cache to
-avoid repeatedly hashing unchanged large files.
-
-The event chain remains tamper-evident, not externally authenticated. Its head
-is inside the same vault. A hostile owner able to rebuild the whole vault and
-event history can still replace it, so trusted backups or signed distribution
-are required for publisher authenticity.
-
-## Knowledge Compiler
-
-`deeplaw knowledge ingest` supports PDF, DOCX, legacy DOC through a local
-LibreOffice conversion, UTF-8 text, Markdown, JSON, source code, CSV/TSV, YAML,
-TOML, XML, HTML, SQL, and logs.
-
-The Knowledge-specific UTF-8 extractor preserves line structure, blank lines,
-and internal indentation for code and structured text. It enforces source,
-character, line, and block-count limits before creating fragments. The original
-bytes remain separately hash-bound.
-
-Compilation preserves three layers:
-
-```text
-source bytes
-  -> bounded source fragments with stable locators and hashes
-  -> proposed Knowledge Asset candidates
-```
-
-The current control plane separates a stable opaque `source_key` from each exact `source_id`.
-Re-ingesting unchanged bytes and compiler identity is idempotent. A changed logical source
-creates a pending immutable successor, exposes an explicit diff, and leaves the prior active
-version usable until the successor's exact review manifest is approved. Matching Assets are
-then superseded and deleted sections revoked in the same transaction. Individual approval of a
-pending successor Asset is rejected because it would break the atomic switch.
-
-`deeplaw knowledge source add-dir` creates a relative-path/size/hash manifest for at most 10,000
-admitted files. A dry run performs no Vault write; a real run uses per-file atomicity and reports
-bounded failures explicitly.
-
-Markdown headings can define section boundaries, but Markdown is not the
-canonical store. PDF ingestion fails closed when the native text layer requires
-OCR unless the operator selects the evidence-preserving document engine.
-Legacy DOC conversion records the LibreOffice version and converted DOCX hash;
-if LibreOffice is unavailable or conversion is unsafe, ingestion fails.
-The compiler hashes the input before extraction, rechecks it after extraction,
-and requires the vault copy to match the same size and SHA-256. A concurrently
-changed source fails instead of binding extracted fragments to different bytes.
-
-Instruction-like text, invisible controls, and bidirectional controls mark the
-source risky and quarantine all of its candidates. This is intentionally
-conservative: ordinary manual proposals pass through the same detector.
-Activating any quarantined Asset requires both reviewed confirmation and a
-separate quarantine-risk confirmation. The Agent cannot promote it.
-
-For a fully reviewed compiled source, the `knowledge review manifest` and
-`knowledge review approve-source` commands commit to its exact one-to-one
-fragment/Asset membership and activate it atomically. The operation performs one
-complete integrity replay, rechecks the stored source bytes, rejects ambiguous,
-revoked, superseded, stale, or changed membership, and records an immutable local Review
-Receipt. Receipt v1 binds reviewer, reason, policy, membership hash, decisions, and Asset
-hashes; its signature is explicitly `null` and does not claim independent reviewer identity.
-It is not an
-automatic approval shortcut: the source ID is content-derived, review
-confirmation is mandatory, and risky sources additionally require
-`--confirm-quarantine`. Per-Asset approval remains available for selective
-review except for a pending successor of an active source.
-
-Optional `deterministic-v1` typed extraction recognizes only explicit heading cues for
-decision, constraint, procedure, rule, fact, lesson, and question proposals. It is deliberately
-narrow, local, and deterministic. Extracted content remains proposed or quarantined and never
-becomes active from an extractor score.
-
-The compiler requires `--confirm-no-case-data`. This is an explicit product
-boundary, not a personal-information detector. Analytix case materials belong
-in the case project and must not be copied into a DeepLaw vault.
-
-## Context Compiler
-
-The Context Compiler searches only active, human-reviewed, non-expired assets.
-Each read-only vault handle pins one SQLite read transaction, so search,
-relations, audit anchor, revision, and exported content come from the same
-committed snapshot. It then applies:
-
-1. explicit task and optional goal;
-2. optional kind and memory-tier filters;
-3. bounded lexical candidate discovery;
-4. deterministic coverage of the beginning, middle, and tail of long Agent
-   tasks so a late entity or acceptance identifier is not silently discarded;
-5. deterministic admission that rejects a weak one-term match in a longer task
-   while retaining a distinctive exact identifier;
-6. relevance order with a bounded preference for constraints, decisions, rules,
-   and procedures;
-7. one bounded hop over explicit human-reviewed relations, never free graph
-   traversal;
-8. current source/integrity verification for every selected Asset;
-9. fair item/content allocation so one long Asset cannot starve the remaining
-   selected evidence;
-10. query-tail-aware excerpts so a hit is not followed by an unrelated prefix
-    fragment;
-11. an eight-reference / 4,000-character provenance-metadata budget allocated in two passes,
-    reserving at least one compact reference for every selected source-bound item;
-12. a 64,000-character hard limit for the complete serialized Capsule;
-13. explicit selection reasons, reviewed contradictions, and gaps.
-
-It emits `deeplaw.knowledge-capsule/v1`:
-
-```text
-task + goal
-  -> constraints
-  -> decisions
-  -> supporting knowledge
-  -> experience and lessons
-  -> open questions / next actions
-  -> source bindings and reviewed relations
-  -> explicit budget and gaps
-  -> capsule digest + vault audit anchor
-```
-
-Weak lexical candidates and excluded source references are counted and surfaced
-as gaps. If one compact reference cannot fit for another source-bound item, that item is not
-selected. Excerpts are query-aware rather than prefix-only, must remain exactly reproducible
-from the current statement, and compiler parts are grouped by source plus logical section
-identity before filling the item budget, so equal section titles from different sources are not
-deduplicated. Capsule verification first enforces the
-packaged Draft 2020-12 JSON contract, then covers every field other than its ID
-and digest, verifies payload accounting and projected content against the
-current asset, requires at least one embedded compact source reference for every
-source-bound item, checks relations and the historical audit anchor, and rejects
-missing, revoked, superseded, expired, or changed assets when the vault is
-available. A stale capsule can remain integrity-valid when an unrelated later
-mutation occurred; `stale` is reported separately.
-
-Each item records either `lexical_match` or the exact reviewed relation that
-admitted it. Open-question text is never copied into an executable
-`next_actions` field; actions contain only a fixed review verb and the Asset
-URI. The Capsule trust boundary states that general Assets are not legal
-authority, case data is forbidden, and authoritative legal-source retrieval
-belongs to `law_support`.
-
-Retrieved content is data by default. Only an active, human-reviewed
-constraint, rule, or procedure has
-`directive_mode=reviewed_instruction`. It still cannot override system,
-developer, repository, or current user instructions.
-
-## Optional candidate discovery
-
-`v0.6.0` retains the removable local Discovery Index for research and operator use.
-It addresses paraphrases and preference-like queries that may not share literal
-terms with an Asset, without changing the canonical vault or the default
-Context Compiler.
-
-The boundary is deliberately strict:
-
-- model setup is an explicit offline-administration action; query and MCP
-  operations never download a model;
-- the English and Chinese-English profiles pin an exact repository revision,
-  five-file inventory, byte size, SHA-256, dimension, tokenizer, pooling
-  policy, and ONNX input/output contract;
-- only active, human-reviewed, non-expired, non-restricted Assets enter an
-  index;
-- the manifest binds the exact vault ID, revision, audit head, Asset content,
-  projection, model identity, record bytes, and vector bytes;
-- every source-bound candidate still revalidates its stored source bytes;
-- a vault mutation, source change, model drift, vector drift, extra file,
-  permission change, or index replacement invalidates the index;
-- the index is derived, non-authoritative, `legal_authority=false`,
-  `case_data_allowed=false`, and can be deleted and rebuilt;
-- search emits ordinal candidate IDs and short excerpts without exposing an
-  uncalibrated numeric confidence; the canonical Asset must be fetched and
-  verified by exact ID before use.
-
-The surface is not part of `knowledge_support`, is not consulted by
-`knowledge context`, and is off by default. This is a measured product
-decision, not an unfinished implicit fallback: the inspected 60-case public
-development ablation improved Recall@5 but increased irrelevant results and
-regressed Hit@1 on six cases. It therefore failed the activation gate. A
-future release may admit it into a read-only Agent path only after frozen
-held-out task-success, context-noise, provenance, lifecycle, poisoning,
-latency, memory, disk, and cost gates all pass.
-
-Operator workflow:
-
-```bash
-uv tool install '.[discovery]'
-
-deeplaw knowledge discovery-model setup \
-  --profile chinese-english
-
-deeplaw knowledge build-discovery \
-  --vault ~/.deeplaw/vaults/my-project \
-  --output ~/.deeplaw/indexes/my-project \
-  --profile chinese-english \
-  --confirm-no-case-data
-
-deeplaw knowledge verify-discovery \
-  --vault ~/.deeplaw/vaults/my-project \
-  --index ~/.deeplaw/indexes/my-project
-
-deeplaw knowledge search-discovery \
-  --vault ~/.deeplaw/vaults/my-project \
-  --index ~/.deeplaw/indexes/my-project \
-  --query "此前关于发布权限的决定是什么？" \
-  --limit 5
-```
-
-The no-case flag is an operator attestation, not a detector. It never permits
-Analytix case facts, files, chats, or identifiers to enter this index.
-
-## Memory and learning lifecycle
-
-DeepLaw memory is curated knowledge, not a transcript dump:
-
-| Tier | Intended content | Lifecycle |
+| Identity | Basis | Mutable? |
 | --- | --- | --- |
-| working | temporary task state | mandatory expiry |
-| project | decisions, facts, constraints, procedures | explicit supersession/revocation |
-| experience | failures, fixes, outcomes, lessons | proposed by debugger/feedback, reviewed by human |
-| wisdom | stable cross-project patterns | deliberate promotion, never automatic |
-| domain | durable references and domain rules | source-bound and separately governed |
+| Collection | Vault + canonical collection name | no |
+| Source Identity | Collection + normalized logical path | stable across content revisions |
+| Source Revision | Source Identity + exact bytes/media/origin commitment | no |
+| Compilation | Source Revision + adapter/config/Source IR/fragment inventory | no |
+| Proposal Set | Compilation + extractor/model/prompt + ordered proposals | no |
+| Knowledge Key | stable semantic lineage key | stable |
+| Knowledge Revision | statement + ordered multi-source refs + scopes/applicability | no |
+| Governance Revision | trust/sensitivity/review/lifecycle/activation/export policy | append-only |
 
-`deeplaw knowledge debug` and the legacy Capsule feedback path create proposals.
-The structured path first records a Task Run Receipt bound to a verified Capsule, historical
-Vault anchor, task/goal hashes, selected Asset/source inventory, host/model identity, timestamps,
-outcome artifact hash, and optional observed metrics. Feedback then classifies helpful,
-irrelevant, harmful, stale, missing-source, missing-knowledge, relation, and budget outcomes.
-It produces a review-gated lesson proposal and a deterministic regression case. Replay compares
-historical and current selection without inferring task success and remains
-`claim_eligible=false`. A shaped Capsule or Run ID is insufficient; stored receipts and their
-audit events must verify. None of these records self-promote. There is deliberately no
-Agent-facing `remember`, `learn`, `approve`, `import`, or delete operation.
+The canonical contract is [`knowledge-identity.v2.schema.json`](../contracts/knowledge-identity.v2.schema.json).
+Legacy IDs remain compatibility bindings rather than canonical identity.
 
-Conversation history remains the host's responsibility. DeepLaw should retain
-only a reviewed decision, constraint, fact, lesson, or source fragment that is
-worth carrying across tasks; it must not mirror every message.
+### Many-to-many evidence
 
-## Relations and human views
+A Knowledge Revision may cite multiple fragments across multiple Source Revisions. A fragment may
+support multiple Knowledge Revisions. Exact ref order, `source_revision_id`, `fragment_revision_id`,
+locator, quote hash, and logical Source IR node keys are committed.
 
-The v1 relation set is deliberately small:
+Compilation can produce `new`, `modified`, `split`, `merged`, `deleted`, or `ambiguous` lineage.
+Mapping evidence is retained; a score alone never resolves ambiguity. Cross-key split, merged, and
+ambiguous mappings require an explicit source-bound human review. The same immutable mapping is
+indexed under every involved Knowledge Key, creates or activates no Asset, and never carries
+approval. A source update creates a pending successor and leaves the prior reviewed source active
+until atomic review succeeds.
+
+### Temporal relations
+
+Reviewed relations bind stable Knowledge Keys and concrete endpoint revisions. Each immutable
+relation revision may contain:
+
+- event time;
+- valid-from / valid-to;
+- observed time;
+- reviewed time;
+- ingest time;
+- exact evidence refs;
+- active/superseded/revoked/ambiguous status.
+
+`current`, `past`, and exact `as-of` views never claim that temporal matching proves factual or
+legal applicability. Endpoint forgetting/revocation removes the relation from the current view but
+does not erase history.
+
+Source replacement runs a separate relation carry-forward workflow. Exact `unchanged` endpoint
+lineage and exactly mapped active evidence may create an inactive `carry_forward` candidate;
+`modified`, `renamed`, or `moved` endpoints create `full_review` candidates. Split, merge,
+ambiguous, deleted, missing-lineage, or ambiguous-evidence cases are blocked. Every candidate is a
+new immutable relation revision with `status=proposed`, and only a fresh explicit human decision
+can append the active successor. Golden review and the Workbench expose this queue without making
+operators copy internal IDs.
+
+## Source Adapter and Source IR
+
+Every ingestion path first creates bounded Source IR. The adapter contract preserves source order,
+boundaries, locators, hashes, hierarchy, and parse configuration.
+
+Current adapters cover:
+
+- Markdown/TXT headings and blocks;
+- PDF pages and layout-derived blocks;
+- DOCX headings, paragraphs, lists, tables, footnotes/endnotes where present, after a bounded whole-
+  archive safety inventory;
+- PPTX relationship-defined slide, object, table, and speaker-note order;
+- XLSX sheets, rows, cells, formulas, and values;
+- EPUB relationship-validated spine documents;
+- Python AST symbols/imports/references, plus pinned compiler-grade Tree-sitter grammars for
+  JavaScript/JSX, TypeScript/TSX, Java, Go, and Rust; syntax recovery and bounded lexical fallback
+  are explicit quality flags;
+- JSON/JSONL/YAML/TOML paths;
+- HTML headings, paragraphs, lists, code, tables, and captions;
+- CSV/TSV rows and cells;
+- exact-pinned SQLGlot AST statements, CTEs, tables, columns, and line spans, with an explicit
+  bounded lexical fallback after a parser limit or closed parse failure;
+- conversations, tool executions, and structured records.
+
+OOXML and EPUB validate the complete ZIP inventory and package relationships before selected XML
+is read. XML byte, node, and depth budgets are closed. XLSX additionally validates worksheet order,
+unique bounded coordinates, shared-string indices, cell types, formulas, and merged ranges. These
+checks are part of `deeplaw-source-adapters/4` compilation identity.
+
+Two explicit operator connectors feed those same closed adapters through immutable Source
+Snapshots:
+
+- HTTPS performs a one-shot, direct TLS fetch only after `--confirm-network`. URL preflight is
+  network-free. The URL has no credentials/query/fragment, uses public DNS and port 443, and is
+  revalidated after each of at most five redirects. DNS answers must all be globally routable; the
+  chosen address is pinned while the certificate is checked against the hostname. Encoded control
+  paths, response compression, ambiguous lengths, unsupported type/suffix conflicts, empty bodies,
+  and bodies over 64 MiB fail closed. An optional expected SHA-256 binds publisher intent; the
+  captured bytes always receive their own SHA-256 and `untrusted` governance.
+- local exact-Git reads an existing repository at one full 40- or 64-hex commit object ID. It uses
+  closed plumbing argv, bounded output/time, disabled replacement objects, prompts, optional locks,
+  global/system config, and lazy fetching. It reads regular blobs with `ls-tree`/`cat-file`, verifies
+  each Git object digest, and performs no clone, checkout, hook, filter, or network operation.
+
+Snapshots and manifests are owner-only operator state under the selected Vault. Their closed
+record binds connector, requested/resolved locator, canonical origin, collection/logical path,
+content size/hash, and Vault identity. Snapshot identity and bytes are reverified when a resumable
+v2 ingest job runs. The local Git path remains private metadata and never enters canonical Source
+Identity or MCP output. Connectors are one-shot—not pollers or `sync --watch` registrations—and
+cannot activate knowledge without the ordinary human review transition.
+
+The Source IR contract is [`source-ir.v1.schema.json`](../contracts/source-ir.v1.schema.json).
+Structure get/list/search/trace operates on Source IR; it does not require an LLM Wiki.
+
+Adapters fail closed on bounded-size, malformed archive/XML, unsafe member/path, decompression,
+symlink, and parser errors. An adapter result is extraction input—not approval.
+
+## Many-to-Many Compiler
+
+Compiler modes are explicit:
+
+| Mode | Status | Boundary |
+| --- | --- | --- |
+| `off` | Supported | reference proposals only |
+| `deterministic-v2` | Supported | replayable local typed extraction |
+| `deterministic-v1` | compatibility | retained for v0.6 replay |
+| `local-model-v1` | Operator-only | exact executable/model/prompt manifest |
+| `external-model-explicit` | Operator-only | exact manifest plus per-run disclosure confirmation |
+
+No compiler may write active knowledge. Output is always `proposed` or `quarantined`; model labels,
+confidence, similarity, and extraction success do not satisfy human review. Imported text cannot
+be interpreted as instructions for the compiler process.
+
+The closed Typed Compiler scorer reports precision, recall, F1, hallucinated and unsupported claim
+rates, exact source-span correctness, duplicates, review acceptance, and cross-document synthesis
+correctness from explicit evaluator labels. Its checked synthetic fixture validates metric
+semantics only and remains `claim_eligible=false`; a frozen reviewed corpus is still required for a
+compiler-quality claim.
+
+## Governance, review, and Proposal Inbox
+
+Activation is a local operator decision bound to exact content and proposal membership. Review
+Receipts record reviewer, policy, reason, decisions, hashes, and audit anchor. The current local
+receipt is intentionally unsigned.
+
+Agent-generated or external artifacts enter a physically isolated Inbox. A promoted
+`.dlproposal` becomes its own untrusted Source Revision and generates a source-bound Identity v2
+quarantine. `.dlfeedback`, `.dlrun`, and `.dleval` remain bounded operator inputs. Inbox APIs never
+appear on MCP.
+
+Manual source-free proposals are supported for deliberate local synthesis but remain explicitly
+`legacy-unbound`; they are not represented as source-authoritative Identity v2 knowledge.
+
+Identity v2 relation revisions require an exact fragment from an active reviewed Source Revision.
+Their governance sensitivity is the maximum of both endpoints and the evidence source. Source-free
+v0.6 compatibility edges remain locally inspectable, but the Retrieval Fabric, Golden `recall`,
+and MCP Context path do not use them as graph evidence. Restricted, superseded, removed, or
+unreviewed relation evidence is rejected again at retrieval time; history remains available in the
+explicit past view.
+
+Lifecycle is explicit:
 
 ```text
-supports, contradicts, depends_on, implements,
-derived_from, applies_to, related_to
+proposed / quarantined → active → superseded / revoked / expired / deleted
 ```
 
-Every relation is an explicit human-reviewed edge between active assets.
-Self-loops are prohibited and Agent expansion is bounded. Generated graph
-extraction and unconstrained multi-hop traversal are not authority paths. A
-selected `contradicts` edge becomes an explicit Capsule gap; DeepLaw does not
-silently choose a winner.
+Generated confidence is never approval. Restricted knowledge never becomes Agent-readable.
 
-`deeplaw knowledge export-markdown` produces deterministic Markdown, backlinks,
-and a hash manifest for Obsidian or code review. Titles are escaped and Asset
-statements are emitted inside dynamically sized literal blocks, so stored text
-cannot become an executable Markdown link, embed, or HTML element. The export
-is replaceable only when the destination contains a closed DeepLaw manifest,
-every tracked file still matches its size and hash, and there is no untracked
-user file. A modified or mixed human-notes directory fails closed instead of
-being deleted. SQLite remains canonical.
+## Evidence-Governed Retrieval Fabric
 
-## Portable Knowledge Assets
+Retrieval begins with a canonical Query Plan containing normalized query, intent, Knowledge Duties,
+channels, channel budgets, filters, temporal scope, ranking profile, reranker profile, tokenizer
+profile, and implementation revision. `query_plan_id` commits to that complete plan.
 
-`deeplaw knowledge export` creates a deterministic `.dlk` package for a fixed
-vault revision. It:
+Candidate channels are:
 
-- exports active, non-expired assets up to an explicit sensitivity ceiling;
-- hashes every payload and all identity-bearing manifest fields;
-- recomputes Asset, source, fragment, and relation identities instead of
-  accepting a self-consistent ZIP manifest alone;
-- rejects unsafe paths, duplicate entries, oversized entries, excessive
-  expansion, and invalid record counts;
-- can optionally include source fragments and source files.
+- exact Asset URI/ID, Knowledge Key, semantic key, and explicit phrase;
+- fielded lexical BM25 with CJK/mixed-language query normalization;
+- Source Tree candidates;
+- reviewed relation graph neighbors with a bounded two-hop traversal;
+- current or as-of temporal candidates;
+- bounded structured-feedback signals;
+- an explicitly supplied, exact-model Discovery Index;
+- an explicitly supplied pinned local reranker.
 
-Relation evidence participates in the package sensitivity boundary. Export
-fails if an included relation depends on a source above the selected
-sensitivity ceiling; it is never silently leaked or stripped.
+Channels only propose candidates. Central Admission then enforces active/reviewed lifecycle,
+expiry, sensitivity, source integrity, source refs, as-of governance, scope, case-data boundary, and
+other policy. Selection applies versioned RRF weights, source diversity, type/Duty priority, token
+and character budgets. Ranks and fusion values are not probabilities or authority.
 
-Package v1 does not sign publisher identity. Import therefore verifies content
-integrity, strips remote trust, and creates local `untrusted` quarantined
-proposals. Each asset requires explicit local review before activation.
+Distinctive identifiers are searched before source-wide common terms. Hybrid Source Tree retrieval
+uses bounded lexical/exact seeds where available, avoiding a full node scan and preventing one large
+source from swamping results. If ordinary lexical retrieval has no candidate, a bounded FTS-prefix
+candidate set may be post-filtered by exact one-edit ASCII distance (including adjacent
+transposition); broader fuzzy search is not implied. Graph traversal caps seeds, frontier, hops, and
+total candidates, and every edge must independently pass reviewed source-evidence admission.
 
-Publisher signing, revocation, and monotonic update channels are future gates;
-the existing Legal Pack signing system must not be casually reused without a
-separate Knowledge Asset trust policy.
+The optional local reranker manifest pins executable, closed argv, model identity/revision, exact
+resource hashes, candidate/input/output bounds, and timeout. It must output an exact permutation of
+the supplied candidates and cannot introduce IDs or numeric confidence. DeepLaw supplies a minimal
+process environment but does not claim it is an OS network sandbox.
+
+## Knowledge Duties and Capsule
+
+Query intent selects explicit duties such as constraints, applicability, current decisions,
+procedures, definitions, lessons, recent changes, exceptions, conflicts, open questions,
+counterevidence, and missing evidence. Missing duties remain gaps rather than being filled from
+model memory or web search.
+
+The Context Compiler packages admitted candidates into a Knowledge Capsule with hard limits for:
+
+- selected items;
+- excerpt characters;
+- serialized payload;
+- source refs;
+- exact or labeled-estimated tokens.
+
+Every source-bound selected item retains at least one compact exact reference. Capsule verification
+replays audit/state/source/hash/plan bindings and rejects tampering, stale lifecycle, missing source
+files, changed query plans, invalid refs, or budget violations.
+
+## Capsule-bound Run Record and feedback
+
+A task Run Record can only bind a real, currently verified Capsule. It commits to Vault revision,
+audit head, Capsule identity, Asset inventory, source inventory, host identity, and explicit outcome.
+DeepLaw never infers task success from command completion.
+
+Structured feedback distinguishes helpful, irrelevant, harmful, stale, missing knowledge, missing
+source, incorrect relation, and budget failure. It binds the Run/Capsule inventory and may generate
+review-gated lesson proposals or source-free regression cases. Profile training/evaluation also
+requires Run/Capsule/Feedback-bound data; activation runs full regression and can roll back.
+
+## Human projection and Workbench
+
+The curses Operator Workbench uses the same service layer as CLI. It includes Source List/Tree/Diff,
+side-by-side review, approve/reject/edit/split/merge, visible-row cross-key Lineage mapping,
+search/recall, Explain Trace, lineage, relations, current/history, Capsule, feedback, health, and
+benchmark status. Approve/reject batches are one transaction and cannot leave a partial decision;
+quarantined approval requires a separate risk confirmation. It opens no socket and sends no
+telemetry.
+
+Rich projection emits Markdown and JSON Canvas for sources, concepts, decisions, constraints,
+procedures, experiences, questions, relations, history, Capsules, and feedback. Projection is a
+deterministic human view, never a second database. Reverse edits produce a diff and quarantine;
+they cannot mutate active Assets or inherit approval.
+
+## Skill Factory
+
+Skill Factory derives bounded, source-bound read-only skills from active Knowledge. A bundle pins:
+
+- exact Knowledge Keys and revisions;
+- source hashes and compact refs;
+- scope and token budgets;
+- `SKILL.md`, knowledge payload, and test inventory hashes;
+- minimum regression fixtures.
+
+External bundles default to quarantine. A skill contains no ingest, review, approve, delete,
+feedback-write, or administration command.
+
+## Reliability and local confidentiality
+
+Implemented operations include resumable ingest, retry, cancel, crash recovery, source watch,
+atomic update, snapshot, restore, GC, orphan detection, derived-index rebuild, migration, rollback,
+corruption doctor, and backup validation.
+
+POSIX Vaults use owner-only modes and reject symlink roots/protected files. Windows code hardens and
+verifies native ACLs, owner SID, Users, Everyone, inherited access, reparse points, junctions,
+sources, models, and indexes. Windows-only CI tests are present, but a macOS run is not Windows
+evidence; final candidate status remains `External verification pending` until the workflow runs.
+
+DeepLaw does not invent an encryption protocol. Operators should enable OS full-disk encryption.
+MCP read-only does not neutralize an arbitrary same-user Shell granted by the host; host tool policy
+or a separate OS identity must enforce that boundary.
+
+## Portable packages and Discovery
+
+`.dlk` v1 provides content integrity only. Publisher identity, signatures, trust rotation,
+revocation, and transparency are not implemented; every import loses source trust and enters
+quarantine.
+
+Discovery is an explicit removable sidecar. It binds the exact model profile/revision/files, Vault
+revision/audit head, active Asset projections, and index bytes. It excludes restricted, inactive,
+expired, legal-release, and case material. It remains outside both MCP servers and default Context
+until a frozen held-out gate passes.
 
 ## Agent interface
 
-The optional Knowledge OS plugin starts:
+`knowledge_support` exposes bounded read-only inspection, search, exact get, and Context operations.
+Provider-visible search returns at most five evidence cards; exact full text requires an exact ID.
+There are no MCP tools for corpus writes, memory writes, learning, Inbox promotion, review,
+approval, feedback recording, import, delete, migration, or administration.
 
-```text
-deeplaw knowledge mcp --stdio
-```
+## Validated and pending evidence
 
-It exposes one leaf tool, `knowledge_support`, with five operations:
-
-| Operation | Result |
-| --- | --- |
-| `search` | at most five short reviewed asset cards |
-| `get` | one exact active non-restricted asset |
-| `context` | one bounded task-specific Knowledge Capsule |
-| `verify` | asset, source-binding, usability, and audit verification |
-| `inspect` | sanitized readiness and review backlog without local paths |
-
-The plugin is explicit-only and separate from the Legal Pack plugin. Restricted
-assets and inactive proposals are never exposed. Search cards, exact reads,
-verification arrays, and complete MCP responses are also bounded; a response
-larger than 64 KiB fails closed. The advertised output schema is a closed,
-operation-discriminated contract; the Capsule contract is bundled into the
-tool schema so hosts do not resolve external references. Search exposes ordinal
-rank and hit reason, not an uncalibrated confidence score.
-
-## CLI example
-
-```bash
-deeplaw knowledge init \
-  --vault ~/.deeplaw/vaults/my-project \
-  --name my-project \
-  --scope project
-
-deeplaw knowledge ingest \
-  --vault ~/.deeplaw/vaults/my-project \
-  --source ./ARCHITECTURE.md \
-  --source-kind document \
-  --sensitivity internal \
-  --confirm-no-case-data
-
-# Review the proposed asset, then activate exactly one ID.
-deeplaw knowledge approve \
-  --vault ~/.deeplaw/vaults/my-project \
-  --asset-id asset_... \
-  --confirm-reviewed
-
-# Or, inspect and commit to the exact source membership, then activate it
-# atomically from the source_id returned by ingest.
-deeplaw knowledge review manifest \
-  --vault ~/.deeplaw/vaults/my-project \
-  --source-id source_...
-
-deeplaw knowledge review approve-source \
-  --vault ~/.deeplaw/vaults/my-project \
-  --source-id source_... \
-  --review-manifest-sha256 REVIEW_MANIFEST_SHA256 \
-  --reviewer-id local-operator \
-  --reason "Reviewed the exact source membership." \
-  --confirm-reviewed
-
-# Required in addition when the proposal is quarantined:
-#   --confirm-quarantine
-
-deeplaw knowledge context \
-  --vault ~/.deeplaw/vaults/my-project \
-  --task "Implement the storage migration without breaking accepted constraints" \
-  --confirm-no-case-data \
-  --max-items 8 \
-  --max-chars 6000 \
-  --output ./capsule.json
-
-deeplaw knowledge verify-capsule \
-  --capsule ./capsule.json \
-  --vault ~/.deeplaw/vaults/my-project
-
-deeplaw knowledge feedback \
-  --vault ~/.deeplaw/vaults/my-project \
-  --capsule ./capsule.json \
-  --outcome partial \
-  --observation "The Capsule exposed one unresolved owner." \
-  --lesson "Resolve explicit gaps before execution." \
-  --confirm-no-case-data
-```
-
-`context` requires the same explicit non-case attestation because the Capsule
-persists `task` and `goal`. The flag is an operator boundary, not a content
-classifier: Analytix case facts, chats, identifiers, and attachments remain
-forbidden even when the flag is present.
-
-Capsule, `.dlk`, and Markdown export paths fail closed instead of overwriting an
-unrelated existing file or directory. Markdown replacement additionally
-requires a complete, unchanged DeepLaw export manifest.
-
-Set `DEEPLAW_KNOWLEDGE_VAULT` to select the default vault for a host process.
-If that vault does not exist, the MCP process still completes capability
-discovery but every read fails with a sanitized unavailable error. It never
-creates a vault or falls back to another path.
-
-## Validated scale envelope
-
-[`knowledge-scale-100k-2026-07-26.json`](../benchmarks/scale/knowledge-scale-100k-2026-07-26.json)
-records a real CLI and persistent-reader run over 100,000 synthetic,
-source-bound Assets. It binds the implementation file hashes and is explicitly
+The repository includes contract/lifecycle/security tests, Golden CLI acceptance, Workbench smoke,
+fresh-wheel verification, dependency/OpenVEX audits, SBOM/license/package inventory tooling,
+reproducible build checks, and a 100k/1m scale runner. Development diagnostics remain
 `claim_eligible=false`.
 
-- CLI init, ingest, atomic source approval, long-query search, Context
-  compilation, and Capsule verification all completed;
-- all 100 deterministic tail-entity queries returned the expected top result,
-  included it in the Capsule, and passed Capsule verification;
-- the persistent reader measured search p95 `0.82 ms` and context p95
-  `1.28 ms`;
-- one cold full audit/state replay took `5.85 s`; the measured in-process peak
-  RSS was about `443 MB`, and the SQLite file was about `185 MB`.
-
-This is the currently validated local-vault working envelope, not a million-
-Asset extrapolation and not evidence of cross-system superiority. A host should
-keep the read-only MCP process alive so its snapshot and successful integrity
-verification are reused. Larger corpora should be partitioned by the existing
-project/domain vault boundary and must pass a new frozen scale and retrieval
-evaluation before their operating envelope is documented.
-
-## Verification and release gates
-
-The v0.6.0 baseline is covered by contract, lifecycle, isolation, injection,
-database/FTS/source tamper, package, Markdown, Context Capsule, full CLI
-lifecycle, MCP stdio, Discovery model/index tamper, and existing Legal Pack
-tests. Before release:
-
-```bash
-uv lock --check
-uv run ruff check .
-uv run pytest
-python /path/to/plugin-creator/scripts/validate_plugin.py \
-  plugins/deeplaw-knowledge-os
-python /path/to/skill-creator/scripts/quick_validate.py \
-  plugins/deeplaw-knowledge-os/skills/use-knowledge-assets
-uv build
-git diff --check
-```
-
-The held-out protocol and machine claim gate are implemented in
-[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md). Real external
-runs, hidden labels, and two independent reproductions are still pending. Unit
-tests and the public development diagnostic do not establish superiority over
-other knowledge systems.
+Actual 100k and one-million construction diagnostics are checked in and remain claim-ineligible
+because they bind a dirty worktree and synthetic exact-token corpus. Formal v0.7 release still
+requires final freeze and clean reruns, real Windows/OS/host matrices, every named official
+baseline, preregistered statistical gates, two secret held-out suites, and two genuine independent
+evaluator signatures. The development team cannot manufacture external independence.
 
 ## Deliberate non-goals
 
-- no replacement Agent runtime or IDE;
-- no autonomous durable memory writes;
-- no automatic wisdom promotion;
-- no case-project storage or cross-case access;
-- no multi-tenant service claim;
-- no generated graph or summary as source authority;
-- no vector dump or unbounded graph traversal;
-- no publisher-authenticity claim for unsigned `.dlk` v1;
-- no claim of universal superiority without reproducible held-out evidence.
+- multi-tenant SaaS, team RBAC, or remote canonical storage;
+- automatic Agent memory activation;
+- treating generated Wiki/graph/embedding/rank as truth;
+- case-project storage;
+- unrestricted MCP output or graph traversal;
+- a general Markdown editor;
+- implicit URL/web/model fallback;
+- cross-system leadership claims without frozen external evidence.

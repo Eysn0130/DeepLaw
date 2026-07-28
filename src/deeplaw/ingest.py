@@ -710,14 +710,14 @@ def build_release(
             relations=relations,
         )
         release_metadata["database_sha256"] = database_sha256(database_path)
-        os.chmod(database_path, artifact_mode)
+        _set_artifact_mode(database_path, artifact_mode)
         (staging_dir / "release.json").write_text(
             json.dumps(release_metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         (staging_dir / "build-report.json").write_bytes(build_report_payload)
-        os.chmod(staging_dir / "release.json", artifact_mode)
-        os.chmod(staging_dir / "build-report.json", artifact_mode)
+        _set_artifact_mode(staging_dir / "release.json", artifact_mode)
+        _set_artifact_mode(staging_dir / "build-report.json", artifact_mode)
         if release_dir.exists():
             existing_manifest_path = release_dir / "release.json"
             existing_database_path = release_dir / "deeplaw.sqlite3"
@@ -747,3 +747,11 @@ def build_release(
     if activate:
         activate_release(output_root, release_id)
     return release_dir, report
+
+
+def _set_artifact_mode(path: Path, mode: int) -> None:
+    # Windows' chmod maps a missing owner-write bit to the DOS read-only
+    # attribute, which prevents explicit administration and temporary cleanup.
+    # Exact-byte hashes and immutable SQLite opens enforce the release boundary
+    # there; owner-only native ACLs protect private-library parents.
+    os.chmod(path, mode if os.name == "posix" else 0o600)

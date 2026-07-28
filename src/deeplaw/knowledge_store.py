@@ -11,10 +11,26 @@ from collections import OrderedDict
 from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any, Literal, cast
 
+from .knowledge_identity import (
+    canonical_origin_commitment,
+    identity_snapshot,
+    identity_tables_present,
+    install_identity_tables,
+    make_asset_revision_id,
+    make_collection_id,
+    make_knowledge_key,
+    make_source_key,
+    normalize_logical_path,
+    record_governance_revision,
+    record_lineage_transition,
+    record_relation_revision,
+    register_compilation_identity,
+)
 from .knowledge_models import (
     ASSET_KINDS,
     ASSET_STATUSES,
@@ -44,6 +60,7 @@ from .util import (
     fts_query,
     has_instruction_risk,
     search_terms,
+    search_terms_v1,
     sha256_bytes,
     sha256_file,
     stable_id,
@@ -96,11 +113,14 @@ _INTEGRITY_CACHE_LOCK = RLock()
 _MAX_SOURCE_HASH_CACHE_ENTRIES = 256
 _SOURCE_HASH_CACHE: OrderedDict[tuple[Any, ...], str] = OrderedDict()
 _SOURCE_HASH_CACHE_LOCK = RLock()
+_SENSITIVITY_ORDER = ("public", "internal", "private", "restricted")
 _KNOWN_EVENT_TYPES = frozenset(
     {
         "vault_initialized",
         "source_compiled",
         "asset_proposed",
+        "asset_revision_proposed",
+        "projection_edit_proposed",
         "asset_approved",
         "asset_revoked",
         "relation_added",
@@ -110,8 +130,31 @@ _KNOWN_EVENT_TYPES = frozenset(
         "review_recorded",
         "run_receipt_recorded",
         "feedback_recorded",
+        "identity_v2_snapshot",
+        "search_index_rebuilt",
     }
 )
+
+
+def _maximum_sensitivity(*values: str) -> Sensitivity:
+    if not values or any(value not in SENSITIVITY_LEVELS for value in values):
+        raise ValueError("cannot combine invalid Knowledge sensitivity values")
+    return cast(Sensitivity, max(values, key=_SENSITIVITY_ORDER.index))
+
+
+def _timestamp_after(candidate: str, prior: str) -> str:
+    canonical_timestamp(candidate, field="governance timestamp")
+    canonical_timestamp(prior, field="prior governance timestamp")
+    if candidate > prior:
+        return candidate
+    prior_time = datetime.fromisoformat(prior.replace("Z", "+00:00"))
+    return (
+        (prior_time + timedelta(seconds=1))
+        .astimezone(UTC)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z")
+    )
+
 
 SOURCE_VERSION_STATUSES = frozenset({"pending", "active", "superseded", "removed"})
 
@@ -300,10 +343,7 @@ def verify_knowledge_migration_backup(
             marker_path.is_symlink()
             or not marker_path.is_file()
             or not 1 <= marker_path.stat().st_size <= _MAX_MANIFEST_BYTES
-            or (
-                os.name != "nt"
-                and stat.S_IMODE(marker_path.stat().st_mode) & 0o077
-            )
+            or (os.name != "nt" and stat.S_IMODE(marker_path.stat().st_mode) & 0o077)
         ):
             raise ValueError("knowledge migration backup marker is unsafe")
         marker = strict_json_loads(marker_path.read_bytes())
@@ -348,8 +388,7 @@ def verify_knowledge_migration_backup(
                     "backup_sha256",
                 )
             )
-            and marker["backup_sha256"]
-            == sha256_bytes(canonical_json(body).encode("utf-8"))
+            and marker["backup_sha256"] == sha256_bytes(canonical_json(body).encode("utf-8"))
             and marker["manifest_sha256"] == sha256_file(_manifest_path(root))
             and marker["database_sha256"] == sha256_file(_database_path(root))
         )
@@ -498,9 +537,7 @@ def knowledge_vault_permission_report(path: str | Path) -> dict[str, Any]:
                     owner_only = not bool(mode_bits & 0o077)
                     stored_sources_owner_only = stored_sources_owner_only and owner_only
                 kind = "symlink" if symlink else "file" if regular_file else "other"
-                stored_sources_structural_valid = (
-                    stored_sources_structural_valid and kind == "file"
-                )
+                stored_sources_structural_valid = stored_sources_structural_valid and kind == "file"
                 if len(stored_sources) < _MAX_PERMISSION_REPORT_SOURCE_DETAILS:
                     stored_sources.append(
                         {
@@ -516,21 +553,35 @@ def knowledge_vault_permission_report(path: str | Path) -> dict[str, Any]:
     stored_sources.sort(key=lambda item: item["stored_name"])
     stored_sources_truncated = stored_source_files_checked > len(stored_sources)
 
-    structural_valid = all(
-        entry["actual_kind"] == entry["expected_kind"] and not entry["symlink"] for entry in entries
-    ) and stored_sources_structural_valid
+    structural_valid = (
+        all(
+            entry["actual_kind"] == entry["expected_kind"] and not entry["symlink"]
+            for entry in entries
+        )
+        and stored_sources_structural_valid
+    )
     if os.name == "nt":
-        status = "not_verified"
-        permissions_verified = False
-        security_model = "windows_acl_requires_native_verification"
-        notes = [
-            "Python POSIX mode bits do not prove equivalent NTFS ACL isolation.",
-            "Use a dedicated OS identity and verify that Users/Everyone cannot write the vault.",
-        ]
+        from .windows_acl import native_windows_acl_report
+
+        try:
+            native_acl = native_windows_acl_report(root)
+            permissions_verified = bool(structural_valid and native_acl["permissions_verified"])
+            status = "verified" if permissions_verified else "failed"
+            notes = [] if permissions_verified else list(native_acl.get("errors", []))
+        except (OSError, RuntimeError, ValueError) as error:
+            native_acl = {
+                "schema_version": "deeplaw.windows-acl-report/v1",
+                "permissions_verified": False,
+                "errors": [str(error)],
+                "entries": [],
+            }
+            permissions_verified = False
+            status = "not_verified"
+            notes = [str(error)]
+        security_model = "windows_native_acl_owner_only"
     else:
         owner_only = (
-            all(entry["owner_only"] is True for entry in entries)
-            and stored_sources_owner_only
+            all(entry["owner_only"] is True for entry in entries) and stored_sources_owner_only
         )
         permissions_verified = structural_valid and owner_only and stored_sources_scan_complete
         status = (
@@ -558,6 +609,7 @@ def knowledge_vault_permission_report(path: str | Path) -> dict[str, Any]:
         "stored_source_files_returned": len(stored_sources),
         "stored_source_files_truncated": stored_sources_truncated,
         "stored_sources": stored_sources,
+        "native_windows_acl": native_acl if os.name == "nt" else None,
         "notes": notes,
     }
 
@@ -607,6 +659,10 @@ def _token_string(text: str) -> str:
     return " ".join(search_terms(text))
 
 
+def _token_string_v1(text: str) -> str:
+    return " ".join(search_terms_v1(text))
+
+
 def _source_membership_sha256(
     fragment_ids: Iterable[str],
     asset_ids: Iterable[str],
@@ -624,15 +680,27 @@ def knowledge_source_key(
     source_kind: SourceKind,
     source_path: str | Path,
     origin_uri: str | None,
+    collection_id: str | None = None,
+    logical_path: str | None = None,
 ) -> str:
-    """Return an opaque logical identity without persisting a local source path."""
+    """Return a move-stable logical identity without hashing an absolute path."""
     if source_kind not in SOURCE_KINDS:
         raise ValueError("unsupported knowledge source kind")
-    if origin_uri is not None:
-        identity = f"origin:{origin_uri}"
+    selected_collection = collection_id or make_collection_id(
+        vault_id=vault_id,
+        name="project",
+    )
+    if logical_path is not None:
+        selected_path = normalize_logical_path(logical_path)
+    elif origin_uri is not None:
+        commitment = canonical_origin_commitment(origin_uri)
+        selected_path = f"origins/{sha256_bytes(commitment.encode('utf-8'))}"
     else:
-        identity = f"local-path:{Path(source_path).expanduser().absolute()}"
-    return stable_id("sourcekey", vault_id, source_kind, identity)
+        selected_path = normalize_logical_path(Path(source_path).name)
+    return make_source_key(
+        collection_id=selected_collection,
+        logical_path=selected_path,
+    )
 
 
 def _control_tables_sql() -> str:
@@ -836,6 +904,11 @@ def initialize_knowledge_vault(
             """
         )
         _install_control_tables(connection)
+        install_identity_tables(
+            connection,
+            installed_at=created_at,
+            migration_source="new-vault",
+        )
         metadata = {
             "schema_version": KNOWLEDGE_STORAGE_SCHEMA,
             "control_schema": KNOWLEDGE_CONTROL_SCHEMA,
@@ -881,6 +954,10 @@ def initialize_knowledge_vault(
     finally:
         connection.close()
     os.chmod(database, 0o600)
+    if os.name == "nt":
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(root)
     return {
         **manifest,
         "revision": 0,
@@ -1013,6 +1090,16 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             }
             if not required_tables.issubset(available_tables):
                 raise RuntimeError("knowledge control tables are missing")
+        identity_table_names = {
+            row["name"]
+            for row in self.connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        identity_marker_present = "identity_v2" in identity_table_names
+        self.identity_v2_enabled = identity_tables_present(self.connection)
+        if identity_marker_present and not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 tables are incomplete")
         for field in ("vault_id", "name", "scope", "created_at"):
             if metadata[field] != str(self.manifest[field]):
                 raise RuntimeError(f"knowledge vault manifest/database {field} mismatch")
@@ -1176,6 +1263,455 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "mapping_sha256": mapping_sha256,
         }
 
+    def verify_identity_v2_migration(self) -> dict[str, Any]:
+        source_count = self.connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        fragment_count = self.connection.execute(
+            "SELECT COUNT(*) FROM source_fragments"
+        ).fetchone()[0]
+        source_bound_asset_count = self.connection.execute(
+            "SELECT COUNT(*) FROM assets WHERE json_array_length(source_refs_json) > 0"
+        ).fetchone()[0]
+        if not self.identity_v2_enabled:
+            return {
+                "schema_version": "deeplaw.identity-v2-migration-verification/v1",
+                "vault_id": self.vault_id,
+                "identity_schema": None,
+                "source_count": source_count,
+                "source_binding_count": 0,
+                "fragment_count": fragment_count,
+                "fragment_binding_count": 0,
+                "source_bound_asset_count": source_bound_asset_count,
+                "asset_binding_count": 0,
+                "integrity_valid": self.verify_integrity()["valid"],
+                "valid": False,
+            }
+        counts = {
+            "source_binding_count": self.connection.execute(
+                "SELECT COUNT(*) FROM source_revision_bindings_v2"
+            ).fetchone()[0],
+            "build_binding_count": self.connection.execute(
+                "SELECT COUNT(*) FROM source_build_bindings_v2"
+            ).fetchone()[0],
+            "location_count": self.connection.execute(
+                "SELECT COUNT(*) FROM source_locations_v2"
+            ).fetchone()[0],
+            "fragment_binding_count": self.connection.execute(
+                "SELECT COUNT(*) FROM legacy_fragment_bindings_v2"
+            ).fetchone()[0],
+            "asset_binding_count": self.connection.execute(
+                "SELECT COUNT(*) FROM asset_revision_bindings_v2"
+            ).fetchone()[0],
+        }
+        integrity_valid = self.verify_integrity()["valid"]
+        valid = bool(
+            counts["source_binding_count"] == source_count
+            and counts["build_binding_count"] == source_count
+            and counts["location_count"] == source_count
+            and counts["fragment_binding_count"] == fragment_count
+            and counts["asset_binding_count"] == source_bound_asset_count
+            and integrity_valid
+        )
+        return {
+            "schema_version": "deeplaw.identity-v2-migration-verification/v1",
+            "vault_id": self.vault_id,
+            "identity_schema": "deeplaw.knowledge-identity/v2",
+            "source_count": source_count,
+            "fragment_count": fragment_count,
+            "source_bound_asset_count": source_bound_asset_count,
+            **counts,
+            "integrity_valid": integrity_valid,
+            "valid": valid,
+        }
+
+    def migrate_identity_v2(
+        self,
+        *,
+        apply: bool,
+        backup_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """Install and backfill the additive Identity v2 projection."""
+        self._require_control()
+        source_count = self.connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        plan = {
+            "schema_version": "deeplaw.identity-v2-migration-plan/v1",
+            "vault_id": self.vault_id,
+            "from_identity_schema": (
+                "deeplaw.knowledge-identity/v2" if self.identity_v2_enabled else None
+            ),
+            "to_identity_schema": "deeplaw.knowledge-identity/v2",
+            "source_count": source_count,
+            "required": not self.identity_v2_enabled,
+            "applied": False,
+            "backup_required": not self.identity_v2_enabled,
+        }
+        if not apply or self.identity_v2_enabled:
+            return plan
+        self._require_write()
+        backup = create_knowledge_migration_backup(self.root, output=backup_path)
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            installed_at = utc_now()
+            install_identity_tables(
+                self.connection,
+                installed_at=installed_at,
+                migration_source="knowledge-sqlite/v1",
+            )
+            self.identity_v2_enabled = True
+            source_rows = self.connection.execute(
+                """
+                SELECT sources.*, source_lifecycle.source_key AS legacy_source_key,
+                       source_lifecycle.status AS lifecycle_status
+                FROM sources
+                JOIN source_lifecycle USING(source_id)
+                ORDER BY sources.imported_at, sources.source_id
+                """
+            ).fetchall()
+            legacy_keys = sorted({row["legacy_source_key"] for row in source_rows})
+            path_by_legacy_key = {
+                key: f"migrated/source-{index:06d}"
+                for index, key in enumerate(legacy_keys, start=1)
+            }
+            pending = list(source_rows)
+            migrated_source_ids: set[str] = set()
+            migrated_asset_ids: set[str] = set()
+            identity_records: list[dict[str, Any]] = []
+            while pending:
+                made_progress = False
+                deferred: list[sqlite3.Row] = []
+                for source in pending:
+                    owned_assets: list[tuple[KnowledgeAsset, tuple[SourceReference, ...]]] = []
+                    blocked = False
+                    for asset_row in self.connection.execute(
+                        "SELECT * FROM assets ORDER BY created_at, asset_id"
+                    ):
+                        asset = self._row_to_asset(asset_row)
+                        if (
+                            not asset.source_refs
+                            or asset.source_refs[0].source_id != source["source_id"]
+                        ):
+                            continue
+                        external_sources = {
+                            reference.source_id
+                            for reference in asset.source_refs
+                            if reference.source_id != source["source_id"]
+                        }
+                        if not external_sources.issubset(migrated_source_ids):
+                            blocked = True
+                            break
+                        owned_assets.append((asset, asset.source_refs))
+                    if blocked:
+                        deferred.append(source)
+                        continue
+                    fragments = self.connection.execute(
+                        "SELECT * FROM source_fragments WHERE source_id = ? ORDER BY ordinal",
+                        (source["source_id"],),
+                    ).fetchall()
+                    assets_by_fragment: dict[str, list[KnowledgeAsset]] = {}
+                    for asset, references in owned_assets:
+                        for reference in references:
+                            if reference.source_id == source["source_id"]:
+                                assets_by_fragment.setdefault(reference.fragment_id, []).append(
+                                    asset
+                                )
+                    source_ir_nodes: list[dict[str, Any]] = []
+                    fragment_records: list[dict[str, Any]] = []
+                    node_key_by_fragment: dict[str, str] = {}
+                    for fragment in fragments:
+                        candidates = assets_by_fragment.get(fragment["fragment_id"], [])
+                        commitment = (
+                            candidates[0].semantic_key
+                            if candidates and candidates[0].semantic_key
+                            else f"{fragment['locator']}:{fragment['ordinal']}"
+                        )
+                        logical_node_key = (
+                            "legacy:"
+                            + sha256_bytes(commitment.encode("utf-8"))[:32]
+                            + f":{fragment['ordinal']}"
+                        )
+                        node_key_by_fragment[fragment["fragment_id"]] = logical_node_key
+                        source_ir_nodes.append(
+                            {
+                                "logical_node_key": logical_node_key,
+                                "parent_logical_node_key": None,
+                                "ordinal": fragment["ordinal"],
+                                "node_type": "legacy-fragment",
+                                "title": candidates[0].title if candidates else source["title"],
+                                "text": fragment["text"],
+                                "locator": fragment["locator"],
+                                "source_span": {"locator": fragment["locator"]},
+                                "content_sha256": fragment["text_sha256"],
+                                "quality_flags": ["migrated-v0.6-fragment"],
+                                "instruction_risk": bool(fragment["instruction_risk"]),
+                                "fragment_id": fragment["fragment_id"],
+                            }
+                        )
+                        fragment_records.append(
+                            {
+                                "fragment_id": fragment["fragment_id"],
+                                "ordinal": fragment["ordinal"],
+                                "locator": fragment["locator"],
+                                "text_sha256": fragment["text_sha256"],
+                                "instruction_risk": bool(fragment["instruction_risk"]),
+                                "logical_node_keys": [logical_node_key],
+                            }
+                        )
+                    collection_id = make_collection_id(
+                        vault_id=self.vault_id,
+                        name="project",
+                    )
+                    logical_path = path_by_legacy_key[source["legacy_source_key"]]
+                    canonical_source_key = make_source_key(
+                        collection_id=collection_id,
+                        logical_path=logical_path,
+                    )
+                    proposals: list[dict[str, Any]] = []
+                    for asset, references in owned_assets:
+                        local_node_keys = [
+                            node_key_by_fragment[reference.fragment_id]
+                            for reference in references
+                            if reference.source_id == source["source_id"]
+                        ]
+                        knowledge_key = make_knowledge_key(
+                            vault_id=self.vault_id,
+                            source_key=canonical_source_key,
+                            logical_node_key="+".join(local_node_keys),
+                            proposal_role=asset.kind,
+                        )
+                        predecessor_revision_ids: list[str] = []
+                        if asset.supersedes_asset_id is not None:
+                            predecessor = self.connection.execute(
+                                "SELECT asset_revision_id FROM asset_revision_bindings_v2 "
+                                "WHERE legacy_asset_id = ?",
+                                (asset.supersedes_asset_id,),
+                            ).fetchone()
+                            if predecessor is not None:
+                                predecessor_revision_ids.append(predecessor[0])
+                        knowledge_content_sha256 = sha256_bytes(
+                            canonical_json(
+                                {
+                                    "kind": asset.kind,
+                                    "memory_tier": asset.memory_tier,
+                                    "title": asset.title,
+                                    "statement": asset.statement,
+                                    "knowledge_key": knowledge_key,
+                                    "logical_node_keys": local_node_keys,
+                                    "source_refs": [
+                                        {
+                                            "locator": reference.locator,
+                                            "quote_sha256": reference.quote_sha256,
+                                        }
+                                        for reference in references
+                                    ],
+                                }
+                            ).encode("utf-8")
+                        )
+                        proposals.append(
+                            {
+                                "legacy_asset_id": asset.asset_id,
+                                "knowledge_key": knowledge_key,
+                                "knowledge_content_sha256": knowledge_content_sha256,
+                                "kind": asset.kind,
+                                "title": asset.title,
+                                "source_refs": [reference.to_dict() for reference in references],
+                                "lineage_status": (
+                                    "modified" if predecessor_revision_ids else "new"
+                                ),
+                                "predecessor_revision_ids": predecessor_revision_ids,
+                                "logical_node_keys": local_node_keys,
+                                "mapping_evidence": {
+                                    "method": "v0.6-additive-migration",
+                                    "legacy_semantic_key": asset.semantic_key,
+                                },
+                                "applicability": {},
+                                "observed_at": asset.created_at,
+                                "valid_from": None,
+                                "valid_to": None,
+                                "expires_at": asset.expires_at,
+                                "project_scope": None,
+                                "repository_scope": None,
+                                "branch_scope": None,
+                                "version_scope": None,
+                                "environment_scope": None,
+                                "warnings": list(asset.warnings),
+                                "trust": asset.trust,
+                                "sensitivity": asset.sensitivity,
+                                "status": asset.status,
+                            }
+                        )
+                    compiler = strict_json_loads(source["compiler_json"])
+                    identity = register_compilation_identity(
+                        self.connection,
+                        vault_id=self.vault_id,
+                        collection_id=collection_id,
+                        collection_name="project",
+                        logical_path=logical_path,
+                        source_key=canonical_source_key,
+                        legacy_source_id=source["source_id"],
+                        content_sha256=source["content_sha256"],
+                        media_identity=source["media_type"],
+                        origin_uri=source["origin_uri"],
+                        byte_size=source["byte_size"],
+                        observed_at=source["imported_at"],
+                        adapter="deeplaw-v0.6-migration",
+                        adapter_version=compiler.get("schema_version", "unknown"),
+                        configuration={
+                            "legacy_compiler_sha256": sha256_bytes(
+                                canonical_json(compiler).encode("utf-8")
+                            ),
+                            "migration_projection": "fragment-preserving/v1",
+                        },
+                        source_ir_nodes=source_ir_nodes,
+                        fragments=fragment_records,
+                        extractor="deeplaw-v0.6-migration",
+                        extractor_revision="1",
+                        model_identity=None,
+                        prompt_configuration={"mode": "migration"},
+                        proposals=proposals,
+                        source_trust=source["trust"],
+                        source_sensitivity=source["sensitivity"],
+                    )
+                    for asset, _ in owned_assets:
+                        if asset.status == "active":
+                            asset_identity = next(
+                                item
+                                for item in identity["asset_identities"]
+                                if item["legacy_asset_id"] == asset.asset_id
+                            )
+                            record_governance_revision(
+                                self.connection,
+                                subject_kind="asset_revision",
+                                subject_id=asset_identity["asset_revision_id"],
+                                trust=asset.trust,
+                                sensitivity=asset.sensitivity,
+                                policy_id="deeplaw.v0.6-migration/v1",
+                                review_status="human_verified",
+                                lifecycle_status="active",
+                                activation_status="active",
+                                export_allowed=asset.sensitivity == "public",
+                                reviewer_id="migration-audit-replay",
+                                recorded_at=asset.activated_at or asset.created_at,
+                            )
+                        migrated_asset_ids.add(asset.asset_id)
+                    if source["lifecycle_status"] == "active":
+                        record_governance_revision(
+                            self.connection,
+                            subject_kind="source_revision",
+                            subject_id=identity["source_revision_id"],
+                            trust=source["trust"],
+                            sensitivity=source["sensitivity"],
+                            policy_id="deeplaw.v0.6-migration/v1",
+                            review_status="human_verified",
+                            lifecycle_status="active",
+                            activation_status="active",
+                            export_allowed=source["sensitivity"] == "public",
+                            reviewer_id="migration-audit-replay",
+                            recorded_at=source["imported_at"],
+                        )
+                    migrated_source_ids.add(source["source_id"])
+                    identity_records.append(identity)
+                    made_progress = True
+                if not made_progress:
+                    raise RuntimeError(
+                        "Identity v2 migration found a cyclic or unresolved cross-source "
+                        "proposal reference graph"
+                    )
+                pending = deferred
+            expected_source_bound_assets = self.connection.execute(
+                "SELECT COUNT(*) FROM assets WHERE json_array_length(source_refs_json) > 0"
+            ).fetchone()[0]
+            if len(migrated_asset_ids) != expected_source_bound_assets:
+                raise RuntimeError("Identity v2 migration did not bind every source-backed asset")
+            search_index = self._rebuild_search_index_in_transaction()
+            self._append_event(
+                event_type="search_index_rebuilt",
+                object_id=None,
+                payload=search_index,
+            )
+            revision, audit_head = self._append_identity_snapshot(
+                reason="identity_migrated",
+                source_revision_id=None,
+            )
+            migration_sha256 = sha256_bytes(canonical_json(identity_records).encode("utf-8"))
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            self.identity_v2_enabled = False
+            raise
+        verification = self.verify_identity_v2_migration()
+        if not verification["valid"]:
+            raise RuntimeError(
+                "Identity v2 migration committed but failed verification; "
+                f"restore the verified backup at {backup['backup_path']}"
+            )
+        return {
+            **plan,
+            "required": True,
+            "applied": True,
+            "backup": backup,
+            "verification": verification,
+            "revision": revision,
+            "audit_head": audit_head,
+            "migration_sha256": migration_sha256,
+            "search_index": search_index,
+        }
+
+    def _rebuild_search_index_in_transaction(self) -> dict[str, Any]:
+        self.connection.execute("DELETE FROM asset_search")
+        inventory: list[dict[str, str]] = []
+        for row in self.connection.execute("SELECT * FROM assets ORDER BY asset_id"):
+            asset = self._row_to_asset(row)
+            tokens = {
+                "title_tokens": _token_string(asset.title),
+                "statement_tokens": _token_string(asset.statement),
+                "semantic_tokens": _token_string(asset.semantic_key or ""),
+                "tag_tokens": _token_string(" ".join(asset.tags)),
+            }
+            self.connection.execute(
+                "INSERT INTO asset_search VALUES (?, ?, ?, ?, ?)",
+                (
+                    asset.asset_id,
+                    tokens["title_tokens"],
+                    tokens["statement_tokens"],
+                    tokens["semantic_tokens"],
+                    tokens["tag_tokens"],
+                ),
+            )
+            inventory.append({"asset_id": asset.asset_id, **tokens})
+        return {
+            "tokenizer_profile": "deeplaw-mixed-cjk-code/2",
+            "asset_count": len(inventory),
+            "inventory_sha256": sha256_bytes(canonical_json(inventory).encode("utf-8")),
+        }
+
+    def rebuild_derived_indexes(self) -> dict[str, Any]:
+        """Rebuild removable lexical state without changing canonical Assets."""
+        self._require_write()
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            result = self._rebuild_search_index_in_transaction()
+            revision, audit_head = self._append_event(
+                event_type="search_index_rebuilt",
+                object_id=None,
+                payload=result,
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        verification = self.verify_integrity()
+        if not verification["valid"]:
+            raise RuntimeError("rebuilt search index failed integrity verification")
+        return {
+            "schema_version": "deeplaw.knowledge-index-rebuild/v1",
+            "vault_id": self.vault_id,
+            **result,
+            "revision": revision,
+            "audit_head": audit_head,
+            "valid": True,
+        }
+
     def _require_healthy_integrity(self) -> None:
         integrity = self.verify_integrity()
         if not integrity["valid"]:
@@ -1238,6 +1774,25 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             (event_hash,),
         )
         return sequence, event_hash
+
+    def _append_identity_snapshot(
+        self,
+        *,
+        reason: str,
+        source_revision_id: str | None,
+    ) -> tuple[int, str]:
+        if not self.identity_v2_enabled:
+            return self.revision, self.audit_head
+        snapshot = identity_snapshot(self.connection)
+        return self._append_event(
+            event_type="identity_v2_snapshot",
+            object_id=self.vault_id,
+            payload={
+                "identity_root_sha256": snapshot["identity_root_sha256"],
+                "reason": reason,
+                "source_revision_id": source_revision_id,
+            },
+        )
 
     def source_by_hash(self, content_sha256: str) -> dict[str, Any] | None:
         if not _SHA256.fullmatch(content_sha256):
@@ -1310,6 +1865,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             return {
                 **source,
                 "source_key": None,
+                "canonical_source_key": None,
                 "previous_source_id": None,
                 "status": "legacy",
                 "activated_at": None,
@@ -1322,9 +1878,90 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         ).fetchone()
         if lifecycle is None:
             raise RuntimeError("knowledge source lifecycle is missing")
+        identity: dict[str, Any] = {
+            "canonical_source_key": None,
+            "source_revision_id": None,
+            "compilation_id": None,
+            "proposal_set_id": None,
+            "collection_id": None,
+            "logical_path": None,
+            "governance_revision": None,
+            "governance": None,
+        }
+        if self.identity_v2_enabled:
+            identity_row = self.connection.execute(
+                """
+                SELECT source_revisions_v2.source_key AS canonical_source_key,
+                       source_revisions_v2.source_revision_id,
+                       compilations_v2.compilation_id,
+                       proposal_sets_v2.proposal_set_id,
+                       source_locations_v2.collection_id,
+                       source_locations_v2.logical_path
+                FROM source_revision_bindings_v2
+                JOIN source_revisions_v2 USING(source_revision_id)
+                JOIN source_build_bindings_v2 USING(legacy_source_id)
+                JOIN compilations_v2 USING(compilation_id)
+                JOIN proposal_sets_v2 USING(proposal_set_id)
+                JOIN source_locations_v2
+                  ON source_locations_v2.legacy_source_id =
+                     source_revision_bindings_v2.legacy_source_id
+                WHERE source_revision_bindings_v2.legacy_source_id = ?
+                ORDER BY source_build_bindings_v2.observed_at DESC
+                LIMIT 1
+                """,
+                (source_id,),
+            ).fetchone()
+            if identity_row is not None:
+                governance = self.connection.execute(
+                    """
+                    SELECT *
+                    FROM governance_revisions_v2
+                    WHERE subject_kind = 'source_revision' AND subject_id = ?
+                    ORDER BY recorded_at DESC,
+                             CASE
+                                 WHEN activation_status = 'inactive'
+                                  AND lifecycle_status NOT IN (
+                                      'pending', 'proposed', 'quarantined'
+                                  ) THEN 2
+                                 WHEN activation_status = 'active' THEN 1
+                                 ELSE 0
+                             END DESC,
+                             governance_revision DESC
+                    LIMIT 1
+                    """,
+                    (identity_row["source_revision_id"],),
+                ).fetchone()
+                identity = {
+                    "canonical_source_key": identity_row["canonical_source_key"],
+                    "source_revision_id": identity_row["source_revision_id"],
+                    "compilation_id": identity_row["compilation_id"],
+                    "proposal_set_id": identity_row["proposal_set_id"],
+                    "collection_id": identity_row["collection_id"],
+                    "logical_path": identity_row["logical_path"],
+                    "governance_revision": (
+                        governance["governance_revision"] if governance is not None else None
+                    ),
+                    "governance": (
+                        {
+                            "trust": governance["trust"],
+                            "sensitivity": governance["sensitivity"],
+                            "policy_id": governance["policy_id"],
+                            "review_status": governance["review_status"],
+                            "lifecycle_status": governance["lifecycle_status"],
+                            "activation_status": governance["activation_status"],
+                            "revoked_at": governance["revoked_at"],
+                            "export_allowed": bool(governance["export_allowed"]),
+                            "reviewer_id": governance["reviewer_id"],
+                            "recorded_at": governance["recorded_at"],
+                        }
+                        if governance is not None
+                        else None
+                    ),
+                }
         return {
             **source,
             "source_key": lifecycle["source_key"],
+            **identity,
             "previous_source_id": lifecycle["previous_source_id"],
             "status": lifecycle["status"],
             "activated_at": lifecycle["activated_at"],
@@ -1344,6 +1981,279 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             (source_key,),
         ).fetchone()
         return self.source_info(row["source_id"]) if row is not None else None
+
+    def update_source_governance(
+        self,
+        source_id: str,
+        *,
+        trust: TrustLevel,
+        sensitivity: Sensitivity,
+        export_allowed: bool,
+        reviewer_id: str,
+        reason: str,
+        confirm_reviewed: bool,
+    ) -> dict[str, Any]:
+        """Record policy independently from immutable source identity."""
+        self._require_write()
+        self._require_control()
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is required for governance changes")
+        if not confirm_reviewed:
+            raise ValueError("source governance change requires explicit operator review")
+        if trust not in TRUST_LEVELS or trust == "verified_source":
+            raise ValueError("source governance trust is invalid")
+        if sensitivity not in SENSITIVITY_LEVELS:
+            raise ValueError("source governance sensitivity is invalid")
+        reviewer_id = reviewer_id.strip()
+        reason = reason.strip()
+        if not 1 <= len(reviewer_id) <= 200 or not 1 <= len(reason) <= 2_000:
+            raise ValueError("source governance reviewer or reason is invalid")
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            source = self.source_info(source_id)
+            source_revision_id = source.get("source_revision_id")
+            if source_revision_id is None:
+                raise RuntimeError("source revision identity is unavailable")
+            prior = self.connection.execute(
+                """
+                SELECT * FROM governance_revisions_v2
+                WHERE subject_kind = 'source_revision' AND subject_id = ?
+                ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+                """,
+                (source_revision_id,),
+            ).fetchone()
+            if prior is None:
+                raise RuntimeError("source governance history is unavailable")
+            recorded_at = utc_now()
+            if recorded_at <= prior["recorded_at"]:
+                prior_time = datetime.fromisoformat(prior["recorded_at"].replace("Z", "+00:00"))
+                recorded_at = (
+                    (prior_time + timedelta(seconds=1))
+                    .astimezone(UTC)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z")
+                )
+            governance_revision = record_governance_revision(
+                self.connection,
+                subject_kind="source_revision",
+                subject_id=source_revision_id,
+                trust=trust,
+                sensitivity=sensitivity,
+                policy_id="deeplaw.local-source-governance/v2",
+                review_status=prior["review_status"],
+                lifecycle_status=prior["lifecycle_status"],
+                activation_status=prior["activation_status"],
+                revoked_at=prior["revoked_at"],
+                export_allowed=export_allowed,
+                reviewer_id=reviewer_id,
+                recorded_at=recorded_at,
+            )
+            revision, audit_head = self._append_identity_snapshot(
+                reason="governance_recorded",
+                source_revision_id=source_revision_id,
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        return {
+            "schema_version": "deeplaw.source-governance-change/v1",
+            "vault_id": self.vault_id,
+            "source_id": source_id,
+            "source_revision_id": source_revision_id,
+            "previous_governance_revision": prior["governance_revision"],
+            "governance_revision": governance_revision,
+            "trust": trust,
+            "sensitivity": sensitivity,
+            "export_allowed": export_allowed,
+            "reviewer_id": reviewer_id,
+            "reason": reason,
+            "recorded_at": recorded_at,
+            "revision": revision,
+            "audit_head": audit_head,
+            "source_revision_changed": False,
+        }
+
+    @staticmethod
+    def _source_ir_row(row: sqlite3.Row, *, include_text: bool) -> dict[str, Any]:
+        result = {
+            "node_id": row["node_id"],
+            "compilation_id": row["compilation_id"],
+            "source_revision_id": row["source_revision_id"],
+            "logical_node_key": row["logical_node_key"],
+            "parent_node_id": row["parent_node_id"],
+            "ordinal": row["ordinal"],
+            "node_type": row["node_type"],
+            "title": row["title"],
+            "locator": row["locator"],
+            "source_span": strict_json_loads(row["source_span_json"]),
+            "content_sha256": row["content_sha256"],
+            "adapter": row["adapter"],
+            "adapter_version": row["adapter_version"],
+            "quality_flags": strict_json_loads(row["quality_flags_json"]),
+            "instruction_risk": bool(row["instruction_risk"]),
+        }
+        if include_text:
+            result["text"] = row["text"]
+        return result
+
+    def structure_get(self, node_id: str, *, max_chars: int = 20_000) -> dict[str, Any]:
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        if not isinstance(node_id, str) or not re.fullmatch(r"irnode_[0-9a-f]{24}", node_id):
+            raise ValueError("Source IR node ID is invalid")
+        if isinstance(max_chars, bool) or not 1 <= max_chars <= 20_000:
+            raise ValueError("Source IR max_chars must be between 1 and 20000")
+        row = self.connection.execute(
+            "SELECT * FROM source_ir_nodes_v2 WHERE node_id = ?",
+            (node_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Source IR node is unavailable: {node_id}")
+        result = self._source_ir_row(row, include_text=True)
+        text = result["text"]
+        result["text"] = text[:max_chars]
+        result["text_truncated"] = len(text) > max_chars
+        result["trace"] = self.structure_trace(node_id)["nodes"]
+        return {
+            "schema_version": "deeplaw.source-structure/v1",
+            "vault_id": self.vault_id,
+            "node": result,
+        }
+
+    def structure_list(
+        self,
+        *,
+        source_id: str | None = None,
+        compilation_id: str | None = None,
+        parent_node_id: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        if isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise ValueError("Source structure limit must be between 1 and 500")
+        if source_id is not None:
+            source = self.source_info(source_id)
+            compilation_id = source.get("compilation_id")
+        if compilation_id is None:
+            raise ValueError("Source structure list requires a source or compilation ID")
+        if not re.fullmatch(r"compilation_[0-9a-f]{24}", compilation_id):
+            raise ValueError("compilation ID is invalid")
+        if parent_node_id is None:
+            predicate = "parent_node_id IS NULL"
+            parameters: tuple[Any, ...] = (compilation_id, limit + 1)
+        else:
+            if not re.fullmatch(r"irnode_[0-9a-f]{24}", parent_node_id):
+                raise ValueError("Source IR parent node ID is invalid")
+            predicate = "parent_node_id = ?"
+            parameters = (compilation_id, parent_node_id, limit + 1)
+        rows = self.connection.execute(
+            f"""
+            SELECT * FROM source_ir_nodes_v2
+            WHERE compilation_id = ? AND {predicate}
+            ORDER BY ordinal, node_id LIMIT ?
+            """,
+            parameters,
+        ).fetchall()
+        return {
+            "schema_version": "deeplaw.source-structure-list/v1",
+            "vault_id": self.vault_id,
+            "source_id": source_id,
+            "compilation_id": compilation_id,
+            "parent_node_id": parent_node_id,
+            "nodes": [self._source_ir_row(row, include_text=False) for row in rows[:limit]],
+            "truncated": len(rows) > limit,
+        }
+
+    def structure_search(
+        self,
+        query: str,
+        *,
+        source_id: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        terms = search_terms(query)
+        if not terms:
+            raise ValueError("Source structure query produced no searchable terms")
+        if isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise ValueError("Source structure search limit must be between 1 and 100")
+        compilation_id: str | None = None
+        if source_id is not None:
+            compilation_id = self.source_info(source_id).get("compilation_id")
+        rows = self.connection.execute(
+            """
+            SELECT * FROM source_ir_nodes_v2
+            WHERE (? IS NULL OR compilation_id = ?)
+            ORDER BY compilation_id, ordinal
+            LIMIT 10000
+            """,
+            (compilation_id, compilation_id),
+        ).fetchall()
+        scored: list[tuple[int, sqlite3.Row]] = []
+        folded_terms = tuple(term.casefold() for term in terms[:32])
+        for row in rows:
+            folded_title = (row["title"] or "").casefold()
+            haystack = f"{folded_title}\n{row['text'].casefold()}"
+            score = sum(
+                3 if term in folded_title else 1 for term in folded_terms if term in haystack
+            )
+            if score:
+                scored.append((score, row))
+        scored.sort(key=lambda item: (-item[0], item[1]["ordinal"], item[1]["node_id"]))
+        selected = scored[:limit]
+        return {
+            "schema_version": "deeplaw.source-structure-search/v1",
+            "vault_id": self.vault_id,
+            "query": query,
+            "search_terms": list(folded_terms),
+            "results": [
+                {
+                    **self._source_ir_row(row, include_text=False),
+                    "match_score": score,
+                }
+                for score, row in selected
+            ],
+            "truncated": len(scored) > limit,
+            "verification_boundary": (
+                "Tree candidates must be verified against Source IR and stored evidence."
+            ),
+        }
+
+    def structure_trace(self, node_id: str) -> dict[str, Any]:
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        if not isinstance(node_id, str) or not re.fullmatch(r"irnode_[0-9a-f]{24}", node_id):
+            raise ValueError("Source IR node ID is invalid")
+        nodes: list[dict[str, Any]] = []
+        current = node_id
+        seen: set[str] = set()
+        for _ in range(64):
+            if current in seen:
+                raise RuntimeError("Source IR hierarchy contains a cycle")
+            seen.add(current)
+            row = self.connection.execute(
+                "SELECT * FROM source_ir_nodes_v2 WHERE node_id = ?",
+                (current,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Source IR node is unavailable: {current}")
+            nodes.append(self._source_ir_row(row, include_text=False))
+            if row["parent_node_id"] is None:
+                break
+            current = row["parent_node_id"]
+        else:
+            raise RuntimeError("Source IR hierarchy exceeds the trace bound")
+        nodes.reverse()
+        return {
+            "schema_version": "deeplaw.source-structure-trace/v1",
+            "vault_id": self.vault_id,
+            "node_id": node_id,
+            "nodes": nodes,
+        }
 
     def active_asset_for_semantic_key(self, semantic_key: str) -> KnowledgeAsset | None:
         row = self.connection.execute(
@@ -1373,6 +2283,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         compiler: dict[str, Any],
         fragments: tuple[dict[str, Any], ...],
         asset_specs: tuple[dict[str, Any], ...],
+        source_ir_nodes: tuple[dict[str, Any], ...] | None = None,
     ) -> dict[str, Any]:
         self._require_write()
         self._require_control()
@@ -1559,6 +2470,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 """,
                 (source_id, source_key, previous_source_id),
             )
+            fragment_rows: list[dict[str, Any]] = []
             for ordinal, fragment in enumerate(fragments, start=1):
                 text = fragment["text"]
                 locator = fragment["locator"]
@@ -1597,34 +2509,193 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         int(bool(fragment.get("instruction_risk", instruction_risk))),
                     ),
                 )
-            if len(asset_specs) != len(fragments):
-                raise ValueError("compiled asset/fragment cardinality mismatch")
-            for fragment_id, fragment, specification in zip(
-                fragment_ids,
-                fragments,
-                asset_specs,
-                strict=True,
-            ):
-                reference = SourceReference(
-                    source_id=source_id,
-                    fragment_id=fragment_id,
-                    locator=fragment["locator"],
-                    quote_sha256=sha256_bytes(fragment["text"].encode("utf-8")),
+                fragment_rows.append(
+                    {
+                        "fragment_id": fragment_id,
+                        "ordinal": ordinal,
+                        "locator": locator,
+                        "text_sha256": text_sha256,
+                        "instruction_risk": bool(
+                            fragment.get("instruction_risk", instruction_risk)
+                        ),
+                        "logical_node_keys": [
+                            *fragment.get(
+                                "logical_node_keys",
+                                (fragment.get("logical_node_key", f"fragment:{ordinal}"),),
+                            )
+                        ],
+                    }
+                )
+            if len(asset_specs) > _MAX_BATCH_APPROVAL_ASSETS:
+                raise ValueError("compiled proposal set exceeds the 100000-proposal bound")
+            identity_proposals: list[dict[str, Any]] = []
+            for specification_index, specification in enumerate(asset_specs):
+                explicit_references = specification.get("source_refs")
+                raw_indexes = specification.get("source_ref_indexes")
+                if explicit_references is None and raw_indexes is None:
+                    if len(asset_specs) != len(fragments):
+                        raise ValueError(
+                            "compiled proposals require an explicit source reference graph"
+                        )
+                    raw_indexes = (specification_index,)
+                if explicit_references is not None:
+                    if (
+                        not isinstance(explicit_references, (list, tuple))
+                        or not explicit_references
+                        or len(explicit_references) > 100
+                    ):
+                        raise ValueError("compiled proposal source reference graph is invalid")
+                    resolved_references: list[SourceReference] = []
+                    for reference in explicit_references:
+                        if not isinstance(reference, dict):
+                            raise ValueError("compiled proposal source reference graph is invalid")
+                        reference_source_id = reference.get("source_id")
+                        reference_fragment_id = reference.get("fragment_id")
+                        evidence = self.connection.execute(
+                            """
+                            SELECT source_id, fragment_id, locator, text_sha256
+                            FROM source_fragments
+                            WHERE source_id = ? AND fragment_id = ?
+                            """,
+                            (reference_source_id, reference_fragment_id),
+                        ).fetchone()
+                        if evidence is None:
+                            raise ValueError(
+                                "compiled proposal references unavailable source evidence"
+                            )
+                        resolved_references.append(
+                            SourceReference(
+                                source_id=evidence["source_id"],
+                                fragment_id=evidence["fragment_id"],
+                                locator=evidence["locator"],
+                                quote_sha256=evidence["text_sha256"],
+                            )
+                        )
+                    references = tuple(resolved_references)
+                    raw_indexes = ()
+                else:
+                    if (
+                        not isinstance(raw_indexes, (list, tuple))
+                        or not raw_indexes
+                        or len(raw_indexes) > 100
+                        or len(set(raw_indexes)) != len(raw_indexes)
+                        or any(
+                            isinstance(index, bool)
+                            or not isinstance(index, int)
+                            or not 0 <= index < len(fragments)
+                            for index in raw_indexes
+                        )
+                    ):
+                        raise ValueError("compiled proposal source reference graph is invalid")
+                    references = tuple(
+                        SourceReference(
+                            source_id=source_id,
+                            fragment_id=fragment_ids[index],
+                            locator=fragments[index]["locator"],
+                            quote_sha256=sha256_bytes(fragments[index]["text"].encode("utf-8")),
+                        )
+                        for index in raw_indexes
+                    )
+                proposal_kind = cast(
+                    AssetKind,
+                    specification.get("kind", "reference"),
+                )
+                default_logical_node_keys = (
+                    tuple(
+                        key
+                        for index in raw_indexes
+                        for key in fragments[index].get(
+                            "logical_node_keys",
+                            (
+                                fragments[index].get(
+                                    "logical_node_key",
+                                    f"fragment:{index + 1}",
+                                ),
+                            ),
+                        )
+                    )
+                    if raw_indexes
+                    else tuple(f"evidence:{reference.fragment_id}" for reference in references)
+                )
+                logical_node_keys = tuple(
+                    specification.get(
+                        "logical_node_keys",
+                        default_logical_node_keys,
+                    )
+                )
+                knowledge_key = specification.get("knowledge_key") or make_knowledge_key(
+                    vault_id=self.vault_id,
+                    source_key=source_key,
+                    logical_node_key="+".join(logical_node_keys),
+                    proposal_role=specification.get("proposal_role", proposal_kind),
+                )
+                supersedes_asset_id = specification.get("supersedes_asset_id")
+                predecessors: list[str] = []
+                lineage_status = "new"
+                mapping_evidence: dict[str, Any] = {
+                    "method": "logical-node-key",
+                    "logical_node_keys": list(logical_node_keys),
+                }
+                if supersedes_asset_id is not None:
+                    prior_asset = self.get_asset(
+                        supersedes_asset_id,
+                        include_inactive=True,
+                    )
+                    lineage_status = (
+                        "unchanged"
+                        if prior_asset.statement == specification["statement"]
+                        and prior_asset.kind == proposal_kind
+                        else "modified"
+                    )
+                    lineage_status_hint = specification.get("lineage_status_hint")
+                    if lineage_status_hint in {"renamed", "moved"}:
+                        if lineage_status != "unchanged":
+                            raise ValueError(
+                                "renamed or moved lineage requires unchanged knowledge content"
+                            )
+                        lineage_status = lineage_status_hint
+                    prior_identity = self.connection.execute(
+                        "SELECT asset_revision_id FROM asset_revision_bindings_v2 "
+                        "WHERE legacy_asset_id = ?",
+                        (supersedes_asset_id,),
+                    ).fetchone()
+                    if prior_identity is not None:
+                        predecessors.append(prior_identity["asset_revision_id"])
+                    mapping_evidence["predecessor_asset_id"] = supersedes_asset_id
+                    if lineage_status in {"renamed", "moved"}:
+                        mapping_evidence.update(
+                            {
+                                "method": "explicit-source-relocation",
+                                "previous_logical_path": specification.get("previous_logical_path"),
+                                "current_logical_path": specification.get("current_logical_path"),
+                            }
+                        )
+                proposal_trust = specification.get("trust", trust)
+                if proposal_trust not in TRUST_LEVELS or proposal_trust == "verified_source":
+                    raise ValueError("compiled proposal trust is invalid")
+                explicit_quarantine = specification.get("quarantined", False)
+                if not isinstance(explicit_quarantine, bool):
+                    raise ValueError("compiled proposal quarantine flag is invalid")
+                proposal_instruction_risk = has_instruction_risk(
+                    f"{specification['title']}\n{specification['statement']}"
+                )
+                proposal_quarantined = bool(
+                    instruction_risk or explicit_quarantine or proposal_instruction_risk
                 )
                 asset, _ = self._insert_asset(
-                    kind=cast(AssetKind, specification.get("kind", "reference")),
+                    kind=proposal_kind,
                     memory_tier=cast(
                         MemoryTier,
                         specification.get("memory_tier", "domain"),
                     ),
                     title=specification["title"],
                     statement=specification["statement"],
-                    semantic_key=specification.get("semantic_key"),
-                    status="quarantined" if instruction_risk else "proposed",
+                    semantic_key=knowledge_key,
+                    status="quarantined" if proposal_quarantined else "proposed",
                     verification="source_bound",
-                    trust=trust,
+                    trust=cast(TrustLevel, proposal_trust),
                     sensitivity=sensitivity,
-                    source_refs=(reference,),
+                    source_refs=references,
                     tags=tuple(specification.get("tags", ())),
                     warnings=tuple(
                         dict.fromkeys(
@@ -1635,32 +2706,216 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                                     if instruction_risk
                                     else ()
                                 ),
+                                *(
+                                    ("proposal contains instruction-like content",)
+                                    if proposal_instruction_risk and not instruction_risk
+                                    else ()
+                                ),
                             )
                         )
                     ),
                     expires_at=specification.get("expires_at"),
-                    supersedes_asset_id=specification.get("supersedes_asset_id"),
+                    supersedes_asset_id=supersedes_asset_id,
                     origin_uri=specification.get("origin_uri"),
                     created_at=imported_at,
                 )
                 asset_ids.append(asset.asset_id)
+                knowledge_content_sha256 = sha256_bytes(
+                    canonical_json(
+                        {
+                            "kind": asset.kind,
+                            "memory_tier": asset.memory_tier,
+                            "title": asset.title,
+                            "statement": asset.statement,
+                            "knowledge_key": knowledge_key,
+                            "logical_node_keys": list(logical_node_keys),
+                            "source_refs": [
+                                {
+                                    "locator": reference.locator,
+                                    "quote_sha256": reference.quote_sha256,
+                                }
+                                for reference in references
+                            ],
+                        }
+                    ).encode("utf-8")
+                )
+                identity_proposals.append(
+                    {
+                        "legacy_asset_id": asset.asset_id,
+                        "knowledge_key": knowledge_key,
+                        "knowledge_content_sha256": knowledge_content_sha256,
+                        "kind": asset.kind,
+                        "title": asset.title,
+                        "source_refs": [reference.to_dict() for reference in references],
+                        "lineage_status": lineage_status,
+                        "predecessor_revision_ids": predecessors,
+                        "logical_node_keys": list(logical_node_keys),
+                        "mapping_evidence": mapping_evidence,
+                        "applicability": specification.get("applicability", {}),
+                        "observed_at": specification.get("observed_at", imported_at),
+                        "valid_from": specification.get("valid_from"),
+                        "valid_to": specification.get("valid_to"),
+                        "expires_at": asset.expires_at,
+                        "project_scope": specification.get("project_scope"),
+                        "repository_scope": specification.get("repository_scope"),
+                        "branch_scope": specification.get("branch_scope"),
+                        "version_scope": specification.get("version_scope"),
+                        "environment_scope": specification.get("environment_scope"),
+                        "warnings": list(asset.warnings),
+                        "trust": asset.trust,
+                        "sensitivity": asset.sensitivity,
+                        "status": asset.status,
+                    }
+                )
+            fragment_titles = [
+                fragment.get("title")
+                or (asset_specs[index].get("title") if len(asset_specs) == len(fragments) else None)
+                for index, fragment in enumerate(fragments)
+            ]
+            prepared_source_ir_nodes = (
+                [dict(node) for node in source_ir_nodes]
+                if source_ir_nodes is not None
+                else [
+                    {
+                        "logical_node_key": fragment.get(
+                            "logical_node_key",
+                            f"fragment:{index + 1}",
+                        ),
+                        "parent_logical_node_key": fragment.get("parent_logical_node_key"),
+                        "ordinal": index + 1,
+                        "node_type": fragment.get("node_type", "text"),
+                        "title": fragment_titles[index],
+                        "text": fragment["text"],
+                        "locator": fragment["locator"],
+                        "source_span": fragment.get(
+                            "source_span",
+                            {"locator": fragment["locator"]},
+                        ),
+                        "content_sha256": sha256_bytes(fragment["text"].encode("utf-8")),
+                        "quality_flags": list(fragment.get("quality_flags", ())),
+                        "instruction_risk": bool(
+                            fragment.get("instruction_risk", instruction_risk)
+                        ),
+                        "fragment_id": fragment_ids[index],
+                    }
+                    for index, fragment in enumerate(fragments)
+                ]
+            )
+            identity_collection_id = compiler.get("collection_id") or make_collection_id(
+                vault_id=self.vault_id,
+                name="project",
+            )
+            identity_logical_path = compiler.get("logical_path")
+            if identity_logical_path is None:
+                identity_logical_path = (
+                    f"origins/{sha256_bytes(canonical_origin_commitment(origin_uri).encode('utf-8'))}"
+                    if origin_uri is not None
+                    else normalize_logical_path(source.name)
+                )
+            typed_extractor = compiler.get("typed_extractor")
+            if typed_extractor is not None and not isinstance(typed_extractor, dict):
+                raise ValueError("typed extractor identity is invalid")
+            extractor_revision = (
+                typed_extractor.get("extractor_revision")
+                if typed_extractor is not None
+                else (
+                    "deeplaw-deterministic/v2"
+                    if compiler.get("typed_extraction") == "deterministic-v2"
+                    else "deeplaw-deterministic/v1"
+                )
+            )
+            prompt_configuration = {
+                "mode": compiler.get("typed_extraction", "off"),
+                "compiler_schema": compiler["schema_version"],
+            }
+            if typed_extractor is not None:
+                prompt_configuration["prompt_config_sha256"] = typed_extractor.get(
+                    "prompt_config_sha256"
+                )
+                prompt_configuration["manifest_sha256"] = typed_extractor.get("manifest_sha256")
+                prompt_configuration["output_sha256"] = typed_extractor.get("output_sha256")
+                prompt_configuration["network_policy"] = typed_extractor.get("network_policy")
+                prompt_configuration["disclosure"] = typed_extractor.get("disclosure")
+            identity = register_compilation_identity(
+                self.connection,
+                vault_id=self.vault_id,
+                collection_id=identity_collection_id,
+                collection_name=compiler.get("collection_name", "project"),
+                logical_path=identity_logical_path,
+                source_key=source_key,
+                legacy_source_id=source_id,
+                content_sha256=content_sha256,
+                media_identity=media_type,
+                origin_uri=origin_uri,
+                byte_size=byte_size,
+                observed_at=imported_at,
+                adapter=(
+                    compiler.get("source_adapter")
+                    or compiler.get("extractor")
+                    or compiler.get("adapter_schema")
+                    or "deeplaw-legacy-compiler"
+                ),
+                adapter_version=(
+                    compiler.get("source_adapter_version")
+                    or compiler.get("extractor_version")
+                    or compiler.get("schema_version")
+                    or "unknown"
+                ),
+                configuration={
+                    "format": compiler.get("format"),
+                    "configuration": compiler.get("configuration", []),
+                    "pdf_fallback": compiler.get("pdf_fallback"),
+                    "source_ir_projection": "deeplaw.source-ir-projection/v1",
+                },
+                source_ir_nodes=prepared_source_ir_nodes,
+                fragments=fragment_rows,
+                extractor=(
+                    typed_extractor.get("extractor")
+                    if typed_extractor is not None
+                    else compiler.get("typed_extraction", "off")
+                ),
+                extractor_revision=extractor_revision,
+                model_identity=(
+                    typed_extractor.get("model_identity") if typed_extractor is not None else None
+                ),
+                prompt_configuration=prompt_configuration,
+                proposals=identity_proposals,
+                source_trust=trust,
+                source_sensitivity=sensitivity,
+            )
             revision, audit_head = self._append_event(
                 event_type="source_compiled",
                 object_id=source_id,
                 payload={
                     "source_sha256": content_sha256,
-                    "fragment_count": len(fragment_ids),
-                    "asset_count": len(asset_ids),
-                    "membership_sha256": _source_membership_sha256(
-                        fragment_ids,
-                        asset_ids,
+                    "fragment_count": identity["fragment_count"],
+                    "fragment_inventory_sha256": identity["fragment_inventory_sha256"],
+                    "proposal_count": identity["proposal_count"],
+                    "proposal_inventory_sha256": identity["proposal_inventory_sha256"],
+                    "proposal_ref_graph_sha256": identity["proposal_ref_graph_sha256"],
+                    "asset_count": identity["proposal_count"],
+                    "membership_sha256": sha256_bytes(
+                        canonical_json(
+                            {
+                                "fragment_inventory_sha256": identity["fragment_inventory_sha256"],
+                                "proposal_inventory_sha256": identity["proposal_inventory_sha256"],
+                                "proposal_ref_graph_sha256": identity["proposal_ref_graph_sha256"],
+                            }
+                        ).encode("utf-8")
                     ),
                     "instruction_risk": instruction_risk,
                     "compiler": compiler,
                     "source_key": source_key,
                     "previous_source_id": previous_source_id,
                     "source_status": "pending",
+                    "source_revision_id": identity["source_revision_id"],
+                    "compilation_id": identity["compilation_id"],
+                    "proposal_set_id": identity["proposal_set_id"],
                 },
+            )
+            revision, audit_head = self._append_identity_snapshot(
+                reason="source_compiled",
+                source_revision_id=identity["source_revision_id"],
             )
             self.connection.commit()
         except BaseException:
@@ -1673,6 +2928,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "audit_head": audit_head,
             "source": self.source_info(source_id),
             "asset_ids": asset_ids,
+            "identity": identity,
             "idempotent": False,
         }
 
@@ -1796,6 +3052,236 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         )
         return asset, True
 
+    def _asset_revision_identity(
+        self,
+        asset_id: str,
+    ) -> dict[str, Any] | None:
+        """Return the exact Identity v2 binding for one legacy Asset."""
+        if not self.identity_v2_enabled:
+            return None
+        row = self.connection.execute(
+            """
+            SELECT asset_revision_bindings_v2.asset_revision_id,
+                   knowledge_revisions_v2.knowledge_key,
+                   knowledge_revisions_v2.logical_node_keys_json,
+                   knowledge_revisions_v2.source_revision_ids_json
+            FROM asset_revision_bindings_v2
+            JOIN knowledge_revisions_v2 USING(asset_revision_id)
+            WHERE asset_revision_bindings_v2.legacy_asset_id = ?
+            """,
+            (asset_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        references = self.connection.execute(
+            """
+            SELECT source_revision_id, fragment_revision_id, locator, quote_sha256
+            FROM proposal_source_refs_v2
+            WHERE asset_revision_id = ?
+            ORDER BY ref_ordinal
+            """,
+            (row["asset_revision_id"],),
+        ).fetchall()
+        return {
+            "asset_revision_id": row["asset_revision_id"],
+            "knowledge_key": row["knowledge_key"],
+            "logical_node_keys": tuple(
+                strict_json_loads(row["logical_node_keys_json"])
+            ),
+            "source_revision_ids": tuple(
+                strict_json_loads(row["source_revision_ids_json"])
+            ),
+            "source_refs": tuple(dict(reference) for reference in references),
+        }
+
+    def _register_asset_revision_in_transaction(
+        self,
+        proposal: KnowledgeAsset,
+        *,
+        knowledge_key: str,
+        logical_node_keys: tuple[str, ...],
+        predecessor_revision_ids: tuple[str, ...] = (),
+        lineage_status: Literal["modified", "split", "merged"] | None = None,
+        mapping_evidence: dict[str, Any] | None = None,
+        policy_id: str,
+        created_at: str,
+    ) -> dict[str, Any]:
+        """Bind a derived source-backed proposal to exact immutable evidence.
+
+        The caller owns the surrounding transaction and audit event. This helper is
+        deliberately unavailable for source-free proposals: an Identity v2 Asset
+        revision must retain at least one exact Source Reference.
+        """
+        self._require_write()
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        if not proposal.source_refs:
+            raise ValueError("source-bound Asset revision requires source references")
+        if proposal.verification != "source_bound":
+            raise ValueError("source-backed proposal must be marked source_bound")
+        if not logical_node_keys or len(logical_node_keys) > 100:
+            raise ValueError("Asset revision logical node inventory is invalid")
+        normalized_node_keys = tuple(dict.fromkeys(logical_node_keys))
+        if len(normalized_node_keys) != len(logical_node_keys) or any(
+            not isinstance(value, str) or not 1 <= len(value) <= 2_000
+            for value in normalized_node_keys
+        ):
+            raise ValueError("Asset revision logical node inventory is invalid")
+
+        prepared_refs: list[dict[str, str]] = []
+        fragment_revision_ids: list[str] = []
+        source_revision_ids: set[str] = set()
+        seen_refs: set[tuple[str, str]] = set()
+        for reference in proposal.source_refs:
+            row = self.connection.execute(
+                """
+                SELECT source_revision_bindings_v2.source_revision_id,
+                       legacy_fragment_bindings_v2.fragment_revision_id,
+                       source_fragments.locator,
+                       source_fragments.text_sha256
+                FROM source_revision_bindings_v2
+                JOIN legacy_fragment_bindings_v2 USING(legacy_source_id)
+                JOIN source_fragments USING(fragment_id)
+                WHERE source_revision_bindings_v2.legacy_source_id = ?
+                  AND legacy_fragment_bindings_v2.fragment_id = ?
+                """,
+                (reference.source_id, reference.fragment_id),
+            ).fetchone()
+            if row is None or (
+                row["locator"], row["text_sha256"]
+            ) != (reference.locator, reference.quote_sha256):
+                raise RuntimeError(
+                    "derived proposal source reference identity is unavailable or changed"
+                )
+            ref_key = (row["source_revision_id"], row["fragment_revision_id"])
+            if ref_key in seen_refs:
+                raise ValueError("derived proposal source references must be unique")
+            seen_refs.add(ref_key)
+            source_revision_ids.add(row["source_revision_id"])
+            fragment_revision_ids.append(row["fragment_revision_id"])
+            prepared_refs.append(
+                {
+                    "source_revision_id": row["source_revision_id"],
+                    "fragment_revision_id": row["fragment_revision_id"],
+                    "locator": reference.locator,
+                    "quote_sha256": reference.quote_sha256,
+                }
+            )
+
+        placeholders = ",".join("?" for _ in fragment_revision_ids)
+        available_node_keys = {
+            row["logical_node_key"]
+            for row in self.connection.execute(
+                f"""
+                SELECT DISTINCT source_ir_nodes_v2.logical_node_key
+                FROM fragment_node_membership_v2
+                JOIN source_ir_nodes_v2 USING(node_id)
+                WHERE fragment_node_membership_v2.fragment_revision_id
+                      IN ({placeholders})
+                """,
+                tuple(fragment_revision_ids),
+            ).fetchall()
+        }
+        if not set(normalized_node_keys).issubset(available_node_keys):
+            raise ValueError(
+                "derived proposal logical nodes are not backed by its exact fragments"
+            )
+
+        ordered_source_revision_ids = tuple(sorted(source_revision_ids))
+        knowledge_content_sha256 = sha256_bytes(
+            canonical_json(
+                {
+                    "kind": proposal.kind,
+                    "memory_tier": proposal.memory_tier,
+                    "title": proposal.title,
+                    "statement": proposal.statement,
+                    "knowledge_key": knowledge_key,
+                    "logical_node_keys": list(normalized_node_keys),
+                    "source_refs": [
+                        {
+                            "locator": reference.locator,
+                            "quote_sha256": reference.quote_sha256,
+                        }
+                        for reference in proposal.source_refs
+                    ],
+                }
+            ).encode("utf-8")
+        )
+        asset_revision_id = make_asset_revision_id(
+            knowledge_key=knowledge_key,
+            knowledge_content_sha256=knowledge_content_sha256,
+            source_revision_ids=ordered_source_revision_ids,
+        )
+        self.connection.execute(
+            "INSERT INTO knowledge_revisions_v2 VALUES (?, ?, ?, ?, ?)",
+            (
+                asset_revision_id,
+                knowledge_key,
+                canonical_json(list(normalized_node_keys)),
+                knowledge_content_sha256,
+                canonical_json(list(ordered_source_revision_ids)),
+            ),
+        )
+        self.connection.execute(
+            """
+            INSERT INTO asset_revision_bindings_v2
+            VALUES (?, ?, ?, NULL, NULL, ?)
+            """,
+            (
+                proposal.asset_id,
+                proposal.source_refs[0].source_id,
+                asset_revision_id,
+                created_at,
+            ),
+        )
+        for ordinal, reference in enumerate(prepared_refs, start=1):
+            self.connection.execute(
+                "INSERT INTO proposal_source_refs_v2 VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    asset_revision_id,
+                    ordinal,
+                    reference["source_revision_id"],
+                    reference["fragment_revision_id"],
+                    reference["locator"],
+                    reference["quote_sha256"],
+                ),
+            )
+        lineage_id = None
+        if lineage_status is not None:
+            if mapping_evidence is None:
+                raise ValueError("Asset revision lineage requires mapping evidence")
+            lineage_id = record_lineage_transition(
+                self.connection,
+                knowledge_key=knowledge_key,
+                from_asset_revision_ids=predecessor_revision_ids,
+                to_asset_revision_ids=(asset_revision_id,),
+                status=lineage_status,
+                source_revision_id=ordered_source_revision_ids[0],
+                mapping_evidence=mapping_evidence,
+                created_at=created_at,
+            )
+        governance_revision = record_governance_revision(
+            self.connection,
+            subject_kind="asset_revision",
+            subject_id=asset_revision_id,
+            trust=proposal.trust,
+            sensitivity=proposal.sensitivity,
+            policy_id=policy_id,
+            review_status="unreviewed",
+            lifecycle_status="quarantined",
+            reviewer_id=None,
+            recorded_at=created_at,
+        )
+        return {
+            "asset_revision_id": asset_revision_id,
+            "knowledge_key": knowledge_key,
+            "source_revision_ids": ordered_source_revision_ids,
+            "logical_node_keys": normalized_node_keys,
+            "source_refs": tuple(prepared_refs),
+            "lineage_id": lineage_id,
+            "governance_revision": governance_revision,
+        }
+
     def propose_asset(
         self,
         *,
@@ -1866,19 +3352,183 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             self.connection.rollback()
             raise
 
+    def propose_asset_revision(
+        self,
+        predecessor_asset_id: str,
+        *,
+        title: str,
+        statement: str,
+        origin_uri: str,
+    ) -> KnowledgeAsset:
+        """Create a quarantined, source-bound edit without inheriting approval."""
+        self._require_write()
+        predecessor = self.get_asset(predecessor_asset_id)
+        warnings = ["projection edit requires exact source revalidation before approval"]
+        if has_instruction_risk(f"{title}\n{statement}"):
+            warnings.append(
+                "instruction-like or invisible control content detected; "
+                "proposal requires explicit review"
+            )
+        created_at = utc_now()
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            proposal, inserted = self._insert_asset(
+                kind=predecessor.kind,
+                memory_tier=predecessor.memory_tier,
+                title=title,
+                statement=statement,
+                semantic_key=predecessor.semantic_key,
+                status="quarantined",
+                verification=("source_bound" if predecessor.source_refs else "unverified"),
+                trust=predecessor.trust,
+                sensitivity=predecessor.sensitivity,
+                source_refs=predecessor.source_refs,
+                tags=predecessor.tags,
+                warnings=tuple(warnings),
+                expires_at=predecessor.expires_at,
+                supersedes_asset_id=predecessor.asset_id,
+                origin_uri=origin_uri,
+                created_at=created_at,
+            )
+            if not inserted:
+                self.connection.rollback()
+                return proposal
+            identity: dict[str, Any] | None = None
+            if self.identity_v2_enabled and predecessor.source_refs:
+                prior = self._asset_revision_identity(predecessor.asset_id)
+                if prior is None:
+                    raise RuntimeError("projection predecessor Identity v2 binding is unavailable")
+                identity = self._register_asset_revision_in_transaction(
+                    proposal,
+                    knowledge_key=prior["knowledge_key"],
+                    logical_node_keys=prior["logical_node_keys"],
+                    predecessor_revision_ids=(prior["asset_revision_id"],),
+                    lineage_status="modified",
+                    mapping_evidence={
+                        "method": "human-projection-edit",
+                        "predecessor_asset_id": predecessor.asset_id,
+                        "origin_uri": origin_uri,
+                        "approval_inherited": False,
+                    },
+                    policy_id="deeplaw.projection-edit/v1",
+                    created_at=created_at,
+                )
+            self._append_event(
+                event_type="asset_revision_proposed",
+                object_id=proposal.asset_id,
+                payload={
+                    "content_sha256": proposal.content_sha256,
+                    "status": proposal.status,
+                    "verification": proposal.verification,
+                    "predecessor_asset_ids": [predecessor.asset_id],
+                    "source_ref_count": len(proposal.source_refs),
+                    "lineage_status": "modified",
+                    "transformation": "edit",
+                    "approval_inherited": False,
+                },
+            )
+            if identity is not None:
+                self._append_identity_snapshot(
+                    reason="asset_revision_proposed",
+                    source_revision_id=identity["source_revision_ids"][0],
+                )
+            self.connection.commit()
+            return proposal
+        except BaseException:
+            self.connection.rollback()
+            raise
+
     def source_review_manifest(self, source_id: str) -> dict[str, Any]:
         self._require_control()
         source = self.source_info(source_id)
-        rows = self.connection.execute(
-            """
-            SELECT DISTINCT assets.asset_id, assets.status, assets.content_sha256
-            FROM assets, json_each(assets.source_refs_json) AS reference
-            WHERE json_extract(reference.value, '$.source_id') = ?
-              AND json_array_length(assets.source_refs_json) = 1
-            ORDER BY assets.asset_id
-            """,
-            (source_id,),
-        ).fetchall()
+        proposal_set_id = source.get("proposal_set_id")
+        if proposal_set_id is not None:
+            rows = self.connection.execute(
+                """
+                SELECT assets.asset_id, assets.status, assets.content_sha256
+                FROM asset_revision_bindings_v2
+                JOIN assets
+                  ON assets.asset_id = asset_revision_bindings_v2.legacy_asset_id
+                WHERE asset_revision_bindings_v2.legacy_source_id = ?
+                  AND asset_revision_bindings_v2.proposal_set_id = ?
+                ORDER BY asset_revision_bindings_v2.proposal_ordinal
+                """,
+                (source_id, proposal_set_id),
+            ).fetchall()
+            proposal_set = self.connection.execute(
+                "SELECT * FROM proposal_sets_v2 WHERE proposal_set_id = ?",
+                (proposal_set_id,),
+            ).fetchone()
+            compilation = self.connection.execute(
+                "SELECT * FROM compilations_v2 WHERE compilation_id = ?",
+                (source["compilation_id"],),
+            ).fetchone()
+            if proposal_set is None or compilation is None:
+                raise RuntimeError("source Identity v2 review inventory is incomplete")
+            fragment_count = self.connection.execute(
+                "SELECT COUNT(*) FROM source_fragments WHERE source_id = ?",
+                (source_id,),
+            ).fetchone()[0]
+            fragment_inventory_sha256 = compilation["fragment_inventory_sha256"]
+            proposal_inventory_sha256 = proposal_set["proposal_inventory_sha256"]
+            proposal_ref_graph_sha256 = proposal_set["proposal_ref_graph_sha256"]
+        else:
+            rows = self.connection.execute(
+                """
+                SELECT DISTINCT assets.asset_id, assets.status, assets.content_sha256
+                FROM assets, json_each(assets.source_refs_json) AS reference
+                WHERE json_extract(reference.value, '$.source_id') = ?
+                  AND json_array_length(assets.source_refs_json) = 1
+                ORDER BY assets.asset_id
+                """,
+                (source_id,),
+            ).fetchall()
+            fragment_count = self.connection.execute(
+                "SELECT COUNT(*) FROM source_fragments WHERE source_id = ?",
+                (source_id,),
+            ).fetchone()[0]
+            fragment_inventory_sha256 = sha256_bytes(
+                canonical_json(
+                    [
+                        dict(row)
+                        for row in self.connection.execute(
+                            """
+                            SELECT fragment_id, ordinal, locator, text_sha256
+                            FROM source_fragments WHERE source_id = ? ORDER BY ordinal
+                            """,
+                            (source_id,),
+                        )
+                    ]
+                ).encode("utf-8")
+            )
+            proposal_inventory_sha256 = sha256_bytes(
+                canonical_json(
+                    [
+                        {
+                            "asset_id": row["asset_id"],
+                            "content_sha256": row["content_sha256"],
+                        }
+                        for row in rows
+                    ]
+                ).encode("utf-8")
+            )
+            proposal_ref_graph_sha256 = sha256_bytes(
+                canonical_json(
+                    [
+                        {
+                            "asset_id": row["asset_id"],
+                            "source_refs": strict_json_loads(
+                                self.connection.execute(
+                                    "SELECT source_refs_json FROM assets WHERE asset_id = ?",
+                                    (row["asset_id"],),
+                                ).fetchone()["source_refs_json"]
+                            ),
+                        }
+                        for row in rows
+                    ]
+                ).encode("utf-8")
+            )
         membership = [
             {
                 "asset_id": row["asset_id"],
@@ -1890,18 +3540,26 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         membership_sha256 = sha256_bytes(canonical_json(membership).encode("utf-8"))
         visible_asset_ids = [item["asset_id"] for item in membership[:100]]
         body = {
-            "schema_version": "deeplaw.knowledge-review-manifest/v1",
+            "schema_version": "deeplaw.knowledge-review-manifest/v2",
             "vault_id": self.vault_id,
             "source_key": source["source_key"],
             "source_id": source_id,
+            "source_revision_id": source.get("source_revision_id"),
+            "compilation_id": source.get("compilation_id"),
+            "proposal_set_id": proposal_set_id,
             "source_content_sha256": source["content_sha256"],
             "source_status": source["status"],
-            "proposal_count": sum(
+            "fragment_count": fragment_count,
+            "fragment_inventory_sha256": fragment_inventory_sha256,
+            "proposal_count": len(membership),
+            "pending_proposal_count": sum(
                 item["status"] in {"proposed", "quarantined"} for item in membership
             ),
+            "proposal_inventory_sha256": proposal_inventory_sha256,
+            "proposal_ref_graph_sha256": proposal_ref_graph_sha256,
             "quarantine_count": sum(item["status"] == "quarantined" for item in membership),
-            "asset_count": len(membership),
-            "membership_sha256": membership_sha256,
+            "review_member_count": len(membership),
+            "review_membership_sha256": membership_sha256,
             "asset_ids": visible_asset_ids,
             "asset_ids_truncated": len(visible_asset_ids) < len(membership),
         }
@@ -2022,9 +3680,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 else None
             ),
         }
-        record_valid = sha256_bytes(canonical_json(body).encode("utf-8")) == row[
-            "receipt_sha256"
-        ]
+        record_valid = sha256_bytes(canonical_json(body).encode("utf-8")) == row["receipt_sha256"]
         vault_integrity_valid = self.verify_integrity()["valid"]
         return {
             **body,
@@ -2118,6 +3774,81 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         ).fetchone()
         return self.get_review_receipt(row["review_receipt_id"]) if row is not None else None
 
+    def _reject_asset_in_transaction(
+        self,
+        asset_id: str,
+        *,
+        reason: str,
+        reviewer_id: str,
+        policy_id: str = "deeplaw.local-review/v1",
+    ) -> dict[str, Any]:
+        """Reject one pending proposal inside the caller's open transaction."""
+        proposal = self.get_asset(asset_id, include_inactive=True)
+        if proposal.status not in {"proposed", "quarantined"}:
+            raise ValueError("only proposed or quarantined assets can be rejected")
+        manifest_body = {
+            "schema_version": "deeplaw.knowledge-review-manifest/v1",
+            "vault_id": self.vault_id,
+            "source_id": None,
+            "asset_id": proposal.asset_id,
+            "content_sha256": proposal.content_sha256,
+            "status": proposal.status,
+        }
+        manifest_sha256 = sha256_bytes(canonical_json(manifest_body).encode("utf-8"))
+        self.connection.execute(
+            "UPDATE assets SET status = 'revoked' WHERE asset_id = ?",
+            (asset_id,),
+        )
+        self._append_event(
+            event_type="asset_revoked",
+            object_id=asset_id,
+            payload={"reason": reason, "content_sha256": proposal.content_sha256},
+        )
+        identity = self._asset_revision_identity(asset_id)
+        if identity is not None:
+            recorded_at = utc_now()
+            latest = self.connection.execute(
+                """
+                SELECT recorded_at
+                FROM governance_revisions_v2
+                WHERE subject_kind = 'asset_revision' AND subject_id = ?
+                ORDER BY recorded_at DESC, governance_revision DESC
+                LIMIT 1
+                """,
+                (identity["asset_revision_id"],),
+            ).fetchone()
+            if latest is not None:
+                recorded_at = _timestamp_after(recorded_at, latest["recorded_at"])
+            record_governance_revision(
+                self.connection,
+                subject_kind="asset_revision",
+                subject_id=identity["asset_revision_id"],
+                trust=proposal.trust,
+                sensitivity=proposal.sensitivity,
+                policy_id=policy_id,
+                review_status="human_verified",
+                lifecycle_status="revoked",
+                activation_status="inactive",
+                revoked_at=recorded_at,
+                export_allowed=False,
+                reviewer_id=reviewer_id,
+                recorded_at=recorded_at,
+            )
+        receipt = self._record_review_receipt(
+            assets=[proposal],
+            source_id=None,
+            reviewer_id=reviewer_id,
+            policy_id=policy_id,
+            reason=reason,
+            review_manifest_sha256=manifest_sha256,
+            decision="reject",
+        )
+        return {
+            "proposal": proposal,
+            "review_receipt": receipt,
+            "identity": identity,
+        }
+
     def reject_asset(
         self,
         asset_id: str,
@@ -2136,36 +3867,17 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             self._require_healthy_integrity()
-            proposal = self.get_asset(asset_id, include_inactive=True)
-            if proposal.status not in {"proposed", "quarantined"}:
-                raise ValueError("only proposed or quarantined assets can be rejected")
-            manifest_body = {
-                "schema_version": "deeplaw.knowledge-review-manifest/v1",
-                "vault_id": self.vault_id,
-                "source_id": None,
-                "asset_id": proposal.asset_id,
-                "content_sha256": proposal.content_sha256,
-                "status": proposal.status,
-            }
-            manifest_sha256 = sha256_bytes(canonical_json(manifest_body).encode("utf-8"))
-            self.connection.execute(
-                "UPDATE assets SET status = 'revoked' WHERE asset_id = ?",
-                (asset_id,),
-            )
-            self._append_event(
-                event_type="asset_revoked",
-                object_id=asset_id,
-                payload={"reason": reason, "content_sha256": proposal.content_sha256},
-            )
-            receipt = self._record_review_receipt(
-                assets=[proposal],
-                source_id=None,
-                reviewer_id=reviewer_id,
-                policy_id="deeplaw.local-review/v1",
+            rejected = self._reject_asset_in_transaction(
+                asset_id,
                 reason=reason,
-                review_manifest_sha256=manifest_sha256,
-                decision="reject",
+                reviewer_id=reviewer_id,
             )
+            identity = rejected["identity"]
+            if identity is not None:
+                self._append_identity_snapshot(
+                    reason="governance_recorded",
+                    source_revision_id=identity["source_revision_ids"][0],
+                )
             self.connection.commit()
         except BaseException:
             self.connection.rollback()
@@ -2175,7 +3887,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "asset_id": asset_id,
             "decision": "reject",
             "status": "revoked",
-            "review_receipt": receipt,
+            "review_receipt": rejected["review_receipt"],
             "revision": self.revision,
             "audit_head": self.audit_head,
         }
@@ -2693,6 +4405,8 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         confirm_quarantined: bool,
         source_file_cache: dict[str, dict[str, Any]],
         allow_source_successor: bool = False,
+        reviewer_id: str = "local-operator",
+        policy_id: str = "deeplaw.local-review/v1",
     ) -> KnowledgeAsset:
         asset = self.get_asset(asset_id, include_inactive=True)
         if asset.status not in {"proposed", "quarantined"}:
@@ -2786,6 +4500,57 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 "supersedes_asset_id": asset.supersedes_asset_id,
             },
         )
+        if self.identity_v2_enabled:
+            identity = self.connection.execute(
+                """
+                SELECT asset_revision_bindings_v2.asset_revision_id
+                FROM asset_revision_bindings_v2
+                WHERE legacy_asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+            if identity is not None:
+                record_governance_revision(
+                    self.connection,
+                    subject_kind="asset_revision",
+                    subject_id=identity["asset_revision_id"],
+                    trust=asset.trust,
+                    sensitivity=asset.sensitivity,
+                    policy_id=policy_id,
+                    review_status="human_verified",
+                    lifecycle_status="active",
+                    activation_status="active",
+                    export_allowed=asset.sensitivity == "public",
+                    reviewer_id=reviewer_id,
+                    recorded_at=activated_at,
+                )
+            if asset.supersedes_asset_id is not None:
+                predecessor = self.connection.execute(
+                    """
+                    SELECT asset_revision_bindings_v2.asset_revision_id,
+                           assets.trust, assets.sensitivity
+                    FROM asset_revision_bindings_v2
+                    JOIN assets
+                      ON assets.asset_id = asset_revision_bindings_v2.legacy_asset_id
+                    WHERE asset_revision_bindings_v2.legacy_asset_id = ?
+                    """,
+                    (asset.supersedes_asset_id,),
+                ).fetchone()
+                if predecessor is not None:
+                    record_governance_revision(
+                        self.connection,
+                        subject_kind="asset_revision",
+                        subject_id=predecessor["asset_revision_id"],
+                        trust=predecessor["trust"],
+                        sensitivity=predecessor["sensitivity"],
+                        policy_id=policy_id,
+                        review_status="human_verified",
+                        lifecycle_status="superseded",
+                        activation_status="inactive",
+                        export_allowed=False,
+                        reviewer_id=reviewer_id,
+                        recorded_at=activated_at,
+                    )
         return self.get_asset(asset_id, include_inactive=True)
 
     def approve_asset(
@@ -2819,6 +4584,8 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 asset_id,
                 confirm_quarantined=confirm_quarantined,
                 source_file_cache={},
+                reviewer_id=reviewer_id,
+                policy_id=policy_id,
             )
             self._record_review_receipt(
                 assets=[proposal],
@@ -2828,6 +4595,20 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 reason=review_reason,
                 review_manifest_sha256=manifest_sha256,
             )
+            identity_row = self.connection.execute(
+                """
+                SELECT source_revision_bindings_v2.source_revision_id
+                FROM asset_revision_bindings_v2
+                JOIN source_revision_bindings_v2 USING(legacy_source_id)
+                WHERE asset_revision_bindings_v2.legacy_asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+            if identity_row is not None:
+                self._append_identity_snapshot(
+                    reason="governance_recorded",
+                    source_revision_id=identity_row["source_revision_id"],
+                )
             self.connection.commit()
             return approved
         except BaseException:
@@ -2875,21 +4656,38 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 raise RuntimeError(
                     "review manifest changed; inspect the exact current source membership"
                 )
-            rows = self.connection.execute(
-                """
-                SELECT DISTINCT assets.asset_id, assets.status
-                FROM assets, json_each(assets.source_refs_json) AS reference
-                WHERE json_extract(reference.value, '$.source_id') = ?
-                  AND json_array_length(assets.source_refs_json) = 1
-                ORDER BY assets.asset_id
-                """,
-                (source_id,),
-            ).fetchall()
+            source_info = self.source_info(source_id)
+            if source_info.get("proposal_set_id") is not None:
+                rows = self.connection.execute(
+                    """
+                    SELECT assets.asset_id, assets.status
+                    FROM asset_revision_bindings_v2
+                    JOIN assets
+                      ON assets.asset_id = asset_revision_bindings_v2.legacy_asset_id
+                    WHERE asset_revision_bindings_v2.legacy_source_id = ?
+                      AND asset_revision_bindings_v2.proposal_set_id = ?
+                    ORDER BY asset_revision_bindings_v2.proposal_ordinal
+                    """,
+                    (source_id, source_info["proposal_set_id"]),
+                ).fetchall()
+            else:
+                rows = self.connection.execute(
+                    """
+                    SELECT DISTINCT assets.asset_id, assets.status
+                    FROM assets, json_each(assets.source_refs_json) AS reference
+                    WHERE json_extract(reference.value, '$.source_id') = ?
+                      AND json_array_length(assets.source_refs_json) = 1
+                    ORDER BY assets.asset_id
+                    """,
+                    (source_id,),
+                ).fetchall()
             fragment_count = self.connection.execute(
                 "SELECT COUNT(*) FROM source_fragments WHERE source_id = ?",
                 (source_id,),
             ).fetchone()[0]
-            if not rows or len(rows) != fragment_count:
+            if source_info.get("proposal_set_id") is None and (
+                not rows or len(rows) != fragment_count
+            ):
                 raise RuntimeError(
                     "compiled knowledge source membership is incomplete or ambiguous"
                 )
@@ -2919,9 +4717,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     confirm_quarantined=confirm_quarantined,
                     source_file_cache=source_file_cache,
                     allow_source_successor=True,
+                    reviewer_id=reviewer_id,
+                    policy_id=policy_id,
                 )
                 approved_ids.append(approved.asset_id)
-            source_info = self.source_info(source_id)
             activated_source = False
             revoked_ids: list[str] = []
             if (
@@ -2946,6 +4745,19 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         (previous_source_id,),
                     ).fetchall()
                     for stale in remaining:
+                        stale_identity = self.connection.execute(
+                            """
+                            SELECT asset_revision_bindings_v2.asset_revision_id,
+                                   knowledge_revisions_v2.knowledge_key,
+                                   assets.trust, assets.sensitivity
+                            FROM asset_revision_bindings_v2
+                            JOIN knowledge_revisions_v2 USING(asset_revision_id)
+                            JOIN assets
+                              ON assets.asset_id = asset_revision_bindings_v2.legacy_asset_id
+                            WHERE asset_revision_bindings_v2.legacy_asset_id = ?
+                            """,
+                            (stale["asset_id"],),
+                        ).fetchone()
                         self.connection.execute(
                             "UPDATE assets SET status = 'revoked' WHERE asset_id = ?",
                             (stale["asset_id"],),
@@ -2961,6 +4773,40 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                                 "content_sha256": stale["content_sha256"],
                             },
                         )
+                        if (
+                            stale_identity is not None
+                            and source_info.get("source_revision_id") is not None
+                        ):
+                            recorded_at = utc_now()
+                            record_lineage_transition(
+                                self.connection,
+                                knowledge_key=stale_identity["knowledge_key"],
+                                from_asset_revision_ids=(stale_identity["asset_revision_id"],),
+                                to_asset_revision_ids=(),
+                                status="deleted",
+                                source_revision_id=source_info["source_revision_id"],
+                                mapping_evidence={
+                                    "method": "reviewed-successor-absence",
+                                    "previous_source_id": previous_source_id,
+                                    "successor_source_id": source_id,
+                                },
+                                created_at=recorded_at,
+                            )
+                            record_governance_revision(
+                                self.connection,
+                                subject_kind="asset_revision",
+                                subject_id=stale_identity["asset_revision_id"],
+                                trust=stale_identity["trust"],
+                                sensitivity=stale_identity["sensitivity"],
+                                policy_id=policy_id,
+                                review_status="human_verified",
+                                lifecycle_status="deleted",
+                                activation_status="inactive",
+                                revoked_at=recorded_at,
+                                export_allowed=False,
+                                reviewer_id=reviewer_id,
+                                recorded_at=recorded_at,
+                            )
                         revoked_ids.append(stale["asset_id"])
                     switched_at = utc_now()
                     self.connection.execute(
@@ -2971,6 +4817,50 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         """,
                         (switched_at, previous_source_id),
                     )
+                    previous_source_identity = self.connection.execute(
+                        """
+                        SELECT source_revision_bindings_v2.source_revision_id,
+                               sources.trust, sources.sensitivity
+                        FROM source_revision_bindings_v2
+                        JOIN sources
+                          ON sources.source_id =
+                             source_revision_bindings_v2.legacy_source_id
+                        WHERE source_revision_bindings_v2.legacy_source_id = ?
+                        """,
+                        (previous_source_id,),
+                    ).fetchone()
+                    if previous_source_identity is not None:
+                        previous_source_governance = self.connection.execute(
+                            """
+                            SELECT recorded_at FROM governance_revisions_v2
+                            WHERE subject_kind = 'source_revision' AND subject_id = ?
+                            ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+                            """,
+                            (previous_source_identity["source_revision_id"],),
+                        ).fetchone()
+                        governance_recorded_at = (
+                            _timestamp_after(
+                                switched_at,
+                                previous_source_governance["recorded_at"],
+                            )
+                            if previous_source_governance is not None
+                            else switched_at
+                        )
+                        record_governance_revision(
+                            self.connection,
+                            subject_kind="source_revision",
+                            subject_id=previous_source_identity["source_revision_id"],
+                            trust=previous_source_identity["trust"],
+                            sensitivity=previous_source_identity["sensitivity"],
+                            policy_id=policy_id,
+                            review_status="human_verified",
+                            lifecycle_status="superseded",
+                            activation_status="inactive",
+                            revoked_at=switched_at,
+                            export_allowed=False,
+                            reviewer_id=reviewer_id,
+                            recorded_at=governance_recorded_at,
+                        )
                 else:
                     switched_at = utc_now()
                 self.connection.execute(
@@ -2981,6 +4871,21 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     """,
                     (switched_at, source_id),
                 )
+                if source_info.get("source_revision_id") is not None:
+                    record_governance_revision(
+                        self.connection,
+                        subject_kind="source_revision",
+                        subject_id=source_info["source_revision_id"],
+                        trust=source_info["trust"],
+                        sensitivity=source_info["sensitivity"],
+                        policy_id=policy_id,
+                        review_status="human_verified",
+                        lifecycle_status="active",
+                        activation_status="active",
+                        export_allowed=source_info["sensitivity"] == "public",
+                        reviewer_id=reviewer_id,
+                        recorded_at=switched_at,
+                    )
                 self._append_event(
                     event_type="source_activated",
                     object_id=source_id,
@@ -3003,6 +4908,11 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 reason=review_reason,
                 review_manifest_sha256=manifest["review_manifest_sha256"],
             )
+            if source_info.get("source_revision_id") is not None:
+                self._append_identity_snapshot(
+                    reason="governance_recorded",
+                    source_revision_id=source_info["source_revision_id"],
+                )
             self.connection.commit()
         except BaseException:
             self.connection.rollback()
@@ -3054,11 +4964,203 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 object_id=asset_id,
                 payload={"reason": reason, "content_sha256": asset.content_sha256},
             )
+            identity_row = self.connection.execute(
+                """
+                SELECT asset_revision_bindings_v2.asset_revision_id,
+                       source_revision_bindings_v2.source_revision_id
+                FROM asset_revision_bindings_v2
+                JOIN source_revision_bindings_v2 USING(legacy_source_id)
+                WHERE asset_revision_bindings_v2.legacy_asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+            if identity_row is not None:
+                revoked_at = utc_now()
+                record_governance_revision(
+                    self.connection,
+                    subject_kind="asset_revision",
+                    subject_id=identity_row["asset_revision_id"],
+                    trust=asset.trust,
+                    sensitivity=asset.sensitivity,
+                    policy_id="deeplaw.local-revocation/v2",
+                    review_status="human_verified",
+                    lifecycle_status="revoked",
+                    activation_status="inactive",
+                    revoked_at=revoked_at,
+                    export_allowed=False,
+                    reviewer_id="local-operator",
+                    recorded_at=revoked_at,
+                )
+                self._append_identity_snapshot(
+                    reason="governance_recorded",
+                    source_revision_id=identity_row["source_revision_id"],
+                )
             self.connection.commit()
             return self.get_asset(asset_id, include_inactive=True)
         except BaseException:
             self.connection.rollback()
             raise
+
+    def selectively_forget(
+        self,
+        *,
+        knowledge_key: str | None = None,
+        asset_id: str | None = None,
+        reason: str,
+        confirm: bool,
+    ) -> dict[str, Any]:
+        """Revoke one current knowledge revision while retaining verifiable history."""
+        self._require_write()
+        if (knowledge_key is None) == (asset_id is None):
+            raise ValueError("selective forgetting requires exactly one knowledge key or asset ID")
+        if not confirm:
+            raise ValueError("selective forgetting requires explicit confirmation")
+        reason = reason.strip()
+        if not reason or len(reason) > 2_000:
+            raise ValueError("forgetting reason must be between 1 and 2000 characters")
+        if knowledge_key is not None and not re.fullmatch(
+            r"knowledge_[0-9a-f]{24}", knowledge_key
+        ):
+            raise ValueError("knowledge key is invalid")
+        if asset_id is not None and not _ASSET_ID.fullmatch(asset_id):
+            raise ValueError("knowledge asset ID is invalid")
+        if not self.identity_v2_enabled:
+            raise RuntimeError("selective forgetting requires Knowledge Identity v2")
+
+        if asset_id is not None:
+            binding = self.connection.execute(
+                """
+                SELECT knowledge_revisions_v2.knowledge_key,
+                       asset_revision_bindings_v2.asset_revision_id,
+                       assets.status
+                FROM asset_revision_bindings_v2
+                JOIN knowledge_revisions_v2 USING(asset_revision_id)
+                JOIN assets
+                  ON assets.asset_id = asset_revision_bindings_v2.legacy_asset_id
+                WHERE asset_revision_bindings_v2.legacy_asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+            if binding is None:
+                legacy_asset = self.connection.execute(
+                    "SELECT asset_id, status FROM assets WHERE asset_id = ?",
+                    (asset_id,),
+                ).fetchone()
+                if legacy_asset is None:
+                    raise KeyError(f"knowledge asset is unavailable: {asset_id}")
+                target_asset_id = asset_id
+                target_revision_id = None
+                already_inactive = legacy_asset["status"] != "active"
+                identity_model = "legacy-unbound"
+            else:
+                knowledge_key = binding["knowledge_key"]
+                target_asset_id = asset_id
+                target_revision_id = binding["asset_revision_id"]
+                already_inactive = binding["status"] != "active"
+                identity_model = "knowledge-identity-v2"
+        else:
+            identity_model = "knowledge-identity-v2"
+            rows = self.connection.execute(
+                """
+                SELECT asset_revision_bindings_v2.legacy_asset_id,
+                       asset_revision_bindings_v2.asset_revision_id
+                FROM knowledge_revisions_v2
+                JOIN asset_revision_bindings_v2 USING(asset_revision_id)
+                JOIN assets
+                  ON assets.asset_id = asset_revision_bindings_v2.legacy_asset_id
+                WHERE knowledge_revisions_v2.knowledge_key = ?
+                  AND assets.status = 'active'
+                ORDER BY asset_revision_bindings_v2.observed_at DESC,
+                         asset_revision_bindings_v2.legacy_asset_id
+                """,
+                (knowledge_key,),
+            ).fetchall()
+            if len(rows) > 1:
+                raise RuntimeError(
+                    "knowledge key has multiple active revisions; forgetting stopped"
+                )
+            if not rows:
+                historical = self.connection.execute(
+                    """
+                    SELECT asset_revision_bindings_v2.legacy_asset_id,
+                           asset_revision_bindings_v2.asset_revision_id
+                    FROM knowledge_revisions_v2
+                    JOIN asset_revision_bindings_v2 USING(asset_revision_id)
+                    WHERE knowledge_revisions_v2.knowledge_key = ?
+                    ORDER BY asset_revision_bindings_v2.observed_at DESC,
+                             asset_revision_bindings_v2.legacy_asset_id
+                    LIMIT 1
+                    """,
+                    (knowledge_key,),
+                ).fetchone()
+                if historical is None:
+                    raise KeyError(f"knowledge key is unavailable: {knowledge_key}")
+                target_asset_id = historical["legacy_asset_id"]
+                target_revision_id = historical["asset_revision_id"]
+                already_inactive = True
+            else:
+                target_asset_id = rows[0]["legacy_asset_id"]
+                target_revision_id = rows[0]["asset_revision_id"]
+                already_inactive = False
+
+        if not already_inactive:
+            self.revoke_asset(target_asset_id, reason=reason, confirm=True)
+        if knowledge_key is None:
+            current_relation_count = self.connection.execute(
+                """
+                SELECT COUNT(*) AS relation_count
+                FROM relations
+                JOIN assets AS subject_asset
+                  ON subject_asset.asset_id = relations.subject_asset_id
+                JOIN assets AS object_asset
+                  ON object_asset.asset_id = relations.object_asset_id
+                WHERE subject_asset.status = 'active' AND object_asset.status = 'active'
+                  AND (relations.subject_asset_id = ? OR relations.object_asset_id = ?)
+                """,
+                (target_asset_id, target_asset_id),
+            ).fetchone()["relation_count"]
+        else:
+            current_relation_count = self.connection.execute(
+                """
+                WITH latest AS (
+                    SELECT relation_revisions_v2.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY relation_key
+                               ORDER BY observed_at DESC, relation_revision_id DESC
+                           ) AS relation_rank
+                    FROM relation_revisions_v2
+                )
+                SELECT COUNT(*) AS relation_count
+                FROM latest
+                JOIN asset_revision_bindings_v2 AS subject_binding
+                  ON subject_binding.asset_revision_id = latest.subject_asset_revision_id
+                JOIN assets AS subject_asset
+                  ON subject_asset.asset_id = subject_binding.legacy_asset_id
+                JOIN asset_revision_bindings_v2 AS object_binding
+                  ON object_binding.asset_revision_id = latest.object_asset_revision_id
+                JOIN assets AS object_asset
+                  ON object_asset.asset_id = object_binding.legacy_asset_id
+                WHERE latest.relation_rank = 1 AND latest.status = 'active'
+                  AND subject_asset.status = 'active' AND object_asset.status = 'active'
+                  AND (latest.subject_knowledge_key = ? OR latest.object_knowledge_key = ?)
+                """,
+                (knowledge_key, knowledge_key),
+            ).fetchone()["relation_count"]
+        return {
+            "schema_version": "deeplaw.selective-forgetting/v1",
+            "vault_id": self.vault_id,
+            "knowledge_key": knowledge_key,
+            "asset_id": target_asset_id,
+            "asset_revision_id": target_revision_id,
+            "identity_model": identity_model,
+            "already_inactive": already_inactive,
+            "current_relation_count": current_relation_count,
+            "current_retrieval_eligible": False,
+            "history_retained": True,
+            "canonical_bytes_deleted": False,
+            "revision": self.revision,
+            "audit_head": self.audit_head,
+        }
 
     def add_relation(
         self,
@@ -3068,6 +5170,9 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         object_asset_id: str,
         evidence_fragment_id: str | None = None,
         confirm_reviewed: bool,
+        event_time: str | None = None,
+        valid_from: str | None = None,
+        valid_to: str | None = None,
     ) -> dict[str, Any]:
         self._require_write()
         if not confirm_reviewed:
@@ -3082,12 +5187,27 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             subject = self.get_asset(subject_asset_id, include_inactive=False)
             target = self.get_asset(object_asset_id, include_inactive=False)
             if evidence_fragment_id is not None:
-                fragment = self.connection.execute(
-                    "SELECT fragment_id FROM source_fragments WHERE fragment_id = ?",
-                    (evidence_fragment_id,),
-                ).fetchone()
+                fragment = (
+                    self.connection.execute(
+                        """
+                        SELECT source_fragments.fragment_id, source_lifecycle.status
+                        FROM source_fragments
+                        JOIN source_lifecycle USING(source_id)
+                        WHERE source_fragments.fragment_id = ?
+                        """,
+                        (evidence_fragment_id,),
+                    ).fetchone()
+                    if self.control_enabled
+                    else self.connection.execute(
+                        "SELECT fragment_id, NULL AS status FROM source_fragments "
+                        "WHERE fragment_id = ?",
+                        (evidence_fragment_id,),
+                    ).fetchone()
+                )
                 if fragment is None:
                     raise ValueError("relation evidence fragment does not exist")
+                if self.control_enabled and fragment["status"] != "active":
+                    raise ValueError("relation evidence source must be active and reviewed")
             relation_id = stable_id(
                 "relation",
                 self.vault_id,
@@ -3101,6 +5221,13 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 (relation_id,),
             ).fetchone()
             if existing is not None:
+                identity_relation = self.connection.execute(
+                    """
+                    SELECT relation_key, relation_revision_id
+                    FROM relation_revisions_v2 WHERE legacy_relation_id = ?
+                    """,
+                    (relation_id,),
+                ).fetchone()
                 self.connection.rollback()
                 return {
                     "relation_id": existing["relation_id"],
@@ -3110,6 +5237,14 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "evidence_fragment_id": existing["evidence_fragment_id"],
                     "verification": existing["verification"],
                     "created_at": existing["created_at"],
+                    "relation_key": (
+                        identity_relation["relation_key"] if identity_relation is not None else None
+                    ),
+                    "relation_revision_id": (
+                        identity_relation["relation_revision_id"]
+                        if identity_relation is not None
+                        else None
+                    ),
                 }
             conflicting = self.connection.execute(
                 """
@@ -3134,6 +5269,92 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     created_at,
                 ),
             )
+            identity_relation: dict[str, str] | None = None
+            endpoint_identities = self.connection.execute(
+                """
+                SELECT subject_binding.asset_revision_id AS subject_revision_id,
+                       subject_revision.knowledge_key AS subject_knowledge_key,
+                       object_binding.asset_revision_id AS object_revision_id,
+                       object_revision.knowledge_key AS object_knowledge_key
+                FROM asset_revision_bindings_v2 AS subject_binding
+                JOIN knowledge_revisions_v2 AS subject_revision
+                  ON subject_revision.asset_revision_id =
+                     subject_binding.asset_revision_id
+                JOIN asset_revision_bindings_v2 AS object_binding
+                  ON object_binding.legacy_asset_id = ?
+                JOIN knowledge_revisions_v2 AS object_revision
+                  ON object_revision.asset_revision_id = object_binding.asset_revision_id
+                WHERE subject_binding.legacy_asset_id = ?
+                """,
+                (target.asset_id, subject.asset_id),
+            ).fetchone()
+            if endpoint_identities is not None:
+                if evidence_fragment_id is None:
+                    raise ValueError(
+                        "Identity v2 relations require an exact source evidence fragment"
+                    )
+                evidence = self.connection.execute(
+                    """
+                    SELECT source_revision_bindings_v2.source_revision_id,
+                           legacy_fragment_bindings_v2.fragment_revision_id,
+                           source_fragments.locator,
+                           source_fragments.text_sha256,
+                           sources.sensitivity
+                    FROM legacy_fragment_bindings_v2
+                    JOIN source_fragments USING(fragment_id)
+                    JOIN source_revision_bindings_v2 USING(legacy_source_id)
+                    JOIN sources
+                      ON sources.source_id =
+                         source_revision_bindings_v2.legacy_source_id
+                    WHERE legacy_fragment_bindings_v2.fragment_id = ?
+                    """,
+                    (evidence_fragment_id,),
+                ).fetchone()
+                if evidence is None:
+                    raise ValueError("relation evidence lacks an Identity v2 binding")
+                identity_relation = record_relation_revision(
+                    self.connection,
+                    vault_id=self.vault_id,
+                    legacy_relation_id=relation_id,
+                    subject_knowledge_key=endpoint_identities["subject_knowledge_key"],
+                    object_knowledge_key=endpoint_identities["object_knowledge_key"],
+                    subject_asset_revision_id=endpoint_identities["subject_revision_id"],
+                    object_asset_revision_id=endpoint_identities["object_revision_id"],
+                    predicate=predicate,
+                    evidence_refs=[
+                        {
+                            "source_revision_id": evidence["source_revision_id"],
+                            "fragment_revision_id": evidence["fragment_revision_id"],
+                            "locator": evidence["locator"],
+                            "quote_sha256": evidence["text_sha256"],
+                        }
+                    ],
+                    status="active",
+                    event_time=event_time,
+                    valid_from=valid_from,
+                    valid_to=valid_to,
+                    observed_at=created_at,
+                    reviewed_at=created_at,
+                    ingest_time=created_at,
+                )
+                record_governance_revision(
+                    self.connection,
+                    subject_kind="relation_revision",
+                    subject_id=identity_relation["relation_revision_id"],
+                    trust="user_provided",
+                    sensitivity=_maximum_sensitivity(
+                        subject.sensitivity,
+                        target.sensitivity,
+                        evidence["sensitivity"],
+                    ),
+                    policy_id="deeplaw.local-relation-review/v2",
+                    review_status="human_verified",
+                    lifecycle_status="active",
+                    activation_status="active",
+                    export_allowed=(subject.sensitivity == target.sensitivity == "public"),
+                    reviewer_id="local-operator",
+                    recorded_at=created_at,
+                )
             self._append_event(
                 event_type="relation_added",
                 object_id=relation_id,
@@ -3144,6 +5365,11 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "evidence_fragment_id": evidence_fragment_id,
                 },
             )
+            if identity_relation is not None:
+                self._append_identity_snapshot(
+                    reason="relation_recorded",
+                    source_revision_id=evidence["source_revision_id"],
+                )
             self.connection.commit()
         except BaseException:
             self.connection.rollback()
@@ -3156,6 +5382,154 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "evidence_fragment_id": evidence_fragment_id,
             "verification": "human_verified",
             "created_at": created_at,
+            "relation_key": (
+                identity_relation["relation_key"] if identity_relation is not None else None
+            ),
+            "relation_revision_id": (
+                identity_relation["relation_revision_id"] if identity_relation is not None else None
+            ),
+        }
+
+    def revise_temporal_relation(
+        self,
+        relation_key: str,
+        *,
+        status: Literal["active", "superseded", "revoked", "ambiguous"],
+        evidence_fragment_id: str,
+        confirm_reviewed: bool,
+        event_time: str | None = None,
+        valid_from: str | None = None,
+        valid_to: str | None = None,
+    ) -> dict[str, Any]:
+        self._require_write()
+        if not confirm_reviewed:
+            raise ValueError("temporal relation revision requires explicit review")
+        if not re.fullmatch(r"relationkey_[0-9a-f]{24}", relation_key):
+            raise ValueError("relation key is invalid")
+        if status not in {"active", "superseded", "revoked", "ambiguous"}:
+            raise ValueError("temporal relation status is invalid")
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            self._require_healthy_integrity()
+            previous = self.connection.execute(
+                """
+                SELECT * FROM relation_revisions_v2
+                WHERE relation_key = ?
+                ORDER BY observed_at DESC, relation_revision_id DESC LIMIT 1
+                """,
+                (relation_key,),
+            ).fetchone()
+            if previous is None:
+                raise KeyError(f"temporal relation is unavailable: {relation_key}")
+            evidence = self.connection.execute(
+                """
+                SELECT source_revision_bindings_v2.source_revision_id,
+                       legacy_fragment_bindings_v2.fragment_revision_id,
+                       source_fragments.locator, source_fragments.text_sha256,
+                       sources.sensitivity, source_lifecycle.status
+                FROM legacy_fragment_bindings_v2
+                JOIN source_fragments USING(fragment_id)
+                JOIN source_revision_bindings_v2 USING(legacy_source_id)
+                JOIN sources
+                  ON sources.source_id = source_revision_bindings_v2.legacy_source_id
+                JOIN source_lifecycle
+                  ON source_lifecycle.source_id =
+                     source_revision_bindings_v2.legacy_source_id
+                WHERE legacy_fragment_bindings_v2.fragment_id = ?
+                """,
+                (evidence_fragment_id,),
+            ).fetchone()
+            if evidence is None:
+                raise ValueError("relation evidence lacks an Identity v2 binding")
+            if evidence["status"] != "active":
+                raise ValueError("relation evidence source must be active and reviewed")
+            observed_at = utc_now()
+            if observed_at <= previous["observed_at"]:
+                previous_time = datetime.fromisoformat(
+                    previous["observed_at"].replace("Z", "+00:00")
+                )
+                observed_at = (
+                    (previous_time + timedelta(seconds=1))
+                    .astimezone(UTC)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z")
+                )
+            relation = record_relation_revision(
+                self.connection,
+                vault_id=self.vault_id,
+                legacy_relation_id=None,
+                subject_knowledge_key=previous["subject_knowledge_key"],
+                object_knowledge_key=previous["object_knowledge_key"],
+                subject_asset_revision_id=previous["subject_asset_revision_id"],
+                object_asset_revision_id=previous["object_asset_revision_id"],
+                predicate=previous["predicate"],
+                evidence_refs=[
+                    {
+                        "source_revision_id": evidence["source_revision_id"],
+                        "fragment_revision_id": evidence["fragment_revision_id"],
+                        "locator": evidence["locator"],
+                        "quote_sha256": evidence["text_sha256"],
+                    }
+                ],
+                status=status,
+                event_time=event_time,
+                valid_from=valid_from,
+                valid_to=valid_to,
+                observed_at=observed_at,
+                reviewed_at=observed_at,
+                ingest_time=observed_at,
+            )
+            previous_governance = self.connection.execute(
+                """
+                SELECT sensitivity FROM governance_revisions_v2
+                WHERE subject_kind = 'relation_revision' AND subject_id = ?
+                ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+                """,
+                (previous["relation_revision_id"],),
+            ).fetchone()
+            record_governance_revision(
+                self.connection,
+                subject_kind="relation_revision",
+                subject_id=relation["relation_revision_id"],
+                trust="user_provided",
+                sensitivity=_maximum_sensitivity(
+                    (
+                        previous_governance["sensitivity"]
+                        if previous_governance is not None
+                        else "private"
+                    ),
+                    evidence["sensitivity"],
+                ),
+                policy_id="deeplaw.local-relation-review/v2",
+                review_status="human_verified",
+                lifecycle_status=status,
+                activation_status="active" if status == "active" else "inactive",
+                revoked_at=observed_at if status == "revoked" else None,
+                export_allowed=False,
+                reviewer_id="local-operator",
+                recorded_at=observed_at,
+            )
+            revision, audit_head = self._append_identity_snapshot(
+                reason="relation_recorded",
+                source_revision_id=evidence["source_revision_id"],
+            )
+            self.connection.commit()
+        except BaseException:
+            self.connection.rollback()
+            raise
+        return {
+            "schema_version": "deeplaw.temporal-relation-revision/v1",
+            "vault_id": self.vault_id,
+            "relation_key": relation_key,
+            "previous_relation_revision_id": previous["relation_revision_id"],
+            "relation_revision_id": relation["relation_revision_id"],
+            "status": status,
+            "event_time": event_time,
+            "valid_from": valid_from,
+            "valid_to": valid_to,
+            "observed_at": observed_at,
+            "revision": revision,
+            "audit_head": audit_head,
         }
 
     def _row_to_asset(self, row: sqlite3.Row) -> KnowledgeAsset:
@@ -3232,6 +5606,497 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "text": row["text"],
             "text_sha256": row["text_sha256"],
             "instruction_risk": bool(row["instruction_risk"]),
+        }
+
+    def knowledge_lineage(
+        self,
+        *,
+        knowledge_key: str | None = None,
+        asset_id: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        if (knowledge_key is None) == (asset_id is None):
+            raise ValueError("lineage lookup requires exactly one knowledge key or asset ID")
+        if asset_id is not None:
+            row = self.connection.execute(
+                """
+                SELECT knowledge_revisions_v2.knowledge_key
+                FROM asset_revision_bindings_v2
+                JOIN knowledge_revisions_v2 USING(asset_revision_id)
+                WHERE legacy_asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"knowledge asset identity is unavailable: {asset_id}")
+            knowledge_key = row["knowledge_key"]
+        if not isinstance(knowledge_key, str) or not re.fullmatch(
+            r"knowledge_[0-9a-f]{24}", knowledge_key
+        ):
+            raise ValueError("knowledge key is invalid")
+        revision_rows = self.connection.execute(
+            """
+            SELECT knowledge_revisions_v2.*,
+                   GROUP_CONCAT(asset_revision_bindings_v2.legacy_asset_id)
+                       AS legacy_asset_ids
+            FROM knowledge_revisions_v2
+            LEFT JOIN asset_revision_bindings_v2 USING(asset_revision_id)
+            WHERE knowledge_revisions_v2.knowledge_key = ?
+            GROUP BY knowledge_revisions_v2.asset_revision_id
+            ORDER BY knowledge_revisions_v2.asset_revision_id
+            """,
+            (knowledge_key,),
+        ).fetchall()
+        lineage_rows = self.connection.execute(
+            """
+            SELECT * FROM knowledge_lineage_v2
+            WHERE knowledge_key = ? ORDER BY created_at, lineage_id
+            """,
+            (knowledge_key,),
+        ).fetchall()
+        return {
+            "schema_version": "deeplaw.knowledge-lineage-view/v1",
+            "vault_id": self.vault_id,
+            "knowledge_key": knowledge_key,
+            "revisions": [
+                {
+                    "asset_revision_id": row["asset_revision_id"],
+                    "statement_sha256": row["statement_sha256"],
+                    "source_revision_ids": strict_json_loads(row["source_revision_ids_json"]),
+                    "logical_node_keys": strict_json_loads(row["logical_node_keys_json"]),
+                    "legacy_asset_ids": (
+                        row["legacy_asset_ids"].split(",") if row["legacy_asset_ids"] else []
+                    ),
+                }
+                for row in revision_rows
+            ],
+            "transitions": [
+                {
+                    "lineage_id": row["lineage_id"],
+                    "from_asset_revision_ids": strict_json_loads(
+                        row["from_asset_revision_ids_json"]
+                    ),
+                    "to_asset_revision_ids": strict_json_loads(row["to_asset_revision_ids_json"]),
+                    "status": row["status"],
+                    "source_revision_id": row["source_revision_id"],
+                    "mapping_evidence": strict_json_loads(row["mapping_evidence_json"]),
+                    "created_at": row["created_at"],
+                }
+                for row in lineage_rows
+            ],
+        }
+
+    def _latest_governance_revision(
+        self,
+        *,
+        subject_kind: str,
+        subject_id: str,
+        as_of: str | None,
+    ) -> sqlite3.Row | None:
+        if as_of is None:
+            parameters: tuple[Any, ...] = (subject_kind, subject_id)
+            time_clause = ""
+        else:
+            canonical_timestamp(as_of, field="governance as_of")
+            parameters = (subject_kind, subject_id, as_of)
+            time_clause = "AND recorded_at <= ?"
+        return self.connection.execute(
+            f"""
+            SELECT * FROM governance_revisions_v2
+            WHERE subject_kind = ? AND subject_id = ? {time_clause}
+            ORDER BY recorded_at DESC,
+                     CASE
+                         WHEN activation_status = 'inactive'
+                          AND lifecycle_status NOT IN (
+                              'pending', 'proposed', 'quarantined'
+                          ) THEN 2
+                         WHEN activation_status = 'active' THEN 1
+                         ELSE 0
+                     END DESC,
+                     governance_revision DESC
+            LIMIT 1
+            """,
+            parameters,
+        ).fetchone()
+
+    def _relation_evidence_admission_reasons(
+        self,
+        *,
+        evidence_fragment_id: str,
+        include_restricted: bool,
+    ) -> list[str]:
+        if not isinstance(include_restricted, bool):
+            raise ValueError("relation evidence sensitivity flag must be a boolean")
+        if self.identity_v2_enabled and self.control_enabled:
+            source = self.connection.execute(
+                """
+                SELECT sources.sensitivity AS legacy_sensitivity,
+                       source_lifecycle.status,
+                       source_revision_bindings_v2.source_revision_id
+                FROM source_fragments
+                JOIN sources USING(source_id)
+                LEFT JOIN source_lifecycle USING(source_id)
+                JOIN source_revision_bindings_v2
+                  ON source_revision_bindings_v2.legacy_source_id =
+                     source_fragments.source_id
+                WHERE source_fragments.fragment_id = ?
+                """,
+                (evidence_fragment_id,),
+            ).fetchone()
+        elif self.identity_v2_enabled:
+            source = self.connection.execute(
+                """
+                SELECT sources.sensitivity AS legacy_sensitivity,
+                       NULL AS status,
+                       source_revision_bindings_v2.source_revision_id
+                FROM source_fragments
+                JOIN sources USING(source_id)
+                JOIN source_revision_bindings_v2
+                  ON source_revision_bindings_v2.legacy_source_id =
+                     source_fragments.source_id
+                WHERE source_fragments.fragment_id = ?
+                """,
+                (evidence_fragment_id,),
+            ).fetchone()
+        elif self.control_enabled:
+            source = self.connection.execute(
+                """
+                SELECT sources.sensitivity AS legacy_sensitivity,
+                       source_lifecycle.status, NULL AS source_revision_id
+                FROM source_fragments
+                JOIN sources USING(source_id)
+                JOIN source_lifecycle USING(source_id)
+                WHERE source_fragments.fragment_id = ?
+                """,
+                (evidence_fragment_id,),
+            ).fetchone()
+        else:
+            source = self.connection.execute(
+                """
+                SELECT sources.sensitivity AS legacy_sensitivity,
+                       NULL AS status, NULL AS source_revision_id
+                FROM source_fragments JOIN sources USING(source_id)
+                WHERE source_fragments.fragment_id = ?
+                """,
+                (evidence_fragment_id,),
+            ).fetchone()
+        if source is None:
+            return ["relation_evidence_missing"]
+        reasons: list[str] = []
+        if self.control_enabled and source["status"] != "active":
+            reasons.append("relation_evidence_source_inactive")
+        sensitivity = source["legacy_sensitivity"]
+        source_revision_id = source["source_revision_id"]
+        if source_revision_id is not None:
+            governance = self._latest_governance_revision(
+                subject_kind="source_revision",
+                subject_id=source_revision_id,
+                as_of=None,
+            )
+            if governance is None:
+                reasons.append("relation_evidence_governance_missing")
+            else:
+                sensitivity = governance["sensitivity"]
+                if (
+                    governance["review_status"] != "human_verified"
+                    or governance["lifecycle_status"] != "active"
+                    or governance["activation_status"] != "active"
+                ):
+                    reasons.append("relation_evidence_governance_inactive")
+        if not include_restricted and sensitivity == "restricted":
+            reasons.append("relation_evidence_restricted")
+        return reasons
+
+    def _relation_revision_admission_reasons(
+        self,
+        *,
+        relation_revision_id: str,
+        evidence_refs_json: str,
+        as_of: str | None,
+        include_restricted: bool,
+    ) -> list[str]:
+        """Recheck relation and evidence governance before current retrieval."""
+
+        if as_of is not None:
+            canonical_timestamp(as_of, field="relation evidence as_of")
+        if not isinstance(include_restricted, bool):
+            raise ValueError("relation evidence sensitivity flag must be a boolean")
+
+        reasons: list[str] = []
+        governance = self._latest_governance_revision(
+            subject_kind="relation_revision",
+            subject_id=relation_revision_id,
+            as_of=as_of,
+        )
+        if governance is None:
+            reasons.append("relation_governance_missing")
+        else:
+            if (
+                governance["review_status"] != "human_verified"
+                or governance["lifecycle_status"] != "active"
+                or governance["activation_status"] != "active"
+            ):
+                reasons.append("relation_governance_inactive")
+            if not include_restricted and governance["sensitivity"] == "restricted":
+                reasons.append("relation_sensitivity:restricted")
+
+        try:
+            evidence_refs = strict_json_loads(evidence_refs_json)
+        except (TypeError, UnicodeDecodeError, ValueError):
+            return [*reasons, "relation_evidence_invalid"]
+        if not isinstance(evidence_refs, list) or not evidence_refs:
+            return [*reasons, "relation_evidence_missing"]
+        for reference in evidence_refs:
+            if not isinstance(reference, dict):
+                reasons.append("relation_evidence_invalid")
+                continue
+            source_revision_id = reference.get("source_revision_id")
+            if not isinstance(source_revision_id, str):
+                reasons.append("relation_evidence_invalid")
+                continue
+            source = self.connection.execute(
+                """
+                SELECT source_lifecycle.status, source_lifecycle.activated_at,
+                       source_lifecycle.superseded_at, source_lifecycle.removed_at
+                FROM source_revision_bindings_v2
+                JOIN source_lifecycle
+                  ON source_lifecycle.source_id =
+                     source_revision_bindings_v2.legacy_source_id
+                WHERE source_revision_bindings_v2.source_revision_id = ?
+                """,
+                (source_revision_id,),
+            ).fetchone()
+            if source is None:
+                reasons.append(f"relation_source_missing:{source_revision_id}")
+                continue
+            if as_of is None:
+                source_active = source["status"] == "active"
+            else:
+                source_active = bool(
+                    source["activated_at"] is not None
+                    and source["activated_at"] <= as_of
+                    and (
+                        source["superseded_at"] is None
+                        or source["superseded_at"] > as_of
+                    )
+                    and (
+                        source["removed_at"] is None
+                        or source["removed_at"] > as_of
+                    )
+                )
+            if not source_active:
+                reasons.append(f"relation_source_inactive:{source_revision_id}")
+            source_governance = self._latest_governance_revision(
+                subject_kind="source_revision",
+                subject_id=source_revision_id,
+                as_of=as_of,
+            )
+            if source_governance is None:
+                reasons.append(f"relation_source_governance_missing:{source_revision_id}")
+                continue
+            if source_governance["review_status"] != "human_verified":
+                reasons.append(f"relation_source_unreviewed:{source_revision_id}")
+            if (
+                not include_restricted
+                and source_governance["sensitivity"] == "restricted"
+            ):
+                reasons.append(f"relation_source_restricted:{source_revision_id}")
+        return list(dict.fromkeys(reasons))
+
+    def temporal_relations(
+        self,
+        *,
+        mode: Literal["current", "past", "as-of"] = "current",
+        as_of: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        if not self.identity_v2_enabled:
+            raise RuntimeError("Knowledge Identity v2 is not installed")
+        if mode not in {"current", "past", "as-of"}:
+            raise ValueError("temporal relation mode is invalid")
+        if isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise ValueError("temporal relation limit must be between 1 and 500")
+        selected_time = as_of or utc_now()
+        canonical_timestamp(selected_time, field="temporal relation as_of")
+        if mode == "as-of" and as_of is None:
+            raise ValueError("as-of relation lookup requires an exact timestamp")
+        if mode == "current":
+            rows = self.connection.execute(
+                """
+                WITH eligible AS (
+                    SELECT relation_revisions_v2.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY relation_key
+                               ORDER BY observed_at DESC, relation_revision_id DESC
+                           ) AS relation_rank
+                    FROM relation_revisions_v2
+                )
+                SELECT eligible.* FROM eligible
+                JOIN asset_revision_bindings_v2 AS subject_binding
+                  ON subject_binding.asset_revision_id =
+                     eligible.subject_asset_revision_id
+                JOIN assets AS subject_asset
+                  ON subject_asset.asset_id = subject_binding.legacy_asset_id
+                JOIN asset_revision_bindings_v2 AS object_binding
+                  ON object_binding.asset_revision_id =
+                     eligible.object_asset_revision_id
+                JOIN assets AS object_asset
+                  ON object_asset.asset_id = object_binding.legacy_asset_id
+                WHERE relation_rank = 1 AND eligible.status = 'active'
+                  AND subject_asset.status = 'active'
+                  AND object_asset.status = 'active'
+                  AND (eligible.valid_from IS NULL OR eligible.valid_from <= ?)
+                  AND (eligible.valid_to IS NULL OR eligible.valid_to > ?)
+                ORDER BY eligible.observed_at DESC, eligible.relation_revision_id
+                LIMIT ?
+                """,
+                (selected_time, selected_time, limit),
+            ).fetchall()
+        elif mode == "as-of":
+            rows = self.connection.execute(
+                """
+                WITH eligible AS (
+                    SELECT relation_revisions_v2.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY relation_key
+                               ORDER BY observed_at DESC, relation_revision_id DESC
+                           ) AS relation_rank
+                    FROM relation_revisions_v2
+                    WHERE observed_at <= ?
+                ), subject_governance AS (
+                    SELECT governance_revisions_v2.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY subject_id
+                               ORDER BY recorded_at DESC,
+                                        CASE
+                                            WHEN activation_status = 'inactive'
+                                             AND lifecycle_status NOT IN (
+                                                 'pending', 'proposed', 'quarantined'
+                                             ) THEN 2
+                                            WHEN activation_status = 'active' THEN 1
+                                            ELSE 0
+                                        END DESC,
+                                        governance_revision DESC
+                           ) AS governance_rank
+                    FROM governance_revisions_v2
+                    WHERE subject_kind = 'asset_revision' AND recorded_at <= ?
+                ), object_governance AS (
+                    SELECT governance_revisions_v2.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY subject_id
+                               ORDER BY recorded_at DESC,
+                                        CASE
+                                            WHEN activation_status = 'inactive'
+                                             AND lifecycle_status NOT IN (
+                                                 'pending', 'proposed', 'quarantined'
+                                             ) THEN 2
+                                            WHEN activation_status = 'active' THEN 1
+                                            ELSE 0
+                                        END DESC,
+                                        governance_revision DESC
+                           ) AS governance_rank
+                    FROM governance_revisions_v2
+                    WHERE subject_kind = 'asset_revision' AND recorded_at <= ?
+                )
+                SELECT eligible.* FROM eligible
+                JOIN subject_governance
+                  ON subject_governance.subject_id = eligible.subject_asset_revision_id
+                 AND subject_governance.governance_rank = 1
+                JOIN object_governance
+                  ON object_governance.subject_id = eligible.object_asset_revision_id
+                 AND object_governance.governance_rank = 1
+                WHERE relation_rank = 1 AND eligible.status = 'active'
+                  AND subject_governance.review_status = 'human_verified'
+                  AND subject_governance.lifecycle_status = 'active'
+                  AND subject_governance.activation_status = 'active'
+                  AND object_governance.review_status = 'human_verified'
+                  AND object_governance.lifecycle_status = 'active'
+                  AND object_governance.activation_status = 'active'
+                  AND (eligible.valid_from IS NULL OR eligible.valid_from <= ?)
+                  AND (eligible.valid_to IS NULL OR eligible.valid_to > ?)
+                ORDER BY eligible.observed_at DESC, eligible.relation_revision_id
+                LIMIT ?
+                """,
+                (
+                    selected_time,
+                    selected_time,
+                    selected_time,
+                    selected_time,
+                    selected_time,
+                    limit,
+                ),
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                """
+                WITH eligible AS (
+                    SELECT relation_revisions_v2.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY relation_key
+                               ORDER BY observed_at DESC, relation_revision_id DESC
+                           ) AS relation_rank
+                    FROM relation_revisions_v2
+                )
+                SELECT eligible.* FROM eligible
+                JOIN asset_revision_bindings_v2 AS subject_binding
+                  ON subject_binding.asset_revision_id =
+                     eligible.subject_asset_revision_id
+                JOIN assets AS subject_asset
+                  ON subject_asset.asset_id = subject_binding.legacy_asset_id
+                JOIN asset_revision_bindings_v2 AS object_binding
+                  ON object_binding.asset_revision_id =
+                     eligible.object_asset_revision_id
+                JOIN assets AS object_asset
+                  ON object_asset.asset_id = object_binding.legacy_asset_id
+                WHERE relation_rank > 1 OR eligible.status <> 'active'
+                   OR (eligible.valid_to IS NOT NULL AND eligible.valid_to <= ?)
+                   OR subject_asset.status <> 'active'
+                   OR object_asset.status <> 'active'
+                ORDER BY eligible.observed_at DESC, eligible.relation_revision_id
+                LIMIT ?
+                """,
+                (selected_time, limit),
+            ).fetchall()
+        if mode in {"current", "as-of"}:
+            selected_as_of = selected_time if mode == "as-of" else None
+            rows = [
+                row
+                for row in rows
+                if not self._relation_revision_admission_reasons(
+                    relation_revision_id=row["relation_revision_id"],
+                    evidence_refs_json=row["evidence_refs_json"],
+                    as_of=selected_as_of,
+                    include_restricted=True,
+                )
+            ]
+        return {
+            "schema_version": "deeplaw.temporal-relation-view/v1",
+            "vault_id": self.vault_id,
+            "mode": mode,
+            "as_of": selected_time,
+            "relations": [
+                {
+                    "relation_key": row["relation_key"],
+                    "relation_revision_id": row["relation_revision_id"],
+                    "subject_knowledge_key": row["subject_knowledge_key"],
+                    "object_knowledge_key": row["object_knowledge_key"],
+                    "predicate": row["predicate"],
+                    "evidence_refs": strict_json_loads(row["evidence_refs_json"]),
+                    "status": row["status"],
+                    "event_time": row["event_time"],
+                    "valid_from": row["valid_from"],
+                    "valid_to": row["valid_to"],
+                    "observed_at": row["observed_at"],
+                    "reviewed_at": row["reviewed_at"],
+                    "ingest_time": row["ingest_time"],
+                }
+                for row in rows
+            ],
+            "truncated": len(rows) == limit,
+            "applicability_notice": (
+                "Temporal matching does not establish factual or legal applicability."
+            ),
         }
 
     def source_file_path(self, source_id: str) -> Path:
@@ -3486,12 +6351,20 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         *,
         limit: int = 32,
         include_restricted: bool = False,
+        require_evidence: bool = False,
     ) -> list[dict[str, Any]]:
         identifiers = tuple(dict.fromkeys(asset_ids))
         if not identifiers:
             return []
         if len(identifiers) > 20 or not 1 <= limit <= 64:
             raise ValueError("knowledge relation expansion exceeds its bound")
+        if not isinstance(include_restricted, bool):
+            raise ValueError("knowledge relation sensitivity flag must be a boolean")
+        if not isinstance(require_evidence, bool):
+            raise ValueError("knowledge relation evidence flag must be a boolean")
+        if require_evidence and not self.control_enabled:
+            return []
+        candidate_limit = min(256, max(limit, limit * 4))
         placeholders = ",".join("?" for _ in identifiers)
         # identifiers determine only the number of bound placeholders.
         rows = self.connection.execute(
@@ -3513,22 +6386,13 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
               ON subject.asset_id = relations.subject_asset_id
             CROSS JOIN assets AS object
               ON object.asset_id = relations.object_asset_id
-            LEFT JOIN source_fragments AS relation_fragment
-              ON relation_fragment.fragment_id = relations.evidence_fragment_id
-            LEFT JOIN sources AS relation_source
-              ON relation_source.source_id = relation_fragment.source_id
-            WHERE subject.status = 'active'
+            WHERE relations.verification = 'human_verified'
+              AND subject.status = 'active'
               AND object.status = 'active'
               AND (subject.expires_at IS NULL OR subject.expires_at > ?)
               AND (object.expires_at IS NULL OR object.expires_at > ?)
-              AND (? OR (
-                subject.sensitivity <> 'restricted'
-                AND object.sensitivity <> 'restricted'
-                AND (
-                  relations.evidence_fragment_id IS NULL
-                  OR relation_source.sensitivity <> 'restricted'
-                )
-              ))
+              AND (? OR (subject.sensitivity <> 'restricted'
+                         AND object.sensitivity <> 'restricted'))
             ORDER BY relations.relation_id
             LIMIT ?
             """,
@@ -3538,10 +6402,24 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 utc_now(),
                 utc_now(),
                 int(include_restricted),
-                limit,
+                candidate_limit,
             ),
         ).fetchall()
-        return [dict(row) for row in rows]
+        admitted: list[dict[str, Any]] = []
+        for row in rows:
+            evidence_fragment_id = row["evidence_fragment_id"]
+            if evidence_fragment_id is None:
+                if require_evidence:
+                    continue
+            elif self._relation_evidence_admission_reasons(
+                evidence_fragment_id=evidence_fragment_id,
+                include_restricted=include_restricted,
+            ):
+                continue
+            admitted.append(dict(row))
+            if len(admitted) >= limit:
+                break
+        return admitted
 
     def verify_asset(self, asset_id: str) -> dict[str, Any]:
         asset = self.get_asset(asset_id, include_inactive=True)
@@ -3773,6 +6651,43 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 if self.control_enabled
                 else {}
             )
+            identity_fragments: dict[str, dict[str, Any]] = {}
+            if self.identity_v2_enabled:
+                for row in self.connection.execute(
+                    """
+                    SELECT legacy_fragment_bindings_v2.fragment_id,
+                           fragments_v2.fragment_revision_id,
+                           fragments_v2.compilation_id,
+                           fragments_v2.ordinal,
+                           fragments_v2.locator,
+                           fragments_v2.text_sha256,
+                           fragments_v2.instruction_risk,
+                           fragment_node_membership_v2.node_ordinal,
+                           source_ir_nodes_v2.logical_node_key,
+                           source_ir_nodes_v2.title
+                    FROM legacy_fragment_bindings_v2
+                    JOIN fragments_v2 USING(fragment_revision_id)
+                    LEFT JOIN fragment_node_membership_v2 USING(fragment_revision_id)
+                    LEFT JOIN source_ir_nodes_v2 USING(node_id)
+                    ORDER BY legacy_fragment_bindings_v2.fragment_id,
+                             fragment_node_membership_v2.node_ordinal
+                    """
+                ):
+                    entry = identity_fragments.setdefault(
+                        row["fragment_id"],
+                        {
+                            "fragment_revision_id": row["fragment_revision_id"],
+                            "compilation_id": row["compilation_id"],
+                            "ordinal": row["ordinal"],
+                            "locator": row["locator"],
+                            "text_sha256": row["text_sha256"],
+                            "instruction_risk": row["instruction_risk"],
+                            "logical_node_keys": [],
+                            "title": row["title"],
+                        },
+                    )
+                    if row["logical_node_key"] is not None:
+                        entry["logical_node_keys"].append(row["logical_node_key"])
         except (KeyError, TypeError, ValueError):
             return failed("stored_record_contract_invalid")
         if len(assets) != counts["asset_count"]:
@@ -3808,6 +6723,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         expected_review_receipts: set[str] = set()
         expected_run_receipts: set[str] = set()
         expected_feedback_records: set[str] = set()
+        latest_identity_root: str | None = None
         previous_event_at: str | None = None
         for event in self.connection.execute("SELECT * FROM events ORDER BY sequence"):
             event_type = event["event_type"]
@@ -3866,6 +6782,24 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "previous_source_id",
                     "source_status",
                 }
+                identity_v2_payload = {
+                    "source_sha256",
+                    "fragment_count",
+                    "fragment_inventory_sha256",
+                    "proposal_count",
+                    "proposal_inventory_sha256",
+                    "proposal_ref_graph_sha256",
+                    "asset_count",
+                    "membership_sha256",
+                    "instruction_risk",
+                    "compiler",
+                    "source_key",
+                    "previous_source_id",
+                    "source_status",
+                    "source_revision_id",
+                    "compilation_id",
+                    "proposal_set_id",
+                }
                 payload_fields = frozenset(payload)
                 if (
                     payload_fields
@@ -3873,6 +6807,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         frozenset(legacy_payload),
                         frozenset(compact_payload),
                         frozenset(control_payload),
+                        frozenset(identity_v2_payload),
                     }
                     or not isinstance(object_id, str)
                     or object_id not in sources
@@ -3882,7 +6817,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 ):
                     return failed("source_compiled_event_invalid", object_id)
                 source = sources[object_id]
-                if payload_fields == frozenset(control_payload):
+                if payload_fields in {
+                    frozenset(control_payload),
+                    frozenset(identity_v2_payload),
+                }:
                     source_key = payload["source_key"]
                     previous_source_id = payload["previous_source_id"]
                     if (
@@ -3980,6 +6918,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     )
                 except (TypeError, ValueError):
                     return failed("source_timestamp_invalid", object_id)
+                identity_v2_source = payload_fields == frozenset(identity_v2_payload)
                 if payload_fields == frozenset(legacy_payload):
                     fragment_ids = payload["fragment_ids"]
                     asset_ids = payload["asset_ids"]
@@ -3988,6 +6927,110 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         list,
                     ):
                         return failed("source_compiled_event_invalid", object_id)
+                elif identity_v2_source:
+                    ordered_fragments = sorted(
+                        fragment_ids_by_source.get(object_id, []),
+                    )
+                    fragment_ids = [fragment_id for _, fragment_id in ordered_fragments]
+                    fragment_inventory: list[dict[str, Any]] = []
+                    fragment_inventory_valid = True
+                    for fragment_id in fragment_ids:
+                        canonical_fragment = identity_fragments.get(fragment_id)
+                        if canonical_fragment is None or not canonical_fragment[
+                            "logical_node_keys"
+                        ]:
+                            fragment_inventory_valid = False
+                            continue
+                        fragment_inventory.append(
+                            {
+                                "ordinal": canonical_fragment["ordinal"],
+                                "locator": canonical_fragment["locator"],
+                                "text_sha256": canonical_fragment["text_sha256"],
+                                "instruction_risk": canonical_fragment["instruction_risk"],
+                                "logical_node_keys": canonical_fragment[
+                                    "logical_node_keys"
+                                ],
+                            }
+                        )
+                    source_revision = self.connection.execute(
+                        "SELECT * FROM source_revisions_v2 WHERE source_revision_id = ?",
+                        (payload["source_revision_id"],),
+                    ).fetchone()
+                    compilation = self.connection.execute(
+                        "SELECT * FROM compilations_v2 WHERE compilation_id = ?",
+                        (payload["compilation_id"],),
+                    ).fetchone()
+                    proposal_set = self.connection.execute(
+                        "SELECT * FROM proposal_sets_v2 WHERE proposal_set_id = ?",
+                        (payload["proposal_set_id"],),
+                    ).fetchone()
+                    source_binding = self.connection.execute(
+                        "SELECT source_revision_id FROM source_revision_bindings_v2 "
+                        "WHERE legacy_source_id = ?",
+                        (object_id,),
+                    ).fetchone()
+                    build_binding = self.connection.execute(
+                        "SELECT compilation_id, proposal_set_id "
+                        "FROM source_build_bindings_v2 WHERE legacy_source_id = ?",
+                        (object_id,),
+                    ).fetchone()
+                    member_rows = self.connection.execute(
+                        """
+                        SELECT legacy_asset_id
+                        FROM asset_revision_bindings_v2
+                        WHERE legacy_source_id = ? AND proposal_set_id = ?
+                        ORDER BY proposal_ordinal
+                        """,
+                        (object_id, payload["proposal_set_id"]),
+                    ).fetchall()
+                    asset_ids = [row["legacy_asset_id"] for row in member_rows]
+                    if (
+                        source_revision is None
+                        or compilation is None
+                        or proposal_set is None
+                        or not fragment_inventory_valid
+                        or source_binding is None
+                        or source_binding["source_revision_id"] != payload["source_revision_id"]
+                        or source_revision["source_key"] != payload["source_key"]
+                        or source_revision["content_sha256"] != payload["source_sha256"]
+                        or compilation["source_revision_id"] != payload["source_revision_id"]
+                        or proposal_set["compilation_id"] != payload["compilation_id"]
+                        or build_binding is None
+                        or build_binding["compilation_id"] != payload["compilation_id"]
+                        or build_binding["proposal_set_id"] != payload["proposal_set_id"]
+                        or isinstance(payload["fragment_count"], bool)
+                        or not isinstance(payload["fragment_count"], int)
+                        or payload["fragment_count"] != len(fragment_ids)
+                        or payload["fragment_inventory_sha256"]
+                        != sha256_bytes(canonical_json(fragment_inventory).encode("utf-8"))
+                        or compilation["fragment_inventory_sha256"]
+                        != payload["fragment_inventory_sha256"]
+                        or isinstance(payload["proposal_count"], bool)
+                        or not isinstance(payload["proposal_count"], int)
+                        or payload["proposal_count"] != len(asset_ids)
+                        or payload["asset_count"] != payload["proposal_count"]
+                        or payload["membership_sha256"]
+                        != sha256_bytes(
+                            canonical_json(
+                                {
+                                    "fragment_inventory_sha256": payload[
+                                        "fragment_inventory_sha256"
+                                    ],
+                                    "proposal_inventory_sha256": payload[
+                                        "proposal_inventory_sha256"
+                                    ],
+                                    "proposal_ref_graph_sha256": payload[
+                                        "proposal_ref_graph_sha256"
+                                    ],
+                                }
+                            ).encode("utf-8")
+                        )
+                        or proposal_set["proposal_inventory_sha256"]
+                        != payload["proposal_inventory_sha256"]
+                        or proposal_set["proposal_ref_graph_sha256"]
+                        != payload["proposal_ref_graph_sha256"]
+                    ):
+                        return failed("source_compiled_identity_v2_invalid", object_id)
                 else:
                     ordered_fragments = sorted(
                         fragment_ids_by_source.get(object_id, []),
@@ -4018,7 +7061,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 if (
                     not fragment_ids
                     or len(fragment_ids) != len(set(fragment_ids))
-                    or len(asset_ids) != len(fragment_ids)
+                    or (not identity_v2_source and len(asset_ids) != len(fragment_ids))
                     or len(asset_ids) != len(set(asset_ids))
                     or any(
                         not isinstance(fragment_id, str)
@@ -4035,60 +7078,174 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 ):
                     return failed("source_compiled_membership_invalid", object_id)
                 compiled_sections: list[dict[str, Any]] = []
-                for ordinal, (fragment_id, asset_id) in enumerate(
-                    zip(fragment_ids, asset_ids, strict=True),
-                    start=1,
-                ):
-                    fragment = fragments[fragment_id]
-                    asset = assets[asset_id]
-                    text_hash = sha256_bytes(fragment["text"].encode("utf-8"))
-                    expected_fragment_id = stable_id(
-                        "fragment",
-                        object_id,
-                        str(ordinal),
-                        fragment["locator"],
-                        text_hash,
-                    )
-                    if (
-                        fragment["source_id"] != object_id
-                        or fragment["ordinal"] != ordinal
-                        or not isinstance(fragment["locator"], str)
-                        or fragment["locator"] != fragment["locator"].strip()
-                        or not 1 <= len(fragment["locator"]) <= 2_000
-                        or not isinstance(fragment["text"], str)
-                        or fragment["text"] != fragment["text"].strip()
-                        or not 1 <= len(fragment["text"]) <= _MAX_FRAGMENT_CHARS
-                        or fragment["instruction_risk"] not in {0, 1}
-                        or fragment["text_sha256"] != text_hash
-                        or expected_fragment_id != fragment_id
-                        or len(asset.source_refs) != 1
-                        or asset.source_refs[0].source_id != object_id
-                        or asset.source_refs[0].fragment_id != fragment_id
-                        or asset.source_refs[0].locator != fragment["locator"]
-                        or asset.source_refs[0].quote_sha256 != text_hash
-                        or asset.statement != fragment["text"]
-                    ):
-                        return failed("source_fragment_binding_mismatch", fragment_id)
-                    compiled_sections.append(
-                        {
-                            "title": asset.title,
-                            "locator": fragment["locator"],
-                            "text": fragment["text"],
-                            "instruction_risk": bool(fragment["instruction_risk"]),
+                if identity_v2_source:
+                    for ordinal, fragment_id in enumerate(fragment_ids, start=1):
+                        fragment = fragments[fragment_id]
+                        text_hash = sha256_bytes(fragment["text"].encode("utf-8"))
+                        expected_fragment_id = stable_id(
+                            "fragment",
+                            object_id,
+                            str(ordinal),
+                            fragment["locator"],
+                            text_hash,
+                        )
+                        identity_fragment = identity_fragments.get(fragment_id)
+                        node = (
+                            identity_fragment
+                            if identity_fragment is not None
+                            and identity_fragment["compilation_id"]
+                            == payload["compilation_id"]
+                            else None
+                        )
+                        if (
+                            fragment["source_id"] != object_id
+                            or fragment["ordinal"] != ordinal
+                            or not isinstance(fragment["locator"], str)
+                            or fragment["locator"] != fragment["locator"].strip()
+                            or not 1 <= len(fragment["locator"]) <= 2_000
+                            or not isinstance(fragment["text"], str)
+                            or fragment["text"] != fragment["text"].strip()
+                            or not 1 <= len(fragment["text"]) <= _MAX_FRAGMENT_CHARS
+                            or fragment["instruction_risk"] not in {0, 1}
+                            or fragment["text_sha256"] != text_hash
+                            or expected_fragment_id != fragment_id
+                            or node is None
+                        ):
+                            return failed("source_fragment_binding_mismatch", fragment_id)
+                        compiled_sections.append(
+                            {
+                                "title": node["title"],
+                                "locator": fragment["locator"],
+                                "text": fragment["text"],
+                                "instruction_risk": bool(fragment["instruction_risk"]),
+                            }
+                        )
+                        expected_fragments.add(fragment_id)
+                    for asset_id in asset_ids:
+                        asset = assets[asset_id]
+                        if (
+                            not asset.source_refs
+                            or not any(
+                                reference.source_id == object_id for reference in asset.source_refs
+                            )
+                            or any(
+                                reference.fragment_id not in fragments
+                                or fragments[reference.fragment_id]["source_id"]
+                                != reference.source_id
+                                or fragments[reference.fragment_id]["locator"] != reference.locator
+                                or fragments[reference.fragment_id]["text_sha256"]
+                                != reference.quote_sha256
+                                for reference in asset.source_refs
+                            )
+                        ):
+                            return failed("source_proposal_binding_mismatch", asset_id)
+                        expected_assets[asset_id] = {
+                            "status": (
+                                "quarantined" if payload["instruction_risk"] else "proposed"
+                            ),
+                            "verification": "source_bound",
+                            "content_sha256": asset.content_sha256,
+                            "approved": False,
                         }
-                    )
-                    expected_assets[asset_id] = {
-                        "status": ("quarantined" if payload["instruction_risk"] else "proposed"),
-                        "verification": "source_bound",
-                        "content_sha256": asset.content_sha256,
-                        "approved": False,
-                    }
-                    expected_fragments.add(fragment_id)
+                else:
+                    for ordinal, (fragment_id, asset_id) in enumerate(
+                        zip(fragment_ids, asset_ids, strict=True),
+                        start=1,
+                    ):
+                        fragment = fragments[fragment_id]
+                        asset = assets[asset_id]
+                        text_hash = sha256_bytes(fragment["text"].encode("utf-8"))
+                        expected_fragment_id = stable_id(
+                            "fragment",
+                            object_id,
+                            str(ordinal),
+                            fragment["locator"],
+                            text_hash,
+                        )
+                        if (
+                            fragment["source_id"] != object_id
+                            or fragment["ordinal"] != ordinal
+                            or not isinstance(fragment["locator"], str)
+                            or fragment["locator"] != fragment["locator"].strip()
+                            or not 1 <= len(fragment["locator"]) <= 2_000
+                            or not isinstance(fragment["text"], str)
+                            or fragment["text"] != fragment["text"].strip()
+                            or not 1 <= len(fragment["text"]) <= _MAX_FRAGMENT_CHARS
+                            or fragment["instruction_risk"] not in {0, 1}
+                            or fragment["text_sha256"] != text_hash
+                            or expected_fragment_id != fragment_id
+                            or len(asset.source_refs) != 1
+                            or asset.source_refs[0].source_id != object_id
+                            or asset.source_refs[0].fragment_id != fragment_id
+                            or asset.source_refs[0].locator != fragment["locator"]
+                            or asset.source_refs[0].quote_sha256 != text_hash
+                            or asset.statement != fragment["text"]
+                        ):
+                            return failed("source_fragment_binding_mismatch", fragment_id)
+                        compiled_sections.append(
+                            {
+                                "title": asset.title,
+                                "locator": fragment["locator"],
+                                "text": fragment["text"],
+                                "instruction_risk": bool(fragment["instruction_risk"]),
+                            }
+                        )
+                        expected_assets[asset_id] = {
+                            "status": (
+                                "quarantined" if payload["instruction_risk"] else "proposed"
+                            ),
+                            "verification": "source_bound",
+                            "content_sha256": asset.content_sha256,
+                            "approved": False,
+                        }
+                        expected_fragments.add(fragment_id)
                 if payload["compiler"].get("compiled_fragment_sha256") != sha256_bytes(
                     canonical_json(compiled_sections).encode("utf-8")
                 ):
                     return failed("compiled_fragment_digest_mismatch", object_id)
                 expected_sources.add(object_id)
+                continue
+
+            if event_type == "identity_v2_snapshot":
+                if (
+                    set(payload) != {"identity_root_sha256", "reason", "source_revision_id"}
+                    or object_id != self.vault_id
+                    or not isinstance(payload["identity_root_sha256"], str)
+                    or not _SHA256.fullmatch(payload["identity_root_sha256"])
+                    or payload["reason"]
+                    not in {
+                        "source_compiled",
+                        "identity_migrated",
+                        "governance_recorded",
+                        "asset_revision_proposed",
+                        "relation_recorded",
+                        "source_removed",
+                    }
+                    or (
+                        payload["source_revision_id"] is not None
+                        and self.connection.execute(
+                            "SELECT 1 FROM source_revisions_v2 WHERE source_revision_id = ?",
+                            (payload["source_revision_id"],),
+                        ).fetchone()
+                        is None
+                    )
+                ):
+                    return failed("identity_v2_snapshot_event_invalid", object_id)
+                latest_identity_root = payload["identity_root_sha256"]
+                continue
+
+            if event_type == "search_index_rebuilt":
+                if (
+                    object_id is not None
+                    or set(payload) != {"tokenizer_profile", "asset_count", "inventory_sha256"}
+                    or payload["tokenizer_profile"] != "deeplaw-mixed-cjk-code/2"
+                    or isinstance(payload["asset_count"], bool)
+                    or not isinstance(payload["asset_count"], int)
+                    or not 0 <= payload["asset_count"] <= len(assets)
+                    or not isinstance(payload["inventory_sha256"], str)
+                    or not _SHA256.fullmatch(payload["inventory_sha256"])
+                ):
+                    return failed("search_index_rebuild_event_invalid", object_id)
                 continue
 
             if event_type == "knowledge_control_migrated":
@@ -4270,7 +7427,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 receipt_sha256 = sha256_bytes(canonical_json(body).encode("utf-8"))
                 if (
                     not isinstance(proposal_ids, list)
-                    or not proposal_ids
+                    or (not proposal_ids and row["source_id"] is None)
                     or len(proposal_ids) != len(asset_hashes)
                     or len(proposal_ids) != len(decisions)
                     or any(asset_id not in expected_assets for asset_id in proposal_ids)
@@ -4390,6 +7547,87 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 expected_assets[object_id] = {
                     "status": payload["status"],
                     "verification": "unverified",
+                    "content_sha256": payload["content_sha256"],
+                    "approved": False,
+                }
+                continue
+
+            if event_type in {
+                "asset_revision_proposed",
+                "projection_edit_proposed",
+            }:
+                if not isinstance(object_id, str) or object_id not in assets:
+                    return failed("asset_revision_proposed_event_invalid", object_id)
+                asset = assets[object_id]
+                if event_type == "projection_edit_proposed":
+                    if set(payload) != {
+                        "content_sha256",
+                        "predecessor_asset_id",
+                        "source_ref_count",
+                        "approval_inherited",
+                    }:
+                        return failed("asset_revision_proposed_event_invalid", object_id)
+                    predecessor_ids = [payload["predecessor_asset_id"]]
+                    transformation = "edit"
+                    lineage_status = "modified"
+                    status = "quarantined"
+                    verification = "source_bound" if asset.source_refs else "unverified"
+                else:
+                    if set(payload) != {
+                        "content_sha256",
+                        "status",
+                        "verification",
+                        "predecessor_asset_ids",
+                        "source_ref_count",
+                        "lineage_status",
+                        "transformation",
+                        "approval_inherited",
+                    }:
+                        return failed("asset_revision_proposed_event_invalid", object_id)
+                    predecessor_ids = payload["predecessor_asset_ids"]
+                    transformation = payload["transformation"]
+                    lineage_status = payload["lineage_status"]
+                    status = payload["status"]
+                    verification = payload["verification"]
+                expected_shape = {
+                    "edit": ("modified", 1, 1),
+                    "split": ("split", 1, 1),
+                    "merge": ("merged", 2, 100),
+                }
+                shape = expected_shape.get(transformation)
+                if (
+                    object_id in expected_assets
+                    or payload["content_sha256"] != asset.content_sha256
+                    or status != "quarantined"
+                    or verification not in {"unverified", "source_bound"}
+                    or isinstance(payload["source_ref_count"], bool)
+                    or not isinstance(payload["source_ref_count"], int)
+                    or payload["source_ref_count"] != len(asset.source_refs)
+                    or payload["source_ref_count"] > 100
+                    or (verification == "source_bound") != bool(asset.source_refs)
+                    or payload["approval_inherited"] is not False
+                    or shape is None
+                    or lineage_status != shape[0]
+                    or not isinstance(predecessor_ids, list)
+                    or not shape[1] <= len(predecessor_ids) <= shape[2]
+                    or len(predecessor_ids) != len(set(predecessor_ids))
+                    or object_id in predecessor_ids
+                    or any(
+                        not isinstance(predecessor_id, str)
+                        or predecessor_id not in expected_assets
+                        for predecessor_id in predecessor_ids
+                    )
+                ):
+                    return failed("asset_revision_proposed_event_invalid", object_id)
+                if transformation in {"split", "merge"} and any(
+                    expected_assets[predecessor_id]["status"]
+                    not in {"proposed", "quarantined"}
+                    for predecessor_id in predecessor_ids
+                ):
+                    return failed("asset_revision_predecessor_invalid", object_id)
+                expected_assets[object_id] = {
+                    "status": status,
+                    "verification": verification,
                     "content_sha256": payload["content_sha256"],
                     "approved": False,
                 }
@@ -4527,6 +7765,19 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             except (TypeError, ValueError):
                 return failed("relation_timestamp_invalid", relation_id)
 
+        if self.identity_v2_enabled:
+            current_identity = identity_snapshot(self.connection)
+            identity_source_count = self.connection.execute(
+                "SELECT COUNT(*) FROM source_revisions_v2"
+            ).fetchone()[0]
+            if identity_source_count and latest_identity_root is None:
+                return failed("identity_v2_snapshot_missing")
+            if (
+                latest_identity_root is not None
+                and latest_identity_root != current_identity["identity_root_sha256"]
+            ):
+                return failed("identity_v2_snapshot_mismatch")
+
         if counts["search_index_count"] != len(assets):
             return failed("search_index_inventory_mismatch")
         indexed_assets: set[str] = set()
@@ -4542,12 +7793,25 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             if asset is None or asset_id in indexed_assets:
                 return failed("search_index_asset_mismatch", asset_id)
             indexed_assets.add(asset_id)
-            if (
-                row["title_tokens"] != _token_string(asset.title)
-                or row["statement_tokens"] != _token_string(asset.statement)
-                or row["semantic_tokens"] != _token_string(asset.semantic_key or "")
-                or row["tag_tokens"] != _token_string(" ".join(asset.tags))
-            ):
+            current_tokens = (
+                _token_string(asset.title),
+                _token_string(asset.statement),
+                _token_string(asset.semantic_key or ""),
+                _token_string(" ".join(asset.tags)),
+            )
+            legacy_tokens = (
+                _token_string_v1(asset.title),
+                _token_string_v1(asset.statement),
+                _token_string_v1(asset.semantic_key or ""),
+                _token_string_v1(" ".join(asset.tags)),
+            )
+            indexed_tokens = (
+                row["title_tokens"],
+                row["statement_tokens"],
+                row["semantic_tokens"],
+                row["tag_tokens"],
+            )
+            if indexed_tokens not in {current_tokens, legacy_tokens}:
                 return failed("search_index_content_mismatch", asset_id)
         return {
             "valid": True,
@@ -4897,14 +8161,37 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "revision": self.revision,
                     "audit_head": self.audit_head,
                 }
-            rows = self.connection.execute(
+            removed_at = utc_now()
+            if self.identity_v2_enabled:
+                removal_inventory_sql = """
+                    SELECT DISTINCT assets.asset_id, assets.content_sha256,
+                           assets.trust, assets.sensitivity, assets.verification,
+                           asset_revision_bindings_v2.asset_revision_id,
+                           knowledge_revisions_v2.knowledge_key
+                    FROM assets
+                    LEFT JOIN asset_revision_bindings_v2
+                      ON asset_revision_bindings_v2.legacy_asset_id = assets.asset_id
+                    LEFT JOIN knowledge_revisions_v2
+                      ON knowledge_revisions_v2.asset_revision_id =
+                         asset_revision_bindings_v2.asset_revision_id
+                    JOIN json_each(assets.source_refs_json) AS reference
+                    WHERE json_extract(reference.value, '$.source_id') = ?
+                      AND assets.status IN ('proposed', 'quarantined', 'active')
+                    ORDER BY assets.asset_id
                 """
-                SELECT DISTINCT assets.asset_id, assets.content_sha256
-                FROM assets, json_each(assets.source_refs_json) AS reference
-                WHERE json_extract(reference.value, '$.source_id') = ?
-                  AND assets.status IN ('proposed', 'quarantined', 'active')
-                ORDER BY assets.asset_id
-                """,
+            else:
+                removal_inventory_sql = """
+                    SELECT DISTINCT assets.asset_id, assets.content_sha256,
+                           assets.trust, assets.sensitivity, assets.verification,
+                           NULL AS asset_revision_id, NULL AS knowledge_key
+                    FROM assets
+                    JOIN json_each(assets.source_refs_json) AS reference
+                    WHERE json_extract(reference.value, '$.source_id') = ?
+                      AND assets.status IN ('proposed', 'quarantined', 'active')
+                    ORDER BY assets.asset_id
+                """
+            rows = self.connection.execute(
+                removal_inventory_sql,
                 (source_id,),
             ).fetchall()
             removed_ids: list[str] = []
@@ -4921,8 +8208,57 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                         "content_sha256": row["content_sha256"],
                     },
                 )
+                if (
+                    row["asset_revision_id"] is not None
+                    and row["knowledge_key"] is not None
+                    and source.get("source_revision_id") is not None
+                ):
+                    record_lineage_transition(
+                        self.connection,
+                        knowledge_key=row["knowledge_key"],
+                        from_asset_revision_ids=(row["asset_revision_id"],),
+                        to_asset_revision_ids=(),
+                        status="deleted",
+                        source_revision_id=source["source_revision_id"],
+                        mapping_evidence={
+                            "method": "explicit-source-removal",
+                            "source_id": source_id,
+                            "reason_sha256": sha256_bytes(reason.encode("utf-8")),
+                        },
+                        created_at=removed_at,
+                    )
+                    prior_asset_governance = self.connection.execute(
+                        """
+                        SELECT recorded_at FROM governance_revisions_v2
+                        WHERE subject_kind = 'asset_revision' AND subject_id = ?
+                        ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+                        """,
+                        (row["asset_revision_id"],),
+                    ).fetchone()
+                    asset_governance_recorded_at = (
+                        _timestamp_after(
+                            removed_at,
+                            prior_asset_governance["recorded_at"],
+                        )
+                        if prior_asset_governance is not None
+                        else removed_at
+                    )
+                    record_governance_revision(
+                        self.connection,
+                        subject_kind="asset_revision",
+                        subject_id=row["asset_revision_id"],
+                        trust=row["trust"],
+                        sensitivity=row["sensitivity"],
+                        policy_id="deeplaw.local-source-removal/v2",
+                        review_status=row["verification"],
+                        lifecycle_status="deleted",
+                        activation_status="inactive",
+                        revoked_at=removed_at,
+                        export_allowed=False,
+                        reviewer_id="local-operator",
+                        recorded_at=asset_governance_recorded_at,
+                    )
                 removed_ids.append(row["asset_id"])
-            removed_at = utc_now()
             self.connection.execute(
                 """
                 UPDATE source_lifecycle
@@ -4931,6 +8267,42 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 """,
                 (removed_at, source_id),
             )
+            if source.get("source_revision_id") is not None:
+                prior_source_governance = self.connection.execute(
+                    """
+                    SELECT review_status, recorded_at FROM governance_revisions_v2
+                    WHERE subject_kind = 'source_revision' AND subject_id = ?
+                    ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+                    """,
+                    (source["source_revision_id"],),
+                ).fetchone()
+                source_governance_recorded_at = (
+                    _timestamp_after(
+                        removed_at,
+                        prior_source_governance["recorded_at"],
+                    )
+                    if prior_source_governance is not None
+                    else removed_at
+                )
+                record_governance_revision(
+                    self.connection,
+                    subject_kind="source_revision",
+                    subject_id=source["source_revision_id"],
+                    trust=source["trust"],
+                    sensitivity=source["sensitivity"],
+                    policy_id="deeplaw.local-source-removal/v2",
+                    review_status=(
+                        prior_source_governance["review_status"]
+                        if prior_source_governance is not None
+                        else "unreviewed"
+                    ),
+                    lifecycle_status="removed",
+                    activation_status="inactive",
+                    revoked_at=removed_at,
+                    export_allowed=False,
+                    reviewer_id="local-operator",
+                    recorded_at=source_governance_recorded_at,
+                )
             revision, audit_head = self._append_event(
                 event_type="source_removed",
                 object_id=source_id,
@@ -4943,6 +8315,11 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     ),
                 },
             )
+            if source.get("source_revision_id") is not None:
+                revision, audit_head = self._append_identity_snapshot(
+                    reason="source_removed",
+                    source_revision_id=source["source_revision_id"],
+                )
             self.connection.commit()
         except BaseException:
             self.connection.rollback()

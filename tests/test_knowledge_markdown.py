@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_markdown import export_knowledge_markdown
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.projection_workflow import projection_diff, propose_projection_edits
 from deeplaw.util import sha256_file
 
 
@@ -168,3 +170,85 @@ def test_markdown_renders_asset_content_as_literal_untrusted_data(
     assert "&lt;img src=x&gt;" in content
     assert "````text\nReference text must remain literal." in content
     assert "\n````\n\n## Provenance" in content
+
+
+def test_projection_edit_becomes_quarantined_source_bound_revision(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="projection edit", scope="project")
+    source = tmp_path / "rule.md"
+    source.write_text(
+        "# Release rule\nVerify the artifact before deployment.\n",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            typed_extraction="deterministic-v2",
+            confirm_no_case_data=True,
+        )
+        source_id = compiled["source"]["source_id"]
+        manifest = vault.source_review_manifest(source_id)
+        vault.approve_source_assets(
+            source_id,
+            confirm_reviewed=True,
+            confirm_quarantined=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+        )
+    projection = tmp_path / "projection"
+    with KnowledgeVault(root, read_only=True) as vault:
+        export_knowledge_markdown(vault, projection, max_sensitivity="private")
+    page = next((projection / "constraints").glob("knowledge_*.md"), None)
+    if page is None:
+        page = next(
+            path
+            for directory in ("knowledge", "procedures")
+            for path in (projection / directory).glob("knowledge_*.md")
+        )
+    content = page.read_text(encoding="utf-8")
+    asset_id = next(
+        line.split('"')[1]
+        for line in content.splitlines()
+        if line.startswith("asset_id: ")
+    )
+    with KnowledgeVault(root, read_only=True) as vault:
+        active = vault.get_asset(asset_id)
+        before_lineage = vault.knowledge_lineage(asset_id=active.asset_id)
+    page.write_text(
+        content.replace(
+            "Verify the artifact before deployment.",
+            "Verify the signed artifact twice before deployment.",
+        ),
+        encoding="utf-8",
+    )
+
+    with KnowledgeVault(root, read_only=True) as vault:
+        diff = projection_diff(vault, projection)
+    assert diff["proposal_eligible_count"] == 1
+    assert diff["canonical_write_performed"] is False
+
+    with KnowledgeVault(root, read_only=False) as vault:
+        result = propose_projection_edits(
+            vault,
+            projection,
+            confirm_no_case_data=True,
+        )
+        proposal = vault.get_asset(
+            result["proposals"][0]["asset_id"], include_inactive=True
+        )
+        predecessor = vault.get_asset(active.asset_id)
+        after_lineage = vault.knowledge_lineage(asset_id=proposal.asset_id)
+        assert vault.verify_integrity()["valid"] is True
+
+    assert result["review_required"] is True
+    assert result["approval_inherited"] is False
+    assert proposal.status == "quarantined"
+    assert proposal.verification == "source_bound"
+    assert proposal.source_refs == predecessor.source_refs
+    assert after_lineage["knowledge_key"] == before_lineage["knowledge_key"]
+    assert any(
+        item["status"] == "modified" for item in after_lineage["transitions"]
+    )

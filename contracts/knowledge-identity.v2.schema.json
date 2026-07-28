@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-identity.v2.schema.json",
+  "title": "DeepLaw Knowledge Identity v2 source build binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "collection_id",
+    "logical_path",
+    "source_key",
+    "source_revision_id",
+    "compilation_id",
+    "proposal_set_id",
+    "governance_revision"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-identity/v2"},
+    "collection_id": {"type": "string", "pattern": "^collection_[0-9a-f]{24}$"},
+    "logical_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "not": {"pattern": "^(?:/|[A-Za-z]:|.*(?:^|/)\\.\\.(?:/|$))"}
+    },
+    "source_key": {"type": "string", "pattern": "^sourcekey_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "compilation_id": {"type": "string", "pattern": "^compilation_[0-9a-f]{24}$"},
+    "proposal_set_id": {"type": "string", "pattern": "^proposalset_[0-9a-f]{24}$"},
+    "governance_revision": {"type": "string", "pattern": "^governance_[0-9a-f]{24}$"}
+  }
+}

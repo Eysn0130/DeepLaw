@@ -75,7 +75,8 @@ def _secure_key_directory(path: Path) -> None:
     parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if not parent.is_dir():
         raise RuntimeError(f"signing key directory is not a directory: {parent}")
-    os.chmod(parent, 0o700)
+    if os.name == "posix":
+        os.chmod(parent, 0o700)
 
 
 def initialize_signing_key(path: str | Path | None = None) -> dict[str, Any]:
@@ -87,6 +88,10 @@ def initialize_signing_key(path: str | Path | None = None) -> dict[str, Any]:
     _secure_key_directory(key_path)
     created = False
     if not key_path.exists():
+        if os.name == "nt":
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(key_path.parent)
         private_key = Ed25519PrivateKey.generate()
         payload = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -105,7 +110,12 @@ def initialize_signing_key(path: str | Path | None = None) -> dict[str, Any]:
         created = True
     if not key_path.is_file():
         raise RuntimeError(f"signing key is not a regular file: {key_path}")
-    os.chmod(key_path, 0o600)
+    if os.name == "posix":
+        os.chmod(key_path, 0o600)
+    elif created:
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(key_path.parent)
     private_key = load_signing_key(key_path)
     return {
         "created": created,
@@ -124,9 +134,16 @@ def load_signing_key(path: str | Path | None = None) -> Ed25519PrivateKey:
         raise FileNotFoundError(f"DeepLaw signing key is missing or unsafe: {key_path}")
     if key_path.stat().st_size > 64 * 1024:
         raise RuntimeError("DeepLaw signing key is unexpectedly large")
-    mode = stat.S_IMODE(key_path.stat().st_mode)
-    if mode & 0o077:
-        raise RuntimeError("DeepLaw signing key must be readable only by its owner")
+    if os.name == "nt":
+        from .windows_acl import native_windows_acl_report
+
+        acl = native_windows_acl_report(key_path.parent)
+        if not acl["permissions_verified"]:
+            raise RuntimeError("DeepLaw signing key must be readable only by its owner")
+    else:
+        mode = stat.S_IMODE(key_path.stat().st_mode)
+        if mode & 0o077:
+            raise RuntimeError("DeepLaw signing key must be readable only by its owner")
     try:
         private_key = serialization.load_pem_private_key(
             key_path.read_bytes(),

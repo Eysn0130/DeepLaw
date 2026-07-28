@@ -1,0 +1,512 @@
+{
+  "cache_copy_checks": [
+    {
+      "exact_match": true,
+      "file_count": 6,
+      "installed_inventory_sha256": "3cff24cca2d3f40eac510226a7f65ec8d41b16546f06aa5c662f0a0e8acd5946",
+      "phase": "legal_initial",
+      "plugin_id": "deeplaw@deeplaw",
+      "source_inventory_sha256": "3cff24cca2d3f40eac510226a7f65ec8d41b16546f06aa5c662f0a0e8acd5946",
+      "total_bytes": 21717
+    },
+    {
+      "exact_match": true,
+      "file_count": 5,
+      "installed_inventory_sha256": "7137eb32fac4fc61613fcc6c3d8786009665f6323901adeaa29b93ebe3c0f3cb",
+      "phase": "knowledge_initial",
+      "plugin_id": "deeplaw-knowledge-os@deeplaw",
+      "source_inventory_sha256": "7137eb32fac4fc61613fcc6c3d8786009665f6323901adeaa29b93ebe3c0f3cb",
+      "total_bytes": 6548
+    },
+    {
+      "exact_match": true,
+      "file_count": 5,
+      "installed_inventory_sha256": "7137eb32fac4fc61613fcc6c3d8786009665f6323901adeaa29b93ebe3c0f3cb",
+      "phase": "knowledge_readd",
+      "plugin_id": "deeplaw-knowledge-os@deeplaw",
+      "source_inventory_sha256": "7137eb32fac4fc61613fcc6c3d8786009665f6323901adeaa29b93ebe3c0f3cb",
+      "total_bytes": 6548
+    },
+    {
+      "exact_match": true,
+      "file_count": 6,
+      "installed_inventory_sha256": "3cff24cca2d3f40eac510226a7f65ec8d41b16546f06aa5c662f0a0e8acd5946",
+      "phase": "legal_readd",
+      "plugin_id": "deeplaw@deeplaw",
+      "source_inventory_sha256": "3cff24cca2d3f40eac510226a7f65ec8d41b16546f06aa5c662f0a0e8acd5946",
+      "total_bytes": 21717
+    }
+  ],
+  "candidate": {
+    "candidate_line": "0.7.0-unreleased",
+    "commit": "e0f1fe3ff01d3026df12673d57c69014c2c4dca4",
+    "implementation_files": {
+      ".agents/plugins/marketplace.json": "1146f8feb7384ce62f4102f56fc1780245aa4d4d014440abc84643871d6bda88",
+      "benchmarks/hosts/run_codex_plugin_smoke.py": "fe7caa23a47521ae82d7c783763c3f544f6ce69c01d0adfd721df71f981acb5e",
+      "contracts/codex-plugin-host-smoke.v1.schema.json": "4d770eed7294f874ddc07c5ca5e3abf868e1301788e07dff9f0c4438f90c45c2"
+    },
+    "marketplace_sha256": "1146f8feb7384ce62f4102f56fc1780245aa4d4d014440abc84643871d6bda88",
+    "package_version": "0.7.0",
+    "worktree_dirty": true
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reasons": [
+    "candidate_worktree_not_frozen",
+    "plugin_lifecycle_only",
+    "model_session_acceptance_not_run",
+    "network_isolation_not_enforced"
+  ],
+  "command_evidence": [
+    {
+      "operation": "host_version",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 1,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 28,
+      "stdout_sha256": "bc31cef53f6fa1988865c5af96b7f26ef71df65e4172c67dd4d4bddd558e437d"
+    },
+    {
+      "operation": "marketplace_add",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 2,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 110,
+      "stdout_sha256": "418f6b04a2a2e168b262819415d424fbed18be0e3791d1a78c6163e13897486d"
+    },
+    {
+      "operation": "list_available",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 3,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1060,
+      "stdout_sha256": "abaaf86601391cd5628401031a10d67a2440cff4f517e5b46e3fb744ff5befa7"
+    },
+    {
+      "operation": "add_legal_initial",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 4,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 296,
+      "stdout_sha256": "97d2a81dce3bff5e1edd197ad856e7619c112b29eaa362e2ffd1d57ec30f3745"
+    },
+    {
+      "operation": "list_legal_initial",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 5,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 530,
+      "stdout_sha256": "bd7f52cd1022b19fa96ca5388c46da80e9efe69f283b88f23c7bba12ebf3346a"
+    },
+    {
+      "operation": "add_knowledge_initial",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 6,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 335,
+      "stdout_sha256": "52971e4b3b0a5d51fbb2d1a923d35cccf1def3ed9d522a369aac628a570430a3"
+    },
+    {
+      "operation": "list_both_initial",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 7,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1056,
+      "stdout_sha256": "55235ea058c1cecb50460bcefac5424613d0b734a76e55c1ec6a674a7a0f2aad"
+    },
+    {
+      "operation": "remove_knowledge",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 8,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 115,
+      "stdout_sha256": "79999e23d0c9cbb9440a10da30c7716e468b7ed9699896f41df7aed3ce87bb26"
+    },
+    {
+      "operation": "list_legal_survives_knowledge_remove",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 9,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 530,
+      "stdout_sha256": "bd7f52cd1022b19fa96ca5388c46da80e9efe69f283b88f23c7bba12ebf3346a"
+    },
+    {
+      "operation": "add_knowledge_readd",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 10,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 335,
+      "stdout_sha256": "52971e4b3b0a5d51fbb2d1a923d35cccf1def3ed9d522a369aac628a570430a3"
+    },
+    {
+      "operation": "list_both_after_knowledge_readd",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 11,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1056,
+      "stdout_sha256": "55235ea058c1cecb50460bcefac5424613d0b734a76e55c1ec6a674a7a0f2aad"
+    },
+    {
+      "operation": "remove_legal",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 12,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 89,
+      "stdout_sha256": "5a50083440852fabdf3c0077e1994419e4413d3606f6e67d214e21555a560bb3"
+    },
+    {
+      "operation": "list_knowledge_survives_legal_remove",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 13,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 569,
+      "stdout_sha256": "62729d836a7da70ed84687cf7caacc91d493dbdc1829c3fe53e5c29c3e0d59a4"
+    },
+    {
+      "operation": "add_legal_readd",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 14,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 296,
+      "stdout_sha256": "97d2a81dce3bff5e1edd197ad856e7619c112b29eaa362e2ffd1d57ec30f3745"
+    },
+    {
+      "operation": "list_both_after_legal_readd",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 15,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1056,
+      "stdout_sha256": "55235ea058c1cecb50460bcefac5424613d0b734a76e55c1ec6a674a7a0f2aad"
+    },
+    {
+      "operation": "remove_knowledge_final",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 16,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 115,
+      "stdout_sha256": "79999e23d0c9cbb9440a10da30c7716e468b7ed9699896f41df7aed3ce87bb26"
+    },
+    {
+      "operation": "list_legal_after_knowledge_final",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 17,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 530,
+      "stdout_sha256": "bd7f52cd1022b19fa96ca5388c46da80e9efe69f283b88f23c7bba12ebf3346a"
+    },
+    {
+      "operation": "remove_legal_final",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 18,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 89,
+      "stdout_sha256": "5a50083440852fabdf3c0077e1994419e4413d3606f6e67d214e21555a560bb3"
+    },
+    {
+      "operation": "list_final_empty",
+      "raw_output_retained": false,
+      "returncode": 0,
+      "sequence": 19,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 41,
+      "stdout_sha256": "050e2dee988ae4ba4d1d8220591b660829a9ee3f06f52d548acc87522ee90885"
+    }
+  ],
+  "full_host_acceptance": false,
+  "generated_at_utc": "2026-07-28T15:26:47Z",
+  "host": {
+    "cli_version": "codex-cli 0.146.0-alpha.3.1",
+    "executable_sha256": "6d8be49e49751554df16572369e636cbe02c84b208cad3dc35528c846eeca223",
+    "kind": "codex",
+    "machine": "arm64",
+    "platform_release": "25.5.0",
+    "platform_system": "Darwin"
+  },
+  "isolation": {
+    "ambient_user_environment_forwarded": false,
+    "codex_home_temporary": true,
+    "environment_variable_names": [
+      "CODEX_HOME",
+      "HOME",
+      "LANG",
+      "LC_ALL",
+      "NO_COLOR",
+      "PATH",
+      "TEMP",
+      "TMP",
+      "TMPDIR",
+      "USERPROFILE",
+      "XDG_CACHE_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME"
+    ],
+    "home_temporary": true,
+    "model_or_api_call_attempted": false,
+    "network_activity_measured": false,
+    "network_claim": false,
+    "network_isolation_enforced": false,
+    "temporary_state_removed": true,
+    "user_configuration_seeded": false,
+    "user_credentials_seeded": false,
+    "xdg_roots_temporary": true
+  },
+  "lifecycle_checks": [
+    {
+      "check_id": "marketplace_discovery",
+      "expected_available_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "expected_installed_plugin_ids": [],
+      "observed_available_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "observed_installed_plugin_ids": [],
+      "passed": true
+    },
+    {
+      "check_id": "legal_initial",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "both_initial",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "legal_survives_knowledge_remove",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "both_after_knowledge_readd",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "knowledge_survives_legal_remove",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "both_after_legal_readd",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw-knowledge-os@deeplaw",
+        "deeplaw@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "legal_after_knowledge_final",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [
+        "deeplaw@deeplaw"
+      ],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [
+        "deeplaw@deeplaw"
+      ],
+      "passed": true
+    },
+    {
+      "check_id": "final_empty",
+      "expected_available_plugin_ids": [],
+      "expected_installed_plugin_ids": [],
+      "observed_available_plugin_ids": [],
+      "observed_installed_plugin_ids": [],
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "The smoke used a local source marketplace, not a frozen installed wheel.",
+    "It did not start a model session or the bundled MCP processes.",
+    "It did not enforce or measure operating-system network isolation.",
+    "It covers one Codex CLI build on one operating-system instance only."
+  ],
+  "plugin_sources": [
+    {
+      "file_count": 5,
+      "files": [
+        {
+          "byte_size": 666,
+          "path": ".claude-plugin/plugin.json",
+          "sha256": "fb26032a2ac7fde97ad66fa322dc0a918e5162b62f7c45fd4fc0593ad88d9256"
+        },
+        {
+          "byte_size": 1272,
+          "path": ".codex-plugin/plugin.json",
+          "sha256": "afe29c24de08111818171f05e8fa16bc6f7da950ae8a741cc70ecbd77d68be41"
+        },
+        {
+          "byte_size": 165,
+          "path": ".mcp.json",
+          "sha256": "a84731f3ff211315905d0f55da644fc57b0b283c1da2ccd83bb15b0bd4aad187"
+        },
+        {
+          "byte_size": 4146,
+          "path": "skills/use-knowledge-assets/SKILL.md",
+          "sha256": "6fb0b047f56c8431d564b6c369b249468a7bf35c6cdd64adbf3a904bd264e255"
+        },
+        {
+          "byte_size": 299,
+          "path": "skills/use-knowledge-assets/agents/openai.yaml",
+          "sha256": "347c82edd587b3fe3b7bd7a107665c1b3631b895b4f6448f5751b0e32fcad6e9"
+        }
+      ],
+      "inventory_sha256": "7137eb32fac4fc61613fcc6c3d8786009665f6323901adeaa29b93ebe3c0f3cb",
+      "name": "deeplaw-knowledge-os",
+      "plugin_id": "deeplaw-knowledge-os@deeplaw",
+      "relative_root": "plugins/deeplaw-knowledge-os",
+      "total_bytes": 6548,
+      "version": "0.7.0"
+    },
+    {
+      "file_count": 6,
+      "files": [
+        {
+          "byte_size": 688,
+          "path": ".claude-plugin/plugin.json",
+          "sha256": "2424f361dd4ef991876cfa0f180f011598e9ec7cdb06d0daacce82b2cb68a90b"
+        },
+        {
+          "byte_size": 1363,
+          "path": ".codex-plugin/plugin.json",
+          "sha256": "a4bef3f7fa0321f6d03671ab34e74afc134723dca737916ab29fc6ce671b78ac"
+        },
+        {
+          "byte_size": 134,
+          "path": ".mcp.json",
+          "sha256": "ae6459fcf88a8caf58324f06a2f2676bb8ae249c3a96822cfa361a052bcd2ceb"
+        },
+        {
+          "byte_size": 11338,
+          "path": "LICENSE",
+          "sha256": "58243be8689716453ba49374f1c985cbf6b216768501f10796038d54779eab11"
+        },
+        {
+          "byte_size": 7843,
+          "path": "skills/research-chinese-law/SKILL.md",
+          "sha256": "7f5421b5195ad1272242d72d2d252ff78fcfe5cfb4541aa0139eed030cfa22a7"
+        },
+        {
+          "byte_size": 351,
+          "path": "skills/research-chinese-law/agents/openai.yaml",
+          "sha256": "a0cbb64ab1c23d8d8378b216956cf08f414b9df10358c0b096b82999f7abb9b5"
+        }
+      ],
+      "inventory_sha256": "3cff24cca2d3f40eac510226a7f65ec8d41b16546f06aa5c662f0a0e8acd5946",
+      "name": "deeplaw",
+      "plugin_id": "deeplaw@deeplaw",
+      "relative_root": "plugins/deeplaw",
+      "total_bytes": 21717,
+      "version": "0.7.0"
+    }
+  ],
+  "record_sha256": "d60eb35b691720fc7f9c7e6c19b401883d12658cc47f327f4ae32612d597d098",
+  "result": {
+    "cache_copy_exact": true,
+    "final_installed_plugin_ids": [],
+    "install_remove_readd": true,
+    "marketplace_discovery": true,
+    "plugin_lifecycle_isolation": true,
+    "success": true
+  },
+  "schema_version": "deeplaw.codex-plugin-host-smoke/v1",
+  "scope": "plugin-lifecycle-only",
+  "unresolved_checks": [
+    "frozen_wheel_runtime",
+    "explicit_task_model_activation",
+    "session_tool_discovery",
+    "recall",
+    "context",
+    "verify",
+    "explain_boundary",
+    "restricted_exclusion",
+    "read_only_behavior",
+    "proposal_inbox_post_run_feedback",
+    "inactive_zero_impact_model_session"
+  ]
+}

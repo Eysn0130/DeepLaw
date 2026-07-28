@@ -126,6 +126,16 @@ def test_source_update_is_review_gated_and_switches_versions_atomically(
         assert switched["revoked_prior_asset_count"] == 1
         assert vault.source_info(first["source"]["source_id"])["status"] == "superseded"
         assert vault.source_info(second["source"]["source_id"])["status"] == "active"
+        superseded_governance = vault.connection.execute(
+            """
+            SELECT lifecycle_status, activation_status
+            FROM governance_revisions_v2
+            WHERE subject_kind = 'source_revision' AND subject_id = ?
+            ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+            """,
+            (first["identity"]["source_revision_id"],),
+        ).fetchone()
+        assert tuple(superseded_governance) == ("superseded", "inactive")
         assert vault.search("green deployment path").results
         current_results = vault.search("blue deployment path").results
         assert all(
@@ -140,6 +150,22 @@ def test_source_update_is_review_gated_and_switches_versions_atomically(
         )
         assert removal["removed_asset_count"] == 1
         assert vault.source_info(second["source"]["source_id"])["status"] == "removed"
+        removed_governance = vault.connection.execute(
+            """
+            SELECT lifecycle_status, activation_status
+            FROM governance_revisions_v2
+            WHERE subject_kind = 'source_revision' AND subject_id = ?
+            ORDER BY recorded_at DESC, governance_revision DESC LIMIT 1
+            """,
+            (second["identity"]["source_revision_id"],),
+        ).fetchone()
+        assert tuple(removed_governance) == ("removed", "inactive")
+        removed_lineage = vault.knowledge_lineage(asset_id=second["asset_ids"][0])
+        assert any(
+            transition["status"] == "deleted"
+            and transition["to_asset_revision_ids"] == []
+            for transition in removed_lineage["transitions"]
+        )
         assert not vault.search("green deployment path").results
         assert vault.verify_integrity()["valid"] is True
 
@@ -368,9 +394,10 @@ def test_permission_report_is_truthful_about_platform_guarantees(
     report = knowledge_vault_permission_report(root)
     assert report["structural_valid"] is True
     if os.name == "nt":
-        assert report["status"] == "not_verified"
-        assert report["permissions_verified"] is False
-        assert report["security_model"] == "windows_acl_requires_native_verification"
+        assert report["status"] == "verified"
+        assert report["permissions_verified"] is True
+        assert report["security_model"] == "windows_native_acl_owner_only"
+        assert report["native_windows_acl"]["permissions_verified"] is True
     else:
         assert report["status"] == "verified"
         assert report["permissions_verified"] is True

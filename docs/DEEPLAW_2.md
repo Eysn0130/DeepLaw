@@ -6,14 +6,14 @@ Status: current architecture and research roadmap, 2026-07-16.
 > 文件进入，Agent 得到可验证的知识。
 
 `DeepLaw 2.0` 是产品名；仓库名保持 `DeepLaw`，Python 包、CLI 和本地目录保持 `deeplaw`。
-当前软件版本是 `v0.6.0`。本文记录独立 Legal Pack；通用 Knowledge Asset 内核见
+当前软件版本是 `v0.7.0`。本文记录独立 Legal Pack；通用 Knowledge Asset 内核见
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md)。本文严格区分已经存在的能力与后续研究目标，架构本身
 不使用版本号。
 
 ## DeepLaw 是什么
 
 DeepLaw 2.0 是面向 Agent 的法律知识库。它将 DOCX、PDF、TXT 文件处理为只读、版本化、
-可追溯的 Knowledge Release，并向 Agent 交付小型 Evidence Pack；当前 `v0.6.0` 官方团队
+可追溯的 Knowledge Release，并向 Agent 交付小型 Evidence Pack；当前 `v0.7.0` 官方团队
 目录输入为 DOCX/PDF，物理分离的用户私有法律参考库另支持 UTF-8 TXT。
 
 DeepLaw 不是聊天记忆，不保存案件项目私有资料，也不把整座知识库塞进模型上下文。用户私有
@@ -25,7 +25,7 @@ DeepLaw 范围只保存法律参考资料，始终标记为用户提供且未经
 3. 哪些内容满足当前问题的证据要求；
 4. 哪些地方仍然缺失、不确定或不能使用。
 
-官方目录、用户私有法律参考与 Analytix 案件项目必须物理隔离。当前 `v0.6.0` 不提供内容级
+官方目录、用户私有法律参考与 Analytix 案件项目必须物理隔离。当前 `v0.7.0` 不提供内容级
 DLP 或案件私有资料分类器；宿主必须在调用或导入 DeepLaw 前完成隔离和拒绝，不能依赖
 DeepLaw 自动识别误传内容。
 
@@ -102,7 +102,7 @@ Discovery != Admission != Selection != Adjudication
 - **Adjudication** 不属于 DeepLaw。案件事实认定、规则适用和裁判结论留给有权限的使用者与
   法律审查；Agent 不能因 receipt 有效就跳过 blocking gap。
 
-`v0.6.0` 已实现固定 release、integrity/抽取门禁、显式时点查询分桶、coverage-first 选择和
+`v0.7.0` 已实现固定 release、integrity/抽取门禁、显式时点查询分桶、coverage-first 选择和
 Skill 级 blocking-gap 检查；完整逐来源人工准入 capability 与宿主不可绕过的 final gate 仍是
 后续工作，因此本文不把当前实现描述为完整的四阶段形式化证明系统。
 
@@ -124,7 +124,7 @@ Agent 的问题先被编译成一个封闭的证据任务，而不是直接取�
 
 ### 4. Evidence Pack
 
-Evidence Pack 是 Agent 实际看到的有界结果。`v0.6.0` 已有 `query_plan`、
+Evidence Pack 是 Agent 实际看到的有界结果。`v0.7.0` 已有 `query_plan`、
 `evidence_compilation`、`evidence`、`uncertain_evidence`、`obligation_coverage` 与 `gaps`；
 `receipt_id` 位于每张 evidence card 内。更完整的顶层 `receipt_ids` 和执行轨迹读取接口仍是
 后续目标：
@@ -185,7 +185,7 @@ Evidence Core 是 DeepLaw 架构的技术核心，由五个相互约束的模块
 - receipt 绑定 release、document、segment、source hash 和 text hash；
 - 当前编译结果记录 candidate/result digest、逐项增量 witness 和汇总拒绝原因；
 - 相同 release、QueryPlan 与确定性策略产生相同 selected IDs、gaps 和 result digest；
-- 完整逐候选 execution trace、trace hash 与按 ID 读取接口属于后续目标，`v0.6.0` 不作此声明。
+- 完整逐候选 execution trace、trace hash 与按 ID 读取接口属于后续目标，`v0.7.0` 不作此声明。
 
 ## 核心创新一：先定义证据要求，再选择内容
 
@@ -203,7 +203,7 @@ Question
   → evidence + uncertain + gaps + receipts
 ```
 
-当前 `v0.6.0` 已实现 QueryPlan、封闭 Evidence Duties、相关性准入、coverage-first 选择、
+当前 `v0.7.0` 已实现 QueryPlan、封闭 Evidence Duties、相关性准入、coverage-first 选择、
 coverage witness、候选/结果 digest、严格时效分桶、gaps 和 receipt。更完整的 challenge 状态与
 可按 ID 读取的执行轨迹仍是后续增量。
 
@@ -217,7 +217,7 @@ coverage witness、候选/结果 digest、严格时效分桶、gaps 和 receipt�
 ## 核心创新二：证据能力类型
 
 DeepLaw 不允许发现排序提升时效、抽取、完整性或审核状态。下列完整 capability type 是目标模型；
-`v0.6.0` 仍以显式 temporal classification、抽取标记和 compiler 的 uncertain boolean 投影其中一部分：
+`v0.7.0` 仍以显式 temporal classification、抽取标记和 compiler 的 uncertain boolean 投影其中一部分：
 
 ```text
 EvidenceCapabilities {
@@ -321,7 +321,7 @@ redistribution_status
 
 ## 当前实现与后续目标
 
-| 能力 | `v0.6.0` 当前实现 | 后续目标 |
+| 能力 | `v0.7.0` 当前实现 | 后续目标 |
 | --- | --- | --- |
 | Ingest | 官方 DOCX/PDF、私有 UTF-8 TXT、Document IR、页级与 segment 级抽取证据、content-addressed SQLite | 官方 TXT、历史 DOC 受控转换与完整 Corpus Coverage Manifest |
 | Organize | 标题/条文分段、顺序、稳定 segment、来源关系 | 完整法律层级、双时态事件账本和双 Map 隔离 |

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/reproducible-build-report.v1.schema.json",
+  "title": "DeepLaw reproducible distribution build report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "repository_commit", "working_tree_dirty",
+    "source_date_epoch", "build_constraints_sha256", "lock_sha256", "build_dependencies",
+    "reproducible", "package_inventory_verified",
+    "artifacts", "release_claim_eligible", "claim_blockers"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.reproducible-build-report/v1"},
+    "repository_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "working_tree_dirty": {"type": "boolean"},
+    "source_date_epoch": {"type": "integer", "minimum": 315532800},
+    "build_constraints_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "lock_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "build_dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hatchling", "packaging", "pathspec", "pluggy", "trove-classifiers"],
+      "properties": {
+        "hatchling": {"const": "1.31.0"},
+        "packaging": {"const": "26.2"},
+        "pathspec": {"const": "1.1.1"},
+        "pluggy": {"const": "1.6.0"},
+        "trove-classifiers": {"const": "2026.6.1.19"}
+      }
+    },
+    "reproducible": {"const": true},
+    "package_inventory_verified": {"const": true},
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sha256", "byte_size", "path_count", "inventory_sha256"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^deeplaw-[0-9].*(?:\\.whl|\\.tar\\.gz)$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "byte_size": {"type": "integer", "minimum": 1},
+          "path_count": {"type": "integer", "minimum": 1},
+          "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "release_claim_eligible": {"type": "boolean"},
+    "claim_blockers": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    }
+  }
+}

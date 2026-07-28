@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/external-evaluator-kit-attestation.v1.schema.json",
+  "title": "Detached independent evaluator signature over exact kit manifest bytes",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "organization", "kit_manifest_file_sha256",
+    "kit_manifest_sha256", "issued_at", "signature_payload",
+    "public_key_base64", "signature_base64"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.external-evaluator-kit-attestation/v1"},
+    "organization": {"type": "string", "minLength": 1, "maxLength": 200},
+    "kit_manifest_file_sha256": {"$ref": "#/$defs/sha256"},
+    "kit_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "issued_at": {"type": "string", "format": "date-time", "maxLength": 40},
+    "signature_payload": {"const": "exact-manifest-bytes"},
+    "public_key_base64": {"type": "string", "minLength": 43, "maxLength": 48},
+    "signature_base64": {"type": "string", "minLength": 86, "maxLength": 92}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

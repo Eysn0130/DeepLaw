@@ -1,0 +1,187 @@
+{
+  "build": {
+    "cold_cli_capsule_valid": true,
+    "cold_cli_exit_code": 0,
+    "cold_cli_process_ms": 425352.7886250522,
+    "cold_integrity_seconds": 384.7094174590893,
+    "final_integrity_cache_lookup_seconds": 3.320816904306412e-05,
+    "integrity_valid": true,
+    "open_seconds": 0.0024156668223440647,
+    "peak_rss_bytes": 4857741312,
+    "total_seconds": 6003.037708415883
+  },
+  "candidate": {
+    "candidate_line": "0.7.0-unreleased",
+    "commit": "e0f1fe3ff01d3026df12673d57c69014c2c4dca4",
+    "implementation_files": {
+      "benchmarks/scale/run_retrieval_fabric_scale.py": "9108596f8159fb0bf67390fe9dfa3b63bc77c44de549bc4dc4fd0d41f5878df7",
+      "src/deeplaw/context_compiler.py": "517bf072f1775a447f770069687245730c572c0e6cca2c6e337520c1b57a152d",
+      "src/deeplaw/knowledge_store.py": "f8e637f325f4cbc38078803165100334b4d754044997926558c5461a772a70e0",
+      "src/deeplaw/retrieval_fabric.py": "85292468fb251cb0f9cd3cfadb4a195bda7645fa755af2df49ed5f83ad640410"
+    },
+    "package_version": "0.6.0",
+    "tracked_or_untracked_worktree_dirty": true
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "deterministic exact-token synthetic corpus produced by the development team; not a natural-language or competitor benchmark",
+  "corpus": {
+    "active_asset_count_after_lifecycle_probe": 1000001,
+    "asset_count": 1000000,
+    "database_bytes": 7380508672,
+    "query_count": 100,
+    "source_count": 10,
+    "sources": [
+      {
+        "approval_seconds": 37.043263542000204,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 49.082165125058964,
+        "content_sha256": "ea8363a810732a9b2a721810e46dedf23215dd13d17e5a5fb6198062b485b3dc",
+        "source_id": "source_6d7926b82efea6abb497dc18",
+        "source_revision_id": "sourcerev_b1a8ccc81d046ed3738b2533"
+      },
+      {
+        "approval_seconds": 60.73862750013359,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 82.85020591691136,
+        "content_sha256": "5d3a5b8b49433c31b68adb47f3e9e09623ed3c3f3999e089ddb0509c5840c259",
+        "source_id": "source_95e018931a3cb9c84269fc88",
+        "source_revision_id": "sourcerev_e1ab6b8d4f9740d760814534"
+      },
+      {
+        "approval_seconds": 89.00854062498547,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 111.190584667027,
+        "content_sha256": "38a3fbeac974b80642d1ad71b1356708531b60cd3389f95f7604cc72be7b9642",
+        "source_id": "source_be56ebcfe839fdd0b89f7f5a",
+        "source_revision_id": "sourcerev_2a4e557136bdf2fecfa6b47e"
+      },
+      {
+        "approval_seconds": 114.34021329088137,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 137.47529870807193,
+        "content_sha256": "08dcc8a03698fb2cfd54c29a5027f4d42c54d2ef000927a819a35b4369c75823",
+        "source_id": "source_8a92525e3c5eee59a1d87be2",
+        "source_revision_id": "sourcerev_542903a85ff7644f12110d3d"
+      },
+      {
+        "approval_seconds": 182.3325959588401,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 194.16237312485464,
+        "content_sha256": "51f15c5eab498c04483839605e2b4fc8a9043f8ba8a3438c991e8972f00c0d78",
+        "source_id": "source_f1c547a814a4fe1b7bc78419",
+        "source_revision_id": "sourcerev_7cff5cc9b66d4f4a1287c8f8"
+      },
+      {
+        "approval_seconds": 245.78756075003184,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 387.0556528340094,
+        "content_sha256": "d3026a3ebbc07b33b51e188aa4b65b74c8babfddb315b522e31faaf98ae7f8a8",
+        "source_id": "source_1be2803a53d7499c6ecbfc77",
+        "source_revision_id": "sourcerev_37a965eee29936537f2ff657"
+      },
+      {
+        "approval_seconds": 336.658913457999,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 391.53253287496045,
+        "content_sha256": "5a00ac63d8f30bde5be3d9c2ee9fc7dd7cc543dadda982d10d3e649664978786",
+        "source_id": "source_afca8d48d29a607f4475c2d1",
+        "source_revision_id": "sourcerev_65ca5b60d84b2d1ce45e0020"
+      },
+      {
+        "approval_seconds": 425.6937390421517,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 544.3655355831143,
+        "content_sha256": "6bbbc734160d5321706290ff37143fe31efbe86ea6836d5b106021598efe9bb7",
+        "source_id": "source_3e3ce15afe743dfac695a261",
+        "source_revision_id": "sourcerev_3b6fee7ebec95e75deb77379"
+      },
+      {
+        "approval_seconds": 496.98268799996004,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 692.959339832887,
+        "content_sha256": "f77194a3edaf227a8a77fe6171e0638b5b2be4614a2f0faf2b2a95c75bb07ba4",
+        "source_id": "source_2f5ae330abfc3761cf8a695e",
+        "source_revision_id": "sourcerev_b9bc8b60b6189d7c7371d0b1"
+      },
+      {
+        "approval_seconds": 564.1363918748684,
+        "approved_asset_count": 100000,
+        "asset_count": 100000,
+        "compile_seconds": 830.4744857919868,
+        "content_sha256": "95c4dc2f87241037c9424a1c47f6709a65c034e1aa98a2d59c9424a9f5d7cefb",
+        "source_id": "source_8df8cc04a895e178738f7f6f",
+        "source_revision_id": "sourcerev_b7b2517e68b0240552c64219"
+      }
+    ],
+    "stored_asset_count_after_lifecycle_probe": 1000004,
+    "stored_asset_count_before_lifecycle_probe": 1000000
+  },
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.13"
+  },
+  "lifecycle": {
+    "active_asset_count": 1000001,
+    "final_integrity_cache_lookup_seconds": 3.320816904306412e-05,
+    "final_integrity_valid": true,
+    "forgetting_correct": true,
+    "forgotten_asset_id": "asset_8e10015d83f180a10688fe14",
+    "forgotten_knowledge_key": "knowledge_40a05cdbdc0336558a8254fc",
+    "history_retained": true,
+    "initial_approved_asset_count": 2,
+    "initial_compile_and_approval_seconds": 542.6468889170792,
+    "initial_source_id": "source_93443da1ae8cc918f8e60e5a",
+    "post_forgetting_retrieval_and_integrity_seconds": 388.02109612501226,
+    "selective_forgetting_seconds": 71.98208387498744,
+    "source_key_stable": true,
+    "source_revision_changed": true,
+    "source_update_seconds": 572.9296928748954,
+    "stored_asset_count": 1000004,
+    "update_correct": true,
+    "updated_approved_asset_count": 2,
+    "updated_asset_id": "asset_b1e621c504e4ca5c0be06ae4",
+    "updated_knowledge_key": "knowledge_76b36801195adbb67280f1f9",
+    "updated_source_id": "source_1a317fd64a2aea9a27eead51"
+  },
+  "limitations": [
+    "Unique tokens measure mechanical indexing and lifecycle correctness only.",
+    "Hybrid ran without an optional Dense index or local reranker unless configured.",
+    "A dirty worktree report cannot become a frozen release artifact.",
+    "Only an actual one-million-Asset run may be described as the million diagnostic."
+  ],
+  "measurements": {
+    "average_selected_tokens_estimated": 23.0,
+    "capsule_recall": 1.0,
+    "capsule_verification_rate": 1.0,
+    "hybrid_hit_at_1": 1.0,
+    "hybrid_p50_ms": 27.729812543839216,
+    "hybrid_p95_ms": 30.053083784878254,
+    "lexical_hit_at_1": 1.0,
+    "lexical_p50_ms": 2.273229416459799,
+    "lexical_p95_ms": 3.9747501723468304,
+    "no_answer_empty": true,
+    "provenance_coverage": 1.0,
+    "recall_and_context_p50_ms": 28.61470845527947,
+    "recall_and_context_p95_ms": 30.909124994650483,
+    "token_count_mode": "estimated"
+  },
+  "schema_version": "deeplaw.retrieval-fabric-scale-diagnostic/v1",
+  "thresholds": {
+    "formal_100k_run": false,
+    "million_asset_diagnostic_run": true,
+    "quality_and_integrity_passed": true,
+    "recall_and_context_p95_lt_750_ms": true,
+    "warm_hybrid_p95_lt_500_ms": true,
+    "warm_lexical_p95_lt_50_ms": true
+  }
+}

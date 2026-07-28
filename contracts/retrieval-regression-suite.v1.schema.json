@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/retrieval-regression-suite.v1.schema.json",
+  "title": "DeepLaw retrieval profile regression suite",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cases", "gates"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.retrieval-regression-suite/v1"},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id", "query", "mode", "expected_asset_ids",
+          "forbidden_asset_ids", "max_items"
+        ],
+        "properties": {
+          "case_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "query": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "mode": {
+            "enum": ["auto", "exact", "lexical", "semantic", "tree", "graph", "temporal", "hybrid", "global"]
+          },
+          "expected_asset_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}
+          },
+          "forbidden_asset_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}
+          },
+          "max_items": {"type": "integer", "minimum": 1, "maximum": 20}
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_recall", "max_irrelevant_rate", "max_safety_failures"],
+      "properties": {
+        "min_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "max_irrelevant_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "max_safety_failures": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

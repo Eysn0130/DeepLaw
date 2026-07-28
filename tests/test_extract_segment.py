@@ -34,7 +34,7 @@ def test_docx_preserves_footnote_at_reference(tmp_path: Path) -> None:
     result = extract_docx(path)
 
     assert result.quality.extractor == "ooxml"
-    assert result.quality.extractor_version == "deeplaw-ooxml/v2"
+    assert result.quality.extractor_version == "deeplaw-ooxml/v3"
     assert "[注1: 脚注原文]" in result.blocks[1].text
 
 
@@ -78,6 +78,48 @@ def test_docx_rejects_dtd_entity_expansion_in_footnotes(tmp_path: Path) -> None:
         archive.writestr("word/footnotes.xml", footnotes)
 
     with pytest.raises(ExtractionError, match="invalid DOCX footnotes XML"):
+        extract_docx(path)
+
+
+def test_docx_preserves_list_and_endnote_structure(tmp_path: Path) -> None:
+    path = tmp_path / "list-endnote.docx"
+    document = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:numPr>'
+        '<w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>'
+        '<w:r><w:t>列表项目保留真实结构，并引用尾注。</w:t></w:r>'
+        '<w:r><w:endnoteReference w:id="2"/></w:r></w:p></w:body></w:document>'
+    )
+    endnotes = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<w:endnotes xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:endnote w:id="2"><w:p><w:r>'
+        '<w:t>尾注原文保持来源绑定</w:t></w:r></w:p></w:endnote></w:endnotes>'
+    )
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document)
+        archive.writestr("word/endnotes.xml", endnotes)
+
+    result = extract_docx(path)
+
+    assert result.blocks[0].kind == "list_item"
+    assert "[尾注2: 尾注原文保持来源绑定]" in result.blocks[0].text
+
+
+def test_docx_rejects_unsafe_unused_archive_members(tmp_path: Path) -> None:
+    path = tmp_path / "unsafe-member.docx"
+    document = (
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:body><w:p><w:r>'
+        '<w:t>安全正文足够长但压缩包成员不安全。</w:t>'
+        "</w:r></w:p></w:body></w:document>"
+    )
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document)
+        archive.writestr("../unused.xml", "unsafe")
+
+    with pytest.raises(ExtractionError, match="unsafe or duplicate member"):
         extract_docx(path)
 
 
