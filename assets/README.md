@@ -2,9 +2,9 @@
 
 The public visual system uses three coordinated levels:
 
-- a dark flagship Knowledge OS hero for the full trusted supply chain;
 - light frosted glass for the wordmark and the five-second product flow;
-- dark technical diagrams for the knowledge cycle and Evidence Core.
+- a restrained dark technical diagram for the deeper knowledge lifecycle;
+- detailed architecture diagrams only where the README text needs them.
 
 The tracked images are product illustrations, not screenshots of a runtime UI. Check every
 visible word, label, arrow, and relationship at full resolution before publishing an update.
@@ -13,13 +13,19 @@ visible word, label, arrow, and relationship at full resolution before publishin
 
 - `brand/deeplaw-2-glass.png`: primary DeepLaw 2.0 wordmark.
 - `brand/deeplaw-knowledge-os-hero-v0.6.png`: Image2-generated v0.6 hero showing
-  source inputs, the verifiable knowledge core, bounded Capsule delivery, and the reviewed
-  feedback loop. Its generation record and alt text live in the adjacent `.prompt.md` file.
+  an earlier source-to-Capsule concept. It remains a historical visual and is not the current
+  README introduction. Its generation record and alt text live in the adjacent `.prompt.md` file.
+- `readme/agent-knowledge-flow-v0.7.png`: current five-second product explanation. It preserves
+  the light v0.5 composition while updating the sequence to Sources → Knowledge Vault → Review /
+  Recall / Explain → Knowledge Capsule → Agent. Its Image2 edit record and alt text live in the
+  adjacent `.prompt.md` file.
+- `readme/agent-knowledge-cycle-v0.7.png`: current lifecycle diagram. It preserves the restrained
+  v0.5 dark composition while showing Ingest / Review / Recall / Explain / Verify / Deliver around
+  the Knowledge Vault. Its Image2 edit record and alt text live in the adjacent `.prompt.md` file.
 - `readme/product-flow-glass.png`: Files → DeepLaw Knowledge Base → Locate / Connect /
-  Explain → Evidence Pack → Agent. Here “DeepLaw Knowledge Base” labels the functional
-  component inside the product; the public product name remains `DeepLaw 2.0`.
+  Explain → Evidence Pack → Agent. This is the historical v0.5 flow retained as a source asset.
 - `readme/knowledge-cycle.png`: Ingest / Organize / Locate / Connect / Explain / Verify,
-  with Deliver as the output action.
+  with Deliver as the output action. This is the historical v0.5 cycle retained as a source asset.
 - `readme/evidence-core.png`: Sources & Versions, Knowledge Map, Evidence Duties,
   Limits & Gaps, and Receipts & Replay.
 
@@ -34,8 +40,8 @@ visible word, label, arrow, and relationship at full resolution before publishin
   gap-amber accent.
 - Avoid legal-industry clichés, national or official symbols, fake awards, unsupported
   ranking badges, and visuals that imply adjudication.
-- Use the dark Knowledge OS hero once near the top of the README. Keep the light product flow
-  for the five-second explanation, and use dark diagrams only for deeper technical detail.
+- Use the current light v0.7 flow once near the top of the README. Keep dark diagrams for deeper
+  technical detail, and prefer legibility over visual spectacle.
 
 Apache License 2.0 applies to copyrightable project assets in this repository. It does not
 grant rights in third-party source material or constitute trademark clearance.

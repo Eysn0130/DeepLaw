@@ -163,8 +163,12 @@ def _openvex(path: Path) -> dict[str, Any]:
 
 def _docs(repository: Path) -> dict[str, bool]:
     required = {
-        "README.md": ("commercial_release_eligible=true", "competitive_claim_eligible=false"),
-        "README_EN.md": ("commercial_release_eligible=true", "competitive_claim_eligible=false"),
+        "README.md": ("本地单用户 Agent Knowledge OS", "Knowledge Capsule", "v0.7.0"),
+        "README_EN.md": (
+            "Local single-user Agent Knowledge OS",
+            "Knowledge Capsule",
+            "v0.7.0",
+        ),
         "CHANGELOG.md": ("0.7.0", "competitive_claim_eligible=false"),
         "SECURITY.md": ("v0.7.0", "commercial_release_eligible=true"),
         "docs/INSTALL_UPGRADE_ROLLBACK.md": ("0.6.0", "0.7.0"),
@@ -182,6 +186,12 @@ def _docs(repository: Path) -> dict[str, bool]:
         text = (repository / relative).read_text(encoding="utf-8")
         if any(marker not in text for marker in markers):
             raise CommercialReleaseError(f"release documentation is incomplete: {relative}")
+        if relative in {"README.md", "README_EN.md"} and (
+            "商业" in text or "commercial" in text.casefold()
+        ):
+            raise CommercialReleaseError(
+                f"public repository homepage contains release-positioning copy: {relative}"
+            )
         result[relative] = True
     return result
 
