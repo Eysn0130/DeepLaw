@@ -72,6 +72,210 @@ def _approve(vault: Path, asset_id: str) -> dict[str, Any]:
     )
 
 
+def test_source_alias_latest_and_active_selectors_survive_rename(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    _json(
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "source selectors",
+        "--scope",
+        "project",
+    )
+    original = tmp_path / "policy.md"
+    original.write_text("# Policy\nUse the blue Atlas path.\n", encoding="utf-8")
+    first = _json(
+        "knowledge",
+        "source",
+        "add",
+        "--vault",
+        str(vault),
+        "--source",
+        str(original),
+        "--confirm-no-case-data",
+    )
+    _json(
+        "review",
+        "--vault",
+        str(vault),
+        "--approve-all",
+        "--confirm-reviewed",
+        "--format",
+        "json",
+    )
+
+    renamed = tmp_path / "renamed-policy.md"
+    renamed.write_text("# Policy\nUse the blue Atlas path.\n", encoding="utf-8")
+    second = _json(
+        "knowledge",
+        "source",
+        "update",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--source",
+        str(renamed),
+        "--confirm-no-case-data",
+    )
+
+    active_before_review = _json(
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--active",
+    )
+    latest = _json(
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--latest",
+    )
+    diff = _json(
+        "knowledge",
+        "source",
+        "diff",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--latest",
+    )
+
+    assert active_before_review["source_id"] == first["source"]["source_id"]
+    assert latest["source_id"] == second["source"]["source_id"]
+    assert latest["status"] == "pending"
+    assert diff["unchanged_count"] == 1
+
+    _json(
+        "review",
+        "--vault",
+        str(vault),
+        "--approve-all",
+        "--confirm-reviewed",
+        "--format",
+        "json",
+    )
+    active_from_historical_alias = _json(
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--active",
+    )
+    active_from_current_alias = _json(
+        "knowledge",
+        "source",
+        "verify",
+        "--vault",
+        str(vault),
+        "--alias",
+        "renamed-policy.md",
+        "--active",
+    )
+    active_list = _json(
+        "knowledge",
+        "source",
+        "list",
+        "--vault",
+        str(vault),
+        "--active",
+    )
+
+    assert active_from_historical_alias["source_id"] == second["source"]["source_id"]
+    assert active_from_historical_alias["logical_path"] == "renamed-policy.md"
+    assert active_from_current_alias["valid"] is True
+    assert [item["source_id"] for item in active_list["sources"]] == [
+        second["source"]["source_id"]
+    ]
+
+
+def test_source_alias_latest_fails_closed_for_parallel_pending_successors(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    _json(
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "ambiguous source selectors",
+        "--scope",
+        "project",
+    )
+    original = tmp_path / "policy.md"
+    original.write_text(
+        "# Policy\nThe initial policy requires the stable Atlas review path.\n",
+        encoding="utf-8",
+    )
+    _json(
+        "knowledge",
+        "source",
+        "add",
+        "--vault",
+        str(vault),
+        "--source",
+        str(original),
+        "--confirm-no-case-data",
+    )
+    _json(
+        "review",
+        "--vault",
+        str(vault),
+        "--approve-all",
+        "--confirm-reviewed",
+        "--format",
+        "json",
+    )
+    for index in (1, 2):
+        original.write_text(
+            f"# Policy\nCandidate {index} requires the reviewed Atlas successor path.\n",
+            encoding="utf-8",
+        )
+        _json(
+            "knowledge",
+            "source",
+            "update",
+            "--vault",
+            str(vault),
+            "--alias",
+            "policy.md",
+            "--source",
+            str(original),
+            "--confirm-no-case-data",
+        )
+
+    result = _run(
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--latest",
+    )
+
+    assert result.returncode != 0
+    assert "multiple pending successors" in result.stderr
+
+
 def test_cli_full_knowledge_asset_lifecycle(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     _json(
@@ -338,3 +542,52 @@ def test_cli_full_knowledge_asset_lifecycle(tmp_path: Path) -> None:
     assert inspection["asset_status_counts"]["quarantined"] == len(
         imported["imported_asset_ids"]
     )
+
+
+def test_cli_selective_forgetting_is_explicit_and_idempotent(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    _json(
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "forget-vault",
+        "--scope",
+        "project",
+    )
+    asset_id = _propose(
+        vault,
+        kind="experience",
+        title="Old preference",
+        statement="Use the old cyan output profile.",
+    )
+    _approve(vault, asset_id)
+
+    forgotten = _json(
+        "knowledge",
+        "forget",
+        "--vault",
+        str(vault),
+        "--asset-id",
+        asset_id,
+        "--reason",
+        "The operator explicitly removed this obsolete preference.",
+        "--confirm",
+    )
+    repeated = _json(
+        "knowledge",
+        "forget",
+        "--vault",
+        str(vault),
+        "--asset-id",
+        asset_id,
+        "--reason",
+        "Confirm the obsolete preference remains forgotten.",
+        "--confirm",
+    )
+
+    assert forgotten["identity_model"] == "legacy-unbound"
+    assert forgotten["current_retrieval_eligible"] is False
+    assert forgotten["history_retained"] is True
+    assert repeated["already_inactive"] is True

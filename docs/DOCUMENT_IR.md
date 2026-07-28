@@ -1,6 +1,6 @@
 # DeepLaw 2.0 Document IR 与文件摄取
 
-Status: implemented baseline in `v0.6.0`, reviewed 2026-07-27.
+Status: implemented in `v0.7.0`, reviewed 2026-07-28.
 
 ## 结论
 
@@ -71,7 +71,7 @@ DeepLaw Document Engine 不是“换一个解析器就相信结果”。流程�
 
 ## Markdown 派生视图
 
-`v0.6.0` 可以从一个已验证的 immutable release 确定性导出 Markdown：
+`v0.7.0` 可以从一个已验证的 immutable release 确定性导出 Markdown：
 
 ```bash
 deeplaw export-markdown \

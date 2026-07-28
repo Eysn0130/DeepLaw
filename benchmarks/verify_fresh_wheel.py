@@ -122,6 +122,18 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             "Fresh wheel exact-source acceptance.",
             "--confirm-reviewed",
         )
+        https_preflight = _run(
+            interpreter,
+            "add",
+            "--url",
+            "https://example.com/source.md",
+            "--dry-run",
+            "--vault",
+            str(vault),
+            "--confirm-no-case-data",
+            "--format",
+            "json",
+        )
         compiled_capsule = _run(
             interpreter,
             "knowledge",
@@ -154,9 +166,18 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
         "review_receipt_valid": approval["review_receipt"]["review_receipt_id"].startswith(
             "review_"
         ),
+        "https_preflight_valid": (
+            https_preflight["network_performed"] is False
+            and https_preflight["canonical_requested_url"]
+            == "https://example.com/source.md"
+        ),
         "capsule_id": compiled_capsule["capsule_id"],
         "capsule_valid": verification["valid"],
-        "valid": verification["valid"] and version == f"deeplaw {__version__}",
+        "valid": (
+            verification["valid"]
+            and https_preflight["network_performed"] is False
+            and version == f"deeplaw {__version__}"
+        ),
     }
 
 

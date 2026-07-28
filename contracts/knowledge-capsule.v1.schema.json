@@ -74,7 +74,12 @@
           "maximum": 4000
         },
         "max_payload_chars": {"const": 64000},
-        "payload_chars": {"type": "integer", "minimum": 1, "maximum": 64000}
+        "payload_chars": {"type": "integer", "minimum": 1, "maximum": 64000},
+        "tokenizer_profile": {"const": "deeplaw-mixed-cjk-code/2"},
+        "tokenizer_version": {"const": "2"},
+        "max_tokens": {"type": "integer", "minimum": 1, "maximum": 32000},
+        "selected_tokens": {"type": "integer", "minimum": 0, "maximum": 32000},
+        "token_count_mode": {"enum": ["exact", "estimated", "unavailable"]}
       }
     },
     "trust_boundary": {
@@ -168,6 +173,11 @@
             "experience",
             "lesson",
             "question",
+            "exception",
+            "definition",
+            "requirement",
+            "risk",
+            "assumption",
             "reference"
           ]
         },
@@ -197,7 +207,7 @@
         "directive_mode": {"type": "string", "enum": ["data_only", "reviewed_instruction"]},
         "selection_reason": {
           "type": "string",
-          "pattern": "^(lexical_match|reviewed_relation:[a-z_]+:asset_[0-9a-f]{24})$"
+          "pattern": "^(lexical_match|retrieval_fabric:(exact_id|knowledge_key|semantic_key|exact_phrase|lexical|dense|tree|graph|temporal|feedback)|reviewed_relation:[a-z_]+:asset_[0-9a-f]{24})$"
         },
         "source_refs": {
           "type": "array",

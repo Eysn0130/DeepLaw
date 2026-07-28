@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/document-engine-actual-pdf-diagnostic.v1.schema.json",
+  "title": "DeepLaw Actual PDF Document Engine Diagnostic v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "claim_eligible",
+    "claim_ineligibility_reason",
+    "candidate",
+    "environment",
+    "engine",
+    "models",
+    "fixture",
+    "result",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.document-engine-actual-pdf-diagnostic/v1"},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_line",
+        "package_version",
+        "commit",
+        "worktree_dirty",
+        "implementation_files"
+      ],
+      "properties": {
+        "candidate_line": {"const": "0.7.0-unreleased"},
+        "package_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "worktree_dirty": {"type": "boolean"},
+        "implementation_files": {
+          "type": "object",
+          "minProperties": 4,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "propertyNames": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "machine", "python"],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1, "maxLength": 300},
+        "machine": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "output_schema", "configuration"],
+      "properties": {
+        "name": {"const": "deeplaw-document-engine"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 300},
+        "output_schema": {"type": "string", "minLength": 1, "maxLength": 100},
+        "configuration": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verified",
+        "repository",
+        "revision",
+        "manifest_sha256",
+        "file_count",
+        "total_bytes",
+        "network_during_ingest"
+      ],
+      "properties": {
+        "verified": {"const": true},
+        "repository": {"const": "opendatalab/PDF-Extract-Kit-1.0"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "file_count": {"type": "integer", "minimum": 1},
+        "total_bytes": {"type": "integer", "minimum": 1},
+        "network_during_ingest": {"const": false}
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator",
+        "generator_version",
+        "source_text_sha256",
+        "pdf_sha256",
+        "pdf_bytes",
+        "page_count"
+      ],
+      "properties": {
+        "generator": {"const": "reportlab"},
+        "generator_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "source_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "pdf_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "pdf_bytes": {"type": "integer", "minimum": 1},
+        "page_count": {"const": 1}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "success",
+        "elapsed_seconds",
+        "page_count",
+        "block_count",
+        "block_types",
+        "output_characters",
+        "output_text_sha256",
+        "expected_text_observed"
+      ],
+      "properties": {
+        "success": {"const": true},
+        "elapsed_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "page_count": {"const": 1},
+        "block_count": {"type": "integer", "minimum": 1},
+        "block_types": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "output_characters": {"type": "integer", "minimum": 1},
+        "output_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "expected_text_observed": {"const": true}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  }
+}

@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from .context_compiler import compile_context, verify_capsule_file
 from .knowledge_compiler import (
+    TYPED_EXTRACTION_MODES,
     compile_directory,
     compile_source,
     record_capsule_feedback,
@@ -26,6 +27,28 @@ from .knowledge_feedback import (
     create_run_receipt,
     record_structured_feedback,
     replay_feedback,
+)
+from .knowledge_identity import normalize_logical_path
+from .knowledge_inbox import (
+    list_inbox_artifacts,
+    promote_inbox_proposal,
+    reject_inbox_artifact,
+    submit_inbox_artifact,
+    verify_inbox_artifact,
+)
+from .knowledge_jobs import (
+    cancel_ingest_job,
+    list_ingest_jobs,
+    load_ingest_job,
+    run_ingest_job,
+)
+from .knowledge_maintenance import (
+    create_knowledge_snapshot,
+    detect_knowledge_orphans,
+    garbage_collect_derived,
+    knowledge_doctor,
+    restore_knowledge_snapshot,
+    verify_knowledge_snapshot,
 )
 from .knowledge_markdown import export_knowledge_markdown
 from .knowledge_models import (
@@ -56,7 +79,62 @@ from .knowledge_store import (
     restore_knowledge_migration_backup,
     verify_knowledge_migration_backup,
 )
-from .util import excerpt
+from .lineage_workflow import review_lineage_mapping
+from .projection_workflow import projection_diff, propose_projection_edits
+from .relation_workflow import (
+    pending_relation_carry_forward,
+    plan_relation_carry_forward,
+    propose_relation_carry_forward,
+    review_relation_carry_forward,
+)
+from .retrieval_fabric import (
+    RETRIEVAL_MODES,
+    RetrievalMode,
+    compare_retrieval,
+    recall,
+    retrieve,
+    verify_retrieval_trace,
+)
+from .retrieval_profiles import (
+    activate_retrieval_profile,
+    evaluate_retrieval_profile,
+    load_active_retrieval_profile,
+    rollback_retrieval_profile,
+    train_retrieval_profile,
+)
+from .skill_factory import (
+    SKILL_TARGETS,
+    SkillTarget,
+    build_skill_bundle,
+    install_skill_bundle,
+    verify_skill_bundle,
+)
+from .util import excerpt, strict_json_loads
+
+
+def _add_typed_extraction_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--typed-extraction",
+        choices=sorted(TYPED_EXTRACTION_MODES),
+        default="off",
+    )
+    parser.add_argument(
+        "--typed-extractor-manifest",
+        type=Path,
+        help="Closed local sidecar manifest for local or explicit external extraction",
+    )
+    parser.add_argument(
+        "--confirm-external-disclosure",
+        action="store_true",
+        help="Confirm section text and locators may be sent by the explicit external sidecar",
+    )
+    parser.add_argument(
+        "--no-reference-proposals",
+        dest="reference_proposals",
+        action="store_false",
+        default=True,
+        help="Compile Source IR without creating Reference proposals",
+    )
 
 
 def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -102,11 +180,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         choices=("off", "vision-consensus", "document-engine"),
         default="off",
     )
-    ingest.add_argument(
-        "--typed-extraction",
-        choices=("off", "deterministic-v1"),
-        default="off",
-    )
+    _add_typed_extraction_arguments(ingest)
     ingest.add_argument("--confirm-no-case-data", action="store_true")
 
     source = subcommands.add_parser(
@@ -127,9 +201,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     source_add.add_argument(
         "--pdf-fallback", choices=("off", "vision-consensus", "document-engine"), default="off"
     )
-    source_add.add_argument(
-        "--typed-extraction", choices=("off", "deterministic-v1"), default="off"
-    )
+    _add_typed_extraction_arguments(source_add)
     source_add.add_argument("--confirm-no-case-data", action="store_true")
 
     source_add_dir = source_commands.add_parser(
@@ -151,9 +223,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     source_add_dir.add_argument(
         "--pdf-fallback", choices=("off", "vision-consensus", "document-engine"), default="off"
     )
-    source_add_dir.add_argument(
-        "--typed-extraction", choices=("off", "deterministic-v1"), default="off"
-    )
+    _add_typed_extraction_arguments(source_add_dir)
     source_add_dir.add_argument("--dry-run", action="store_true")
     source_add_dir.add_argument("--confirm-no-case-data", action="store_true")
 
@@ -168,14 +238,34 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         source_command = source_commands.add_parser(name, help=help_text)
         source_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
         if name in {"show", "verify", "remove"}:
-            source_command.add_argument("--source-id", required=True)
+            source_target = source_command.add_mutually_exclusive_group(required=True)
+            source_target.add_argument("--source-id")
+            source_target.add_argument(
+                "--alias",
+                help="Stable logical-path alias; historical paths resolve across rename/move",
+            )
+            source_selector = source_command.add_mutually_exclusive_group()
+            source_selector.add_argument("--active", action="store_true")
+            source_selector.add_argument("--latest", action="store_true")
         if name == "list":
-            source_command.add_argument("--source-key")
+            source_filter = source_command.add_mutually_exclusive_group()
+            source_filter.add_argument("--source-key")
+            source_filter.add_argument("--alias")
+            source_selector = source_command.add_mutually_exclusive_group()
+            source_selector.add_argument("--active", action="store_true")
+            source_selector.add_argument("--latest", action="store_true")
         if name == "diff":
-            source_command.add_argument("--old-source-id", required=True)
-            source_command.add_argument("--new-source-id", required=True)
+            source_command.add_argument("--old-source-id")
+            source_command.add_argument("--new-source-id")
+            source_command.add_argument(
+                "--alias",
+                help="Compare the latest two versions of this stable logical-path alias",
+            )
+            source_command.add_argument("--latest", action="store_true")
         if name == "update":
-            source_command.add_argument("--source-key", required=True)
+            source_target = source_command.add_mutually_exclusive_group(required=True)
+            source_target.add_argument("--source-key")
+            source_target.add_argument("--alias")
             source_command.add_argument("--source", type=Path, required=True)
             source_command.add_argument(
                 "--source-kind", choices=sorted(SOURCE_KINDS), default="document"
@@ -193,13 +283,69 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
                 choices=("off", "vision-consensus", "document-engine"),
                 default="off",
             )
-            source_command.add_argument(
-                "--typed-extraction", choices=("off", "deterministic-v1"), default="off"
-            )
+            _add_typed_extraction_arguments(source_command)
             source_command.add_argument("--confirm-no-case-data", action="store_true")
         if name == "remove":
             source_command.add_argument("--reason", required=True)
             source_command.add_argument("--confirm", action="store_true")
+
+    source_governance = source_commands.add_parser(
+        "governance",
+        help="Change source policy without changing immutable source identity",
+    )
+    source_governance.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    source_governance_target = source_governance.add_mutually_exclusive_group(required=True)
+    source_governance_target.add_argument("--source-id")
+    source_governance_target.add_argument(
+        "--alias",
+        help="Stable logical-path alias; defaults to its active version",
+    )
+    source_governance_selector = source_governance.add_mutually_exclusive_group()
+    source_governance_selector.add_argument("--active", action="store_true")
+    source_governance_selector.add_argument("--latest", action="store_true")
+    source_governance.add_argument(
+        "--trust", choices=sorted(USER_SETTABLE_TRUST_LEVELS), required=True
+    )
+    source_governance.add_argument(
+        "--sensitivity", choices=sorted(SENSITIVITY_LEVELS), required=True
+    )
+    source_governance.add_argument("--allow-export", action="store_true")
+    source_governance.add_argument("--reviewer-id", required=True)
+    source_governance.add_argument("--reason", required=True)
+    source_governance.add_argument("--confirm-reviewed", action="store_true")
+
+    structure = subcommands.add_parser(
+        "structure",
+        help="Inspect and search the verified Source IR hierarchy",
+    )
+    structure_commands = structure.add_subparsers(
+        dest="structure_command",
+        required=True,
+    )
+    structure_get = structure_commands.add_parser("get", help="Read one Source IR node")
+    structure_get.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    structure_get.add_argument("--node-id", required=True)
+    structure_get.add_argument("--max-chars", type=int, default=20_000)
+    structure_list = structure_commands.add_parser(
+        "list", help="List Source IR roots or direct children"
+    )
+    structure_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    structure_list.add_argument("--source-id")
+    structure_list.add_argument("--compilation-id")
+    structure_list.add_argument("--parent-node-id")
+    structure_list.add_argument("--limit", type=int, default=100)
+    structure_search = structure_commands.add_parser(
+        "search", help="Search bounded Source IR candidates"
+    )
+    structure_search.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    structure_search.add_argument("--query", required=True)
+    structure_search.add_argument("--source-id")
+    structure_search.add_argument("--limit", type=int, default=20)
+    structure_trace = structure_commands.add_parser(
+        "trace", help="Trace one Source IR node to its hierarchy root"
+    )
+    structure_trace.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    structure_trace.add_argument("--node-id", required=True)
 
     propose = subcommands.add_parser(
         "propose",
@@ -329,6 +475,17 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     revoke.add_argument("--reason", required=True)
     revoke.add_argument("--confirm", action="store_true")
 
+    forget = subcommands.add_parser(
+        "forget",
+        help="Selectively revoke current knowledge while retaining verifiable history",
+    )
+    forget.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    forget_target = forget.add_mutually_exclusive_group(required=True)
+    forget_target.add_argument("--knowledge-key")
+    forget_target.add_argument("--asset-id")
+    forget.add_argument("--reason", required=True)
+    forget.add_argument("--confirm", action="store_true")
+
     relate = subcommands.add_parser(
         "relate",
         help="Add one explicit human-reviewed relation between active assets",
@@ -338,7 +495,76 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     relate.add_argument("--predicate", choices=sorted(RELATION_PREDICATES), required=True)
     relate.add_argument("--object-asset-id", required=True)
     relate.add_argument("--evidence-fragment-id")
+    relate.add_argument("--event-time")
+    relate.add_argument("--valid-from")
+    relate.add_argument("--valid-to")
     relate.add_argument("--confirm-reviewed", action="store_true")
+
+    relation = subcommands.add_parser(
+        "relation",
+        help="Inspect or revise the embedded reviewed temporal graph",
+    )
+    relation_commands = relation.add_subparsers(dest="relation_command", required=True)
+    relation_list = relation_commands.add_parser("list")
+    relation_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    relation_list.add_argument("--mode", choices=("current", "past", "as-of"), default="current")
+    relation_list.add_argument("--as-of")
+    relation_list.add_argument("--limit", type=int, default=100)
+    relation_revise = relation_commands.add_parser("revise")
+    relation_revise.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    relation_revise.add_argument("--relation-key", required=True)
+    relation_revise.add_argument(
+        "--status",
+        choices=("active", "superseded", "revoked", "ambiguous"),
+        required=True,
+    )
+    relation_revise.add_argument("--evidence-fragment-id", required=True)
+    relation_revise.add_argument("--event-time")
+    relation_revise.add_argument("--valid-from")
+    relation_revise.add_argument("--valid-to")
+    relation_revise.add_argument("--confirm-reviewed", action="store_true")
+    relation_carry_forward = relation_commands.add_parser(
+        "carry-forward",
+        help="Plan or create review-gated relation successor candidates",
+    )
+    relation_carry_forward.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    relation_carry_forward.add_argument("--apply", action="store_true")
+    relation_carry_forward.add_argument("--limit", type=int, default=100)
+    relation_candidates = relation_commands.add_parser(
+        "candidates",
+        help="List pending relation carry-forward candidates",
+    )
+    relation_candidates.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    relation_candidates.add_argument("--limit", type=int, default=100)
+    relation_review = relation_commands.add_parser(
+        "review-candidate",
+        help="Approve or reject one review-gated relation successor",
+    )
+    relation_review.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    relation_review.add_argument("--relation-revision-id", required=True)
+    relation_review.add_argument("--decision", choices=("approve", "reject"), required=True)
+    relation_review.add_argument("--confirm-reviewed", action="store_true")
+    relation_review.add_argument("--reviewer-id", default="local-operator")
+    relation_review.add_argument(
+        "--reason", default="Reviewed the relation carry-forward candidate."
+    )
+
+    lineage = subcommands.add_parser(
+        "lineage",
+        help="Inspect or explicitly review stable Knowledge Lineage mappings",
+    )
+    lineage.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    lineage_target = lineage.add_mutually_exclusive_group()
+    lineage_target.add_argument("--knowledge-key")
+    lineage_target.add_argument("--asset-id")
+    lineage.add_argument("--map-status", choices=("split", "merged", "ambiguous"))
+    lineage.add_argument("--from-asset-id", action="append", default=[])
+    lineage.add_argument("--to-asset-id", action="append", default=[])
+    lineage.add_argument("--reviewer-id", default="local-operator")
+    lineage.add_argument("--reason")
+    lineage.add_argument("--confirm-reviewed", action="store_true")
 
     search = subcommands.add_parser("search", help="Search reviewed active Knowledge Assets")
     search.add_argument("--vault", type=Path, default=default_knowledge_vault())
@@ -349,6 +575,106 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     search.add_argument("--memory-tier", action="append", default=[])
     search.add_argument("--include-restricted", action="store_true")
     search.add_argument("--include-inactive", action="store_true")
+
+    recall_command = subcommands.add_parser(
+        "recall",
+        help="Plan multi-channel retrieval and compile one verified Knowledge Capsule",
+    )
+    recall_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    recall_command.add_argument("--query", required=True)
+    recall_command.add_argument("--goal")
+    recall_command.add_argument("--mode", choices=sorted(RETRIEVAL_MODES), default="auto")
+    recall_command.add_argument("--max-items", type=int, default=8)
+    recall_command.add_argument("--max-chars", type=int, default=6_000)
+    recall_command.add_argument("--max-tokens", type=int, default=4_096)
+    recall_command.add_argument("--kind", action="append", default=[])
+    recall_command.add_argument("--memory-tier", action="append", default=[])
+    recall_command.add_argument("--as-of")
+    recall_command.add_argument("--discovery-index", type=Path)
+    recall_command.add_argument("--model-root", type=Path)
+    recall_command.add_argument("--reranker-manifest", type=Path)
+    recall_command.add_argument("--threads", type=int)
+    recall_command.add_argument("--include-restricted", action="store_true")
+    recall_command.add_argument("--confirm-no-case-data", action="store_true")
+    recall_command.add_argument("--output", type=Path)
+
+    diagnose_retrieval = subcommands.add_parser(
+        "diagnose-retrieval",
+        help="Show Query Plan, every candidate channel, exclusions, gaps, and Capsule",
+    )
+    diagnose_retrieval.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    diagnose_retrieval.add_argument("--query", required=True)
+    diagnose_retrieval.add_argument("--goal")
+    diagnose_retrieval.add_argument("--mode", choices=sorted(RETRIEVAL_MODES), default="auto")
+    diagnose_retrieval.add_argument("--max-items", type=int, default=8)
+    diagnose_retrieval.add_argument("--max-chars", type=int, default=6_000)
+    diagnose_retrieval.add_argument("--max-tokens", type=int, default=4_096)
+    diagnose_retrieval.add_argument("--kind", action="append", default=[])
+    diagnose_retrieval.add_argument("--memory-tier", action="append", default=[])
+    diagnose_retrieval.add_argument("--as-of")
+    diagnose_retrieval.add_argument("--discovery-index", type=Path)
+    diagnose_retrieval.add_argument("--model-root", type=Path)
+    diagnose_retrieval.add_argument("--reranker-manifest", type=Path)
+    diagnose_retrieval.add_argument("--threads", type=int)
+    diagnose_retrieval.add_argument("--include-restricted", action="store_true")
+    diagnose_retrieval.add_argument("--confirm-no-case-data", action="store_true")
+
+    explain_retrieval = subcommands.add_parser(
+        "explain",
+        help="Explain a retrieval query or the last local retrieval trace",
+    )
+    explain_retrieval.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    explain_target = explain_retrieval.add_mutually_exclusive_group(required=True)
+    explain_target.add_argument("--query")
+    explain_target.add_argument("--last", action="store_true")
+    explain_retrieval.add_argument("--mode", choices=sorted(RETRIEVAL_MODES), default="auto")
+    explain_retrieval.add_argument("--limit", type=int, default=5)
+    explain_retrieval.add_argument("--max-chars", type=int, default=5_000)
+    explain_retrieval.add_argument("--as-of")
+    explain_retrieval.add_argument("--discovery-index", type=Path)
+    explain_retrieval.add_argument("--model-root", type=Path)
+    explain_retrieval.add_argument("--reranker-manifest", type=Path)
+    explain_retrieval.add_argument("--threads", type=int)
+    explain_retrieval.add_argument("--confirm-no-case-data", action="store_true")
+
+    compare = subcommands.add_parser(
+        "compare-retrieval",
+        help="Replay one query through bounded retrieval modes without making a benchmark claim",
+    )
+    compare.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    compare.add_argument("--query", required=True)
+    compare.add_argument(
+        "--mode",
+        action="append",
+        choices=sorted(RETRIEVAL_MODES),
+        default=[],
+    )
+    compare.add_argument("--limit", type=int, default=5)
+    compare.add_argument("--max-chars", type=int, default=5_000)
+    compare.add_argument("--as-of")
+    compare.add_argument("--discovery-index", type=Path)
+    compare.add_argument("--reranker-manifest", type=Path)
+    compare.add_argument("--confirm-no-case-data", action="store_true")
+
+    retrieval_profile = subcommands.add_parser(
+        "retrieval-profile",
+        help="Train, gate, activate, and roll back local ranking-only profiles",
+    )
+    profile_commands = retrieval_profile.add_subparsers(dest="profile_command", required=True)
+    profile_train = profile_commands.add_parser("train")
+    profile_train.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    profile_train.add_argument("--feedback-id", action="append", required=True)
+    profile_evaluate = profile_commands.add_parser("evaluate")
+    profile_evaluate.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    profile_evaluate.add_argument("--profile-id", required=True)
+    profile_evaluate.add_argument("--suite", type=Path, required=True)
+    profile_activate = profile_commands.add_parser("activate")
+    profile_activate.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    profile_activate.add_argument("--profile-id", required=True)
+    profile_activate.add_argument("--evaluation", type=Path, required=True)
+    for name in ("rollback", "status"):
+        profile_command = profile_commands.add_parser(name)
+        profile_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
 
     get = subcommands.add_parser("get", help="Read one exact Knowledge Asset")
     get.add_argument("--vault", type=Path, default=default_knowledge_vault())
@@ -389,10 +715,18 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
 
     doctor = subcommands.add_parser(
         "doctor",
-        help="Diagnose filesystem isolation without overstating Windows ACL support",
+        help="Diagnose canonical integrity, jobs, inbox, Source IR, and native permissions",
     )
     doctor.add_argument("--vault", type=Path, default=default_knowledge_vault())
     doctor.add_argument("--permissions", action="store_true")
+    doctor.add_argument("--repair-derived", action="store_true")
+
+    rebuild_indexes = subcommands.add_parser(
+        "rebuild-indexes",
+        help="Rebuild removable local retrieval indexes from canonical Assets",
+    )
+    rebuild_indexes.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    rebuild_indexes.add_argument("--confirm", action="store_true")
 
     discovery_model = subcommands.add_parser(
         "discovery-model",
@@ -591,6 +925,157 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         else:
             run_command.add_argument("--limit", type=int, default=100)
 
+    inbox = subcommands.add_parser(
+        "inbox",
+        help="Manage isolated Agent proposal, feedback, run, and evaluation artifacts",
+    )
+    inbox_commands = inbox.add_subparsers(dest="inbox_command", required=True)
+    inbox_submit = inbox_commands.add_parser(
+        "submit",
+        help="Write one hash-bound artifact to the isolated local inbox",
+    )
+    inbox_submit.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    inbox_submit.add_argument(
+        "--type",
+        dest="artifact_type",
+        choices=("proposal", "feedback", "run", "eval"),
+        required=True,
+    )
+    inbox_submit.add_argument("--payload", type=Path, required=True)
+    inbox_submit.add_argument("--producer-name", required=True)
+    inbox_submit.add_argument("--producer-version", required=True)
+    inbox_submit.add_argument("--priority-signal", action="append", default=[])
+    inbox_submit.add_argument(
+        "--sensitivity", choices=sorted(SENSITIVITY_LEVELS), default="private"
+    )
+    inbox_submit.add_argument("--confirm-no-case-data", action="store_true")
+    inbox_list = inbox_commands.add_parser("list", help="List bounded inbox metadata")
+    inbox_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    inbox_list.add_argument(
+        "--state", choices=("pending", "processed", "rejected"), default="pending"
+    )
+    inbox_list.add_argument(
+        "--type", dest="artifact_type", choices=("proposal", "feedback", "run", "eval")
+    )
+    inbox_list.add_argument("--limit", type=int, default=100)
+    for name in ("show", "verify", "promote", "reject"):
+        inbox_command = inbox_commands.add_parser(name)
+        inbox_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        inbox_command.add_argument("--artifact-id", required=True)
+        if name in {"promote", "reject"}:
+            inbox_command.add_argument("--confirm-reviewed", action="store_true")
+
+    jobs = subcommands.add_parser(
+        "job",
+        help="Inspect, resume, retry, or cancel resumable ingest jobs",
+    )
+    job_commands = jobs.add_subparsers(dest="job_command", required=True)
+    job_list = job_commands.add_parser("list")
+    job_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    job_list.add_argument("--limit", type=int, default=100)
+    for name in ("show", "resume", "retry", "cancel"):
+        job_command = job_commands.add_parser(name)
+        job_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        job_command.add_argument("--job-id", required=True)
+
+    snapshot = subcommands.add_parser(
+        "snapshot",
+        help="Create, verify, or atomically restore a local vault snapshot",
+    )
+    snapshot_commands = snapshot.add_subparsers(
+        dest="snapshot_command",
+        required=True,
+    )
+    snapshot_create = snapshot_commands.add_parser("create")
+    snapshot_create.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    snapshot_create.add_argument("--output", type=Path, required=True)
+    snapshot_create.add_argument(
+        "--include-operator-state",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    snapshot_verify = snapshot_commands.add_parser("verify")
+    snapshot_verify.add_argument("--snapshot", type=Path, required=True)
+    snapshot_verify.add_argument("--expected-vault-id")
+    snapshot_restore = snapshot_commands.add_parser("restore")
+    snapshot_restore.add_argument("--vault", type=Path, required=True)
+    snapshot_restore.add_argument("--snapshot", type=Path, required=True)
+    snapshot_restore.add_argument("--confirm", action="store_true")
+
+    gc = subcommands.add_parser(
+        "gc",
+        help="Detect or remove bounded derived temporary orphan files",
+    )
+    gc.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    gc.add_argument("--orphans", action="store_true")
+    gc.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=True)
+    gc.add_argument("--confirm", action="store_true")
+
+    projection = subcommands.add_parser(
+        "projection",
+        help="Export, diff, or turn Human Projection edits into review proposals",
+    )
+    projection_commands = projection.add_subparsers(
+        dest="projection_command",
+        required=True,
+    )
+    projection_export = projection_commands.add_parser("export")
+    projection_export.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    projection_export.add_argument("--output", type=Path, required=True)
+    projection_export.add_argument(
+        "--max-sensitivity",
+        choices=sorted(SENSITIVITY_LEVELS),
+        default="private",
+    )
+    projection_export.add_argument("--replace", action="store_true")
+    for name in ("diff", "propose"):
+        projection_command = projection_commands.add_parser(name)
+        projection_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        projection_command.add_argument("--projection", type=Path, required=True)
+        if name == "propose":
+            projection_command.add_argument("--confirm-no-case-data", action="store_true")
+
+    skill = subcommands.add_parser(
+        "skill",
+        help="Build, verify, install, or update revision-bound read-only Agent Skills",
+    )
+    skill_commands = skill.add_subparsers(dest="skill_command", required=True)
+    skill_build = skill_commands.add_parser("build")
+    skill_build.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    skill_build.add_argument("--output", type=Path, required=True)
+    skill_build.add_argument("--name", required=True)
+    skill_build.add_argument("--description", required=True)
+    skill_build.add_argument("--knowledge-key", action="append", default=[])
+    skill_build.add_argument("--asset-id", action="append", default=[])
+    skill_build.add_argument("--target", choices=sorted(SKILL_TARGETS), action="append", default=[])
+    skill_build.add_argument(
+        "--max-sensitivity",
+        choices=sorted(SENSITIVITY_LEVELS),
+        default="private",
+    )
+    skill_build.add_argument("--max-items", type=int, default=20)
+    skill_build.add_argument("--max-chars", type=int, default=40_000)
+    skill_build.add_argument("--max-tokens", type=int, default=10_000)
+    skill_build.add_argument("--replace", action="store_true")
+    skill_verify = skill_commands.add_parser("verify")
+    skill_verify.add_argument("--bundle", type=Path, required=True)
+    skill_verify.add_argument("--vault", type=Path)
+    for name in ("install", "update"):
+        skill_command = skill_commands.add_parser(name)
+        skill_command.add_argument("--bundle", type=Path, required=True)
+        skill_command.add_argument("--install-root", type=Path, required=True)
+        skill_command.add_argument("--target", choices=sorted(SKILL_TARGETS), required=True)
+        skill_command.add_argument("--vault", type=Path)
+        skill_command.add_argument("--expected-vault-id")
+        skill_command.add_argument("--trust-external", action="store_true")
+        skill_command.add_argument("--confirm", action="store_true")
+
+    workbench = subcommands.add_parser(
+        "workbench",
+        help="Open the local Operator Workbench or print its bounded snapshot",
+    )
+    workbench.add_argument("--vault", type=Path, default=default_knowledge_vault())
+
     mcp = subcommands.add_parser(
         "mcp",
         help="Run the optional read-only Knowledge Asset MCP server",
@@ -624,6 +1109,63 @@ def _write_capsule(path: Path, capsule: dict[str, Any]) -> None:
         raise
 
 
+_MAX_RETRIEVAL_TRACE_BYTES = 4 * 1024 * 1024
+
+
+def _retrieval_trace_path(vault_root: Path) -> Path:
+    derived = vault_root / "derived"
+    retrieval = derived / "retrieval"
+    for directory in (derived, retrieval):
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            raise RuntimeError("retrieval trace directory is unsafe")
+        directory.mkdir(mode=0o700, exist_ok=True)
+        if os.name != "nt":
+            os.chmod(directory, 0o700)
+    return retrieval / "last-trace.json"
+
+
+def _write_last_retrieval_trace(vault_root: Path, trace: dict[str, Any]) -> None:
+    output = _retrieval_trace_path(vault_root)
+    if output.is_symlink() or (output.exists() and not output.is_file()):
+        raise RuntimeError("last retrieval trace path is unsafe")
+    payload = (json.dumps(trace, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
+    if len(payload) > _MAX_RETRIEVAL_TRACE_BYTES:
+        raise ValueError("retrieval trace exceeds its local sidecar bound")
+    temporary = output.with_name(f".{output.name}.{secrets.token_hex(8)}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, output)
+        if os.name != "nt":
+            os.chmod(output, 0o600)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _read_last_retrieval_trace(vault_root: Path) -> dict[str, Any]:
+    path = vault_root / "derived" / "retrieval" / "last-trace.json"
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or path.stat().st_size > _MAX_RETRIEVAL_TRACE_BYTES
+        or (os.name != "nt" and path.stat().st_mode & 0o077)
+    ):
+        raise RuntimeError("last retrieval trace is unavailable or unsafe")
+    try:
+        payload = strict_json_loads(path.read_bytes())
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        raise RuntimeError("last retrieval trace is invalid") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("last retrieval trace is invalid")
+    return payload
+
+
 def _bounded_ingest_receipt(result: dict[str, Any]) -> dict[str, Any]:
     """Keep CLI/tool output bounded while preserving the full compiler API."""
     asset_ids = result.get("asset_ids")
@@ -636,6 +1178,115 @@ def _bounded_ingest_receipt(result: dict[str, Any]) -> dict[str, Any]:
         "asset_ids": visible_ids,
         "asset_ids_truncated": len(visible_ids) < len(asset_ids),
     }
+
+
+def _source_key_for_alias(vault: KnowledgeVault, alias: str) -> str:
+    logical_path = normalize_logical_path(alias)
+    rows = vault.connection.execute(
+        """
+        SELECT DISTINCT source_revisions_v2.source_key
+        FROM source_locations_v2
+        JOIN source_revisions_v2 USING(source_revision_id)
+        WHERE source_locations_v2.logical_path_folded = ?
+        ORDER BY source_revisions_v2.source_key
+        """,
+        (logical_path.casefold(),),
+    ).fetchall()
+    if not rows:
+        raise KeyError(f"knowledge source alias is unavailable: {logical_path}")
+    if len(rows) != 1:
+        raise RuntimeError(
+            "knowledge source alias was reused by multiple identities; use an exact source key"
+        )
+    return str(rows[0]["source_key"])
+
+
+def _source_versions_for_cli(
+    vault: KnowledgeVault,
+    *,
+    source_key: str | None = None,
+    alias: str | None = None,
+) -> list[dict[str, Any]]:
+    selected_key = _source_key_for_alias(vault, alias) if alias is not None else source_key
+    sources = (
+        list(vault.source_versions(selected_key))
+        if selected_key is not None
+        else list(vault.all_sources())
+    )
+    return sorted(
+        sources,
+        key=lambda item: (item["source_key"], item["imported_at"], item["source_id"]),
+    )
+
+
+def _latest_source_version(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    if not sources:
+        raise KeyError("source identity has no versions")
+    pending = [source for source in sources if source["status"] == "pending"]
+    if len(pending) == 1:
+        return pending[0]
+    if len(pending) > 1:
+        raise RuntimeError(
+            "source identity has multiple pending successors; use an exact source ID"
+        )
+    active = [source for source in sources if source["status"] == "active"]
+    if len(active) == 1:
+        return active[0]
+    if len(active) > 1:
+        raise RuntimeError("source identity has multiple active versions")
+    predecessor_ids = {
+        source["previous_source_id"]
+        for source in sources
+        if source["previous_source_id"] is not None
+    }
+    heads = [source for source in sources if source["source_id"] not in predecessor_ids]
+    if len(heads) != 1:
+        raise RuntimeError("source identity history is ambiguous; use an exact source ID")
+    return heads[0]
+
+
+def _filter_source_selector(
+    sources: list[dict[str, Any]],
+    *,
+    active: bool,
+    latest: bool,
+) -> list[dict[str, Any]]:
+    if active:
+        return [source for source in sources if source["status"] == "active"]
+    if not latest:
+        return sources
+    versions_by_key: dict[str, list[dict[str, Any]]] = {}
+    for source in sources:
+        versions_by_key.setdefault(source["source_key"], []).append(source)
+    return sorted(
+        (_latest_source_version(versions) for versions in versions_by_key.values()),
+        key=lambda item: (item["source_key"], item["source_id"]),
+    )
+
+
+def _resolve_source_id(
+    vault: KnowledgeVault,
+    *,
+    source_id: str | None,
+    alias: str | None,
+    active: bool,
+    latest: bool,
+) -> str:
+    if source_id is not None:
+        if active or latest:
+            raise ValueError("--active/--latest can only be used with --alias")
+        return source_id
+    if alias is None:
+        raise ValueError("source selection requires --source-id or --alias")
+    versions = _source_versions_for_cli(vault, alias=alias)
+    if latest:
+        return str(_latest_source_version(versions)["source_id"])
+    active_versions = [source for source in versions if source["status"] == "active"]
+    if len(active_versions) != 1:
+        if not active_versions:
+            raise KeyError("source alias has no active version; use --latest to inspect it")
+        raise RuntimeError("source alias has multiple active versions")
+    return str(active_versions[0]["source_id"])
 
 
 def render_knowledge_result(value: Any, *, output_format: str) -> str:
@@ -692,21 +1343,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         permission_report = knowledge_vault_permission_report(args.vault)
         if args.permissions:
             return permission_report
-        try:
-            with KnowledgeVault(args.vault, read_only=True) as vault:
-                inspection = vault.inspect()
-        except (FileNotFoundError, RuntimeError, ValueError) as error:
-            inspection = {
-                "valid": False,
-                "error": str(error),
-            }
-        return {
-            "schema_version": "deeplaw.knowledge-doctor/v1",
-            "permissions": permission_report,
-            "vault": inspection,
-            "ready": bool(permission_report["permissions_verified"])
-            and bool(inspection.get("integrity", {}).get("valid")),
-        }
+        return knowledge_doctor(args.vault, repair_derived=args.repair_derived)
     if command == "verify-package":
         return verify_knowledge_package(args.package)
     if command == "verify-capsule":
@@ -714,6 +1351,46 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             return verify_capsule_file(args.capsule)
         with KnowledgeVault(args.vault, read_only=True) as vault:
             return verify_capsule_file(args.capsule, vault=vault)
+    if command == "snapshot":
+        if args.snapshot_command == "verify":
+            return verify_knowledge_snapshot(
+                args.snapshot,
+                expected_vault_id=args.expected_vault_id,
+            )
+        if args.snapshot_command == "restore":
+            return restore_knowledge_snapshot(
+                args.vault,
+                snapshot=args.snapshot,
+                confirm=args.confirm,
+            )
+    if command == "skill" and args.skill_command in {"verify", "install", "update"}:
+        if args.skill_command == "verify":
+            if args.vault is None:
+                return verify_skill_bundle(args.bundle)
+            with KnowledgeVault(args.vault, read_only=True) as vault:
+                return verify_skill_bundle(args.bundle, vault=vault)
+        expected_vault_id = args.expected_vault_id
+        if args.vault is not None:
+            with KnowledgeVault(args.vault, read_only=True) as vault:
+                bound = verify_skill_bundle(args.bundle, vault=vault)
+                if not bound["valid"] and bound.get("source_vault_id") == vault.vault_id:
+                    raise RuntimeError(
+                        "same-vault skill bundle no longer matches current active knowledge"
+                    )
+                expected_vault_id = vault.vault_id
+        return install_skill_bundle(
+            args.bundle,
+            args.install_root,
+            target=cast(SkillTarget, args.target),
+            expected_vault_id=expected_vault_id,
+            trust_external=args.trust_external,
+            confirm=args.confirm,
+            update=args.skill_command == "update",
+        )
+    if command == "workbench":
+        from .operator_workbench import run_operator_workbench
+
+        return run_operator_workbench(args.vault)
     if command == "discovery-model":
         if args.discovery_model_command == "setup":
             return setup_discovery_model(
@@ -748,33 +1425,318 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         "approve",
         "approve-source",
         "revoke",
+        "forget",
         "relate",
         "import-package",
         "debug",
+        "rebuild-indexes",
     }
     nested_write = (
         (
             command == "source"
             and (
-                args.source_command in {"add", "update", "remove"}
+                args.source_command in {"add", "update", "remove", "governance"}
                 or (args.source_command == "add-dir" and not args.dry_run)
             )
         )
         or (command == "review" and args.review_command in {"approve", "reject", "approve-source"})
         or (command == "migrate" and args.apply)
         or (command == "run-receipt" and args.run_command == "create")
+        or (command == "feedback" and args.feedback_action in {None, "record"})
+        or (command == "inbox" and args.inbox_command == "promote")
         or (
-            command == "feedback"
-            and args.feedback_action in {None, "record"}
+            command == "relation"
+            and (
+                args.relation_command == "revise"
+                or (args.relation_command == "carry-forward" and args.apply)
+                or args.relation_command == "review-candidate"
+            )
         )
+        or (command == "lineage" and args.map_status is not None)
+        or (command == "job" and args.job_command in {"resume", "retry", "cancel"})
+        or (command == "projection" and args.projection_command == "propose")
+        or (command == "gc" and not args.dry_run and not args.orphans)
     )
     with KnowledgeVault(
         args.vault,
         read_only=command not in write_commands and not nested_write,
     ) as vault:
+        if command == "job":
+            if args.job_command == "list":
+                return list_ingest_jobs(vault, limit=args.limit)
+            if args.job_command == "show":
+                return load_ingest_job(vault, args.job_id)
+            if args.job_command == "cancel":
+                return cancel_ingest_job(vault, args.job_id)
+            return run_ingest_job(
+                vault,
+                args.job_id,
+                retry_failed=args.job_command == "retry",
+            )
+        if command == "snapshot":
+            return create_knowledge_snapshot(
+                vault,
+                args.output,
+                include_operator_state=args.include_operator_state,
+            )
+        if command == "gc":
+            if args.orphans:
+                return detect_knowledge_orphans(vault)
+            return garbage_collect_derived(
+                vault,
+                confirm=args.confirm,
+                dry_run=args.dry_run,
+            )
+        if command == "projection":
+            if args.projection_command == "export":
+                return export_knowledge_markdown(
+                    vault,
+                    args.output,
+                    max_sensitivity=cast(Sensitivity, args.max_sensitivity),
+                    replace=args.replace,
+                )
+            if args.projection_command == "diff":
+                return projection_diff(vault, args.projection)
+            return propose_projection_edits(
+                vault,
+                args.projection,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if command == "skill":
+            targets = tuple(args.target) or ("generic",)
+            return build_skill_bundle(
+                vault,
+                args.output,
+                skill_name=args.name,
+                description=args.description,
+                knowledge_keys=tuple(args.knowledge_key),
+                asset_ids=tuple(args.asset_id),
+                targets=cast(tuple[SkillTarget, ...], targets),
+                max_sensitivity=cast(Sensitivity, args.max_sensitivity),
+                max_items=args.max_items,
+                max_chars=args.max_chars,
+                max_tokens=args.max_tokens,
+                replace=args.replace,
+            )
+        if command == "retrieval-profile":
+            if args.profile_command == "train":
+                return train_retrieval_profile(
+                    vault,
+                    feedback_ids=tuple(args.feedback_id),
+                )
+            if args.profile_command == "evaluate":
+                return evaluate_retrieval_profile(
+                    vault,
+                    profile_id=args.profile_id,
+                    suite_path=args.suite,
+                )
+            if args.profile_command == "activate":
+                return activate_retrieval_profile(
+                    vault,
+                    profile_id=args.profile_id,
+                    evaluation_path=args.evaluation,
+                )
+            if args.profile_command == "rollback":
+                return rollback_retrieval_profile(vault)
+            active_profile = load_active_retrieval_profile(vault)
+            return {
+                "schema_version": "deeplaw.retrieval-profile-status/v1",
+                "vault_id": vault.vault_id,
+                "active": active_profile is not None,
+                "profile": active_profile,
+                "authority_effect": "ranking-only",
+            }
+        if command == "lineage":
+            if args.map_status is not None:
+                if args.knowledge_key is not None or args.asset_id is not None:
+                    raise ValueError(
+                        "lineage mapping cannot be combined with a lineage lookup selector"
+                    )
+                if args.reason is None:
+                    raise ValueError("lineage mapping requires --reason")
+                return review_lineage_mapping(
+                    vault,
+                    status=args.map_status,
+                    from_asset_ids=tuple(args.from_asset_id),
+                    to_asset_ids=tuple(args.to_asset_id),
+                    confirm_reviewed=args.confirm_reviewed,
+                    reviewer_id=args.reviewer_id,
+                    reason=args.reason,
+                )
+            if (args.knowledge_key is None) == (args.asset_id is None):
+                raise ValueError(
+                    "lineage lookup requires exactly one --knowledge-key or --asset-id"
+                )
+            return vault.knowledge_lineage(
+                knowledge_key=args.knowledge_key,
+                asset_id=args.asset_id,
+            )
+        if command == "relation":
+            if args.relation_command == "list":
+                return vault.temporal_relations(
+                    mode=args.mode,
+                    as_of=args.as_of,
+                    limit=args.limit,
+                )
+            if args.relation_command == "carry-forward":
+                if args.apply:
+                    return propose_relation_carry_forward(vault, limit=args.limit)
+                return plan_relation_carry_forward(vault, limit=args.limit)
+            if args.relation_command == "candidates":
+                return pending_relation_carry_forward(vault, limit=args.limit)
+            if args.relation_command == "review-candidate":
+                return review_relation_carry_forward(
+                    vault,
+                    relation_revision_id=args.relation_revision_id,
+                    decision=args.decision,
+                    confirm_reviewed=args.confirm_reviewed,
+                    reviewer_id=args.reviewer_id,
+                    reason=args.reason,
+                )
+            return vault.revise_temporal_relation(
+                args.relation_key,
+                status=args.status,
+                evidence_fragment_id=args.evidence_fragment_id,
+                confirm_reviewed=args.confirm_reviewed,
+                event_time=args.event_time,
+                valid_from=args.valid_from,
+                valid_to=args.valid_to,
+            )
+        if command == "inbox":
+            if args.inbox_command == "submit":
+                payload_path = args.payload.expanduser().absolute()
+                if (
+                    payload_path.is_symlink()
+                    or not payload_path.is_file()
+                    or not 1 <= payload_path.stat().st_size <= 1024 * 1024
+                ):
+                    raise ValueError("inbox payload must be a regular JSON file under 1 MiB")
+                payload = strict_json_loads(payload_path.read_bytes())
+                if not isinstance(payload, dict):
+                    raise ValueError("inbox payload must be a JSON object")
+                return submit_inbox_artifact(
+                    vault,
+                    artifact_type=args.artifact_type,
+                    payload=payload,
+                    producer_name=args.producer_name,
+                    producer_version=args.producer_version,
+                    priority_signals=tuple(args.priority_signal),
+                    sensitivity=cast(Sensitivity, args.sensitivity),
+                    confirm_no_case_data=args.confirm_no_case_data,
+                )
+            if args.inbox_command == "list":
+                return list_inbox_artifacts(
+                    vault,
+                    state=args.state,
+                    artifact_type=args.artifact_type,
+                    limit=args.limit,
+                )
+            if args.inbox_command in {"show", "verify"}:
+                result = verify_inbox_artifact(vault, args.artifact_id)
+                if args.inbox_command == "show" and result["valid"]:
+                    return result["artifact"]
+                return result
+            if args.inbox_command == "promote":
+                return promote_inbox_proposal(
+                    vault,
+                    artifact_id=args.artifact_id,
+                    confirm_reviewed=args.confirm_reviewed,
+                )
+            if args.inbox_command == "reject":
+                return reject_inbox_artifact(
+                    vault,
+                    artifact_id=args.artifact_id,
+                    confirm_reviewed=args.confirm_reviewed,
+                )
+        if command == "rebuild-indexes":
+            if not args.confirm:
+                raise ValueError("derived index rebuild requires --confirm")
+            return vault.rebuild_derived_indexes()
+        if command in {"recall", "diagnose-retrieval"}:
+            result = recall(
+                vault,
+                args.query,
+                goal=args.goal,
+                confirm_no_case_data=args.confirm_no_case_data,
+                mode=cast(RetrievalMode, args.mode),
+                max_items=args.max_items,
+                max_chars=args.max_chars,
+                max_tokens=args.max_tokens,
+                kinds=tuple(args.kind),
+                memory_tiers=tuple(args.memory_tier),
+                include_restricted=args.include_restricted,
+                as_of=args.as_of,
+                discovery_index_path=args.discovery_index,
+                model_root=args.model_root,
+                threads=args.threads,
+                reranker_manifest=args.reranker_manifest,
+            )
+            _write_last_retrieval_trace(vault.root, result["retrieval"]["trace"])
+            if command == "recall" and args.output is not None:
+                _write_capsule(args.output, result["capsule"])
+            return result
+        if command == "explain":
+            if args.last:
+                trace = _read_last_retrieval_trace(vault.root)
+                verification = verify_retrieval_trace(trace, vault=vault)
+                if not verification["valid"]:
+                    raise RuntimeError("last retrieval trace failed verification")
+                return {
+                    "schema_version": "deeplaw.knowledge-retrieval-explanation/v1",
+                    "trace": trace,
+                    "verification": verification,
+                }
+            if not args.confirm_no_case_data:
+                raise ValueError("retrieval explanation requires --confirm-no-case-data")
+            result = retrieve(
+                vault,
+                args.query,
+                mode=cast(RetrievalMode, args.mode),
+                limit=args.limit,
+                max_chars=args.max_chars,
+                as_of=args.as_of,
+                discovery_index_path=args.discovery_index,
+                model_root=args.model_root,
+                threads=args.threads,
+                reranker_manifest=args.reranker_manifest,
+                explain=True,
+            )
+            _write_last_retrieval_trace(vault.root, result["trace"])
+            return {
+                "schema_version": "deeplaw.knowledge-retrieval-explanation/v1",
+                "trace": result["trace"],
+                "verification": verify_retrieval_trace(result["trace"], vault=vault),
+            }
+        if command == "compare-retrieval":
+            if not args.confirm_no_case_data:
+                raise ValueError("retrieval comparison requires --confirm-no-case-data")
+            modes = tuple(args.mode) or ("lexical", "hybrid", "global")
+            result = compare_retrieval(
+                vault,
+                args.query,
+                modes=cast(tuple[RetrievalMode, ...], modes),
+                limit=args.limit,
+                max_chars=args.max_chars,
+                discovery_index_path=args.discovery_index,
+                as_of=args.as_of,
+                reranker_manifest=args.reranker_manifest,
+            )
+            _write_last_retrieval_trace(
+                vault.root,
+                result["runs"][-1]["trace"],
+            )
+            return result
         if command == "migrate":
             if args.verify:
-                result = vault.verify_knowledge_control_migration()
+                control = vault.verify_knowledge_control_migration()
+                identity = vault.verify_identity_v2_migration()
+                result = {
+                    "schema_version": "deeplaw.knowledge-migration-verification/v2",
+                    "vault_id": vault.vault_id,
+                    "control": control,
+                    "identity_v2": identity,
+                    "valid": bool(control["valid"] and identity["valid"]),
+                }
                 if args.backup is not None:
                     result = {
                         **result,
@@ -785,10 +1747,62 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     }
                     result["valid"] = bool(result["valid"] and result["backup"]["valid"])
                 return result
-            return vault.migrate_knowledge_control(
+            control = vault.migrate_knowledge_control(
                 apply=args.apply,
                 backup_path=args.backup,
             )
+            if not args.apply and not vault.control_enabled:
+                return {
+                    "schema_version": "deeplaw.knowledge-migration-plan/v2",
+                    "vault_id": vault.vault_id,
+                    "control": control,
+                    "identity_v2": {
+                        "required": True,
+                        "blocked_by": "knowledge-control/v1",
+                        "to_identity_schema": "deeplaw.knowledge-identity/v2",
+                    },
+                    "required": True,
+                    "applied": False,
+                }
+            identity = vault.migrate_identity_v2(
+                apply=args.apply,
+                backup_path=(None if control.get("applied") else args.backup),
+            )
+            result = {
+                "schema_version": "deeplaw.knowledge-migration-result/v2",
+                "vault_id": vault.vault_id,
+                "control": control,
+                "identity_v2": identity,
+                "required": bool(control["required"] or identity["required"]),
+                "applied": bool(control["applied"] or identity["applied"]),
+            }
+            if "backup" in control:
+                result["backup"] = control["backup"]
+            elif "backup" in identity:
+                result["backup"] = identity["backup"]
+            if "verification" in control:
+                result["verification"] = control["verification"]
+            elif "verification" in identity:
+                result["verification"] = identity["verification"]
+            return result
+        if command == "structure":
+            if args.structure_command == "get":
+                return vault.structure_get(args.node_id, max_chars=args.max_chars)
+            if args.structure_command == "list":
+                return vault.structure_list(
+                    source_id=args.source_id,
+                    compilation_id=args.compilation_id,
+                    parent_node_id=args.parent_node_id,
+                    limit=args.limit,
+                )
+            if args.structure_command == "search":
+                return vault.structure_search(
+                    args.query,
+                    source_id=args.source_id,
+                    limit=args.limit,
+                )
+            if args.structure_command == "trace":
+                return vault.structure_trace(args.node_id)
         if command == "source":
             if args.source_command == "add":
                 return _bounded_ingest_receipt(
@@ -803,6 +1817,9 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                         confirm_no_case_data=args.confirm_no_case_data,
                         pdf_fallback=args.pdf_fallback,
                         typed_extraction=args.typed_extraction,
+                        typed_extractor_manifest=args.typed_extractor_manifest,
+                        confirm_external_disclosure=args.confirm_external_disclosure,
+                        reference_proposals=args.reference_proposals,
                     )
                 )
             if args.source_command == "add-dir":
@@ -818,13 +1835,20 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     confirm_no_case_data=args.confirm_no_case_data,
                     pdf_fallback=args.pdf_fallback,
                     typed_extraction=args.typed_extraction,
+                    typed_extractor_manifest=args.typed_extractor_manifest,
+                    confirm_external_disclosure=args.confirm_external_disclosure,
+                    reference_proposals=args.reference_proposals,
                     dry_run=args.dry_run,
                 )
             if args.source_command == "list":
-                sources = (
-                    vault.source_versions(args.source_key)
-                    if args.source_key
-                    else vault.all_sources()
+                sources = _filter_source_selector(
+                    _source_versions_for_cli(
+                        vault,
+                        source_key=args.source_key,
+                        alias=args.alias,
+                    ),
+                    active=args.active,
+                    latest=args.latest,
                 )
                 return {
                     "schema_version": "deeplaw.knowledge-source-list/v1",
@@ -834,12 +1858,55 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     "truncated": len(sources) > 500,
                 }
             if args.source_command == "show":
-                return vault.source_info(args.source_id)
+                source_id = _resolve_source_id(
+                    vault,
+                    source_id=args.source_id,
+                    alias=args.alias,
+                    active=args.active,
+                    latest=args.latest,
+                )
+                return vault.source_info(source_id)
             if args.source_command == "verify":
-                return vault.verify_source(args.source_id)
+                source_id = _resolve_source_id(
+                    vault,
+                    source_id=args.source_id,
+                    alias=args.alias,
+                    active=args.active,
+                    latest=args.latest,
+                )
+                return vault.verify_source(source_id)
             if args.source_command == "diff":
-                return vault.source_diff(args.old_source_id, args.new_source_id)
+                if args.alias is not None:
+                    if args.old_source_id is not None or args.new_source_id is not None:
+                        raise ValueError(
+                            "source diff alias cannot be combined with exact source IDs"
+                        )
+                    versions = _source_versions_for_cli(vault, alias=args.alias)
+                    latest = _latest_source_version(versions)
+                    if latest["previous_source_id"] is None:
+                        raise ValueError("source diff alias requires at least two versions")
+                    old_source_id = latest["previous_source_id"]
+                    new_source_id = latest["source_id"]
+                else:
+                    if args.latest:
+                        raise ValueError("source diff --latest requires --alias")
+                    if args.old_source_id is None or args.new_source_id is None:
+                        raise ValueError(
+                            "source diff requires --alias or both exact source IDs"
+                        )
+                    old_source_id = args.old_source_id
+                    new_source_id = args.new_source_id
+                return vault.source_diff(old_source_id, new_source_id)
             if args.source_command == "update":
+                source_key = (
+                    _source_key_for_alias(vault, args.alias)
+                    if args.alias is not None
+                    else args.source_key
+                )
+                if source_key is None:
+                    raise ValueError("source update requires --source-key or --alias")
+                if vault.active_source_for_key(source_key) is None:
+                    raise RuntimeError("source update requires an active predecessor")
                 return _bounded_ingest_receipt(
                     compile_source(
                         vault,
@@ -851,15 +1918,42 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                         sensitivity=cast(Sensitivity, args.sensitivity),
                         confirm_no_case_data=args.confirm_no_case_data,
                         pdf_fallback=args.pdf_fallback,
-                        source_key=args.source_key,
+                        source_key=source_key,
                         typed_extraction=args.typed_extraction,
+                        typed_extractor_manifest=args.typed_extractor_manifest,
+                        confirm_external_disclosure=args.confirm_external_disclosure,
+                        reference_proposals=args.reference_proposals,
                     )
                 )
             if args.source_command == "remove":
+                source_id = _resolve_source_id(
+                    vault,
+                    source_id=args.source_id,
+                    alias=args.alias,
+                    active=args.active,
+                    latest=args.latest,
+                )
                 return vault.remove_source(
-                    args.source_id,
+                    source_id,
                     reason=args.reason,
                     confirm=args.confirm,
+                )
+            if args.source_command == "governance":
+                source_id = _resolve_source_id(
+                    vault,
+                    source_id=args.source_id,
+                    alias=args.alias,
+                    active=args.active,
+                    latest=args.latest,
+                )
+                return vault.update_source_governance(
+                    source_id,
+                    trust=cast(TrustLevel, args.trust),
+                    sensitivity=cast(Sensitivity, args.sensitivity),
+                    export_allowed=args.allow_export,
+                    reviewer_id=args.reviewer_id,
+                    reason=args.reason,
+                    confirm_reviewed=args.confirm_reviewed,
                 )
         if command == "review":
             if args.review_command == "queue":
@@ -1024,6 +2118,9 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     confirm_no_case_data=args.confirm_no_case_data,
                     pdf_fallback=args.pdf_fallback,
                     typed_extraction=args.typed_extraction,
+                    typed_extractor_manifest=args.typed_extractor_manifest,
+                    confirm_external_disclosure=args.confirm_external_disclosure,
+                    reference_proposals=args.reference_proposals,
                 )
             )
         if command == "propose":
@@ -1064,6 +2161,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 reason=args.reason,
                 confirm=args.confirm,
             ).to_dict()
+        if command == "forget":
+            return vault.selectively_forget(
+                knowledge_key=args.knowledge_key,
+                asset_id=args.asset_id,
+                reason=args.reason,
+                confirm=args.confirm,
+            )
         if command == "relate":
             return vault.add_relation(
                 subject_asset_id=args.subject_asset_id,
@@ -1071,6 +2175,9 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 object_asset_id=args.object_asset_id,
                 evidence_fragment_id=args.evidence_fragment_id,
                 confirm_reviewed=args.confirm_reviewed,
+                event_time=args.event_time,
+                valid_from=args.valid_from,
+                valid_to=args.valid_to,
             )
         if command == "search":
             return vault.search(

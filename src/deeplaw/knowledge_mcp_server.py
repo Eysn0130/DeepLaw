@@ -18,6 +18,7 @@ from mcp.server.stdio import stdio_server
 from . import __version__
 from .context_compiler import compile_context
 from .knowledge_store import KnowledgeVault, default_knowledge_vault
+from .retrieval_fabric import retrieve
 from .util import canonical_json, strict_json_loads
 
 KnowledgeOperation = Literal["search", "get", "context", "verify", "inspect"]
@@ -165,9 +166,28 @@ def _bounded_asset(asset: dict[str, Any], *, max_chars: int) -> dict[str, Any]:
 
 
 def _bounded_search_result(result: dict[str, Any]) -> dict[str, Any]:
-    for card in result.get("results", []):
+    cards = result.get("results", [])
+    if not isinstance(cards, list):
+        raise RuntimeError("Knowledge retrieval result is invalid")
+    for card in cards:
+        if not isinstance(card, dict):
+            raise RuntimeError("Knowledge retrieval card is invalid")
         _bounded_asset_metadata(card, source_ref_limit=1)
-    return result
+        for field in ("knowledge_key", "channels", "duty_coverage"):
+            card.pop(field, None)
+    return {
+        "schema_version": "deeplaw.knowledge-search/v1",
+        "vault_id": result["vault_id"],
+        "vault_revision": result["vault_revision"],
+        "query": result["query"],
+        "results": cards,
+        "ranking": {
+            "method": "evidence_governed_retrieval_fabric",
+            "numeric_confidence_exposed": False,
+        },
+        "gaps": result["gaps"],
+        "total_excerpt_chars": result["total_excerpt_chars"],
+    }
 
 
 def _bounded_verification(result: dict[str, Any]) -> dict[str, Any]:
@@ -217,13 +237,18 @@ def handle_knowledge_support(
                 source_integrity.pop("invalid_source_ids_truncated", None)
         elif operation == "search":
             result = _bounded_search_result(
-                vault.search(
+                retrieve(
+                    vault,
                     query,
+                    mode="auto",
                     limit=min(limit, 5),
                     max_chars=min(max_chars, 6_000),
-                    kinds=kinds or (),
-                    memory_tiers=memory_tiers or (),
-                ).to_dict()
+                    kinds=tuple(kinds or ()),
+                    memory_tiers=tuple(memory_tiers or ()),
+                    include_restricted=False,
+                    include_inactive=False,
+                    explain=False,
+                )
             )
         elif operation == "get":
             if asset_id is None:
@@ -247,15 +272,36 @@ def handle_knowledge_support(
                 raise PermissionError("restricted Knowledge Assets are unavailable to MCP hosts")
             result = _bounded_verification(vault.verify_asset(asset_id))
         elif operation == "context":
+            if not confirm_no_case_data:
+                raise ValueError(
+                    "context compilation requires confirmation that task and goal "
+                    "contain no Analytix case material"
+                )
+            selected_task = task.strip()
+            selected_goal = goal.strip() if goal else None
+            context_query = f"{selected_task} {selected_goal or ''}".strip()
+            retrieval_result = retrieve(
+                vault,
+                context_query,
+                mode="auto",
+                limit=min(20, min(limit, 8) * 3),
+                max_chars=20_000,
+                kinds=tuple(kinds or ()),
+                memory_tiers=tuple(memory_tiers or ()),
+                include_restricted=False,
+                include_inactive=False,
+                explain=False,
+            )
             result = compile_context(
                 vault,
-                task=task,
+                task=selected_task,
                 confirm_no_case_data=confirm_no_case_data,
-                goal=goal,
+                goal=selected_goal,
                 max_items=min(limit, 8),
                 max_chars=min(max_chars, 8_000),
                 kinds=tuple(kinds or ()),
                 memory_tiers=tuple(memory_tiers or ()),
+                retrieval_result=retrieval_result,
             )
         else:
             raise ValueError(f"unsupported knowledge operation: {operation}")

@@ -1,0 +1,96 @@
+{
+  "schema_version": "deeplaw.typed-compiler-benchmark-input/v1",
+  "suite_id": "typed-compiler-dev-fixture-v1",
+  "candidate_line": "0.7.0-unreleased",
+  "compiler_identity": "development-fixture/mixed-predictions-v1",
+  "claim_eligible": false,
+  "limitations": [
+    "Synthetic scorer fixture; it tests metric semantics and is not compiler-quality evidence.",
+    "Predictions and evaluator labels are embedded, not independently produced or reviewed."
+  ],
+  "cases": [
+    {
+      "case_id": "single-source",
+      "source_refs": [
+        {
+          "ref_id": "ref-a",
+          "source_id": "source-a",
+          "locator": "lines:1-2",
+          "text_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "gold_claims": [
+        {
+          "claim_id": "gold-a",
+          "kind": "constraint",
+          "statement": "The vault must remain local.",
+          "source_ref_ids": ["ref-a"],
+          "cross_document": false
+        }
+      ],
+      "predicted_claims": [
+        {
+          "prediction_id": "prediction-a",
+          "kind": "constraint",
+          "statement": "The vault must remain local.",
+          "source_ref_ids": ["ref-a"],
+          "matched_gold_claim_id": "gold-a",
+          "claim_equivalent": true,
+          "support_label": "supported",
+          "review_decision": "accept",
+          "cross_document": false
+        },
+        {
+          "prediction_id": "prediction-hallucinated",
+          "kind": "fact",
+          "statement": "The vault is hosted in a public cloud.",
+          "source_ref_ids": ["ref-a"],
+          "matched_gold_claim_id": null,
+          "claim_equivalent": false,
+          "support_label": "hallucinated",
+          "review_decision": "reject",
+          "cross_document": false
+        }
+      ]
+    },
+    {
+      "case_id": "cross-document",
+      "source_refs": [
+        {
+          "ref_id": "ref-b",
+          "source_id": "source-b",
+          "locator": "paragraph:1",
+          "text_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "ref_id": "ref-c",
+          "source_id": "source-c",
+          "locator": "paragraph:4",
+          "text_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "gold_claims": [
+        {
+          "claim_id": "gold-cross",
+          "kind": "requirement",
+          "statement": "Review both sources before activation.",
+          "source_ref_ids": ["ref-b", "ref-c"],
+          "cross_document": true
+        }
+      ],
+      "predicted_claims": [
+        {
+          "prediction_id": "prediction-cross",
+          "kind": "requirement",
+          "statement": "Review both sources before activation.",
+          "source_ref_ids": ["ref-b", "ref-c"],
+          "matched_gold_claim_id": "gold-cross",
+          "claim_equivalent": true,
+          "support_label": "supported",
+          "review_decision": "accept",
+          "cross_document": true
+        }
+      ]
+    }
+  ]
+}

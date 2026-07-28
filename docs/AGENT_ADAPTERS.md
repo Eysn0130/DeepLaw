@@ -1,7 +1,7 @@
 # DeepLaw Agent Adapters
 
-DeepLaw 2.0 integrates with Codex, Claude Code, OpenCode, and, in a later
-change, Analytix through two separate optional local read-only MCP products.
+DeepLaw 2.0 provides local adapters for Codex, Claude Code, and OpenCode through
+two separate optional read-only MCP products.
 They must not be collapsed into one implicit always-on capability:
 
 | Product | Plugin | Process | Single leaf |
@@ -11,6 +11,24 @@ They must not be collapsed into one implicit always-on capability:
 
 This document describes adapter behavior only. Corpus building, release
 governance, and retrieval internals are separate concerns.
+
+## Acceptance status
+
+| Surface | Status | Evidence boundary |
+| --- | --- | --- |
+| MCP protocol and closed tool schemas | **Supported** | contract and subprocess tests |
+| Codex/Claude/OpenCode manifests and static configuration | **Supported local-only** | repository validators/tests |
+| Generic read-only Skill bundle | **Supported local-only** | source/hash/budget/test manifest verification |
+| No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
+| No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
+| No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
+| Real model/session tasks on all hosts | **External verification pending** | competitive evidence only; no-model lifecycle is not task acceptance |
+
+The v0.7.0 host report is deliberately scoped to official-CLI configuration, manifest, lifecycle,
+and MCP stdio handshake without a model or API key. It is sufficient for commercial host packaging,
+but it is not reported as model/task acceptance. Real recall/context/verify, Explain boundary,
+restricted exclusion, proposal/feedback handling, and inactive-session tasks remain in the separate
+competitive evidence program.
 
 ## Stable boundary
 
@@ -165,6 +183,26 @@ explicitly:
 codex plugin marketplace add /absolute/path/to/DeepLaw
 codex plugin add deeplaw@deeplaw
 ```
+
+The reproducible lifecycle diagnostic uses a fresh temporary `CODEX_HOME`, `HOME`, and XDG roots,
+does not seed user configuration or credentials, never starts a model/API request, and retains only
+sanitized parsed state plus hashes and byte counts for the raw CLI streams:
+
+```bash
+uv run --frozen python benchmarks/hosts/run_codex_plugin_smoke.py \
+  --codex /absolute/path/to/codex \
+  --output dist/codex-plugin-smoke.json
+```
+
+The checked-in 2026-07-28 result is
+[`benchmarks/hosts/codex-plugin-smoke-2026-07-28.json`](../benchmarks/hosts/codex-plugin-smoke-2026-07-28.json).
+It discovered both plugins, installed both, proved the untouched product remained installed while
+the other was removed and re-added, compared every cached plugin file to its source bytes twice,
+and finished with no installed plugin. The report sets `scope=plugin-lifecycle-only`,
+`full_host_acceptance=false`, and `claim_eligible=false`. It did not enforce OS network isolation,
+start MCP/model sessions, or test task activation, session tool discovery, recall, context, verify,
+Explain, restricted exclusion, read-only behavior, proposal/feedback artifacts, or inactive
+zero-impact.
 
 ```text
 $research-chinese-law 核验《中华人民共和国刑法》某条在 2020-06-01 的有效版本。
@@ -346,10 +384,10 @@ and a deterministic hit reason, not a confidence probability. Context items
 identify a lexical or bounded reviewed-relation selection reason, and
 open-question actions contain only an Asset URI.
 
-## Future Analytix connection
+## Analytix remains outside DeepLaw
 
-Do not modify Analytix merely to make DeepLaw globally visible. Add the bridge
-in a later, scoped Analytix change with these invariants:
+Do not modify Analytix merely to make DeepLaw globally visible. DeepLaw does not store Analytix case
+projects. Any separately authorized future host bridge would have to preserve these invariants:
 
 1. Register an optional DeepLaw stdio MCP profile, disabled for normal tasks.
 2. Start `deeplaw mcp --stdio` only after an explicit legal-research action or
@@ -381,7 +419,8 @@ Before publishing an adapter release:
 
 1. Parse both products' Codex/Claude manifests, `.mcp.json`,
    `agents/openai.yaml`, and OpenCode samples.
-2. Run the Codex plugin and Skill validators for both plugin roots.
+2. Run the Codex plugin and Skill validators for both plugin roots, then run the isolated Codex
+   plugin-lifecycle smoke and verify its schema/digest/source inventories.
 3. Run `claude plugin validate` for both plugin roots when Claude Code is
    installed.
 4. Validate the OpenCode config and agent with the target OpenCode release.

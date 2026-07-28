@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import tomllib
 from collections import Counter
 from pathlib import Path
 
@@ -24,16 +23,6 @@ def _assert_snapshot(repository: Path, summary_name: str) -> None:
     assert dict(buckets) == summary["expected_bucket_counts"]
 
 
-def _python_source_tree_sha256(repository: Path) -> str:
-    source_tree = hashlib.sha256()
-    for path in sorted((repository / "src" / "deeplaw").rglob("*.py")):
-        source_tree.update(path.relative_to(repository).as_posix().encode("utf-8"))
-        source_tree.update(b"\0")
-        source_tree.update(path.read_bytes())
-        source_tree.update(b"\0")
-    return source_tree.hexdigest()
-
-
 def test_historical_legal_benchmark_fixtures_are_immutable() -> None:
     repository = Path(__file__).resolve().parents[1]
 
@@ -42,7 +31,7 @@ def test_historical_legal_benchmark_fixtures_are_immutable() -> None:
     _assert_snapshot(repository, "core-v5-candidate-2026-07-15.json")
 
 
-def test_current_knowledge_control_candidate_snapshot_is_source_bound() -> None:
+def test_historical_v060_knowledge_control_candidate_keeps_its_identity() -> None:
     repository = Path(__file__).resolve().parents[1]
     snapshot = json.loads(
         (
@@ -52,30 +41,21 @@ def test_current_knowledge_control_candidate_snapshot_is_source_bound() -> None:
         ).read_text(encoding="utf-8")
     )
     implementation = snapshot["implementation"]
-    project = tomllib.loads(
-        (repository / "pyproject.toml").read_text(encoding="utf-8")
-    )
-
     assert snapshot["schema_version"] == "deeplaw.knowledge-os-candidate/v1"
     assert snapshot["status"] == "release_candidate_internal_not_held_out"
-    assert snapshot["package_version"] == project["project"]["version"] == "0.6.0"
-    assert (
-        "/benchmarks/knowledge-os-control-plane-candidate-2026-07-27.json"
-        in project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"]
+    assert snapshot["package_version"] == "0.6.0"
+    assert implementation["candidate_code_commit"] == (
+        "aea0c319bdd72c2c5e3ed2a26bd71a97f6fa686f"
     )
-    assert (
-        hashlib.sha256((repository / "pyproject.toml").read_bytes()).hexdigest()
-        == implementation["pyproject_sha256"]
+    assert implementation["pyproject_sha256"] == (
+        "f1a7dba03940e095748b1e3020acbc87cccc38a36bd0cff7e45946bd96ec7066"
     )
-    assert (
-        hashlib.sha256((repository / "uv.lock").read_bytes()).hexdigest()
-        == implementation["uv_lock_sha256"]
+    assert implementation["uv_lock_sha256"] == (
+        "d1f3989517706a2d23daa3f755ce27423e011db1735599757aec1a9171c93df8"
     )
-    assert (
-        _python_source_tree_sha256(repository)
-        == implementation["python_source_tree_sha256"]
+    assert implementation["python_source_tree_sha256"] == (
+        "4302ba55322553d64680ee5a612f1b828be93fa7106e4f37a8601f57a1710a11"
     )
-    assert len(implementation["candidate_code_commit"]) == 40
     assert implementation["tracked_worktree_dirty_at_manifest_generation"] is False
     assert implementation["local_build_artifacts"]["fresh_wheel_lifecycle_verified"] is True
 

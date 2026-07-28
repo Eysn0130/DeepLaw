@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/baseline-evidence-collection-report.v1.schema.json",
+  "title": "DeepLaw official-baseline evidence collection report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "collection_id", "collection_manifest_sha256",
+    "registry_file_sha256", "registry_sha256", "expected_system_count",
+    "submitted_run_count", "valid_run_count", "successful_run_count",
+    "required_system_ids", "valid_system_ids", "successful_system_ids",
+    "missing_system_ids", "unexpected_system_ids", "duplicate_system_ids",
+    "invalid_runs", "run_evidence", "common_bindings", "fairness_checks",
+    "collection_complete", "claim_eligible", "claim_ineligibility_reason",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.baseline-evidence-collection-report/v1"},
+    "collection_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "collection_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "registry_file_sha256": {"$ref": "#/$defs/sha256"},
+    "registry_sha256": {"$ref": "#/$defs/sha256"},
+    "expected_system_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "submitted_run_count": {"type": "integer", "minimum": 0, "maximum": 64},
+    "valid_run_count": {"type": "integer", "minimum": 0, "maximum": 64},
+    "successful_run_count": {"type": "integer", "minimum": 0, "maximum": 64},
+    "required_system_ids": {"$ref": "#/$defs/system_ids"},
+    "valid_system_ids": {"$ref": "#/$defs/system_ids"},
+    "successful_system_ids": {"$ref": "#/$defs/system_ids"},
+    "missing_system_ids": {"$ref": "#/$defs/system_ids"},
+    "unexpected_system_ids": {"$ref": "#/$defs/system_ids"},
+    "duplicate_system_ids": {"$ref": "#/$defs/system_ids"},
+    "invalid_runs": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["system_id", "code", "reason"],
+        "properties": {
+          "system_id": {"$ref": "#/$defs/system_id"},
+          "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,99}$"},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "run_evidence": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "system_id", "plan_sha256", "receipt_sha256", "execution_status",
+          "raw_output_sha256", "resource_record_sha256",
+          "manual_record_sha256", "evaluation_environment_record_sha256"
+        ],
+        "properties": {
+          "system_id": {"$ref": "#/$defs/system_id"},
+          "plan_sha256": {"$ref": "#/$defs/sha256"},
+          "receipt_sha256": {"$ref": "#/$defs/sha256"},
+          "execution_status": {
+            "enum": [
+              "succeeded", "command_failed", "bounded_subprocess_failed",
+              "output_invalid", "resource_invalid", "manual_record_invalid"
+            ]
+          },
+          "raw_output_sha256": {"$ref": "#/$defs/nullable_sha256"},
+          "resource_record_sha256": {"$ref": "#/$defs/nullable_sha256"},
+          "manual_record_sha256": {"$ref": "#/$defs/nullable_sha256"},
+          "evaluation_environment_record_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "common_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluator_run_id_sha256", "corpus_sha256", "queries_sha256",
+        "query_case_ids_sha256", "hardware_sha256", "reader_sha256",
+        "measurement_sha256", "context_token_budget", "top_k"
+      ],
+      "properties": {
+        "evaluator_run_id_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "corpus_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "queries_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "query_case_ids_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "hardware_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "reader_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "measurement_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "context_token_budget": {"type": ["integer", "null"], "minimum": 256, "maximum": 100000},
+        "top_k": {"type": ["integer", "null"], "minimum": 1, "maximum": 100}
+      }
+    },
+    "fairness_checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "passed", "observed_count", "expected_count"],
+        "properties": {
+          "check": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,99}$"},
+          "passed": {"type": "boolean"},
+          "observed_count": {"type": "integer", "minimum": 0, "maximum": 64},
+          "expected_count": {"type": "integer", "minimum": 1, "maximum": 64}
+        }
+      }
+    },
+    "collection_complete": {"type": "boolean"},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reason": {"type": "string", "minLength": 1, "maxLength": 500},
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {
+      "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "system_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "system_ids": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/system_id"}
+    }
+  }
+}

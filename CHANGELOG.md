@@ -3,6 +3,166 @@
 All notable product changes are recorded here. DeepLaw 2.0 is the product name; Python package
 versions follow semantic versioning independently.
 
+## 0.7.0 — 2026-07-28
+
+Commercial GA is approved independently from competitive leadership. The signed release manifest
+records `commercial_release_eligible=true` and `competitive_claim_eligible=false`. Real model-task
+E2E, 17 named-baseline results, secret held-outs, and independent evaluator signatures remain
+incomplete and are not represented as completed by static compatibility or plugin lifecycle tests.
+
+### Added
+
+- Knowledge Identity v2: stable collection/logical-path source identity, immutable source,
+  compilation, proposal-set, Knowledge, and governance revisions; many-to-many source references;
+  split/merge/modified/deleted/ambiguous lineage; and temporal relation revisions.
+- Explicit source-bound cross-key Lineage review for split, merged, and ambiguous mappings, with a
+  closed result contract, idempotent evidence, Workbench visible-row selection, and no activation or
+  approval inheritance.
+- Review-gated relation carry-forward planning, proposal, and approval/rejection: unchanged
+  endpoints may produce inactive candidates, modified endpoints require full review, and
+  deleted/split/merge/ambiguous endpoints remain blocked from the current graph.
+- Multi-format Source Adapter and Source IR/Tree APIs for Markdown/TXT, HTML, PDF, DOCX, PPTX,
+  XLSX, EPUB, code, JSON/JSONL/YAML/TOML, CSV/TSV, SQL, conversation, and tool-result structure.
+  Python uses AST extraction; JavaScript/JSX, TypeScript/TSX, Java, Go, and Rust use exact-pinned
+  official Tree-sitter grammars with compiler/grammar identity, bounded syntax trees, explicit
+  recovery flags, imports, nested symbols, line spans, doc comments, and call references.
+- Exact-pinned SQLGlot Source Adapter with compiler identity, robust statement boundaries, CTE,
+  table and column AST nodes, precise line spans, and explicit bounded lexical fallback.
+- Closed OOXML/EPUB package relationships now preserve presentation slide/object/notes order and
+  workbook/spine order, reject external, escaping, missing, ambiguous, and duplicate targets, and
+  bound every archive inventory. DOCX v3 also preserves list/endnote structure and rejects unsafe
+  unused members before parsing selected XML.
+- Atomic Workbench edit/split/merge now retains exact Source References and Identity v2 bindings,
+  records reviewed cross-key lineage without inheriting approval, writes rejection governance and
+  receipts in the same transaction, and uses visible row numbers instead of copied Asset IDs.
+- Workbench approve/reject batches now commit atomically, reject duplicate selections, and require
+  an independent risk confirmation before a quarantined proposal can be activated.
+- Owner-only, hash-bound, one-shot Source Snapshots for explicit public HTTPS capture and exact
+  revisions in existing local Git repositories. HTTPS applies DNS-pinned TLS, SSRF/redirect/type/
+  size/hash gates and always enters as untrusted; Git performs no clone, checkout, protocol access,
+  or lazy fetch and keeps absolute repository paths outside canonical identity. Both use resumable
+  ingest-job v2 and ordinary human review; historical v1 jobs normalize forward on resume.
+- Deterministic-v2, pinned local-model, explicit external-model, and off compiler modes. External
+  disclosure is explicit and every model result remains proposal-only.
+- Evidence-Governed Retrieval Fabric with stable Query Plans, exact/BM25/tree/graph/temporal/
+  feedback channels, optional Dense and pinned local-reranker candidates, rank fusion, source
+  diversity, Knowledge Duties, admission, token budgets, Explain Traces, and diagnostics.
+- Retrieval Fabric v2 adds bounded one-edit ASCII typo repair after lexical misses and bounded
+  two-hop traversal over reviewed, source-evidenced relations; global recall remains Capsule-bound
+  and token-limited.
+- Proposal Inbox, retrieval-profile train/evaluate/activate/rollback, resumable ingest jobs,
+  retry/cancel/crash recovery, sync/watch, snapshots, restore, GC, orphan detection, and selective
+  forgetting that retains audit history.
+- Golden `init/add/sync/review/recall/explain/feedback/status/open` commands, deterministic shell
+  completion, curses Operator Workbench, and rich Markdown/Obsidian/JSON Canvas projections.
+- Stable logical-path source aliases with fail-closed historical rename/move resolution and explicit
+  `--active` / `--latest` selectors for advanced source operations.
+- Reverse projection diff that can only create quarantined proposals, plus a source-bound Skill
+  Factory whose external imports remain quarantined.
+- Native Windows ACL evaluation/hardening for owner SID, Users, Everyone, inheritance, reparse
+  points and junctions, with Windows-only real-filesystem tests in the mandatory commercial
+  workflow. A release cannot be assembled when any required case skips.
+- Official-adapter registry for 17 named baseline configurations and a claim-ineligible 100k/1m
+  Retrieval Fabric diagnostic runner. Actual 100k and one-million construction diagnostics now
+  pass their complete workloads and configured latency gates; clean frozen-candidate reruns and
+  every third-party execution remain pending.
+- Official baseline execution-plan/receipt v2 binds and rechecks exact registry bytes, a clean
+  pinned Git worktree and submodules, corpus/query bytes and complete case-ID inventory, the
+  wrapper/executable, and a fixed hardware/software/model/common-reader/network/measurement
+  environment. Separate raw output, resource/failure record, bounded logs, and receipt artifacts
+  are retained; invalid coverage, non-finite output, cost/resource binding drift, and post-receipt
+  artifact changes fail closed. A 17-system collection gate checks common fairness dimensions and
+  retained evidence while remaining claim-ineligible; query networking still requires an
+  evaluator-provided OS sandbox and independent attestation.
+- The scripted Obsidian baseline now uses a two-phase manual plan/seal contract rather than a fake
+  subprocess. It binds per-case outcome, quality, provenance, staleness, Token and timing records,
+  exact screen capture, before/after vault archives, common raw output/resource failures, and the
+  frozen workflow before entering the collection gate.
+- A final External Evaluator Kit freezer/verifier now fails closed unless a clean exact commit,
+  complete successful 17-system evidence collection, pre-delivery corpus commitment, immutable
+  model-file manifests, passed case-level statistical gate, wheel/sdist, OCI container, SBOM,
+  lock, contracts, tokenizer/index profiles, raw outputs/resources, and signature tools all bind.
+  It emits a portable content-addressed directory and verifies detached Ed25519 signatures only
+  against an independently trusted key; kit integrity and signatures remain claim-ineligible.
+- A closed Typed Compiler benchmark scorer for precision/recall, hallucinated and unsupported
+  claims, source-span correctness, duplicates, review acceptance, and cross-document synthesis,
+  with a claim-ineligible synthetic fixture that tests metric semantics rather than product quality.
+- Default/optional dependency audits with exact OpenVEX coverage, CycloneDX SBOM generation,
+  installed-license and package-content inventories, byte-identical wheel/sdist verification,
+  fresh-wheel tests, Sigstore signing, and GitHub provenance/SBOM attestation workflows.
+- A schema-validated actual-PDF diagnostic that executes the fixed local `pipeline` backend with
+  the fully rehashed pinned model bundle; the checked-in dirty-worktree result remains explicitly
+  claim-ineligible and does not stand in for OCR/layout or cross-platform release evidence.
+- A real Codex CLI plugin-lifecycle smoke runs both local marketplace products inside a temporary
+  configuration without supplied user credentials, verifies exact cached source inventories,
+  removes/re-adds each plugin while the other survives, and retains only sanitized output hashes.
+  Its checked-in report is explicitly lifecycle-only and cannot satisfy model/session host
+  acceptance.
+
+### Changed
+
+- The product direction is now explicitly and permanently local single-user; multi-tenant SaaS,
+  team RBAC, remote canonical databases, central services, and default telemetry are out of scope.
+- Context compilation now accepts many-to-many evidence bindings and treats retrieval ranking as
+  candidate selection only, never authority, approval, applicability, or confidence.
+- The read-only `knowledge_support` search and Context operations now use the same bounded
+  Evidence-Governed Retrieval Fabric; the MCP view omits operator traces and Dense remains
+  unavailable unless an operator explicitly prepares and selects it outside MCP.
+- Human projection is a rich derived view rather than a minimal one-way export; SQLite and source
+  bytes remain canonical.
+- User-facing terminology now uses **Capsule-bound Run Record**.
+
+### Fixed
+
+- Query Plan IDs now bind admission filters and reranker profile before hashing; trace verification
+  detects plan mutation.
+- Source IR root lookup no longer performs a per-block linear scan during large Markdown ingest.
+- Identity integrity replay preloads fragment/node bindings rather than issuing random SQLite
+  lookups for each fragment.
+- Exact semantic-key lookup now uses the active semantic-key index and exact-phrase lookup uses
+  FTS-bounded candidates, removing a full Asset-table scan exposed by the one-million diagnostic.
+- Exact identifier queries avoid scoring source-wide common terms before the distinctive token,
+  and hybrid Source Tree ranking seeds from bounded lexical candidates to prevent source swamp.
+- Temporal as-of views conservatively resolve same-second governance transitions instead of using
+  a hash as causal order.
+- Inbox promotion records the proposal artifact itself as an untrusted Source Revision and binds
+  the resulting quarantine through Identity v2.
+- Retrieval graph and temporal channels now require active reviewed relation evidence, propagate
+  evidence-source sensitivity into relation governance, and exclude source-free compatibility,
+  restricted, superseded, or removed evidence from current Fabric/Capsule selection.
+- Source replacement and explicit removal now append source-governance lifecycle revisions;
+  removal also records Asset governance and deleted lineage while retaining historical bytes.
+- Stable source `--latest` resolution now selects the sole pending successor or active revision and
+  fails closed for parallel pending branches instead of depending on second-resolution timestamps
+  or internal-ID sort order; Workbench Source Diff follows the same explicit lifecycle link.
+- Bounded subprocess execution now caps stdout, stderr, stdin, and wall time before typed
+  extractors, local rerankers, document converters, dependency probes, or ACL checks can consume
+  unbounded process output.
+- OOXML XML trees now have byte/node/depth gates; XLSX rejects duplicate or out-of-order cells,
+  invalid shared-string references and malformed merged ranges. SQL parser recursion exhaustion is
+  recorded as the same explicit bounded lexical fallback as other closed parse failures.
+- Retrieval gaps now report stored-source integrity failure regardless of where that reason appears
+  in a candidate's ordered exclusion inventory.
+- Tagged release signing is now downstream of a frozen Linux/macOS/Windows test, build, and
+  fresh-wheel matrix; manual branch dispatch can no longer create release signatures.
+- Signed release artifacts are now the exact byte-for-byte outputs produced by the two-build
+  reproducibility verifier; the workflow no longer verifies one pair and separately rebuilds a
+  different wheel/sdist for signing.
+- The PEP 517 backend and its complete isolated-build dependency set are exact-version constrained,
+  lock-visible, separately audited, and hash-bound into the reproducibility report.
+
+### Commercial release and competitive evidence
+
+- All named third-party baseline results remain `pending_external_execution`; competitive claims
+  remain ineligible.
+- Codex, Claude Code, and OpenCode official CLIs pass the no-model configuration/manifest,
+  discovery, install, enable/disable, upgrade, removal, MCP handshake, and product-isolation matrix.
+  This does not claim a model session or task result.
+- The commercial workflow requires identical verified wheel/sdist bytes on Linux, macOS, and
+  Windows; native Windows ACL/junction/reparse tests with zero mandatory skips; a non-root,
+  networkless-default OCI; SBOM, license, audit and OpenVEX evidence; OIDC signatures; provenance;
+  and post-release download/reinstall verification.
+
 ## 0.6.0 — 2026-07-27
 
 ### Added

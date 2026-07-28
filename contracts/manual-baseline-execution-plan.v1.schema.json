@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/manual-baseline-execution-plan.v1.schema.json",
+  "title": "DeepLaw scripted-human baseline execution plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "registry", "system", "implementation_revision", "corpus",
+    "queries", "evaluation_environment", "workflow", "artifacts", "result_status",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.manual-baseline-execution-plan/v1"},
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "file_sha256", "canonical_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "canonical_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "system": {
+      "type": "object",
+      "minProperties": 14,
+      "maxProperties": 14
+    },
+    "implementation_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "corpus": {"$ref": "#/$defs/input"},
+    "queries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size", "case_count", "case_ids_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 17179869184},
+        "case_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "case_ids_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evaluation_environment": {"$ref": "#/$defs/record_binding"},
+    "workflow": {"$ref": "#/$defs/file_binding"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_output_path_hint", "resource_record_path_hint",
+        "manual_record_path_hint", "receipt_path_hint"
+      ],
+      "properties": {
+        "raw_output_path_hint": {"$ref": "#/$defs/path"},
+        "resource_record_path_hint": {"$ref": "#/$defs/path"},
+        "manual_record_path_hint": {"$ref": "#/$defs/path"},
+        "receipt_path_hint": {"$ref": "#/$defs/path"}
+      }
+    },
+    "result_status": {"const": "planned_not_executed"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 17179869184}
+      }
+    },
+    "record_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size", "record_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 4194304},
+        "record_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "resolved_path", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "resolved_path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

@@ -170,7 +170,7 @@
           "additionalProperties": false,
           "required": ["method", "numeric_confidence_exposed"],
           "properties": {
-            "method": {"const": "deterministic_lexical"},
+            "method": {"const": "evidence_governed_retrieval_fabric"},
             "numeric_confidence_exposed": {"const": false}
           }
         },
@@ -522,23 +522,33 @@
           "required": [
             "constraint",
             "decision",
+            "definition",
+            "assumption",
+            "exception",
             "experience",
             "fact",
             "lesson",
             "procedure",
             "question",
             "reference",
+            "requirement",
+            "risk",
             "rule"
           ],
           "properties": {
             "constraint": {"type": "integer", "minimum": 0},
             "decision": {"type": "integer", "minimum": 0},
+            "definition": {"type": "integer", "minimum": 0},
+            "assumption": {"type": "integer", "minimum": 0},
+            "exception": {"type": "integer", "minimum": 0},
             "experience": {"type": "integer", "minimum": 0},
             "fact": {"type": "integer", "minimum": 0},
             "lesson": {"type": "integer", "minimum": 0},
             "procedure": {"type": "integer", "minimum": 0},
             "question": {"type": "integer", "minimum": 0},
             "reference": {"type": "integer", "minimum": 0},
+            "requirement": {"type": "integer", "minimum": 0},
+            "risk": {"type": "integer", "minimum": 0},
             "rule": {"type": "integer", "minimum": 0}
           }
         },
@@ -563,6 +573,11 @@
         "experience",
         "lesson",
         "question",
+        "exception",
+        "definition",
+        "requirement",
+        "risk",
+        "assumption",
         "reference"
       ]
     },

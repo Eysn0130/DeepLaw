@@ -14,14 +14,24 @@ from .catalog_signing import (
     initialize_signing_key,
     sign_catalog_file,
 )
+from .context_compiler import verify_capsule_file
 from .document_engine_models import install_models, model_status
 from .evaluate import evaluate_file
+from .golden_cli import (
+    GOLDEN_COMMANDS,
+    add_golden_parsers,
+    handle_golden_command,
+    handle_golden_doctor,
+    render_golden_result,
+    resolve_golden_vault,
+)
 from .ingest import build_release
 from .knowledge_cli import (
     add_knowledge_parser,
     handle_knowledge_command,
     render_knowledge_result,
 )
+from .knowledge_store import KnowledgeVault
 from .markdown_export import export_markdown
 from .mcp_server import run_mcp
 from .models import SearchRequest
@@ -39,6 +49,7 @@ from .private_library import (
     resolve_private_database,
 )
 from .search import DeepLaw, response_json
+from .shell_completion import shell_completion
 from .store import database_sha256, default_home, resolve_active_database
 from .vision import (
     EXTRACTION_EVIDENCE_SCHEMA,
@@ -58,6 +69,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"deeplaw {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+    add_golden_parsers(commands)
 
     build = commands.add_parser("build", help="Build an immutable release from a verified manifest")
     build.add_argument("--source-root", type=Path, required=True)
@@ -99,6 +111,19 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--segment-id")
     verify.add_argument("--receipt-id")
     verify.add_argument("--db", type=Path)
+    verify.add_argument("--capsule", type=Path)
+    verify.add_argument("--last", action="store_true")
+    verify.add_argument("--vault", type=Path)
+    verify.add_argument("--project-root", type=Path)
+    verify.add_argument("--format", choices=("human", "json", "jsonl"), default="human")
+    verify.add_argument("--quiet", action="store_true")
+    verify.add_argument("--no-color", action="store_true")
+
+    completion = commands.add_parser(
+        "completion",
+        help="Print deterministic shell completion for bash, zsh, or fish",
+    )
+    completion.add_argument("shell", choices=("bash", "zsh", "fish"))
 
     evaluate = commands.add_parser("eval", help="Run a source-free retrieval evaluation file")
     evaluate.add_argument("--cases", type=Path, required=True)
@@ -243,9 +268,7 @@ def _parser() -> argparse.ArgumentParser:
     private_get.add_argument("--segment-id", required=True)
     private_get.add_argument("--max-chars", type=int, default=6000)
     private_get.add_argument("--db", type=Path)
-    private_verify = private_commands.add_parser(
-        "verify", help="Verify a private-library receipt"
-    )
+    private_verify = private_commands.add_parser("verify", help="Verify a private-library receipt")
     private_verify.add_argument("--segment-id", required=True)
     private_verify.add_argument("--receipt-id", required=True)
     private_verify.add_argument("--db", type=Path)
@@ -270,8 +293,18 @@ def _parser() -> argparse.ArgumentParser:
     sign_catalog.add_argument("--key-file", type=Path)
     sign_catalog.add_argument("--trust-output", type=Path)
 
-    doctor = commands.add_parser("doctor", help="Inspect the active release without changing it")
+    doctor = commands.add_parser(
+        "doctor",
+        help="Inspect the local Knowledge vault or an explicitly selected legal release",
+    )
     doctor.add_argument("--db", type=Path)
+    doctor.add_argument("--knowledge", action="store_true")
+    doctor.add_argument("--vault", type=Path)
+    doctor.add_argument("--project-root", type=Path)
+    doctor.add_argument("--repair-derived", action="store_true")
+    doctor.add_argument("--format", choices=("human", "json", "jsonl"), default="human")
+    doctor.add_argument("--quiet", action="store_true")
+    doctor.add_argument("--no-color", action="store_true")
     add_knowledge_parser(commands)
     return parser
 
@@ -279,6 +312,44 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "completion":
+            print(shell_completion(args.shell), end="")
+            return
+        if args.command == "verify" and (args.capsule is not None or args.last):
+            if args.capsule is not None and args.last:
+                raise ValueError("verify accepts either --capsule or --last, not both")
+            if args.segment_id is not None or args.receipt_id is not None or args.db is not None:
+                raise ValueError(
+                    "Capsule verification cannot be combined with legal-release options"
+                )
+            selected_vault: Path | None = None
+            if args.last or args.vault is not None or args.project_root is not None:
+                selected_vault = resolve_golden_vault(
+                    args.vault,
+                    project_root=args.project_root,
+                )
+            capsule_path = (
+                selected_vault / "derived" / "retrieval" / "last-capsule.json"
+                if args.last and selected_vault is not None
+                else args.capsule
+            )
+            if capsule_path is None:
+                raise ValueError("Capsule verification requires --capsule or --last")
+            if selected_vault is None:
+                result = verify_capsule_file(capsule_path)
+            else:
+                with KnowledgeVault(selected_vault, read_only=True) as vault:
+                    result = verify_capsule_file(capsule_path, vault=vault)
+            if not args.quiet:
+                print(render_golden_result(result, output_format=args.format))
+            if not result["valid"]:
+                raise SystemExit(2)
+            return
+        if args.command in GOLDEN_COMMANDS:
+            result = handle_golden_command(args)
+            if not args.quiet:
+                print(render_golden_result(result, output_format=args.format))
+            return
         if args.command == "knowledge":
             result = handle_knowledge_command(args)
             if result is not None:
@@ -447,6 +518,23 @@ def main(argv: list[str] | None = None) -> None:
                     _print_json(law.verify(args.segment_id, args.receipt_id))
                     return
             raise RuntimeError(f"unhandled private command: {args.private_command}")
+
+        if args.command == "doctor":
+            selected_vault = resolve_golden_vault(
+                args.vault,
+                project_root=args.project_root,
+            )
+            if (
+                args.knowledge
+                or args.vault is not None
+                or (args.db is None and selected_vault.exists())
+            ):
+                result = handle_golden_doctor(args)
+                if not args.quiet:
+                    print(render_golden_result(result, output_format=args.format))
+                if not result["canonical_valid"]:
+                    raise SystemExit(2)
+                return
 
         database = resolve_active_database(explicit_db=getattr(args, "db", None))
         if args.command == "eval":

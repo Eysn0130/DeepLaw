@@ -46,6 +46,11 @@
         "experience",
         "lesson",
         "question",
+        "exception",
+        "definition",
+        "requirement",
+        "risk",
+        "assumption",
         "reference"
       ]
     },

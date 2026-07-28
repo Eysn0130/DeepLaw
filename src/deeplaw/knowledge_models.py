@@ -20,6 +20,11 @@ AssetKind = Literal[
     "experience",
     "lesson",
     "question",
+    "exception",
+    "definition",
+    "requirement",
+    "risk",
+    "assumption",
     "reference",
 ]
 MemoryTier = Literal["working", "project", "experience", "wisdom", "domain"]

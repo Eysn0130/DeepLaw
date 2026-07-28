@@ -144,6 +144,9 @@ def test_knowledge_mcp_search_context_verify_and_inspect_are_bounded(
     assert search["result"]["results"][0]["tags_truncated"] is True
     assert "score" not in search["result"]["results"][0]
     assert search["result"]["results"][0]["rank"] == 1
+    assert search["result"]["ranking"]["method"] == (
+        "evidence_governed_retrieval_fabric"
+    )
     assert search["result"]["ranking"]["numeric_confidence_exposed"] is False
     assert context["result"]["budget"]["max_items"] == 8
     assert context["result"]["budget"]["max_chars"] == 8_000
@@ -155,6 +158,44 @@ def test_knowledge_mcp_search_context_verify_and_inspect_are_bounded(
     for response in (search, context, verification, inspection):
         Draft202012Validator(knowledge_tool_definition().outputSchema).validate(response)
         assert len(canonical_json(response)) <= 65_536
+
+
+def test_knowledge_mcp_search_and_context_use_the_retrieval_fabric(
+    tmp_path: Path,
+) -> None:
+    root, asset_id = _ready_vault(tmp_path)
+
+    search = handle_knowledge_support(
+        operation="search",
+        query=asset_id,
+        vault_path=root,
+    )
+    context = handle_knowledge_support(
+        operation="context",
+        task=f"Load the exact reviewed knowledge item {asset_id}",
+        confirm_no_case_data=True,
+        vault_path=root,
+    )
+
+    assert [item["asset_id"] for item in search["result"]["results"]] == [asset_id]
+    assert search["result"]["results"][0]["hit_reason"] == (
+        "retrieval_fabric:exact_id"
+    )
+    capsule_items = [
+        item
+        for field in (
+            "constraints",
+            "decisions",
+            "knowledge_assets",
+            "experiences",
+            "open_questions",
+        )
+        for item in context["result"][field]
+    ]
+    selected = next(item for item in capsule_items if item["asset_id"] == asset_id)
+    assert selected["selection_reason"] == "retrieval_fabric:exact_id"
+    Draft202012Validator(knowledge_tool_definition().outputSchema).validate(search)
+    Draft202012Validator(knowledge_tool_definition().outputSchema).validate(context)
 
 
 def test_knowledge_mcp_cannot_fetch_restricted_assets_by_identifier(

@@ -15,6 +15,7 @@ from .knowledge_models import (
     utc_now,
 )
 from .knowledge_store import KnowledgeVault
+from .retrieval_fabric import TOKENIZER_PROFILE, estimate_tokens
 from .util import (
     canonical_json,
     compact_text,
@@ -35,6 +36,8 @@ MAX_CAPSULE_SOURCE_REF_CHARS = 4_000
 MAX_CAPSULE_TAGS_PER_ITEM = 8
 MIN_CAPSULE_ITEM_CHARS = 160
 MAX_CAPSULE_ITEM_CHARS = 1_600
+MAX_CAPSULE_TOKENS = 32_000
+DEFAULT_CAPSULE_TOKENS = 4_096
 MIN_RELATIVE_LEXICAL_SCORE = 0.60
 
 _COMPILED_PART_SUFFIX = re.compile(r"^(?P<title>.+) · part [2-9][0-9]*$")
@@ -390,6 +393,8 @@ def compile_context(
     kinds: tuple[str, ...] = (),
     memory_tiers: tuple[str, ...] = (),
     include_restricted: bool = False,
+    max_tokens: int = DEFAULT_CAPSULE_TOKENS,
+    retrieval_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
         raise ValueError(
@@ -406,42 +411,81 @@ def compile_context(
         raise ValueError(f"context max_items must be between 1 and {MAX_CAPSULE_ITEMS}")
     if isinstance(max_chars, bool) or not 1 <= max_chars <= MAX_CAPSULE_CHARS:
         raise ValueError(f"context max_chars must be between 1 and {MAX_CAPSULE_CHARS}")
+    if isinstance(max_tokens, bool) or not 1 <= max_tokens <= MAX_CAPSULE_TOKENS:
+        raise ValueError(f"context max_tokens must be between 1 and {MAX_CAPSULE_TOKENS}")
     if not vault.verify_integrity()["valid"]:
         raise RuntimeError("knowledge vault integrity is invalid; context compilation stopped")
     context_query = f"{task} {goal or ''}".strip()
     query_terms = tuple(search_terms(context_query, limit=32, cover_tail=True))
-    search = vault.search(
-        context_query,
-        limit=min(20, max_items * 3),
-        max_chars=MAX_CAPSULE_CHARS,
-        kinds=kinds,
-        memory_tiers=memory_tiers,
-        include_restricted=include_restricted,
-    )
+    if retrieval_result is None:
+        search = vault.search(
+            context_query,
+            limit=min(20, max_items * 3),
+            max_chars=MAX_CAPSULE_CHARS,
+            kinds=kinds,
+            memory_tiers=memory_tiers,
+            include_restricted=include_restricted,
+        )
+        search_results = [
+            {
+                "asset_id": card.asset_id,
+                "score": card.score,
+                "hit_reason": card.hit_reason,
+            }
+            for card in search.results
+        ]
+        search_gaps = list(search.gaps)
+        retrieval_fabric_selected = False
+    else:
+        if (
+            not isinstance(retrieval_result, dict)
+            or retrieval_result.get("schema_version") != "deeplaw.knowledge-retrieval/v1"
+            or retrieval_result.get("vault_id") != vault.vault_id
+            or retrieval_result.get("vault_revision") != vault.revision
+            or retrieval_result.get("query") != context_query
+            or not isinstance(retrieval_result.get("results"), list)
+            or not isinstance(retrieval_result.get("gaps"), list)
+        ):
+            raise ValueError("context retrieval result does not match this vault and task")
+        search_results = retrieval_result["results"]
+        search_gaps = list(retrieval_result["gaps"])
+        retrieval_fabric_selected = True
     ranked: list[KnowledgeAsset] = []
     selection_reasons: dict[str, str] = {}
     excluded_by_relevance = 0
-    top_lexical_score = search.results[0].score if search.results else None
-    for card in search.results:
-        asset = vault.get_asset(card.asset_id)
+    top_lexical_score = (
+        search_results[0]["score"]
+        if search_results and not retrieval_fabric_selected
+        else None
+    )
+    for card in search_results:
+        asset = vault.get_asset(card["asset_id"])
         if not _context_candidate_admitted(
             asset,
             query=context_query,
             terms=query_terms,
-        ):
+        ) and not retrieval_fabric_selected:
             excluded_by_relevance += 1
             continue
         if (
             top_lexical_score is not None
-            and card.score < top_lexical_score * MIN_RELATIVE_LEXICAL_SCORE
+            and card["score"] < top_lexical_score * MIN_RELATIVE_LEXICAL_SCORE
         ):
             excluded_by_relevance += 1
             continue
         ranked.append(asset)
-        selection_reasons[asset.asset_id] = "lexical_match"
+        if retrieval_fabric_selected:
+            hit_reason = card.get("hit_reason", "retrieval_fabric:lexical")
+            if not isinstance(hit_reason, str) or not hit_reason.startswith(
+                "retrieval_fabric:"
+            ):
+                raise ValueError("context retrieval result contains an invalid hit reason")
+            selection_reasons[asset.asset_id] = hit_reason
+        else:
+            selection_reasons[asset.asset_id] = "lexical_match"
 
     seed_ids = tuple(asset.asset_id for asset in ranked[:20])
-    if seed_ids:
+    if seed_ids and not retrieval_fabric_selected:
         discovery_relations = vault.relations_for_assets(
             seed_ids,
             limit=min(64, max(16, max_items * 4)),
@@ -494,6 +538,10 @@ def compile_context(
         query=context_query,
         max_chars=max_chars,
     )
+    while selected and sum(estimate_tokens(content) for content in projected_contents) > max_tokens:
+        selected.pop()
+        projected_contents.pop()
+        excluded_by_budget += 1
 
     source_refs_by_asset: dict[str, list[dict[str, str]]] = {
         asset.asset_id: [] for asset in selected
@@ -583,11 +631,12 @@ def compile_context(
             (asset.asset_id for asset in selected),
             limit=min(16, max_items * 2),
             include_restricted=include_restricted,
+            require_evidence=retrieval_fabric_selected,
         )
         if relation["subject_asset_id"] in selected_id_set
         and relation["object_asset_id"] in selected_id_set
     ]
-    gaps = list(search.gaps)
+    gaps = search_gaps
     contradiction_count = sum(
         relation["predicate"] == "contradicts" for relation in relations
     )
@@ -638,6 +687,11 @@ def compile_context(
             "selected_source_ref_chars": selected_source_ref_chars,
             "max_payload_chars": MAX_CAPSULE_PAYLOAD_CHARS,
             "payload_chars": 0,
+            "tokenizer_profile": TOKENIZER_PROFILE,
+            "tokenizer_version": "2",
+            "max_tokens": max_tokens,
+            "selected_tokens": sum(estimate_tokens(content) for content in projected_contents),
+            "token_count_mode": "estimated",
         },
         "trust_boundary": dict(_TRUST_BOUNDARY),
         "constraints": constraints,
@@ -786,7 +840,7 @@ def verify_capsule(
         for item in all_items
         for reference in item["source_refs"]
     )
-    expected_budget_fields = {
+    legacy_budget_fields = {
         "max_items",
         "max_chars",
         "selected_items",
@@ -800,9 +854,18 @@ def verify_capsule(
         "max_payload_chars",
         "payload_chars",
     }
+    token_budget_fields = {
+        "tokenizer_profile",
+        "tokenizer_version",
+        "max_tokens",
+        "selected_tokens",
+        "token_count_mode",
+    }
+    expected_budget_fields = legacy_budget_fields | token_budget_fields
     if (
         not isinstance(budget, dict)
-        or set(budget) != expected_budget_fields
+        or frozenset(budget)
+        not in {frozenset(legacy_budget_fields), frozenset(expected_budget_fields)}
         or isinstance(budget.get("max_items"), bool)
         or not isinstance(budget.get("max_items"), int)
         or not 1 <= budget["max_items"] <= MAX_CAPSULE_ITEMS
@@ -832,6 +895,21 @@ def verify_capsule(
         or budget["payload_chars"] > MAX_CAPSULE_PAYLOAD_CHARS
     ):
         raise ValueError("knowledge capsule budget does not match its selected assets")
+    if token_budget_fields.issubset(budget) and (
+        budget["tokenizer_profile"] != TOKENIZER_PROFILE
+        or budget["tokenizer_version"] != "2"
+        or isinstance(budget["max_tokens"], bool)
+        or not isinstance(budget["max_tokens"], int)
+        or not 1 <= budget["max_tokens"] <= MAX_CAPSULE_TOKENS
+        or isinstance(budget["selected_tokens"], bool)
+        or not isinstance(budget["selected_tokens"], int)
+        or budget["selected_tokens"] != sum(
+            estimate_tokens(item["content"]) for item in all_items
+        )
+        or budget["selected_tokens"] > budget["max_tokens"]
+        or budget["token_count_mode"] != "estimated"
+    ):
+        raise ValueError("knowledge capsule token budget is invalid")
     payload_accounting_valid = budget["payload_chars"] == len(canonical_json(capsule))
     if capsule.get("trust_boundary") != _TRUST_BOUNDARY:
         raise ValueError("knowledge capsule trust boundary is invalid")
@@ -885,6 +963,22 @@ def verify_capsule(
     for item in all_items:
         reason = item["selection_reason"]
         if reason == "lexical_match":
+            continue
+        if reason.startswith("retrieval_fabric:"):
+            parts = reason.split(":")
+            if len(parts) != 2 or parts[1] not in {
+                "exact_id",
+                "knowledge_key",
+                "semantic_key",
+                "exact_phrase",
+                "lexical",
+                "dense",
+                "tree",
+                "graph",
+                "temporal",
+                "feedback",
+            }:
+                raise ValueError("knowledge capsule retrieval selection reason is invalid")
             continue
         parts = reason.split(":")
         if (
@@ -951,12 +1045,17 @@ def verify_capsule(
             )
         except (TypeError, ValueError):
             audit_anchor_valid = False
+        retrieval_fabric_capsule = any(
+            item.get("selection_reason", "").startswith("retrieval_fabric:")
+            for item in all_items
+        )
         current_relations = {
             relation["relation_id"]: relation
             for relation in vault.relations_for_assets(
                 asset_ids,
                 limit=64,
                 include_restricted=True,
+                require_evidence=retrieval_fabric_capsule,
             )
         }
         for relation in relations:

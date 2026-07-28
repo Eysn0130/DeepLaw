@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/official-baseline-execution-plan.v2.schema.json",
+  "title": "DeepLaw pinned official-baseline execution plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "registry", "system", "checkout", "corpus", "queries",
+    "evaluation_environment",
+    "artifacts", "command", "executable", "wrapper", "environment_contract",
+    "network_control", "result_status", "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.official-baseline-execution-plan/v2"},
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "file_sha256", "canonical_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "canonical_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "system": {
+      "type": "object",
+      "minProperties": 14,
+      "maxProperties": 14,
+      "required": [
+        "system_id", "display_name", "category", "implementation", "adapter",
+        "configuration", "model_aliases", "runtime_dependencies", "network_policy",
+        "data_boundary", "official_evidence", "execution_state", "results_status",
+        "raw_output_required"
+      ]
+    },
+    "checkout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "revision", "clean", "submodule_count", "submodule_status_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "clean": {"const": true},
+        "submodule_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "submodule_status_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "corpus": {"$ref": "#/$defs/input"},
+    "queries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size", "case_count", "case_ids_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 17179869184},
+        "case_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "case_ids_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evaluation_environment": {"$ref": "#/$defs/record_binding"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_output_path_hint", "resource_record_path_hint", "stdout_path_hint",
+        "stderr_path_hint", "receipt_path_hint"
+      ],
+      "properties": {
+        "raw_output_path_hint": {"$ref": "#/$defs/path"},
+        "resource_record_path_hint": {"$ref": "#/$defs/path"},
+        "stdout_path_hint": {"$ref": "#/$defs/path"},
+        "stderr_path_hint": {"$ref": "#/$defs/path"},
+        "receipt_path_hint": {"$ref": "#/$defs/path"}
+      }
+    },
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"type": "string", "minLength": 1, "maxLength": 4096}
+    },
+    "executable": {"$ref": "#/$defs/file_binding"},
+    "wrapper": {"$ref": "#/$defs/file_binding"},
+    "environment_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed", "inherited_names", "inherited_values_sha256"],
+      "properties": {
+        "fixed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "DEEPLAW_BASELINE_CHECKOUT", "DEEPLAW_BASELINE_CONFIG_JSON",
+            "DEEPLAW_BASELINE_CORPUS", "DEEPLAW_BASELINE_CORPUS_SHA256",
+            "DEEPLAW_BASELINE_EVALUATION_ENVIRONMENT",
+            "DEEPLAW_BASELINE_EVALUATION_ENVIRONMENT_RECORD_SHA256",
+            "DEEPLAW_BASELINE_IMPLEMENTATION_REVISION",
+            "DEEPLAW_BASELINE_NETWORK_POLICY", "DEEPLAW_BASELINE_OUTPUT",
+            "DEEPLAW_BASELINE_QUERIES", "DEEPLAW_BASELINE_QUERIES_SHA256",
+            "DEEPLAW_BASELINE_QUERY_CASE_IDS_SHA256",
+            "DEEPLAW_BASELINE_REGISTRY_SHA256", "DEEPLAW_BASELINE_RESOURCE_RECORD",
+            "DEEPLAW_BASELINE_SYSTEM_ID"
+          ],
+          "properties": {
+            "DEEPLAW_BASELINE_CHECKOUT": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "DEEPLAW_BASELINE_CONFIG_JSON": {"type": "string", "minLength": 2, "maxLength": 32768},
+            "DEEPLAW_BASELINE_CORPUS": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "DEEPLAW_BASELINE_CORPUS_SHA256": {"$ref": "#/$defs/sha256"},
+            "DEEPLAW_BASELINE_EVALUATION_ENVIRONMENT": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "DEEPLAW_BASELINE_EVALUATION_ENVIRONMENT_RECORD_SHA256": {"$ref": "#/$defs/sha256"},
+            "DEEPLAW_BASELINE_IMPLEMENTATION_REVISION": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+            "DEEPLAW_BASELINE_NETWORK_POLICY": {"type": "string", "minLength": 1, "maxLength": 200},
+            "DEEPLAW_BASELINE_OUTPUT": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "DEEPLAW_BASELINE_QUERIES": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "DEEPLAW_BASELINE_QUERIES_SHA256": {"$ref": "#/$defs/sha256"},
+            "DEEPLAW_BASELINE_QUERY_CASE_IDS_SHA256": {"$ref": "#/$defs/sha256"},
+            "DEEPLAW_BASELINE_REGISTRY_SHA256": {"$ref": "#/$defs/sha256"},
+            "DEEPLAW_BASELINE_RESOURCE_RECORD": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "DEEPLAW_BASELINE_SYSTEM_ID": {"type": "string", "minLength": 1, "maxLength": 100}
+          }
+        },
+        "inherited_names": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}
+        },
+        "inherited_values_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "network_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "runner_enforces_network_isolation", "required_external_enforcement"],
+      "properties": {
+        "policy": {
+          "enum": [
+            "build-network-recorded-query-offline",
+            "query-offline-loopback-models-only",
+            "manual-local-offline"
+          ]
+        },
+        "runner_enforces_network_isolation": {"const": false},
+        "required_external_enforcement": {"const": "evaluator-provided-os-sandbox"}
+      }
+    },
+    "result_status": {"const": "planned_not_executed"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 17179869184}
+      }
+    },
+    "file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "resolved_path", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "resolved_path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    },
+    "record_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size", "record_sha256"],
+      "properties": {
+        "path_hint": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 4194304},
+        "record_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

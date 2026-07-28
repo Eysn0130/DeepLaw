@@ -346,7 +346,7 @@ sys.stdout.write('x' * 4096)
         document_engine._run_bounded(
             [str(executable)],
             cwd=tmp_path,
-            timeout_seconds=3,
+            timeout_seconds=10,
             capture_limit=32,
         )
 

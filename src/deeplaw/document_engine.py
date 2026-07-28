@@ -233,10 +233,10 @@ def _run_bounded(
     process.wait()
     for reader in readers:
         reader.join(timeout=2)
-    if failure is not None:
-        raise DocumentEngineError(failure)
     if capture.exceeded.is_set():
         raise DocumentEngineError(f"document engine output exceeded {capture_limit} bytes")
+    if failure is not None:
+        raise DocumentEngineError(failure)
     if output_root is not None:
         _check_output_tree(output_root)
     return process.returncode, bytes(capture.value)

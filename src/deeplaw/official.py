@@ -5,7 +5,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 from datetime import UTC, datetime
@@ -17,6 +16,7 @@ from urllib.request import Request, urlopen
 
 from . import __version__
 from .admin_lock import administration_locked
+from .bounded_subprocess import BoundedSubprocessError, run_bounded_subprocess
 from .catalog_signing import (
     CATALOG_SIGNATURE_SUFFIX,
     verify_catalog_signature,
@@ -542,20 +542,19 @@ def _run_dependency_probe(
             f"official PDF build dependency is missing: {description} ({executable})"
         )
     try:
-        completed = subprocess.run(
+        completed = run_bounded_subprocess(
             [resolved, *arguments],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-            shell=False,
-            timeout=_DEPENDENCY_PROBE_TIMEOUT_SECONDS,
+            timeout_seconds=_DEPENDENCY_PROBE_TIMEOUT_SECONDS,
+            max_stdout_bytes=64 * 1024,
+            max_stderr_bytes=64 * 1024,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except BoundedSubprocessError as error:
         raise RuntimeError(
             f"official PDF build dependency is not executable: {description} ({executable})"
         ) from error
-    output = completed.stdout.decode("utf-8", errors="replace").strip()
+    output = (completed.stdout + completed.stderr).decode(
+        "utf-8", errors="replace"
+    ).strip()
     if completed.returncode != 0:
         raise RuntimeError(
             f"official PDF build dependency probe failed: {description} ({executable})"

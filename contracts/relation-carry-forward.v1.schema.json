@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/relation-carry-forward.v1.schema.json",
+  "title": "DeepLaw relation carry-forward workflow",
+  "oneOf": [
+    {"$ref": "#/$defs/plan"},
+    {"$ref": "#/$defs/queue"},
+    {"$ref": "#/$defs/result"},
+    {"$ref": "#/$defs/review"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "relationKey": {"type": "string", "pattern": "^relationkey_[0-9a-f]{24}$"},
+    "relationRevisionId": {
+      "type": "string",
+      "pattern": "^relationrev_[0-9a-f]{24}$"
+    },
+    "knowledgeKey": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "assetRevisionId": {"type": "string", "pattern": "^assetrev_[0-9a-f]{24}$"},
+    "sourceRevisionId": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "fragmentRevisionId": {
+      "type": "string",
+      "pattern": "^irfragment_[0-9a-f]{24}$"
+    },
+    "timestamp": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision_id",
+        "fragment_revision_id",
+        "locator",
+        "quote_sha256"
+      ],
+      "properties": {
+        "source_revision_id": {"$ref": "#/$defs/sourceRevisionId"},
+        "fragment_revision_id": {"$ref": "#/$defs/fragmentRevisionId"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "knowledge_key",
+        "previous_asset_revision_id",
+        "current_asset_revision_ids",
+        "lineage_status"
+      ],
+      "properties": {
+        "knowledge_key": {"$ref": "#/$defs/knowledgeKey"},
+        "previous_asset_revision_id": {"$ref": "#/$defs/assetRevisionId"},
+        "current_asset_revision_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/assetRevisionId"}
+        },
+        "lineage_status": {
+          "type": ["string", "null"],
+          "enum": [
+            "retained",
+            "new",
+            "unchanged",
+            "modified",
+            "renamed",
+            "moved",
+            "split",
+            "merged",
+            "deleted",
+            "ambiguous",
+            null
+          ]
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_key",
+        "previous_relation_revision_id",
+        "predicate",
+        "subject_knowledge_key",
+        "object_knowledge_key",
+        "subject_asset_revision_id",
+        "object_asset_revision_id",
+        "endpoint_lineage",
+        "evidence_refs",
+        "event_time",
+        "valid_from",
+        "valid_to",
+        "review_mode",
+        "changed",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "relation_key": {"$ref": "#/$defs/relationKey"},
+        "previous_relation_revision_id": {"$ref": "#/$defs/relationRevisionId"},
+        "predicate": {"type": "string", "minLength": 1, "maxLength": 200},
+        "subject_knowledge_key": {"$ref": "#/$defs/knowledgeKey"},
+        "object_knowledge_key": {"$ref": "#/$defs/knowledgeKey"},
+        "subject_asset_revision_id": {
+          "oneOf": [{"$ref": "#/$defs/assetRevisionId"}, {"type": "null"}]
+        },
+        "object_asset_revision_id": {
+          "oneOf": [{"$ref": "#/$defs/assetRevisionId"}, {"type": "null"}]
+        },
+        "endpoint_lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subject", "object"],
+          "properties": {
+            "subject": {"$ref": "#/$defs/endpoint"},
+            "object": {"$ref": "#/$defs/endpoint"}
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/evidence"}
+        },
+        "event_time": {"$ref": "#/$defs/timestamp"},
+        "valid_from": {"$ref": "#/$defs/timestamp"},
+        "valid_to": {"$ref": "#/$defs/timestamp"},
+        "review_mode": {"enum": ["carry_forward", "full_review"]},
+        "changed": {"type": "boolean"},
+        "blocked_reasons": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "queueItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_key",
+        "relation_revision_id",
+        "subject_knowledge_key",
+        "object_knowledge_key",
+        "subject_asset_revision_id",
+        "object_asset_revision_id",
+        "predicate",
+        "evidence_refs",
+        "review_mode",
+        "observed_at",
+        "approval_inherited"
+      ],
+      "properties": {
+        "relation_key": {"$ref": "#/$defs/relationKey"},
+        "relation_revision_id": {"$ref": "#/$defs/relationRevisionId"},
+        "subject_knowledge_key": {"$ref": "#/$defs/knowledgeKey"},
+        "object_knowledge_key": {"$ref": "#/$defs/knowledgeKey"},
+        "subject_asset_revision_id": {"$ref": "#/$defs/assetRevisionId"},
+        "object_asset_revision_id": {"$ref": "#/$defs/assetRevisionId"},
+        "predicate": {"type": "string", "minLength": 1, "maxLength": 200},
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/evidence"}
+        },
+        "review_mode": {"enum": ["carry_forward", "full_review"]},
+        "observed_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"},
+        "approval_inherited": {"const": false}
+      }
+    },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "vault_id", "total", "items", "truncated"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.relation-carry-forward-queue/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "total": {"type": "integer", "minimum": 0},
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/queueItem"}
+        },
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "vault_id",
+        "candidate_count",
+        "carry_forward_candidate_count",
+        "full_review_candidate_count",
+        "blocked_count",
+        "already_current_count",
+        "pending_candidate_count",
+        "candidates",
+        "blocked",
+        "pending_candidates",
+        "truncated",
+        "automatic_activation"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.relation-carry-forward-plan/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "carry_forward_candidate_count": {"type": "integer", "minimum": 0},
+        "full_review_candidate_count": {"type": "integer", "minimum": 0},
+        "blocked_count": {"type": "integer", "minimum": 0},
+        "already_current_count": {"type": "integer", "minimum": 0},
+        "pending_candidate_count": {"type": "integer", "minimum": 0},
+        "candidates": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/candidate"}
+        },
+        "blocked": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/candidate"}
+        },
+        "pending_candidates": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/queueItem"}
+        },
+        "truncated": {"type": "boolean"},
+        "automatic_activation": {"const": false}
+      }
+    },
+    "createdItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_key",
+        "relation_revision_id",
+        "evidence_refs_sha256",
+        "previous_relation_revision_id",
+        "review_mode",
+        "status",
+        "approval_inherited"
+      ],
+      "properties": {
+        "relation_key": {"$ref": "#/$defs/relationKey"},
+        "relation_revision_id": {"$ref": "#/$defs/relationRevisionId"},
+        "evidence_refs_sha256": {"$ref": "#/$defs/sha256"},
+        "previous_relation_revision_id": {"$ref": "#/$defs/relationRevisionId"},
+        "review_mode": {"enum": ["carry_forward", "full_review"]},
+        "status": {"const": "proposed"},
+        "approval_inherited": {"const": false}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "vault_id",
+        "created_count",
+        "created_candidates",
+        "blocked",
+        "pending",
+        "revision",
+        "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.relation-carry-forward-result/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "created_count": {"type": "integer", "minimum": 0},
+        "created_candidates": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/createdItem"}
+        },
+        "blocked": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/candidate"}
+        },
+        "pending": {"$ref": "#/$defs/queue"},
+        "revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "vault_id",
+        "relation_key",
+        "candidate_relation_revision_id",
+        "relation_revision_id",
+        "decision",
+        "status",
+        "reviewer_id",
+        "reason",
+        "approval_inherited",
+        "revision",
+        "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.relation-carry-forward-review/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "relation_key": {"$ref": "#/$defs/relationKey"},
+        "candidate_relation_revision_id": {"$ref": "#/$defs/relationRevisionId"},
+        "relation_revision_id": {"$ref": "#/$defs/relationRevisionId"},
+        "decision": {"enum": ["approve", "reject"]},
+        "status": {"enum": ["active", "revoked"]},
+        "reviewer_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "approval_inherited": {"const": false},
+        "revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

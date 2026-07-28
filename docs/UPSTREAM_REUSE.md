@@ -1,6 +1,11 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-07-26
+Reviewed: 2026-07-28
+
+The full v0.7 product-system and parser comparison, including dependency,
+network, data-boundary and benchmark fields, is maintained in
+[`UPSTREAM_CAPABILITY_MATRIX.md`](UPSTREAM_CAPABILITY_MATRIX.md). The detailed
+historical decisions below remain useful file-level review notes.
 
 This document records the upstream systems examined for DeepLaw 2.0 and the
 technical decision for each. It distinguishes a runtime dependency, an
@@ -63,9 +68,12 @@ subject to DeepLaw's own source, lifecycle, evidence, and admission policy.
 | [huggingface/tokenizers](https://github.com/huggingface/tokenizers) | `v0.22.2` | Apache-2.0 | Optional fixed-tokenizer execution dependency |
 | [xenova/jina-embeddings-v2-small-en](https://huggingface.co/Xenova/jina-embeddings-v2-small-en) | `523cadcb9c2e` | Apache-2.0 model card | Fixed English Discovery profile; weights downloaded explicitly and not redistributed |
 | [jinaai/jina-embeddings-v2-base-zh](https://huggingface.co/jinaai/jina-embeddings-v2-base-zh) | `c1ff9086a89a` | Apache-2.0 model card | Fixed Chinese-English Discovery profile; weights downloaded explicitly and not redistributed |
+| [tree-sitter/py-tree-sitter](https://github.com/tree-sitter/py-tree-sitter) and official language grammars | core `0.26.0`; JavaScript `0.25.0`; TypeScript `0.23.2`; Java `0.23.5`; Go `0.25.0`; Rust `0.24.2` | MIT | Exact-pinned base-runtime dependencies for bounded compiler-grade code Source IR |
+| [tobymao/sqlglot](https://github.com/tobymao/sqlglot) | `30.13.0` | MIT | Exact-pinned base-runtime dependency for bounded compiler-grade SQL Source IR |
 
-Commit pins identify the material reviewed; they are not dependency pins
-because these projects are not imported into the DeepLaw runtime.
+Repository commit coordinates identify material reviewed and are not dependency
+pins. The explicit Tree-sitter and SQLGlot version coordinates are different:
+they are exact base-runtime dependency pins recorded in `uv.lock`.
 
 ## Detailed Decisions
 
@@ -336,11 +344,46 @@ runtime.
 Decision: evaluation references only. If metric code is copied, pin the exact
 MIT-licensed file and add attribution at that time.
 
+### Tree-sitter and official code grammars
+
+DeepLaw directly installs the official Tree-sitter Python binding and the
+official JavaScript, TypeScript, Java, Go, and Rust grammar distributions at
+the exact versions listed in the reviewed snapshot. JavaScript and TypeScript
+also provide the JSX and TSX grammars. This is dependency use through their
+published Python APIs and wheel contents; no upstream source is copied into the
+repository.
+
+The parser versions are part of Source IR compilation identity. DeepLaw caps
+source bytes, traversed syntax nodes, structural symbols, imports, and
+references; syntax recovery is recorded explicitly, and only an explicit
+bounded lexical fallback may handle inputs above those limits. Parsed
+structure remains derived, untrusted data and never establishes source trust,
+approval, legal authority, or permission to execute source code. Exact license
+and distribution information is recorded in `THIRD_PARTY_NOTICES.md`, the
+lockfile, generated license inventory, and release SBOM.
+
+### SQLGlot
+
+DeepLaw directly installs SQLGlot `30.13.0` and uses its published Python API
+to build statement, CTE, table, column, and line-span Source IR. The exact
+version and generic dialect profile are compilation identity. Source bytes,
+AST nodes, statements, and symbols are bounded; rejected or over-limit input
+uses an explicit bounded lexical fallback. DeepLaw never executes SQL, and all
+parser output remains untrusted derived structure. No SQLGlot source is copied
+or vendored in this repository.
+
 ## Reuse Classification
 
 ### Current runtime dependency
 
-None of the reviewed platforms.
+None of the reviewed knowledge platforms.
+
+The base runtime directly depends on the exact-pinned MIT-licensed Tree-sitter
+Python binding and five official language-grammar distributions listed above.
+They implement local compiler-grade Source IR for JavaScript/JSX,
+TypeScript/TSX, Java, Go, and Rust behind explicit size and inventory bounds.
+The base runtime also directly depends on exact-pinned MIT-licensed SQLGlot for
+bounded compiler-grade SQL Source IR without a network, model, or execution path.
 
 The optional `deeplaw[discovery]` extra directly depends on ONNX Runtime,
 Tokenizers, `huggingface_hub`, and NumPy. DeepLaw implements its own small,

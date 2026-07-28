@@ -4,19 +4,27 @@ import mimetypes
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 from dataclasses import dataclass, replace
 from fnmatch import fnmatch
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from time import perf_counter
 from typing import Any
 
+from .bounded_subprocess import BoundedSubprocessError, run_bounded_subprocess
 from .context_compiler import verify_capsule_file
 from .extract import ExtractionError, extract_document
+from .knowledge_identity import (
+    canonical_collection_name,
+    make_collection_id,
+    make_knowledge_key,
+    normalize_logical_path,
+)
 from .knowledge_models import Sensitivity, SourceKind, TrustLevel
 from .knowledge_store import KnowledgeVault, knowledge_source_key
 from .models import ExtractionQuality, ExtractionResult, TextBlock
+from .source_adapters import build_source_ir, extract_extended_source
+from .typed_extractor import run_typed_extractor
 from .util import (
     canonical_json,
     has_instruction_risk,
@@ -27,6 +35,15 @@ from .util import (
 )
 
 KNOWLEDGE_COMPILER_SCHEMA = "deeplaw.knowledge-compiler/v1"
+TYPED_EXTRACTION_MODES = frozenset(
+    {
+        "off",
+        "deterministic-v1",
+        "deterministic-v2",
+        "local-model-v1",
+        "external-model-explicit",
+    }
+)
 
 _TEXT_SUFFIXES = {
     ".txt",
@@ -83,8 +100,8 @@ class _CompiledSection:
 def _typed_section_kind(section: _CompiledSection, *, extractor: str) -> str:
     if extractor == "off":
         return "reference"
-    if extractor != "deterministic-v1":
-        raise ValueError("typed extraction must be off or deterministic-v1")
+    if extractor not in {"deterministic-v1", "deterministic-v2"}:
+        raise ValueError("typed extraction must be off, deterministic-v1, or deterministic-v2")
     title = normalize_text(section.title).casefold()
     statement = normalize_text(section.text).casefold()
     if title.startswith(("decision", "decision record", "决策", "决定")):
@@ -95,6 +112,18 @@ def _typed_section_kind(section: _CompiledSection, *, extractor: str) -> str:
         return "procedure"
     if title.startswith(("lesson", "postmortem", "教训", "经验", "复盘")):
         return "lesson"
+    if title.startswith(("experience", "经历", "实践")):
+        return "experience"
+    if title.startswith(("exception", "例外", "除外")):
+        return "exception"
+    if title.startswith(("definition", "glossary", "定义", "术语")):
+        return "definition"
+    if title.startswith(("requirement", "must", "要求", "需求", "必须")):
+        return "requirement"
+    if title.startswith(("risk", "warning", "风险", "警告")):
+        return "risk"
+    if title.startswith(("assumption", "假设", "前提")):
+        return "assumption"
     if title.startswith(("question", "open question", "问题", "待确认")) or statement.endswith(
         ("?", "\uff1f")
     ):
@@ -106,6 +135,14 @@ def _typed_section_kind(section: _CompiledSection, *, extractor: str) -> str:
     return "reference"
 
 
+def _deterministic_extractor_revision(mode: str) -> str:
+    if mode == "deterministic-v2":
+        return "deeplaw-deterministic/v2"
+    if mode in {"off", "deterministic-v1"}:
+        return "deeplaw-deterministic/v1"
+    raise ValueError("model-backed typed extraction has a manifest-defined revision")
+
+
 def _source_format(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".pdf":
@@ -114,10 +151,17 @@ def _source_format(path: Path) -> str:
         return "DOCX"
     if suffix == ".doc":
         return "DOC"
+    if suffix == ".pptx":
+        return "PPTX"
+    if suffix == ".xlsx":
+        return "XLSX"
+    if suffix == ".epub":
+        return "EPUB"
     if suffix in _TEXT_SUFFIXES:
         return "TXT"
     raise ExtractionError(
-        "unsupported knowledge source format; use PDF, DOCX, UTF-8 text, Markdown, "
+        "unsupported knowledge source format; use PDF, DOCX, PPTX, XLSX, EPUB, "
+        "UTF-8 text, Markdown, "
         "JSON, source code, CSV/TSV, YAML, TOML, XML, HTML, SQL, or log files; "
         "legacy DOC additionally requires LibreOffice"
     )
@@ -145,16 +189,20 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
             "legacy DOC ingestion requires LibreOffice (soffice) on the local PATH"
         )
     try:
-        version_process = subprocess.run(
+        version_process = run_bounded_subprocess(
             [executable, "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
+            timeout_seconds=15,
+            max_stdout_bytes=8 * 1024,
+            max_stderr_bytes=8 * 1024,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except BoundedSubprocessError as error:
         raise ExtractionError("LibreOffice version check failed") from error
-    version = _bounded_process_text(version_process.stdout or version_process.stderr or "unknown")
+    version = _bounded_process_text(
+        (version_process.stdout or version_process.stderr).decode(
+            "utf-8", errors="replace"
+        )
+        or "unknown"
+    )
     if version_process.returncode != 0 or not version or version == "unknown":
         raise ExtractionError("LibreOffice version identity is unavailable")
     with tempfile.TemporaryDirectory(prefix="deeplaw-doc-") as temporary:
@@ -162,7 +210,7 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
         profile = output_root / "profile"
         profile.mkdir(mode=0o700)
         try:
-            process = subprocess.run(
+            process = run_bounded_subprocess(
                 [
                     executable,
                     "--headless",
@@ -177,13 +225,12 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
                     str(output_root),
                     str(path),
                 ],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                env={**os.environ, "HOME": temporary, "TMPDIR": temporary},
+                timeout_seconds=120,
+                max_stdout_bytes=64 * 1024,
+                max_stderr_bytes=64 * 1024,
+                environment={**os.environ, "HOME": temporary, "TMPDIR": temporary},
             )
-        except (OSError, subprocess.TimeoutExpired) as error:
+        except BoundedSubprocessError as error:
             raise ExtractionError("legacy DOC conversion failed") from error
         candidates = [
             candidate for candidate in output_root.iterdir() if candidate.suffix.lower() == ".docx"
@@ -195,7 +242,9 @@ def _extract_legacy_doc(path: Path) -> ExtractionResult:
             or not converted.is_file()
             or converted.stat().st_size == 0
         ):
-            detail = _bounded_process_text(process.stderr or process.stdout)
+            detail = _bounded_process_text(
+                (process.stderr or process.stdout).decode("utf-8", errors="replace")
+            )
             raise ExtractionError(f"legacy DOC conversion did not produce a safe DOCX: {detail}")
         converted_sha256 = sha256_file(converted)
         extraction = extract_document(converted, "DOCX")
@@ -369,9 +418,18 @@ def _compile_sections(
 
     for block in blocks:
         heading = _MARKDOWN_HEADING.match(block.text) if markdown else None
+        structured_heading = (
+            not markdown
+            and block.style is not None
+            and re.match(r"^(?:Heading|Title)\s*[1-6]?$", block.style, re.IGNORECASE)
+        )
         if heading is not None:
             flush()
             current_title = normalize_text(heading.group(2))[:500]
+            continue
+        if structured_heading:
+            flush()
+            current_title = normalize_text(block.text)[:500]
             continue
         current.append(block)
     flush()
@@ -403,11 +461,31 @@ def compile_source(
     pdf_fallback: str = "off",
     source_key: str | None = None,
     typed_extraction: str = "off",
+    typed_extractor_manifest: str | Path | None = None,
+    confirm_external_disclosure: bool = False,
+    reference_proposals: bool = True,
+    collection_id: str | None = None,
+    collection_name: str = "project",
+    logical_path: str | None = None,
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
         raise ValueError(
             "knowledge ingestion requires confirmation that the source is not Analytix "
             "case material"
+        )
+    if typed_extraction not in TYPED_EXTRACTION_MODES:
+        raise ValueError("unsupported typed extraction mode")
+    model_backed = typed_extraction in {
+        "local-model-v1",
+        "external-model-explicit",
+    }
+    if model_backed != (typed_extractor_manifest is not None):
+        raise ValueError(
+            "model-backed typed extraction requires exactly one --typed-extractor-manifest"
+        )
+    if typed_extraction != "external-model-explicit" and confirm_external_disclosure:
+        raise ValueError(
+            "external disclosure confirmation is only valid for external-model-explicit"
         )
     source_path = Path(source).expanduser().absolute()
     if source_path.is_symlink():
@@ -419,20 +497,51 @@ def compile_source(
     if not 1 <= source_size <= _MAX_SOURCE_BYTES:
         raise ValueError("knowledge source is empty or exceeds 512 MiB")
     source_content_sha256 = sha256_file(path)
+    selected_collection_name = canonical_collection_name(collection_name)
+    expected_collection_id = make_collection_id(
+        vault_id=vault.vault_id,
+        name=selected_collection_name,
+    )
+    selected_collection_id = collection_id or expected_collection_id
+    if selected_collection_id != expected_collection_id:
+        raise ValueError("collection identity does not match its canonical name")
+    selected_logical_path = normalize_logical_path(logical_path or path.name)
     logical_source_key = source_key or knowledge_source_key(
         vault_id=vault.vault_id,
         source_kind=source_kind,
         source_path=path,
         origin_uri=origin_uri,
+        collection_id=selected_collection_id,
+        logical_path=selected_logical_path,
     )
+    prior_source = (
+        vault.active_source_for_key(logical_source_key)
+        if vault.control_enabled
+        else None
+    )
+    prior_logical_path = (
+        prior_source.get("logical_path") if prior_source is not None else None
+    )
+    relocation_status: str | None = None
+    if prior_logical_path is not None and prior_logical_path != selected_logical_path:
+        old_path = PurePosixPath(prior_logical_path)
+        new_path = PurePosixPath(selected_logical_path)
+        relocation_status = (
+            "renamed" if old_path.parent == new_path.parent else "moved"
+        )
     format_name = _source_format(path)
+    source_media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     extraction = (
         _extract_legacy_doc(path)
         if format_name == "DOC"
         else (
-            _extract_knowledge_text(path)
-            if format_name == "TXT"
-            else extract_document(path, format_name, pdf_fallback=pdf_fallback)
+            extract_extended_source(path, format_name)
+            if format_name in {"PPTX", "XLSX", "EPUB"}
+            else (
+                _extract_knowledge_text(path)
+                if format_name == "TXT"
+                else extract_document(path, format_name, pdf_fallback=pdf_fallback)
+            )
         )
     )
     if format_name == "PDF" and extraction.quality.needs_ocr:
@@ -476,19 +585,12 @@ def compile_source(
             )
         )
     )
-    fragments = tuple(
-        {
-            "text": section.text,
-            "locator": section.locator,
-            "instruction_risk": section.instruction_risk,
-        }
-        for section in sections
-    )
     memory_tier = "project" if source_kind in {"conversation", "tool_result", "code"} else "domain"
     section_occurrences: dict[str, int] = {}
     current_section_groups: dict[str, str] = {}
+    fragments_list: list[dict[str, Any]] = []
     asset_specs_list: list[dict[str, Any]] = []
-    for section in sections:
+    for fragment_index, section in enumerate(sections):
         match = _COMPILED_PART_SUFFIX.fullmatch(section.title)
         section_title = match.group("title") if match else section.title
         if match is None:
@@ -518,38 +620,228 @@ def compile_source(
             section_group_id,
             section.title,
         )
-        semantic_key = f"compiled:{logical_source_key}:{section_id}"
-        active = vault.active_asset_for_semantic_key(semantic_key)
-        kind = _typed_section_kind(section, extractor=typed_extraction)
-        asset_specs_list.append(
+        logical_node_key = f"section:{section_id}"
+        fragments_list.append(
             {
-                "kind": kind,
-                "memory_tier": memory_tier,
+                "text": section.text,
+                "locator": section.locator,
+                "instruction_risk": section.instruction_risk,
+                "logical_node_key": logical_node_key,
+                "parent_logical_node_key": None,
+                "node_type": "section",
                 "title": section.title,
-                "statement": section.text,
-                "semantic_key": semantic_key,
-                "supersedes_asset_id": active.asset_id if active is not None else None,
-                "tags": tuple(
+                "source_span": {
+                    "locator": section.locator,
+                    "fragment_ordinal": fragment_index + 1,
+                },
+                "quality_flags": [],
+            }
+        )
+        deterministic_mode = "off" if model_backed else typed_extraction
+        kind = _typed_section_kind(section, extractor=deterministic_mode)
+        proposal_kinds = (
+            ("reference", kind)
+            if typed_extraction == "deterministic-v2" and kind != "reference"
+            else (kind,)
+        )
+        if not reference_proposals:
+            proposal_kinds = tuple(
+                proposal_kind
+                for proposal_kind in proposal_kinds
+                if proposal_kind != "reference"
+            )
+        for proposal_kind in proposal_kinds:
+            proposal_role = (
+                "reference" if proposal_kind == "reference" else f"typed:{proposal_kind}"
+            )
+            knowledge_key = make_knowledge_key(
+                vault_id=vault.vault_id,
+                source_key=logical_source_key,
+                logical_node_key=logical_node_key,
+                proposal_role=proposal_role,
+            )
+            active = vault.active_asset_for_semantic_key(knowledge_key)
+            asset_specs_list.append(
+                {
+                    "kind": proposal_kind,
+                    "memory_tier": memory_tier,
+                    "title": section.title,
+                    "statement": section.text,
+                    "semantic_key": knowledge_key,
+                    "knowledge_key": knowledge_key,
+                    "proposal_role": proposal_role,
+                    "logical_node_keys": (logical_node_key,),
+                    "source_ref_indexes": (fragment_index,),
+                    "applicability": {
+                        "source_kind": source_kind,
+                        "logical_path": selected_logical_path,
+                    },
+                    "project_scope": selected_collection_id,
+                    "repository_scope": str(
+                        PurePosixPath(selected_logical_path).parent
+                    ),
+                    "branch_scope": None,
+                    "version_scope": None,
+                    "environment_scope": None,
+                    "valid_from": None,
+                    "valid_to": None,
+                    "supersedes_asset_id": active.asset_id if active is not None else None,
+                    "lineage_status_hint": relocation_status,
+                    "previous_logical_path": prior_logical_path,
+                    "current_logical_path": selected_logical_path,
+                    "tags": tuple(
+                        dict.fromkeys(
+                            (
+                                source_kind,
+                                path.suffix.lower().lstrip(".") or "text",
+                                f"section-group:{section_group_id}",
+                                *(
+                                    (f"typed-extractor:{typed_extraction}",)
+                                    if typed_extraction != "off"
+                                    else ()
+                                ),
+                            )
+                        )
+                    ),
+                    "warnings": (
+                        ("section contains instruction-like content",)
+                        if section.instruction_risk
+                        else ()
+                    ),
+                }
+            )
+    source_ir = build_source_ir(
+        path,
+        source_key=logical_source_key,
+        format_name=format_name,
+        extraction=extraction,
+        fragments=fragments_list,
+    )
+    for index, logical_node_keys in enumerate(source_ir.fragment_logical_node_keys):
+        fragments_list[index]["logical_node_keys"] = logical_node_keys
+    typed_extractor_metadata: dict[str, Any] | None = None
+    if model_backed:
+        assert typed_extractor_manifest is not None
+        extracted = run_typed_extractor(
+            manifest_path=typed_extractor_manifest,
+            mode=typed_extraction,
+            source_revision_hint={
+                "source_key": logical_source_key,
+                "content_sha256": source_content_sha256,
+                "media_identity": source_media_type,
+                "logical_path": selected_logical_path,
+            },
+            sections=[
+                {
+                    "index": index,
+                    "title": section.title,
+                    "text": section.text,
+                    "locator": section.locator,
+                    "logical_node_keys": list(
+                        fragments_list[index]["logical_node_keys"]
+                    ),
+                }
+                for index, section in enumerate(sections)
+            ],
+            confirm_external_disclosure=confirm_external_disclosure,
+        )
+        for ordinal, proposal in enumerate(extracted["proposals"], start=1):
+            reference_indexes = tuple(proposal["source_ref_indexes"])
+            logical_node_keys = tuple(
+                dict.fromkeys(
+                    key
+                    for index in reference_indexes
+                    for key in fragments_list[index]["logical_node_keys"]
+                )
+            )
+            proposal_fingerprint = sha256_bytes(
+                canonical_json(
+                    {
+                        "kind": proposal["kind"],
+                        "statement": normalize_text(proposal["statement"]),
+                        "semantic_key_hint": proposal["semantic_key_hint"],
+                        "logical_node_keys": list(logical_node_keys),
+                    }
+                ).encode("utf-8")
+            )
+            proposal_role = f"typed:{proposal['kind']}:{proposal_fingerprint[:24]}"
+            knowledge_key = make_knowledge_key(
+                vault_id=vault.vault_id,
+                source_key=logical_source_key,
+                logical_node_key="+".join(logical_node_keys),
+                proposal_role=proposal_role,
+            )
+            active = vault.active_asset_for_semantic_key(knowledge_key)
+            proposal_risk = has_instruction_risk(
+                f"{proposal['title']}\n{proposal['statement']}"
+            )
+            proposal_spec: dict[str, Any] = {
+                "kind": proposal["kind"],
+                "memory_tier": memory_tier,
+                "title": proposal["title"],
+                "statement": proposal["statement"],
+                "semantic_key": knowledge_key,
+                "knowledge_key": knowledge_key,
+                "proposal_role": proposal_role,
+                "logical_node_keys": logical_node_keys,
+                "source_ref_indexes": reference_indexes,
+                "applicability": {
+                    "source_kind": source_kind,
+                    "logical_path": selected_logical_path,
+                    **proposal["applicability"],
+                },
+                "project_scope": proposal["project_scope"] or selected_collection_id,
+                "repository_scope": proposal["repository_scope"]
+                or str(PurePosixPath(selected_logical_path).parent),
+                "branch_scope": proposal["branch_scope"],
+                "version_scope": proposal["version_scope"],
+                "environment_scope": proposal["environment_scope"],
+                "valid_from": proposal["valid_from"],
+                "valid_to": proposal["valid_to"],
+                "expires_at": proposal["expires_at"],
+                "supersedes_asset_id": (
+                    active.asset_id if active is not None else None
+                ),
+                "lineage_status_hint": relocation_status,
+                "previous_logical_path": prior_logical_path,
+                "current_logical_path": selected_logical_path,
+                # Model output never inherits source trust.  Human approval is
+                # still required before it can become active.
+                "trust": "untrusted",
+                "quarantined": proposal_risk,
+                "tags": (
+                    source_kind,
+                    path.suffix.lower().lstrip(".") or "text",
+                    f"typed-extractor:{typed_extraction}",
+                    f"model-proposal:{ordinal}",
+                ),
+                "warnings": tuple(
                     dict.fromkeys(
                         (
-                            source_kind,
-                            path.suffix.lower().lstrip(".") or "text",
-                            f"section-group:{section_group_id}",
-                            *(
-                                ("typed-extractor:deterministic-v1",)
-                                if typed_extraction == "deterministic-v1"
-                                else ()
-                            ),
+                            *proposal["warnings"],
+                            "automated model output requires human review",
+                            *(("instruction-like model output",) if proposal_risk else ()),
                         )
                     )
                 ),
-                "warnings": (
-                    ("section contains instruction-like content",)
-                    if section.instruction_risk
-                    else ()
-                ),
             }
-        )
+            if proposal["observed_at"] is not None:
+                proposal_spec["observed_at"] = proposal["observed_at"]
+            asset_specs_list.append(proposal_spec)
+        typed_extractor_metadata = {
+            key: extracted[key]
+            for key in (
+                "extractor",
+                "extractor_revision",
+                "model_identity",
+                "prompt_config_sha256",
+                "manifest_sha256",
+                "network_policy",
+                "disclosure",
+                "output_sha256",
+            )
+        }
+    fragments = tuple(fragments_list)
     asset_specs = tuple(asset_specs_list)
     compiled_fragment_sha256 = sha256_bytes(
         canonical_json(
@@ -567,10 +859,18 @@ def compile_source(
     compiler = {
         "schema_version": KNOWLEDGE_COMPILER_SCHEMA,
         "source_key": logical_source_key,
+        "collection_id": selected_collection_id,
+        "collection_name": selected_collection_name,
+        "logical_path": selected_logical_path,
         "format": format_name,
         "source_sha256": source_content_sha256,
         "extractor": extraction.quality.extractor,
         "extractor_version": extraction.quality.extractor_version,
+        "source_adapter": source_ir.adapter,
+        "source_adapter_version": source_ir.adapter_version,
+        "source_ir_schema": "deeplaw.source-ir/v1",
+        "source_ir_node_count": len(source_ir.nodes),
+        "source_ir_quality_flags": list(source_ir.quality_flags),
         "configuration": list(extraction.quality.configuration),
         "pdf_fallback": pdf_fallback if format_name == "PDF" else None,
         "block_count": extraction.quality.block_count,
@@ -580,6 +880,8 @@ def compile_source(
         "compiled_fragment_sha256": compiled_fragment_sha256,
         "instruction_risk": source_risk,
         "typed_extraction": typed_extraction,
+        "reference_proposals": reference_proposals,
+        "typed_extractor": typed_extractor_metadata,
         "policy": "source fragments are evidence; compiled assets are review candidates",
     }
     result = vault.add_compiled_source(
@@ -590,7 +892,7 @@ def compile_source(
         source_kind=source_kind,
         title=source_title,
         origin_uri=origin_uri,
-        media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        media_type=source_media_type,
         trust=trust,
         sensitivity=sensitivity,
         instruction_risk=source_risk,
@@ -598,6 +900,7 @@ def compile_source(
         compiler=compiler,
         fragments=fragments,
         asset_specs=asset_specs,
+        source_ir_nodes=source_ir.nodes,
     )
     result["compiler"] = compiler
     return result
@@ -616,7 +919,11 @@ def compile_directory(
     confirm_no_case_data: bool,
     pdf_fallback: str = "off",
     typed_extraction: str = "off",
+    typed_extractor_manifest: str | Path | None = None,
+    confirm_external_disclosure: bool = False,
+    reference_proposals: bool = True,
     dry_run: bool = False,
+    collection_id: str | None = None,
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
         raise ValueError(
@@ -628,6 +935,10 @@ def compile_directory(
     root = root_input.resolve(strict=True)
     if not root.is_dir():
         raise ValueError("knowledge source directory must be a directory")
+    selected_collection_id = collection_id or make_collection_id(
+        vault_id=vault.vault_id,
+        name="project",
+    )
     if len(include) > 32 or len(exclude) > 32:
         raise ValueError("directory include/exclude patterns exceed the bound")
     patterns = (*include, *exclude)
@@ -674,6 +985,7 @@ def compile_directory(
     manifest_body = {
         "schema_version": "deeplaw.knowledge-directory-manifest/v1",
         "vault_id": vault.vault_id,
+        "collection_id": selected_collection_id,
         "recursive": recursive,
         "include": list(include),
         "exclude": list(exclude),
@@ -681,6 +993,13 @@ def compile_directory(
         "trust": trust,
         "sensitivity": sensitivity,
         "typed_extraction": typed_extraction,
+        "reference_proposals": reference_proposals,
+        "typed_extractor_manifest_sha256": (
+            sha256_file(Path(typed_extractor_manifest).expanduser().absolute())
+            if typed_extractor_manifest is not None
+            else None
+        ),
+        "external_disclosure_confirmed": confirm_external_disclosure,
         "files": manifest_entries,
     }
     manifest_sha256 = sha256_bytes(canonical_json(manifest_body).encode("utf-8"))
@@ -719,6 +1038,11 @@ def compile_directory(
                     confirm_no_case_data=True,
                     pdf_fallback=pdf_fallback,
                     typed_extraction=typed_extraction,
+                    typed_extractor_manifest=typed_extractor_manifest,
+                    confirm_external_disclosure=confirm_external_disclosure,
+                    reference_proposals=reference_proposals,
+                    collection_id=selected_collection_id,
+                    logical_path=relative,
                 )
             )
         except (OSError, RuntimeError, ValueError, ExtractionError) as error:

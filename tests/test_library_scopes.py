@@ -14,6 +14,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 import deeplaw.official as official_module
+from deeplaw.bounded_subprocess import BoundedProcessResult
 from deeplaw.catalog_signing import (
     export_trust_store,
     initialize_signing_key,
@@ -110,13 +111,17 @@ def test_official_pdf_dependency_preflight_probes_versions_and_chinese_ocr(
         lambda: {"manifest_sha256": "a" * 64},
     )
 
-    def fake_run(command: list[str], **kwargs: object) -> object:
-        assert kwargs["shell"] is False
+    def fake_run(command: list[str], **kwargs: object) -> BoundedProcessResult:
+        assert kwargs == {
+            "timeout_seconds": 15.0,
+            "max_stdout_bytes": 64 * 1024,
+            "max_stderr_bytes": 64 * 1024,
+        }
         key = (Path(command[0]).name, command[1])
         calls.append(key)
-        return official_module.subprocess.CompletedProcess(command, 0, stdout=outputs[key])
+        return BoundedProcessResult(returncode=0, stdout=outputs[key], stderr=b"")
 
-    monkeypatch.setattr(official_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(official_module, "run_bounded_subprocess", fake_run)
 
     result = official_module._preflight_official_pdf_dependencies()
 

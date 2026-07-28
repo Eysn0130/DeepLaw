@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-ir.v1.schema.json",
+  "title": "DeepLaw Source IR node",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "node_id",
+    "compilation_id",
+    "source_revision_id",
+    "logical_node_key",
+    "parent_node_id",
+    "ordinal",
+    "node_type",
+    "title",
+    "text",
+    "locator",
+    "source_span",
+    "content_sha256",
+    "adapter",
+    "adapter_version",
+    "quality_flags",
+    "instruction_risk"
+  ],
+  "properties": {
+    "node_id": {"type": "string", "pattern": "^irnode_[0-9a-f]{24}$"},
+    "compilation_id": {"type": "string", "pattern": "^compilation_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "logical_node_key": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "parent_node_id": {
+      "type": ["string", "null"],
+      "pattern": "^irnode_[0-9a-f]{24}$"
+    },
+    "ordinal": {"type": "integer", "minimum": 1, "maximum": 200000},
+    "node_type": {"type": "string", "minLength": 1, "maxLength": 100},
+    "title": {"type": ["string", "null"], "maxLength": 2000},
+    "text": {"type": "string", "maxLength": 20971520},
+    "locator": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "source_span": {"type": "object", "maxProperties": 32},
+    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "adapter": {"type": "string", "minLength": 1, "maxLength": 200},
+    "adapter_version": {"type": "string", "minLength": 1, "maxLength": 200},
+    "quality_flags": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "instruction_risk": {"type": "boolean"}
+  }
+}

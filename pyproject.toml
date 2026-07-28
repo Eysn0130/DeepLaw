@@ -1,11 +1,11 @@
 [build-system]
-requires = ["hatchling>=1.27"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "deeplaw"
-version = "0.6.0"
-description = "Verifiable Knowledge Assets and Context Capsules for AI agents, with a Chinese Legal Pack"
+version = "0.7.0"
+description = "Local single-user Agent Knowledge OS with verifiable Knowledge Capsules and a Chinese Legal Pack"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -20,7 +20,7 @@ keywords = [
   "legal-research",
 ]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -33,7 +33,15 @@ dependencies = [
   "mcp>=1.28.1,<2",
   "pydantic>=2.13,<3",
   "pypdf>=6.10,<7",
+  "pyyaml>=6.0,<7",
+  "sqlglot==30.13.0",
   "starlette>=1.3.1,<2",
+  "tree-sitter==0.26.0",
+  "tree-sitter-go==0.25.0",
+  "tree-sitter-java==0.23.5",
+  "tree-sitter-javascript==0.25.0",
+  "tree-sitter-rust==0.24.2",
+  "tree-sitter-typescript==0.23.2",
 ]
 
 [project.optional-dependencies]
@@ -61,9 +69,9 @@ document-engine = [
   "six==1.17.0",
 ]
 dev = [
-  "pytest>=8.4,<9",
+  "hatchling==1.31.0",
+  "pytest>=9.0.3,<10",
   "pytest-cov>=6.2,<7",
-  "pyyaml>=6.0,<7",
   "reportlab>=4.4,<5",
   "ruff>=0.12,<1",
 ]
@@ -88,11 +96,17 @@ packages = ["src/deeplaw"]
 [tool.hatch.build.targets.sdist]
 exclude = [
   "/benchmarks/knowledge-os-control-plane-candidate-2026-07-27.json",
+  # Package-external delivery evidence may record the sdist digest without
+  # creating a self-referential archive.
+  "/docs/V0_7_DELIVERY_REPORT.md",
 ]
 
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+  "windows_native: exercises native Windows ACL and reparse-point behavior",
+]
 
 [tool.ruff]
 line-length = 100

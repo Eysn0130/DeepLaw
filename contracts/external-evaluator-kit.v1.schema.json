@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/external-evaluator-kit.v1.schema.json",
+  "title": "Portable, content-addressed DeepLaw external evaluator candidate kit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kit_id", "created_at", "candidate", "contracts",
+    "release_artifacts", "container", "models", "retrieval_profiles",
+    "benchmark_commitments", "baseline_evidence", "signature_tools",
+    "external_verification", "kit_integrity_complete", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.external-evaluator-kit/v1"},
+    "kit_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "created_at": {"type": "string", "format": "date-time", "maxLength": 40},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_line", "package_version", "commit", "git_tree",
+        "source_archive", "file_count", "inventory_sha256"
+      ],
+      "properties": {
+        "candidate_line": {"const": "0.7.0-frozen-evaluation-candidate"},
+        "package_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "git_tree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "source_archive": {"$ref": "#/$defs/artifact"},
+        "file_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "inventory_sha256", "files"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "files": {
+          "type": "array", "minItems": 1, "maxItems": 10000,
+          "items": {"$ref": "#/$defs/file"}
+        }
+      }
+    },
+    "release_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lock", "wheel", "sdist", "container", "sbom",
+        "license_inventory", "reproducible_build"
+      ],
+      "properties": {
+        "lock": {"$ref": "#/$defs/artifact"},
+        "wheel": {"$ref": "#/$defs/artifact"},
+        "sdist": {"$ref": "#/$defs/artifact"},
+        "container": {"$ref": "#/$defs/artifact"},
+        "sbom": {"$ref": "#/$defs/artifact"},
+        "license_inventory": {"$ref": "#/$defs/artifact"},
+        "reproducible_build": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform_count", "platforms", "blob_count", "artifact_bindings"],
+      "properties": {
+        "platform_count": {"type": "integer", "minimum": 1, "maximum": 16},
+        "platforms": {
+          "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["os", "architecture"],
+            "properties": {
+              "os": {"type": "string", "minLength": 1, "maxLength": 50},
+              "architecture": {"type": "string", "minLength": 1, "maxLength": 50}
+            }
+          }
+        },
+        "blob_count": {"type": "integer", "minimum": 2, "maximum": 1000000},
+        "artifact_bindings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wheel_sha256", "sdist_sha256", "lock_sha256"],
+          "properties": {
+            "wheel_sha256": {"$ref": "#/$defs/sha256"},
+            "sdist_sha256": {"$ref": "#/$defs/sha256"},
+            "lock_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["alias", "model_id", "revision", "manifest_sha256", "artifact"],
+        "properties": {
+          "alias": {"type": "string", "minLength": 1, "maxLength": 80},
+          "model_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+          "manifest_sha256": {"$ref": "#/$defs/sha256"},
+          "artifact": {"$ref": "#/$defs/artifact"}
+        }
+      }
+    },
+    "retrieval_profiles": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_sha256", "artifact"],
+      "properties": {
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "benchmark_commitments": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "registry_sha256", "corpus_record_sha256",
+        "internal_gate_record_sha256", "artifacts"
+      ],
+      "properties": {
+        "registry_sha256": {"$ref": "#/$defs/sha256"},
+        "corpus_record_sha256": {"$ref": "#/$defs/sha256"},
+        "internal_gate_record_sha256": {"$ref": "#/$defs/sha256"},
+        "artifacts": {
+          "type": "object", "additionalProperties": false,
+          "required": [
+            "corpus", "baseline_registry", "internal_gate", "statistical_protocol",
+            "case_results_manifest", "comparisons_manifest"
+          ],
+          "properties": {
+            "corpus": {"$ref": "#/$defs/artifact"},
+            "baseline_registry": {"$ref": "#/$defs/artifact"},
+            "internal_gate": {"$ref": "#/$defs/artifact"},
+            "statistical_protocol": {"$ref": "#/$defs/artifact"},
+            "case_results_manifest": {"$ref": "#/$defs/artifact"},
+            "comparisons_manifest": {"$ref": "#/$defs/artifact"}
+          }
+        }
+      }
+    },
+    "baseline_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "collection_id", "system_count", "successful_system_count",
+        "collection_report_sha256", "raw_output_count",
+        "resource_record_count", "artifacts"
+      ],
+      "properties": {
+        "collection_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "system_count": {"type": "integer", "minimum": 1, "maximum": 64},
+        "successful_system_count": {"type": "integer", "minimum": 1, "maximum": 64},
+        "collection_report_sha256": {"$ref": "#/$defs/sha256"},
+        "raw_output_count": {"type": "integer", "minimum": 1, "maximum": 64},
+        "resource_record_count": {"type": "integer", "minimum": 1, "maximum": 64},
+        "artifacts": {
+          "type": "array", "minItems": 1, "maxItems": 512,
+          "items": {"$ref": "#/$defs/artifact"}
+        }
+      }
+    },
+    "signature_tools": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "external_verification": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "claim_eligible", "secret_held_out_runs_complete",
+        "independent_org_attestations_complete", "required_secret_held_out_count",
+        "required_independent_org_count", "attestation_schema", "blockers"
+      ],
+      "properties": {
+        "claim_eligible": {"const": false},
+        "secret_held_out_runs_complete": {"const": false},
+        "independent_org_attestations_complete": {"const": false},
+        "required_secret_held_out_count": {"const": 2},
+        "required_independent_org_count": {"const": 2},
+        "attestation_schema": {"const": "deeplaw.external-evaluator-kit-attestation/v1"},
+        "blockers": {
+          "type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "kit_integrity_complete": {"const": true},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "byte_size"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["logical_name", "blob_path", "sha256", "byte_size", "media_type"],
+      "properties": {
+        "logical_name": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "blob_path": {
+          "type": "string",
+          "pattern": "^blobs/sha256/[0-9a-f]{2}/[0-9a-f]{64}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+        "media_type": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    }
+  }
+}

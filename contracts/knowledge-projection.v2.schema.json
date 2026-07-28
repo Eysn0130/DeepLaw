@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-projection.v2.schema.json",
+  "title": "DeepLaw deterministic human projection manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "vault_id", "vault_revision", "audit_head", "max_sensitivity", "asset_count", "source_count", "concept_count", "projection_file_count", "files"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-markdown/v2"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "vault_revision": {"type": "integer", "minimum": 0},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "max_sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "asset_count": {"type": "integer", "minimum": 0},
+    "source_count": {"type": "integer", "minimum": 0},
+    "concept_count": {"type": "integer", "minimum": 0},
+    "projection_file_count": {"type": "integer", "minimum": 2, "maximum": 300000},
+    "files": {"type": "array", "minItems": 2, "maxItems": 300000, "items": {"$ref": "#/$defs/file"}}
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byte_size"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096, "not": {"pattern": "^(?:/|.*(?:^|/)\\.\\.(?:/|$))"}},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 16777216}
+      }
+    }
+  }
+}

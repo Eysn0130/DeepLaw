@@ -1,0 +1,28 @@
+{
+  "schema_version": "deeplaw.release-license-policy/v1",
+  "approved_markers": [
+    "Apache",
+    "BSD",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Mozilla Public License 2.0",
+    "PSF",
+    "Python Software Foundation",
+    "CNRI-Python"
+  ],
+  "forbidden_markers": [
+    "AGPL",
+    "BUSL",
+    "Business Source License",
+    "Commons Clause",
+    "SSPL"
+  ],
+  "reviewed_exceptions": {
+    "mineru": {
+      "version": "3.4.4",
+      "license_evidence": "LicenseRef-MinerU-Open-Source-License",
+      "notice_marker": "Optional Structured Document Engine"
+    }
+  }
+}

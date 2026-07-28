@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-retrieval-trace.v1.schema.json",
+  "title": "DeepLaw retrieval explain trace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "vault_id", "vault_revision", "audit_head", "query_plan",
+    "channel_candidates", "fusion_ranks", "reranker_ranks", "excluded_candidates",
+    "selected_asset_ids", "source_coverage", "duty_coverage", "budget", "gaps",
+    "numeric_confidence_exposed", "authority_changed_by_ranking", "trace_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-retrieval-trace/v1"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "vault_revision": {"type": "integer", "minimum": 0},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "query_plan": {"$ref": "knowledge-query-plan.v1.schema.json"},
+    "channel_candidates": {
+      "type": "object",
+      "maxProperties": 10,
+      "additionalProperties": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {"$ref": "#/$defs/channelCandidate"}
+      }
+    },
+    "fusion_ranks": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/fusionRank"}},
+    "reranker_ranks": {"type": "array", "maxItems": 100, "items": {"type": "object"}},
+    "excluded_candidates": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/exclusion"}},
+    "selected_asset_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"}},
+    "source_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected_source_count", "selected_source_ids", "all_source_bound_items_have_refs"],
+      "properties": {
+        "selected_source_count": {"type": "integer", "minimum": 0, "maximum": 2000},
+        "selected_source_ids": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"}},
+        "all_source_bound_items_have_refs": {"type": "boolean"}
+      }
+    },
+    "duty_coverage": {"type": "object", "maxProperties": 12, "additionalProperties": {"enum": ["covered", "gap"]}},
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_items", "max_excerpt_chars", "selected_items", "selected_excerpt_chars"],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_excerpt_chars": {"type": "integer", "minimum": 1, "maximum": 20000},
+        "selected_items": {"type": "integer", "minimum": 0, "maximum": 20},
+        "selected_excerpt_chars": {"type": "integer", "minimum": 0, "maximum": 20000}
+      }
+    },
+    "gaps": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+    "numeric_confidence_exposed": {"const": false},
+    "authority_changed_by_ranking": {"const": false},
+    "trace_id": {"type": "string", "pattern": "^retrievaltrace_[0-9a-f]{24}$"}
+  },
+  "$defs": {
+    "channelCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "asset_id", "reason"],
+      "properties": {
+        "rank": {"type": "integer", "minimum": 1, "maximum": 100},
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "fusionRank": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "asset_id", "channel_ranks", "fusion_value", "fusion_value_is_probability"],
+      "properties": {
+        "rank": {"type": "integer", "minimum": 1, "maximum": 100},
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "channel_ranks": {"type": "object", "maxProperties": 10, "additionalProperties": {"type": "integer", "minimum": 1, "maximum": 100}},
+        "fusion_value": {"type": "number"},
+        "fusion_value_is_probability": {"const": false}
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "reasons"],
+      "properties": {
+        "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+        "knowledge_key": {"type": "string", "pattern": "^(?:knowledge_[0-9a-f]{24}|legacy:asset_[0-9a-f]{24})$"},
+        "reasons": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "string", "minLength": 1, "maxLength": 2000}}
+      }
+    }
+  }
+}

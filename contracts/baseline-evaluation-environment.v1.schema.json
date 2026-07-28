@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/baseline-evaluation-environment.v1.schema.json",
+  "title": "DeepLaw official-baseline evaluation environment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evaluator_run_id", "system_id", "implementation_revision",
+    "hardware", "software", "models", "reader", "network", "measurement",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.baseline-evaluation-environment/v1"},
+    "evaluator_run_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "system_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "implementation_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_id", "os_name", "os_version", "architecture", "cpu_model",
+        "logical_cpu_count", "memory_bytes", "accelerator", "storage"
+      ],
+      "properties": {
+        "host_id": {"$ref": "#/$defs/bounded"},
+        "os_name": {"$ref": "#/$defs/bounded"},
+        "os_version": {"$ref": "#/$defs/bounded"},
+        "architecture": {"$ref": "#/$defs/bounded"},
+        "cpu_model": {"$ref": "#/$defs/bounded"},
+        "logical_cpu_count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "memory_bytes": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+        "accelerator": {
+          "anyOf": [{"$ref": "#/$defs/bounded"}, {"type": "null"}]
+        },
+        "storage": {"$ref": "#/$defs/bounded"}
+      }
+    },
+    "software": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version", "role", "artifact_sha256"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 200},
+          "version": {"$ref": "#/$defs/bounded"},
+          "role": {"enum": ["runtime", "container", "database", "model-server"]},
+          "artifact_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alias", "model_id", "revision", "artifact_manifest_sha256", "loopback_only"
+        ],
+        "properties": {
+          "alias": {"type": "string", "minLength": 1, "maxLength": 80},
+          "model_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+          "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"},
+          "loopback_only": {"const": true}
+        }
+      }
+    },
+    "reader": {"$ref": "#/$defs/model"},
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy", "enforcement_method", "build_network_used",
+        "build_network_record_sha256", "query_network_disabled",
+        "loopback_only_model_services"
+      ],
+      "properties": {
+        "policy": {
+          "enum": [
+            "build-network-recorded-query-offline",
+            "query-offline-loopback-models-only",
+            "manual-local-offline"
+          ]
+        },
+        "enforcement_method": {"$ref": "#/$defs/bounded"},
+        "build_network_used": {"type": "boolean"},
+        "build_network_record_sha256": {
+          "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
+        "query_network_disabled": {"const": true},
+        "loopback_only_model_services": {"const": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"build_network_used": {"const": true}}},
+          "then": {"properties": {"build_network_record_sha256": {"$ref": "#/$defs/sha256"}}},
+          "else": {"properties": {"build_network_record_sha256": {"type": "null"}}}
+        }
+      ]
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clock", "peak_memory", "disk", "model_cost"],
+      "properties": {
+        "clock": {"const": "evaluator-monotonic-wall-clock-v1"},
+        "peak_memory": {"const": "evaluator-process-tree-peak-rss-v1"},
+        "disk": {"const": "evaluator-workspace-apparent-bytes-v1"},
+        "model_cost": {"const": "local-model-call-token-ledger-v1"}
+      }
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bounded": {"type": "string", "minLength": 1, "maxLength": 500},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias", "model_id", "revision", "artifact_manifest_sha256", "loopback_only"
+      ],
+      "properties": {
+        "alias": {"const": "generation-reader"},
+        "model_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "loopback_only": {"const": true}
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-query-plan.v1.schema.json",
+  "title": "DeepLaw Evidence-Governed Retrieval query plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "normalized_query", "mode", "intent", "duties", "channels",
+    "channel_budgets", "filters", "temporal_scope", "search_terms", "exact_phrases",
+    "fusion_profile", "channel_weights", "reranker_profile", "retrieval_profile",
+    "tokenizer_profile", "implementation_revision", "query_plan_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-query-plan/v1"},
+    "normalized_query": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "mode": {"enum": ["auto", "exact", "lexical", "semantic", "tree", "graph", "temporal", "hybrid", "global"]},
+    "intent": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+    "duties": {"type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true, "items": {"enum": ["constraints", "current_decisions", "required_procedures", "definitions", "known_lessons", "recent_changes", "applicability", "exceptions", "conflicts", "open_questions", "missing_evidence", "counterevidence"]}},
+    "channels": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"enum": ["exact_id", "knowledge_key", "semantic_key", "exact_phrase", "lexical", "dense", "tree", "graph", "temporal", "feedback"]}},
+    "channel_budgets": {"type": "object", "maxProperties": 10, "additionalProperties": {"type": "integer", "minimum": 1, "maximum": 64}},
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kinds", "memory_tiers", "active_reviewed_only", "restricted_allowed"],
+      "properties": {
+        "kinds": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "memory_tiers": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "active_reviewed_only": {"type": "boolean"},
+        "restricted_allowed": {"type": "boolean"}
+      }
+    },
+    "temporal_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "mode"],
+      "properties": {
+        "as_of": {"type": ["string", "null"], "format": "date-time"},
+        "mode": {"enum": ["current", "as-of"]}
+      }
+    },
+    "search_terms": {"type": "array", "maxItems": 48, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 200}},
+    "exact_phrases": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+    "fusion_profile": {"type": "string", "minLength": 1, "maxLength": 100},
+    "channel_weights": {"type": "object", "maxProperties": 10, "additionalProperties": {"type": "number", "minimum": 0, "maximum": 16}},
+    "reranker_profile": {"type": "string", "minLength": 1, "maxLength": 100},
+    "retrieval_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "profile_sha256", "authority_effect"],
+      "properties": {
+        "profile_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "profile_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "authority_effect": {"const": "ranking-only"}
+      }
+    },
+    "tokenizer_profile": {"type": "string", "minLength": 1, "maxLength": 100},
+    "implementation_revision": {"type": "string", "minLength": 1, "maxLength": 100},
+    "query_plan_id": {"type": "string", "pattern": "^queryplan_[0-9a-f]{24}$"}
+  }
+}

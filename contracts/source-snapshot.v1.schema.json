@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-snapshot.v1.schema.json",
+  "title": "DeepLaw owner-only connector source snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "vault_id", "connector", "captured_at", "requested_locator", "resolved_locator", "canonical_origin_uri", "collection_id", "logical_path", "path_hint", "content_sha256", "byte_size", "media_type", "network_used", "metadata", "record_sha256"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-snapshot/v1"},
+    "snapshot_id": {"type": "string", "pattern": "^sourcesnapshot_[0-9a-f]{24}$"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "connector": {"enum": ["https", "git-local-exact"]},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "requested_locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "resolved_locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "canonical_origin_uri": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "collection_id": {"type": "string", "pattern": "^collection_[0-9a-f]{24}$"},
+    "logical_path": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "path_hint": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+    "media_type": {"type": "string", "maxLength": 200, "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"},
+    "network_used": {"type": "boolean"},
+    "metadata": {"type": "object", "maxProperties": 20},
+    "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"connector": {"const": "https"}}},
+      "then": {"properties": {"network_used": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"connector": {"const": "git-local-exact"}}},
+      "then": {"properties": {"network_used": {"const": false}}}
+    }
+  ]
+}

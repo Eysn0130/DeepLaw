@@ -77,6 +77,42 @@ artifact hash。这些事实进入 suite manifest 并由独立评测方签名，
 真实 Knowledge Compiler、人工 fixture 审核边界和 Context Compiler，保留原始评测 ID，
 便于接入法律片段与秘密检索套件。它不是通用“自动适配所有 benchmark”的宣称。
 
+v0.7 named-baseline kit 的
+[`official_adapter.py`](../benchmarks/baselines/official_adapter.py) 采用 execution-plan/receipt v2：
+绑定并重新核验 exact registry、clean Git revision/submodule、corpus/query/case inventory、
+wrapper/executable，以及固定 hardware/software/models/common reader/network/measurement 的 closed
+environment record。五个新 artifact 路径保留 raw output、resource/failure record、stdout、stderr
+与 receipt；输出必须精确覆盖 query case，资源记录必须绑定 build/query cost、memory/disk、模型
+调用/Token/成本和失败清单。
+
+[`collection_gate.py`](../benchmarks/baselines/collection_gate.py) 会重新验证所有 plan/receipt、冻结
+输入、clean checkout 与 artifact bytes，并要求 17 项具名系统共享 evaluator run、corpus、queries、
+case inventory、hardware、reader、measurement、Token budget 与 top-k。它同时要求 raw output、
+resource record 和 failure inventory 全量保留；不完整时失败关闭。该 runner 明确记录
+`runner_enforces_network_isolation=false`，environment 的断网字段仍是 evaluator 记录，独立评测方
+必须用 OS sandbox 实际实施。plan/receipt/collection digest 都不是签名；只有进入新冻结协议的完整
+suite manifest 并由独立方签名后才可能成为 claim evidence。历史 v3 仍只绑定 0.5.0，不能移用于
+v0.7。
+
+Obsidian 使用独立的两阶段 `manual_adapter.py`，而不是虚构 command execution。评测方必须在操作前
+写入绑定 registry/corpus/queries/environment/frozen workflow 的 plan，操作后封存逐题指标、原始
+JSONL、resource/failure record、screen recording 和前后 vault archive；collection gate 会按同一
+公平条件复核这些产物。manual receipt 同样只有内容完整性，不能证明独立性或替代签名。
+
+最终 `benchmarks/release/evaluator_candidate.py` 不接受“稍后补证据”的半成品 freeze。它重新验证
+clean exact HEAD、无遗漏 source-tree archive、完整 contracts、冻结 registry 与 17 项成功 collection，
+并要求 environment 中每个模型 digest 对上 evaluator 对完整本地模型目录生成的 file manifest。
+预交付 corpus/query commitment、逐题统计 gate、protocol/result/comparison manifests、reproducible
+wheel/sdist、原样 `uv.lock`、CycloneDX SBOM、通过的 license inventory，以及 commit/version-labeled
+OCI image archive 必须同时存在；OCI config 还必须绑定同一 wheel、sdist 与 lock digest。输出只使用
+`blobs/sha256/...` 内容地址，并绑定 tokenizer、fusion、
+三个 DeepLaw index operating point、raw output、resource/failure、manual capture 和签名工具。
+
+portable `verify` 不依赖原 evaluator 绝对路径；detached Ed25519 attestation verification 必须由调用方
+另行提供 trusted public key，不能信任 attestation 自带 key 来证明机构身份。即使 kit 完整且一个
+签名有效，机器输出仍固定 `claim_eligible=false`、`organization_identity_independently_verified=false`。
+两个秘密 held-out 和两家真实独立机构只能由外部事实关闭，开发团队不能用自签名替代。
+
 ## 相同条件
 
 每个套件都必须固定并保留：

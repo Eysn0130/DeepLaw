@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/codex-plugin-host-smoke.v1.schema.json",
+  "title": "DeepLaw sanitized Codex plugin lifecycle smoke",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "generated_at_utc", "scope", "claim_eligible",
+    "claim_ineligibility_reasons", "full_host_acceptance", "candidate", "host",
+    "isolation", "plugin_sources", "command_evidence", "lifecycle_checks",
+    "cache_copy_checks", "result", "unresolved_checks", "limitations",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.codex-plugin-host-smoke/v1"},
+    "generated_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "scope": {"const": "plugin-lifecycle-only"},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reasons": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "candidate_worktree_not_frozen",
+          "plugin_lifecycle_only",
+          "model_session_acceptance_not_run",
+          "network_isolation_not_enforced"
+        ]
+      }
+    },
+    "full_host_acceptance": {"const": false},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_line", "package_version", "commit", "worktree_dirty",
+        "implementation_files", "marketplace_sha256"
+      ],
+      "properties": {
+        "candidate_line": {"const": "0.7.0-unreleased"},
+        "package_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "worktree_dirty": {"type": "boolean"},
+        "implementation_files": {
+          "type": "object",
+          "minProperties": 3,
+          "maxProperties": 16,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$"
+          },
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        },
+        "marketplace_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "cli_version", "executable_sha256", "platform_system",
+        "platform_release", "machine"
+      ],
+      "properties": {
+        "kind": {"const": "codex"},
+        "cli_version": {
+          "type": "string",
+          "pattern": "^codex-cli [A-Za-z0-9][A-Za-z0-9.+_-]{0,99}$"
+        },
+        "executable_sha256": {"$ref": "#/$defs/sha256"},
+        "platform_system": {"$ref": "#/$defs/text100"},
+        "platform_release": {"$ref": "#/$defs/text200"},
+        "machine": {"$ref": "#/$defs/text100"}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "codex_home_temporary", "home_temporary", "xdg_roots_temporary",
+        "ambient_user_environment_forwarded", "user_configuration_seeded",
+        "user_credentials_seeded", "model_or_api_call_attempted",
+        "network_isolation_enforced", "network_activity_measured", "network_claim",
+        "temporary_state_removed", "environment_variable_names"
+      ],
+      "properties": {
+        "codex_home_temporary": {"const": true},
+        "home_temporary": {"const": true},
+        "xdg_roots_temporary": {"const": true},
+        "ambient_user_environment_forwarded": {"const": false},
+        "user_configuration_seeded": {"const": false},
+        "user_credentials_seeded": {"const": false},
+        "model_or_api_call_attempted": {"const": false},
+        "network_isolation_enforced": {"const": false},
+        "network_activity_measured": {"const": false},
+        "network_claim": {"const": false},
+        "temporary_state_removed": {"const": true},
+        "environment_variable_names": {
+          "type": "array",
+          "minItems": 13,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "CODEX_HOME", "HOME", "USERPROFILE", "XDG_CONFIG_HOME",
+              "XDG_DATA_HOME", "XDG_CACHE_HOME", "TMPDIR", "TMP", "TEMP",
+              "PATH", "NO_COLOR", "LANG", "LC_ALL", "SYSTEMROOT", "WINDIR",
+              "COMSPEC", "PATHEXT"
+            ]
+          }
+        }
+      }
+    },
+    "plugin_sources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/plugin_source"}
+    },
+    "command_evidence": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "items": {"$ref": "#/$defs/command_evidence"}
+    },
+    "lifecycle_checks": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {"$ref": "#/$defs/lifecycle_check"}
+    },
+    "cache_copy_checks": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/cache_copy_check"}
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "success", "marketplace_discovery", "install_remove_readd",
+        "plugin_lifecycle_isolation", "cache_copy_exact",
+        "final_installed_plugin_ids"
+      ],
+      "properties": {
+        "success": {"const": true},
+        "marketplace_discovery": {"const": true},
+        "install_remove_readd": {"const": true},
+        "plugin_lifecycle_isolation": {"const": true},
+        "cache_copy_exact": {"const": true},
+        "final_installed_plugin_ids": {"type": "array", "maxItems": 0}
+      }
+    },
+    "unresolved_checks": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "frozen_wheel_runtime",
+          "explicit_task_model_activation",
+          "session_tool_discovery",
+          "recall",
+          "context",
+          "verify",
+          "explain_boundary",
+          "restricted_exclusion",
+          "read_only_behavior",
+          "proposal_inbox_post_run_feedback",
+          "inactive_zero_impact_model_session"
+        ]
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 12,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "text100": {"type": "string", "minLength": 1, "maxLength": 100},
+    "text200": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plugin_id": {
+      "enum": ["deeplaw@deeplaw", "deeplaw-knowledge-os@deeplaw"]
+    },
+    "plugin_ids": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/plugin_id"}
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byte_size"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 8388608}
+      }
+    },
+    "plugin_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plugin_id", "name", "version", "relative_root", "inventory_sha256",
+        "file_count", "total_bytes", "files"
+      ],
+      "properties": {
+        "plugin_id": {"$ref": "#/$defs/plugin_id"},
+        "name": {"enum": ["deeplaw", "deeplaw-knowledge-os"]},
+        "version": {"$ref": "#/$defs/text100"},
+        "relative_root": {
+          "enum": ["plugins/deeplaw", "plugins/deeplaw-knowledge-os"]
+        },
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "file_count": {"type": "integer", "minimum": 1, "maximum": 256},
+        "total_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {"$ref": "#/$defs/file"}
+        }
+      }
+    },
+    "command_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence", "operation", "returncode", "stdout_sha256", "stdout_bytes",
+        "stderr_sha256", "stderr_bytes", "raw_output_retained"
+      ],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 19},
+        "operation": {
+          "enum": [
+            "host_version", "marketplace_add", "list_available", "add_legal_initial",
+            "list_legal_initial", "add_knowledge_initial", "list_both_initial",
+            "remove_knowledge", "list_legal_survives_knowledge_remove",
+            "add_knowledge_readd", "list_both_after_knowledge_readd", "remove_legal",
+            "list_knowledge_survives_legal_remove", "add_legal_readd",
+            "list_both_after_legal_readd", "remove_knowledge_final",
+            "list_legal_after_knowledge_final", "remove_legal_final", "list_final_empty"
+          ]
+        },
+        "returncode": {"const": 0},
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stdout_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "raw_output_retained": {"const": false}
+      }
+    },
+    "lifecycle_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check_id", "expected_installed_plugin_ids", "observed_installed_plugin_ids",
+        "expected_available_plugin_ids", "observed_available_plugin_ids", "passed"
+      ],
+      "properties": {
+        "check_id": {
+          "enum": [
+            "marketplace_discovery", "legal_initial", "both_initial",
+            "legal_survives_knowledge_remove", "both_after_knowledge_readd",
+            "knowledge_survives_legal_remove", "both_after_legal_readd",
+            "legal_after_knowledge_final", "final_empty"
+          ]
+        },
+        "expected_installed_plugin_ids": {"$ref": "#/$defs/plugin_ids"},
+        "observed_installed_plugin_ids": {"$ref": "#/$defs/plugin_ids"},
+        "expected_available_plugin_ids": {"$ref": "#/$defs/plugin_ids"},
+        "observed_available_plugin_ids": {"$ref": "#/$defs/plugin_ids"},
+        "passed": {"const": true}
+      }
+    },
+    "cache_copy_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase", "plugin_id", "source_inventory_sha256",
+        "installed_inventory_sha256", "file_count", "total_bytes", "exact_match"
+      ],
+      "properties": {
+        "phase": {
+          "enum": ["legal_initial", "knowledge_initial", "knowledge_readd", "legal_readd"]
+        },
+        "plugin_id": {"$ref": "#/$defs/plugin_id"},
+        "source_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "installed_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "file_count": {"type": "integer", "minimum": 1, "maximum": 256},
+        "total_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "exact_match": {"const": true}
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/installed-license-inventory.v1.schema.json",
+  "title": "DeepLaw installed distribution license inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "policy_schema_version", "package_count", "status",
+    "blocked", "review_required", "packages"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.installed-license-inventory/v1"},
+    "policy_schema_version": {"const": "deeplaw.release-license-policy/v1"},
+    "package_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "status": {"enum": ["passed", "review_required", "blocked"]},
+    "blocked": {"type": "array", "maxItems": 10000, "items": {"type": "string"}},
+    "review_required": {"type": "array", "maxItems": 10000, "items": {"type": "string"}},
+    "binding": {"type": "object"},
+    "environment": {"type": "object"},
+    "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name", "normalized_name", "version", "license_expression",
+          "declared_license", "license_classifiers", "status", "reason"
+        ],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 500},
+          "normalized_name": {"type": "string", "minLength": 1, "maxLength": 500},
+          "version": {"type": "string", "minLength": 1, "maxLength": 200},
+          "license_expression": {"type": ["string", "null"]},
+          "declared_license": {"type": ["string", "null"]},
+          "license_classifiers": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
+          "status": {"enum": ["approved", "reviewed_exception", "review_required", "blocked"]},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    }
+  }
+}

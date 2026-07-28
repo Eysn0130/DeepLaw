@@ -1,0 +1,584 @@
+{
+  "schema_version": "deeplaw.baseline-adapter-registry/v1",
+  "candidate_line": "0.7.0-unreleased",
+  "reviewed_at": "2026-07-27",
+  "purpose": "Closed, claim-ineligible execution registry for fair local single-user Agent Knowledge comparison. It pins official code and model revisions without pretending that unexecuted systems produced results.",
+  "shared_models": {
+    "embedding-multilingual": {
+      "model_id": "BAAI/bge-m3",
+      "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+      "role": "embedding",
+      "local_runtime": true
+    },
+    "deeplaw-discovery-zh": {
+      "model_id": "jinaai/jina-embeddings-v2-base-zh",
+      "revision": "c1ff9086a89a1123d7b5eff58055a665db4fb4b9",
+      "role": "embedding",
+      "local_runtime": true
+    },
+    "reranker-multilingual": {
+      "model_id": "BAAI/bge-reranker-v2-m3",
+      "revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+      "role": "reranker",
+      "local_runtime": true
+    },
+    "generation-reader": {
+      "model_id": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "role": "generation",
+      "local_runtime": true
+    }
+  },
+  "fairness": {
+    "same_corpus": true,
+    "same_queries": true,
+    "same_reader": true,
+    "same_context_token_budget": true,
+    "same_hardware": true,
+    "same_query_network_policy": true,
+    "record_build_and_query_cost": true,
+    "retain_failures_and_raw_outputs": true,
+    "no_toy_substitution": true
+  },
+  "systems": [
+    {
+      "system_id": "baseline/bm25",
+      "display_name": "Pyserini BM25",
+      "category": "retrieval",
+      "implementation": {
+        "repository": "https://github.com/castorini/pyserini",
+        "revision": "8f6964c95d01980b1700381998c2448d9e6232de",
+        "release": "reviewed HEAD 2026-07-27",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official Lucene BM25 defaults, whitespace-preserving frozen document IDs",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "bm25",
+        "official_defaults_documented": true
+      },
+      "model_aliases": [],
+      "runtime_dependencies": ["Python", "Java", "Pyserini/Lucene"],
+      "network_policy": "build-network-recorded-query-offline",
+      "data_boundary": "Fresh local index; corpus, index, queries, logs and outputs stay in the evaluator workspace.",
+      "official_evidence": "https://github.com/castorini/pyserini",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "baseline/dense",
+      "display_name": "Pyserini dense retrieval",
+      "category": "retrieval",
+      "implementation": {
+        "repository": "https://github.com/castorini/pyserini",
+        "revision": "8f6964c95d01980b1700381998c2448d9e6232de",
+        "release": "reviewed HEAD 2026-07-27",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official dense index/search path with normalized BGE-M3 embeddings",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "dense",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual"],
+      "runtime_dependencies": ["Python", "Java", "Pyserini/Lucene", "local embedding runtime"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Model files are provisioned by hash before the run; corpus and vectors stay in the evaluator workspace.",
+      "official_evidence": "https://github.com/castorini/pyserini",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "baseline/bm25-dense-reranker",
+      "display_name": "Pyserini BM25 + dense + reranker",
+      "category": "retrieval",
+      "implementation": {
+        "repository": "https://github.com/castorini/pyserini",
+        "revision": "8f6964c95d01980b1700381998c2448d9e6232de",
+        "release": "reviewed HEAD 2026-07-27",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official hybrid fusion with BGE-M3 candidate retrieval and BGE reranking",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "hybrid-rerank",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "reranker-multilingual"],
+      "runtime_dependencies": ["Python", "Java", "Pyserini/Lucene", "local embedding and reranker runtimes"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Models are fixed local files; corpus, indexes and all intermediate ranks stay in the evaluator workspace.",
+      "official_evidence": "https://github.com/castorini/pyserini",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "ragflow",
+      "display_name": "RAGFlow",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/infiniflow/ragflow",
+        "revision": "76acd499d4fc74cc6e72ce8c71fcb2262b3cab13",
+        "release": "v0.26.4 review coordinate",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official general document parser, hybrid retrieval and reranking path",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "hybrid-rerank",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "reranker-multilingual", "generation-reader"],
+      "runtime_dependencies": ["official RAGFlow container stack", "local OpenAI-compatible model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Dedicated loopback-only official stack; no shared corpus, database or object store outside the evaluator workspace.",
+      "official_evidence": "https://github.com/infiniflow/ragflow",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "microsoft-graphrag",
+      "display_name": "Microsoft GraphRAG",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/microsoft/graphrag",
+        "revision": "14a00ad88fc33cf2b52f4f113f25807556f8e25e",
+        "release": "v3.1.1",
+        "license": "MIT"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official standard indexing; local search for focused cases and global search for global cases",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "official-local-or-global-by-preregistered-case-duty",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "Microsoft GraphRAG", "local OpenAI-compatible model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Fresh local GraphRAG workspace; generated graph/community reports are retained as baseline output, not DeepLaw authority.",
+      "official_evidence": "https://github.com/microsoft/graphrag",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "lightrag",
+      "display_name": "LightRAG",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/HKUDS/LightRAG",
+        "revision": "bbebdd64272d9c9cd71cf93c7446b1054a00388c",
+        "release": "v1.5.5rc1",
+        "license": "MIT"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official local/global/hybrid/mix modes selected only by preregistered query duty",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "hybrid-or-mix",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "reranker-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "LightRAG", "local embedded stores", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Use only local embedded storage profiles; generated entities and relations remain isolated baseline artifacts.",
+      "official_evidence": "https://github.com/HKUDS/LightRAG",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "graphiti",
+      "display_name": "Graphiti",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/getzep/graphiti",
+        "revision": "9140123a7282d44efc077a0af09179919f3defdf",
+        "release": "v0.29.2 review coordinate",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official episode ingestion and hybrid graph search with temporal metadata",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "hybrid-temporal",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "Graphiti", "official supported local graph backend", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Dedicated baseline graph database bound to loopback; episodes, graph and outputs are deleted with the evaluator workspace.",
+      "official_evidence": "https://github.com/getzep/graphiti",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "mem0",
+      "display_name": "Mem0",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/mem0ai/mem0",
+        "revision": "b357a5a1b03c299ec8229c268e63cfac0f7c6566",
+        "release": "Python v2.0.14",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official OSS memory add/search API with local vector and graph configuration",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "search",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "Mem0 OSS", "local vector store", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Fresh local OSS history and indexes; no Mem0 cloud account or telemetry is permitted.",
+      "official_evidence": "https://github.com/mem0ai/mem0",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "cognee",
+      "display_name": "Cognee",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/topoteretes/cognee",
+        "revision": "325acf356a81545b9892f19ab1ea7b61c51a776b",
+        "release": "v1.4.0.dev0",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official add/cognify/search pipeline with local database providers",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "search",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "Cognee", "local database providers", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "All datasets, graph/vector stores and task artifacts stay in a fresh evaluator workspace.",
+      "official_evidence": "https://github.com/topoteretes/cognee",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "memos",
+      "display_name": "MemOS",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/MemTensor/MemOS",
+        "revision": "344cab73c2d04b44d5a10f4bfed0d7e51af9c91c",
+        "release": "local plugin v2.0.11 review coordinate",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official local memory cube add/search/feedback path",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "memory-search",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "MemOS", "local memory stores", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Use a dedicated local memory cube; asynchronous jobs and corrections remain in the evaluator workspace.",
+      "official_evidence": "https://github.com/MemTensor/MemOS",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "pageindex",
+      "display_name": "PageIndex",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/VectifyAI/PageIndex",
+        "revision": "39121c4d3479edeb049fb1e37045f3227bf50355",
+        "release": "v0.3.0.dev3",
+        "license": "MIT"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official tree generation and tree-search retrieval path",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "tree-search",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["generation-reader"],
+      "runtime_dependencies": ["Python", "PageIndex", "local OpenAI-compatible model endpoint"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Generated trees and reasoning traces stay in a fresh evaluator workspace and are retained as raw outputs.",
+      "official_evidence": "https://github.com/VectifyAI/PageIndex",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "openkb",
+      "display_name": "OpenKB",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/VectifyAI/OpenKB",
+        "revision": "ff54396e575ee6feb0113b631a34caa082b441cc",
+        "release": "v0.4.5",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official knowledge compile and agent search/read workflow",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "search-read",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Python", "OpenKB", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Compiled Wiki and source copies stay in an isolated evaluator workspace; no result is imported into DeepLaw.",
+      "official_evidence": "https://github.com/VectifyAI/OpenKB",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "wikigraph",
+      "display_name": "WikiGraph",
+      "category": "knowledge-system",
+      "implementation": {
+        "repository": "https://github.com/oomol-lab/wiki-graph",
+        "revision": "8dc2b2e0642b4d6e67462739deaaf2ac0f6bb666",
+        "release": "reviewed HEAD 2026-07-27",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "closed-subprocess",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks.baselines.official_adapter"
+      },
+      "configuration": {
+        "profile": "official archive build, search, get, graph and context-pack workflow",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "search-graph-context-pack",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["embedding-multilingual", "generation-reader"],
+      "runtime_dependencies": ["Node.js", "WikiGraph", "local model endpoints"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "The .wikg archive, graph, cache and outputs remain inside the evaluator workspace.",
+      "official_evidence": "https://github.com/oomol-lab/wiki-graph",
+      "execution_state": "configuration_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "obsidian-native",
+      "display_name": "Obsidian native vault workflow",
+      "category": "human-workflow",
+      "implementation": {
+        "repository": "https://github.com/obsidianmd/obsidian-releases",
+        "revision": "8173c5931a6f55bede9e542c6bf1b117f47e1fdc",
+        "release": "Desktop v1.12.7",
+        "license": "Proprietary application; benchmark use under Obsidian terms"
+      },
+      "adapter": {
+        "kind": "scripted-human",
+        "protocol": "obsidian-workflow-v1",
+        "entrypoint": "benchmarks/baselines/obsidian-workflow-v1.md"
+      },
+      "configuration": {
+        "profile": "fresh local vault, Restricted Mode, core Search/Graph/editor only, no community plugins",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "fixed-human-script",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["generation-reader"],
+      "runtime_dependencies": ["Obsidian Desktop v1.12.7", "screen recorder", "fixed reader Agent"],
+      "network_policy": "manual-local-offline",
+      "data_boundary": "Fresh local vault with Sync and Publish disabled; recording and vault bytes are evaluator evidence.",
+      "official_evidence": "https://obsidian.md/changelog/2026-03-23-desktop-v1.12.7/",
+      "execution_state": "manual_protocol_ready_execution_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "deeplaw/lexical",
+      "display_name": "DeepLaw lexical",
+      "category": "candidate",
+      "implementation": {
+        "repository": "https://github.com/Eysn0130/DeepLaw",
+        "revision": "FINAL_CANDIDATE_COMMIT_REQUIRED",
+        "release": "0.7.0-unreleased",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "deeplaw-jsonl",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks/external/adapters/jsonl_corpus_deeplaw_v070.py"
+      },
+      "configuration": {
+        "profile": "retrieval-fabric/2 lexical mode, central admission, bounded typo repair, no dense index",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "lexical",
+        "official_defaults_documented": true
+      },
+      "model_aliases": [],
+      "runtime_dependencies": ["DeepLaw candidate wheel", "SQLite FTS5"],
+      "network_policy": "build-network-recorded-query-offline",
+      "data_boundary": "Fresh owner-only local DeepLaw benchmark vault; no case data or production vault reuse.",
+      "official_evidence": "https://github.com/Eysn0130/DeepLaw",
+      "execution_state": "adapter_ready_candidate_freeze_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "deeplaw/hybrid",
+      "display_name": "DeepLaw hybrid",
+      "category": "candidate",
+      "implementation": {
+        "repository": "https://github.com/Eysn0130/DeepLaw",
+        "revision": "FINAL_CANDIDATE_COMMIT_REQUIRED",
+        "release": "0.7.0-unreleased",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "deeplaw-jsonl",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks/external/adapters/jsonl_corpus_deeplaw_v070.py"
+      },
+      "configuration": {
+        "profile": "retrieval-fabric/2 hybrid mode with explicitly prepared fixed Discovery index",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "hybrid",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["deeplaw-discovery-zh"],
+      "runtime_dependencies": ["DeepLaw candidate wheel", "SQLite FTS5", "fixed local Discovery model"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Fresh owner-only local vault and removable source-bound Discovery index; query networking disabled.",
+      "official_evidence": "https://github.com/Eysn0130/DeepLaw",
+      "execution_state": "adapter_ready_candidate_freeze_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    },
+    {
+      "system_id": "deeplaw/full",
+      "display_name": "DeepLaw full retrieval fabric",
+      "category": "candidate",
+      "implementation": {
+        "repository": "https://github.com/Eysn0130/DeepLaw",
+        "revision": "FINAL_CANDIDATE_COMMIT_REQUIRED",
+        "release": "0.7.0-unreleased",
+        "license": "Apache-2.0"
+      },
+      "adapter": {
+        "kind": "deeplaw-jsonl",
+        "protocol": "deeplaw.external-run/v1 JSONL",
+        "entrypoint": "benchmarks/external/adapters/jsonl_corpus_deeplaw_v070.py"
+      },
+      "configuration": {
+        "profile": "retrieval-fabric/2 hybrid channel set with exact, lexical, dense, tree, bounded two-hop temporal graph, reviewed relations and feedback ranking; local model reranker remains off",
+        "top_k": 5,
+        "context_token_budget": 4096,
+        "query_mode": "hybrid",
+        "official_defaults_documented": true
+      },
+      "model_aliases": ["deeplaw-discovery-zh"],
+      "runtime_dependencies": ["DeepLaw candidate wheel", "SQLite FTS5", "fixed local Discovery model"],
+      "network_policy": "query-offline-loopback-models-only",
+      "data_boundary": "Canonical evidence stays local; every derived index is removable and bound to exact vault/model revisions.",
+      "official_evidence": "https://github.com/Eysn0130/DeepLaw",
+      "execution_state": "adapter_ready_candidate_freeze_pending",
+      "results_status": "pending_execution",
+      "raw_output_required": true
+    }
+  ],
+  "result_policy": {
+    "current_status": "pending_execution",
+    "claim_eligible": false,
+    "required_before_claim": [
+      "freeze final candidate commit, wheel, sdist, lock, contracts, models and tokenizer profiles",
+      "commit corpus and every baseline configuration before candidate delivery",
+      "run every registered system on identical cases, budgets, hardware and network policy",
+      "retain raw per-case output, failures and complete resource records",
+      "run paired bootstrap and Holm-Bonferroni corrected comparisons",
+      "obtain two genuine independent evaluator attestations including secret held-out suites"
+    ]
+  }
+}

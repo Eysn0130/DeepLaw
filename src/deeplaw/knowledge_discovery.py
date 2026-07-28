@@ -273,6 +273,12 @@ def verify_discovery_model(
         raise RuntimeError("pinned discovery model directory is missing or unsafe")
     if os.name != "nt" and stat.S_IMODE(directory.stat().st_mode) & 0o077:
         raise RuntimeError("pinned discovery model directory must be owner-only")
+    if os.name == "nt":
+        from .windows_acl import native_windows_acl_report
+
+        acl = native_windows_acl_report(directory)
+        if not acl["permissions_verified"]:
+            raise RuntimeError("pinned discovery model Windows ACL is not owner-only")
     expected_paths = {_MODEL_MANIFEST, *(item.path for item in profile.files)}
     actual_paths: set[str] = set()
     for path in directory.rglob("*"):
@@ -393,6 +399,10 @@ def setup_discovery_model(
         )
         os.replace(temporary, destination)
         os.chmod(destination, 0o700)
+        if os.name == "nt":
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(destination)
     except BaseException:
         shutil.rmtree(temporary, ignore_errors=True)
         raise
@@ -736,6 +746,10 @@ def _write_index_with_embedder(
         )
         os.replace(temporary, output_path)
         os.chmod(output_path, 0o700)
+        if os.name == "nt":
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(output_path)
     except BaseException:
         with suppress(OSError):
             os.close(record_descriptor)
@@ -792,6 +806,12 @@ def _load_index_manifest(path: Path) -> dict[str, Any]:
             raise RuntimeError("discovery index directory must be owner-only")
         if stat.S_IMODE(manifest_path.stat().st_mode) & 0o077:
             raise RuntimeError("discovery index files must be owner-only")
+    else:
+        from .windows_acl import native_windows_acl_report
+
+        acl = native_windows_acl_report(path)
+        if not acl["permissions_verified"]:
+            raise RuntimeError("discovery index Windows ACL is not owner-only")
     try:
         value = strict_json_loads(manifest_path.read_bytes())
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
