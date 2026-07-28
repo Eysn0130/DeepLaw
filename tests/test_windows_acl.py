@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from deeplaw import windows_acl
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import (
     KnowledgeVault,
@@ -24,6 +25,21 @@ def _rule(sid: str, *, inherited: bool = False) -> dict[str, object]:
         "inheritance_flags": "None",
         "propagation_flags": "None",
     }
+
+
+def test_windows_acl_prefers_the_matching_pwsh_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def fake_which(name: str) -> str | None:
+        observed.append(name)
+        return f"C:\\tools\\{name}"
+
+    monkeypatch.setattr(windows_acl.shutil, "which", fake_which)
+
+    assert windows_acl._powershell() == "C:\\tools\\pwsh.exe"
+    assert observed == ["pwsh.exe"]
 
 
 def test_windows_acl_evaluator_requires_owner_only_native_acl() -> None:

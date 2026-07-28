@@ -111,7 +111,7 @@ foreach ($item in $items) {
 
 
 def _powershell() -> str:
-    executable = shutil.which("powershell.exe") or shutil.which("pwsh.exe")
+    executable = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
     if executable is None:
         raise RuntimeError("native Windows ACL verification requires PowerShell")
     return executable
