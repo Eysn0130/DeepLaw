@@ -119,6 +119,16 @@ def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
 def test_release_workflow_resumes_without_overwriting_published_assets() -> None:
     workflow = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
+    validation = workflow.split(
+        "      - name: Create and verify Sigstore OIDC bundles", maxsplit=1
+    )[0]
+    assert 'for path in sorted(assets_root.rglob("*")):' in validation
+    assert 'raise SystemExit(f"duplicate release asset basename: {path.name}")' in validation
+    assert 'files_by_name.get(name)' in validation
+    assert 'hashlib.sha256(path.read_bytes()).hexdigest()' in validation
+    assert 'expected_names = set(files_by_name) - {checksum_path.name}' in validation
+    assert 'raise SystemExit("release checksum inventory is incomplete")' in validation
+    assert "sha256sum --check SHA256SUMS" not in validation
     assert "Create or resume the release without overwriting assets" in workflow
     assert "Attach or verify post-release evidence without overwriting assets" in workflow
     assert workflow.count('remote_digest=$(jq -r --arg name "${name}"') == 2
