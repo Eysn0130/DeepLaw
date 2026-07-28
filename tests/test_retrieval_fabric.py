@@ -411,7 +411,7 @@ def test_graph_channel_follows_two_reviewed_source_bound_hops_with_a_bounded_tra
 
         result = retrieve(
             vault,
-            "Why does Orion-ANCHOR-7129 matter?",
+            f"Why does the exact anchor {anchor} matter?",
             mode="graph",
             limit=5,
         )
