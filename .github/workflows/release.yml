@@ -11,6 +11,11 @@ on:
         required: true
         type: string
         default: "v0.7.0"
+      post_release_only:
+        description: Verify an already published release without rebuilding or resigning it.
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,6 +66,7 @@ jobs:
   commercial-gates:
     name: Reuse exact commercial GA evidence
     needs: release-context
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.post_release_only }}
     uses: ./.github/workflows/commercial-gates.yml
     with:
       release_ref: ${{ needs.release-context.outputs.tag }}
@@ -72,6 +78,7 @@ jobs:
     needs:
       - release-context
       - commercial-gates
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.post_release_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -275,9 +282,14 @@ jobs:
           [[ "$(jq -r '.prerelease' <<< "${release_json}")" == "false" ]]
           if [[ "$(jq -r '.draft' <<< "${release_json}")" == "true" ]]; then
             jq --arg tag "${RELEASE_TAG}" --arg commit "${RELEASE_COMMIT}" \
-              '.tag_name = $tag | .target_commitish = $commit \
-              | .draft = false | .prerelease = false | .make_latest = "true" \
-              | {tag_name, target_commitish, name, body, draft, prerelease, make_latest}' \
+              '
+              .tag_name = $tag
+              | .target_commitish = $commit
+              | .draft = false
+              | .prerelease = false
+              | .make_latest = "true"
+              | {tag_name, target_commitish, name, body, draft, prerelease, make_latest}
+              ' \
               <<< "${release_json}" > "${RUNNER_TEMP}/publish-release.json"
             gh api --method PATCH \
               "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
@@ -294,6 +306,10 @@ jobs:
     needs:
       - release-context
       - publish
+    if: >-
+      ${{ always() && needs.release-context.result == 'success' &&
+      (needs.publish.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && inputs.post_release_only)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
