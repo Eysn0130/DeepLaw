@@ -106,3 +106,13 @@ def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
     assert "deeplaw-0.7.0-py3-none-any.whl" in dockerfile
     assert "/tmp/deeplaw.whl" not in dockerfile
     assert "EXPOSE " not in dockerfile
+
+
+def test_release_workflow_resumes_without_overwriting_published_assets() -> None:
+    workflow = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    assert "Create or resume the release without overwriting assets" in workflow
+    assert "Attach or verify post-release evidence without overwriting assets" in workflow
+    assert workflow.count('remote_digest=$(jq -r --arg name "${name}"') == 2
+    assert '[[ "${remote_digest}" == "${local_digest}" ]]' in workflow
+    assert "--clobber" not in workflow

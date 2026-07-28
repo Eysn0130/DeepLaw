@@ -169,7 +169,7 @@ jobs:
               shutil.copyfile(path, target / path.name)
           PY
 
-      - name: Create or resume the draft without overwriting assets
+      - name: Create or resume the release without overwriting assets
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ needs.release-context.outputs.commit }}
@@ -180,10 +180,14 @@ jobs:
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             is_draft=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
               --json isDraft --jq .isDraft)
-            [[ "${is_draft}" == "true" ]]
-            gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
-              --draft --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
-              --notes-file docs/RELEASE_NOTES_v0.7.0.md
+            is_prerelease=$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --json isPrerelease --jq .isPrerelease)
+            [[ "${is_prerelease}" == "false" ]]
+            if [[ "${is_draft}" == "true" ]]; then
+              gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+                --draft --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
+                --notes-file docs/RELEASE_NOTES_v0.7.0.md
+            fi
           else
             gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
               --verify-tag --target "${RELEASE_COMMIT}" --draft \
@@ -357,21 +361,34 @@ jobs:
           release-signing-artifacts: false
           upload-signing-artifacts: false
 
-      - name: Attach post-release evidence without overwriting assets
+      - name: Attach or verify post-release evidence without overwriting assets
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+          release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          for asset in \
             "${RUNNER_TEMP}/post-evidence/checksum-verification.log" \
             "${RUNNER_TEMP}/post-evidence/sigstore-verification.log" \
             "${RUNNER_TEMP}/post-evidence/provenance-verification.log" \
             "${RUNNER_TEMP}/post-evidence/sbom-verification.log" \
             "${RUNNER_TEMP}/post-evidence/post-release-distribution-lifecycle.json" \
             "${RUNNER_TEMP}/post-evidence/post-release-verification.json" \
-            "${RUNNER_TEMP}/post-evidence/post-release-verification.json.sigstore.json"
+            "${RUNNER_TEMP}/post-evidence/post-release-verification.json.sigstore.json"; do
+            name=$(basename "${asset}")
+            local_digest="sha256:$(sha256sum "${asset}" | cut -d ' ' -f 1)"
+            remote_digest=$(jq -r --arg name "${name}" \
+              '.assets[] | select(.name == $name) | .digest // empty' <<< "${release_json}")
+            if [[ -n "${remote_digest}" ]]; then
+              [[ "${remote_digest}" == "${local_digest}" ]]
+            else
+              gh release upload "${RELEASE_TAG}" "${asset}" \
+                --repo "${GITHUB_REPOSITORY}"
+              release_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+            fi
+          done
           gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
             --json isDraft,isPrerelease,url --jq \
             'select(.isDraft == false and .isPrerelease == false) | .url'
