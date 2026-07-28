@@ -25,7 +25,7 @@ The Sigstore bundle uses GitHub Actions OIDC. With the `sigstore` CLI installed,
 ```bash
 python -m sigstore verify identity \
   --bundle deeplaw-0.7.0-py3-none-any.whl.sigstore.json \
-  --cert-identity https://github.com/Eysn0130/DeepLaw/.github/workflows/release.yml@refs/tags/v0.7.0 \
+  --cert-identity https://github.com/Eysn0130/DeepLaw/.github/workflows/release.yml@refs/heads/main \
   --cert-oidc-issuer https://token.actions.githubusercontent.com \
   deeplaw-0.7.0-py3-none-any.whl
 ```

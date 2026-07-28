@@ -41,6 +41,8 @@ The release includes a byte-reproducible wheel and sdist, an OCI layout archive 
 and exposes no port, CycloneDX SBOM, installed-license inventory, dependency audit reports,
 OpenVEX, SHA-256 checksums, Sigstore/OIDC bundles, GitHub provenance/SBOM attestations, three-OS
 test/lifecycle reports, no-model host acceptance, and the commercial release manifest.
+The published Sigstore bundles use the exact workflow identity
+`https://github.com/Eysn0130/DeepLaw/.github/workflows/release.yml@refs/heads/main`.
 
 The tagged workflow publishes the already verified exact bytes. A final job downloads the public
 GitHub Release assets, verifies checksums, Sigstore identity and GitHub provenance, and performs a

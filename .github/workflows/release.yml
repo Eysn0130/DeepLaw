@@ -102,12 +102,15 @@ jobs:
         run: |
           set -euo pipefail
           python - "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" <<'PY'
+          import hashlib
           import json
           import os
           import pathlib
           import sys
 
-          manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          manifest_path = pathlib.Path(sys.argv[1]).resolve(strict=True)
+          assets_root = manifest_path.parent
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           release = manifest.get("release", {})
           if (
               manifest.get("commercial_release_eligible") is not True
@@ -116,9 +119,39 @@ jobs:
               or release.get("commit") != os.environ["RELEASE_COMMIT"]
           ):
               raise SystemExit("commercial release decision does not bind the exact tag")
+
+          files_by_name = {}
+          for path in sorted(assets_root.rglob("*")):
+              if not path.is_file():
+                  continue
+              if path.name in files_by_name:
+                  raise SystemExit(f"duplicate release asset basename: {path.name}")
+              files_by_name[path.name] = path
+          checksum_path = assets_root / "SHA256SUMS"
+          listed_names = set()
+          for line in checksum_path.read_text(encoding="utf-8").splitlines():
+              digest, separator, name = line.partition("  ")
+              if (
+                  separator != "  "
+                  or len(digest) != 64
+                  or any(character not in "0123456789abcdef" for character in digest)
+                  or not name
+                  or name in listed_names
+                  or "/" in name
+                  or "\\" in name
+              ):
+                  raise SystemExit("release checksum manifest is malformed")
+              listed_names.add(name)
+              path = files_by_name.get(name)
+              if path is None:
+                  raise SystemExit(f"checksummed release asset is missing: {name}")
+              observed = hashlib.sha256(path.read_bytes()).hexdigest()
+              if observed != digest:
+                  raise SystemExit(f"release checksum differs: {name}")
+          expected_names = set(files_by_name) - {checksum_path.name}
+          if listed_names != expected_names:
+              raise SystemExit("release checksum inventory is incomplete")
           PY
-          cd "${RUNNER_TEMP}/release-assets"
-          sha256sum --check SHA256SUMS
 
       - name: Create and verify Sigstore OIDC bundles
         uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
