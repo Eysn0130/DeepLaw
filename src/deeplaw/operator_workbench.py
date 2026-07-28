@@ -825,10 +825,19 @@ def _lineage_mapping_panel(
     )
 
 
-def _run_curses(screen: Any, vault_path: Path) -> None:
-    import curses
+def _hide_curses_cursor() -> None:
+    try:
+        import curses
+    except ImportError:
+        return
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        return
 
-    curses.curs_set(0)
+
+def _run_curses(screen: Any, vault_path: Path) -> None:
+    _hide_curses_cursor()
     screen.keypad(True)
     while True:
         snapshot = operator_snapshot(vault_path)
@@ -948,7 +957,11 @@ def run_operator_workbench(vault_path: str | Path) -> dict[str, Any]:
     if os.environ.get("TERM", "").lower() in {"", "dumb"}:
         print(json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
         return snapshot
-    import curses
+    try:
+        import curses
+    except ImportError:
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
+        return snapshot
 
     curses.wrapper(_run_curses, path)
     return operator_snapshot(path)

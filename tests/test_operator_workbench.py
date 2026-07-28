@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from deeplaw import operator_workbench
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.operator_workbench import (
@@ -129,7 +130,7 @@ def test_curses_workbench_starts_and_quits_on_local_vault(
 ) -> None:
     root = tmp_path / "vault"
     initialize_knowledge_vault(root, name="workbench smoke", scope="project")
-    monkeypatch.setattr("curses.curs_set", lambda _value: None)
+    monkeypatch.setattr(operator_workbench, "_hide_curses_cursor", lambda: None)
 
     _run_curses(_SmokeScreen(), root)
 

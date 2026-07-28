@@ -13,7 +13,11 @@ from deeplaw.knowledge_store import (
     initialize_knowledge_vault,
     knowledge_vault_permission_report,
 )
-from deeplaw.windows_acl import evaluate_windows_acl_payload, native_windows_acl_report
+from deeplaw.windows_acl import (
+    evaluate_windows_acl_payload,
+    harden_windows_vault,
+    native_windows_acl_report,
+)
 
 
 def _rule(sid: str, *, inherited: bool = False) -> dict[str, object]:
@@ -124,11 +128,13 @@ def test_native_windows_vault_acl_is_owner_only_after_real_ingest(tmp_path: Path
     index_file = root / "derived" / "indexes" / "fixture-index.bin"
     index_file.parent.mkdir(parents=True)
     index_file.write_bytes(b"derived-index-fixture")
+    hardening = harden_windows_vault(root)
 
     native = native_windows_acl_report(root)
     permissions = knowledge_vault_permission_report(root)
 
-    assert native["status"] == "verified"
+    assert hardening["applied"] is True
+    assert native["status"] == "verified", native
     assert native["permissions_verified"] is True
     assert native["owner_sid_verified"] is True
     assert native["reparse_points_absent"] is True
@@ -153,9 +159,11 @@ def test_native_windows_acl_rejects_directory_junction(tmp_path: Path) -> None:
         [
             "cmd.exe",
             "/d",
-            "/s",
             "/c",
-            f'mklink /J "{junction}" "{target}"',
+            "mklink",
+            "/J",
+            str(junction),
+            str(target),
         ],
         check=False,
         capture_output=True,

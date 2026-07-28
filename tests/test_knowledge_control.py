@@ -394,9 +394,10 @@ def test_permission_report_is_truthful_about_platform_guarantees(
     report = knowledge_vault_permission_report(root)
     assert report["structural_valid"] is True
     if os.name == "nt":
-        assert report["status"] == "not_verified"
-        assert report["permissions_verified"] is False
-        assert report["security_model"] == "windows_acl_requires_native_verification"
+        assert report["status"] == "verified"
+        assert report["permissions_verified"] is True
+        assert report["security_model"] == "windows_native_acl_owner_only"
+        assert report["native_windows_acl"]["permissions_verified"] is True
     else:
         assert report["status"] == "verified"
         assert report["permissions_verified"] is True
