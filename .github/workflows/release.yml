@@ -437,14 +437,21 @@ jobs:
             --output "${RUNNER_TEMP}/post-evidence/post-release-verification.json"
 
       - name: Sign and verify post-release verification
-        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
-        with:
-          inputs: ${{ runner.temp }}/post-evidence/post-release-verification.json
-          verify: true
-          verify-cert-identity: https://github.com/${{ github.workflow_ref }}
-          verify-oidc-issuer: https://token.actions.githubusercontent.com
-          release-signing-artifacts: false
-          upload-signing-artifacts: false
+        env:
+          CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="${RUNNER_TEMP}/post-evidence/post-release-verification.json"
+          bundle="${artifact}.sigstore.json"
+          uvx --from sigstore==4.3.0 sigstore sign \
+            --bundle "${bundle}" \
+            "${artifact}"
+          uvx --from sigstore==4.3.0 sigstore verify identity \
+            --bundle "${bundle}" \
+            --cert-identity "${CERT_IDENTITY}" \
+            --cert-oidc-issuer https://token.actions.githubusercontent.com \
+            "${artifact}"
 
       - name: Attach or verify post-release evidence without overwriting assets
         env:

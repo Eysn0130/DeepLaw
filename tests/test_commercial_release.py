@@ -135,6 +135,9 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
     assert "needs.publish.result == 'success'" in workflow
     assert "verified provenance: %s" in workflow
     assert "verified CycloneDX SBOM: %s" in workflow
+    assert "uvx --from sigstore==4.3.0 sigstore sign" in workflow
+    assert "uvx --from sigstore==4.3.0 sigstore verify identity" in workflow
+    assert '--cert-identity "${CERT_IDENTITY}"' in workflow
     assert 'releases?per_page=100' in workflow
     assert "release_id=$(jq -r '.id'" in workflow
     assert (
