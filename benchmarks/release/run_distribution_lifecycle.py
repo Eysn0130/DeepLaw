@@ -89,6 +89,30 @@ def _assert_wheel_version(path: Path, expected: str) -> None:
         raise LifecycleError(f"wheel metadata does not declare version {expected}")
 
 
+def _isolated_environment(home: Path) -> dict[str, str]:
+    if home.exists() or home.is_symlink():
+        raise LifecycleError("distribution lifecycle home must not already exist")
+    home.mkdir(mode=0o700)
+    selected_home = str(home.absolute())
+    environment = {
+        "PATH": os.environ.get("PATH", os.defpath),
+        "HOME": selected_home,
+        "USERPROFILE": selected_home,
+        "NO_COLOR": "1",
+        "PYTHONUTF8": "1",
+        "UV_NO_PROGRESS": "1",
+    }
+    if os.name == "nt":
+        drive, tail = os.path.splitdrive(selected_home)
+        if drive:
+            environment["HOMEDRIVE"] = drive
+            environment["HOMEPATH"] = tail or "\\"
+    for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP"):
+        if name in os.environ:
+            environment[name] = os.environ[name]
+    return environment
+
+
 def _create_environment(
     *,
     uv: str,
@@ -168,18 +192,9 @@ def run(
         raise LifecycleError("distribution filenames do not match the commercial version")
 
     evidence: list[dict[str, Any]] = []
-    environment = {
-        "PATH": os.environ.get("PATH", os.defpath),
-        "NO_COLOR": "1",
-        "PYTHONUTF8": "1",
-        "UV_NO_PROGRESS": "1",
-    }
-    for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP"):
-        if name in os.environ:
-            environment[name] = os.environ[name]
-
     with tempfile.TemporaryDirectory(prefix="deeplaw-distribution-lifecycle-") as temporary:
         root = Path(temporary)
+        environment = _isolated_environment(root / "home")
         constraints = root / "runtime-constraints.txt"
         export = _run(
             [

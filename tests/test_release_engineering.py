@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator
 
 from benchmarks.release.evidence import verify_record_digest
 from benchmarks.release.inventory_licenses import _reviewed_exception_matches, inventory
+from benchmarks.release.run_distribution_lifecycle import _isolated_environment
 from benchmarks.release.verify_reproducible_build import (
     DEFAULT_SOURCE_DATE_EPOCH,
     _verify_build_inputs,
@@ -18,6 +19,23 @@ from benchmarks.release.verify_reproducible_build import (
 )
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+
+
+def test_distribution_lifecycle_uses_an_explicit_isolated_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"):
+        monkeypatch.delenv(name, raising=False)
+    home = tmp_path / "lifecycle-home"
+
+    environment = _isolated_environment(home)
+
+    assert home.is_dir()
+    assert environment["HOME"] == str(home.absolute())
+    assert environment["USERPROFILE"] == str(home.absolute())
+    assert "PYTHONUTF8" in environment
+    assert "PATH" in environment
 
 
 def test_license_inventory_has_no_unreviewed_installed_distribution() -> None:
