@@ -100,7 +100,7 @@ def run(repository: Path, *, timeout_seconds: float) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "claim_eligible": False,
         "claim_ineligibility_reason": (
-            "single synthetic PDF on one dirty local environment; not a release, "
+            "single synthetic PDF in one local environment; not a frozen release, "
             "real-document corpus, or cross-platform gate"
         ),
         "candidate": {
@@ -144,7 +144,8 @@ def run(repository: Path, *, timeout_seconds: float) -> dict[str, Any]:
         "limitations": [
             "The fixture is a generated text-only one-page PDF.",
             "It does not cover OCR, tables, figures, damaged files, or multilingual layout.",
-            "A dirty-worktree diagnostic cannot become frozen release evidence.",
+            "A single-environment synthetic diagnostic cannot become "
+            "competitive-claim evidence.",
         ],
     }
 

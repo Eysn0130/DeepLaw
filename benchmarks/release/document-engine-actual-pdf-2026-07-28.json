@@ -1,15 +1,15 @@
 {
   "candidate": {
     "candidate_line": "0.7.0-unreleased",
-    "commit": "e0f1fe3ff01d3026df12673d57c69014c2c4dca4",
+    "commit": "3eeccc462fca87c8051a9abc9f1997cfc3981c85",
     "implementation_files": {
       "benchmarks/release/run_document_engine_actual_pdf.py": "14912c2b98307a83e83b75249ac991eb38c30301472dfaade6bdfda96944e620",
-      "src/deeplaw/document_engine.py": "fb8ea5a232914f475301a0e8d06875a374e846da0fdc867c4ac5eaf88a169bb0",
+      "src/deeplaw/document_engine.py": "44d297394b89e53fe0a1ece6c5906dba2036b840090e992a6c9879bd8d3fbc4c",
       "src/deeplaw/document_engine_cli.py": "791d1b738f64594d17278280435418865586e3f5963a37938138bba75005af40",
       "src/deeplaw/document_engine_models.py": "949a2f3305324ccdb8665ef60a3be75738a92f943c3f7e629c0aaf3c7c6c7556"
     },
-    "package_version": "0.6.0",
-    "worktree_dirty": true
+    "package_version": "0.7.0",
+    "worktree_dirty": false
   },
   "claim_eligible": false,
   "claim_ineligibility_reason": "single synthetic PDF on one dirty local environment; not a release, real-document corpus, or cross-platform gate",
@@ -56,7 +56,7 @@
     "block_types": [
       "paragraph"
     ],
-    "elapsed_seconds": 13.878285833168775,
+    "elapsed_seconds": 20.259388791862875,
     "expected_text_observed": true,
     "output_characters": 109,
     "output_text_sha256": "138cc5b28c525bd1f67be8badde862a88389e9867f37ed7b1974daa70774d7de",
