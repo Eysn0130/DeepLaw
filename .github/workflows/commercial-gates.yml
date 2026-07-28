@@ -285,7 +285,7 @@ jobs:
           evidence="${RUNNER_TEMP}/oci-evidence"
           mkdir -p "${context}" "${evidence}"
           cp packaging/oci/Dockerfile "${context}/Dockerfile"
-          cp "${RUNNER_TEMP}"/verified-dist/deeplaw-0.7.0-*.whl "${context}/deeplaw.whl"
+          cp "${RUNNER_TEMP}"/verified-dist/deeplaw-0.7.0-py3-none-any.whl "${context}/"
           release_commit=$(git rev-parse HEAD)
           uv export --frozen --no-dev --no-emit-project --format requirements-txt \
             --output-file "${context}/runtime-requirements.txt"

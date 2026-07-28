@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.scale.run_knowledge_scale import run_diagnostic
+from benchmarks.scale.run_knowledge_scale import _peak_rss_bytes, run_diagnostic
+
+
+def test_peak_rss_is_reported_as_bytes() -> None:
+    assert _peak_rss_bytes() > 0
 
 
 def test_scale_diagnostic_uses_the_real_cli_and_verified_capsules(

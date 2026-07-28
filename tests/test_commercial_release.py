@@ -103,4 +103,6 @@ def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
     assert "USER 65532:65532" in dockerfile
     assert 'ENTRYPOINT ["deeplaw"]' in dockerfile
     assert 'CMD ["--version"]' in dockerfile
+    assert "deeplaw-0.7.0-py3-none-any.whl" in dockerfile
+    assert "/tmp/deeplaw.whl" not in dockerfile
     assert "EXPOSE " not in dockerfile
