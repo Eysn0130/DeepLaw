@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import stat
 from pathlib import Path
@@ -81,7 +82,10 @@ def test_release_is_content_addressed_readonly_and_idempotent(tmp_path: Path) ->
         ).read_text()
     )
     Draft202012Validator(release_schema).validate(release)
-    assert not database.stat().st_mode & stat.S_IWUSR
+    if os.name == "posix":
+        assert not database.stat().st_mode & stat.S_IWUSR
+    else:
+        assert verify_release_artifact(database)["database_sha256"] == original_hash
     assert (output.parent / "ACTIVE").read_text(encoding="utf-8").strip() == release_dir.name
 
     rebuilt, report = build_release(

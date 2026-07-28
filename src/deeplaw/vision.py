@@ -10,6 +10,7 @@ import shutil
 import signal
 import stat
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -368,6 +369,7 @@ def _run_bounded_pdf_subprocess(
 ) -> _BoundedProcessResult:
     """Run a PDF helper with bounded pipes, time, and optional live output budget."""
 
+    command = _native_command(command)
     try:
         process = subprocess.Popen(
             command,
@@ -436,6 +438,25 @@ def _run_bounded_pdf_subprocess(
         stdout=bytes(stdout.value),
         stderr=bytes(stderr.value),
     )
+
+
+def _native_command(command: list[str]) -> list[str]:
+    """Use the active Python runtime for configured shebang scripts on Windows."""
+
+    if os.name != "nt" or not command:
+        return command
+    candidate = Path(command[0])
+    try:
+        if candidate.suffix.lower() == ".py":
+            is_python_script = True
+        elif candidate.is_file():
+            with candidate.open("rb") as stream:
+                is_python_script = stream.read(2) == b"#!"
+        else:
+            is_python_script = False
+    except OSError:
+        is_python_script = False
+    return [sys.executable, *command] if is_python_script else command
 
 
 def _executable(name: str, environment_name: str) -> str:

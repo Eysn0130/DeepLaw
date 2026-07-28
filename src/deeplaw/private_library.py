@@ -68,7 +68,12 @@ def _secure_directory(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     if not path.is_dir():
         raise RuntimeError(f"private library path is not a directory: {path}")
-    os.chmod(path, 0o700)
+    if os.name == "posix":
+        os.chmod(path, 0o700)
+    else:
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(path)
     return path
 
 

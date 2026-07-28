@@ -596,12 +596,18 @@ def test_private_library_is_physical_separate_explicit_and_deletable(tmp_path: P
     root = private_home(home)
 
     assert private_database.parent.parent == root / "releases"
-    assert stat.S_IMODE(root.stat().st_mode) == 0o700
-    assert stat.S_IMODE((root / "library.json").stat().st_mode) == 0o600
-    assert stat.S_IMODE(private_database.stat().st_mode) == 0o400
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_acl_report
+
+        assert native_windows_acl_report(root)["permissions_verified"] is True
+    else:
+        assert stat.S_IMODE(root.stat().st_mode) == 0o700
+        assert stat.S_IMODE((root / "library.json").stat().st_mode) == 0o600
+        assert stat.S_IMODE(private_database.stat().st_mode) == 0o400
     private_sources = list((root / "sources").iterdir())
     assert len(private_sources) == 1
-    assert stat.S_IMODE(private_sources[0].stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(private_sources[0].stat().st_mode) == 0o600
     assert str(private_source) not in (root / "library.json").read_text(encoding="utf-8")
     assert (official_release / "release.json").read_bytes() == official_hash
 

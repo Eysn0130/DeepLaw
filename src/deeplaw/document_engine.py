@@ -179,6 +179,7 @@ def _run_bounded(
     capture_limit: int = _MAX_CAPTURE_BYTES,
     output_root: Path | None = None,
 ) -> tuple[int, bytes]:
+    command = _native_command(command)
     popen_options: dict[str, Any] = {}
     resource_limiter = _posix_resource_limiter(timeout_seconds)
     if resource_limiter is not None:
@@ -240,6 +241,25 @@ def _run_bounded(
     if output_root is not None:
         _check_output_tree(output_root)
     return process.returncode, bytes(capture.value)
+
+
+def _native_command(command: list[str]) -> list[str]:
+    """Use the active Python runtime for configured shebang scripts on Windows."""
+
+    if os.name != "nt" or not command:
+        return command
+    candidate = Path(command[0])
+    try:
+        if candidate.suffix.lower() == ".py":
+            is_python_script = True
+        elif candidate.is_file():
+            with candidate.open("rb") as stream:
+                is_python_script = stream.read(2) == b"#!"
+        else:
+            is_python_script = False
+    except OSError:
+        is_python_script = False
+    return [sys.executable, *command] if is_python_script else command
 
 
 def _discover_engine() -> Path:

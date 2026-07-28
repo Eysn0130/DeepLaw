@@ -130,6 +130,10 @@ def _secure_directory(path: Path, *, mode: int = 0o700) -> Path:
     return path
 
 
+def _set_cached_artifact_mode(path: Path) -> None:
+    os.chmod(path, 0o444 if os.name == "posix" else 0o600)
+
+
 def _state_path(home: str | Path | None = None) -> Path:
     return official_home(home) / "state.json"
 
@@ -660,7 +664,7 @@ def _save_catalog(
             )
         temporary.unlink(missing_ok=True)
         temporary.write_bytes(payload)
-        os.chmod(temporary, 0o444)
+        _set_cached_artifact_mode(temporary)
         os.replace(temporary, path)
     if signature_payload is not None:
         signature_sha256 = signature_verification["signature_sha256"]
@@ -681,7 +685,7 @@ def _save_catalog(
                 )
             temporary.unlink(missing_ok=True)
             temporary.write_bytes(signature_payload)
-            os.chmod(temporary, 0o444)
+            _set_cached_artifact_mode(temporary)
             os.replace(temporary, signature_path)
     return path
 
@@ -719,7 +723,7 @@ def _resolve_review_overlay(
         )
     temporary.unlink(missing_ok=True)
     temporary.write_bytes(payload)
-    os.chmod(temporary, 0o444)
+    _set_cached_artifact_mode(temporary)
     os.replace(temporary, path)
     return path
 
@@ -772,7 +776,7 @@ def _download_source(document: dict[str, Any], destination: Path) -> None:
             raise RuntimeError(f"official source byte size changed: {document['path']}")
         if digest.hexdigest() != document["sha256"]:
             raise RuntimeError(f"official source SHA-256 changed: {document['path']}")
-        os.chmod(temporary, 0o444)
+        _set_cached_artifact_mode(temporary)
         os.replace(temporary, destination)
     except BaseException:
         temporary.unlink(missing_ok=True)

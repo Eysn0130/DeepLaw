@@ -89,6 +89,7 @@ def _clean_repository(tmp_path: Path) -> tuple[Path, str]:
     for name, source in implementations.items():
         (repository / "src" / "deeplaw" / name).write_text(source, encoding="utf-8")
     _git(repository, "init", "-q")
+    _git(repository, "config", "core.autocrlf", "false")
     _git(repository, "config", "user.name", "Evaluator Test")
     _git(repository, "config", "user.email", "evaluator@example.test")
     _git(repository, "add", ".")
@@ -196,7 +197,7 @@ def test_model_corpus_and_internal_gate_contracts_fail_closed(tmp_path: Path) ->
 
     model_root = tmp_path / "model"
     model_root.mkdir()
-    (model_root / "config.json").write_text("{}\n", encoding="utf-8")
+    (model_root / "config.json").write_bytes(b"{}\n")
     (model_root / "model.bin").write_bytes(b"weights")
     generated_model = build_model_manifest(
         registry_path=REPOSITORY / "benchmarks" / "baselines" / "registry-v0.7.json",
