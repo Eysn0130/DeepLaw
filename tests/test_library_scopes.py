@@ -592,6 +592,7 @@ def test_private_library_is_physical_separate_explicit_and_deletable(tmp_path: P
         home=home,
     )
     document_id = added["document"]["document_id"]
+    assert added["pending_cleanup_release_ids"] == []
     private_database = resolve_private_database(home=home)
     root = private_home(home)
 
@@ -632,6 +633,8 @@ def test_private_library_is_physical_separate_explicit_and_deletable(tmp_path: P
     deleted = delete_private_document(document_id, home=home)
     assert deleted["document_count"] == 0
     assert deleted["restart_required"] is True
+    assert deleted["deletion_complete"] is True
+    assert deleted["pending_cleanup_release_ids"] == []
     assert not (root / "ACTIVE").exists()
     assert not list((root / "sources").iterdir())
     assert not list((root / "releases").iterdir())
@@ -759,7 +762,17 @@ def test_mcp_rejects_private_reads_after_the_snapshot_is_deleted(tmp_path: Path)
             )
             assert before.isError is False
 
-            delete_private_document(added["document"]["document_id"], home=home)
+            deleted = delete_private_document(
+                added["document"]["document_id"], home=home
+            )
+            if os.name == "nt":
+                assert deleted["deletion_complete"] is False
+                assert deleted["pending_cleanup_release_ids"] == [
+                    added["active_release_id"]
+                ]
+            else:
+                assert deleted["deletion_complete"] is True
+                assert deleted["pending_cleanup_release_ids"] == []
             after = await session.call_tool(
                 "law_support",
                 {"operation": "private_info"},

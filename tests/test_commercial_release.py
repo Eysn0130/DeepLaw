@@ -98,6 +98,14 @@ def test_platform_gate_accepts_no_skip_suite_and_rejects_a_skip(tmp_path: Path) 
         _junit_report(skipped, expected_system="Windows")
 
 
+def test_platform_gate_uses_utf8_for_cross_platform_subprocess_output() -> None:
+    workflow = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'PYTHONUTF8: "1"' in workflow
+
+
 def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
     dockerfile = (REPOSITORY / "packaging/oci/Dockerfile").read_text(encoding="utf-8")
     assert "USER 65532:65532" in dockerfile

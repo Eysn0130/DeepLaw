@@ -134,7 +134,18 @@ def test_setup_is_explicit_and_writes_an_owner_only_verified_config(
         assert native_windows_acl_report(config.parent)["permissions_verified"] is True
     else:
         assert config.stat().st_mode & 0o777 == 0o600
-    assert document_engine_models.verify_installed_models()["model_root"] == str(root.resolve())
+    installed_root = Path(document_engine_models.verify_installed_models()["model_root"])
+    if os.name == "nt":
+        expected_root = (
+            home
+            / "document-engine"
+            / "model-bundles"
+            / document_engine_models.MODEL_REVISION
+        )
+        assert installed_root == expected_root.resolve()
+        assert installed_root != root.resolve()
+    else:
+        assert installed_root == root.resolve()
 
 
 def test_ingest_environment_ignores_upstream_overrides_and_forces_local_offline_models(

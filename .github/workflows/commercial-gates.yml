@@ -67,6 +67,8 @@ jobs:
     needs: build-distributions
     runs-on: ${{ matrix.os }}
     timeout-minutes: 50
+    env:
+      PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:

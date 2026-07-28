@@ -18,7 +18,11 @@ from deeplaw.knowledge_compiler import (
     record_capsule_feedback,
     record_debug_experience,
 )
-from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.knowledge_store import (
+    KnowledgeVault,
+    initialize_knowledge_vault,
+    knowledge_vault_permission_report,
+)
 from deeplaw.models import ExtractionQuality, ExtractionResult, TextBlock
 
 
@@ -58,8 +62,9 @@ def test_vault_is_owner_only_and_has_a_valid_initial_audit_chain(tmp_path: Path)
         info = vault.inspect()
 
     if os.name == "nt":
-        assert info["permissions"]["permissions_verified"] is True
-        assert info["permissions"]["security_model"] == "windows_native_acl_owner_only"
+        permissions = knowledge_vault_permission_report(root)
+        assert permissions["permissions_verified"] is True
+        assert permissions["security_model"] == "windows_native_acl_owner_only"
     else:
         assert stat.S_IMODE(root.stat().st_mode) == 0o700
         assert stat.S_IMODE((root / "vault.json").stat().st_mode) == 0o600
@@ -93,8 +98,7 @@ def test_vault_rejects_a_symlinked_sources_directory(tmp_path: Path) -> None:
 def test_vault_rejects_group_or_world_readable_identity_files(tmp_path: Path) -> None:
     root = _vault(tmp_path)
     if os.name == "nt":
-        with KnowledgeVault(root, read_only=True) as vault:
-            assert vault.inspect()["permissions"]["permissions_verified"] is True
+        assert knowledge_vault_permission_report(root)["permissions_verified"] is True
         return
     database = root / "vault.sqlite3"
     database.chmod(0o640)
@@ -1116,7 +1120,6 @@ def test_vault_write_surface_is_not_available_from_read_only_handle(tmp_path: Pa
         )
 
     if os.name == "nt":
-        with KnowledgeVault(root, read_only=True) as vault:
-            assert vault.inspect()["permissions"]["permissions_verified"] is True
+        assert knowledge_vault_permission_report(root)["permissions_verified"] is True
     else:
         assert stat.S_IMODE(os.stat(root / "vault.sqlite3").st_mode) == 0o600
