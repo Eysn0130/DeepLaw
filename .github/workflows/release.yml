@@ -275,9 +275,14 @@ jobs:
           [[ "$(jq -r '.prerelease' <<< "${release_json}")" == "false" ]]
           if [[ "$(jq -r '.draft' <<< "${release_json}")" == "true" ]]; then
             jq --arg tag "${RELEASE_TAG}" --arg commit "${RELEASE_COMMIT}" \
-              '.tag_name = $tag | .target_commitish = $commit \
-              | .draft = false | .prerelease = false | .make_latest = "true" \
-              | {tag_name, target_commitish, name, body, draft, prerelease, make_latest}' \
+              '
+              .tag_name = $tag
+              | .target_commitish = $commit
+              | .draft = false
+              | .prerelease = false
+              | .make_latest = "true"
+              | {tag_name, target_commitish, name, body, draft, prerelease, make_latest}
+              ' \
               <<< "${release_json}" > "${RUNNER_TEMP}/publish-release.json"
             gh api --method PATCH \
               "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
