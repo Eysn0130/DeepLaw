@@ -48,9 +48,13 @@ def _junit(path: Path, *, skipped: int = 0) -> None:
     )
 
 
-def test_commercial_release_versions_and_documented_claim_policy_are_exact() -> None:
+def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
     assert set(_unified_versions(REPOSITORY).values()) == {"0.7.0"}
     assert all(_docs(REPOSITORY).values())
+    assert "商业" not in (REPOSITORY / "README.md").read_text(encoding="utf-8")
+    assert "commercial" not in (
+        REPOSITORY / "README_EN.md"
+    ).read_text(encoding="utf-8").casefold()
     assert COMPETITIVE_EVIDENCE_MISSING == [
         "real_model_task_e2e",
         "named_baseline_results_17",
