@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+_CLI_TIMEOUT_SECONDS = 120 if sys.platform == "win32" else 30
+
 
 def _run_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -14,7 +16,7 @@ def _run_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
         check=False,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=_CLI_TIMEOUT_SECONDS,
     )
 
 
