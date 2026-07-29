@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>让 Agent 使用有来源、有状态、有边界的知识。</strong><br />
+  <strong>给 Agent 一个可追溯、经审核、不会被它静默改写的知识库。</strong><br />
   本地单用户 Agent Knowledge OS · Source-bound · Human-reviewed · Capsule-delivered
 </p>
 
@@ -23,12 +23,12 @@
 </p>
 
 <p align="center">
-  <a href="#为什么-agent-需要知识系统">为什么</a> ·
+  <a href="#什么知识值得进入-vault">适合什么</a> ·
   <a href="#五步开始">开始</a> ·
-  <a href="#从来源到-capsule">工作方式</a> ·
+  <a href="#知识如何运转">工作方式</a> ·
+  <a href="#vault-内部">Vault 内部</a> ·
   <a href="#接入-agent">Agent 接入</a> ·
   <a href="#v070-能力概览">能力</a> ·
-  <a href="#开源协作">参与</a> ·
   <a href="#文档">文档</a>
 </p>
 
@@ -40,12 +40,31 @@
   <sub>本地来源进入 Vault，经审核和可解释召回，成为交付给 Agent 的有界 Knowledge Capsule。</sub>
 </p>
 
-DeepLaw 位于本地资料与 Agent 之间。它把文档、代码、决策、约束、经验和工具结果编译为
+DeepLaw 是本地资料与 Agent 之间的知识层。它把文档、代码、决策、约束、经验和工具结果编译为
 **可追溯的 Knowledge Assets**，再针对当前任务交付一份小而完整、可以复核的
 **Knowledge Capsule**。
 
-它不是对聊天记录的长期堆积，也不是把向量检索结果直接塞进提示词。来源、知识、审核、检索与
-反馈各自有独立身份和生命周期；SQLite、内容寻址来源片段与追加审计链共同构成本机规范状态。
+DeepLaw 关心的不是“存了多少”，而是 Agent 能否知道：**这条知识从哪里来、现在是否有效、为什么
+进入本次上下文、还有哪些缺口**。来源、知识、审核、检索与反馈各自拥有独立身份和生命周期；
+owner-only SQLite、内容寻址来源片段与追加审计链共同构成本机规范状态。
+
+> DeepLaw 不替 Agent 思考，也不把聊天记录自动变成记忆。它守住来源、审核与交付边界，让 Agent
+> 在明确的证据范围内工作。
+
+## 什么知识值得进入 Vault
+
+不是所有文件都要变成长期知识。最适合进入 DeepLaw 的，是会跨任务复用、错误代价不低、并且需要
+持续说明出处与状态的信息：
+
+| 知识场景 | 典型来源 | Agent 得到什么 |
+| --- | --- | --- |
+| **项目约束与架构决策** | ADR、接口契约、仓库规范、依赖选择 | 当前有效的 constraint / decision，以及原始依据 |
+| **可重复的工作方法** | 发布清单、排障手册、审核流程、操作记录 | 有前置条件和边界的 procedure，而不是一段模糊摘要 |
+| **研究与领域知识** | 研究笔记、规范、术语、概念关系、开放问题 | 可追溯 concept / question 与显式 gaps |
+| **经验与 Agent 反馈** | 工具结果、失败复盘、Run Record、feedback artifact | 进入 Proposal Inbox 的待审核经验；不会自行写入 active knowledge |
+
+同一份 Vault 可以服务编码、研究、运维和内容工作；每次只按当前任务编译必要上下文，不把整个资料库
+塞进提示词。
 
 ## 为什么 Agent 需要知识系统
 
@@ -93,7 +112,10 @@ deeplaw explain --vault ./vault --last
 这条默认路径不需要远程数据库、后台服务或大模型 API Key。`recall` 会在同一结果中验证 Capsule；
 验证失败时关闭交付，而不是把不可核验的上下文交给 Agent。
 
-## 从来源到 Capsule
+## 知识如何运转
+
+DeepLaw 把知识当成持续演进的本地资产，而不是一次性索引。一次完整循环从保留来源开始，经过
+proposal 与人工审核，再按任务召回、解释、验证和交付；任何反馈都回到隔离的待审核入口。
 
 <p align="center">
   <img src="assets/readme/agent-knowledge-cycle-v0.7.png" width="1080" alt="本地 Knowledge Vault 围绕 Ingest、Review、Recall、Explain、Verify 与 Deliver 运转，并保留 Sources、Gaps 和 Receipts" />
@@ -102,6 +124,26 @@ deeplaw explain --vault ./vault --last
 <p align="center">
   <sub>知识不是一次性索引：来源、审核、召回、解释、验证与交付共同构成可复核的生命周期。</sub>
 </p>
+
+## Vault 内部
+
+<p align="center">
+  <img src="assets/readme/agent-knowledge-vault-v0.7.png" width="1180" alt="Knowledge Vault 保存 Sources and Revisions 与 Knowledge Assets，并以 Knowledge Duties、Limits and Gaps、Receipts and Replay 约束每次交付" />
+</p>
+
+<p align="center">
+  <sub>Vault 不是一个黑盒索引；来源、知识、任务要求、缺口与回执始终保持可辨认。</sub>
+</p>
+
+| Vault 责任 | 保留或产生的证据 |
+| --- | --- |
+| **Sources & Revisions** | 原始字节、文档顺序、结构化 locator、内容 hash 与不可变 revision |
+| **Knowledge Assets** | 经来源支持的 constraint、decision、procedure、experience、concept 与 question |
+| **Knowledge Duties** | 当前任务必须覆盖的要求；先定义责任，再比较候选与分配预算 |
+| **Limits & Gaps** | 正文/来源/完整载荷预算，以及找不到、不能使用或覆盖不足的证据 |
+| **Receipts & Replay** | Review、Explain、Run、feedback 与审计锚点，用于验证和重放本次选择 |
+
+### 一条知识如何穿过系统
 
 ```mermaid
 flowchart LR
@@ -144,15 +186,17 @@ flowchart LR
 
 ## 接入 Agent
 
-DeepLaw 提供两个互相隔离的可选插件：
+DeepLaw 2.0 在同一仓库提供两个互相隔离的产品面。它们共享“来源可验证、Agent 只读、写入由本地
+operator 治理”的原则，但不共享进程、存储或隐式触发：
 
-| 插件 | 面向内容 | MCP tool | 写入边界 |
+| 产品面 | 管理什么 | 交付给 Agent | 可选插件 / MCP tool |
 | --- | --- | --- | --- |
-| `deeplaw-knowledge-os` | 通用项目知识、决策、约束、经验与工具结果 | `knowledge_support` | 永久只读；管理写入只由本地 CLI 完成 |
-| `deeplaw` | 版本化中国 Legal Pack | `law_support` | 永久只读；与通用 Vault 不共进程、不混库 |
+| **Agent Knowledge OS** | 通用项目知识、决策、约束、经验与工具结果 | 带来源、选择理由、预算和 gaps 的 Knowledge Capsule | `deeplaw-knowledge-os` / `knowledge_support` |
+| **中国 Legal Pack** | 验签、不可变、版本感知的官方法源 release | 最多五张 evidence cards、按 ID 取得的精确 segment 与 receipt | `deeplaw` / `law_support` |
 
 Codex、Claude Code 与 OpenCode 都使用各自的薄适配层；插件必须显式安装和启用，不会接管普通代码
-或数据任务。配置、安装、升级、移除及双产品隔离见
+或数据任务。两个 MCP 面永久只读；所有摄取、审核、激活、导入、撤销与删除都只属于本地 CLI。
+配置、安装、升级、移除及双产品隔离见
 [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md)。
 
 ## v0.7.0 能力概览

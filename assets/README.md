@@ -22,12 +22,16 @@ visible word, label, arrow, and relationship at full resolution before publishin
 - `readme/agent-knowledge-cycle-v0.7.png`: current lifecycle diagram. It preserves the restrained
   v0.5 dark composition while showing Ingest / Review / Recall / Explain / Verify / Deliver around
   the Knowledge Vault. Its Image2 edit record and alt text live in the adjacent `.prompt.md` file.
+- `readme/agent-knowledge-vault-v0.7.png`: current inside-the-Vault diagram. It preserves the
+  restrained dark Evidence Core composition while showing Sources & Revisions, Knowledge Assets,
+  Knowledge Duties, Limits & Gaps, and Receipts & Replay around the Knowledge Vault. Its Image2
+  edit record and alt text live in the adjacent `.prompt.md` file.
 - `readme/product-flow-glass.png`: Files → DeepLaw Knowledge Base → Locate / Connect /
   Explain → Evidence Pack → Agent. This is the historical v0.5 flow retained as a source asset.
 - `readme/knowledge-cycle.png`: Ingest / Organize / Locate / Connect / Explain / Verify,
   with Deliver as the output action. This is the historical v0.5 cycle retained as a source asset.
-- `readme/evidence-core.png`: Sources & Versions, Knowledge Map, Evidence Duties,
-  Limits & Gaps, and Receipts & Replay.
+- `readme/evidence-core.png`: historical Legal Pack-specific Evidence Core diagram showing Sources
+  & Versions, Knowledge Map, Evidence Duties, Limits & Gaps, and Receipts & Replay.
 
 ## Brand rules
 
@@ -40,8 +44,8 @@ visible word, label, arrow, and relationship at full resolution before publishin
   gap-amber accent.
 - Avoid legal-industry clichés, national or official symbols, fake awards, unsupported
   ranking badges, and visuals that imply adjudication.
-- Use the current light v0.7 flow once near the top of the README. Keep dark diagrams for deeper
-  technical detail, and prefer legibility over visual spectacle.
+- Use the current light v0.7 flow once near the top of the README. Use the dark lifecycle and Vault
+  diagrams only after the plain-language introduction, and prefer legibility over visual spectacle.
 
 Apache License 2.0 applies to copyrightable project assets in this repository. It does not
 grant rights in third-party source material or constitute trademark clearance.

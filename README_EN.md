@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>Give agents knowledge with sources, state, and boundaries.</strong><br />
+  <strong>Give agents a traceable, reviewed knowledge base they cannot silently rewrite.</strong><br />
   Local single-user Agent Knowledge OS · Source-bound · Human-reviewed · Capsule-delivered
 </p>
 
@@ -23,12 +23,12 @@
 </p>
 
 <p align="center">
-  <a href="#why-agents-need-a-knowledge-system">Why</a> ·
+  <a href="#what-belongs-in-the-vault">Use cases</a> ·
   <a href="#five-step-start">Start</a> ·
-  <a href="#from-sources-to-a-capsule">How it works</a> ·
+  <a href="#how-knowledge-moves">How it works</a> ·
+  <a href="#inside-the-vault">Inside the Vault</a> ·
   <a href="#connect-an-agent">Agent access</a> ·
   <a href="#v070-at-a-glance">Capabilities</a> ·
-  <a href="#open-source-collaboration">Contribute</a> ·
   <a href="#documentation">Docs</a>
 </p>
 
@@ -40,14 +40,33 @@
   <sub>Local sources enter the Vault; reviewed, explainable recall becomes a bounded Knowledge Capsule for the Agent.</sub>
 </p>
 
-DeepLaw sits between local material and an Agent. It compiles documents, code, decisions,
+DeepLaw is the knowledge layer between local material and an Agent. It compiles documents, code, decisions,
 constraints, experience, and tool results into **traceable Knowledge Assets**, then delivers a
 small, sufficient, reviewable **Knowledge Capsule** for the task at hand.
 
-It is not a growing transcript and does not pour raw vector-search hits into a prompt. Sources,
+DeepLaw cares less about how much was stored than whether an Agent can answer: **where did this
+come from, may it be used now, why is it in this context, and what is still missing?** Sources,
 knowledge, review, retrieval, and feedback have separate identities and lifecycles. The owner's
-SQLite database, content-addressed source fragments, and append-only audit chain are the canonical
-local state.
+SQLite database, content-addressed source fragments, and append-only audit chain form the
+canonical local state.
+
+> DeepLaw does not think for the Agent or turn transcripts into memory automatically. It guards
+> source, review, and delivery boundaries so the Agent works inside an explicit evidence envelope.
+
+## What belongs in the Vault
+
+Not every file should become durable knowledge. DeepLaw is most useful for information that will
+be reused across tasks, carries a real cost when wrong, and must keep its provenance and status:
+
+| Knowledge scenario | Typical sources | What the Agent receives |
+| --- | --- | --- |
+| **Project constraints and architecture decisions** | ADRs, API contracts, repository rules, dependency choices | The current constraint or decision with its original support |
+| **Repeatable ways of working** | Release checklists, runbooks, review procedures, operation records | A bounded procedure with prerequisites, not a vague summary |
+| **Research and domain knowledge** | Research notes, standards, terminology, concept relations, open questions | Traceable concepts and questions with explicit gaps |
+| **Experience and Agent feedback** | Tool results, failure reviews, Run Records, feedback artifacts | Review-pending experience in the Proposal Inbox; never an automatic write to active knowledge |
+
+One Vault can support coding, research, operations, and content work. Each task receives only the
+context it needs instead of the whole repository being poured into its prompt.
 
 ## Why agents need a knowledge system
 
@@ -97,7 +116,11 @@ deeplaw explain --vault ./vault --last
 The default path needs no remote database, background service, or model API key. `recall` verifies
 the Capsule in the same result and fails closed instead of handing unverifiable context to an Agent.
 
-## From sources to a Capsule
+## How knowledge moves
+
+DeepLaw treats knowledge as an evolving local asset, not a one-time index. A complete loop starts
+by preserving sources, passes through proposals and human review, then recalls, explains, verifies,
+and delivers for one task. Feedback returns only through an isolated review-pending path.
 
 <p align="center">
   <img src="assets/readme/agent-knowledge-cycle-v0.7.png" width="1080" alt="A local Knowledge Vault coordinates Ingest, Review, Recall, Explain, Verify, and Deliver while retaining Sources, Gaps, and Receipts" />
@@ -106,6 +129,26 @@ the Capsule in the same result and fails closed instead of handing unverifiable 
 <p align="center">
   <sub>Knowledge is not a one-time index: sources, review, recall, explanation, verification, and delivery form a reviewable lifecycle.</sub>
 </p>
+
+## Inside the Vault
+
+<p align="center">
+  <img src="assets/readme/agent-knowledge-vault-v0.7.png" width="1180" alt="The Knowledge Vault retains Sources and Revisions and Knowledge Assets, then governs delivery through Knowledge Duties, Limits and Gaps, and Receipts and Replay" />
+</p>
+
+<p align="center">
+  <sub>The Vault is not a black-box index: sources, knowledge, task duties, gaps, and receipts remain distinct.</sub>
+</p>
+
+| Vault responsibility | Evidence retained or produced |
+| --- | --- |
+| **Sources & Revisions** | Original bytes, document order, structured locators, content hashes, and immutable revisions |
+| **Knowledge Assets** | Source-supported constraints, decisions, procedures, experiences, concepts, and questions |
+| **Knowledge Duties** | Requirements this task must cover; duties are compiled before candidates are compared and budgets assigned |
+| **Limits & Gaps** | Text/source/full-payload budgets plus evidence that is missing, inadmissible, or insufficiently covered |
+| **Receipts & Replay** | Review, Explain, Run, feedback, and audit anchors used to verify and replay the selection |
+
+### How one piece of knowledge crosses the system
 
 ```mermaid
 flowchart LR
@@ -150,15 +193,19 @@ flowchart LR
 
 ## Connect an Agent
 
-DeepLaw exposes two isolated optional plugins:
+DeepLaw 2.0 provides two isolated product surfaces in one repository. They share the principles of
+verifiable sources, read-only Agent access, and local operator-governed writes, but never share a
+process, store, or implicit activation path:
 
-| Plugin | Content | MCP tool | Write boundary |
+| Product surface | What it manages | What reaches the Agent | Optional plugin / MCP tool |
 | --- | --- | --- | --- |
-| `deeplaw-knowledge-os` | General project knowledge, decisions, constraints, experience, and tool results | `knowledge_support` | Permanently read-only; local CLI owns administrative writes |
-| `deeplaw` | Version-aware Chinese Legal Pack | `law_support` | Permanently read-only; separate process and store from the general Vault |
+| **Agent Knowledge OS** | General project knowledge, decisions, constraints, experience, and tool results | A Knowledge Capsule with sources, selection reasons, budgets, and gaps | `deeplaw-knowledge-os` / `knowledge_support` |
+| **Chinese Legal Pack** | Signed, immutable, version-aware official legal-source releases | At most five evidence cards, exact segments by ID, and receipts | `deeplaw` / `law_support` |
 
 Codex, Claude Code, and OpenCode use thin host-specific adapters. Plugins are installed and enabled
-explicitly and never take over unrelated coding or data work. See
+explicitly and never take over unrelated coding or data work. Both MCP surfaces are permanently
+read-only; ingestion, review, activation, import, revocation, and deletion belong only to the local
+CLI. See
 [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) for configuration, install, upgrade, removal, and
 dual-product isolation.
 
