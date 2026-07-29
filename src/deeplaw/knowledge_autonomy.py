@@ -657,6 +657,13 @@ def parse_knowledge_markdown(
         text = payload.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ValueError("Knowledge Object Markdown must be UTF-8") from error
+    # Markdown editors use the host platform's text newline by default. Parse
+    # CRLF as the same Markdown structure while continuing to hash and bind the
+    # exact edited bytes supplied in ``payload``. A bare CR is not a supported
+    # line ending because accepting it would make delimiter parsing ambiguous.
+    text = text.replace("\r\n", "\n")
+    if "\r" in text:
+        raise ValueError("Knowledge Object Markdown contains an unsupported line ending")
     if not text.startswith("---\n") or "\n---\n" not in text[4:]:
         raise ValueError("Knowledge Object Markdown requires YAML frontmatter")
     raw_frontmatter, raw_body = text[4:].split("\n---\n", 1)

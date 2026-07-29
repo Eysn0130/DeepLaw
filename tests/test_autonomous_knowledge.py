@@ -854,6 +854,63 @@ def test_closed_frontmatter_rejects_duplicate_keys_and_aliases() -> None:
         parse_knowledge_markdown(alias)
 
 
+def test_workspace_reconcile_accepts_crlf_editor_output(tmp_path: Path) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store, writer="cross-platform-editor")
+        first = store.remember(
+            grant_id=grant_id,
+            idempotency_key="crlf-first",
+            title="Cross-platform Markdown",
+            body="The original body uses canonical line endings.",
+            kind="claim",
+            confirm_no_case_data=True,
+        )
+        workspace = root / first["workspace_path"]
+        edited = workspace.read_bytes().replace(
+            b"The original body uses canonical line endings.",
+            b"A Windows editor changed this body.",
+        )
+        workspace.write_bytes(edited.replace(b"\n", b"\r\n"))
+
+        report = store.reconcile_workspace(
+            grant_id=grant_id,
+            confirm_no_case_data=True,
+        )
+
+        assert len(report["committed"]) == 1
+        second = report["committed"][0]
+        assert second["parent_revision_id"] == first["revision_id"]
+        assert store.get_current(first["knowledge_id"])["body"] == (
+            "A Windows editor changed this body."
+        )
+        assert workspace.read_bytes() == (
+            root
+            / ".deeplaw"
+            / "objects"
+            / "sha256"
+            / second["markdown_sha256"][:2]
+            / second["markdown_sha256"][2:]
+        ).read_bytes()
+
+
+def test_workspace_parser_rejects_bare_carriage_returns(tmp_path: Path) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store)
+        revision = store.remember(
+            grant_id=grant_id,
+            idempotency_key="bare-cr",
+            title="Canonical Markdown",
+            body="Bare carriage returns are not valid Markdown line endings.",
+            kind="claim",
+            confirm_no_case_data=True,
+        )
+        payload = (root / revision["workspace_path"]).read_bytes()
+    with pytest.raises(ValueError, match="unsupported line ending"):
+        parse_knowledge_markdown(payload.replace(b"\n", b"\r"))
+
+
 def test_historical_recall_uses_revision_semantics_and_ignores_quarantine(
     tmp_path: Path,
 ) -> None:
