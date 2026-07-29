@@ -49,7 +49,7 @@ flowchart LR
   G --> M["Markdown Knowledge Revision"]
   CAS --> L["SQLite trusted identity/event Ledger"]
   M --> L
-  L --> D["可重建派生层\nFTS · graph · wiki · canvas · cache"]
+  L --> D["可重建派生层\nFTS · dense · graph · community · wiki · canvas"]
   D --> Q["Discovery → Admission → Selection"]
   L --> Q
   Q --> C["有界 Knowledge Capsule"]
@@ -81,7 +81,26 @@ owner 必须用 `--feedback-evaluator-type` 创建独立、最小权限的评价
 `remember` 只承载普通 Knowledge Object，不能代替 `upsert_concept`、`save_synthesis` 或
 `save_skill`；这些语义更强的类型必须由 grant 和请求同时选择对应 operation。
 
-把一次 mutation 写成 closed JSON contract；每次调用都要求 idempotency key 与案件数据边界确认：
+把一次 mutation 写成 closed JSON contract；每次调用都要求 idempotency key 与案件数据边界确认。
+凡是声明 `run_id` 的知识必须先提交同 scope/sensitivity 的不可变 Run Record，不能用一个自由文本 ID
+伪造 provenance：
+
+```json
+{
+  "operation": "record_run",
+  "idempotency_key": "run-42-record",
+  "confirm_no_case_data": true,
+  "run_id": "run-42",
+  "task": "Prepare the release decision.",
+  "host_id": "codex-local",
+  "model_id": "host-model",
+  "status": "succeeded",
+  "scope": "project",
+  "sensitivity": "private"
+}
+```
+
+随后提交 Knowledge Revision：
 
 ```json
 {
@@ -112,6 +131,11 @@ uv run deeplaw knowledge autonomy explain \
   --vault ./vault --query "release coordinator"
 
 uv run deeplaw knowledge autonomy graph --vault ./vault --limit 20
+
+uv run deeplaw knowledge autonomy identity \
+  --vault ./vault --query "release coordinator"
+
+uv run deeplaw knowledge autonomy gaps --vault ./vault
 
 uv run deeplaw knowledge autonomy context \
   --vault ./vault \
@@ -153,6 +177,15 @@ uv run deeplaw knowledge autonomy watch \
 
 uv run deeplaw knowledge autonomy lint --vault ./vault
 uv run deeplaw knowledge autonomy rebuild --vault ./vault
+
+# 遗忘后先 dry-run，再由 owner 明确确认擦除 eligible Agent Knowledge bytes
+uv run deeplaw knowledge autonomy gc --vault ./vault
+uv run deeplaw knowledge autonomy gc --vault ./vault --no-dry-run --confirm \
+  --reason "owner retention policy"
+
+# 只把含显式 completion criterion 的 Procedure 编译为受治理 draft Skill
+uv run deeplaw knowledge autonomy skill-draft \
+  --vault ./vault --grant-id grant_REPLACE_WITH_RETURNED_ID --request ./skill-draft.json
 ```
 
 典型布局：
@@ -167,19 +200,20 @@ vault/
 ├── canvas/                  # 可重建 JSON Canvas
 ├── .deeplaw/
 │   ├── objects/sha256/      # immutable content-addressed objects
+│   ├── ledger.sqlite3       # identity, governance, bitemporal state, audit
 │   ├── capabilities/        # owner-only sink tokens
 │   ├── staging/             # crash recovery and preserved conflicts
 │   └── derived/             # rebuildable indexes and manifests
-└── vault.sqlite3            # legacy compatibility + trusted autonomous Ledger
+└── vault.sqlite3            # only an unmigrated v0.7 compatibility location
 ```
 
 ## Agent 接入
 
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | federated source-derived/autonomous recall、exact get、lineage、graph、Wiki discovery、verify、Capsule |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | remember、reflect、synthesis、concept、relation、feedback、expire、forget、Skill revision |
-| `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据；最多五张官方 evidence cards 与有界 segment read |
+| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | v3 federated source-derived/autonomous recall、exact get、lineage、graph、identity、gaps、Wiki、verify、Capsule |
+| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | Run/capture、Claim/Concept/Entity/Event/Comparison/Synthesis/Memory、relation、feedback、consolidate、expire/forget、Skill revision |
+| `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主
 配置中单独添加进程和具体 grant ID；插件、Skill、检索内容和模型都不能自行创建 grant 或扩大权限。
@@ -188,9 +222,9 @@ vault/
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current** | CAS 原件/Markdown revision、additive STRICT Ledger、hash-chained events、稳定 ID、原子 staging/recovery、reconcile/显式前台 Watcher/conflict、active/quarantine/expire/forget、scope/sensitivity-bound typed relation、current FTS + autonomous historical lexical recall、分区 Capsule、语义 Lint、deterministic communities、Wiki/Canvas bounded rebuild、独立读写 MCP、snapshot/restore 与 v0.7 rollback；旧 source-derived 分区不提供伪历史回退 |
+| **Current** | 0.8/0.9 repository-head：CAS 原件/Markdown revision、`.deeplaw/ledger.sqlite3` STRICT Ledger、Run/capture、hash-chained events、稳定 ID/alias/identity resolution、原子 staging/recovery、file lease/CAS/reconcile/Watcher/conflict、active/quarantine/consolidate/expire/forget/owner GC、typed temporal relation、FTS + offline Dense/Reranker + graph + historical lexical recall、Living Wiki/Semantic Lint/Gap/community/Canvas、Skill draft Factory、authority-partitioned Legal context、独立读写 MCP、snapshot/restore 与 v0.7 rollback |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
-| **Planned / experimental** | 可选 embedding/reranker、模型生成 entity extraction、GraphRAG community summary 与 Source Tree reasoning channel 必须绑定本地模型/配置/输入 audit head 后才能进入默认检索 |
+| **External closure pending** | 默认本地 Dense/Reranker 已落地；真实三宿主模型任务、实际具名竞争基线、秘密 held-out、置信区间与两家独立机构签名仍只能由外部事实完成，机器 claim gate 在此之前保持关闭 |
 | **Not claimed** | 没有远程 SaaS、多人控制平面、自动法律适用/裁判、模型自授予权限，也没有在缺少冻结候选、held-out 数据、置信区间和独立复现时宣称领先或 SOTA |
 
 ## 安全与验证

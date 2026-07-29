@@ -15,55 +15,74 @@ Agent-derived knowledge may activate autonomously inside an explicit scope-bound
 identity, `human_verified`, signature/release operations, private export, scope expansion, new tool
 permissions, and audit destruction remain owner/maintainer-only.
 
-## v0.8 — autonomous Markdown core
+## v0.8 — Autonomous Knowledge Core
 
-Repository-head implementation:
+**Repository-head implementation complete.** The milestone is implemented as an additive migration,
+not as a rename of the published `v0.7.0` package:
 
 - additive migration with a verified v0.7 rollback point;
 - immutable content-addressed objects plus canonical Markdown Knowledge Revisions;
 - STRICT SQLite identity/event Ledger, bitemporal relations, writer/run/model/tool provenance, and
   independent hash-chain verification;
-- stable-ID rename/move reconciliation, explicit conflict preservation, crash recovery, exact
-  duplicate rejection, prompt-injection and authority-elevation quarantine;
+- stable-ID rename/move reconciliation, file leases, compare-and-swap, explicit conflict
+  preservation, crash recovery, audited exact-duplicate collapse, high-precision contradiction
+  preservation, prompt-injection and authority-elevation quarantine;
 - separately enabled scope/sensitivity/operation/size/rate/capacity-bound `knowledge_sink`;
-- immediate active/quarantine policy, immutable revision supersession lineage, TTL expiry, explicit
-  forgetting, and fail-closed admission for every inactive lifecycle state;
-- v2 read-only `knowledge_support` with source-derived/autonomous partitions, lineage, graph,
-  Living Wiki discovery, feedback records, and bounded Capsule v2;
-- deterministic FTS, semantic lint, connected components, Wiki/Canvas rebuild manifests;
+- Run Records, bounded durable capture, Claim/Concept/Entity/Event/Comparison/Synthesis/Memory/Skill
+  revisions, alias and identity resolution, canonical temporal relations, and source/run binding;
+- immediate active/quarantine policy, immutable revision supersession lineage, TTL expiry,
+  autonomous consolidation, explicit forgetting, owner-confirmed content GC, and fail-closed
+  admission for every inactive lifecycle state;
+- v3 read-only `knowledge_support`, v2 separately enabled `knowledge_sink`, bounded Capsule v2,
+  foreground Watcher, recovery, replay, snapshot, restore, and v0.7 rollback;
+- existing exact-byte signed Legal Pack updater with monotonic catalog sequence, rollback protection,
+  fail-closed build validation, and atomic activation.
 - autonomous snapshot/restore and legacy compatibility.
 
 Release closure still requires a clean frozen artifact, package/version decision, supported-OS
 matrix, security/package audit, signed release metadata, and published release notes. Repository
 implementation is not itself a released wheel claim.
 
-## v0.9 — hybrid retrieval and knowledge quality
+## v0.9 — Living Wiki and Knowledge Intelligence
 
-Planned only until implemented and evaluated:
+**Repository-head implementation complete; cross-system quality evaluation remains separate.**
 
-- bind optional local embedding and reranker indexes to exact model/checkpoint/configuration,
-  input revision set, audit head, index bytes, network policy, and resource budget;
-- add model-assisted concept/entity/event extraction with closed outputs, source/Knowledge Revision
-  back-links, poisoning checks, and deterministic fallback/abstention;
-- compare Source Tree navigation, lexical retrieval, semantic retrieval, graph traversal,
-  GraphRAG communities, Wiki navigation, memory, and hybrids under one frozen protocol;
-- implement contradiction clusters, evidence-duty coverage, semantic consolidation proposals,
-  usage/feedback-based decay candidates, and owner policy for content-erasing forget/GC;
-- evaluate Skill trigger precision/recall, capability boundaries, failure paths, context cost,
-  revision rollback, and cross-host thin adapters.
+- deterministic offline multilingual dense index and evidence-duty reranker, both bound to model
+  identity, audit heads, revision inventory, exact index bytes, offline policy, and hard limits;
+- exact, lexical, dense, graph, temporal, memory, Living Wiki, Source Tree/code-symbol compatibility,
+  and hybrid planning under item/character/token/source/hop/provider-payload budgets;
+- constrained aliases, same-as/merge/split identity decisions, Wikilink compilation, temporal
+  canonical relations, weighted deterministic communities, contradictions, Semantic Lint, and Gap
+  Discovery;
+- Living Overview plus Concept/Entity/Event/Comparison/Synthesis pages, community/gap reports, and
+  JSON Canvas as hash-bound rebuildable views;
+- memory consolidation with crash-safe saga replay and reversible archived inputs;
+- Obsidian/Tolaria-safe stable-ID rename/move/reconcile semantics without CRDT or last-writer-wins;
+- a deterministic Skill Factory that compiles only explicitly checkable Procedure steps into a
+  governed draft Skill revision; promotion still requires an admitted user/external evaluation;
+- authority-partitioned `law_support.federated_context` for official, user-private, and explicitly
+  enabled Agent interpretations, with no fallback relabeling or legal adjudication.
 
-## v1.0 — reproducible real-task proof
+## v1.0 — Quality and Superiority Closure
 
-Planned release gate:
+**Engineering gates exist; external proof is intentionally open.** Repository head provides the
+offline Dense/Reranker implementation, Typed Compiler scorer, real-repository Chinese/English/code/
+legal/long-document development Gold Set, host adapters, 17-system fair-baseline execution kit,
+secret-held-out protocol, evaluator-kit freezer, detached-signature verification, and a fail-closed
+claim gate. The following are facts that only external evaluators can complete:
 
 - frozen corpus/candidate/split/questions and preregistered third-party baselines;
 - fixed host model, prompt, permissions, context budgets, hardware, network, latency, memory,
   indexing and token/cost accounting;
+- real-model Codex, Claude Code, and OpenCode tasks on the frozen candidate;
+- actual RAGFlow, Graphiti, PageIndex, Mem0, OpenKB, LLM Wiki, Obsidian/Tolaria and registered
+  baseline runs under one evaluator-owned environment;
 - held-out task success, useful-context recall, irrelevant-context rate, provenance coverage,
   wrong-version/invalid-authority admission, temporal updates, contradiction, forgetting,
   poisoning, unauthorized mutation, isolation, abstention, cold/warm latency, and build cost;
-- confidence intervals, paired tests, correction for multiple comparisons, complete failures, raw
-  outputs, independent organizations, and signed reproducibility artifacts;
+- confidence intervals, paired tests, correction for multiple comparisons, complete failures and
+  raw outputs from two evaluator-controlled secret held-outs;
+- two genuine independent organizations and signatures verified against separately trusted keys;
 - threat-model closure, formal migrations, upgrade/rollback drills, Windows/macOS/Linux evidence,
   SBOM/licenses/OpenVEX, and release signing.
 

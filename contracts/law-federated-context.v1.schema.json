@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-federated-context:v1",
+  "title": "DeepLawAuthorityAwareLegalContextV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "query", "purpose", "as_of", "official", "user_private",
+    "agent_interpretation", "gaps", "budget", "authority_partitions_preserved",
+    "legal_adjudication", "context_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.law-federated-context/v1"},
+    "query": {"type": "string", "minLength": 1, "maxLength": 8000},
+    "purpose": {"type": "string"},
+    "as_of": {"type": ["string", "null"], "format": "date"},
+    "official": {"$ref": "#/$defs/partition"},
+    "user_private": {"$ref": "#/$defs/partition"},
+    "agent_interpretation": {"$ref": "#/$defs/partition"},
+    "gaps": {
+      "type": "array", "maxItems": 12,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["official_limit", "private_limit", "agent_limit", "selected_items", "max_characters"],
+      "properties": {
+        "official_limit": {"type": "integer", "minimum": 0, "maximum": 5},
+        "private_limit": {"type": "integer", "minimum": 0, "maximum": 5},
+        "agent_limit": {"type": "integer", "minimum": 0, "maximum": 5},
+        "selected_items": {"type": "integer", "minimum": 0, "maximum": 15},
+        "max_characters": {"type": "integer", "minimum": 500, "maximum": 18000}
+      }
+    },
+    "authority_partitions_preserved": {"const": true},
+    "legal_adjudication": {"const": false},
+    "context_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "partition": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "name", "origin", "authority", "legal_authority", "status", "results",
+        "selected_count", "receipt", "ranking_is_authority"
+      ],
+      "properties": {
+        "name": {"enum": ["official", "user_private", "agent_interpretation"]},
+        "origin": {"enum": ["official", "user_source", "agent_derived"]},
+        "authority": {"enum": ["official", "user_provided", "agent_derived"]},
+        "legal_authority": {"type": "boolean"},
+        "status": {"enum": ["available", "unavailable", "disabled", "empty"]},
+        "results": {"type": "array", "maxItems": 5, "items": {"type": "object"}},
+        "selected_count": {"type": "integer", "minimum": 0, "maximum": 5},
+        "receipt": {"type": ["object", "null"]},
+        "ranking_is_authority": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"name": {"const": "official"}}, "required": ["name"]},
+          "then": {"properties": {
+            "origin": {"const": "official"},
+            "authority": {"const": "official"},
+            "legal_authority": {"const": true},
+            "status": {"enum": ["available", "unavailable", "empty"]}
+          }}
+        },
+        {
+          "if": {"properties": {"name": {"const": "user_private"}}, "required": ["name"]},
+          "then": {"properties": {
+            "origin": {"const": "user_source"},
+            "authority": {"const": "user_provided"},
+            "legal_authority": {"const": false}
+          }}
+        },
+        {
+          "if": {"properties": {"name": {"const": "agent_interpretation"}}, "required": ["name"]},
+          "then": {"properties": {
+            "origin": {"const": "agent_derived"},
+            "authority": {"const": "agent_derived"},
+            "legal_authority": {"const": false}
+          }}
+        }
+      ]
+    }
+  }
+}

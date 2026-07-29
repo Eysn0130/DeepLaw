@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-revision.v2.schema.json",
+  "title": "DeepLaw autonomous Knowledge Revision v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "knowledge_id", "revision_id", "parent_revision_id",
+    "markdown_sha256", "workspace_path", "kind", "origin", "authority",
+    "legal_authority", "mutability", "writer_scope", "activation_policy",
+    "verification", "lifecycle", "epistemic_state", "scope", "sensitivity",
+    "source_free", "quarantine_reasons", "recorded_at",
+    "idempotent_replay", "current_revision_id", "audit_head"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-revision/v2"},
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "parent_revision_id": {
+      "type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "markdown_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "workspace_path": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "kind": {"enum": [
+      "claim", "concept", "entity", "event", "decision", "procedure", "experience",
+      "preference", "synthesis", "comparison", "skill", "memory"
+    ]},
+    "origin": {"const": "agent_derived"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "mutability": {"const": "revision_only"},
+    "writer_scope": {"enum": ["personal", "project", "domain"]},
+    "activation_policy": {"const": "deeplaw.autonomous-activation/v1"},
+    "verification": {"enum": ["unverified", "source_bound", "run_bound"]},
+    "lifecycle": {"enum": [
+      "active", "superseded", "revoked", "expired", "forgotten", "archived",
+      "quarantined"
+    ]},
+    "epistemic_state": {"enum": ["supported", "tentative", "contested", "unknown"]},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "source_free": {"type": "boolean"},
+    "quarantine_reasons": {
+      "type": "array", "maxItems": 16, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "idempotent_replay": {"type": "boolean"},
+    "current_revision_id": {
+      "type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "deduplicated": {"type": "boolean"},
+    "deduplicated_to": {"type": ["string", "null"], "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "deduplication_id": {
+      "type": "string", "pattern": "^deduplication_[0-9a-f]{24}$"
+    }
+  }
+}

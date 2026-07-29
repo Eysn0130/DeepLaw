@@ -1168,6 +1168,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     autonomy_recall.add_argument("--limit", type=int, default=5)
     autonomy_recall.add_argument("--max-chars", type=int, default=5_000)
+    autonomy_recall.add_argument("--max-tokens", type=int, default=4_000)
+    autonomy_recall.add_argument("--max-sources", type=int, default=8)
+    autonomy_recall.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    autonomy_recall.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
     autonomy_recall.add_argument("--as-of")
     autonomy_explain = autonomy_commands.add_parser(
         "explain",
@@ -1189,6 +1197,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     autonomy_explain.add_argument("--limit", type=int, default=5)
     autonomy_explain.add_argument("--max-chars", type=int, default=5_000)
+    autonomy_explain.add_argument("--max-tokens", type=int, default=4_000)
+    autonomy_explain.add_argument("--max-sources", type=int, default=8)
+    autonomy_explain.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    autonomy_explain.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
     autonomy_explain.add_argument("--as-of")
     autonomy_graph = autonomy_commands.add_parser(
         "graph",
@@ -1222,8 +1238,63 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     autonomy_context.add_argument("--limit", type=int, default=8)
     autonomy_context.add_argument("--max-chars", type=int, default=8_000)
+    autonomy_context.add_argument("--max-tokens", type=int, default=6_000)
+    autonomy_context.add_argument("--max-sources", type=int, default=12)
+    autonomy_context.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    autonomy_context.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
     autonomy_context.add_argument("--as-of")
     autonomy_context.add_argument("--confirm-no-case-data", action="store_true")
+    autonomy_identity = autonomy_commands.add_parser(
+        "identity",
+        help="Resolve an exact semantic key or bounded Concept/Entity alias candidates",
+    )
+    autonomy_identity.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_identity.add_argument("--query", required=True)
+    autonomy_identity.add_argument("--kind", choices=("concept", "entity"))
+    autonomy_identity.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_identity.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_identity.add_argument("--limit", type=int, default=10)
+    autonomy_gaps = autonomy_commands.add_parser(
+        "gaps",
+        help="Report bounded missing evidence, orphan, conflict, and unresolved-link gaps",
+    )
+    autonomy_gaps.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_gc = autonomy_commands.add_parser(
+        "gc",
+        help=(
+            "Owner-only purge of forgotten Knowledge bytes and unreferenced CAS objects; "
+            "governance and audit remain"
+        ),
+    )
+    autonomy_gc.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_gc.add_argument(
+        "--dry-run", action=argparse.BooleanOptionalAction, default=True
+    )
+    autonomy_gc.add_argument("--confirm", action="store_true")
+    autonomy_gc.add_argument("--include-expired", action="store_true")
+    autonomy_gc.add_argument("--max-objects", type=int, default=1_000)
+    autonomy_gc.add_argument(
+        "--reason", default="owner-requested Knowledge Object forgetting"
+    )
+    autonomy_skill_draft = autonomy_commands.add_parser(
+        "skill-draft",
+        help=(
+            "Compile explicitly checkable Procedure lines into a governed draft Skill revision"
+        ),
+    )
+    autonomy_skill_draft.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    autonomy_skill_draft.add_argument("--grant-id", required=True)
+    autonomy_skill_draft.add_argument("--request", type=Path, required=True)
     for name in ("get", "history"):
         autonomy_read = autonomy_commands.add_parser(name)
         autonomy_read.add_argument("--vault", type=Path, default=default_knowledge_vault())
@@ -1273,7 +1344,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     sink_status.add_argument("--grant-id", required=True)
     sink_apply = sink_commands.add_parser(
         "apply",
-        help="Apply one closed knowledge-sink.input/v1 JSON request",
+        help="Apply one closed knowledge-sink.input/v2 JSON request",
     )
     sink_apply.add_argument("--vault", type=Path, default=default_knowledge_vault())
     sink_apply.add_argument("--grant-id", required=True)
@@ -1604,6 +1675,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             "graph",
             "conflicts",
             "context",
+            "identity",
+            "gaps",
             "get",
             "history",
         }
@@ -1614,7 +1687,16 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 else store.vault_scope
             )
             agent_read_integrity = None
-            if action in {"recall", "explain", "graph", "context", "get", "history"}:
+            if action in {
+                "recall",
+                "explain",
+                "graph",
+                "context",
+                "identity",
+                "gaps",
+                "get",
+                "history",
+            }:
                 agent_read_integrity = store.verify()
                 if not agent_read_integrity["valid"]:
                     raise RuntimeError(
@@ -1662,6 +1744,31 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 return store.semantic_lint()
             if action == "rebuild":
                 return store.rebuild_derived()
+            if action == "gc":
+                return store.garbage_collect_content(
+                    dry_run=args.dry_run,
+                    confirm=args.confirm,
+                    include_expired=args.include_expired,
+                    max_objects=args.max_objects,
+                    reason=args.reason,
+                )
+            if action == "skill-draft":
+                request_path = args.request.expanduser().absolute()
+                if (
+                    request_path.is_symlink()
+                    or not request_path.is_file()
+                    or request_path.stat().st_size > 128 * 1024
+                ):
+                    raise ValueError(
+                        "Skill Factory request file is missing, unsafe, or oversized"
+                    )
+                request = strict_json_loads(request_path.read_bytes())
+                if not isinstance(request, dict):
+                    raise ValueError("Skill Factory request must contain a JSON object")
+                return store.create_skill_draft(
+                    grant_id=args.grant_id,
+                    request=request,
+                )
             if action == "recall":
                 return store.recall(
                     args.query,
@@ -1669,6 +1776,10 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     max_sensitivity=args.max_sensitivity,
                     limit=args.limit,
                     max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
                     as_of=args.as_of,
                     kinds=tuple(args.kind),
                     force_canonical_lexical=bool(
@@ -1682,6 +1793,10 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     max_sensitivity=args.max_sensitivity,
                     limit=args.limit,
                     max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
                     as_of=args.as_of,
                     kinds=tuple(args.kind),
                     force_canonical_lexical=bool(
@@ -1706,12 +1821,26 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     max_sensitivity=args.max_sensitivity,
                     limit=args.limit,
                     max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
                     as_of=args.as_of,
                     confirm_no_case_data=args.confirm_no_case_data,
                     force_canonical_lexical=bool(
                         agent_read_integrity and not agent_read_integrity["derived_ready"]
                     ),
                 )
+            if action == "identity":
+                return store.lookup_identity(
+                    args.query,
+                    kind=args.kind,
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    limit=args.limit,
+                )
+            if action == "gaps":
+                return store.discover_gaps()
             if action == "get":
                 if args.as_of is not None:
                     if args.include_inactive:

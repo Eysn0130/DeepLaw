@@ -5,8 +5,13 @@
 <h1 align="center">DeepLaw 2.0</h1>
 
 > **Status note (2026-07-29):** This English page documents the published v0.7 compatibility
-> baseline. Repository head now includes the additive Markdown-native autonomous knowledge core,
-> separate scope-bound `knowledge_sink`, and Knowledge Capsule v2. See
+> baseline. Repository head now implements the pasted v0.8 Autonomous Knowledge Core and v0.9
+> Living Wiki/Knowledge Intelligence milestones: canonical Markdown revisions paired with
+> `.deeplaw/ledger.sqlite3`, Run-bound autonomous capture, identity/temporal graph governance,
+> offline Dense/Reranker, Wiki/Lint/gaps/communities, Skill draft Factory, owner content GC, a
+> separate scope-bound `knowledge_sink`, `knowledge_support` v3, authority-partitioned legal
+> context, and Knowledge Capsule v2. The v1.0 external real-host/baseline/secret-held-out/signature
+> proof is still pending and no superiority claim is made. See
 > [the current Chinese README](README.md) and
 > [the current autonomous contract](docs/AUTONOMOUS_KNOWLEDGE_OS.md). Statements below requiring
 > universal human review describe the retained v0.7 path, not the new default for Agent-derived

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-skill-draft.input.v1.schema.json",
+  "title": "DeepLaw deterministic Skill Factory draft input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "idempotency_key",
+    "title",
+    "purpose",
+    "applies_to",
+    "does_not_apply_to",
+    "invocation_mode",
+    "source_knowledge_ids",
+    "input_contract",
+    "output_contract",
+    "capabilities",
+    "resource_limits",
+    "success_criteria",
+    "failure_conditions",
+    "license",
+    "host_compatibility",
+    "verification_commands",
+    "known_limitations",
+    "run_id",
+    "model_id",
+    "semantic_key",
+    "tags",
+    "confirm_no_case_data"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-skill-draft-input/v1"},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "applies_to": {"$ref": "#/$defs/nonempty_text_list"},
+    "does_not_apply_to": {"$ref": "#/$defs/nonempty_text_list"},
+    "invocation_mode": {"enum": ["user-invoked", "model-invoked"]},
+    "source_knowledge_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+    },
+    "input_contract": {"type": "object", "maxProperties": 64},
+    "output_contract": {"type": "object", "maxProperties": 64},
+    "capabilities": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "resource_limits": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "additionalProperties": {
+        "type": ["integer", "number", "boolean", "string"],
+        "maxLength": 500
+      }
+    },
+    "success_criteria": {"$ref": "#/$defs/nonempty_text_list"},
+    "failure_conditions": {"$ref": "#/$defs/nonempty_text_list"},
+    "license": {"type": "string", "minLength": 1, "maxLength": 500},
+    "host_compatibility": {"$ref": "#/$defs/nonempty_text_list"},
+    "verification_commands": {"$ref": "#/$defs/nonempty_text_list"},
+    "known_limitations": {"$ref": "#/$defs/text_list"},
+    "run_id": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "model_id": {"type": ["string", "null"], "maxLength": 500},
+    "semantic_key": {"type": ["string", "null"], "maxLength": 300},
+    "tags": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "confirm_no_case_data": {"const": true}
+  },
+  "$defs": {
+    "text_list": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "nonempty_text_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  }
+}

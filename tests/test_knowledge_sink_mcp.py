@@ -43,6 +43,18 @@ def _ready(tmp_path: Path) -> tuple[Path, str]:
             writer_id="codex-agent",
             operations=tuple(sorted(SINK_OPERATIONS)),
         )["grant_id"]
+        store.record_run(
+            grant_id=grant_id,
+            idempotency_key="test-run-record",
+            run_id="run-test-1",
+            task="Exercise the autonomous Knowledge Sink contract.",
+            host_id="pytest",
+            model_id="test-model",
+            status="succeeded",
+            scope="project",
+            sensitivity="public",
+            confirm_no_case_data=True,
+        )
     return root, grant_id
 
 
@@ -60,6 +72,24 @@ def _remember_request(key: str, *, title: str = "Admission boundary") -> dict[st
         "model_id": "test-model",
         "tool_id": "pytest",
     }
+
+
+def _record_test_run(root: Path, grant_id: str, run_id: str) -> None:
+    handle_knowledge_sink(
+        {
+            "operation": "record_run",
+            "idempotency_key": f"record:{run_id}",
+            "confirm_no_case_data": True,
+            "run_id": run_id,
+            "task": f"Execute test task {run_id}.",
+            "host_id": "pytest",
+            "status": "succeeded",
+            "scope": "project",
+            "sensitivity": "private",
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
 
 
 def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
@@ -82,6 +112,9 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
         format_checker=FormatChecker(),
     )
     validator.validate(_remember_request("sink-contract"))
+    unbound_claim = _remember_request("unbound-claim")
+    unbound_claim.pop("run_id")
+    assert list(validator.iter_errors(unbound_claim))
     assert list(
         validator.iter_errors(
             {**_remember_request("unknown-field"), "arbitrary_path": "/tmp/escape"}
@@ -124,6 +157,24 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
         )
     )
     assert len(canonical_json(response)) <= 65_536
+
+
+def test_knowledge_support_v3_extends_without_mutating_frozen_v2() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    v2 = json.loads(
+        (repository / "contracts/knowledge-support.input.v2.schema.json").read_text()
+    )
+    v3 = json.loads(
+        (repository / "contracts/knowledge-support.input.v3.schema.json").read_text()
+    )
+
+    v2_operations = set(v2["properties"]["operation"]["enum"])
+    v3_operations = set(v3["properties"]["operation"]["enum"])
+    assert {"identity_lookup", "gaps"}.isdisjoint(v2_operations)
+    assert v3_operations == v2_operations | {"identity_lookup", "gaps"}
+    assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
+        "knowledge-support.input.v3.schema.json"
+    )
 
 
 def test_read_support_fails_closed_on_local_paths_and_secret_like_content(
@@ -174,6 +225,8 @@ def test_agent_interfaces_default_to_the_selected_vault_scope(tmp_path: Path) ->
         )["grant_id"]
     request = _remember_request("personal-default-scope", title="Personal default scope")
     request.pop("scope")
+    request.pop("run_id")
+    request["kind"] = "decision"
 
     written = handle_knowledge_sink(
         request,
@@ -201,6 +254,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
             operations=("record_feedback",),
             evaluator_types=("external_check",),
         )["grant_id"]
+    _record_test_run(root, grant_id, "evaluation-run-1")
     first = handle_knowledge_sink(
         _remember_request("first"),
         grant_id=grant_id,
@@ -333,7 +387,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
     inspection = handle_knowledge_support(operation="inspect", vault_path=root)
     verification = handle_knowledge_support(operation="verify", vault_path=root)
 
-    assert search["schema_version"] == "deeplaw.knowledge-support-output/v2"
+    assert search["schema_version"] == "deeplaw.knowledge-support-output/v3"
     assert search["result"]["autonomous"]["results"][0]["authority"] == ("agent_derived")
     assert search["result"]["source_derived"]["results"] == []
     assert exact["result"]["knowledge_id"] == first["knowledge_id"]
@@ -538,7 +592,8 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
         concept["knowledge_id"]
     )
     assert autonomous_only["autonomous"]["query_plan"]["filters"] == {
-        "kinds": ["concept"]
+        "kinds": ["concept"],
+        "required_tags": [],
     }
     assert autonomous_only["budget"]["partitions"] == {
         "autonomous": {"items": 2, "characters": 1_000},
@@ -588,7 +643,10 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
         vault_path=root,
     )["result"]
     assert autonomous_capsule["sections"]["source_derived_knowledge"] == []
-    assert autonomous_capsule["query_plan"]["filters"] == {"kinds": ["concept"]}
+    assert autonomous_capsule["query_plan"]["filters"] == {
+        "kinds": ["concept"],
+        "required_tags": [],
+    }
 
 
 def test_source_only_recall_does_not_verify_the_excluded_autonomous_plane(
@@ -605,7 +663,7 @@ def test_source_only_recall_does_not_verify_the_excluded_autonomous_plane(
         fact = vault.approve_asset(proposal.asset_id, confirm_reviewed=True)
     with AutonomousKnowledgeStore(root, read_only=False):
         pass
-    connection = sqlite3.connect(root / "vault.sqlite3")
+    connection = sqlite3.connect(root / ".deeplaw" / "ledger.sqlite3")
     try:
         connection.execute(
             "UPDATE autonomous_events_v3 SET payload_json = ? WHERE sequence = 1",
@@ -633,21 +691,23 @@ def test_source_only_recall_does_not_verify_the_excluded_autonomous_plane(
         )
 
 
-def test_exact_duplicate_is_rejected_and_unknown_provenance_is_quarantined(
+def test_exact_duplicate_is_collapsed_and_unknown_provenance_is_quarantined(
     tmp_path: Path,
 ) -> None:
     root, grant_id = _ready(tmp_path)
-    handle_knowledge_sink(
+    original = handle_knowledge_sink(
         _remember_request("original"),
         grant_id=grant_id,
         vault_path=root,
-    )
-    with pytest.raises(ValueError, match="exact duplicate"):
-        handle_knowledge_sink(
-            _remember_request("duplicate"),
-            grant_id=grant_id,
-            vault_path=root,
-        )
+    )["result"]
+    duplicate = handle_knowledge_sink(
+        _remember_request("duplicate"),
+        grant_id=grant_id,
+        vault_path=root,
+    )["result"]
+    assert duplicate["deduplicated"] is True
+    assert duplicate["knowledge_id"] == original["knowledge_id"]
+    assert duplicate["revision_id"] == original["revision_id"]
 
     quarantined = handle_knowledge_sink(
         {
@@ -706,6 +766,13 @@ def test_skill_and_preference_contracts_preserve_lifecycle_and_statement_basis(
         "supersedes_skill_revision": None,
         "deprecation_reason": None,
     }
+    for run_id in (
+        "skill-factory-run",
+        "user-statement-run",
+        "skill-eval-run-1",
+        "skill-factory-promotion-run",
+    ):
+        _record_test_run(root, grant_id, run_id)
     skill = handle_knowledge_sink(
         {
             "operation": "save_skill",
@@ -1017,6 +1084,15 @@ def test_tool_contracts_reject_irrelevant_fields_and_invalid_advertisement(
                 ],
             }
         )
+    )
+    working_memory = {
+        **_remember_request("working-memory-requires-expiry"),
+        "kind": "memory",
+        "memory_type": "working",
+    }
+    assert list(sink_validator.iter_errors(working_memory))
+    sink_validator.validate(
+        {**working_memory, "expires_at": "2099-01-01T00:00:00Z"}
     )
     narrowed = knowledge_sink_tool_definition(operations=("remember", "expire"))
     assert narrowed.inputSchema["properties"]["operation"]["enum"] == [

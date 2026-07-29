@@ -551,8 +551,9 @@ review accepts it.
 
 The provider-facing schemas live in [`contracts`](../contracts):
 
-- DeepLaw 2.0 software version `v0.7.0` advertises `law-support.input` v2 for the eight official/private
-  operations and retains input v1 as the official-only compatibility contract.
+- Repository-head advertises `law-support.input` v3 for the eight official/private operations plus
+  the authority-partitioned `federated_context`; v2 remains the frozen eight-operation contract and
+  v1 remains the official-only compatibility contract.
   Verification remains v1; the output union, search response, segment,
   release-info, evidence-card, and corpus release-manifest contracts are v2.
 - `LegalEvidenceCardV2` returns the release, receipt, stable IDs, title, issuer,
@@ -564,8 +565,8 @@ The provider-facing schemas live in [`contracts`](../contracts):
 - `verify` recomputes the segment text hash and the receipt binding over the
   release, document, segment, stored source hash, and stored segment hash. It
   does not reopen or rehash the original DOCX/PDF.
-- `law-support.output` is a closed union of search, segment, verification, and
-  release-info schemas. Official and private operations reuse these bounded
+- `law-support.output` v3 is a closed union of search, segment, verification, release-info, and
+  federated-context schemas. Official and private operations reuse these bounded
   result shapes, while private release metadata binds `collection_scope` and
   `library_id`; hosts must reject unknown output fields.
 
@@ -577,7 +578,7 @@ selection operation; `get` is a deliberate evidence-read operation.
 
 [`src/deeplaw/mcp_server.py`](../src/deeplaw/mcp_server.py) uses the MCP SDK's
 low-level `Server` and local stdio transport to expose one tool, `law_support`,
-with eight read-only operations. Its advertised output schema is a bundled,
+with nine read-only operations in the repository-head v3 contract. Its advertised output schema is a bundled,
 closed copy of the repository contracts, so clients do not need to resolve
 remote schema URLs during the handshake:
 
@@ -591,6 +592,7 @@ remote schema URLs during the handshake:
 | `private_get` | Fetch one exact private segment | `segment_id` |
 | `private_verify` | Verify one private snapshot receipt | `segment_id` and `receipt_id` |
 | `private_info` | Inspect the active private snapshot | None |
+| `federated_context` | Compile authority-separated legal context without adjudication | Query plus `confirm_no_case_data=true` |
 
 Some hosts display a transport-qualified name such as
 `mcp__deeplaw__law_support`. The `mcp__deeplaw__` portion is host routing

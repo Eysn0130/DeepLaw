@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.input.v2.schema.json",
+  "title": "DeepLaw Knowledge Sink Input v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "idempotency_key", "confirm_no_case_data"],
+  "properties": {
+    "operation": {"enum": [
+      "remember", "reflect", "save_synthesis", "upsert_concept", "upsert_entity",
+      "record_event", "save_claim", "save_comparison", "add_relation", "expire",
+      "forget", "save_skill", "record_feedback", "record_run", "capture",
+      "resolve_identity", "consolidate_memory"
+    ]},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "confirm_no_case_data": {"const": true},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "body": {"type": "string", "minLength": 1, "maxLength": 200000},
+    "kind": {"enum": [
+      "claim", "concept", "entity", "event", "decision", "procedure", "experience",
+      "preference", "synthesis", "comparison", "skill", "memory"
+    ]},
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "knowledge_ids": {
+      "type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+    },
+    "expected_revision_id": {
+      "type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "epistemic_state": {"enum": ["supported", "tentative", "contested", "unknown"]},
+    "source_refs": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/source_ref"}},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "model_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "tool_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "generation_activity_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "tags": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "semantic_key": {"type": "string", "minLength": 1, "maxLength": 300},
+    "aliases": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 300}
+    },
+    "relation_hints": {
+      "type": "array", "maxItems": 100,
+      "items": {"$ref": "#/$defs/relation_hint"}
+    },
+    "assertion": {"$ref": "#/$defs/assertion"},
+    "valid_from": {"type": "string", "format": "date-time"},
+    "valid_to": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "memory_type": {"enum": ["working", "episodic", "semantic", "procedural", "reflective"]},
+    "preference_basis": {"enum": ["direct_user_statement", "agent_inference"]},
+    "requested_origin": {"enum": ["official", "user_source", "agent_derived", "external_import"]},
+    "requested_authority": {"enum": [
+      "official", "user_provided", "agent_derived", "unverified", "human_verified"
+    ]},
+    "skill_manifest": {"$ref": "#/$defs/skill_manifest"},
+    "subject_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "predicate": {"enum": [
+      "supports", "contradicts", "depends_on", "implements", "derived_from",
+      "applies_to", "related_to", "describes", "mentions", "reports",
+      "contributes_to", "same_as", "alias_of", "consolidates", "split_from"
+    ]},
+    "object_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "object_knowledge_ids": {
+      "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+    },
+    "action": {"enum": ["same_as", "merge", "split", "ambiguous"]},
+    "expected_relation_revision_id": {
+      "type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"
+    },
+    "evidence_refs": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/source_ref"}},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "outcome": {"enum": ["helpful", "neutral", "noisy", "harmful"]},
+    "evaluator_type": {"enum": ["user", "external_check", "agent_self_report"]},
+    "feedback_note": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "task": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "host_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "status": {"enum": ["succeeded", "failed", "partial", "aborted"]},
+    "input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "output_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tool_results_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "ended_at": {"type": "string", "format": "date-time"},
+    "run_metadata": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "task_kind": {"type": "string", "maxLength": 500},
+        "tool_ids": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 500}},
+        "artifact_ids": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 500}},
+        "notes_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "items": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/capture_item"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"enum": [
+        "remember", "reflect", "save_synthesis", "upsert_concept", "upsert_entity",
+        "record_event", "save_claim", "save_comparison", "save_skill"
+      ]}}, "required": ["operation"]},
+      "then": {"required": ["title", "body"]}
+    },
+    {
+      "if": {"properties": {"operation": {"enum": [
+        "remember", "reflect", "save_synthesis", "upsert_concept", "upsert_entity",
+        "record_event", "save_claim", "save_comparison", "save_skill"
+      ]}}, "required": ["operation"]},
+      "then": {"propertyNames": {"$ref": "#/$defs/object_field_name"}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "remember"}}, "required": ["operation"]},
+      "then": {
+        "properties": {"kind": {"enum": [
+          "claim", "entity", "event", "decision", "procedure", "experience",
+          "preference", "comparison", "memory"
+        ]}},
+        "not": {"required": ["skill_manifest"]}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "reflect"}}, "required": ["operation"]},
+      "then": {"not": {"anyOf": [
+        {"required": ["kind"]}, {"required": ["preference_basis"]},
+        {"required": ["skill_manifest"]}
+      ]}}
+    },
+    {
+      "if": {"properties": {"operation": {"enum": [
+        "save_synthesis", "upsert_concept", "upsert_entity", "record_event",
+        "save_claim", "save_comparison"
+      ]}}, "required": ["operation"]},
+      "then": {"not": {"anyOf": [
+        {"required": ["kind"]}, {"required": ["memory_type"]},
+        {"required": ["preference_basis"]}, {"required": ["skill_manifest"]}
+      ]}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "save_skill"}}, "required": ["operation"]},
+      "then": {
+        "required": ["skill_manifest"],
+        "not": {"anyOf": [
+          {"required": ["kind"]}, {"required": ["memory_type"]},
+          {"required": ["preference_basis"]}
+        ]}
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {"properties": {"operation": {"const": "save_claim"}}, "required": ["operation"]},
+          {"properties": {"kind": {"const": "claim"}}, "required": ["kind"]}
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {"required": ["run_id"]},
+          {"required": ["source_refs"], "properties": {"source_refs": {"minItems": 1}}}
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"memory_type": {"const": "working"}}, "required": ["memory_type"]},
+      "then": {"required": ["expires_at"]}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "add_relation"}}, "required": ["operation"]},
+      "then": {
+        "required": ["subject_knowledge_id", "predicate", "object_knowledge_id"],
+        "propertyNames": {"$ref": "#/$defs/relation_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"enum": ["forget", "expire"]}}, "required": ["operation"]},
+      "then": {
+        "required": ["knowledge_id", "expected_revision_id", "reason"],
+        "propertyNames": {"$ref": "#/$defs/lifecycle_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "record_feedback"}}, "required": ["operation"]},
+      "then": {
+        "required": ["knowledge_id", "expected_revision_id", "run_id", "outcome", "evaluator_type"],
+        "propertyNames": {"$ref": "#/$defs/feedback_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "record_run"}}, "required": ["operation"]},
+      "then": {
+        "required": ["task", "host_id", "status"],
+        "propertyNames": {"$ref": "#/$defs/run_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "capture"}}, "required": ["operation"]},
+      "then": {
+        "required": ["run_id", "items"],
+        "propertyNames": {"$ref": "#/$defs/capture_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "resolve_identity"}}, "required": ["operation"]},
+      "then": {
+        "required": ["action", "subject_knowledge_id", "object_knowledge_ids"],
+        "propertyNames": {"$ref": "#/$defs/identity_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "consolidate_memory"}}, "required": ["operation"]},
+      "then": {
+        "required": ["run_id", "knowledge_ids", "title", "body"],
+        "propertyNames": {"$ref": "#/$defs/consolidation_field_name"}
+      }
+    }
+  ],
+  "$defs": {
+    "object_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "title", "body",
+      "kind", "knowledge_id", "expected_revision_id", "scope", "sensitivity",
+      "epistemic_state", "source_refs", "run_id", "model_id", "tool_id",
+      "generation_activity_id", "tags", "semantic_key", "aliases", "relation_hints",
+      "assertion", "valid_from", "valid_to", "expires_at", "memory_type",
+      "preference_basis", "requested_origin", "requested_authority", "skill_manifest"
+    ]},
+    "relation_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "subject_knowledge_id",
+      "predicate", "object_knowledge_id", "expected_relation_revision_id",
+      "evidence_refs", "valid_from", "valid_to"
+    ]},
+    "lifecycle_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "knowledge_id",
+      "expected_revision_id", "reason"
+    ]},
+    "feedback_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "knowledge_id",
+      "expected_revision_id", "run_id", "outcome", "evaluator_type", "feedback_note"
+    ]},
+    "run_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "run_id", "task",
+      "host_id", "model_id", "scope", "sensitivity", "status", "input_sha256",
+      "output_sha256", "tool_results_sha256", "started_at", "ended_at", "run_metadata"
+    ]},
+    "capture_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "run_id", "items",
+      "scope", "sensitivity", "model_id", "tool_id"
+    ]},
+    "identity_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "action",
+      "subject_knowledge_id", "object_knowledge_ids", "evidence_refs", "run_id"
+    ]},
+    "consolidation_field_name": {"enum": [
+      "operation", "idempotency_key", "confirm_no_case_data", "run_id", "knowledge_ids",
+      "title", "body", "scope", "sensitivity", "model_id", "tool_id", "tags",
+      "semantic_key", "aliases", "expires_at"
+    ]},
+    "source_ref": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "source_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "fragment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "artifact_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "uri": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "oneOf": [
+        {"required": ["revision_id"], "not": {"anyOf": [{"required": ["source_id"]}, {"required": ["source_revision_id"]}, {"required": ["artifact_id"]}]}},
+        {"required": ["artifact_id"], "not": {"anyOf": [{"required": ["source_id"]}, {"required": ["source_revision_id"]}, {"required": ["revision_id"]}]}},
+        {"anyOf": [{"required": ["source_id"]}, {"required": ["source_revision_id"]}], "not": {"anyOf": [{"required": ["artifact_id"]}, {"required": ["revision_id"]}]}}
+      ]
+    },
+    "relation_hint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["predicate", "target", "valid_from", "valid_to"],
+      "properties": {
+        "predicate": {"$ref": "#/properties/predicate"},
+        "target": {"type": "string", "minLength": 1, "maxLength": 500},
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "assertion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subject", "predicate", "object", "polarity"],
+      "properties": {
+        "subject": {"type": "string", "minLength": 1, "maxLength": 500},
+        "predicate": {"type": "string", "minLength": 1, "maxLength": 200},
+        "object": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "polarity": {"enum": ["positive", "negative"]}
+      }
+    },
+    "capture_item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["title", "body", "durable", "reusable", "contains_case_data"],
+      "properties": {
+        "title": {"$ref": "#/properties/title"}, "body": {"$ref": "#/properties/body"},
+        "kind": {"$ref": "#/properties/kind"}, "durable": {"const": true},
+        "reusable": {"const": true}, "contains_case_data": {"const": false},
+        "epistemic_state": {"$ref": "#/properties/epistemic_state"},
+        "source_refs": {"$ref": "#/properties/source_refs"},
+        "tags": {"$ref": "#/properties/tags"},
+        "semantic_key": {"$ref": "#/properties/semantic_key"},
+        "aliases": {"$ref": "#/properties/aliases"},
+        "relation_hints": {"$ref": "#/properties/relation_hints"},
+        "assertion": {"$ref": "#/properties/assertion"},
+        "valid_from": {"$ref": "#/properties/valid_from"},
+        "valid_to": {"$ref": "#/properties/valid_to"},
+        "expires_at": {"$ref": "#/properties/expires_at"},
+        "memory_type": {"$ref": "#/properties/memory_type"},
+        "preference_basis": {"$ref": "#/properties/preference_basis"}
+      }
+    },
+    "skill_manifest": {"type": "object"}
+  }
+}

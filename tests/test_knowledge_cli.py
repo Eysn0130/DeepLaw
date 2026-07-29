@@ -384,7 +384,7 @@ def test_knowledge_cli_source_review_run_and_feedback_control_plane(
     )
     assert ingested.returncode == 0, ingested.stderr
     source_id = json.loads(ingested.stdout)["source"]["source_id"]
-    connection = sqlite3.connect(vault / "vault.sqlite3")
+    connection = sqlite3.connect(vault / ".deeplaw" / "ledger.sqlite3")
     try:
         binding = connection.execute(
             "SELECT object_sha256 FROM evidence_bindings_v3 WHERE legacy_source_id = ?",
@@ -518,7 +518,7 @@ def test_knowledge_cli_migration_backup_verify_and_rollback(tmp_path: Path) -> N
         "migration-cli",
     )
     assert initialized.returncode == 0, initialized.stderr
-    connection = sqlite3.connect(vault / "vault.sqlite3")
+    connection = sqlite3.connect(vault / ".deeplaw" / "ledger.sqlite3")
     try:
         connection.execute("DELETE FROM metadata WHERE key = 'control_schema'")
         connection.execute("DROP TABLE feedback_records")
@@ -609,10 +609,9 @@ def test_autonomous_workspace_watcher_uses_the_shared_reconcile_service(
                 "confirm_no_case_data": True,
                 "title": "Watcher boundary",
                 "body": "The original workspace body.",
-                "kind": "claim",
+                "kind": "decision",
                 "scope": "project",
                 "sensitivity": "private",
-                "run_id": "watcher-test",
             }
         ),
         encoding="utf-8",

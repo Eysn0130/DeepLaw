@@ -1,8 +1,29 @@
 # DeepLaw 2.0 评测说明
 
 > Repository-head autonomous mutation、Authority、生命周期、poisoning、隔离与成本门禁已在
-> [`autonomous-protocol-v1.json`](../benchmarks/external/autonomous-protocol-v1.json) 预注册。该文件是
+> [`autonomous-protocol-v2.json`](../benchmarks/external/autonomous-protocol-v2.json) 预注册；v1
+> 保留为历史协议。该文件是
 > protocol，不是结果；现有 v0.7 报告不能复用为自主内核或竞争领先证据。
+
+## Repository-head 五域开发 Gold Set
+
+[`repository-gold-v1.json`](../benchmarks/quality/repository-gold-v1.json) 绑定 10 个真实仓库文件的
+exact bytes/anchor/hash，并以 15 个策展查询覆盖中文、英文、代码、法律和长文档五类。运行器
+[`run_repository_gold.py`](../benchmarks/quality/run_repository_gold.py) 在离线条件下分别报告 lexical、
+本地 hash-dense 和 hybrid reranker 的逐题结果、Hit@1、useful-context recall、irrelevant-context
+rate、分类指标、完整 failure samples 与延迟。fixture 冻结每种模式的最低 Hit@1/recall、最高
+irrelevant-context rate 和零 forbidden-admission 门禁；任何门禁失败时运行器返回非零退出码：
+
+```bash
+uv run python -m benchmarks.quality.run_repository_gold \
+  --suite benchmarks/quality/repository-gold-v1.json
+```
+
+该集合解决的是 repository-head 多域回归入口，不是假装“秘密”的竞争数据。manifest 和 report
+contract 都固定 `competitive_claim_eligible=false`、`secret_held_out=false`、
+`independently_evaluated=false`；任一源文件漂移会在评分前失败。运行器保留每一种模式的失败样本，
+因此不能用 hybrid 的较好平均数隐藏纯 Dense 或个别类别的退化；该开发集不支持领先声明，也不能
+替代专家法律金标、真实三宿主任务或 evaluator-controlled held-out。
 
 ## v0.7.0 商业发布与竞争证据边界
 

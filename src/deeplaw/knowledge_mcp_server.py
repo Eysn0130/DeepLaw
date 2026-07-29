@@ -47,6 +47,8 @@ KnowledgeOperation = Literal[
     "graph",
     "wiki_lookup",
     "explain",
+    "identity_lookup",
+    "gaps",
 ]
 
 _DESCRIPTION = (
@@ -110,7 +112,7 @@ def _load_contract(name: str) -> dict[str, Any]:
 
 @cache
 def _autonomous_output_validator() -> Draft202012Validator:
-    schema = _load_contract("knowledge-support.output.v2.schema.json")
+    schema = _load_contract("knowledge-support.output.v3.schema.json")
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -121,7 +123,7 @@ def _autonomous_capsule_validators() -> tuple[
     Draft202012Validator,
 ]:
     capsule_schema = _load_contract("knowledge-capsule.v2.schema.json")
-    plan_schema = _load_contract("knowledge-query-plan.v2.schema.json")
+    plan_schema = _load_contract("knowledge-query-plan.v3.schema.json")
     Draft202012Validator.check_schema(capsule_schema)
     Draft202012Validator.check_schema(plan_schema)
     return (
@@ -137,7 +139,7 @@ def _validate_autonomous_output(value: dict[str, Any]) -> None:
     path = ".".join(str(item) for item in error.absolute_path)
     location = f" at {path}" if path else ""
     raise RuntimeError(
-        f"knowledge_support produced an invalid v2 response{location}: {error.message}"
+        f"knowledge_support produced an invalid v3 response{location}: {error.message}"
     )
 
 
@@ -204,8 +206,8 @@ def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
             "bounded Knowledge Capsules. Persistent writes exist only in the separate, "
             "explicitly enabled knowledge_sink process."
         )
-        input_schema = _load_contract("knowledge-support.input.v2.schema.json")
-        output_schema = _load_contract("knowledge-support.output.v2.schema.json")
+        input_schema = _load_contract("knowledge-support.input.v3.schema.json")
+        output_schema = _load_contract("knowledge-support.output.v3.schema.json")
     else:
         description = _DESCRIPTION
         input_schema = _load_contract("knowledge-support.input.v1.schema.json")
@@ -940,21 +942,33 @@ def _empty_autonomous_capsule(
     )
     query = f"{selected_task} {selected_goal or ''}".strip()
     query_plan = {
-        "schema_version": "deeplaw.knowledge-query-plan/v2",
+        "schema_version": "deeplaw.knowledge-query-plan/v3",
         "intent": "autonomous_knowledge_recall",
         "query_sha256": sha256_bytes(query.encode("utf-8")),
         "channels": [],
+        "retrieval_mode": "hybrid",
         "scope": scope,
         "max_sensitivity": max_sensitivity,
         "as_of": selected_as_of,
-        "filters": {"kinds": sorted(kinds)},
-        "budget": {"items": 0, "characters": 0, "provider_characters": 24_576},
+        "filters": {"kinds": sorted(kinds), "required_tags": []},
+        "budget": {
+            "items": 0,
+            "characters": 0,
+            "tokens": 0,
+            "sources": 0,
+            "graph_hops": 0,
+            "provider_characters": 24_576,
+        },
         "audit_head": store.audit_head,
         "legacy_audit_head": store.legacy_audit_head,
         "candidate_count": 0,
         "candidate_state_sha256": sha256_bytes(canonical_json([]).encode("utf-8")),
         "derived_manifest_sha256": None,
         "derived_lexical_ready": False,
+        "derived_dense_ready": False,
+        "dense_manifest_sha256": None,
+        "dense_model": "deeplaw-multilingual-hash-dense/1",
+        "reranker_model": "deeplaw-evidence-duty-reranker/1",
     }
     capsule = {
         "schema_version": "deeplaw.knowledge-capsule/v2",
@@ -1006,6 +1020,10 @@ def _handle_autonomous_knowledge_support(
     knowledge_id: str | None,
     limit: int,
     max_chars: int,
+    max_tokens: int,
+    max_sources: int,
+    graph_hops: int,
+    retrieval_mode: str,
     kinds: list[str] | None,
     memory_tiers: list[str] | None,
     scope: str,
@@ -1031,7 +1049,7 @@ def _handle_autonomous_knowledge_support(
         raise ValueError("source-derived exact reads do not support historical as_of")
     if as_of is not None:
         as_of = canonical_timestamp(as_of, field="knowledge as_of")
-    if operation in {"lineage", "graph"} and plane == "source_derived":
+    if operation in {"lineage", "graph", "identity_lookup", "gaps"} and plane == "source_derived":
         raise ValueError(f"operation={operation} requires the autonomous plane")
     requested_kinds = tuple(kinds or ())
     supported_kinds = KNOWLEDGE_KINDS | ASSET_KINDS
@@ -1072,7 +1090,7 @@ def _handle_autonomous_knowledge_support(
             raise RuntimeError("knowledge read planes changed while opening a consistent snapshot")
         needs_legacy = plane in {"all", "source_derived"}
         needs_autonomous = plane in {"all", "autonomous"}
-        if operation in {"lineage", "graph"} or knowledge_id is not None:
+        if operation in {"lineage", "graph", "identity_lookup", "gaps"} or knowledge_id is not None:
             needs_legacy = False
             needs_autonomous = True
         elif asset_id is not None:
@@ -1147,6 +1165,10 @@ def _handle_autonomous_knowledge_support(
                     max_sensitivity=cast(Any, max_sensitivity),
                     limit=autonomous_budget["items"],
                     max_chars=autonomous_budget["characters"],
+                    max_tokens=max_tokens,
+                    max_sources=max_sources,
+                    graph_hops=graph_hops,
+                    retrieval_mode=retrieval_mode,
                     as_of=as_of,
                     kinds=autonomous_kinds,
                     force_canonical_lexical=not autonomous_integrity["derived_ready"],
@@ -1375,6 +1397,15 @@ def _handle_autonomous_knowledge_support(
                 limit=limit,
                 as_of=as_of,
             )
+        elif operation == "identity_lookup":
+            result = store.lookup_identity(
+                query,
+                scope=cast(Any, scope),
+                max_sensitivity=cast(Any, max_sensitivity),
+                limit=limit,
+            )
+        elif operation == "gaps":
+            result = store.discover_gaps()
         elif operation == "context":
             if not confirm_no_case_data:
                 raise ValueError(
@@ -1412,6 +1443,10 @@ def _handle_autonomous_knowledge_support(
                     max_sensitivity=cast(Any, max_sensitivity),
                     limit=autonomous_limit,
                     max_chars=autonomous_chars,
+                    max_tokens=max_tokens,
+                    max_sources=max_sources,
+                    graph_hops=graph_hops,
+                    retrieval_mode=retrieval_mode,
                     as_of=as_of,
                     kinds=autonomous_kinds,
                     confirm_no_case_data=True,
@@ -1496,7 +1531,7 @@ def _handle_autonomous_knowledge_support(
         else:
             raise ValueError(f"unsupported knowledge operation: {operation}")
     response = {
-        "schema_version": "deeplaw.knowledge-support-output/v2",
+        "schema_version": "deeplaw.knowledge-support-output/v3",
         "operation": operation,
         "authority_boundary": dict(_AUTONOMOUS_AUTHORITY_BOUNDARY),
         "result": result,
@@ -1518,6 +1553,10 @@ def handle_knowledge_support(
     knowledge_id: str | None = None,
     limit: int = 5,
     max_chars: int = 5_000,
+    max_tokens: int = 4_000,
+    max_sources: int = 8,
+    graph_hops: int = 1,
+    retrieval_mode: str = "hybrid",
     kinds: list[str] | None = None,
     memory_tiers: list[str] | None = None,
     scope: str | None = None,
@@ -1542,6 +1581,10 @@ def handle_knowledge_support(
             knowledge_id=knowledge_id,
             limit=limit,
             max_chars=max_chars,
+            max_tokens=max_tokens,
+            max_sources=max_sources,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
             kinds=kinds,
             memory_tiers=memory_tiers,
             scope=scope,
@@ -1687,6 +1730,10 @@ def create_knowledge_mcp_server(
                     knowledge_id=cast(str | None, arguments.get("knowledge_id")),
                     limit=int(arguments.get("limit", 5)),
                     max_chars=int(arguments.get("max_chars", 5_000)),
+                    max_tokens=int(arguments.get("max_tokens", 4_000)),
+                    max_sources=int(arguments.get("max_sources", 8)),
+                    graph_hops=int(arguments.get("graph_hops", 1)),
+                    retrieval_mode=str(arguments.get("retrieval_mode", "hybrid")),
                     kinds=cast(list[str] | None, arguments.get("kinds")),
                     memory_tiers=cast(
                         list[str] | None,

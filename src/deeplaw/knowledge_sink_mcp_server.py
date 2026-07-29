@@ -74,6 +74,9 @@ _OBJECT_FIELDS = frozenset(
         "generation_activity_id",
         "tags",
         "semantic_key",
+        "aliases",
+        "relation_hints",
+        "assertion",
         "valid_from",
         "valid_to",
         "expires_at",
@@ -87,6 +90,43 @@ _OPERATION_FIELDS = {
     "save_synthesis": _OBJECT_FIELDS,
     "upsert_concept": _OBJECT_FIELDS,
     "save_skill": _OBJECT_FIELDS | {"skill_manifest"},
+    "upsert_entity": _OBJECT_FIELDS,
+    "record_event": _OBJECT_FIELDS,
+    "save_claim": _OBJECT_FIELDS,
+    "save_comparison": _OBJECT_FIELDS,
+    "record_run": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "run_id",
+            "task",
+            "host_id",
+            "model_id",
+            "status",
+            "scope",
+            "sensitivity",
+            "input_sha256",
+            "output_sha256",
+            "tool_results_sha256",
+            "started_at",
+            "ended_at",
+            "run_metadata",
+        }
+    ),
+    "capture": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "run_id",
+            "items",
+            "scope",
+            "sensitivity",
+            "model_id",
+            "tool_id",
+        }
+    ),
     "add_relation": frozenset(
         {
             "operation",
@@ -134,6 +174,31 @@ _OPERATION_FIELDS = {
             "feedback_note",
         }
     ),
+    "resolve_identity": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "action",
+            "subject_knowledge_id",
+            "object_knowledge_ids",
+            "evidence_refs",
+            "run_id",
+        }
+    ),
+    "consolidate_memory": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "run_id",
+            "knowledge_ids",
+            "title",
+            "body",
+            "semantic_key",
+            "tags",
+        }
+    ),
 }
 
 
@@ -168,7 +233,7 @@ def knowledge_sink_tool_definition(
     operations: tuple[str, ...] | None = None,
     evaluator_types: tuple[str, ...] | None = None,
 ) -> types.Tool:
-    input_schema = deepcopy(_contract("knowledge-sink.input.v1.schema.json"))
+    input_schema = deepcopy(_contract("knowledge-sink.input.v2.schema.json"))
     # MCP schemas must be self-contained. Hydrate the embedded Skill branch
     # from the canonical Skill contract so the advertised write surface cannot
     # drift from the domain validator.
@@ -195,7 +260,7 @@ def knowledge_sink_tool_definition(
         name="knowledge_sink",
         description=_DESCRIPTION,
         inputSchema=input_schema,
-        outputSchema=deepcopy(_contract("knowledge-sink.output.v1.schema.json")),
+        outputSchema=deepcopy(_contract("knowledge-sink.output.v2.schema.json")),
         annotations=types.ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=True,
@@ -219,7 +284,7 @@ def _validate(name: str, value: dict[str, Any]) -> None:
         raise ValueError(
             f"Knowledge Sink request does not match its contract{location}: {error.message}"
         )
-    if name == "knowledge-sink.input.v1.schema.json":
+    if name == "knowledge-sink.input.v2.schema.json":
         operation = value.get("operation")
         allowed = _OPERATION_FIELDS.get(operation)
         if allowed is None:
@@ -241,12 +306,45 @@ def handle_knowledge_sink(
     """Apply one contract-validated mutation through the single domain store."""
     if not isinstance(request, dict):
         raise TypeError("Knowledge Sink request must be an object")
-    _validate("knowledge-sink.input.v1.schema.json", request)
+    _validate("knowledge-sink.input.v2.schema.json", request)
     selected_path = Path(vault_path) if vault_path is not None else default_knowledge_vault()
     operation = str(request["operation"])
     with AutonomousKnowledgeStore(selected_path, read_only=False) as store:
         grant_scope = store.grant_status(grant_id)["allowed_scope"]
-        if operation == "add_relation":
+        if operation == "record_run":
+            result = store.record_run(
+                grant_id=grant_id,
+                idempotency_key=str(request["idempotency_key"]),
+                run_id=cast(str | None, request.get("run_id")),
+                task=str(request["task"]),
+                host_id=str(request["host_id"]),
+                model_id=cast(str | None, request.get("model_id")),
+                status=str(request["status"]),
+                scope=cast(Scope, request.get("scope", grant_scope)),
+                sensitivity=cast(Sensitivity, request.get("sensitivity", "private")),
+                input_sha256=cast(str | None, request.get("input_sha256")),
+                output_sha256=cast(str | None, request.get("output_sha256")),
+                tool_results_sha256=cast(
+                    str | None, request.get("tool_results_sha256")
+                ),
+                started_at=cast(str | None, request.get("started_at")),
+                ended_at=cast(str | None, request.get("ended_at")),
+                metadata=cast(dict[str, Any] | None, request.get("run_metadata")),
+                confirm_no_case_data=True,
+            )
+        elif operation == "capture":
+            result = store.capture(
+                grant_id=grant_id,
+                idempotency_key=str(request["idempotency_key"]),
+                run_id=str(request["run_id"]),
+                items=cast(list[dict[str, Any]], request["items"]),
+                scope=cast(Scope, request.get("scope", grant_scope)),
+                sensitivity=cast(Sensitivity, request.get("sensitivity", "private")),
+                model_id=cast(str | None, request.get("model_id")),
+                tool_id=cast(str | None, request.get("tool_id")),
+                confirm_no_case_data=True,
+            )
+        elif operation == "add_relation":
             result = store.add_relation(
                 grant_id=grant_id,
                 idempotency_key=str(request["idempotency_key"]),
@@ -274,6 +372,31 @@ def handle_knowledge_sink(
                 feedback_note=cast(str | None, request.get("feedback_note")),
                 confirm_no_case_data=True,
             )
+        elif operation == "resolve_identity":
+            result = store.record_identity_resolution(
+                grant_id=grant_id,
+                idempotency_key=str(request["idempotency_key"]),
+                action=str(request["action"]),
+                subject_knowledge_id=str(request["subject_knowledge_id"]),
+                object_knowledge_ids=cast(list[str], request["object_knowledge_ids"]),
+                evidence_refs=cast(
+                    list[dict[str, Any]] | None, request.get("evidence_refs")
+                ),
+                run_id=cast(str | None, request.get("run_id")),
+                confirm_no_case_data=True,
+            )
+        elif operation == "consolidate_memory":
+            result = store.consolidate_memory(
+                grant_id=grant_id,
+                idempotency_key=str(request["idempotency_key"]),
+                run_id=str(request["run_id"]),
+                knowledge_ids=cast(list[str], request["knowledge_ids"]),
+                title=str(request["title"]),
+                body=str(request["body"]),
+                semantic_key=cast(str | None, request.get("semantic_key")),
+                tags=cast(list[str] | None, request.get("tags")),
+                confirm_no_case_data=True,
+            )
         elif operation in {"forget", "expire"}:
             lifecycle_method = store.forget if operation == "forget" else store.expire
             result = lifecycle_method(
@@ -290,6 +413,10 @@ def handle_knowledge_sink(
                 "save_synthesis": "synthesis",
                 "upsert_concept": "concept",
                 "save_skill": "skill",
+                "upsert_entity": "entity",
+                "record_event": "event",
+                "save_claim": "claim",
+                "save_comparison": "comparison",
             }
             kind = forced_kind.get(operation, cast(KnowledgeKind, request.get("kind", "memory")))
             memory_type = cast(str | None, request.get("memory_type"))
@@ -316,6 +443,11 @@ def handle_knowledge_sink(
                 ),
                 tags=cast(list[str] | None, request.get("tags")),
                 semantic_key=cast(str | None, request.get("semantic_key")),
+                aliases=cast(list[str] | None, request.get("aliases")),
+                relation_hints=cast(
+                    list[dict[str, Any]] | None, request.get("relation_hints")
+                ),
+                assertion=cast(dict[str, Any] | None, request.get("assertion")),
                 valid_from=cast(str | None, request.get("valid_from")),
                 valid_to=cast(str | None, request.get("valid_to")),
                 expires_at=cast(str | None, request.get("expires_at")),
@@ -328,7 +460,7 @@ def handle_knowledge_sink(
                 skill_manifest=cast(dict[str, Any] | None, request.get("skill_manifest")),
             )
     response = {
-        "schema_version": "deeplaw.knowledge-sink-output/v1",
+        "schema_version": "deeplaw.knowledge-sink-output/v2",
         "operation": operation,
         "boundary": dict(_BOUNDARY),
         "result": result,
@@ -336,7 +468,7 @@ def handle_knowledge_sink(
     assert_provider_output_safe(response, interface="knowledge_sink")
     if len(canonical_json(response)) > _MAX_OUTPUT_CHARS:
         raise RuntimeError("knowledge_sink output exceeds its hard 64 KiB budget")
-    _validate("knowledge-sink.output.v1.schema.json", response)
+    _validate("knowledge-sink.output.v2.schema.json", response)
     return response
 
 

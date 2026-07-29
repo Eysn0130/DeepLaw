@@ -254,7 +254,12 @@ def run_diagnostic(
         vault.close()
 
     repository = Path(__file__).resolve().parents[2]
-    database = vault_root / "vault.sqlite3"
+    # The compatibility core may still use ``vault.sqlite3``.  Once the
+    # autonomous core is installed, the one trusted Ledger lives at the
+    # manifest-selected ``.deeplaw/ledger.sqlite3`` path.  Bind the diagnostic
+    # to the path actually opened by the domain store instead of guessing a
+    # storage-version-specific filename.
+    database = vault.database
     cli_target_title = f"Knowledge {cli_target:05d}"
     cli_search_hit = bool(
         cli_search["results"]

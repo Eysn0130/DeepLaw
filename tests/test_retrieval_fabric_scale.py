@@ -57,7 +57,39 @@ def test_retrieval_fabric_scale_runner_uses_real_identity_retrieval_and_capsules
     assert report["thresholds"]["million_asset_diagnostic_run"] is False
 
 
-def test_checked_in_100k_diagnostic_is_bound_to_current_implementation() -> None:
+def _assert_historical_dirty_candidate_is_not_a_current_claim(
+    report: dict[str, object],
+    *,
+    repository_root: Path,
+) -> None:
+    """Keep old dirty-worktree diagnostics honest after implementation changes.
+
+    The checked-in reports deliberately recorded an uncommitted candidate.  Its
+    file hashes can prove which bytes were measured, but those bytes are not a
+    reconstructable Git revision and must never be relabelled as evidence for a
+    later implementation.  Current behavior is exercised by the real runner
+    test above.
+    """
+
+    candidate = report["candidate"]
+    assert isinstance(candidate, dict)
+    implementation_files = candidate["implementation_files"]
+    assert isinstance(implementation_files, dict)
+    assert implementation_files
+    current_hashes = {
+        relative_path: hashlib.sha256(
+            (repository_root / relative_path).read_bytes()
+        ).hexdigest()
+        for relative_path in implementation_files
+    }
+    assert any(
+        current_hashes[path] != expected
+        for path, expected in implementation_files.items()
+    )
+    assert report["claim_eligible"] is False
+
+
+def test_checked_in_100k_diagnostic_remains_historical_and_claim_ineligible() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     report_path = (
         repository_root
@@ -90,16 +122,13 @@ def test_checked_in_100k_diagnostic_is_bound_to_current_implementation() -> None
     assert report["lifecycle"]["forgetting_correct"] is True
     assert report["lifecycle"]["history_retained"] is True
 
-    for relative_path, expected_sha256 in report["candidate"][
-        "implementation_files"
-    ].items():
-        actual_sha256 = hashlib.sha256(
-            (repository_root / relative_path).read_bytes()
-        ).hexdigest()
-        assert actual_sha256 == expected_sha256
+    _assert_historical_dirty_candidate_is_not_a_current_claim(
+        report,
+        repository_root=repository_root,
+    )
 
 
-def test_checked_in_one_million_diagnostic_is_bound_to_current_implementation() -> None:
+def test_checked_in_one_million_diagnostic_remains_historical_and_claim_ineligible() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     report_path = (
         repository_root
@@ -132,10 +161,7 @@ def test_checked_in_one_million_diagnostic_is_bound_to_current_implementation() 
     assert report["lifecycle"]["forgetting_correct"] is True
     assert report["lifecycle"]["history_retained"] is True
 
-    for relative_path, expected_sha256 in report["candidate"][
-        "implementation_files"
-    ].items():
-        actual_sha256 = hashlib.sha256(
-            (repository_root / relative_path).read_bytes()
-        ).hexdigest()
-        assert actual_sha256 == expected_sha256
+    _assert_historical_dirty_candidate_is_not_a_current_claim(
+        report,
+        repository_root=repository_root,
+    )

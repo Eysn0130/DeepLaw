@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.output.v3.schema.json",
+  "title": "DeepLaw Knowledge Support Output v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "authority_boundary", "result"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-support-output/v3"},
+    "operation": {
+      "enum": ["search", "recall", "get", "context", "verify", "inspect", "lineage", "graph", "wiki_lookup", "explain", "identity_lookup", "gaps"]
+    },
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legal_authority", "official_legal_sources_tool", "persistent_writes",
+        "case_data_allowed", "authority_from_ranking"
+      ],
+      "properties": {
+        "legal_authority": {"const": false},
+        "official_legal_sources_tool": {"const": "law_support"},
+        "persistent_writes": {"const": "separate_explicit_knowledge_sink"},
+        "case_data_allowed": {"const": false},
+        "authority_from_ranking": {"const": false}
+      }
+    },
+    "result": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"enum": ["search", "recall", "wiki_lookup"]}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"$ref": "#/$defs/federated_recall"}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "wiki_lookup"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"required": ["living_wiki"]}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "explain"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"$ref": "#/$defs/explanation"}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "get"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"oneOf": [
+        {"required": ["knowledge_id", "revision_id", "origin", "authority", "legal_authority", "scope", "sensitivity"]},
+        {"required": ["asset_id", "status", "verification", "trust", "sensitivity", "legal_authority"]}
+      ]}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "context"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"$ref": "#/$defs/capsule"}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "verify"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"required": ["valid"]}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "inspect"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"required": ["schema_version", "vault_id", "agent_ready", "source_derived", "autonomous", "planes"]}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "lineage"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"required": ["schema_version", "knowledge_id", "current_revision_id", "revisions", "audit_head"]}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "graph"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"$ref": "#/$defs/graph"}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "identity_lookup"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"$ref": "#/$defs/identity_lookup"}}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "gaps"}}, "required": ["operation"]},
+      "then": {"properties": {"result": {"$ref": "#/$defs/gap_report"}}}
+    }
+  ],
+  "$defs": {
+    "budget": {
+      "type": "object",
+      "required": ["max_items", "selected_items", "max_characters", "selected_characters"],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 0, "maximum": 20},
+        "selected_items": {"type": "integer", "minimum": 0, "maximum": 20},
+        "max_characters": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "selected_characters": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "partitions": {"type": "object"}
+      }
+    },
+    "federated_recall": {
+      "type": "object",
+      "required": ["schema_version", "query", "plane", "source_derived", "autonomous", "ranking", "budget"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.federated-knowledge-recall/v1"},
+        "query": {"type": "string"},
+        "plane": {"enum": ["all", "source_derived", "autonomous"]},
+        "source_derived": {"type": ["object", "null"]},
+        "autonomous": {"type": ["object", "null"]},
+        "ranking": {
+          "type": "object",
+          "required": ["authority_partitions_preserved", "numeric_confidence_exposed"],
+          "properties": {
+            "authority_partitions_preserved": {"const": true},
+            "numeric_confidence_exposed": {"const": false}
+          }
+        },
+        "budget": {"$ref": "#/$defs/budget"},
+        "living_wiki": {"type": "object"}
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "required": ["schema_version", "query", "plane", "source_derived", "autonomous", "budget", "authority_changed_by_ranking"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-query-explanation/v1"},
+        "query": {"type": "string"},
+        "plane": {"enum": ["all", "source_derived", "autonomous"]},
+        "source_derived": {"type": ["object", "null"]},
+        "autonomous": {"type": ["object", "null"]},
+        "budget": {"$ref": "#/$defs/budget"},
+        "authority_changed_by_ranking": {"const": false}
+      }
+    },
+    "capsule": {
+      "type": "object",
+      "required": [
+        "schema_version", "vault_id", "task", "query_plan", "query_plan_sha256",
+        "sections", "budget", "audit_head", "capsule_id", "capsule_digest"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-capsule/v2"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "task": {"type": "string"},
+        "query_plan": {"type": "object"},
+        "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sections": {"type": "object"},
+        "budget": {"$ref": "#/$defs/budget"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+        "capsule_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "graph": {
+      "type": "object",
+      "required": ["schema_version", "nodes", "relations", "rejected", "budget", "audit_head", "derived_adjacency", "canonical_relation_revisions"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-graph-view/v1"},
+        "nodes": {"type": "array", "maxItems": 40},
+        "relations": {"type": "array", "maxItems": 20},
+        "rejected": {"type": "array", "maxItems": 100},
+        "budget": {"type": "object"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "derived_adjacency": {"const": true},
+        "canonical_relation_revisions": {"const": true}
+      }
+    },
+    "identity_lookup": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "query_sha256", "normalized_key", "status",
+        "candidates", "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-identity-lookup/v1"},
+        "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "normalized_key": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "status": {"enum": ["resolved", "ambiguous", "candidate", "not_found"]},
+        "candidates": {
+          "type": "array", "maxItems": 20,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": [
+              "knowledge_id", "revision_id", "title", "kind", "matched_alias",
+              "exact", "identity_score", "authority", "legal_authority"
+            ],
+            "properties": {
+              "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+              "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+              "title": {"type": "string", "minLength": 1, "maxLength": 500},
+              "kind": {"enum": [
+                "claim", "concept", "entity", "event", "decision", "procedure",
+                "experience", "preference", "synthesis", "comparison", "skill", "memory"
+              ]},
+              "matched_alias": {"type": "string", "minLength": 1, "maxLength": 500},
+              "exact": {"type": "boolean"},
+              "identity_score": {"type": "number", "minimum": -1, "maximum": 1},
+              "authority": {"const": "agent_derived"},
+              "legal_authority": {"const": false}
+            }
+          }
+        },
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "gap_report": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "vault_id", "audit_head", "gaps", "gap_counts",
+        "returned_gap_count", "truncated", "derived", "authority", "generated_at"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-gap-report/v1"},
+        "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "gaps": {"type": "array", "maxItems": 64, "items": {"type": "object"}},
+        "gap_counts": {
+          "type": "object", "maxProperties": 8,
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "returned_gap_count": {"type": "integer", "minimum": 0, "maximum": 64},
+        "truncated": {"type": "boolean"},
+        "derived": {"const": true},
+        "authority": {"const": "none"},
+        "generated_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

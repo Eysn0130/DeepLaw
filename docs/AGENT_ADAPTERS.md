@@ -45,7 +45,8 @@ so the visible name can differ, but the server-level leaf name must remain
 exactly `law_support`. For example, OpenCode renders it as
 `deeplaw_law_support`. Host namespacing does not create a second public tool.
 
-`law_support` routes eight operations:
+`law_support` routes nine read-only operations under the repository-head v3 contract (the published
+v0.7 package retains the frozen v2 surface):
 
 | Operation | Purpose | Required selector |
 | --- | --- | --- |
@@ -57,6 +58,7 @@ exactly `law_support`. For example, OpenCode renders it as
 | `private_get` | Read one selected private segment | `segment_id` |
 | `private_verify` | Verify one private snapshot receipt | `segment_id`, `receipt_id` |
 | `private_info` | Inspect the private snapshot | none |
+| `federated_context` | Compile separately admitted official/private/Agent interpretation partitions | `query`, `confirm_no_case_data=true` |
 
 No host adapter may expose a separate write, upload, memory,
 reindex, delete, activation, administration, case, or chat tool. Build and

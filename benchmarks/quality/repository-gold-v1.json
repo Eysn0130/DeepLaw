@@ -1,0 +1,231 @@
+{
+  "schema_version": "deeplaw.repository-gold-set/v1",
+  "status": "curated_development_fixture",
+  "claim_eligible": false,
+  "frozen_at": "2026-07-29T16:00:00Z",
+  "categories": ["chinese", "english", "code", "legal", "long_document"],
+  "quality_gate": {
+    "lexical": {
+      "minimum_hit_at_1": 0.75,
+      "minimum_useful_context_recall": 0.8,
+      "maximum_irrelevant_context_rate": 0.65,
+      "maximum_forbidden_admission_count": 0
+    },
+    "dense": {
+      "minimum_hit_at_1": 0.3,
+      "minimum_useful_context_recall": 0.4,
+      "maximum_irrelevant_context_rate": 0.8,
+      "maximum_forbidden_admission_count": 0
+    },
+    "hybrid": {
+      "minimum_hit_at_1": 0.9,
+      "minimum_useful_context_recall": 0.8,
+      "maximum_irrelevant_context_rate": 0.6,
+      "maximum_forbidden_admission_count": 0
+    }
+  },
+  "documents": [
+    {
+      "document_id": "doc_chinese_readme",
+      "category": "chinese",
+      "path": "README.md",
+      "sha256": "98ba35577e8a31954cbd50100e50e90881cfbf7ad24878c892c7ac747d2f40c9",
+      "title": "DeepLaw 中文产品说明",
+      "anchor": "自主写入不等于权威升级"
+    },
+    {
+      "document_id": "doc_chinese_agent_guide",
+      "category": "chinese",
+      "path": "AGENTS.md",
+      "sha256": "b1b48b5c1d3c66a08ed40cbcc34379d6c0b9b54a07edb670074ef9991938d2c3",
+      "title": "DeepLaw Agent 工程总纲",
+      "anchor": "Discovery != Admission != Selection != Authority != Adjudication"
+    },
+    {
+      "document_id": "doc_english_readme",
+      "category": "english",
+      "path": "README_EN.md",
+      "sha256": "6f88bde915e93e43d21692de70be6ad0c42ed16c6b4dd0ed0c6faecc30d28708",
+      "title": "DeepLaw English product baseline and vNext status",
+      "anchor": "Knowledge Duties"
+    },
+    {
+      "document_id": "doc_english_adapters",
+      "category": "english",
+      "path": "docs/AGENT_ADAPTERS.md",
+      "sha256": "a1a85cc23accf33a1961ef3bebcc11a1352796d40f350b43a307075a36cddd3b",
+      "title": "DeepLaw Agent adapter contracts",
+      "anchor": "Real model/session tasks on all hosts"
+    },
+    {
+      "document_id": "doc_code_autonomy",
+      "category": "code",
+      "path": "src/deeplaw/knowledge_autonomy.py",
+      "sha256": "6a9f4bd25931e85f2aa51c6369fd425a3aa1b87b0069c7e1c32f7a33e6346b02",
+      "title": "Autonomous Knowledge Store implementation",
+      "anchor": "def garbage_collect_content("
+    },
+    {
+      "document_id": "doc_code_intelligence",
+      "category": "code",
+      "path": "src/deeplaw/knowledge_intelligence.py",
+      "sha256": "b5ee09cb489a208ab3882e79df5abe038115cd5bbf2e5f7ecf758694309ef56d",
+      "title": "Offline knowledge intelligence implementation",
+      "anchor": "signed-int8-l2"
+    },
+    {
+      "document_id": "doc_legal_architecture",
+      "category": "legal",
+      "path": "docs/DEEPLAW_2.md",
+      "sha256": "8cc7261dd0efbd67403dc2400e6ba590232ab9d5f002cdd67d2bac191a1dca12",
+      "title": "DeepLaw dual Legal Pack architecture",
+      "anchor": "用户私有法律参考库"
+    },
+    {
+      "document_id": "doc_legal_federated_contract",
+      "category": "legal",
+      "path": "contracts/law-federated-context.v1.schema.json",
+      "sha256": "28dbeaf7145b91fc942db09650d090cdafaaa155a0a69e0c0035fc5bf63e206c",
+      "title": "Authority-aware federated legal context contract",
+      "anchor": "authority_partitions_preserved"
+    },
+    {
+      "document_id": "doc_long_architecture",
+      "category": "long_document",
+      "path": "docs/ARCHITECTURE.md",
+      "sha256": "5fd162a53cc58fc82f20a6a6fee9bc07b45bb3b0a3dc704cbfb656025fb1eca5",
+      "title": "DeepLaw full architecture",
+      "anchor": "Source Tree"
+    },
+    {
+      "document_id": "doc_long_autonomous_contract",
+      "category": "long_document",
+      "path": "docs/AUTONOMOUS_KNOWLEDGE_OS.md",
+      "sha256": "e4bb4f955141d8f16b4205bf0b6fc44e0a0b6a5e3d9ad45472d4b748319121db",
+      "title": "DeepLaw Autonomous Knowledge OS contract",
+      "anchor": "Autonomous mutation lifecycle"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "zh_autonomous_activation",
+      "category": "chinese",
+      "query": "普通 Agent 派生知识不再逐条人工审核，准入后自动 active",
+      "expected_document_ids": ["doc_chinese_readme", "doc_chinese_agent_guide"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "zh_markdown_ledger",
+      "category": "chinese",
+      "query": "Markdown-native 不是 Markdown-only，SQLite trusted Ledger 维护治理",
+      "expected_document_ids": ["doc_chinese_readme", "doc_chinese_agent_guide"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "zh_authority_boundary",
+      "category": "chinese",
+      "query": "Embedding 排名图权重不能升级法律 Authority 或工具权限",
+      "expected_document_ids": ["doc_chinese_agent_guide", "doc_chinese_readme"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "en_real_host_boundary",
+      "category": "english",
+      "query": "real model session tasks on Codex Claude Code OpenCode remain external verification pending",
+      "expected_document_ids": ["doc_english_adapters"],
+      "forbidden_document_ids": [],
+      "top_k": 2
+    },
+    {
+      "case_id": "en_knowledge_duties",
+      "category": "english",
+      "query": "Knowledge Duties are compiled before candidates and bounded Capsule delivery",
+      "expected_document_ids": ["doc_english_readme"],
+      "forbidden_document_ids": [],
+      "top_k": 2
+    },
+    {
+      "case_id": "en_vnext_status",
+      "category": "english",
+      "query": "repository head v0.8 v0.9 offline Dense Reranker Skill draft Factory",
+      "expected_document_ids": ["doc_english_readme"],
+      "forbidden_document_ids": [],
+      "top_k": 2
+    },
+    {
+      "case_id": "code_owner_gc",
+      "category": "code",
+      "query": "garbage_collect_content owner tombstone forgotten knowledge bytes",
+      "expected_document_ids": ["doc_code_autonomy"],
+      "forbidden_document_ids": [],
+      "top_k": 2
+    },
+    {
+      "case_id": "code_dense_manifest",
+      "category": "code",
+      "query": "signed int8 l2 dense vectors manifest dimensions quantization",
+      "expected_document_ids": ["doc_code_intelligence"],
+      "forbidden_document_ids": [],
+      "top_k": 2
+    },
+    {
+      "case_id": "code_contradiction_abstention",
+      "category": "code",
+      "query": "likely_contradiction high precision detect contradiction otherwise abstain",
+      "expected_document_ids": ["doc_code_intelligence"],
+      "forbidden_document_ids": [],
+      "top_k": 2
+    },
+    {
+      "case_id": "legal_federated_partitions",
+      "category": "legal",
+      "query": "federated legal context official user private agent interpretation authority partitions preserved",
+      "expected_document_ids": ["doc_legal_federated_contract", "doc_legal_architecture"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "legal_signed_update",
+      "category": "legal",
+      "query": "official Legal Pack exact byte Ed25519 signature catalog sequence rollback protection",
+      "expected_document_ids": ["doc_legal_architecture"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "legal_no_adjudication",
+      "category": "legal",
+      "query": "legal adjudication false ranking is authority false private source not official",
+      "expected_document_ids": ["doc_legal_federated_contract", "doc_legal_architecture"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "long_source_tree",
+      "category": "long_document",
+      "query": "Source Tree exact identifiers fielded lexical retrieval deterministic parser hierarchy",
+      "expected_document_ids": ["doc_long_architecture"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "long_crash_recovery",
+      "category": "long_document",
+      "query": "pending materialization staging startup recovery orphan CAS object",
+      "expected_document_ids": ["doc_long_autonomous_contract"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    },
+    {
+      "case_id": "long_skill_factory",
+      "category": "long_document",
+      "query": "Skill Factory explicit completion criterion governed draft does not grant capability",
+      "expected_document_ids": ["doc_long_autonomous_contract"],
+      "forbidden_document_ids": [],
+      "top_k": 3
+    }
+  ]
+}
