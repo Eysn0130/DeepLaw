@@ -298,7 +298,7 @@ jobs:
           cp packaging/oci/Dockerfile "${context}/Dockerfile"
           candidate_wheels=("${RUNNER_TEMP}"/verified-dist/deeplaw-*.whl)
           [[ "${#candidate_wheels[@]}" -eq 1 ]]
-          cp "${candidate_wheels[0]}" "${context}/deeplaw.whl"
+          cp "${candidate_wheels[0]}" "${context}/"
           release_commit=$(git rev-parse HEAD)
           uv export --frozen --no-dev --no-emit-project --format requirements-txt \
             --output-file "${context}/runtime-requirements.txt"
