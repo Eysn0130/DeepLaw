@@ -1405,7 +1405,10 @@ def _handle_autonomous_knowledge_support(
                 limit=limit,
             )
         elif operation == "gaps":
-            result = store.discover_gaps()
+            result = store.discover_gaps(
+                scope=cast(Any, scope),
+                max_sensitivity=cast(Any, max_sensitivity),
+            )
         elif operation == "context":
             if not confirm_no_case_data:
                 raise ValueError(

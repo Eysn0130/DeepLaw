@@ -1,9 +1,9 @@
 # DeepLaw Autonomous Knowledge OS
 
-Status: **Current repository-head contract**, 2026-07-29. The latest published package remains
-`v0.7.0`; this document describes the additive vNext implementation in this repository. Historical
-v0.7 proposal/review documents remain migration evidence, not the default policy for new
-Agent-derived knowledge.
+Status: **Current v0.9.0 contract**, 2026-07-30. This document defines the released 0.8 Autonomous
+Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence implementation. Historical v0.7
+proposal/review documents remain source-governance and migration evidence, not the default policy
+for new Agent-derived knowledge.
 
 ## 1. Product boundary
 
@@ -136,15 +136,19 @@ The `knowledge_sink` domain path applies this sequence:
    deterministically replays. Every writable store startup performs this bounded recovery before
    accepting another mutation; malformed staging records fail closed, and intents with no atomic
    Ledger commit are discarded without treating their orphan CAS bytes as knowledge.
-8. **Connect and rebuild** FTS, dense vectors, canonical relations, aliases, lint/gaps, Living Wiki
-   pages, weighted communities, and Canvas. Wikilinks compile through stable identity resolution;
-   an ambiguous link remains a reported gap.
+8. **Connect and rebuild** through the durable derived-work queue. Canonical commits do not wait for
+   FTS, dense vectors, graph projection, lint/gaps, Living Wiki, weighted communities, or Canvas.
+   The explicit foreground Watcher drains queued work after reconciliation, and `rebuild` is the
+   deterministic operator path. Failure leaves work queued; current reads reject stale manifests
+   and use bounded canonical fallback. Wikilinks compile through stable identity resolution; an
+   ambiguous link remains a reported gap.
 9. **Learn** through a distinct feedback record. `agent_self_report` is explicitly weaker than a
    `user` or `external_check` outcome and cannot establish task success by itself.
 10. **Decay, consolidate, or forget** through TTL expiry, a crash-safe consolidation saga, or an
-    explicit immutable lifecycle revision. Current workspace and indexes stop exposing inactive
-    content; history and audit identities remain. An owner may separately purge eligible bytes
-    without deleting governance history.
+    explicit immutable lifecycle revision. Consolidation preflights its relation sub-capability and
+    verifies every evidence-bound lineage edge before archiving an input. Current workspace and
+    indexes stop exposing inactive content; history and audit identities remain. An owner may
+    separately purge eligible bytes without deleting governance history.
 
 “Decay” is therefore an explicit eligibility/lifecycle transition driven by bounded TTL or owner
 policy, not a hidden confidence score that silently changes Authority. Usage feedback may influence
@@ -196,7 +200,11 @@ legacy lifecycle history.
 Ordinary sink grants cannot move an existing lineage to another scope or lower its sensitivity.
 Knowledge and relation provenance must itself be visible in the same scope and at or below the
 containing revision's sensitivity. Relations inherit the maximum sensitivity of both endpoints and
-their bound evidence, so a public graph query cannot reveal a private supporting edge.
+their bound evidence, so a public graph query cannot reveal a private supporting edge. Every new
+relation requires at least one bound Source, Run artifact, or Knowledge Revision evidence reference;
+historical source-free relation rows remain auditable but are never admitted to current graph or
+recall. A Markdown relation hint that cannot be compiled under the active capability or evidence
+policy remains an explicit Semantic Lint / Gap finding; it is never treated as a canonical edge.
 If a bound Inbox artifact or source later becomes rejected/inactive, immutable revision history
 still verifies, but that Knowledge Object or relation is no longer admitted to recall, graph, MCP
 exact reads, or rebuilt FTS/Wiki views; semantic Lint reports the inactive provenance.
@@ -233,7 +241,11 @@ Discovery != Admission != Selection != Authority != Adjudication
 ```
 
 `recall` discovers exact IDs, current/historical lexical candidates, the bound local dense index,
-canonical graph neighbors and reranked candidates, then admits by lifecycle, provenance, exact
+current or transaction-time canonical graph neighbors, and reranked candidates. Scope,
+sensitivity, lifecycle, valid time,
+kind, and required-tag boundaries are applied before each bounded lexical/dense/graph candidate
+cut whenever the canonical channel can express them; the unified admission pass then revalidates
+every candidate and provenance before reranking. It admits by lifecycle, provenance, exact
 scope, maximum sensitivity, kind/required tag, TTL, valid time, and transaction time. Selection
 applies independent item, character, token, source, graph-hop, and provider-payload budgets.
 Unauthorized scope or sensitivity candidates are omitted
@@ -354,7 +366,7 @@ text never grants tools by itself; the host and owner policy remain authoritativ
 deeplaw knowledge init --vault ./vault --name project --scope project
 ```
 
-This creates the v0.7 compatibility schema plus the additive autonomous core. No mutation grant is
+This creates the retained v0.7 compatibility schema plus the v0.9 autonomous core. No mutation grant is
 enabled. `--legacy-review-core` exists only for compatibility testing and staged migration.
 
 ### Existing Vault
@@ -427,7 +439,8 @@ The implementation is exercised by:
   CAS/Markdown/Ledger binding, authority/injection quarantine, reconcile/conflicts/recovery,
   historical revision semantics, provenance/scope/sensitivity isolation, tamper detection,
   derived-staleness handling, relations/Wiki/lint/Capsule/forget, scope/rate/token/TTL, and safe
-  YAML;
+  YAML, pre-Top-K governance filters, evidence-required relations, exact identity ambiguity, and
+  scope/sensitivity-safe gap discovery;
 - `tests/test_knowledge_sink_mcp.py`: closed and separate MCP surfaces, federated read partitions,
   hard budgets, temporal get, scope isolation, explain/lineage/graph/Wiki/Capsule, feedback
   authority, provenance quarantine, exact dedup, externally gated Skill promotion, preference

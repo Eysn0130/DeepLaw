@@ -1,6 +1,6 @@
 # DeepLaw Knowledge CLI lifecycle
 
-Status: **v0.7 compatibility CLI**, reviewed 2026-07-28. New Vaults and autonomous migration use
+Status: **v0.7 compatibility CLI retained by v0.9.0**, reviewed 2026-07-30. New Vaults and autonomous migration use
 the `deeplaw knowledge autonomy ...` and `deeplaw knowledge sink ...` commands documented in
 [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md). Examples below keep legacy writes
 in the offline CLI; Agent MCP remains read-only.
@@ -10,7 +10,7 @@ in the offline CLI; Agent MCP remains read-only.
 Install the formal wheel once:
 
 ```bash
-uv tool install https://github.com/Eysn0130/DeepLaw/releases/download/v0.7.0/deeplaw-0.7.0-py3-none-any.whl
+uv tool install https://github.com/Eysn0130/DeepLaw/releases/download/v0.9.0/deeplaw-0.9.0-py3-none-any.whl
 ```
 
 The complete normal loop uses five user commands and no internal-ID parsing:

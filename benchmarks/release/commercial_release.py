@@ -17,9 +17,7 @@ from benchmarks.release.evidence import (
     write_report,
 )
 
-SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v1"
-VERSION = "0.7.0"
-TAG = "v0.7.0"
+SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v2"
 COMPETITIVE_EVIDENCE_MISSING = [
     "real_model_task_e2e",
     "named_baseline_results_17",
@@ -61,6 +59,7 @@ def _require_report(
 
 def _unified_versions(repository: Path) -> dict[str, str]:
     project = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
+    version = project["project"]["version"]
     values = {
         "package": project["project"]["version"],
         "python": __import__("deeplaw").__version__,
@@ -83,11 +82,11 @@ def _unified_versions(repository: Path) -> dict[str, str]:
             "version"
         ],
     }
-    if set(values.values()) != {VERSION}:
+    if set(values.values()) != {version}:
         raise CommercialReleaseError(f"release versions are not unified: {values}")
     marketplace = load_json(repository / ".claude-plugin/marketplace.json")
-    if {item.get("version") for item in marketplace.get("plugins", [])} != {VERSION}:
-        raise CommercialReleaseError("Claude marketplace entries are not version 0.7.0")
+    if {item.get("version") for item in marketplace.get("plugins", [])} != {version}:
+        raise CommercialReleaseError("Claude marketplace entries do not match the package version")
     return values
 
 
@@ -108,7 +107,7 @@ def _artifact_inventory(root: Path) -> list[dict[str, Any]]:
     return records
 
 
-def _sbom(path: Path) -> dict[str, Any]:
+def _sbom(path: Path, *, version: str) -> dict[str, Any]:
     payload = load_json(path)
     if payload.get("bomFormat") != "CycloneDX" or payload.get("specVersion") not in {
         "1.5",
@@ -121,10 +120,10 @@ def _sbom(path: Path) -> dict[str, Any]:
     if not any(
         isinstance(item, dict)
         and item.get("name") == "deeplaw"
-        and item.get("version") == VERSION
+        and item.get("version") == version
         for item in candidates
     ):
-        raise CommercialReleaseError("release SBOM does not bind deeplaw 0.7.0")
+        raise CommercialReleaseError("release SBOM does not bind the package version")
     return {
         "format": "CycloneDX",
         "spec_version": payload["specVersion"],
@@ -146,37 +145,42 @@ def _licenses(path: Path, *, binding: dict[str, Any]) -> dict[str, Any]:
     return {"status": "passed", "package_count": payload.get("package_count")}
 
 
-def _openvex(path: Path) -> dict[str, Any]:
+def _openvex(path: Path, *, version: str) -> dict[str, Any]:
     payload = load_json(path)
     statements = payload.get("statements")
     if not isinstance(statements, list) or not statements:
         raise CommercialReleaseError("OpenVEX has no statements")
-    expected = f"pkg:pypi/deeplaw@{VERSION}"
+    expected = f"pkg:pypi/deeplaw@{version}"
     for statement in statements:
         products = statement.get("products") if isinstance(statement, dict) else None
         if not isinstance(products, list) or expected not in {
             item.get("@id") for item in products if isinstance(item, dict)
         }:
-            raise CommercialReleaseError("OpenVEX statement is not bound to deeplaw 0.7.0")
+            raise CommercialReleaseError("OpenVEX statement is not bound to the package version")
     return {"statement_count": len(statements), "product": expected}
 
 
 def _docs(repository: Path) -> dict[str, bool]:
+    project = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
+    version = project["project"]["version"]
+    major, minor, _patch = version.split(".")
+    acceptance = f"docs/V{major}_{minor}_ACCEPTANCE_MATRIX.md"
+    release_notes = f"docs/RELEASE_NOTES_v{version}.md"
     required = {
-        "README.md": ("本地单用户 Agent Knowledge OS", "Knowledge Capsule", "v0.7.0"),
+        "README.md": ("本地单用户 Agent Knowledge OS", "Knowledge Capsule", f"v{version}"),
         "README_EN.md": (
             "Local single-user Agent Knowledge OS",
             "Knowledge Capsule",
-            "v0.7.0",
+            f"v{version}",
         ),
-        "CHANGELOG.md": ("0.7.0", "competitive_claim_eligible=false"),
-        "SECURITY.md": ("v0.7.0", "commercial_release_eligible=true"),
-        "docs/INSTALL_UPGRADE_ROLLBACK.md": ("0.6.0", "0.7.0"),
-        "docs/V0_7_ACCEPTANCE_MATRIX.md": (
+        "CHANGELOG.md": (version, "competitive_claim_eligible=false"),
+        "SECURITY.md": (f"v{version}", "commercial_release_eligible=true"),
+        "docs/INSTALL_UPGRADE_ROLLBACK.md": ("0.6.0", version),
+        acceptance: (
             "commercial_release_eligible=true",
             "competitive_claim_eligible=false",
         ),
-        "docs/RELEASE_NOTES_v0.7.0.md": (
+        release_notes: (
             "commercial_release_eligible=true",
             "competitive_claim_eligible=false",
         ),
@@ -211,8 +215,10 @@ def assemble(
     source_date_epoch: int,
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
-    if binding["package_version"] != VERSION or not binding["worktree_clean"]:
-        raise CommercialReleaseError("commercial manifest requires a clean 0.7.0 commit")
+    version = binding["package_version"]
+    tag = f"v{version}"
+    if not binding["worktree_clean"]:
+        raise CommercialReleaseError("commercial manifest requires a clean release commit")
     versions = _unified_versions(repository)
     platform_reports = [
         _require_report(
@@ -289,9 +295,9 @@ def assemble(
     if profiles != expected_profiles:
         raise CommercialReleaseError(f"dependency audit profiles are incomplete: {profiles}")
 
-    sbom = _sbom(sbom_path)
+    sbom = _sbom(sbom_path, version=version)
     licenses = _licenses(licenses_path, binding=binding)
-    openvex = _openvex(openvex_path)
+    openvex = _openvex(openvex_path, version=version)
     docs = _docs(repository)
     artifacts = _artifact_inventory(assets_root)
     artifact_by_path = {item["path"]: item for item in artifacts}
@@ -301,7 +307,7 @@ def assemble(
     for relative, digest in expected_dist.items():
         if artifact_by_path.get(relative, {}).get("sha256") != digest:
             raise CommercialReleaseError(f"verified distribution bytes are absent: {relative}")
-    if artifact_by_path.get("oci/deeplaw-0.7.0-linux-amd64.oci.tar", {}).get(
+    if artifact_by_path.get(f"oci/deeplaw-{version}-linux-amd64.oci.tar", {}).get(
         "sha256"
     ) != oci["oci_archive"]["sha256"]:
         raise CommercialReleaseError("verified OCI bytes are absent from release assets")
@@ -315,8 +321,8 @@ def assemble(
         "environment": environment_manifest(),
         "release": {
             "repository": "Eysn0130/DeepLaw",
-            "version": VERSION,
-            "tag": TAG,
+            "version": version,
+            "tag": tag,
             "commit": binding["commit"],
             "tree": binding["tree"],
             "source_date_epoch": source_date_epoch,
@@ -359,7 +365,7 @@ def assemble(
         },
         "commercial_gates": {
             "clean_final_commit": True,
-            "version_0_7_0_unified": True,
+            "version_unified": True,
             "three_os_no_skip_mandatory_suite": True,
             "distribution_install_upgrade_uninstall": True,
             "cli_migration_rollback_snapshot_restore": True,
@@ -416,7 +422,7 @@ def main() -> int:
         )
         schema = load_json(
             args.repository.resolve()
-            / "contracts/commercial-release-manifest.v1.schema.json"
+            / "contracts/commercial-release-manifest.v2.schema.json"
         )
         Draft202012Validator.check_schema(schema)
         write_report(args.output.resolve(), report)

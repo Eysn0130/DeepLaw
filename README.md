@@ -11,8 +11,8 @@
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.7.0"><img src="https://img.shields.io/badge/latest%20published-v0.7.0-17202A?style=flat-square" alt="Latest published release v0.7.0" /></a>
-  <img src="https://img.shields.io/badge/repository%20head-vNext%20autonomous%20core-36CDBB?style=flat-square" alt="Repository head autonomous core" />
+  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.9.0"><img src="https://img.shields.io/badge/latest-v0.9.0-17202A?style=flat-square" alt="Latest release v0.9.0" /></a>
+  <img src="https://img.shields.io/badge/autonomous%20knowledge-0.8%20%2B%200.9-36CDBB?style=flat-square" alt="Autonomous Knowledge Core and Living Wiki" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
 </p>
@@ -21,9 +21,10 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。它�
 记忆、知识关系、Living Wiki、来源追踪、检索编排与任务级 Knowledge Capsule，同时保持模型、会话
 和通用工具仍由宿主控制。
 
-仓库当前开发头已经落地新的自主知识内核；公开安装包仍以 `v0.7.0` 为最近正式发布版本。旧版
-proposal/review 工作流保留为来源编译与迁移兼容面，不再是 Agent 派生知识的默认激活路径。状态与
-迁移边界见 [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
+`v0.9.0` 已交付 0.8 Autonomous Knowledge Core 与 0.9 Living Wiki / Knowledge Intelligence。
+旧版 proposal/review 工作流只保留为来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的
+默认激活路径。当前契约与迁移边界见
+[`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
 
 ## 核心边界
 
@@ -59,7 +60,15 @@ flowchart LR
 
 ## 快速开始
 
-开发工作树使用 Python 3.11+ 与 [`uv`](https://docs.astral.sh/uv/)：
+正式版本使用 Python 3.11+ 与 [`uv`](https://docs.astral.sh/uv/)：
+
+```bash
+uv tool install \
+  https://github.com/Eysn0130/DeepLaw/releases/download/v0.9.0/deeplaw-0.9.0-py3-none-any.whl
+deeplaw --version
+```
+
+开发工作树：
 
 ```bash
 uv sync --all-extras
@@ -222,7 +231,7 @@ vault/
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current** | 0.8/0.9 repository-head：CAS 原件/Markdown revision、`.deeplaw/ledger.sqlite3` STRICT Ledger、Run/capture、hash-chained events、稳定 ID/alias/identity resolution、原子 staging/recovery、file lease/CAS/reconcile/Watcher/conflict、active/quarantine/consolidate/expire/forget/owner GC、typed temporal relation、FTS + offline Dense/Reranker + graph + historical lexical recall、Living Wiki/Semantic Lint/Gap/community/Canvas、Skill draft Factory、authority-partitioned Legal context、独立读写 MCP、snapshot/restore 与 v0.7 rollback |
+| **Current** | v0.9.0：CAS 原件/Markdown revision、`.deeplaw/ledger.sqlite3` STRICT Ledger、Run/capture、hash-chained events、稳定 ID/alias/identity resolution、原子 staging/recovery、file lease/CAS/reconcile/Watcher/conflict、active/quarantine/consolidate/expire/forget/owner GC、evidence-bound typed temporal relation、FTS + offline Dense/Reranker + graph + historical lexical recall、Living Wiki/Semantic Lint/Gap/community/Canvas、Skill draft Factory、authority-partitioned Legal context、独立读写 MCP、snapshot/restore 与 v0.7 rollback |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
 | **External closure pending** | 默认本地 Dense/Reranker 已落地；真实三宿主模型任务、实际具名竞争基线、秘密 held-out、置信区间与两家独立机构签名仍只能由外部事实完成，机器 claim gate 在此之前保持关闭 |
 | **Not claimed** | 没有远程 SaaS、多人控制平面、自动法律适用/裁判、模型自授予权限，也没有在缺少冻结候选、held-out 数据、置信区间和独立复现时宣称领先或 SOTA |
@@ -254,11 +263,13 @@ git diff --check
 | 文档 | 说明 |
 | --- | --- |
 | [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md) | 当前自主内核契约、迁移、CLI/MCP、安全与限制 |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 系统架构；顶部状态说明区分 v0.7 baseline 与 vNext |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | v0.9 当前系统架构、事务边界与派生层 |
 | [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md) | v0.7 兼容面和当前覆盖说明 |
 | [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | 双层 Legal Pack 与法律检索边界 |
 | [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) | Codex、Claude Code、OpenCode 的薄适配与隔离 |
 | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | 可复现评测与领先性证据边界 |
+| [`docs/V0_9_ACCEPTANCE_MATRIX.md`](docs/V0_9_ACCEPTANCE_MATRIX.md) | v0.9 验收矩阵、发布门禁与外部证据缺口 |
+| [`docs/RELEASE_NOTES_v0.9.0.md`](docs/RELEASE_NOTES_v0.9.0.md) | v0.9.0 发布说明与升级边界 |
 | [`SECURITY.md`](SECURITY.md) | 威胁模型和安全报告渠道 |
 
 DeepLaw 以 [Apache License 2.0](LICENSE) 开源。请勿提交法律原件、生成 release database、凭据、

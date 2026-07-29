@@ -3,11 +3,10 @@
 All notable product changes are recorded here. DeepLaw 2.0 is the product name; Python package
 versions follow semantic versioning independently.
 
-## Unreleased — Autonomous Knowledge OS vNext
+## 0.9.0 — 2026-07-30
 
-This repository-head line implements the pasted **DeepLaw 0.8 Autonomous Knowledge Core** and
-**0.9 Living Wiki and Knowledge Intelligence** milestones without relabeling them as the published
-`v0.7.0` package. The v1.0 engineering/evaluator gates are present, but competitive eligibility
+This release implements the **DeepLaw 0.8 Autonomous Knowledge Core** and **0.9 Living Wiki and
+Knowledge Intelligence** milestones. The v1.0 engineering/evaluator gates are present, but competitive eligibility
 remains false until evaluator-controlled real-host runs, named baselines, secret held-outs and
 independent signatures exist.
 
@@ -40,6 +39,23 @@ independent signatures exist.
   projection. Rename/move is identity-safe and external edits become new audited revisions.
 - Persisted task-local `working` memory now requires an explicit expiry instead of silently becoming
   unbounded long-term state.
+
+### Fixed
+
+- Scope and sensitivity are now applied to Semantic Lint and gap discovery before MCP projection;
+  other partitions cannot leak through identifiers, issue counts, or alias analysis.
+- Scope, sensitivity, lifecycle, valid time, kind, and required tags are pushed ahead of bounded
+  lexical, dense, temporal, and graph candidate cuts, then revalidated before reranking. Hidden or
+  irrelevant candidates can no longer crowd out admissible results.
+- Every new relation now requires a bound evidence reference. Historical source-free relation rows
+  remain auditable but are excluded from current graph and recall.
+- Canonical knowledge commits no longer synchronously rebuild every disposable index. They enqueue
+  derived maintenance; the foreground Watcher or explicit rebuild drains the queue, stale indexes
+  fail closed, and current lexical recall uses a bounded canonical fallback.
+- Identity lookup filters governance before its scan, binds aliases to the current revision, retains
+  exact ambiguity even when the return limit is one, and reports scan truncation.
+- Graph, contradiction, identity, and Semantic Lint scans now expose hard resource truncation instead
+  of performing unbounded Agent-facing work.
 
 ## 0.7.0 — 2026-07-28
 

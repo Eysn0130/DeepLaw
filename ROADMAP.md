@@ -1,6 +1,6 @@
 # DeepLaw roadmap
 
-Status: repository-head vNext, updated 2026-07-29. Runtime truth is `src/deeplaw`, contracts,
+Status: v0.9.0 delivery line, updated 2026-07-30. Runtime truth is `src/deeplaw`, contracts,
 migrations, tests, and `uv.lock`. A roadmap item never becomes a delivery claim without those
 artifacts.
 
@@ -17,8 +17,8 @@ permissions, and audit destruction remain owner/maintainer-only.
 
 ## v0.8 — Autonomous Knowledge Core
 
-**Repository-head implementation complete.** The milestone is implemented as an additive migration,
-not as a rename of the published `v0.7.0` package:
+**Implemented in v0.9.0.** The milestone is an additive migration from the published v0.7
+foundation:
 
 - additive migration with a verified v0.7 rollback point;
 - immutable content-addressed objects plus canonical Markdown Knowledge Revisions;
@@ -29,7 +29,8 @@ not as a rename of the published `v0.7.0` package:
   preservation, prompt-injection and authority-elevation quarantine;
 - separately enabled scope/sensitivity/operation/size/rate/capacity-bound `knowledge_sink`;
 - Run Records, bounded durable capture, Claim/Concept/Entity/Event/Comparison/Synthesis/Memory/Skill
-  revisions, alias and identity resolution, canonical temporal relations, and source/run binding;
+  revisions, alias and identity resolution, evidence-required canonical temporal relations, and
+  source/run binding;
 - immediate active/quarantine policy, immutable revision supersession lineage, TTL expiry,
   autonomous consolidation, explicit forgetting, owner-confirmed content GC, and fail-closed
   admission for every inactive lifecycle state;
@@ -39,13 +40,12 @@ not as a rename of the published `v0.7.0` package:
   fail-closed build validation, and atomic activation.
 - autonomous snapshot/restore and legacy compatibility.
 
-Release closure still requires a clean frozen artifact, package/version decision, supported-OS
-matrix, security/package audit, signed release metadata, and published release notes. Repository
-implementation is not itself a released wheel claim.
+The v0.9 release line freezes the package/version, supported-OS matrix, security/package audit,
+signed release metadata, and release notes independently from competitive evidence.
 
 ## v0.9 — Living Wiki and Knowledge Intelligence
 
-**Repository-head implementation complete; cross-system quality evaluation remains separate.**
+**Implemented in v0.9.0; cross-system quality evaluation remains separate.**
 
 - deterministic offline multilingual dense index and evidence-duty reranker, both bound to model
   identity, audit heads, revision inventory, exact index bytes, offline policy, and hard limits;
@@ -62,10 +62,15 @@ implementation is not itself a released wheel claim.
   governed draft Skill revision; promotion still requires an admitted user/external evaluation;
 - authority-partitioned `law_support.federated_context` for official, user-private, and explicitly
   enabled Agent interpretations, with no fallback relabeling or legal adjudication.
+- canonical mutations enqueue derived maintenance instead of synchronously rebuilding the Vault;
+  Watcher or explicit rebuild consumes the queue, while stale indexes fail closed and bounded
+  canonical recall remains available.
+- governance filters are applied before bounded lexical/dense/temporal/graph candidate windows and
+  revalidated before reranking; Lint/gaps enforce the same scope/sensitivity boundary.
 
 ## v1.0 — Quality and Superiority Closure
 
-**Engineering gates exist; external proof is intentionally open.** Repository head provides the
+**Engineering gates exist; external proof is intentionally open.** v0.9 provides the
 offline Dense/Reranker implementation, Typed Compiler scorer, real-repository Chinese/English/code/
 legal/long-document development Gold Set, host adapters, 17-system fair-baseline execution kit,
 secret-held-out protocol, evaluator-kit freezer, detached-signature verification, and a fail-closed
@@ -83,8 +88,6 @@ claim gate. The following are facts that only external evaluators can complete:
 - confidence intervals, paired tests, correction for multiple comparisons, complete failures and
   raw outputs from two evaluator-controlled secret held-outs;
 - two genuine independent organizations and signatures verified against separately trusted keys;
-- threat-model closure, formal migrations, upgrade/rollback drills, Windows/macOS/Linux evidence,
-  SBOM/licenses/OpenVEX, and release signing.
 
 Until those artifacts exist, `competitive_claim_eligible=false`; no better/leading/SOTA statement
 is permitted.

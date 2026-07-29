@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "deeplaw",
   "displayName": "DeepLaw 2.0",
-  "version": "0.7.0",
+  "version": "0.9.0",
   "description": "DeepLaw 2.0 explicit-use, read-only Agent Knowledge Base for official Chinese legal sources and user-private legal references.",
   "author": {
     "name": "Eysn0130",

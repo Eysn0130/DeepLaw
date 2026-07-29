@@ -1,11 +1,11 @@
 # DeepLaw 2.0 评测说明
 
-> Repository-head autonomous mutation、Authority、生命周期、poisoning、隔离与成本门禁已在
+> v0.9 autonomous mutation、Authority、生命周期、poisoning、隔离与成本门禁已在
 > [`autonomous-protocol-v2.json`](../benchmarks/external/autonomous-protocol-v2.json) 预注册；v1
 > 保留为历史协议。该文件是
 > protocol，不是结果；现有 v0.7 报告不能复用为自主内核或竞争领先证据。
 
-## Repository-head 五域开发 Gold Set
+## v0.9 五域开发 Gold Set
 
 [`repository-gold-v1.json`](../benchmarks/quality/repository-gold-v1.json) 绑定 10 个真实仓库文件的
 exact bytes/anchor/hash，并以 15 个策展查询覆盖中文、英文、代码、法律和长文档五类。运行器
@@ -19,22 +19,24 @@ uv run python -m benchmarks.quality.run_repository_gold \
   --suite benchmarks/quality/repository-gold-v1.json
 ```
 
-该集合解决的是 repository-head 多域回归入口，不是假装“秘密”的竞争数据。manifest 和 report
+该集合解决的是 v0.9 多域回归入口，不是假装“秘密”的竞争数据。manifest 和 report
 contract 都固定 `competitive_claim_eligible=false`、`secret_held_out=false`、
 `independently_evaluated=false`；任一源文件漂移会在评分前失败。运行器保留每一种模式的失败样本，
 因此不能用 hybrid 的较好平均数隐藏纯 Dense 或个别类别的退化；该开发集不支持领先声明，也不能
 替代专家法律金标、真实三宿主任务或 evaluator-controlled held-out。
 
-## v0.7.0 商业发布与竞争证据边界
+## v0.9.0 发布与竞争证据边界
 
-v0.7.0 商业清单固定 `commercial_release_eligible=true`，同时固定
+v0.9.0 release-manifest v2 固定 `commercial_release_eligible=true`，同时固定
 `competitive_claim_eligible=false`。wheel、sdist、OCI、SBOM、lock、contracts、三 OS、无模型
-宿主生命周期、签名和 provenance 属于商业发布证据；真实模型任务、17 项具名基线、秘密
+宿主生命周期、签名和 provenance 属于软件发布证据；真实模型任务、17 项具名基线、秘密
 held-out 和独立机构签名属于竞争性领先证据，尚未完成。
 
 ### 具名基线
 
-[`registry-v0.7.json`](../benchmarks/baselines/registry-v0.7.json) 登记 17 个系统/配置：BM25、
+冻结的历史命名文件
+[`registry-v0.7.json`](../benchmarks/baselines/registry-v0.7.json) 继续登记 17 个系统/配置；它是
+外部协议的不可变候选目录，不是 v0.7 结果复用。目录包括 BM25、
 Dense、BM25+Dense+Reranker、RAGFlow、Microsoft GraphRAG、LightRAG、Graphiti、Mem0、Cognee、
 MemOS、PageIndex、OpenKB、WikiGraph、Obsidian native workflow，以及 DeepLaw lexical、hybrid、
 full。每项固定官方 upstream、commit/version、推荐配置、模型 revision、adapter policy 和结果
@@ -326,6 +328,12 @@ Code、OpenCode 或未来 Analytix 的模型一定遵守 Skill；必须在每个
 未激活/显式激活”三种状态的 provider-visible schema、路由、Token 和工具调用。
 
 ## 通用 Knowledge OS 规模与公开开发诊断
+
+> 本节冻结的是 v0.7 source-derived compatibility baseline：其中的逐项 source review、Proposal
+> Inbox 和“默认只存储已审核 Asset”不描述 v0.9 Agent 自主知识平面。v0.9 当前回归与写入政策见
+> 本文开头的五域 Gold Set、[`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md) 和
+> [`V0_9_ACCEPTANCE_MATRIX.md`](V0_9_ACCEPTANCE_MATRIX.md)。历史指标不会被复用为自主知识或领先
+> 证据。
 
 10 万资产报告位于
 [`knowledge-scale-100k-2026-07-26.json`](../benchmarks/scale/knowledge-scale-100k-2026-07-26.json)。

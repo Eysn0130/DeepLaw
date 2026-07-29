@@ -16,7 +16,7 @@ from .util import canonical_json, compact_text, search_terms, sha256_bytes, sha2
 
 LOCAL_DENSE_MODEL = "deeplaw-multilingual-hash-dense/1"
 LOCAL_RERANKER_MODEL = "deeplaw-evidence-duty-reranker/1"
-DENSE_INDEX_SCHEMA = "deeplaw.local-dense-index/v1"
+DENSE_INDEX_SCHEMA = "deeplaw.local-dense-index/v2"
 DENSE_DIMENSIONS = 192
 _VECTOR_MAGIC = b"DLV1"
 _MAX_INDEX_ITEMS = 1_000_000
@@ -25,7 +25,26 @@ _MAX_RECORD_BYTES = 256 * 1024 * 1024
 _MAX_MANIFEST_BYTES = 256 * 1024
 _KNOWLEDGE_ID = re.compile(r"^knowledge_[0-9a-f]{24}$")
 _REVISION_ID = re.compile(r"^knowledgerev_[0-9a-f]{24}$")
+_CANONICAL_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _TOKEN = re.compile(r"[\w.+#/-]+", re.UNICODE)
+_SCOPES = frozenset({"personal", "project", "domain"})
+_SENSITIVITY_ORDER = ("public", "internal", "private", "restricted")
+_KNOWLEDGE_KINDS = frozenset(
+    {
+        "claim",
+        "concept",
+        "entity",
+        "event",
+        "decision",
+        "procedure",
+        "experience",
+        "preference",
+        "synthesis",
+        "comparison",
+        "skill",
+        "memory",
+    }
+)
 _NEGATION = re.compile(
     r"(?:\bnot\b|\bnever\b|\bno\b|\bcannot\b|\bfalse\b|不(?:是|会|能|应|得)|没有|从未|禁止)",
     re.IGNORECASE,
@@ -168,7 +187,7 @@ def capture_rejection_reason(item: dict[str, Any]) -> str | None:
 def write_dense_index(
     root: Path,
     *,
-    rows: list[dict[str, str]],
+    rows: list[dict[str, Any]],
     input_audit_head: str,
     legacy_audit_head: str,
 ) -> dict[str, Any]:
@@ -187,6 +206,13 @@ def write_dense_index(
                 "ordinal": ordinal,
                 "knowledge_id": row["knowledge_id"],
                 "revision_id": row["revision_id"],
+                "scope": row["scope"],
+                "sensitivity": row["sensitivity"],
+                "kind": row["kind"],
+                "tags": row["tags"],
+                "valid_from": row["valid_from"],
+                "valid_to": row["valid_to"],
+                "expires_at": row["expires_at"],
             }
         )
     vector_payload = _VECTOR_MAGIC + struct.pack(">HI", DENSE_DIMENSIONS, len(records)) + vectors
@@ -253,10 +279,23 @@ def search_dense_index(
     query: str,
     input_audit_head: str,
     legacy_audit_head: str,
+    scope: str,
+    max_sensitivity: str,
+    reference_time: str,
+    kinds: tuple[str, ...] = (),
+    required_tags: tuple[str, ...] = (),
     limit: int = 64,
 ) -> dict[str, Any]:
     if not 1 <= limit <= 100:
         raise ValueError("local dense search limit is invalid")
+    if scope not in _SCOPES or max_sensitivity not in _SENSITIVITY_ORDER:
+        raise ValueError("local dense search boundary is invalid")
+    if not _CANONICAL_TIMESTAMP.fullmatch(reference_time):
+        raise ValueError("local dense search reference time is invalid")
+    if any(kind not in _KNOWLEDGE_KINDS for kind in kinds):
+        raise ValueError("local dense search kind filter is invalid")
+    if any(not isinstance(tag, str) or not tag for tag in required_tags):
+        raise ValueError("local dense search tag filter is invalid")
     directory = root / ".deeplaw" / "derived" / "vectors"
     manifest_path = directory / "manifest.json"
     if manifest_path.is_symlink() or not manifest_path.is_file():
@@ -325,12 +364,42 @@ def search_dense_index(
             or len(records) != item_count
             or any(
                 not isinstance(record, dict)
-                or set(record) != {"ordinal", "knowledge_id", "revision_id"}
+                or set(record)
+                != {
+                    "ordinal",
+                    "knowledge_id",
+                    "revision_id",
+                    "scope",
+                    "sensitivity",
+                    "kind",
+                    "tags",
+                    "valid_from",
+                    "valid_to",
+                    "expires_at",
+                }
                 or record.get("ordinal") != ordinal
                 or not isinstance(record.get("knowledge_id"), str)
                 or not _KNOWLEDGE_ID.fullmatch(record["knowledge_id"])
                 or not isinstance(record.get("revision_id"), str)
                 or not _REVISION_ID.fullmatch(record["revision_id"])
+                or record.get("scope") not in _SCOPES
+                or record.get("sensitivity") not in _SENSITIVITY_ORDER
+                or record.get("kind") not in _KNOWLEDGE_KINDS
+                or not isinstance(record.get("tags"), list)
+                or len(record["tags"]) > 64
+                or any(not isinstance(tag, str) or not tag for tag in record["tags"])
+                or any(
+                    value is not None
+                    and (
+                        not isinstance(value, str)
+                        or not _CANONICAL_TIMESTAMP.fullmatch(value)
+                    )
+                    for value in (
+                        record.get("valid_from"),
+                        record.get("valid_to"),
+                        record.get("expires_at"),
+                    )
+                )
                 for ordinal, record in enumerate(records)
             )
         ):
@@ -349,7 +418,24 @@ def search_dense_index(
         return {"ready": False, "reason": "index_invalid", "results": []}
     query_vector = dense_vector(query)
     scored: list[tuple[float, str, str]] = []
+    maximum_sensitivity = _SENSITIVITY_ORDER.index(max_sensitivity)
     for ordinal, record in enumerate(records):
+        if (
+            record["scope"] != scope
+            or _SENSITIVITY_ORDER.index(record["sensitivity"]) > maximum_sensitivity
+            or (kinds and record["kind"] not in kinds)
+            or any(tag not in record["tags"] for tag in required_tags)
+            or (
+                record["valid_from"] is not None
+                and record["valid_from"] > reference_time
+            )
+            or (record["valid_to"] is not None and record["valid_to"] <= reference_time)
+            or (
+                record["expires_at"] is not None
+                and record["expires_at"] <= reference_time
+            )
+        ):
+            continue
         offset = 10 + ordinal * DENSE_DIMENSIONS
         vector = struct.unpack(
             f"{DENSE_DIMENSIONS}b", payload[offset : offset + DENSE_DIMENSIONS]

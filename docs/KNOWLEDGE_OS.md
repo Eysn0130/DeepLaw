@@ -1,6 +1,6 @@
 # DeepLaw Knowledge OS
 
-Status: **v0.7 compatibility baseline**, reviewed 2026-07-28. The repository-head autonomous
+Status: **v0.7 compatibility baseline retained by v0.9.0**, reviewed 2026-07-30. The current autonomous
 contract is [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md); where this document requires
 per-item human review or describes Markdown as projection-only, it records the legacy path rather
 than the current default for Agent-derived knowledge. Runtime behavior is defined by code, tests,
@@ -334,10 +334,11 @@ reproducible build checks, and a 100k/1m scale runner. Development diagnostics r
 `claim_eligible=false`.
 
 Actual 100k and one-million construction diagnostics are checked in and remain claim-ineligible
-because they bind a dirty worktree and synthetic exact-token corpus. Formal v0.7 release still
-requires final freeze and clean reruns, real Windows/OS/host matrices, every named official
-baseline, preregistered statistical gates, two secret held-out suites, and two genuine independent
-evaluator signatures. The development team cannot manufacture external independence.
+because they bind a dirty worktree and synthetic exact-token corpus. The formal v0.7 software
+release completed its release gates, but neither that release nor v0.9 can reuse these diagnostics
+as competitive evidence. Every named official baseline, preregistered statistical gate, two secret
+held-out suites, and two genuine independent evaluator signatures remain external requirements.
+The development team cannot manufacture external independence.
 
 ## Deliberate non-goals
 

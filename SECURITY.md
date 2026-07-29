@@ -9,7 +9,7 @@ documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.7.0`, and the `main` branch.
+Security fixes are evaluated for the current software release, `v0.9.0`, and the `main` branch.
 The release manifest records `commercial_release_eligible=true`; competitive leadership remains
 separate with `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says
@@ -156,10 +156,10 @@ failures become a generic fail-closed error instead of being reflected to the ho
 The optional `knowledge_support` server:
 
 - opens exactly one selected vault read-only;
-- advertises v1 compatibility for untouched v0.7 Vaults or the v2 read contract after autonomous
-  migration;
-- exposes only bounded search/recall, get, context, verify, inspect, lineage, graph, and Wiki
-  discovery;
+- advertises v1 compatibility for untouched v0.7 Vaults or the v3 read contract after autonomous
+  migration; the frozen v2 autonomous seam remains a compatibility contract;
+- exposes only twelve bounded read operations: search/recall, get, context, explain, verify,
+  inspect, lineage, graph, Wiki discovery, identity lookup, and gap discovery;
 - excludes inactive and restricted revisions and strips local filesystem paths;
 - fails closed without echoing the matched value if any bounded response still contains a local
   absolute path or recognized secret-like material;
@@ -217,7 +217,7 @@ Autonomous Vault snapshots also include capability state and owner-only token ma
 an exact restore. Treat such snapshots as credentials: preserve owner-only permissions, never
 commit or publish them, and rotate/revoke restored grants when snapshot custody is uncertain.
 
-The v0.7 optional Discovery Index is a derived, removable candidate index and never
+The retained v0.7 optional Discovery Index is a derived, removable compatibility candidate index and never
 a source of truth. Provisioning downloads only one fixed model profile and
 accepts it only after the exact repository revision, five-file inventory, byte
 sizes, and SHA-256 values pass. Query execution is local-only. The index binds
@@ -228,9 +228,11 @@ stored source bytes. Extra files, symlinks, unsafe permissions, model drift,
 dimension/row-width drift, non-finite vectors, source changes, vault changes,
 or post-verification file replacement fail closed.
 
-That model-backed Discovery path remains outside the default MCP/Context Compiler. The autonomous
-core's deterministic FTS/graph/Wiki indexes are separately rebuildable and bind their input audit
-head. Model-backed discovery remains operator/research CLI functionality until held-out
+That compatibility model-backed Discovery path remains outside the default MCP/Context Compiler.
+The v0.9 autonomous core's deterministic offline hash-dense, FTS, reranker, graph, and Wiki indexes
+are a separate rebuildable path bound to both audit heads, exact derived bytes, and model/profile
+identity. Stale or damaged derived state fails closed and current recall uses a bounded canonical
+fallback. The older model-backed discovery path remains operator/research CLI functionality until held-out
 task-success, noise, provenance, lifecycle, poisoning, resource, and cost gates
 pass. Its case-data confirmation is an explicit operator boundary, not a
 personal-data classifier. Analytix case material remains forbidden.

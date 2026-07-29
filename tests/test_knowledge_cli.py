@@ -657,6 +657,7 @@ def test_autonomous_workspace_watcher_uses_the_shared_reconcile_service(
     assert watch_result["cycle_count"] == 1
     assert watch_result["interrupted"] is False
     assert len(watch_result["last"]["committed"]) == 1
+    assert watch_result["last"]["derived_maintenance"]["status"] == "rebuilt"
     assert watch_result["last"]["committed"][0]["parent_revision_id"] == written[
         "revision_id"
     ]
@@ -672,3 +673,35 @@ def test_autonomous_workspace_watcher_uses_the_shared_reconcile_service(
     )
     assert current.returncode == 0, current.stderr
     assert json.loads(current.stdout)["body"] == "The watcher committed this external edit."
+
+
+def test_autonomous_gap_cli_accepts_an_explicit_read_boundary(tmp_path: Path) -> None:
+    vault = tmp_path / "gap-vault"
+    initialized = _run_cli(
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "gap-boundary",
+        "--scope",
+        "project",
+    )
+    assert initialized.returncode == 0, initialized.stderr
+
+    result = _run_cli(
+        "knowledge",
+        "autonomy",
+        "gaps",
+        "--vault",
+        str(vault),
+        "--scope",
+        "project",
+        "--max-sensitivity",
+        "public",
+    )
+
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["scope"] == "project"
+    assert report["max_sensitivity"] == "public"

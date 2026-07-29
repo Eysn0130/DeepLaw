@@ -159,7 +159,7 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "schema_version", "query_sha256", "normalized_key", "status",
-        "candidates", "audit_head"
+        "candidates", "candidate_count", "alias_scan_truncated", "audit_head"
       ],
       "properties": {
         "schema_version": {"const": "deeplaw.knowledge-identity-lookup/v1"},
@@ -190,6 +190,8 @@
             }
           }
         },
+        "candidate_count": {"type": "integer", "minimum": 0, "maximum": 2000},
+        "alias_scan_truncated": {"type": "boolean"},
         "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
@@ -197,15 +199,18 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "schema_version", "vault_id", "audit_head", "gaps", "gap_counts",
-        "returned_gap_count", "truncated", "derived", "authority", "generated_at"
+        "returned_gap_count", "truncated", "derived", "authority", "generated_at",
+        "scope", "max_sensitivity"
       ],
       "properties": {
         "schema_version": {"const": "deeplaw.knowledge-gap-report/v1"},
         "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
         "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "scope": {"enum": ["all", "personal", "project", "domain"]},
+        "max_sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
         "gaps": {"type": "array", "maxItems": 64, "items": {"type": "object"}},
         "gap_counts": {
-          "type": "object", "maxProperties": 8,
+          "type": "object", "maxProperties": 10,
           "additionalProperties": {"type": "integer", "minimum": 0}
         },
         "returned_gap_count": {"type": "integer", "minimum": 0, "maximum": 64},

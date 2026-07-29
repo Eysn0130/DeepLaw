@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,9 @@ from benchmarks.release.evidence import (
 SCHEMA_VERSION = "deeplaw.no-model-host-acceptance/v1"
 BASELINE_COMMIT = "0b7d21bfaadaa2143381b1c585f34ab4e3322999"
 BASELINE_VERSION = "0.5.0"
-VERSION = "0.7.0"
+VERSION = tomllib.loads(
+    (Path(__file__).resolve().parents[2] / "pyproject.toml").read_text(encoding="utf-8")
+)["project"]["version"]
 PLUGIN_IDS = ("deeplaw@deeplaw", "deeplaw-knowledge-os@deeplaw")
 LOCAL_GIT_URL = "https://local.invalid/deeplaw.git"
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -767,7 +770,7 @@ def run(
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
     if binding["package_version"] != VERSION or not binding["worktree_clean"]:
-        raise HostAcceptanceError("host acceptance requires a clean 0.7.0 commit")
+        raise HostAcceptanceError("host acceptance requires a clean release commit")
     executables = {
         "codex": _resolve_executable(codex),
         "claude": _resolve_executable(claude),

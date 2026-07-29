@@ -68,7 +68,7 @@ def test_repository_gold_quality_gate_fails_closed(tmp_path: Path) -> None:
     suite = json.loads(
         (repository / "benchmarks/quality/repository-gold-v1.json").read_text()
     )
-    suite["quality_gate"]["hybrid"]["minimum_hit_at_1"] = 1.0
+    suite["quality_gate"]["hybrid"]["maximum_irrelevant_context_rate"] = 0.0
     path = tmp_path / "strict-gate.json"
     path.write_text(json.dumps(suite), encoding="utf-8")
 
@@ -76,7 +76,7 @@ def test_repository_gold_quality_gate_fails_closed(tmp_path: Path) -> None:
 
     assert report["quality_gate"]["passed"] is False
     assert report["quality_gate"]["mode_results"]["hybrid"]["checks"][
-        "hit_at_1"
+        "irrelevant_context_rate"
     ] is False
 
 

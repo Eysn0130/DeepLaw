@@ -10,7 +10,7 @@ from jsonschema import Draft202012Validator
 
 import benchmarks.hosts.run_codex_plugin_smoke as codex_smoke
 from deeplaw.bounded_subprocess import BoundedProcessResult
-from deeplaw.util import canonical_json, sha256_bytes, sha256_file
+from deeplaw.util import canonical_json, sha256_bytes
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 REPORT_PATH = REPOSITORY / "benchmarks/hosts/codex-plugin-smoke-2026-07-29.json"
@@ -218,7 +218,7 @@ def test_codex_plugin_smoke_rejects_cache_byte_drift(
         )
 
 
-def test_checked_in_codex_plugin_smoke_remains_source_bound_and_non_claiming() -> None:
+def test_checked_in_historical_codex_plugin_smoke_remains_self_bound_and_non_claiming() -> None:
     report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
@@ -230,18 +230,8 @@ def test_checked_in_codex_plugin_smoke_remains_source_bound_and_non_claiming() -
     assert report["claim_eligible"] is False
     assert report["full_host_acceptance"] is False
     assert set(report["unresolved_checks"]) == set(codex_smoke.UNRESOLVED_CHECKS)
-    for relative, expected_sha256 in report["candidate"]["implementation_files"].items():
-        assert sha256_file(REPOSITORY / relative) == expected_sha256
-    expected_sources = {
-        item["relative_root"]: item
-        for item in report["plugin_sources"]
-    }
-    for relative_root, source in expected_sources.items():
-        observed = codex_smoke.plugin_inventory(REPOSITORY / relative_root)
-        assert observed == {
-            key: source[key]
-            for key in ("inventory_sha256", "file_count", "total_bytes", "files")
-        }
+    assert report["candidate"]["package_version"] == "0.7.0"
+    assert all(item["version"] == "0.7.0" for item in report["plugin_sources"])
     rendered = canonical_json(report)
     assert str(REPOSITORY.resolve()) not in rendered
     assert "/private/var/folders/" not in rendered

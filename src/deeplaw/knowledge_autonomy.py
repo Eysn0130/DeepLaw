@@ -204,6 +204,12 @@ _MAX_OBJECTS = 1_000_000
 _MAX_RECALL_LIMIT = 20
 _MAX_RECALL_CHARS = 20_000
 _MAX_RECALL_TERMS = 128
+_MAX_LEXICAL_CANDIDATES = 200
+_MAX_GRAPH_RELATIONS_PER_HOP = 500
+_MAX_GRAPH_RELATION_SCAN = 5_000
+_MAX_LINT_OBJECTS = 10_000
+_MAX_LINT_RELATIONS = 10_000
+_MAX_LINT_LINKS = 10_000
 _MAX_RECONCILE_FILES = 10_000
 _MAX_RECONCILE_BYTES = 256 * 1024 * 1024
 _MAX_STAGING_RECORDS = 10_000
@@ -2937,7 +2943,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
     def relation_provenance_admitted(self, relation: dict[str, Any]) -> bool:
         """Check whether every canonical relation evidence reference remains admissible."""
         references = relation.get("evidence_refs", [])
-        return not references or all(
+        return bool(references) and all(
             isinstance(reference, dict)
             and self._source_reference_is_bound(
                 reference,
@@ -2946,6 +2952,39 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             )
             for reference in references
         )
+
+    def _knowledge_admission_reasons(
+        self,
+        revision: dict[str, Any],
+        *,
+        scope: Scope,
+        max_sensitivity: Sensitivity,
+        reference_time: str,
+        kinds: tuple[str, ...] = (),
+        required_tags: tuple[str, ...] = (),
+    ) -> tuple[bool, list[str]]:
+        """Return an opaque boundary decision and explainable in-boundary rejections."""
+
+        if revision["scope"] != scope or SENSITIVITY_ORDER.index(
+            revision["sensitivity"]
+        ) > SENSITIVITY_ORDER.index(max_sensitivity):
+            return False, []
+        reasons: list[str] = []
+        if revision["lifecycle"] != "active":
+            reasons.append(f"lifecycle:{revision['lifecycle']}")
+        if not self.revision_provenance_admitted(revision):
+            reasons.append("source_provenance_inactive")
+        if kinds and revision["kind"] not in kinds:
+            reasons.append("kind")
+        if required_tags and not all(tag in revision["tags"] for tag in required_tags):
+            reasons.append("required_tag")
+        if revision["expires_at"] is not None and revision["expires_at"] <= reference_time:
+            reasons.append("expired")
+        if revision["valid_from"] is not None and revision["valid_from"] > reference_time:
+            reasons.append("not_yet_valid")
+        if revision["valid_to"] is not None and revision["valid_to"] <= reference_time:
+            reasons.append("no_longer_valid")
+        return True, reasons
 
     def record_run(
         self,
@@ -4489,8 +4528,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     grant_id=grant_id,
                     revision_id=revision_id,
                 )
-        with suppress(Exception):
-            self.rebuild_derived()
+        # Link compilation is a separate, recoverable canonical mutation and
+        # may advance the audit chain after the Knowledge Revision committed.
+        # The first response must anchor the final state just as an
+        # idempotent replay does.
+        response["audit_head"] = self.audit_head
         _validate_contract("knowledge-revision.v2.schema.json", response)
         return response
 
@@ -5981,15 +6023,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         alias_key = normalize_identity_text(query)
         if not alias_key:
             raise ValueError("identity query has no searchable content")
+        admitted_sensitivities = SENSITIVITY_ORDER[
+            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
+        ]
+        sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
+        reference_time = utc_now()
         rows = self.connection.execute(
-            """
+            f"""
             SELECT knowledge_aliases_v4.alias_key,
                    knowledge_aliases_v4.alias_text,
-                   knowledge_aliases_v4.knowledge_id,
-                   knowledge_aliases_v4.kind,
-                   knowledge_revisions_v3.title,
-                   knowledge_revisions_v3.revision_id,
-                   knowledge_revisions_v3.sensitivity
+                   knowledge_objects_v3.workspace_path AS current_workspace_path,
+                   knowledge_revisions_v3.*
             FROM knowledge_aliases_v4
             JOIN knowledge_objects_v3 USING(knowledge_id)
             JOIN knowledge_revisions_v3
@@ -5997,18 +6041,38 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                  knowledge_objects_v3.current_revision_id
             WHERE knowledge_aliases_v4.scope = ?
               AND knowledge_aliases_v4.retired_at IS NULL
+              AND knowledge_aliases_v4.revision_id = knowledge_revisions_v3.revision_id
               AND knowledge_revisions_v3.lifecycle = 'active'
+              AND knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})
+              AND (knowledge_revisions_v3.valid_from IS NULL
+                   OR knowledge_revisions_v3.valid_from <= ?)
+              AND (knowledge_revisions_v3.valid_to IS NULL
+                   OR knowledge_revisions_v3.valid_to > ?)
+              AND (knowledge_revisions_v3.expires_at IS NULL
+                   OR knowledge_revisions_v3.expires_at > ?)
               AND (? IS NULL OR knowledge_aliases_v4.kind = ?)
-            ORDER BY knowledge_aliases_v4.alias_key,
+            ORDER BY (knowledge_aliases_v4.alias_key = ?) DESC,
+                     knowledge_aliases_v4.alias_key,
                      knowledge_aliases_v4.knowledge_id
-            LIMIT 2000
+            LIMIT 2001
             """,
-            (scope, kind, kind),
+            (
+                scope,
+                *admitted_sensitivities,
+                reference_time,
+                reference_time,
+                reference_time,
+                kind,
+                kind,
+                alias_key,
+            ),
         ).fetchall()
+        scan_truncated = len(rows) > 2_000
         candidates: dict[str, dict[str, Any]] = {}
-        maximum_level = SENSITIVITY_ORDER.index(max_sensitivity)
-        for row in rows:
-            if SENSITIVITY_ORDER.index(row["sensitivity"]) > maximum_level:
+        for row in rows[:2_000]:
+            if not self.revision_provenance_admitted(
+                self._revision_row(row, include_body=False)
+            ):
                 continue
             exact = row["alias_key"] == alias_key
             score = 1.0 if exact else semantic_similarity(query, row["alias_text"])
@@ -6027,16 +6091,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "authority": "agent_derived",
                     "legal_authority": False,
                 }
-        ranked = sorted(
+        ranked_candidates = sorted(
             candidates.values(),
             key=lambda item: (-int(item["exact"]), -item["identity_score"], item["knowledge_id"]),
-        )[:limit]
-        exact_count = sum(1 for item in ranked if item["exact"])
+        )
+        exact_count = sum(1 for item in ranked_candidates if item["exact"])
+        ranked = ranked_candidates[:limit]
         status = (
             "resolved"
             if exact_count == 1
             else "ambiguous"
-            if exact_count > 1 or len(ranked) > 1
+            if exact_count > 1 or len(ranked_candidates) > 1
             else "candidate"
             if ranked
             else "not_found"
@@ -6047,6 +6112,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "normalized_key": alias_key,
             "status": status,
             "candidates": ranked,
+            "candidate_count": len(ranked_candidates),
+            "alias_scan_truncated": scan_truncated,
             "audit_head": self.audit_head,
         }
 
@@ -6344,11 +6411,31 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 target_id,
             )
             existing = self.connection.execute(
-                "SELECT current_revision_id FROM knowledge_relations_v3 WHERE relation_key = ?",
+                """
+                SELECT knowledge_relation_revisions_v3.*
+                FROM knowledge_relations_v3
+                JOIN knowledge_relation_revisions_v3
+                  ON knowledge_relation_revisions_v3.relation_revision_id =
+                     knowledge_relations_v3.current_revision_id
+                WHERE knowledge_relations_v3.relation_key = ?
+                """,
                 (relation_key,),
             ).fetchone()
-            if existing is not None:
-                compiled.append(existing["current_revision_id"])
+            existing_relation = (
+                {
+                    **dict(existing),
+                    "evidence_refs": strict_json_loads(existing["evidence_refs_json"]),
+                    "source_free": bool(existing["source_free"]),
+                }
+                if existing is not None
+                else None
+            )
+            if (
+                existing_relation is not None
+                and existing_relation["lifecycle"] == "active"
+                and self.relation_provenance_admitted(existing_relation)
+            ):
+                compiled.append(existing_relation["relation_revision_id"])
                 continue
             relation = self.add_relation(
                 grant_id=grant_id,
@@ -6358,11 +6445,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 subject_knowledge_id=revision["knowledge_id"],
                 predicate=hint["predicate"],
                 object_knowledge_id=target_id,
+                expected_relation_revision_id=(
+                    existing_relation["relation_revision_id"]
+                    if existing_relation is not None
+                    else None
+                ),
                 evidence_refs=[{"revision_id": revision_id}],
                 valid_from=hint.get("valid_from"),
                 valid_to=hint.get("valid_to"),
                 confirm_no_case_data=True,
-                rebuild_after=False,
             )
             compiled.append(relation["relation_revision_id"])
         return {
@@ -6436,7 +6527,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         valid_from: str | None = None,
         valid_to: str | None = None,
         confirm_no_case_data: bool = False,
-        rebuild_after: bool = True,
     ) -> dict[str, Any]:
         self._require_write()
         if not confirm_no_case_data:
@@ -6456,6 +6546,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         selected_refs = self._pin_source_references(
             _canonical_source_references(evidence_refs or [], field="relation evidence")
         )
+        if not selected_refs:
+            raise ValueError("Knowledge relations require at least one bound evidence reference")
         if has_instruction_risk(canonical_json(selected_refs)):
             raise ValueError("relation evidence metadata contains persistent prompt-injection risk")
         valid_from = _optional_timestamp(valid_from, field="relation valid_from")
@@ -6538,7 +6630,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "origin": "agent_derived",
             "authority": "agent_derived",
             "legal_authority": False,
-            "source_free": not selected_refs,
+            "source_free": False,
             "lifecycle": "active",
             "scope": relation_scope,
             "sensitivity": relation_sensitivity,
@@ -6627,7 +6719,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     predicate,
                     object_knowledge_id,
                     canonical_json(selected_refs),
-                    int(not selected_refs),
+                    0,
                     relation_scope,
                     relation_sensitivity,
                     locked_grant["writer_id"],
@@ -6660,7 +6752,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "subject_knowledge_id": subject_knowledge_id,
                     "predicate": predicate,
                     "object_knowledge_id": object_knowledge_id,
-                    "source_free": not selected_refs,
+                    "source_free": False,
                     "scope": relation_scope,
                     "sensitivity": relation_sensitivity,
                     "writer_id": locked_grant["writer_id"],
@@ -6696,9 +6788,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         except BaseException:
             self.connection.rollback()
             raise
-        if rebuild_after:
-            with suppress(Exception):
-                self.rebuild_derived()
         _validate_contract("knowledge-relation.v3.schema.json", response)
         return response
 
@@ -6754,6 +6843,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         )
         if replay is not None:
             return replay
+        # Consolidation is a composite mutation: it promises canonical
+        # `consolidates` relations before any input is archived. Validate the
+        # sub-capability before the first child commit so a narrow grant cannot
+        # leave a visible summary without its lineage.
+        self._grant(
+            grant_id,
+            operation="add_relation",
+            request_bytes=len(request_bytes),
+        )
         if not self._run_binding_admitted(
             run_id,
             scope=cast(Scope, grant["allowed_scope"]),
@@ -6845,6 +6943,60 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             confirm_no_case_data=True,
             operation="consolidate_memory",
         )
+        def lineage_relations_ready() -> bool:
+            for current in inputs:
+                relation_key = stable_id(
+                    "relationkey",
+                    self.vault_id,
+                    output["knowledge_id"],
+                    "consolidates",
+                    current["knowledge_id"],
+                )
+                relation_row = self.connection.execute(
+                    """
+                    SELECT knowledge_relation_revisions_v3.*
+                    FROM knowledge_relations_v3
+                    JOIN knowledge_relation_revisions_v3
+                      ON knowledge_relation_revisions_v3.relation_revision_id =
+                         knowledge_relations_v3.current_revision_id
+                    WHERE knowledge_relations_v3.relation_key = ?
+                    """,
+                    (relation_key,),
+                ).fetchone()
+                if relation_row is None:
+                    return False
+                relation = {
+                    **dict(relation_row),
+                    "evidence_refs": strict_json_loads(
+                        relation_row["evidence_refs_json"]
+                    ),
+                    "source_free": bool(relation_row["source_free"]),
+                }
+                if (
+                    relation["lifecycle"] != "active"
+                    or not self.relation_provenance_admitted(relation)
+                    or not any(
+                        reference.get("revision_id") == output["revision_id"]
+                        for reference in relation["evidence_refs"]
+                        if isinstance(reference, dict)
+                    )
+                ):
+                    return False
+            return True
+
+        if not lineage_relations_ready():
+            compiled_links = self._compile_revision_links(
+                grant_id=grant_id,
+                revision_id=output["revision_id"],
+            )
+            if (
+                compiled_links["skipped"] is not None
+                or compiled_links["unresolved"]
+                or not lineage_relations_ready()
+            ):
+                raise RuntimeError(
+                    "memory consolidation could not commit every canonical lineage relation"
+                )
         archived: list[dict[str, str]] = []
         for index, current in enumerate(inputs):
             archived_revision = self.remember(
@@ -6987,8 +7139,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         except BaseException:
             self.connection.rollback()
             raise
-        with suppress(Exception):
-            self.rebuild_derived()
         return response
 
     def record_feedback(
@@ -7652,6 +7802,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if as_of is not None:
             as_of = canonical_timestamp(as_of, field="recall as_of")
         reference_time = as_of or utc_now()
+        admitted_sensitivities = SENSITIVITY_ORDER[
+            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
+        ]
         terms = search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
         exact_id = query if _KNOWLEDGE_ID.fullmatch(query) else None
         candidate_ids: list[str] = []
@@ -7695,15 +7848,56 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         dense_enabled = retrieval_mode in {"dense", "hybrid"}
         graph_enabled = retrieval_mode in {"graph", "hybrid"} and graph_hops > 0
         if expression and as_of is None and derived_lexical_ready and lexical_enabled:
+            sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
+            lexical_filters = [
+                "autonomous_search_v3 MATCH ?",
+                "knowledge_revisions_v3.revision_id = autonomous_search_v3.revision_id",
+                "knowledge_revisions_v3.lifecycle = 'active'",
+                "knowledge_revisions_v3.scope = ?",
+                f"knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})",
+                "(knowledge_revisions_v3.valid_from IS NULL "
+                "OR knowledge_revisions_v3.valid_from <= ?)",
+                "(knowledge_revisions_v3.valid_to IS NULL "
+                "OR knowledge_revisions_v3.valid_to > ?)",
+                "(knowledge_revisions_v3.expires_at IS NULL "
+                "OR knowledge_revisions_v3.expires_at > ?)",
+            ]
+            lexical_parameters: list[Any] = [
+                expression,
+                scope,
+                *admitted_sensitivities,
+                reference_time,
+                reference_time,
+                reference_time,
+            ]
+            if kinds:
+                kind_placeholders = ",".join("?" for _ in kinds)
+                lexical_filters.append(
+                    f"knowledge_revisions_v3.kind IN ({kind_placeholders})"
+                )
+                lexical_parameters.extend(kinds)
+            for tag in required_tags:
+                lexical_filters.append(
+                    "EXISTS (SELECT 1 FROM json_each(knowledge_revisions_v3.tags_json) "
+                    "WHERE json_each.value = ?)"
+                )
+                lexical_parameters.append(tag)
             try:
                 rows = self.connection.execute(
-                    """
-                    SELECT knowledge_id FROM autonomous_search_v3
-                    WHERE autonomous_search_v3 MATCH ?
-                    ORDER BY bm25(autonomous_search_v3), knowledge_id
-                    LIMIT 200
+                    f"""
+                    SELECT autonomous_search_v3.knowledge_id
+                    FROM autonomous_search_v3
+                    JOIN knowledge_objects_v3
+                      ON knowledge_objects_v3.knowledge_id =
+                         autonomous_search_v3.knowledge_id
+                    JOIN knowledge_revisions_v3
+                      ON knowledge_revisions_v3.revision_id =
+                         knowledge_objects_v3.current_revision_id
+                    WHERE {' AND '.join(lexical_filters)}
+                    ORDER BY bm25(autonomous_search_v3), autonomous_search_v3.knowledge_id
+                    LIMIT ?
                     """,
-                    (expression,),
+                    (*lexical_parameters, _MAX_LEXICAL_CANDIDATES),
                 ).fetchall()
             except sqlite3.OperationalError:
                 rows = []
@@ -7719,6 +7913,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 query=query,
                 input_audit_head=self.audit_head,
                 legacy_audit_head=self.legacy_audit_head,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                reference_time=reference_time,
+                kinds=kinds,
+                required_tags=required_tags,
                 limit=64,
             )
             for item in dense["results"]:
@@ -7728,15 +7927,37 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 channels[knowledge_id].append("dense")
         temporal_scan_truncated = False
         if as_of is not None and terms and exact_id is None:
+            sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
+            temporal_filters = [
+                "rank = 1",
+                "lifecycle = 'active'",
+                "scope = ?",
+                f"sensitivity IN ({sensitivity_placeholders})",
+                "(valid_from IS NULL OR valid_from <= ?)",
+                "(valid_to IS NULL OR valid_to > ?)",
+                "(expires_at IS NULL OR expires_at > ?)",
+            ]
+            temporal_parameters: list[Any] = [
+                as_of,
+                scope,
+                *admitted_sensitivities,
+                reference_time,
+                reference_time,
+                reference_time,
+            ]
+            if kinds:
+                kind_placeholders = ",".join("?" for _ in kinds)
+                temporal_filters.append(f"kind IN ({kind_placeholders})")
+                temporal_parameters.extend(kinds)
+            for tag in required_tags:
+                temporal_filters.append(
+                    "EXISTS (SELECT 1 FROM json_each(tags_json) WHERE json_each.value = ?)"
+                )
+                temporal_parameters.append(tag)
             temporal_rows = self.connection.execute(
-                """
+                f"""
                 WITH ranked AS (
-                    SELECT knowledge_revisions_v3.knowledge_id,
-                           knowledge_revisions_v3.revision_id,
-                           knowledge_revisions_v3.markdown_sha256,
-                           knowledge_revisions_v3.title,
-                           knowledge_revisions_v3.tags_json,
-                           knowledge_revisions_v3.semantic_key,
+                    SELECT knowledge_revisions_v3.*,
                            ROW_NUMBER() OVER (
                                PARTITION BY knowledge_revisions_v3.knowledge_id
                                ORDER BY knowledge_revisions_v3.recorded_at DESC,
@@ -7744,12 +7965,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                            ) AS rank
                     FROM knowledge_revisions_v3
                     WHERE knowledge_revisions_v3.recorded_at <= ?
-                      AND knowledge_revisions_v3.lifecycle <> 'quarantined'
                 )
-                SELECT * FROM ranked WHERE rank = 1
+                SELECT * FROM ranked WHERE {' AND '.join(temporal_filters)}
                 ORDER BY knowledge_id LIMIT 501
                 """,
-                (as_of,),
+                tuple(temporal_parameters),
             ).fetchall()
             temporal_scan_truncated = len(temporal_rows) > 500
             for row in temporal_rows[:500]:
@@ -7779,21 +7999,46 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             and lexical_enabled
             and (not derived_lexical_ready or lexical_query_failed or not candidate_ids)
         ):
-            admitted_sensitivities = SENSITIVITY_ORDER[
-                : SENSITIVITY_ORDER.index(max_sensitivity) + 1
-            ]
             placeholders = ",".join("?" for _ in admitted_sensitivities)
+            canonical_filters = [
+                "knowledge_revisions_v3.lifecycle = 'active'",
+                "knowledge_revisions_v3.scope = ?",
+                f"knowledge_revisions_v3.sensitivity IN ({placeholders})",
+                "(knowledge_revisions_v3.valid_from IS NULL "
+                "OR knowledge_revisions_v3.valid_from <= ?)",
+                "(knowledge_revisions_v3.valid_to IS NULL "
+                "OR knowledge_revisions_v3.valid_to > ?)",
+                "(knowledge_revisions_v3.expires_at IS NULL "
+                "OR knowledge_revisions_v3.expires_at > ?)",
+            ]
+            canonical_parameters: list[Any] = [
+                scope,
+                *admitted_sensitivities,
+                reference_time,
+                reference_time,
+                reference_time,
+            ]
+            if kinds:
+                kind_placeholders = ",".join("?" for _ in kinds)
+                canonical_filters.append(
+                    f"knowledge_revisions_v3.kind IN ({kind_placeholders})"
+                )
+                canonical_parameters.extend(kinds)
+            for tag in required_tags:
+                canonical_filters.append(
+                    "EXISTS (SELECT 1 FROM json_each(knowledge_revisions_v3.tags_json) "
+                    "WHERE json_each.value = ?)"
+                )
+                canonical_parameters.append(tag)
             rows = self.connection.execute(
                 "SELECT knowledge_objects_v3.knowledge_id "
                 "FROM knowledge_objects_v3 "
                 "JOIN knowledge_revisions_v3 ON knowledge_revisions_v3.revision_id = "
                 "knowledge_objects_v3.current_revision_id "
-                "WHERE knowledge_revisions_v3.lifecycle = 'active' "
-                "AND knowledge_revisions_v3.scope = ? "
-                f"AND knowledge_revisions_v3.sensitivity IN ({placeholders}) "
+                f"WHERE {' AND '.join(canonical_filters)} "
                 "ORDER BY knowledge_objects_v3.updated_at DESC, "
                 "knowledge_objects_v3.knowledge_id LIMIT 501",
-                (scope, *admitted_sensitivities),
+                tuple(canonical_parameters),
             ).fetchall()
             canonical_scan_truncated = len(rows) > 500
             fallback_ids: list[str] = []
@@ -7821,11 +8066,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 ]
             else:
                 candidate_ids.extend(item for item in fallback_ids if item not in candidate_ids)
-        if candidate_ids and as_of is None and graph_enabled:
+        graph_relation_scan_truncated = False
+        if candidate_ids and graph_enabled:
             graph_seed_ids: list[str] = []
             for candidate_id in candidate_ids[:100]:
                 try:
-                    seed = self.get_current(candidate_id, include_inactive=True)
+                    seed = (
+                        self.get_at(candidate_id, recorded_at=as_of)
+                        if as_of is not None
+                        else self.get_current(candidate_id, include_inactive=True)
+                    )
                 except KeyError:
                     continue
                 if (
@@ -7851,41 +8101,35 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if not frontier:
                     break
                 bounded_frontier = tuple(frontier[:200])
-                if as_of is None:
-                    placeholders = ",".join("?" for _ in bounded_frontier)
-                    relation_rows: list[dict[str, Any]] = [
-                        {
-                            **dict(row),
-                            "evidence_refs": strict_json_loads(row["evidence_refs_json"]),
-                        }
-                        for row in self.connection.execute(
-                            f"""
-                            SELECT knowledge_relation_revisions_v3.*
-                            FROM knowledge_relations_v3
-                            JOIN knowledge_relation_revisions_v3
-                              ON knowledge_relation_revisions_v3.relation_revision_id =
-                                 knowledge_relations_v3.current_revision_id
-                            WHERE knowledge_relation_revisions_v3.lifecycle = 'active'
-                              AND (
-                                knowledge_relation_revisions_v3.subject_knowledge_id
-                                    IN ({placeholders})
-                                OR knowledge_relation_revisions_v3.object_knowledge_id
-                                    IN ({placeholders})
-                              )
-                            ORDER BY knowledge_relation_revisions_v3.relation_key
-                            LIMIT 500
-                            """,
-                            (*bounded_frontier, *bounded_frontier),
-                        ).fetchall()
-                    ]
-                else:
-                    frontier_set = set(bounded_frontier)
-                    relation_rows = [
+                relation_candidates = self._relations_at(
+                    as_of,
+                    scope=scope,
+                    max_sensitivity=max_sensitivity,
+                    endpoint_ids=bounded_frontier,
+                    reference_time=reference_time,
+                    limit=_MAX_GRAPH_RELATION_SCAN + 1,
+                )
+                if len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN:
+                    graph_relation_scan_truncated = True
+                relation_rows: list[dict[str, Any]] = []
+                for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
+                    if relation["source_free"] or not self.relation_provenance_admitted(
                         relation
-                        for relation in self._relations_at(as_of)
-                        if relation["subject_knowledge_id"] in frontier_set
-                        or relation["object_knowledge_id"] in frontier_set
-                    ][:500]
+                    ):
+                        continue
+                    if (
+                        relation["valid_from"] is not None
+                        and relation["valid_from"] > reference_time
+                    ) or (
+                        relation["valid_to"] is not None
+                        and relation["valid_to"] <= reference_time
+                    ):
+                        continue
+                    relation_rows.append(relation)
+                    if len(relation_rows) >= _MAX_GRAPH_RELATIONS_PER_HOP:
+                        if len(relation_candidates) > len(relation_rows):
+                            graph_relation_scan_truncated = True
+                        break
                 next_frontier: list[str] = []
                 for relation in relation_rows:
                     if relation["scope"] != scope or SENSITIVITY_ORDER.index(
@@ -7906,6 +8150,24 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         relation["subject_knowledge_id"],
                         relation["object_knowledge_id"],
                     ):
+                        try:
+                            neighbor = (
+                                self.get_at(candidate, recorded_at=as_of)
+                                if as_of is not None
+                                else self.get_current(candidate, include_inactive=True)
+                            )
+                        except KeyError:
+                            continue
+                        inside_boundary, neighbor_reasons = self._knowledge_admission_reasons(
+                            neighbor,
+                            scope=scope,
+                            max_sensitivity=max_sensitivity,
+                            reference_time=reference_time,
+                            kinds=kinds,
+                            required_tags=required_tags,
+                        )
+                        if not inside_boundary or neighbor_reasons:
+                            continue
                         if candidate not in candidate_ids:
                             candidate_ids.append(candidate)
                         channels[candidate].append("graph")
@@ -7913,18 +8175,60 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                             visited.add(candidate)
                             next_frontier.append(candidate)
                 frontier = next_frontier
+        rejected: list[dict[str, str]] = []
+        candidate_state_receipts: list[dict[str, Any]] = []
+        admitted_revisions: dict[str, dict[str, Any]] = {}
+        for candidate_id in candidate_ids:
+            try:
+                candidate = (
+                    self.get_at(candidate_id, recorded_at=as_of)
+                    if as_of is not None
+                    else self.get_current(candidate_id, include_inactive=True)
+                )
+            except KeyError:
+                continue
+            inside_boundary, reasons = self._knowledge_admission_reasons(
+                candidate,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                reference_time=reference_time,
+                kinds=kinds,
+                required_tags=required_tags,
+            )
+            if not inside_boundary:
+                # Even opaque IDs or aggregate counts would disclose the
+                # existence of knowledge outside this read boundary.
+                continue
+            provenance_admitted = "source_provenance_inactive" not in reasons
+            candidate_state_receipts.append(
+                {
+                    "candidate_sha256": sha256_bytes(candidate_id.encode("utf-8")),
+                    "revision_id": candidate["revision_id"],
+                    "lifecycle": candidate["lifecycle"],
+                    "provenance_admitted": provenance_admitted,
+                    "reasons": reasons,
+                }
+            )
+            if reasons:
+                rejected.append(
+                    {
+                        "candidate_sha256": sha256_bytes(candidate_id.encode("utf-8")),
+                        "reason": ",".join(reasons),
+                    }
+                )
+                continue
+            admitted_revisions[candidate_id] = candidate
+        candidate_ids = [
+            candidate_id for candidate_id in candidate_ids if candidate_id in admitted_revisions
+        ]
+        admitted_candidate_count = len(candidate_ids)
+        reranker_candidate_truncated = False
         reranker_receipts: dict[str, dict[str, Any]] = {}
         if exact_id is None and candidate_ids:
             reranker_input: list[dict[str, Any]] = []
+            reranker_candidate_truncated = len(candidate_ids) > 500
             for candidate_id in candidate_ids[:500]:
-                try:
-                    candidate = (
-                        self.get_at(candidate_id, recorded_at=as_of)
-                        if as_of is not None
-                        else self.get_current(candidate_id, include_inactive=True)
-                    )
-                except KeyError:
-                    continue
+                candidate = admitted_revisions[candidate_id]
                 feedback_row = self.connection.execute(
                     """
                     SELECT COALESCE(SUM(
@@ -7967,62 +8271,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             for candidate_id in candidate_ids:
                 channels[candidate_id].append("reranker")
         selected: list[dict[str, Any]] = []
-        rejected: list[dict[str, str]] = []
         selected_chars = 0
         selected_tokens = 0
         selected_provider_chars = 0
         selected_source_keys: set[str] = set()
-        admitted_candidate_count = 0
-        candidate_state_receipts: list[dict[str, Any]] = []
         for knowledge_id in candidate_ids:
-            try:
-                current = (
-                    self.get_at(knowledge_id, recorded_at=as_of)
-                    if as_of is not None
-                    else self.get_current(knowledge_id, include_inactive=True)
-                )
-            except KeyError:
-                continue
-            if current["scope"] != scope or SENSITIVITY_ORDER.index(
-                current["sensitivity"]
-            ) > SENSITIVITY_ORDER.index(max_sensitivity):
-                # Even opaque IDs or aggregate counts would disclose the
-                # existence of knowledge outside this read boundary.
-                continue
-            admitted_candidate_count += 1
-            reasons: list[str] = []
-            provenance_admitted = self.revision_provenance_admitted(current)
-            if current["lifecycle"] != "active":
-                reasons.append(f"lifecycle:{current['lifecycle']}")
-            if not provenance_admitted:
-                reasons.append("source_provenance_inactive")
-            if kinds and current["kind"] not in kinds:
-                reasons.append("kind")
-            if required_tags and not all(tag in current["tags"] for tag in required_tags):
-                reasons.append("required_tag")
-            if current["expires_at"] is not None and current["expires_at"] <= reference_time:
-                reasons.append("expired")
-            if current["valid_from"] is not None and current["valid_from"] > reference_time:
-                reasons.append("not_yet_valid")
-            if current["valid_to"] is not None and current["valid_to"] <= reference_time:
-                reasons.append("no_longer_valid")
-            candidate_state_receipts.append(
-                {
-                    "candidate_sha256": sha256_bytes(knowledge_id.encode("utf-8")),
-                    "revision_id": current["revision_id"],
-                    "lifecycle": current["lifecycle"],
-                    "provenance_admitted": provenance_admitted,
-                    "reasons": reasons,
-                }
-            )
-            if reasons:
-                rejected.append(
-                    {
-                        "candidate_sha256": sha256_bytes(knowledge_id.encode("utf-8")),
-                        "reason": ",".join(reasons),
-                    }
-                )
-                continue
+            current = dict(admitted_revisions[knowledge_id])
             remaining = max_chars - selected_chars
             if remaining < 100 or len(selected) >= limit:
                 rejected.append(
@@ -8110,7 +8364,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             selected_tokens += estimate_tokens(excerpt)
             selected_provider_chars += provider_chars
             selected_source_keys.add(source_key)
-        admitted_relations = self._relations_at(as_of)
+        selected_knowledge_ids = tuple(item["knowledge_id"] for item in selected)
+        admitted_relations = (
+            self._relations_at(
+                as_of,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                endpoint_ids=selected_knowledge_ids,
+                reference_time=reference_time,
+                limit=_MAX_GRAPH_RELATION_SCAN + 1,
+            )
+            if selected_knowledge_ids
+            else []
+        )
+        contradiction_relation_scan_truncated = (
+            len(admitted_relations) > _MAX_GRAPH_RELATION_SCAN
+        )
+        admitted_relations = admitted_relations[:_MAX_GRAPH_RELATION_SCAN]
 
         def has_admitted_contradiction(item: dict[str, Any]) -> bool:
             for relation in admitted_relations:
@@ -8169,7 +8439,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     }
                 )
         planned_channels = sorted(
-            {channel for values in channels.values() for channel in values}
+            {
+                channel
+                for candidate_id in candidate_ids
+                for channel in channels[candidate_id]
+            }
             | (
                 {"lexical"}
                 if expression and as_of is None and derived_lexical_ready
@@ -8224,6 +8498,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             gaps.append("derived lexical state was stale; bounded canonical fallback was used")
         if canonical_scan_truncated:
             gaps.append("canonical lexical fallback reached its 500-object resource bound")
+        if graph_relation_scan_truncated:
+            gaps.append(
+                "graph traversal reached its 500-admitted/5000-scanned relation per-hop bound"
+            )
+        if reranker_candidate_truncated:
+            gaps.append("reranker reached its 500-admitted-candidate resource bound")
+        if contradiction_relation_scan_truncated:
+            gaps.append("contradiction challenge reached its 5000-relation resource bound")
         if dense_enabled and not dense["ready"]:
             gaps.append(
                 "local dense index was unavailable or stale; authority-safe channels remained"
@@ -8442,16 +8724,43 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         _validate_contract("knowledge-capsule.v2.schema.json", capsule)
         return capsule
 
-    def semantic_lint(self) -> dict[str, Any]:
+    def semantic_lint(
+        self,
+        *,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("semantic Lint scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("semantic Lint sensitivity is invalid")
+        reference_time = utc_now()
+        admitted_sensitivities = SENSITIVITY_ORDER[
+            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
+        ]
+        sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
+        current_filters = [
+            "knowledge_revisions_v3.lifecycle = 'active'",
+            f"knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})",
+        ]
+        current_parameters: list[Any] = list(admitted_sensitivities)
+        if scope is not None:
+            current_filters.append("knowledge_revisions_v3.scope = ?")
+            current_parameters.append(scope)
         current_rows = self.connection.execute(
-            """
+            f"""
             SELECT knowledge_revisions_v3.*
             FROM knowledge_objects_v3
             JOIN knowledge_revisions_v3
               ON knowledge_revisions_v3.revision_id = knowledge_objects_v3.current_revision_id
+            WHERE {' AND '.join(current_filters)}
             ORDER BY knowledge_objects_v3.knowledge_id
-            """
+            LIMIT ?
+            """,
+            (*current_parameters, _MAX_LINT_OBJECTS + 1),
         ).fetchall()
+        object_scan_truncated = len(current_rows) > _MAX_LINT_OBJECTS
+        current_rows = current_rows[:_MAX_LINT_OBJECTS]
         issues: list[dict[str, Any]] = []
         issue_count = 0
 
@@ -8464,6 +8773,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         semantic_index: dict[tuple[str, str], list[str]] = defaultdict(list)
         digest_index: dict[tuple[str, str, str, str], list[str]] = defaultdict(list)
         linked_ids: set[str] = set()
+        scanned_link_count = 0
+        link_scan_truncated = False
         for row in current_rows:
             if row["semantic_key"]:
                 semantic_index[(row["kind"], row["semantic_key"])].append(row["knowledge_id"])
@@ -8504,7 +8815,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 for item in frontmatter.get("relations", [])
                 if isinstance(item, dict) and isinstance(item.get("target"), str)
             )
+            resolved_links: dict[str, str] = {}
             for link in dict.fromkeys(link_targets):
+                if scanned_link_count >= _MAX_LINT_LINKS:
+                    link_scan_truncated = True
+                    break
+                scanned_link_count += 1
                 try:
                     target_id = self._resolve_link_target(
                         link,
@@ -8526,6 +8842,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     lookup = None
                 if target_id is not None:
                     linked_ids.add(target_id)
+                    resolved_links[link] = target_id
                     continue
                 add_issue(
                     {
@@ -8539,6 +8856,60 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "target_sha256": sha256_bytes(link.encode("utf-8")),
                     }
                 )
+            for hint in frontmatter.get("relations", []):
+                if not isinstance(hint, dict):
+                    continue
+                target = hint.get("target")
+                predicate = hint.get("predicate")
+                if not isinstance(target, str) or not isinstance(predicate, str):
+                    continue
+                target_id = resolved_links.get(target)
+                if target_id is None:
+                    continue
+                relation_key = stable_id(
+                    "relationkey",
+                    self.vault_id,
+                    row["knowledge_id"],
+                    predicate,
+                    target_id,
+                )
+                relation_row = self.connection.execute(
+                    """
+                    SELECT knowledge_relation_revisions_v3.*
+                    FROM knowledge_relations_v3
+                    JOIN knowledge_relation_revisions_v3
+                      ON knowledge_relation_revisions_v3.relation_revision_id =
+                         knowledge_relations_v3.current_revision_id
+                    WHERE knowledge_relations_v3.relation_key = ?
+                    """,
+                    (relation_key,),
+                ).fetchone()
+                relation = (
+                    {
+                        **dict(relation_row),
+                        "evidence_refs": strict_json_loads(
+                            relation_row["evidence_refs_json"]
+                        ),
+                        "source_free": bool(relation_row["source_free"]),
+                    }
+                    if relation_row is not None
+                    else None
+                )
+                if (
+                    target_id == row["knowledge_id"]
+                    or relation is None
+                    or relation["lifecycle"] != "active"
+                    or not self.relation_provenance_admitted(relation)
+                ):
+                    add_issue(
+                        {
+                            "code": "uncompiled_relation_hint",
+                            "severity": "warning",
+                            "knowledge_id": row["knowledge_id"],
+                            "predicate": predicate,
+                            "target_sha256": sha256_bytes(target.encode("utf-8")),
+                        }
+                    )
         for (kind, semantic_key), knowledge_ids in semantic_index.items():
             if len(knowledge_ids) > 1:
                 add_issue(
@@ -8569,7 +8940,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         > _MAX_DUPLICATE_IDS_PER_ISSUE,
                     }
                 )
-        relation_rows = self._current_relations()
+        selected_ids = {row["knowledge_id"] for row in current_rows}
+        relation_candidates = self._current_relations(
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            reference_time=reference_time,
+            limit=_MAX_LINT_RELATIONS + 1,
+        )
+        relation_scan_truncated = len(relation_candidates) > _MAX_LINT_RELATIONS
+        relation_rows = [
+            relation
+            for relation in relation_candidates[:_MAX_LINT_RELATIONS]
+            if (scope is None or relation["scope"] == scope)
+            and SENSITIVITY_ORDER.index(relation["sensitivity"])
+            <= SENSITIVITY_ORDER.index(max_sensitivity)
+            and relation["subject_knowledge_id"] in selected_ids
+            and relation["object_knowledge_id"] in selected_ids
+        ]
         contradicted_ids: set[str] = set()
         for relation in relation_rows:
             if not self.relation_provenance_admitted(relation):
@@ -8609,17 +8996,34 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "knowledge_id": row["knowledge_id"],
                     }
                 )
-        for row in self.connection.execute(
+        alias_rows = self.connection.execute(
             """
-            SELECT alias_key, kind, scope, COUNT(DISTINCT knowledge_id) AS candidate_count
+            SELECT knowledge_aliases_v4.alias_key,
+                   knowledge_aliases_v4.kind,
+                   knowledge_aliases_v4.scope,
+                   COUNT(DISTINCT knowledge_aliases_v4.knowledge_id) AS candidate_count
             FROM knowledge_aliases_v4
-            WHERE retired_at IS NULL
-            GROUP BY alias_key, kind, scope
-            HAVING COUNT(DISTINCT knowledge_id) > 1
-            ORDER BY alias_key, kind, scope
-            LIMIT 64
-            """
-        ):
+            JOIN json_each(?) AS admitted_ids
+              ON admitted_ids.value = knowledge_aliases_v4.knowledge_id
+            JOIN knowledge_objects_v3 USING(knowledge_id)
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id =
+                 knowledge_objects_v3.current_revision_id
+            WHERE knowledge_aliases_v4.retired_at IS NULL
+              AND knowledge_aliases_v4.revision_id = knowledge_revisions_v3.revision_id
+            GROUP BY knowledge_aliases_v4.alias_key,
+                     knowledge_aliases_v4.kind,
+                     knowledge_aliases_v4.scope
+            HAVING COUNT(DISTINCT knowledge_aliases_v4.knowledge_id) > 1
+            ORDER BY knowledge_aliases_v4.alias_key,
+                     knowledge_aliases_v4.kind,
+                     knowledge_aliases_v4.scope
+            LIMIT 65
+            """,
+            (canonical_json(sorted(selected_ids)),),
+        ).fetchall()
+        alias_scan_truncated = len(alias_rows) > 64
+        for row in alias_rows[:64]:
             add_issue(
                 {
                     "code": "ambiguous_identity_alias",
@@ -8630,13 +9034,67 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "candidate_count": row["candidate_count"],
                 }
             )
+        conflict_filters = [
+            "workspace_conflicts_v3.resolved_at IS NULL",
+            "workspace_conflicts_v3.knowledge_id IS NOT NULL",
+            "knowledge_revisions_v3.lifecycle = 'active'",
+            f"knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})",
+        ]
+        conflict_parameters: list[Any] = list(admitted_sensitivities)
+        if scope is not None:
+            conflict_filters.append("knowledge_revisions_v3.scope = ?")
+            conflict_parameters.append(scope)
+        conflict_rows = self.connection.execute(
+            f"""
+            SELECT workspace_conflicts_v3.knowledge_id,
+                   workspace_conflicts_v3.reason
+            FROM workspace_conflicts_v3
+            JOIN knowledge_objects_v3
+              ON knowledge_objects_v3.knowledge_id = workspace_conflicts_v3.knowledge_id
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id =
+                 knowledge_objects_v3.current_revision_id
+            WHERE {' AND '.join(conflict_filters)}
+            ORDER BY workspace_conflicts_v3.detected_at,
+                     workspace_conflicts_v3.conflict_id
+            LIMIT ?
+            """,
+            (*conflict_parameters, _MAX_LINT_ISSUES + 1),
+        ).fetchall()
+        conflict_scan_truncated = len(conflict_rows) > _MAX_LINT_ISSUES
+        for row in conflict_rows[:_MAX_LINT_ISSUES]:
+            add_issue(
+                {
+                    "code": "workspace_conflict",
+                    "severity": "error",
+                    "knowledge_id": row["knowledge_id"],
+                    "reason_sha256": sha256_bytes(row["reason"].encode("utf-8")),
+                }
+            )
         report = {
             "schema_version": "deeplaw.semantic-lint/v1",
             "vault_id": self.vault_id,
             "audit_head": self.audit_head,
+            "scope": scope or "all",
+            "max_sensitivity": max_sensitivity,
+            "scanned_object_count": len(current_rows),
+            "object_scan_truncated": object_scan_truncated,
+            "scanned_link_count": scanned_link_count,
+            "link_scan_truncated": link_scan_truncated,
+            "scanned_relation_count": len(relation_rows),
+            "relation_scan_truncated": relation_scan_truncated,
+            "alias_scan_truncated": alias_scan_truncated,
+            "conflict_scan_truncated": conflict_scan_truncated,
             "issue_count": issue_count,
             "returned_issue_count": len(issues),
-            "issues_truncated": issue_count > len(issues),
+            "issues_truncated": (
+                issue_count > len(issues)
+                or object_scan_truncated
+                or link_scan_truncated
+                or relation_scan_truncated
+                or alias_scan_truncated
+                or conflict_scan_truncated
+            ),
             "issues": issues,
             "generated_at": utc_now(),
             "derived": True,
@@ -8644,10 +9102,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         }
         return report
 
-    def discover_gaps(self) -> dict[str, Any]:
+    def discover_gaps(
+        self,
+        *,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
         """Project bounded, actionable knowledge gaps from semantic Lint."""
 
-        lint = self.semantic_lint()
+        lint = self.semantic_lint(scope=scope, max_sensitivity=max_sensitivity)
         gap_codes = {
             "broken_wikilink",
             "ambiguous_wikilink",
@@ -8655,6 +9118,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "contested_without_counterevidence",
             "source_provenance_inactive",
             "relation_provenance_inactive",
+            "uncompiled_relation_hint",
+            "workspace_conflict",
             "orphan",
             "source_free",
         }
@@ -8666,6 +9131,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "schema_version": "deeplaw.knowledge-gap-report/v1",
             "vault_id": self.vault_id,
             "audit_head": self.audit_head,
+            "scope": lint["scope"],
+            "max_sensitivity": lint["max_sensitivity"],
             "gaps": gaps,
             "gap_counts": dict(sorted(counts.items())),
             "returned_gap_count": len(gaps),
@@ -8675,9 +9142,81 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "generated_at": lint["generated_at"],
         }
 
-    def _current_relations(self) -> list[dict[str, Any]]:
+    def _current_relations(
+        self,
+        *,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity | None = None,
+        endpoint_ids: tuple[str, ...] = (),
+        reference_time: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        filters = [
+            "knowledge_relation_revisions_v3.lifecycle = 'active'",
+            "subject_revision.lifecycle = 'active'",
+            "object_revision.lifecycle = 'active'",
+        ]
+        parameters: list[Any] = []
+        if reference_time is not None:
+            reference_time = canonical_timestamp(
+                reference_time,
+                field="relation reference time",
+            )
+            filters.extend(
+                (
+                    "(knowledge_relation_revisions_v3.valid_from IS NULL "
+                    "OR knowledge_relation_revisions_v3.valid_from <= ?)",
+                    "(knowledge_relation_revisions_v3.valid_to IS NULL "
+                    "OR knowledge_relation_revisions_v3.valid_to > ?)",
+                    "(subject_revision.valid_from IS NULL "
+                    "OR subject_revision.valid_from <= ?)",
+                    "(subject_revision.valid_to IS NULL OR subject_revision.valid_to > ?)",
+                    "(subject_revision.expires_at IS NULL "
+                    "OR subject_revision.expires_at > ?)",
+                    "(object_revision.valid_from IS NULL OR object_revision.valid_from <= ?)",
+                    "(object_revision.valid_to IS NULL OR object_revision.valid_to > ?)",
+                    "(object_revision.expires_at IS NULL OR object_revision.expires_at > ?)",
+                )
+            )
+            parameters.extend((reference_time,) * 8)
+        if scope is not None:
+            filters.extend(
+                (
+                    "knowledge_relation_revisions_v3.scope = ?",
+                    "subject_revision.scope = ?",
+                    "object_revision.scope = ?",
+                )
+            )
+            parameters.extend((scope, scope, scope))
+        if max_sensitivity is not None:
+            admitted_sensitivities = SENSITIVITY_ORDER[
+                : SENSITIVITY_ORDER.index(max_sensitivity) + 1
+            ]
+            placeholders = ",".join("?" for _ in admitted_sensitivities)
+            filters.append(
+                f"knowledge_relation_revisions_v3.sensitivity IN ({placeholders})"
+            )
+            parameters.extend(admitted_sensitivities)
+            filters.append(f"subject_revision.sensitivity IN ({placeholders})")
+            parameters.extend(admitted_sensitivities)
+            filters.append(f"object_revision.sensitivity IN ({placeholders})")
+            parameters.extend(admitted_sensitivities)
+        if endpoint_ids:
+            placeholders = ",".join("?" for _ in endpoint_ids)
+            filters.append(
+                "(knowledge_relation_revisions_v3.subject_knowledge_id "
+                f"IN ({placeholders}) OR "
+                "knowledge_relation_revisions_v3.object_knowledge_id "
+                f"IN ({placeholders}))"
+            )
+            parameters.extend(endpoint_ids)
+            parameters.extend(endpoint_ids)
+        limit_clause = ""
+        if limit is not None:
+            limit_clause = " LIMIT ?"
+            parameters.append(limit)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT knowledge_relation_revisions_v3.*
             FROM knowledge_relations_v3
             JOIN knowledge_relation_revisions_v3
@@ -8693,11 +9232,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                  knowledge_relation_revisions_v3.object_knowledge_id
             JOIN knowledge_revisions_v3 AS object_revision
               ON object_revision.revision_id = object_object.current_revision_id
-            WHERE knowledge_relation_revisions_v3.lifecycle = 'active'
-              AND subject_revision.lifecycle = 'active'
-              AND object_revision.lifecycle = 'active'
+            WHERE {' AND '.join(filters)}
             ORDER BY knowledge_relation_revisions_v3.relation_key
-            """
+            {limit_clause}
+            """,
+            tuple(parameters),
         ).fetchall()
         return [
             {
@@ -8708,26 +9247,108 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             for row in rows
         ]
 
-    def _relations_at(self, recorded_at: str | None) -> list[dict[str, Any]]:
+    def _relations_at(
+        self,
+        recorded_at: str | None,
+        *,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity | None = None,
+        endpoint_ids: tuple[str, ...] = (),
+        reference_time: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
         if recorded_at is None:
-            return self._current_relations()
+            return self._current_relations(
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                endpoint_ids=endpoint_ids,
+                reference_time=reference_time,
+                limit=limit,
+            )
         instant = canonical_timestamp(recorded_at, field="relation transaction time")
+        selected_reference_time = (
+            canonical_timestamp(reference_time, field="relation reference time")
+            if reference_time is not None
+            else instant
+        )
+        filters = [
+            "ranked.relation_rank = 1",
+            "ranked.lifecycle = 'active'",
+            "subject_revision.revision_rank = 1",
+            "subject_revision.lifecycle = 'active'",
+            "object_revision.revision_rank = 1",
+            "object_revision.lifecycle = 'active'",
+            "(ranked.valid_from IS NULL OR ranked.valid_from <= ?)",
+            "(ranked.valid_to IS NULL OR ranked.valid_to > ?)",
+            "(subject_revision.valid_from IS NULL OR subject_revision.valid_from <= ?)",
+            "(subject_revision.valid_to IS NULL OR subject_revision.valid_to > ?)",
+            "(subject_revision.expires_at IS NULL OR subject_revision.expires_at > ?)",
+            "(object_revision.valid_from IS NULL OR object_revision.valid_from <= ?)",
+            "(object_revision.valid_to IS NULL OR object_revision.valid_to > ?)",
+            "(object_revision.expires_at IS NULL OR object_revision.expires_at > ?)",
+        ]
+        parameters: list[Any] = [instant, instant, *((selected_reference_time,) * 8)]
+        if scope is not None:
+            filters.extend(
+                (
+                    "ranked.scope = ?",
+                    "subject_revision.scope = ?",
+                    "object_revision.scope = ?",
+                )
+            )
+            parameters.extend((scope, scope, scope))
+        if max_sensitivity is not None:
+            admitted_sensitivities = SENSITIVITY_ORDER[
+                : SENSITIVITY_ORDER.index(max_sensitivity) + 1
+            ]
+            placeholders = ",".join("?" for _ in admitted_sensitivities)
+            filters.append(f"ranked.sensitivity IN ({placeholders})")
+            parameters.extend(admitted_sensitivities)
+            filters.append(f"subject_revision.sensitivity IN ({placeholders})")
+            parameters.extend(admitted_sensitivities)
+            filters.append(f"object_revision.sensitivity IN ({placeholders})")
+            parameters.extend(admitted_sensitivities)
+        if endpoint_ids:
+            placeholders = ",".join("?" for _ in endpoint_ids)
+            filters.append(
+                f"(ranked.subject_knowledge_id IN ({placeholders}) "
+                f"OR ranked.object_knowledge_id IN ({placeholders}))"
+            )
+            parameters.extend(endpoint_ids)
+            parameters.extend(endpoint_ids)
+        limit_clause = ""
+        if limit is not None:
+            limit_clause = " LIMIT ?"
+            parameters.append(limit)
         rows = self.connection.execute(
-            """
+            f"""
             WITH ranked AS (
                 SELECT knowledge_relation_revisions_v3.*,
                        ROW_NUMBER() OVER (
                            PARTITION BY relation_key
                            ORDER BY recorded_at DESC, relation_revision_id DESC
-                       ) AS rank
+                       ) AS relation_rank
                 FROM knowledge_relation_revisions_v3
                 WHERE recorded_at <= ?
+            ), endpoint_ranked AS (
+                SELECT knowledge_revisions_v3.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY knowledge_id
+                           ORDER BY recorded_at DESC, revision_id DESC
+                       ) AS revision_rank
+                FROM knowledge_revisions_v3
+                WHERE recorded_at <= ?
             )
-            SELECT * FROM ranked
-            WHERE rank = 1 AND lifecycle = 'active'
-            ORDER BY relation_key
+            SELECT ranked.* FROM ranked
+            JOIN endpoint_ranked AS subject_revision
+              ON subject_revision.knowledge_id = ranked.subject_knowledge_id
+            JOIN endpoint_ranked AS object_revision
+              ON object_revision.knowledge_id = ranked.object_knowledge_id
+            WHERE {' AND '.join(filters)}
+            ORDER BY ranked.relation_key
+            {limit_clause}
             """,
-            (instant,),
+            tuple(parameters),
         ).fetchall()
         return [
             {
@@ -8760,16 +9381,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         admitted: dict[str, dict[str, Any]] = {}
         rejected: list[dict[str, str]] = []
         relations: list[dict[str, Any]] = []
-        for relation in self._relations_at(selected_as_of):
-            if knowledge_id is not None and knowledge_id not in {
-                relation["subject_knowledge_id"],
-                relation["object_knowledge_id"],
-            }:
-                continue
-            if relation["scope"] != scope or SENSITIVITY_ORDER.index(
-                relation["sensitivity"]
-            ) > SENSITIVITY_ORDER.index(max_sensitivity):
-                continue
+        relation_candidates = self._relations_at(
+            selected_as_of,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            endpoint_ids=(knowledge_id,) if knowledge_id is not None else (),
+            reference_time=reference_time,
+            limit=_MAX_GRAPH_RELATION_SCAN + 1,
+        )
+        relation_scan_truncated = len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN
+        for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
             if not self.relation_provenance_admitted(relation):
                 rejected.append(
                     {
@@ -8884,7 +9505,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "nodes": sorted(admitted.values(), key=lambda item: item["knowledge_id"]),
             "relations": relations,
             "rejected": rejected[:100],
-            "budget": {"max_relations": limit, "selected_relations": len(relations)},
+            "budget": {
+                "max_relations": limit,
+                "selected_relations": len(relations),
+                "max_candidate_relations_scanned": _MAX_GRAPH_RELATION_SCAN,
+                "candidate_relations_scanned": min(
+                    len(relation_candidates), _MAX_GRAPH_RELATION_SCAN
+                ),
+                "candidate_scan_truncated": relation_scan_truncated,
+            },
             "audit_head": self.audit_head,
             "derived_adjacency": True,
             "canonical_relation_revisions": True,
@@ -8984,7 +9613,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             ]
             self.connection.execute("DELETE FROM autonomous_search_v3")
             fts_rows: list[tuple[str, str, str, str, str, str]] = []
-            dense_rows: list[dict[str, str]] = []
+            dense_rows: list[dict[str, Any]] = []
             for row in rows:
                 payload = _read_object(self.root, row["markdown_sha256"])
                 body = parse_knowledge_markdown(payload)["body"]
@@ -9009,6 +9638,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "title": row["title"],
                         "body": body,
                         "semantic_key": row["semantic_key"] or "",
+                        "scope": row["scope"],
+                        "sensitivity": row["sensitivity"],
+                        "kind": row["kind"],
+                        "tags": tags,
+                        "valid_from": row["valid_from"],
+                        "valid_to": row["valid_to"],
+                        "expires_at": row["expires_at"],
                     }
                 )
             self.connection.commit()

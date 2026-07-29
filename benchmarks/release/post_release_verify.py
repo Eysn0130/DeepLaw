@@ -40,17 +40,20 @@ def verify(
     release_url: str,
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
-    if binding["package_version"] != "0.7.0" or not binding["worktree_clean"]:
-        raise PostReleaseError("post-release verification requires the clean 0.7.0 tag checkout")
+    version = binding["package_version"]
+    tag = f"v{version}"
+    if not binding["worktree_clean"]:
+        raise PostReleaseError("post-release verification requires a clean tag checkout")
     manifest_path = _downloaded(downloads, "commercial-release-manifest.json")
     manifest = load_json(manifest_path)
     verify_record_digest(manifest, field="commercial release manifest")
     release = manifest.get("release", {})
     if (
-        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v1"
+        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v2"
         or manifest.get("commercial_release_eligible") is not True
         or manifest.get("competitive_claim_eligible") is not False
-        or release.get("tag") != "v0.7.0"
+        or release.get("version") != version
+        or release.get("tag") != tag
         or release.get("commit") != binding["commit"]
         or manifest.get("bindings", {}).get("lock_sha256") != binding["lock_sha256"]
         or manifest.get("bindings", {}).get("contracts_inventory_sha256")
@@ -111,7 +114,7 @@ def verify(
         "binding": binding,
         "environment": environment_manifest(),
         "release": {
-            "tag": "v0.7.0",
+            "tag": tag,
             "url": release_url,
             "commit": binding["commit"],
             "lock_sha256": binding["lock_sha256"],

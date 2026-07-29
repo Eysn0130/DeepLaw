@@ -1,9 +1,8 @@
-# DeepLaw vNext 总纲逐项落地核对
+# DeepLaw v0.9 总纲逐项落地核对
 
-状态：**repository-head implementation audit，2026-07-29**。本表以用户提供的最新《一、DeepLaw
+状态：**v0.9.0 release audit，2026-07-30**。本表以用户提供的最新《一、DeepLaw
 项目总纲》及其“十九、终局实施顺序”为基准，代码事实以 `src/deeplaw`、`contracts`、迁移、测试和
-`uv.lock` 为准。公开安装包仍是 `v0.7.0`；“仓库已实现”不等于已经发布新版本，也不等于取得外部
-竞争领先证明。
+`uv.lock` 为准。v0.9.0 对应总纲 0.8/0.9 工程交付；发布成功也不等于取得 1.0 外部竞争领先证明。
 
 状态含义：
 
@@ -37,9 +36,9 @@ compare-and-swap、显式 conflict、TTL、forget、owner-only content GC、snap
 | Living Overview | 已实现 | `rebuild_derived()` 生成 hash-bound `wiki/index.md`、`wiki/overview.md`；明确 `derived_view` 和 `authority:none` |
 | Entity/Concept Page | 已实现 | 生成 Concept/Entity/Event/Comparison/Synthesis typed pages，回链 canonical Markdown revision 与 relations |
 | Synthesis | 已实现 | 独立 `save_synthesis` capability 与 kind，不可通过普通 remember 偷渡 |
-| Semantic Lint | 已实现 | source-free/inactive provenance、duplicate key/content、broken/ambiguous link、orphan、contested-without-counterevidence、alias ambiguity；有界结果 |
+| Semantic Lint | 已实现 | source-free/inactive provenance、duplicate key/content、broken/ambiguous link、未编译 relation hint、orphan、contested-without-counterevidence、alias ambiguity；按 scope/sensitivity 准入并对 object/relation/link scan 与输出分别设硬界限 |
 | Community Detection | 已实现 | deterministic weighted label propagation + semantic bridge；community view 可删除重建，不写 authority |
-| Gap Discovery | 已实现 | read-only `gaps`/`discover_gaps()`，输出 missing evidence/orphan/conflict/link/provenance gaps 与 counts |
+| Gap Discovery | 已实现 | read-only `gaps`/`discover_gaps()`，输出 missing evidence/orphan/conflict/link/provenance gaps 与 counts；CLI/MCP 都绑定 exact scope/max-sensitivity，不能泄漏其他分区 ID 或计数 |
 | Memory Consolidation | 已实现 | 多输入 memory → 新 summary revision + `consolidates` relations + input archived revisions + consolidation event；确定性 operation digest 与 crash-safe retry |
 | Obsidian/Tolaria 完整互操作 | 已实现 | files-first Markdown/YAML/Wikilink、稳定 ID、rename/move、external edit reconcile、冲突保留、JSON Canvas、Git-friendly views；不使用 CRDT/LWW |
 | Skill Factory | 已实现 | 显式可检查 Procedure step → governed draft Skill；无可检查 criterion 则 abstain；不执行、不授予 capability；promotion 需 user/external helpful eval |
@@ -104,8 +103,20 @@ manifest 全量 hash 绑定和 stale-index fail closed。
    provenance、prompt injection、scope/sensitivity 越权、case data 和非法 Run 仍 fail closed/quarantine。
 5. **遗忘与字节擦除必须分开。** `forget` 是 lifecycle revision；owner GC 仅擦除所有引用都符合
    policy 且没有 evidence role 的 bytes，保留最小 governance/audit tombstone，并支持 crash recovery。
-6. **联合检索不能先 Top-K 再按标签过滤。** Agent 法律解释的 `required_tags` 已进入 admission 和
-   Query Plan，避免无关高排名结果占满预算后造成错误空集；官方为空时不把 private/Agent 结果改名。
+6. **联合检索不能先 Top-K 再做治理准入。** scope、sensitivity、lifecycle、valid time、kind 和
+   `required_tags` 已下推到 FTS、canonical fallback、historical lexical、dense 与 relation candidate
+   scan，并在 reranker 前统一复核；无权或无关候选不能占满 Top-K。官方为空时也不把 private/Agent
+   结果改名。
+7. **Gap/Lint 也是读边界。** 旧实现的全 Vault Lint 会让低权限 `gaps` 暴露 restricted/其他 scope
+   的 ID 和聚合计数；现已在 SQL、relation 与 alias 三层按调用边界过滤，并增加回归测试。
+8. **派生索引不能绑架规范提交。** 旧实现每次 remember/relation/consolidate 后同步全量 rebuild，
+   与总纲异步派生层冲突且会造成写放大；现改为事务内排队、Watcher/显式 rebuild 消费，失败保留
+   pending，读取拒绝 stale manifest 并使用有界 canonical fallback。
+9. **关系没有 Evidence 就不是可准入事实。** 新 `add_relation` contract 强制至少一个可绑定
+   evidence reference；source-free 历史行仅保留审计，不进入图遍历、冲突挑战或 Capsule。未成功
+   编译为 evidence-bound canonical relation 的 Markdown relation hint 会进入 Gap，而不是静默当作边。
+10. **有界返回不等于有界执行。** identity、graph、contradiction 和 Semantic Lint 的候选扫描均有
+    明确硬上限和 truncation/gap；exact identity ambiguity 不会因返回 limit=1 被误报为 resolved。
 
 ## 6. 交付门禁
 

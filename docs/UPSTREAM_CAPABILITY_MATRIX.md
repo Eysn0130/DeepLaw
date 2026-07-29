@@ -2,6 +2,11 @@
 
 Reviewed: 2026-07-28
 
+Status: **historical v0.7 adoption review**. Rows that reject autonomous memory or describe
+Markdown as a one-way projection preserve the decision at that construction point; they are not
+the current v0.9 Agent-derived policy. Current authority and autonomous-write rules are in
+[`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md) and `AGENTS.md`.
+
 This matrix fixes the upstream material used to design the DeepLaw v0.7
 construction line. Commits are immutable review coordinates, not runtime
 dependency pins. Repository metadata, READMEs, manifests and the listed source

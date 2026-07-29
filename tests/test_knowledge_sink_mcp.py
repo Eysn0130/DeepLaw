@@ -294,6 +294,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
             "subject_knowledge_id": first["knowledge_id"],
             "predicate": "related_to",
             "object_knowledge_id": second["knowledge_id"],
+            "evidence_refs": [{"revision_id": first["revision_id"]}],
         },
         grant_id=grant_id,
         vault_path=root,
@@ -306,6 +307,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
         "subject_knowledge_id": first["knowledge_id"],
         "predicate": "related_to",
         "object_knowledge_id": second["knowledge_id"],
+        "evidence_refs": [{"revision_id": first["revision_id"]}],
     }
     with pytest.raises(RuntimeError, match="relation compare-and-swap"):
         handle_knowledge_sink(

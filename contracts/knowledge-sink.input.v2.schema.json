@@ -172,7 +172,10 @@
     {
       "if": {"properties": {"operation": {"const": "add_relation"}}, "required": ["operation"]},
       "then": {
-        "required": ["subject_knowledge_id", "predicate", "object_knowledge_id"],
+        "required": [
+          "subject_knowledge_id", "predicate", "object_knowledge_id", "evidence_refs"
+        ],
+        "properties": {"evidence_refs": {"minItems": 1}},
         "propertyNames": {"$ref": "#/$defs/relation_field_name"}
       }
     },

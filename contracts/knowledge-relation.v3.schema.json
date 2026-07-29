@@ -25,7 +25,7 @@
     "origin": {"const": "agent_derived"},
     "authority": {"const": "agent_derived"},
     "legal_authority": {"const": false},
-    "source_free": {"type": "boolean"},
+    "source_free": {"const": false},
     "lifecycle": {"const": "active"},
     "scope": {"enum": ["personal", "project", "domain"]},
     "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},

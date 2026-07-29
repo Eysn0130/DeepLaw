@@ -1267,6 +1267,12 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         help="Report bounded missing evidence, orphan, conflict, and unresolved-link gaps",
     )
     autonomy_gaps.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_gaps.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_gaps.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
     autonomy_gc = autonomy_commands.add_parser(
         "gc",
         help=(
@@ -1727,6 +1733,31 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                             grant_id=args.grant_id,
                             confirm_no_case_data=args.confirm_no_case_data,
                         )
+                        pending_rebuilds = store.connection.execute(
+                            "SELECT COUNT(*) FROM derived_rebuild_queue_v3 "
+                            "WHERE completed_at IS NULL"
+                        ).fetchone()[0]
+                        if pending_rebuilds:
+                            try:
+                                rebuilt = store.rebuild_derived()
+                                last["derived_maintenance"] = {
+                                    "status": "rebuilt",
+                                    "queued_before": pending_rebuilds,
+                                    "knowledge_count": rebuilt["knowledge_count"],
+                                    "relation_count": rebuilt["relation_count"],
+                                    "input_audit_head": rebuilt["input_audit_head"],
+                                }
+                            except Exception as error:
+                                last["derived_maintenance"] = {
+                                    "status": "retry_pending",
+                                    "queued_before": pending_rebuilds,
+                                    "error_type": type(error).__name__,
+                                }
+                        else:
+                            last["derived_maintenance"] = {
+                                "status": "current",
+                                "queued_before": 0,
+                            }
                         cycle_count += 1
                         if args.max_cycles is not None and cycle_count >= args.max_cycles:
                             break
@@ -1840,7 +1871,10 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     limit=args.limit,
                 )
             if action == "gaps":
-                return store.discover_gaps()
+                return store.discover_gaps(
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                )
             if action == "get":
                 if args.as_of is not None:
                     if args.include_inactive:
