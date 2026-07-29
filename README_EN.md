@@ -4,6 +4,14 @@
 
 <h1 align="center">DeepLaw 2.0</h1>
 
+> **Status note (2026-07-29):** This English page documents the published v0.7 compatibility
+> baseline. Repository head now includes the additive Markdown-native autonomous knowledge core,
+> separate scope-bound `knowledge_sink`, and Knowledge Capsule v2. See
+> [the current Chinese README](README.md) and
+> [the current autonomous contract](docs/AUTONOMOUS_KNOWLEDGE_OS.md). Statements below requiring
+> universal human review describe the retained v0.7 path, not the new default for Agent-derived
+> knowledge.
+
 <p align="center">
   <img src="assets/brand/deeplaw-2-glass.png" width="760" alt="DeepLaw 2.0 wordmark" />
 </p>

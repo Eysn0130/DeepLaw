@@ -3,7 +3,7 @@
   "name": "deeplaw-knowledge-os",
   "displayName": "DeepLaw Knowledge OS",
   "version": "0.7.0",
-  "description": "Optional, explicit-use read-only Knowledge Assets and Context Capsules.",
+  "description": "Explicit-use, read-only access to the local Markdown-native Knowledge OS and bounded Context Capsules.",
   "author": {
     "name": "Eysn0130",
     "url": "https://github.com/Eysn0130"

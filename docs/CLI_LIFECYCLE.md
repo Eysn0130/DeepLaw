@@ -1,6 +1,8 @@
 # DeepLaw Knowledge CLI lifecycle
 
-Status: released `v0.7.0` surface, reviewed 2026-07-28. Examples keep canonical writes
+Status: **v0.7 compatibility CLI**, reviewed 2026-07-28. New Vaults and autonomous migration use
+the `deeplaw knowledge autonomy ...` and `deeplaw knowledge sink ...` commands documented in
+[`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md). Examples below keep legacy writes
 in the offline CLI; Agent MCP remains read-only.
 
 ## Golden Path

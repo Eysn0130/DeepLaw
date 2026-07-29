@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-skill.v1.schema.json",
+  "title": "DeepLaw Agent-derived Skill manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "purpose", "applies_to", "does_not_apply_to", "invocation_mode",
+    "input_contract", "output_contract", "capabilities", "resource_limits",
+    "steps", "success_criteria", "failure_conditions", "license",
+    "host_compatibility", "verification_commands", "known_limitations",
+    "lifecycle", "source_revision_ids", "evaluation_run_ids",
+    "supersedes_skill_revision", "deprecation_reason"
+  ],
+  "properties": {
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "applies_to": {"$ref": "#/$defs/nonempty_text_list"},
+    "does_not_apply_to": {"$ref": "#/$defs/nonempty_text_list"},
+    "invocation_mode": {"enum": ["user-invoked", "model-invoked"]},
+    "input_contract": {"type": "object", "maxProperties": 64},
+    "output_contract": {"type": "object", "maxProperties": 64},
+    "capabilities": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "resource_limits": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "additionalProperties": {
+        "type": ["integer", "number", "boolean", "string"],
+        "maxLength": 500
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["instruction", "completion_criterion"],
+        "properties": {
+          "instruction": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "completion_criterion": {"type": "string", "minLength": 1, "maxLength": 2000}
+        }
+      }
+    },
+    "success_criteria": {"$ref": "#/$defs/nonempty_text_list"},
+    "failure_conditions": {"$ref": "#/$defs/nonempty_text_list"},
+    "license": {"type": "string", "minLength": 1, "maxLength": 500},
+    "host_compatibility": {"$ref": "#/$defs/nonempty_text_list"},
+    "verification_commands": {"$ref": "#/$defs/nonempty_text_list"},
+    "known_limitations": {"$ref": "#/$defs/text_list"},
+    "lifecycle": {
+      "enum": ["draft", "experimental", "promoted", "deprecated", "revoked"]
+    },
+    "source_revision_ids": {"$ref": "#/$defs/id_list"},
+    "evaluation_run_ids": {"$ref": "#/$defs/id_list"},
+    "supersedes_skill_revision": {"type": ["string", "null"], "maxLength": 500},
+    "deprecation_reason": {"type": ["string", "null"], "maxLength": 2000}
+  },
+  "$defs": {
+    "text_list": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "nonempty_text_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "id_list": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    }
+  }
+}

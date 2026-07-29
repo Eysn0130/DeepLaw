@@ -1,5 +1,10 @@
 # DeepLaw v0.7.0 installation, upgrade, and rollback
 
+> This page preserves the published v0.7 artifact procedure. Repository-head autonomous Vault
+> migration, rollback, and snapshot semantics are documented in
+> [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md). Do not treat an unreleased checkout as
+> a signed v0.8 package.
+
 DeepLaw is a local, single-user application. Installation requires no cloud account, model API
 key, remote database, or telemetry endpoint. The official artifacts are attached to the
 [`v0.7.0` GitHub Release](https://github.com/Eysn0130/DeepLaw/releases/tag/v0.7.0).

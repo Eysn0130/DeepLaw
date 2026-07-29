@@ -21,6 +21,7 @@ from .models import Purpose, SearchRequest
 from .official import active_official_release_id
 from .private_library import active_private_release_id, resolve_private_database
 from .search import DeepLaw
+from .util import assert_provider_output_safe, provider_safe_exception
 
 Operation = Literal[
     "search",
@@ -224,7 +225,7 @@ def _execute_support(
     normalized_operation = operation.removeprefix("private_")
     if normalized_operation == "info":
         normalized_operation = "release_info"
-    return _execute_law_operation(
+    result = _execute_law_operation(
         law,
         operation=cast(
             Literal["search", "get", "verify", "release_info"], normalized_operation
@@ -238,6 +239,8 @@ def _execute_support(
         segment_id=segment_id,
         receipt_id=receipt_id,
     )
+    assert_provider_output_safe(result, interface="law_support")
+    return result
 
 
 def handle_support(
@@ -336,21 +339,24 @@ def create_mcp_server() -> Server[_RuntimeContext]:
     @server.call_tool(validate_input=True)
     async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name != "law_support":
-            raise ValueError(f"unknown DeepLaw tool: {name}")
+            raise ValueError("unknown DeepLaw tool")
         runtime = server.request_context.lifespan_context
         with runtime.lock:
-            return _execute_support(
-                runtime,
-                operation=cast(Operation, arguments.get("operation", "search")),
-                query=str(arguments.get("query", "")),
-                purpose=cast(Purpose, arguments.get("purpose", "auto")),
-                as_of=cast(str | None, arguments.get("as_of")),
-                limit=int(arguments.get("limit", 5)),
-                max_chars=int(arguments.get("max_chars", 3500)),
-                document_types=cast(list[str] | None, arguments.get("document_types")),
-                segment_id=cast(str | None, arguments.get("segment_id")),
-                receipt_id=cast(str | None, arguments.get("receipt_id")),
-            )
+            try:
+                return _execute_support(
+                    runtime,
+                    operation=cast(Operation, arguments.get("operation", "search")),
+                    query=str(arguments.get("query", "")),
+                    purpose=cast(Purpose, arguments.get("purpose", "auto")),
+                    as_of=cast(str | None, arguments.get("as_of")),
+                    limit=int(arguments.get("limit", 5)),
+                    max_chars=int(arguments.get("max_chars", 3500)),
+                    document_types=cast(list[str] | None, arguments.get("document_types")),
+                    segment_id=cast(str | None, arguments.get("segment_id")),
+                    receipt_id=cast(str | None, arguments.get("receipt_id")),
+                )
+            except Exception as error:
+                raise provider_safe_exception(error, interface="law_support") from None
 
     return server
 

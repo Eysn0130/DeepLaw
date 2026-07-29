@@ -1,13 +1,14 @@
 # DeepLaw Agent Adapters
 
-DeepLaw 2.0 provides local adapters for Codex, Claude Code, and OpenCode through
-two separate optional read-only MCP products.
-They must not be collapsed into one implicit always-on capability:
+DeepLaw provides local adapters for Codex, Claude Code, and OpenCode. The two default products are
+read-only; an autonomous mutation capability is a third, separately enabled process and must not be
+collapsed into either query surface:
 
 | Product | Plugin | Process | Single leaf |
 | --- | --- | --- | --- |
 | Chinese Legal Pack | `deeplaw` | `deeplaw mcp --stdio` | `law_support` |
 | Knowledge Asset core | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --stdio` | `knowledge_support` |
+| Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --grant-id … --stdio` | `knowledge_sink` |
 
 This document describes adapter behavior only. Corpus building, release
 governance, and retrieval internals are separate concerns.
@@ -19,6 +20,7 @@ governance, and retrieval internals are separate concerns.
 | MCP protocol and closed tool schemas | **Supported** | contract and subprocess tests |
 | Codex/Claude/OpenCode manifests and static configuration | **Supported local-only** | repository validators/tests |
 | Generic read-only Skill bundle | **Supported local-only** | source/hash/budget/test manifest verification |
+| Autonomous Knowledge Sink domain/MCP contract | **Supported repository-head, explicit opt-in** | contract, capability, idempotency, scope, rate, integrity, and stdio tests |
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
@@ -135,10 +137,12 @@ later reads in that scope when its pinned epoch no longer matches.
 
 The Knowledge Asset process selects one vault through
 `DEEPLAW_KNOWLEDGE_VAULT` or `--vault`. It opens the vault read-only for each
-operation, verifies its closed identity, and never imports, approves, revokes,
-or writes feedback. Restart is not required merely to observe a later
-committed vault revision, but a previously compiled Capsule reports staleness
-against the new revision.
+operation, verifies its closed identities and audit chains, and never mutates
+knowledge. An untouched v0.7 Vault advertises the v1 reviewed-asset contract;
+an autonomous Vault advertises v2 with source-derived and Agent-derived
+partitions. Restart is not required merely to observe a later committed
+revision, but a previously compiled Capsule remains bound to its recorded
+revision/audit head.
 
 ## Explicit invocation policy
 
@@ -194,8 +198,8 @@ uv run --frozen python benchmarks/hosts/run_codex_plugin_smoke.py \
   --output dist/codex-plugin-smoke.json
 ```
 
-The checked-in 2026-07-28 result is
-[`benchmarks/hosts/codex-plugin-smoke-2026-07-28.json`](../benchmarks/hosts/codex-plugin-smoke-2026-07-28.json).
+The checked-in repository-head rerun from 2026-07-29 is
+[`benchmarks/hosts/codex-plugin-smoke-2026-07-29.json`](../benchmarks/hosts/codex-plugin-smoke-2026-07-29.json).
 It discovered both plugins, installed both, proved the untouched product remained installed while
 the other was removed and re-added, compared every cached plugin file to its source bytes twice,
 and finished with no installed plugin. The report sets `scope=plugin-lifecycle-only`,
@@ -348,23 +352,27 @@ cp adapters/opencode/agents/deeplaw-knowledge.md \
   .opencode/agents/deeplaw-knowledge.md
 ```
 
-`knowledge_support` routes five operations:
+After autonomous migration, `knowledge_support` routes ten read operations:
 
 | Operation | Purpose |
 | --- | --- |
-| `search` | locate at most five active reviewed assets |
-| `get` | read one exact active non-restricted asset |
-| `context` | compile a bounded task-specific Knowledge Capsule |
-| `verify` | verify source binding, current usability, event chain, and current-state reconciliation |
-| `inspect` | inspect sanitized readiness and review backlog |
+| `search` / `recall` | return bounded source-derived and autonomous partitions without merging Authority |
+| `get` | read one exact active non-restricted `knowledge_id` or legacy `asset_id` |
+| `context` | compile a bounded partitioned Knowledge Capsule v2 |
+| `verify` | verify object/source binding, current usability, both event chains, and state reconciliation |
+| `inspect` | inspect sanitized readiness, scoped counts, integrity, and legacy compatibility state |
+| `lineage` | read bounded immutable revision metadata for one Knowledge Object |
+| `graph` | read bounded canonical relation revisions after endpoint admission |
+| `wiki_lookup` | discover through derived Wiki navigation while returning canonical revisions |
+| `explain` | return hashed query plans, admission/selection receipts, gaps, and budgets |
 
 `context` requires `confirm_no_case_data=true` because its task and goal are
 persisted in the Capsule. A host may send that confirmation only after keeping
 Analytix case facts, chats, identifiers, and attachments out of the request.
 
-The plugin has no `remember`, `learn`, `approve`, `import`, delete, shell, web,
-or case operation. Host configuration is not permission to copy Analytix case
-data into a vault.
+The default plugin has no `remember`, relation mutation, feedback write,
+`approve`, `import`, delete, shell, web, or case operation. Host configuration
+is not permission to copy Analytix case data into a vault.
 
 This read-only guarantee covers the DeepLaw MCP surface. A host must not give
 the same Agent a separate same-owner shell or filesystem route to
@@ -382,7 +390,34 @@ Every general result declares `legal_authority=false`; authoritative Chinese
 legal research must use the separate `law_support` plugin. Search returns rank
 and a deterministic hit reason, not a confidence probability. Context items
 identify a lexical or bounded reviewed-relation selection reason, and
-open-question actions contain only an Asset URI.
+open-question actions contain only a stable object URI.
+
+### Separately enabling the Knowledge Sink
+
+Owner administration first creates an exact grant:
+
+```bash
+deeplaw knowledge sink enable \
+  --vault /absolute/owner/vault \
+  --writer-id codex-local \
+  --scope project \
+  --max-sensitivity private \
+  --operation remember \
+  --operation reflect \
+  --operation record_feedback
+```
+
+Only then may the owner add a separate host MCP entry whose command is:
+
+```text
+deeplaw knowledge sink mcp --vault <owner-vault> --grant-id <exact-grant-id> --stdio
+```
+
+Do not commit a Vault path, grant ID, or capability token. Never add this
+server to the default plugin manifest. The server exposes exactly one
+`knowledge_sink` leaf; its closed request requires an idempotency key and
+`confirm_no_case_data=true`. A model, retrieved page, Skill, or router cannot
+run `sink enable`, choose a broader grant, or add owner-only operations.
 
 ## Analytix remains outside DeepLaw
 

@@ -13,7 +13,7 @@ from deeplaw.bounded_subprocess import BoundedProcessResult
 from deeplaw.util import canonical_json, sha256_bytes, sha256_file
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-REPORT_PATH = REPOSITORY / "benchmarks/hosts/codex-plugin-smoke-2026-07-28.json"
+REPORT_PATH = REPOSITORY / "benchmarks/hosts/codex-plugin-smoke-2026-07-29.json"
 SCHEMA_PATH = REPOSITORY / "contracts/codex-plugin-host-smoke.v1.schema.json"
 
 

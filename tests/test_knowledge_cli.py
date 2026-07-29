@@ -384,6 +384,18 @@ def test_knowledge_cli_source_review_run_and_feedback_control_plane(
     )
     assert ingested.returncode == 0, ingested.stderr
     source_id = json.loads(ingested.stdout)["source"]["source_id"]
+    connection = sqlite3.connect(vault / "vault.sqlite3")
+    try:
+        binding = connection.execute(
+            "SELECT object_sha256 FROM evidence_bindings_v3 WHERE legacy_source_id = ?",
+            (source_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert binding is not None
+    assert (
+        vault / ".deeplaw" / "objects" / "sha256" / binding[0][:2] / binding[0][2:]
+    ).is_file()
     queue = _run_cli(
         "knowledge",
         "review",
@@ -559,3 +571,105 @@ def test_knowledge_cli_migration_backup_verify_and_rollback(tmp_path: Path) -> N
     restored_plan = _run_cli("knowledge", "migrate", "--vault", str(vault))
     assert restored_plan.returncode == 0, restored_plan.stderr
     assert json.loads(restored_plan.stdout)["required"] is True
+
+
+def test_autonomous_workspace_watcher_uses_the_shared_reconcile_service(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    initialized = _run_cli(
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "watcher-cli",
+        "--scope",
+        "project",
+    )
+    assert initialized.returncode == 0, initialized.stderr
+    enabled = _run_cli(
+        "knowledge",
+        "sink",
+        "enable",
+        "--vault",
+        str(vault),
+        "--writer-id",
+        "cli-watcher",
+    )
+    assert enabled.returncode == 0, enabled.stderr
+    grant_id = json.loads(enabled.stdout)["grant_id"]
+
+    request_path = tmp_path / "remember.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "operation": "remember",
+                "idempotency_key": "watcher-seed",
+                "confirm_no_case_data": True,
+                "title": "Watcher boundary",
+                "body": "The original workspace body.",
+                "kind": "claim",
+                "scope": "project",
+                "sensitivity": "private",
+                "run_id": "watcher-test",
+            }
+        ),
+        encoding="utf-8",
+    )
+    applied = _run_cli(
+        "knowledge",
+        "sink",
+        "apply",
+        "--vault",
+        str(vault),
+        "--grant-id",
+        grant_id,
+        "--request",
+        str(request_path),
+    )
+    assert applied.returncode == 0, applied.stderr
+    written = json.loads(applied.stdout)["result"]
+    workspace = vault / written["workspace_path"]
+    workspace.write_text(
+        workspace.read_text(encoding="utf-8").replace(
+            "The original workspace body.",
+            "The watcher committed this external edit.",
+        ),
+        encoding="utf-8",
+    )
+
+    watched = _run_cli(
+        "knowledge",
+        "autonomy",
+        "watch",
+        "--vault",
+        str(vault),
+        "--grant-id",
+        grant_id,
+        "--confirm-no-case-data",
+        "--interval",
+        "0.25",
+        "--max-cycles",
+        "1",
+    )
+    assert watched.returncode == 0, watched.stderr
+    watch_result = json.loads(watched.stdout)
+    assert watch_result["cycle_count"] == 1
+    assert watch_result["interrupted"] is False
+    assert len(watch_result["last"]["committed"]) == 1
+    assert watch_result["last"]["committed"][0]["parent_revision_id"] == written[
+        "revision_id"
+    ]
+
+    current = _run_cli(
+        "knowledge",
+        "autonomy",
+        "get",
+        "--vault",
+        str(vault),
+        "--knowledge-id",
+        written["knowledge_id"],
+    )
+    assert current.returncode == 0, current.stderr
+    assert json.loads(current.stdout)["body"] == "The watcher committed this external edit."

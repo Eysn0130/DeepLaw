@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -14,8 +15,24 @@ from referencing import Registry, Resource
 from deeplaw.cli import _parser
 from deeplaw.ingest import build_release
 from deeplaw.mcp_server import handle_support, tool_definition
+from deeplaw.util import provider_safe_exception
 
 from .helpers import manifest_document, write_docx, write_manifest
+
+
+def test_provider_error_projection_omits_paths_secrets_and_unsafe_unicode() -> None:
+    safe = ValueError("query budget is invalid")
+    assert provider_safe_exception(safe, interface="law_support") is safe
+
+    for message in (
+        "failed to open /Users/example/private/vault.sqlite3",
+        "api_key=super-secret-value",
+        "unsafe\u202etext",
+    ):
+        projected = provider_safe_exception(ValueError(message), interface="law_support")
+        assert type(projected) is RuntimeError
+        assert str(projected) == "law_support request failed closed; sensitive details omitted"
+        assert message not in str(projected)
 
 
 def test_mcp_exposes_one_bounded_leaf_tool() -> None:
@@ -136,6 +153,33 @@ def test_single_tool_routes_search_get_and_verify(tmp_path: Path) -> None:
     validator.validate(segment)
     validator.validate(verification)
     validator.validate(release_info)
+
+
+def test_law_support_fails_closed_before_exposing_a_local_path(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    document = source / "path-boundary.docx"
+    write_docx(
+        document,
+        ["中华人民共和国路径边界测试法", "第一条 不得暴露 /Users/example/private/source.pdf。"],
+    )
+    manifest = write_manifest(
+        source / "manifest.json",
+        [manifest_document(source, document.name, title="中华人民共和国路径边界测试法")],
+    )
+    release, _ = build_release(
+        source_root=source,
+        manifest_path=manifest,
+        output_root=tmp_path / "var" / "releases",
+    )
+
+    database = release / "deeplaw.sqlite3"
+    with pytest.raises(PermissionError, match="local absolute path"):
+        handle_support(
+            operation="search",
+            query="中华人民共和国路径边界测试法 第一条",
+            purpose="exact_citation",
+            database=database,
+        )
 
 
 def test_stdio_mcp_rejects_unknown_and_operation_irrelevant_arguments(tmp_path: Path) -> None:

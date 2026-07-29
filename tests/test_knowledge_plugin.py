@@ -54,7 +54,8 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
         / "research-chinese-law"
         / "SKILL.md"
     ).read_text(encoding="utf-8")
-    assert "Never invent one or use shell/filesystem tools to bypass" in knowledge_skill
+    assert "Never emulate a write with shell or\nfilesystem tools" in knowledge_skill
+    assert "independently enabled" in knowledge_skill
     assert "Never use shell or\nfilesystem tools to run or bypass" in legal_skill
 
 

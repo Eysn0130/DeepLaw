@@ -26,6 +26,34 @@ from benchmarks.external.claim_gate import (
 )
 
 
+def test_autonomous_protocol_is_preregistered_and_non_claiming() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    protocol = json.loads(
+        (repository / "benchmarks/external/autonomous-protocol-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert protocol["schema_version"] == "deeplaw.autonomous-benchmark-protocol/v1"
+    assert protocol["status"] == "preregistered_not_executed"
+    assert protocol["competitive_claim_eligible"] is False
+    assert {suite["id"] for suite in protocol["required_suites"]} == {
+        "task-context",
+        "authority-temporal",
+        "memory-lifecycle",
+        "mutation-security",
+        "systems-cost",
+    }
+    assert protocol["statistics"] == {
+        "held_out_required": True,
+        "paired_confidence_intervals_required": True,
+        "multiple_comparison_correction_required": True,
+        "complete_failure_samples_required": True,
+        "independent_evaluator_signatures_required_for_external_claim": True,
+    }
+    assert protocol["notes"][-1] == "This file defines a protocol and contains no benchmark result."
+
+
 def _case(case_id: str, relevant_ids: list[str]) -> dict[str, object]:
     return {
         "schema_version": SCHEMA_CASE,

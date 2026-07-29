@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-query-plan.v2.schema.json",
+  "title": "DeepLaw autonomous Knowledge Query Plan v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "intent", "query_sha256", "channels", "scope",
+    "max_sensitivity", "as_of", "filters", "budget", "audit_head", "legacy_audit_head", "candidate_count",
+    "candidate_state_sha256", "derived_manifest_sha256", "derived_lexical_ready"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-query-plan/v2"},
+    "intent": {"const": "autonomous_knowledge_recall"},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "channels": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["exact", "lexical", "lexical_fallback", "temporal_lexical", "graph"]
+      }
+    },
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "as_of": {"type": ["string", "null"], "format": "date-time"},
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kinds"],
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"enum": [
+            "claim", "comparison", "concept", "decision", "entity", "event", "experience",
+            "memory", "preference", "procedure", "skill", "synthesis"
+          ]}
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "characters", "provider_characters"],
+      "properties": {
+        "items": {"type": "integer", "minimum": 0, "maximum": 20},
+        "characters": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "provider_characters": {"const": 24576}
+      }
+    },
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "candidate_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "derived_manifest_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "derived_lexical_ready": {"type": "boolean"},
+    "source_derived": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "query_sha256", "scope", "max_sensitivity", "as_of", "filters",
+        "budget", "vault_revision", "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.source-derived-query-plan/v1"},
+        "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "scope": {"enum": ["personal", "project", "domain"]},
+        "max_sensitivity": {"enum": ["public", "internal", "private"]},
+        "as_of": {"type": ["string", "null"], "format": "date-time"},
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kinds", "memory_tiers"],
+          "properties": {
+            "kinds": {
+              "type": "array",
+              "maxItems": 14,
+              "uniqueItems": true,
+              "items": {"enum": [
+                "assumption", "constraint", "decision", "definition", "exception", "experience",
+                "fact", "lesson", "procedure", "question", "reference", "requirement", "risk", "rule"
+              ]}
+            },
+            "memory_tiers": {
+              "type": "array",
+              "maxItems": 5,
+              "uniqueItems": true,
+              "items": {"enum": ["working", "project", "experience", "wisdom", "domain"]}
+            }
+          }
+        },
+        "vault_revision": {"type": "integer", "minimum": 0},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["items", "characters"],
+          "properties": {
+            "items": {"type": "integer", "minimum": 1, "maximum": 5},
+            "characters": {"type": "integer", "minimum": 200, "maximum": 6000}
+          }
+        }
+      }
+    }
+  }
+}

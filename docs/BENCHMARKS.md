@@ -1,5 +1,9 @@
 # DeepLaw 2.0 评测说明
 
+> Repository-head autonomous mutation、Authority、生命周期、poisoning、隔离与成本门禁已在
+> [`autonomous-protocol-v1.json`](../benchmarks/external/autonomous-protocol-v1.json) 预注册。该文件是
+> protocol，不是结果；现有 v0.7 报告不能复用为自主内核或竞争领先证据。
+
 ## v0.7.0 商业发布与竞争证据边界
 
 v0.7.0 商业清单固定 `commercial_release_eligible=true`，同时固定

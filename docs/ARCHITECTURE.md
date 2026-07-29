@@ -1,6 +1,10 @@
 # DeepLaw Architecture
 
-Status: released `v0.7.0` architecture, reviewed 2026-07-28. Commercial GA eligibility is separate
+Status: **released v0.7 baseline plus repository-head vNext addendum**, reviewed 2026-07-29. Read
+[`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md) first for the current Markdown-native,
+autonomous Agent-derived knowledge core. Statements below that require universal human review or
+make Markdown projection-only describe the retained v0.7 compatibility plane. Commercial GA
+eligibility is separate
 from competitive leadership eligibility.
 
 DeepLaw 2.0 is a local-first Agent Knowledge OS with two isolated products:

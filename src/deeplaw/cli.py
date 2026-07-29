@@ -66,7 +66,7 @@ def _print_json(value: Any) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="deeplaw",
-        description="Verifiable Agent Knowledge Assets with an integrated Chinese Legal Pack",
+        description="Local Agent Knowledge OS with independently governed Legal Pack evidence",
     )
     parser.add_argument("--version", action="version", version=f"deeplaw {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)

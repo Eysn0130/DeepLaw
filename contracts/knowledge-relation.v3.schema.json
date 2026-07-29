@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-relation.v3.schema.json",
+  "title": "DeepLaw autonomous relation revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "relation_key", "relation_revision_id", "parent_revision_id",
+    "subject_knowledge_id", "predicate", "object_knowledge_id", "origin", "authority",
+    "legal_authority", "source_free", "lifecycle", "scope", "sensitivity",
+    "valid_from", "valid_to",
+    "recorded_at", "idempotent_replay", "audit_head"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-relation/v3"},
+    "relation_key": {"type": "string", "pattern": "^relationkey_[0-9a-f]{24}$"},
+    "relation_revision_id": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"},
+    "parent_revision_id": {
+      "type": ["string", "null"],
+      "pattern": "^relationrev_[0-9a-f]{24}$"
+    },
+    "subject_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "predicate": {"type": "string", "minLength": 1, "maxLength": 100},
+    "object_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "origin": {"const": "agent_derived"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "source_free": {"type": "boolean"},
+    "lifecycle": {"const": "active"},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "valid_from": {"type": ["string", "null"], "format": "date-time"},
+    "valid_to": {"type": ["string", "null"], "format": "date-time"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "idempotent_replay": {"type": "boolean"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

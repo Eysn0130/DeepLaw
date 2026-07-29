@@ -1,6 +1,6 @@
 interface:
-  display_name: "DeepLaw Knowledge Assets"
-  short_description: "为 Agent 编译有界、可验证且可复核的长期知识上下文"
-  default_prompt: "Use $use-knowledge-assets to compile a bounded, verified context capsule for this task."
+  display_name: "DeepLaw Knowledge OS"
+  short_description: "检索、验证并编译有界的本地长期知识与任务上下文胶囊"
+  default_prompt: "Use $use-knowledge-assets to compile a bounded, verified local Knowledge Capsule for this task."
 policy:
   allow_implicit_invocation: false
