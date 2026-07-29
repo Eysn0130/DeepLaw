@@ -1047,7 +1047,7 @@ def test_historical_recall_traverses_the_bitemporal_relation_revision(
             evidence_refs=[{"revision_id": source["revision_id"]}],
             confirm_no_case_data=True,
         )
-        store.expire(
+        expired = store.expire(
             grant_id=grant_id,
             idempotency_key="expire-historical-graph-neighbor",
             knowledge_id=neighbor["knowledge_id"],
@@ -1055,6 +1055,8 @@ def test_historical_recall_traverses_the_bitemporal_relation_revision(
             reason="Exercise a historical graph read after current expiry.",
             confirm_no_case_data=True,
         )
+
+        assert neighbor["recorded_at"] < relation["recorded_at"] < expired["recorded_at"]
 
         historical = store.recall(
             "Historical graph seed",

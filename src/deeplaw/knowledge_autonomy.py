@@ -2261,7 +2261,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
                 self.connection.commit()
 
-    def _next_transaction_time(self, *priors: str) -> str:
+    def _next_transaction_time(self, *priors: str, strictly_after_event: bool = False) -> str:
         timestamp = utc_now()
         row = self.connection.execute(
             "SELECT recorded_at FROM autonomous_events_v3 ORDER BY sequence DESC LIMIT 1"
@@ -2269,13 +2269,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         candidates = [*priors]
         if row is not None:
             candidates.append(row["recorded_at"])
-        for prior in candidates:
-            canonical_prior = canonical_timestamp(
-                prior,
-                field="prior transaction timestamp",
-            )
-            if timestamp < canonical_prior:
-                timestamp = canonical_prior
+        canonical_priors = [
+            canonical_timestamp(prior, field="prior transaction timestamp")
+            for prior in candidates
+        ]
+        if canonical_priors:
+            latest = max(canonical_priors)
+            if strictly_after_event:
+                timestamp = _timestamp_after(timestamp, latest)
+            elif timestamp < latest:
+                timestamp = latest
         return timestamp
 
     def _append_event(
@@ -4047,7 +4050,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     request_bytes=len(request_bytes),
                     operation=operation,
                 )
-        recorded_at = self._next_transaction_time()
+        # A Knowledge revision is a public bitemporal boundary. Keep it strictly
+        # after the preceding Ledger event so timestamp-only historical reads
+        # cannot collapse two causally ordered mutations into the same second.
+        recorded_at = self._next_transaction_time(strictly_after_event=True)
         observed_at = recorded_at
         current_workspace_path: str | None = None
         if knowledge_id is None:
@@ -6602,7 +6608,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 raise ValueError("new Knowledge relation cannot declare an expected revision")
         elif expected_relation_revision_id != parent_revision_id:
             raise RuntimeError("Knowledge relation compare-and-swap conflict")
-        recorded_at = self._next_transaction_time()
+        # Relation revisions share the Knowledge bitemporal timeline. A strict
+        # boundary makes a later endpoint lifecycle mutation distinguishable
+        # from the relation state it supersedes during historical traversal.
+        recorded_at = self._next_transaction_time(strictly_after_event=True)
         if parent_revision_id is not None:
             parent_recorded = self.connection.execute(
                 "SELECT recorded_at FROM knowledge_relation_revisions_v3 "
