@@ -200,7 +200,7 @@ process, store, or implicit activation path:
 | Product surface | What it manages | What reaches the Agent | Optional plugin / MCP tool |
 | --- | --- | --- | --- |
 | **Agent Knowledge OS** | General project knowledge, decisions, constraints, experience, and tool results | A Knowledge Capsule with sources, selection reasons, budgets, and gaps | `deeplaw-knowledge-os` / `knowledge_support` |
-| **Chinese Legal Pack** | Signed, immutable, version-aware official legal-source releases | At most five evidence cards, exact segments by ID, and receipts | `deeplaw` / `law_support` |
+| **Chinese Legal Pack** | Immutable, version-aware official legal-source releases built from exact-byte Ed25519-verified catalogs | At most five evidence cards, exact segments by ID, and receipts | `deeplaw` / `law_support` |
 
 Codex, Claude Code, and OpenCode use thin host-specific adapters. Plugins are installed and enabled
 explicitly and never take over unrelated coding or data work. Both MCP surfaces are permanently
@@ -233,7 +233,8 @@ For exact status, boundaries, and commands, use
 - Case-private documents, facts, chats, and identifiers stay outside the Knowledge OS, Legal Pack,
   caches, logs, and query corpora.
 - General Knowledge Assets always carry `legal_authority: false`. Official legal sources exist only
-  in a separate, signed, immutable Legal Pack release.
+  in a separate, immutable Legal Pack release built from an exact-byte Ed25519-verified catalog;
+  the release artifact itself has no separate approval signature.
 - Dense retrieval, rerankers, model compilers, and generated views cannot approve knowledge, decide
   legal validity, or invent missing sources.
 - The repository includes auditable benchmark and evaluator tooling, but does not present incomplete
