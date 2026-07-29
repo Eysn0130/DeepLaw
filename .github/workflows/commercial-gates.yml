@@ -203,7 +203,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install Node.js 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -219,8 +219,10 @@ jobs:
           set -euo pipefail
           uv sync --frozen --extra dev
           uv venv --python 3.12 --no-project "${RUNNER_TEMP}/host-runtime"
+          candidate_wheels=("${RUNNER_TEMP}"/verified-dist/deeplaw-*.whl)
+          [[ "${#candidate_wheels[@]}" -eq 1 ]]
           uv pip install --python "${RUNNER_TEMP}/host-runtime/bin/python" \
-            "${RUNNER_TEMP}"/verified-dist/deeplaw-0.7.0-*.whl
+            "${candidate_wheels[0]}"
           npm install --global --prefix "${RUNNER_TEMP}/host-clis" \
             @openai/codex@0.145.0 \
             @anthropic-ai/claude-code@2.1.220 \
@@ -270,7 +272,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Download exact verified wheel
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -283,11 +285,20 @@ jobs:
         run: |
           set -euo pipefail
           uv sync --frozen --extra dev
+          version=$(python - <<'PY'
+          import pathlib
+          import tomllib
+
+          print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])
+          PY
+          )
           context="${RUNNER_TEMP}/oci-context"
           evidence="${RUNNER_TEMP}/oci-evidence"
           mkdir -p "${context}" "${evidence}"
           cp packaging/oci/Dockerfile "${context}/Dockerfile"
-          cp "${RUNNER_TEMP}"/verified-dist/deeplaw-0.7.0-py3-none-any.whl "${context}/"
+          candidate_wheels=("${RUNNER_TEMP}"/verified-dist/deeplaw-*.whl)
+          [[ "${#candidate_wheels[@]}" -eq 1 ]]
+          cp "${candidate_wheels[0]}" "${context}/"
           release_commit=$(git rev-parse HEAD)
           uv export --frozen --no-dev --no-emit-project --format requirements-txt \
             --output-file "${context}/runtime-requirements.txt"
@@ -295,20 +306,20 @@ jobs:
             --platform linux/amd64 \
             --provenance=false \
             --sbom=false \
-            --build-arg DEEPLAW_VERSION=0.7.0 \
+            --build-arg DEEPLAW_VERSION="${version}" \
             --build-arg VCS_REF="${release_commit}" \
             --build-arg SOURCE_DATE_EPOCH=946684800 \
-            --output "type=oci,dest=${evidence}/deeplaw-0.7.0-linux-amd64.oci.tar" \
+            --output "type=oci,dest=${evidence}/deeplaw-${version}-linux-amd64.oci.tar" \
             "${context}"
           docker buildx build \
             --platform linux/amd64 \
             --provenance=false \
             --sbom=false \
-            --build-arg DEEPLAW_VERSION=0.7.0 \
+            --build-arg DEEPLAW_VERSION="${version}" \
             --build-arg VCS_REF="${release_commit}" \
             --build-arg SOURCE_DATE_EPOCH=946684800 \
             --load \
-            --tag deeplaw:0.7.0-local \
+            --tag "deeplaw:${version}-local" \
             "${context}"
           container_id=$(docker create \
             --network none \
@@ -316,13 +327,13 @@ jobs:
             --tmpfs /tmp:rw,noexec,nosuid,size=64m \
             --cap-drop ALL \
             --security-opt no-new-privileges:true \
-            deeplaw:0.7.0-local)
+            "deeplaw:${version}-local")
           docker inspect "${container_id}" > "${evidence}/container-inspect.json"
           docker start --attach "${container_id}" > "${evidence}/runtime-output.txt"
           docker rm "${container_id}"
           cp "${context}/runtime-requirements.txt" "${evidence}/runtime-requirements.txt"
           uv run --frozen python -m benchmarks.release.verify_oci \
-            --archive "${evidence}/deeplaw-0.7.0-linux-amd64.oci.tar" \
+            --archive "${evidence}/deeplaw-${version}-linux-amd64.oci.tar" \
             --requirements "${evidence}/runtime-requirements.txt" \
             --container-inspect "${evidence}/container-inspect.json" \
             --output "${evidence}/oci-release-report.json"
@@ -371,17 +382,26 @@ jobs:
           set -euo pipefail
           uv lock --check
           uv sync --frozen --extra dev --extra discovery --extra document-engine
+          version=$(python - <<'PY'
+          import pathlib
+          import tomllib
+
+          print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])
+          PY
+          )
           assets="${RUNNER_TEMP}/release-assets"
           mkdir -p "${assets}/dist" "${assets}/evidence" "${assets}/oci" \
             "${assets}/security" "${assets}/sbom" "${assets}/licenses"
-          cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-0.7.0-*.whl "${assets}/dist/"
-          cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-0.7.0.tar.gz "${assets}/dist/"
+          cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}"-*.whl \
+            "${assets}/dist/"
+          cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}".tar.gz \
+            "${assets}/dist/"
           cp "${RUNNER_TEMP}/gate-evidence/verified-dist/reproducible-build.json" \
             "${assets}/evidence/reproducible-build.json"
           cp "${RUNNER_TEMP}"/gate-evidence/platform-*/* "${assets}/evidence/"
           cp "${RUNNER_TEMP}/gate-evidence/no-model-host-acceptance/no-model-host-acceptance.json" \
             "${assets}/evidence/no-model-host-acceptance.json"
-          cp "${RUNNER_TEMP}/gate-evidence/verified-oci/deeplaw-0.7.0-linux-amd64.oci.tar" \
+          cp "${RUNNER_TEMP}/gate-evidence/verified-oci/deeplaw-${version}-linux-amd64.oci.tar" \
             "${assets}/oci/"
           cp "${RUNNER_TEMP}/gate-evidence/verified-oci/oci-release-report.json" \
             "${assets}/evidence/oci-release-report.json"
@@ -394,9 +414,9 @@ jobs:
           done
           uv export --quiet --frozen --all-extras --no-extra dev --no-dev \
             --format cyclonedx1.5 \
-            --output-file "${assets}/sbom/deeplaw-0.7.0.cdx.json"
+            --output-file "${assets}/sbom/deeplaw-${version}.cdx.json"
           uv run --frozen python -m benchmarks.release.inventory_licenses \
-            --output "${assets}/licenses/deeplaw-0.7.0-licenses.json"
+            --output "${assets}/licenses/deeplaw-${version}-licenses.json"
           cp security/openvex.json "${assets}/security/openvex.json"
           uv run --frozen python -m benchmarks.release.commercial_release \
             --assets-root "${assets}" \
@@ -410,8 +430,8 @@ jobs:
             --audit "${assets}/security/audit-build.json" \
             --audit "${assets}/security/audit-discovery.json" \
             --audit "${assets}/security/audit-document-engine.json" \
-            --sbom "${assets}/sbom/deeplaw-0.7.0.cdx.json" \
-            --licenses "${assets}/licenses/deeplaw-0.7.0-licenses.json" \
+            --sbom "${assets}/sbom/deeplaw-${version}.cdx.json" \
+            --licenses "${assets}/licenses/deeplaw-${version}-licenses.json" \
             --openvex "${assets}/security/openvex.json" \
             --output "${assets}/commercial-release-manifest.json"
           uv run --frozen python -m benchmarks.release.write_checksums \

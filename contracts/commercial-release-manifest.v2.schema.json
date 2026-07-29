@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-release-manifest.v2.schema.json",
+  "title": "DeepLaw commercial release manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "environment", "release", "bindings", "artifacts", "platform_gates",
+    "host_acceptance", "supply_chain", "commercial_gates",
+    "commercial_release_eligible", "competitive_claim_eligible",
+    "competitive_evidence_missing", "claim_policy", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.commercial-release-manifest/v2"},
+    "environment": {"type": "object"},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "tag", "commit", "tree", "source_date_epoch"],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source_date_epoch": {"type": "integer", "minimum": 315532800}
+      }
+    },
+    "bindings": {"type": "object"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 18,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "byte_size"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "byte_size": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "platform_gates": {
+      "type": "object",
+      "required": ["systems", "mandatory_tests", "mandatory_skips", "passed"],
+      "properties": {
+        "systems": {"const": ["Darwin", "Linux", "Windows"]},
+        "mandatory_tests": {"type": "integer", "minimum": 1740},
+        "mandatory_skips": {"const": 0},
+        "passed": {"const": true}
+      }
+    },
+    "host_acceptance": {"type": "object"},
+    "supply_chain": {"type": "object"},
+    "commercial_gates": {"type": "object"},
+    "commercial_release_eligible": {"const": true},
+    "competitive_claim_eligible": {"const": false},
+    "competitive_evidence_missing": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "real_model_task_e2e",
+          "named_baseline_results_17",
+          "secret_held_out_results",
+          "independent_evaluator_signatures"
+        ]
+      }
+    },
+    "claim_policy": {"type": "object"},
+    "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

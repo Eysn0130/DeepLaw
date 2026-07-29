@@ -40,7 +40,7 @@ their own server or plugin prefix to that name. The prefix is not a second tool.
 Do not use any other DeepLaw tool. If the server advertises a different leaf name
 or more than one tool, stop and report an adapter/runtime contract mismatch.
 
-`law_support` routes eight read-only operations:
+`law_support` routes nine read-only operations:
 
 - `search`: return a bounded evidence-card set;
 - `get`: fetch one exact segment selected by `segment_id`;
@@ -49,13 +49,21 @@ or more than one tool, stop and report an adapter/runtime contract mismatch.
 - `private_search`: search only the user-private legal-reference snapshot;
 - `private_get`: fetch one exact private segment;
 - `private_verify`: verify one private snapshot receipt;
-- `private_info`: inspect the current private snapshot.
+- `private_info`: inspect the current private snapshot;
+- `federated_context`: compile separately admitted official, private, and explicitly enabled
+  Agent-interpretation partitions under one bounded plan.
 
 Use `private_*` only when the user explicitly asks to use their DeepLaw private
 legal-reference library. Never infer private scope from a workspace, filename,
 or case project. Do not combine official and private candidates into one ranking
 or authority conclusion; query and label the two scopes separately when both
 are explicitly requested.
+
+Use `federated_context` only when the user explicitly requests combined context and after
+`confirm_no_case_data=true` is justified. Keep each returned partition's origin, authority,
+version, temporal state, receipt, and uncertainty. Agent interpretations always have
+`legal_authority=false`; an unavailable official partition must never be silently replaced or
+relabeled by private material, model memory, or Web search.
 
 Never ask for or invent an MCP corpus-write, memory-write, upload, delete,
 reindex, or administration operation. Private add/delete and official updates

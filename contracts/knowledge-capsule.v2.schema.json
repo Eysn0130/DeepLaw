@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-capsule.v2.schema.json",
+  "title": "DeepLaw Knowledge Capsule v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "vault_id", "task", "goal", "as_of", "query_plan",
+    "query_plan_sha256", "sections", "budget", "audit_head", "created_at",
+    "capsule_id", "capsule_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-capsule/v2"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "task": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "goal": {"type": ["string", "null"], "maxLength": 2000},
+    "as_of": {"type": ["string", "null"], "format": "date-time"},
+    "query_plan": {"type": "object"},
+    "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "official_evidence", "user_private_evidence", "source_derived_knowledge",
+        "agent_derived_knowledge", "agent_memory", "contradictions", "limitations",
+        "gaps", "receipts"
+      ],
+      "properties": {
+        "official_evidence": {"type": "array", "maxItems": 5, "items": {"type": "object"}},
+        "user_private_evidence": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+        "source_derived_knowledge": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+        "agent_derived_knowledge": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+        "agent_memory": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+        "contradictions": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+        "limitations": {"type": "array", "maxItems": 20, "items": {"type": "string"}},
+        "gaps": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
+        "receipts": {"type": "array", "maxItems": 40, "items": {"type": "object"}}
+      }
+    },
+    "budget": {"type": "object"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+    "capsule_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

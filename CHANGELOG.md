@@ -3,6 +3,60 @@
 All notable product changes are recorded here. DeepLaw 2.0 is the product name; Python package
 versions follow semantic versioning independently.
 
+## 0.9.0 — 2026-07-30
+
+This release implements the **DeepLaw 0.8 Autonomous Knowledge Core** and **0.9 Living Wiki and
+Knowledge Intelligence** milestones. The v1.0 engineering/evaluator gates are present, but competitive eligibility
+remains false until evaluator-controlled real-host runs, named baselines, secret held-outs and
+independent signatures exist.
+
+### Added
+
+- Markdown Knowledge Revisions in a content-addressed object repository plus
+  `.deeplaw/ledger.sqlite3`, recoverable staging/materialization, single-writer leases,
+  compare-and-swap, explicit conflict revisions, Watcher/reconcile, snapshot/restore and rollback.
+- A separate v2 `knowledge_sink` with grants, immutable Run Records, bounded durable capture,
+  Claim/Concept/Entity/Event/Comparison/Synthesis/Memory/Skill objects, typed temporal relations,
+  feedback, consolidation, expiry, forgetting and owner-confirmed content GC.
+- Exact duplicate collapse receipts, high-precision contradiction preservation, aliases,
+  Concept/Entity identity lookup, explicit same-as/merge/split decisions and Wikilink compilation.
+- Offline hash-dense and evidence-duty reranker indexes bound to both audit heads and exact bytes;
+  token/source/hop/item/character/provider budgets; temporal graph and historical lexical recall.
+- Living Overview and typed Wiki pages, weighted deterministic communities, Semantic Lint, Gap
+  Discovery, JSON Canvas and a deterministic checkable-step Skill draft Factory.
+- `knowledge_support` v3 with identity/gap operations and `law_support` v3 with an authority-aware
+  federated official/private/Agent-interpretation context; frozen v2 contracts remain unchanged.
+- Repository-bound Chinese/English/code/legal/long-document development Gold tooling. It is openly
+  labeled non-secret and claim-ineligible, enforces frozen per-mode quality thresholds, and leaves
+  the external claim gate fail closed.
+
+### Changed
+
+- Ordinary admitted Agent-derived knowledge is immediately active instead of entering the legacy
+  universal human-review queue. Official/human-verified authority, signing, scope expansion,
+  restricted export and new capabilities remain owner/maintainer-only.
+- Markdown is canonical open content paired with Ledger governance, not a disposable SQLite
+  projection. Rename/move is identity-safe and external edits become new audited revisions.
+- Persisted task-local `working` memory now requires an explicit expiry instead of silently becoming
+  unbounded long-term state.
+
+### Fixed
+
+- Scope and sensitivity are now applied to Semantic Lint and gap discovery before MCP projection;
+  other partitions cannot leak through identifiers, issue counts, or alias analysis.
+- Scope, sensitivity, lifecycle, valid time, kind, and required tags are pushed ahead of bounded
+  lexical, dense, temporal, and graph candidate cuts, then revalidated before reranking. Hidden or
+  irrelevant candidates can no longer crowd out admissible results.
+- Every new relation now requires a bound evidence reference. Historical source-free relation rows
+  remain auditable but are excluded from current graph and recall.
+- Canonical knowledge commits no longer synchronously rebuild every disposable index. They enqueue
+  derived maintenance; the foreground Watcher or explicit rebuild drains the queue, stale indexes
+  fail closed, and current lexical recall uses a bounded canonical fallback.
+- Identity lookup filters governance before its scan, binds aliases to the current revision, retains
+  exact ambiguity even when the return limit is one, and reports scan truncation.
+- Graph, contradiction, identity, and Semantic Lint scans now expose hard resource truncation instead
+  of performing unbounded Agent-facing work.
+
 ## 0.7.0 — 2026-07-28
 
 Commercial GA is approved independently from competitive leadership. The signed release manifest

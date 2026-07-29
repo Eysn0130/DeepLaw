@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/repository-gold-set.v1.schema.json",
+  "title": "DeepLaw repository-bound development Gold Set v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "claim_eligible", "frozen_at", "categories",
+    "quality_gate", "documents", "cases"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.repository-gold-set/v1"},
+    "status": {"const": "curated_development_fixture"},
+    "claim_eligible": {"const": false},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "categories": {
+      "const": ["chinese", "english", "code", "legal", "long_document"]
+    },
+    "quality_gate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lexical", "dense", "hybrid"],
+      "properties": {
+        "lexical": {"$ref": "#/$defs/gate"},
+        "dense": {"$ref": "#/$defs/gate"},
+        "hybrid": {"$ref": "#/$defs/gate"}
+      }
+    },
+    "documents": {
+      "type": "array", "minItems": 5, "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["document_id", "category", "path", "sha256", "title", "anchor"],
+        "properties": {
+          "document_id": {"type": "string", "minLength": 1, "maxLength": 100},
+          "category": {"enum": ["chinese", "english", "code", "legal", "long_document"]},
+          "path": {"type": "string", "minLength": 1, "maxLength": 500},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "title": {"type": "string", "minLength": 1, "maxLength": 500},
+          "anchor": {"type": "string", "minLength": 1, "maxLength": 2000}
+        }
+      }
+    },
+    "cases": {
+      "type": "array", "minItems": 10, "maxItems": 1000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "case_id", "category", "query", "expected_document_ids",
+          "forbidden_document_ids", "top_k"
+        ],
+        "properties": {
+          "case_id": {"type": "string", "minLength": 1, "maxLength": 100},
+          "category": {"enum": ["chinese", "english", "code", "legal", "long_document"]},
+          "query": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "expected_document_ids": {
+            "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 100}
+          },
+          "forbidden_document_ids": {
+            "type": "array", "maxItems": 20, "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 100}
+          },
+          "top_k": {"type": "integer", "minimum": 1, "maximum": 10}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "gate": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "minimum_hit_at_1", "minimum_useful_context_recall",
+        "maximum_irrelevant_context_rate", "maximum_forbidden_admission_count"
+      ],
+      "properties": {
+        "minimum_hit_at_1": {"$ref": "#/$defs/ratio"},
+        "minimum_useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "maximum_irrelevant_context_rate": {"$ref": "#/$defs/ratio"},
+        "maximum_forbidden_admission_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

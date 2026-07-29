@@ -2,12 +2,14 @@
 
 ## 状态和边界
 
+Status: reviewed against DeepLaw `v0.9.0`, 2026-07-30.
+
 本文描述 DeepLaw 2.0 与 Analytix 的未来集成契约，不证明 Analytix 当前已经具备这些能力，
 也不授权修改 Analytix。实施前必须在 Analytix 建立独立 OpenSpec change，并以当时的代码、
 已接受规范和测试为准重新复核。
 
 目标不是把 DeepLaw 写进 Analytix 核心，而是让 Analytix 的唯一生产 Go Runtime 安全消费
-一个外部、只读、版本化的官方法律能力。DeepLaw 2.0 当前软件版本 `v0.7.0` 另有用户私有法律参考资料范围，
+一个外部、只读、版本化的官方法律能力。DeepLaw 2.0 当前软件版本 `v0.9.0` 另有用户私有法律参考资料范围，
 但它不是 Analytix 案件项目库，首期 Analytix 集成不开放 `private_*` operation：
 
 ```text
@@ -42,8 +44,9 @@ schema 对所有 provider turn 永久可见。用户私有法律资料也不能�
 
 DeepLaw 当前只暴露一个紧凑工具：`law_support`。公开 contract 位于：
 
-- `contracts/law-support.input.v2.schema.json`（当前八 operation；v1 保留官方四 operation）
-- `contracts/law-support.output.v2.schema.json`
+- `contracts/law-support.input.v3.schema.json`（当前九个只读 operation）
+- `contracts/law-support.output.v3.schema.json`
+- `contracts/law-support.input.v2.schema.json`（冻结的官方/私有八 operation 兼容契约）
 - `contracts/law-search-response.v2.schema.json`
 - `contracts/law-segment.v2.schema.json`
 - `contracts/law-verification.v1.schema.json`
@@ -51,11 +54,11 @@ DeepLaw 当前只暴露一个紧凑工具：`law_support`。公开 contract 位�
 - `contracts/legal-evidence-card.v2.schema.json`
 - `contracts/corpus-release-manifest.v2.schema.json`
 
-`law-support.output` 是四种只读结果形状的 closed union；`law-support.input` 当前路由八种只读
-operation（官方四种、私有四种）。宿主必须按 operation 验证对应分支，
+`law-support.output` 是只读结果形状的 closed union；`law-support.input` v3 当前路由九种只读
+operation（官方四种、私有四种、authority-aware `federated_context` 一种）。宿主必须按 operation 验证对应分支，
 拒绝未知字段，不能只验证 MCP transport success。
 
-DeepLaw 2.0 当前软件版本 `v0.7.0` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transport；它不是 HTTP
+DeepLaw 2.0 当前软件版本 `v0.9.0` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transport；它不是 HTTP
 服务。握手时发布的是已内联本地 `$ref` 的 closed output schema，宿主不应在运行时依赖网络
 解析 GitHub schema URL。
 
@@ -75,8 +78,9 @@ DeepLaw 2.0 当前软件版本 `v0.7.0` 使用 MCP SDK 的低层 `Server`，只�
 | `private_get` | 读取一个私有 segment | 首期 Analytix 必须拒绝 |
 | `private_verify` | 校验私有快照 receipt | 首期 Analytix 必须拒绝 |
 | `private_info` | 获取私有快照元数据 | 首期 Analytix 必须拒绝 |
+| `federated_context` | 分区编排官方、私有和显式启用的 Agent 法律解释 | 首期 Analytix 必须拒绝；不得发送案件事实，也不得视为法律适用判断 |
 
-由于八种 operation 共用一个 `law_support` leaf，只按 leaf allowlist 不足以完成首期隔离。
+由于九种 operation 共用一个 `law_support` leaf，只按 leaf allowlist 不足以完成首期隔离。
 Analytix 必须在 provider schema 物化前投影出只含官方四个分支的输入 schema，并在执行适配器
 再次拒绝 `private_*`，不能只依赖模型“不去调用”。未来若要开放用户私有法律参考，应建立另一个
 明确授权的能力 scope；仍不得把它接到案件附件、会话或案件 SQLite/DuckDB。

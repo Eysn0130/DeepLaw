@@ -113,8 +113,8 @@ def build_report(
         raise PlatformGateError(
             f"runner platform is {environment['platform_system']}, expected {expected_system}"
         )
-    if binding["package_version"] != "0.7.0" or not binding["worktree_clean"]:
-        raise PlatformGateError("platform gate requires a clean 0.7.0 commit")
+    if not binding["worktree_clean"]:
+        raise PlatformGateError("platform gate requires a clean release commit")
     lifecycle = load_json(lifecycle_path)
     verify_record_digest(lifecycle, field="distribution lifecycle")
     if lifecycle.get("schema_version") != "deeplaw.distribution-lifecycle/v1":

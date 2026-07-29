@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -178,8 +179,8 @@ def run(
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
     version = binding["package_version"]
-    if version != "0.7.0":
-        raise LifecycleError(f"commercial lifecycle requires 0.7.0, found {version}")
+    if version == LEGACY_VERSION or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+        raise LifecycleError(f"commercial lifecycle package version is invalid: {version}")
     wheels = sorted(dist.glob("*.whl"))
     sdists = sorted(dist.glob("*.tar.gz"))
     if len(wheels) != 1 or len(sdists) != 1:
@@ -378,7 +379,7 @@ def run(
             "wheel_uninstall": True,
             "sdist_install": True,
             "sdist_uninstall": True,
-            "upgrade_0_6_0_to_0_7_0": True,
+            "upgrade_from_0_6_0": True,
             "cli_version": True,
             "locked_runtime_constraints": True,
         },

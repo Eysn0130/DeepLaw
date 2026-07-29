@@ -49,7 +49,7 @@ def _junit(path: Path, *, skipped: int = 0) -> None:
 
 
 def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
-    assert set(_unified_versions(REPOSITORY).values()) == {"0.7.0"}
+    assert set(_unified_versions(REPOSITORY).values()) == {"0.9.0"}
     assert all(_docs(REPOSITORY).values())
     assert "商业" not in (REPOSITORY / "README.md").read_text(encoding="utf-8")
     assert "commercial" not in (
@@ -66,7 +66,7 @@ def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
 def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
     schema = json.loads(
         (
-            REPOSITORY / "contracts/commercial-release-manifest.v1.schema.json"
+            REPOSITORY / "contracts/commercial-release-manifest.v2.schema.json"
         ).read_text(encoding="utf-8")
     )
     Draft202012Validator.check_schema(schema)
@@ -115,8 +115,9 @@ def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
     assert "USER 65532:65532" in dockerfile
     assert 'ENTRYPOINT ["deeplaw"]' in dockerfile
     assert 'CMD ["--version"]' in dockerfile
-    assert "deeplaw-0.7.0-py3-none-any.whl" in dockerfile
-    assert "/tmp/deeplaw.whl" not in dockerfile
+    assert "COPY deeplaw-*.whl /tmp/" in dockerfile
+    assert 'set -- /tmp/deeplaw-*.whl' in dockerfile
+    assert '--no-deps "$1"' in dockerfile
     assert "EXPOSE " not in dockerfile
 
 

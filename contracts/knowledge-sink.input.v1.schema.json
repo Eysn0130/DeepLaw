@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.input.v1.schema.json",
+  "title": "DeepLaw Knowledge Sink Input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "idempotency_key", "confirm_no_case_data"],
+  "properties": {
+    "operation": {
+      "type": "string",
+      "enum": [
+        "remember",
+        "reflect",
+        "save_synthesis",
+        "upsert_concept",
+        "add_relation",
+        "expire",
+        "forget",
+        "save_skill",
+        "record_feedback"
+      ]
+    },
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "confirm_no_case_data": {"const": true},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "body": {"type": "string", "minLength": 1, "maxLength": 200000},
+    "kind": {
+      "type": "string",
+      "enum": [
+        "claim", "concept", "entity", "event", "decision", "procedure",
+        "experience", "preference", "synthesis", "comparison", "skill", "memory"
+      ]
+    },
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "expected_revision_id": {
+      "type": "string",
+      "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "scope": {"type": "string", "enum": ["personal", "project", "domain"]},
+    "sensitivity": {
+      "type": "string",
+      "enum": ["public", "internal", "private", "restricted"]
+    },
+    "epistemic_state": {
+      "type": "string",
+      "enum": ["supported", "tentative", "contested", "unknown"]
+    },
+    "source_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/source_ref"}
+    },
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "model_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "tool_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "generation_activity_id": {"type": "string", "minLength": 1, "maxLength": 500},
+    "tags": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "semantic_key": {"type": "string", "minLength": 1, "maxLength": 300},
+    "valid_from": {"type": "string", "format": "date-time"},
+    "valid_to": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "memory_type": {
+      "type": "string",
+      "enum": ["working", "episodic", "semantic", "procedural", "reflective"]
+    },
+    "preference_basis": {
+      "enum": ["direct_user_statement", "agent_inference"]
+    },
+    "requested_origin": {
+      "type": "string",
+      "enum": ["official", "user_source", "agent_derived", "external_import"]
+    },
+    "requested_authority": {
+      "type": "string",
+      "enum": ["official", "user_provided", "agent_derived", "unverified", "human_verified"]
+    },
+    "skill_manifest": {"$ref": "#/$defs/skill_manifest"},
+    "subject_knowledge_id": {
+      "type": "string",
+      "pattern": "^knowledge_[0-9a-f]{24}$"
+    },
+    "predicate": {
+      "type": "string",
+      "enum": [
+        "supports", "contradicts", "depends_on", "implements", "derived_from",
+        "applies_to", "related_to", "describes", "mentions", "reports",
+        "contributes_to", "same_as"
+      ]
+    },
+    "object_knowledge_id": {
+      "type": "string",
+      "pattern": "^knowledge_[0-9a-f]{24}$"
+    },
+    "expected_relation_revision_id": {
+      "type": "string",
+      "pattern": "^relationrev_[0-9a-f]{24}$"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/source_ref"}
+    },
+    "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "outcome": {"enum": ["helpful", "neutral", "noisy", "harmful"]},
+    "evaluator_type": {"enum": ["user", "external_check", "agent_self_report"]},
+    "feedback_note": {"type": "string", "minLength": 1, "maxLength": 4000}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"enum": ["remember", "reflect", "save_synthesis", "upsert_concept", "save_skill"]}},
+        "required": ["operation"]
+      },
+      "then": {
+        "required": ["title", "body"],
+        "propertyNames": {"$ref": "#/$defs/object_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "remember"}}, "required": ["operation"]},
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "claim", "entity", "event", "decision", "procedure", "experience",
+              "preference", "comparison", "memory"
+            ]
+          }
+        },
+        "not": {"required": ["skill_manifest"]}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "reflect"}}, "required": ["operation"]},
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["kind"]},
+            {"required": ["preference_basis"]},
+            {"required": ["skill_manifest"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"operation": {"enum": ["save_synthesis", "upsert_concept"]}},
+        "required": ["operation"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["kind"]},
+            {"required": ["memory_type"]},
+            {"required": ["preference_basis"]},
+            {"required": ["skill_manifest"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "save_skill"}}, "required": ["operation"]},
+      "then": {
+        "required": ["skill_manifest"],
+        "not": {
+          "anyOf": [
+            {"required": ["kind"]},
+            {"required": ["memory_type"]},
+            {"required": ["preference_basis"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "add_relation"}}, "required": ["operation"]},
+      "then": {
+        "required": ["subject_knowledge_id", "predicate", "object_knowledge_id"],
+        "propertyNames": {"$ref": "#/$defs/relation_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"enum": ["forget", "expire"]}}, "required": ["operation"]},
+      "then": {
+        "required": ["knowledge_id", "expected_revision_id", "reason"],
+        "propertyNames": {"$ref": "#/$defs/lifecycle_field_name"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "record_feedback"}}, "required": ["operation"]},
+      "then": {
+        "required": ["knowledge_id", "expected_revision_id", "run_id", "outcome", "evaluator_type"],
+        "propertyNames": {"$ref": "#/$defs/feedback_field_name"}
+      }
+    }
+  ],
+  "$defs": {
+    "object_field_name": {
+      "enum": [
+        "operation", "idempotency_key", "confirm_no_case_data", "title", "body",
+        "kind", "knowledge_id", "expected_revision_id", "scope", "sensitivity",
+        "epistemic_state", "source_refs", "run_id", "model_id", "tool_id",
+        "generation_activity_id", "tags", "semantic_key", "valid_from", "valid_to",
+        "expires_at", "memory_type", "preference_basis", "requested_origin",
+        "requested_authority", "skill_manifest"
+      ]
+    },
+    "relation_field_name": {
+      "enum": [
+        "operation", "idempotency_key", "confirm_no_case_data",
+        "subject_knowledge_id", "predicate", "object_knowledge_id",
+        "expected_relation_revision_id", "evidence_refs", "valid_from", "valid_to"
+      ]
+    },
+    "lifecycle_field_name": {
+      "enum": [
+        "operation", "idempotency_key", "confirm_no_case_data", "knowledge_id",
+        "expected_revision_id", "reason"
+      ]
+    },
+    "feedback_field_name": {
+      "enum": [
+        "operation", "idempotency_key", "confirm_no_case_data", "knowledge_id",
+        "expected_revision_id", "run_id", "outcome", "evaluator_type", "feedback_note"
+      ]
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "source_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "fragment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "artifact_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "uri": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "oneOf": [
+        {
+          "required": ["revision_id"],
+          "not": {"anyOf": [
+            {"required": ["source_id"]}, {"required": ["source_revision_id"]},
+            {"required": ["fragment_id"]}, {"required": ["artifact_id"]}
+          ]}
+        },
+        {
+          "required": ["artifact_id"],
+          "not": {"anyOf": [
+            {"required": ["source_id"]}, {"required": ["source_revision_id"]},
+            {"required": ["fragment_id"]}, {"required": ["revision_id"]}
+          ]}
+        },
+        {
+          "anyOf": [
+            {"required": ["source_id"]},
+            {"required": ["source_revision_id"]}
+          ],
+          "not": {"anyOf": [
+            {"required": ["artifact_id"]}, {"required": ["revision_id"]}
+          ]}
+        }
+      ]
+    },
+    "skill_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose", "applies_to", "does_not_apply_to", "invocation_mode",
+        "input_contract", "output_contract", "capabilities", "resource_limits",
+        "steps", "success_criteria", "failure_conditions", "license",
+        "host_compatibility", "verification_commands", "known_limitations",
+        "lifecycle", "source_revision_ids", "evaluation_run_ids",
+        "supersedes_skill_revision", "deprecation_reason"
+      ],
+      "properties": {
+        "purpose": {"type": "string", "minLength": 1},
+        "applies_to": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "does_not_apply_to": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "invocation_mode": {"enum": ["user-invoked", "model-invoked"]},
+        "input_contract": {"type": "object"},
+        "output_contract": {"type": "object"},
+        "capabilities": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "resource_limits": {"type": "object"},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["instruction", "completion_criterion"],
+            "properties": {
+              "instruction": {"type": "string", "minLength": 1},
+              "completion_criterion": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "success_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "failure_conditions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "license": {"type": "string", "minLength": 1},
+        "host_compatibility": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "verification_commands": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "known_limitations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "lifecycle": {"enum": ["draft", "experimental", "promoted", "deprecated", "revoked"]},
+        "source_revision_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "evaluation_run_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "supersedes_skill_revision": {"type": ["string", "null"]},
+        "deprecation_reason": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

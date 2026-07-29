@@ -1,90 +1,105 @@
 # DeepLaw roadmap
 
-Status: `v0.7.0` commercial GA, updated 2026-07-28. Runtime truth is
-`src/deeplaw`, tests, contracts, and `uv.lock`; this file never upgrades a planned capability into
-an implementation claim.
+Status: v0.9.0 delivery line, updated 2026-07-30. Runtime truth is `src/deeplaw`, contracts,
+migrations, tests, and `uv.lock`. A roadmap item never becomes a delivery claim without those
+artifacts.
 
-## Permanent product boundary
+## Permanent boundary
 
-DeepLaw is a local, single-OS-user Agent Knowledge OS. This is the intended product, not a temporary
-stage before a hosted service.
+DeepLaw remains local-first, single-user, owner-controlled, CLI-first, and host-runtime agnostic.
+The roadmap excludes multi-tenant SaaS, a remote canonical database, a team control plane, default
+upload/telemetry, implicit networking, automatic legal adjudication, and authority derived from
+rank, embeddings, graph weight, confidence, votes, or frequency.
 
-The roadmap does not include:
+Agent-derived knowledge may activate autonomously inside an explicit scope-bound policy. Official
+identity, `human_verified`, signature/release operations, private export, scope expansion, new tool
+permissions, and audit destruction remain owner/maintainer-only.
 
-- multi-tenant SaaS;
-- team RBAC or a remote control plane;
-- a remote canonical database or distributed index;
-- cross-organization Knowledge Marketplace;
-- default upload, telemetry, or implicit web retrieval;
-- Agent-driven automatic activation of memory;
-- graph, embedding, model output, confidence, or rank becoming authority.
+## v0.8 — Autonomous Knowledge Core
 
-The separate general Knowledge OS and Chinese Legal Pack remain local, explicitly activated, and
-reachable through different read-only MCP plugins.
+**Implemented in v0.9.0.** The milestone is an additive migration from the published v0.7
+foundation:
 
-## v0.7.0 commercial implementation
+- additive migration with a verified v0.7 rollback point;
+- immutable content-addressed objects plus canonical Markdown Knowledge Revisions;
+- STRICT SQLite identity/event Ledger, bitemporal relations, writer/run/model/tool provenance, and
+  independent hash-chain verification;
+- stable-ID rename/move reconciliation, file leases, compare-and-swap, explicit conflict
+  preservation, crash recovery, audited exact-duplicate collapse, high-precision contradiction
+  preservation, prompt-injection and authority-elevation quarantine;
+- separately enabled scope/sensitivity/operation/size/rate/capacity-bound `knowledge_sink`;
+- Run Records, bounded durable capture, Claim/Concept/Entity/Event/Comparison/Synthesis/Memory/Skill
+  revisions, alias and identity resolution, evidence-required canonical temporal relations, and
+  source/run binding;
+- immediate active/quarantine policy, immutable revision supersession lineage, TTL expiry,
+  autonomous consolidation, explicit forgetting, owner-confirmed content GC, and fail-closed
+  admission for every inactive lifecycle state;
+- v3 read-only `knowledge_support`, v2 separately enabled `knowledge_sink`, bounded Capsule v2,
+  foreground Watcher, recovery, replay, snapshot, restore, and v0.7 rollback;
+- existing exact-byte signed Legal Pack updater with monotonic catalog sequence, rollback protection,
+  fail-closed build validation, and atomic activation.
+- autonomous snapshot/restore and legacy compatibility.
 
-- Identity v2 with stable logical-source identity, immutable source/compilation/proposal/governance
-  revisions, many-to-many references, lineage, temporal relation revisions, and selective
-  forgetting.
-- Multi-format Source Adapter, Source IR, Source Tree, deterministic-v2 compiler, explicit local
-  and external compiler modes, resumable ingest/sync/watch jobs, and atomic source replacement.
-- One-shot owner-only Source Snapshots for explicitly authorized public HTTPS and exact commits in
-  existing local Git repositories, with origin commitments, bounded fetch/plumbing, no silent
-  fallback, and the same proposal/review lifecycle.
-- Evidence-Governed Retrieval Fabric with Query Plan, exact/BM25/tree/graph/temporal/feedback
-  channels, optional Dense and pinned local reranker paths, rank fusion, admission, Knowledge
-  Duties, source diversity, token budgets, Explain Trace, and Capsule verification.
-- Golden CLI, curses Operator Workbench, rich Markdown/Obsidian/JSON Canvas projection, reverse
-  edit-to-quarantine workflow, isolated Proposal Inbox, and source-bound Skill Factory.
-- Snapshot/restore, GC/orphan detection, derived rebuild, migration/rollback, corruption doctor,
-  backup validation, POSIX permissions, and native Windows ACL evaluation/hardening code.
-- Named baseline registry and official-adapter protocol, Retrieval Fabric scale runner, a
-  fail-closed content-addressed External Evaluator Kit freezer/verifier, dependency audits,
-  OpenVEX enforcement, CycloneDX SBOM, license/package inventory,
-  byte-reproducible wheel/sdist check, fresh-wheel verification, and signed/attested release
-  workflow.
+The v0.9 release line freezes the package/version, supported-OS matrix, security/package audit,
+signed release metadata, and release notes independently from competitive evidence.
 
-The signed commercial manifest and post-release report bind these items to exact release bytes.
+## v0.9 — Living Wiki and Knowledge Intelligence
 
-## Competitive validation program
+**Implemented in v0.9.0; cross-system quality evaluation remains separate.**
 
-| Gate | Required evidence | Current state |
-| --- | --- | --- |
-| Commercial artifact freeze | Clean final commit, lock, contracts, identical wheel/sdist, OCI, SBOM, licenses, audits, OpenVEX, signatures and provenance | required commercial GA gate; published in the v0.7.0 manifest |
-| Native Windows isolation | Real Windows run proves owner SID and rejects Users, Everyone, inherited broad grants, reparse points and junctions across Vault sources, model files, and index files | required commercial GA gate; the `windows-latest` report is published |
-| OS install matrix | Clean install/upgrade/uninstall, CLI/MCP/migration/rollback/snapshot and mandatory tests on Linux, macOS and Windows with zero skips | required commercial GA gate; reports are published |
-| Formal 100k support | Actual 100,000-Asset run records build/index cost, cold CLI/integrity, memory, database size, warm latency, quality, provenance, update, forgetting, and no-answer | 100k construction diagnostic passed the complete listed workload; clean frozen-candidate rerun remains pending |
-| One-million diagnostic | Actual 1,000,000-Asset run with the same resource accounting; no extrapolated claim | construction diagnostic passed the complete workload and all three latency gates; clean frozen-candidate rerun remains pending |
-| Named baseline execution | Every preregistered third-party system runs its official implementation/config at the pinned commit/model with the same corpus, tasks, token budget, hardware, and network policy | registry, environment/resource contracts, subprocess receipts, and 17-system collection gate ready; all real results pending |
-| Internal superiority gate | Per-system non-inferiority plus one win, aggregate metrics, paired bootstrap, confidence intervals, Holm–Bonferroni, failures, costs, and raw outputs | pending execution |
-| Host model-task end-to-end | Codex, Claude Code and OpenCode complete real model tasks for recall/context/verify/explain/restricted exclusion and inactive-zero-impact | no-model official-CLI lifecycle passes commercial GA; real model-task evidence remains competitive-only and pending |
-| Independent held-out | Two genuine independent organizations commit secret suites before candidate access, run the frozen artifact, retain failures/resources, and sign complete manifests | pending external execution |
+- deterministic offline multilingual dense index and evidence-duty reranker, both bound to model
+  identity, audit heads, revision inventory, exact index bytes, offline policy, and hard limits;
+- exact, lexical, dense, graph, temporal, memory, Living Wiki, Source Tree/code-symbol compatibility,
+  and hybrid planning under item/character/token/source/hop/provider-payload budgets;
+- constrained aliases, same-as/merge/split identity decisions, Wikilink compilation, temporal
+  canonical relations, weighted deterministic communities, contradictions, Semantic Lint, and Gap
+  Discovery;
+- Living Overview plus Concept/Entity/Event/Comparison/Synthesis pages, community/gap reports, and
+  JSON Canvas as hash-bound rebuildable views;
+- memory consolidation with crash-safe saga replay and reversible archived inputs;
+- Obsidian/Tolaria-safe stable-ID rename/move/reconcile semantics without CRDT or last-writer-wins;
+- a deterministic Skill Factory that compiles only explicitly checkable Procedure steps into a
+  governed draft Skill revision; promotion still requires an admitted user/external evaluation;
+- authority-partitioned `law_support.federated_context` for official, user-private, and explicitly
+  enabled Agent interpretations, with no fallback relabeling or legal adjudication.
+- canonical mutations enqueue derived maintenance instead of synchronously rebuilding the Vault;
+  Watcher or explicit rebuild consumes the queue, while stale indexes fail closed and bounded
+  canonical recall remains available.
+- governance filters are applied before bounded lexical/dense/temporal/graph candidate windows and
+  revalidated before reranking; Lint/gaps enforce the same scope/sensitivity boundary.
 
-The development team cannot create the independent organizations, secret data, signatures, or
-independence. Until authentic evidence exists, `competitive_claim_eligible=false` and no
-best/SOTA/leadership statement is permitted. That status does not revoke commercial GA.
+## v1.0 — Quality and Superiority Closure
 
-## P2 product completion after the candidate core
+**Engineering gates exist; external proof is intentionally open.** v0.9 provides the
+offline Dense/Reranker implementation, Typed Compiler scorer, real-repository Chinese/English/code/
+legal/long-document development Gold Set, host adapters, 17-system fair-baseline execution kit,
+secret-held-out protocol, evaluator-kit freezer, detached-signature verification, and a fail-closed
+claim gate. The following are facts that only external evaluators can complete:
 
-- Exercise the HTTPS/Git snapshot adapters against a frozen public-endpoint/certificate/redirect
-  matrix and native Git implementations on every supported OS; retain fail-closed SSRF, protocol,
-  size, hash, origin, and tamper evidence.
-- Exercise rename/move/split/merge/parser-change/source-update cases across the full real-file
-  format matrix, including damaged and adversarial inputs.
-- Complete natural-language retrieval suites for typo, synonym, abbreviation, mixed CJK/English,
-  multi-entity, multi-hop, global, temporal, contradiction/counterevidence, source swamp,
-  preference, procedure, experience, incident review, and no-answer behavior.
-- Run training/evaluation/activation/rollback gates for versioned Ranking Profiles using only
-  Run/Capsule/Feedback-bound data; task success remains explicit human/evaluator evidence.
-- Expand TUI keyboard/accessibility tests and large-queue usability studies without introducing a
-  remote service or second business-logic layer.
-- Complete publisher signing for `.dlk`; until then packages provide content integrity only and
-  every import remains untrusted quarantine.
+- frozen corpus/candidate/split/questions and preregistered third-party baselines;
+- fixed host model, prompt, permissions, context budgets, hardware, network, latency, memory,
+  indexing and token/cost accounting;
+- real-model Codex, Claude Code, and OpenCode tasks on the frozen candidate;
+- actual RAGFlow, Graphiti, PageIndex, Mem0, OpenKB, LLM Wiki, Obsidian/Tolaria and registered
+  baseline runs under one evaluator-owned environment;
+- held-out task success, useful-context recall, irrelevant-context rate, provenance coverage,
+  wrong-version/invalid-authority admission, temporal updates, contradiction, forgetting,
+  poisoning, unauthorized mutation, isolation, abstention, cold/warm latency, and build cost;
+- confidence intervals, paired tests, correction for multiple comparisons, complete failures and
+  raw outputs from two evaluator-controlled secret held-outs;
+- two genuine independent organizations and signatures verified against separately trusted keys;
 
-## Release rule
+Until those artifacts exist, `competitive_claim_eligible=false`; no better/leading/SOTA statement
+is permitted.
 
-Commercial version advancement requires the engineering, packaging, security, platform and
-post-release gates in `docs/V0_7_ACCEPTANCE_MATRIX.md`. Competitive leadership requires the separate
-external evidence program above. Planned work remains `Planned`; a generated confidence score is
-never an approval or a release gate result.
+## Sequencing rule
+
+At every milestone:
+
+1. Preserve evidence bytes, stable identity, authority dimensions, scope, sensitivity, temporal
+   state, provenance, and audit before adding retrieval sophistication.
+2. Add one production-grade path with schema, migration, rollback, replay, tests, and docs; do not
+   maintain a second implementation in GUI, MCP, Skill, or adapters.
+3. Keep advanced retrieval and visual layers disposable and rebuildable.
+4. Compare mechanisms fairly before making one a default.
+5. Stop and report an evidence gap instead of filling it with a generated claim.

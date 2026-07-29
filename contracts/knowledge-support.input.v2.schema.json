@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.input.v2.schema.json",
+  "title": "DeepLaw Knowledge Support Input v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation"],
+  "properties": {
+    "operation": {
+      "enum": ["search", "recall", "get", "context", "verify", "inspect", "lineage", "graph", "wiki_lookup", "explain"]
+    },
+    "plane": {"enum": ["all", "source_derived", "autonomous"], "default": "all"},
+    "query": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "task": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "goal": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "confirm_no_case_data": {"const": true},
+    "asset_id": {"type": "string", "pattern": "^asset_[0-9a-f]{24}$"},
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {
+      "enum": ["public", "internal", "private"],
+      "default": "private"
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
+    "max_chars": {"type": "integer", "minimum": 200, "maximum": 20000, "default": 5000},
+    "as_of": {"type": "string", "format": "date-time"},
+    "kinds": {
+      "type": "array",
+      "maxItems": 23,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "assumption", "claim", "comparison", "concept", "constraint", "decision",
+          "definition", "entity", "event", "exception", "experience", "fact", "lesson",
+          "memory", "preference", "procedure", "question", "reference", "requirement",
+          "risk", "rule", "skill", "synthesis"
+        ]
+      }
+    },
+    "memory_tiers": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"enum": ["working", "project", "experience", "wisdom", "domain"]}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"enum": ["search", "recall", "wiki_lookup", "explain"]}}, "required": ["operation"]},
+      "then": {
+        "required": ["query"],
+        "propertyNames": {"$ref": "#/$defs/query_field"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "context"}}, "required": ["operation"]},
+      "then": {
+        "required": ["task", "confirm_no_case_data"],
+        "propertyNames": {"$ref": "#/$defs/context_field"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "get"}}, "required": ["operation"]},
+      "then": {
+        "oneOf": [{"required": ["knowledge_id"]}, {"required": ["asset_id"]}],
+        "propertyNames": {"$ref": "#/$defs/get_field"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "verify"}}, "required": ["operation"]},
+      "then": {
+        "not": {"required": ["asset_id", "knowledge_id"]},
+        "propertyNames": {"$ref": "#/$defs/verify_field"}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "inspect"}}, "required": ["operation"]},
+      "then": {"propertyNames": {"$ref": "#/$defs/inspect_field"}}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "lineage"}}, "required": ["operation"]},
+      "then": {
+        "required": ["knowledge_id"],
+        "propertyNames": {"$ref": "#/$defs/lineage_field"},
+        "properties": {"plane": {"enum": ["all", "autonomous"]}}
+      }
+    },
+    {
+      "if": {"properties": {"operation": {"const": "graph"}}, "required": ["operation"]},
+      "then": {
+        "propertyNames": {"$ref": "#/$defs/graph_field"},
+        "properties": {"plane": {"enum": ["all", "autonomous"]}}
+      }
+    },
+    {
+      "if": {"required": ["asset_id"]},
+      "then": {"properties": {"plane": {"enum": ["all", "source_derived"]}}}
+    },
+    {
+      "if": {"required": ["knowledge_id"]},
+      "then": {"properties": {"plane": {"enum": ["all", "autonomous"]}}}
+    },
+    {
+      "if": {"properties": {"plane": {"const": "autonomous"}}, "required": ["plane"]},
+      "then": {
+        "not": {"required": ["memory_tiers"]},
+        "properties": {"kinds": {"items": {"enum": [
+          "claim", "comparison", "concept", "decision", "entity", "event", "experience",
+          "memory", "preference", "procedure", "skill", "synthesis"
+        ]}}}
+      }
+    },
+    {
+      "if": {"properties": {"plane": {"const": "source_derived"}}, "required": ["plane"]},
+      "then": {"properties": {"kinds": {"items": {"enum": [
+        "assumption", "constraint", "decision", "definition", "exception", "experience",
+        "fact", "lesson", "procedure", "question", "reference", "requirement", "risk", "rule"
+      ]}}}}
+    },
+    {
+      "if": {"required": ["memory_tiers"]},
+      "then": {"properties": {"kinds": {"items": {"enum": [
+        "assumption", "constraint", "decision", "definition", "exception", "experience",
+        "fact", "lesson", "procedure", "question", "reference", "requirement", "risk", "rule"
+      ]}}}}
+    }
+  ],
+  "$defs": {
+    "query_field": {
+      "enum": ["operation", "plane", "query", "scope", "max_sensitivity", "limit", "max_chars", "as_of", "kinds", "memory_tiers"]
+    },
+    "context_field": {
+      "enum": ["operation", "plane", "task", "goal", "confirm_no_case_data", "scope", "max_sensitivity", "limit", "max_chars", "as_of", "kinds", "memory_tiers"]
+    },
+    "get_field": {
+      "enum": ["operation", "plane", "asset_id", "knowledge_id", "scope", "max_sensitivity", "max_chars", "as_of"]
+    },
+    "verify_field": {
+      "enum": ["operation", "plane", "asset_id", "knowledge_id", "scope", "max_sensitivity"]
+    },
+    "inspect_field": {
+      "enum": ["operation", "plane", "scope", "max_sensitivity"]
+    },
+    "lineage_field": {
+      "enum": ["operation", "plane", "knowledge_id", "scope", "max_sensitivity"]
+    },
+    "graph_field": {
+      "enum": ["operation", "plane", "knowledge_id", "scope", "max_sensitivity", "limit", "as_of"]
+    }
+  }
+}

@@ -1,19 +1,20 @@
 # DeepLaw 2.0 Legal Pack 技术设计：面向 Agent 的可验证法律知识
 
-Status: current architecture and research roadmap, 2026-07-16.
+Status: **v0.9.0 Legal Pack architecture and research roadmap**, reviewed 2026-07-30.
 
 > **Files in. Verifiable knowledge out.**
 > 文件进入，Agent 得到可验证的知识。
 
 `DeepLaw 2.0` 是产品名；仓库名保持 `DeepLaw`，Python 包、CLI 和本地目录保持 `deeplaw`。
-当前软件版本是 `v0.7.0`。本文记录独立 Legal Pack；通用 Knowledge Asset 内核见
-[`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md)。本文严格区分已经存在的能力与后续研究目标，架构本身
-不使用版本号。
+当前软件版本是 `v0.9.0`。本文记录独立 Legal Pack；通用自主知识内核见
+[`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md)，v0.7 source-derived 兼容面见
+[`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md)。下文标注 `v0.7.0` 的段落是仍由 v0.9 保留的 Legal Pack
+实现基线，不代表当前包版本或 Agent 派生知识仍走统一 Review。
 
 ## DeepLaw 是什么
 
 DeepLaw 2.0 是面向 Agent 的法律知识库。它将 DOCX、PDF、TXT 文件处理为只读、版本化、
-可追溯的 Knowledge Release，并向 Agent 交付小型 Evidence Pack；当前 `v0.7.0` 官方团队
+可追溯的 Knowledge Release，并向 Agent 交付小型 Evidence Pack；`v0.9.0` 官方团队
 目录输入为 DOCX/PDF，物理分离的用户私有法律参考库另支持 UTF-8 TXT。
 
 DeepLaw 不是聊天记忆，不保存案件项目私有资料，也不把整座知识库塞进模型上下文。用户私有
@@ -25,7 +26,7 @@ DeepLaw 范围只保存法律参考资料，始终标记为用户提供且未经
 3. 哪些内容满足当前问题的证据要求；
 4. 哪些地方仍然缺失、不确定或不能使用。
 
-官方目录、用户私有法律参考与 Analytix 案件项目必须物理隔离。当前 `v0.7.0` 不提供内容级
+官方目录、用户私有法律参考与 Analytix 案件项目必须物理隔离。当前 `v0.9.0` 不提供内容级
 DLP 或案件私有资料分类器；宿主必须在调用或导入 DeepLaw 前完成隔离和拒绝，不能依赖
 DeepLaw 自动识别误传内容。
 
@@ -102,7 +103,7 @@ Discovery != Admission != Selection != Adjudication
 - **Adjudication** 不属于 DeepLaw。案件事实认定、规则适用和裁判结论留给有权限的使用者与
   法律审查；Agent 不能因 receipt 有效就跳过 blocking gap。
 
-`v0.7.0` 已实现固定 release、integrity/抽取门禁、显式时点查询分桶、coverage-first 选择和
+v0.9 保留的 v0.7 Legal baseline 已实现固定 release、integrity/抽取门禁、显式时点查询分桶、coverage-first 选择和
 Skill 级 blocking-gap 检查；完整逐来源人工准入 capability 与宿主不可绕过的 final gate 仍是
 后续工作，因此本文不把当前实现描述为完整的四阶段形式化证明系统。
 
@@ -203,7 +204,7 @@ Question
   → evidence + uncertain + gaps + receipts
 ```
 
-当前 `v0.7.0` 已实现 QueryPlan、封闭 Evidence Duties、相关性准入、coverage-first 选择、
+v0.9 保留的 v0.7 Legal baseline 已实现 QueryPlan、封闭 Evidence Duties、相关性准入、coverage-first 选择、
 coverage witness、候选/结果 digest、严格时效分桶、gaps 和 receipt。更完整的 challenge 状态与
 可按 ID 读取的执行轨迹仍是后续增量。
 
@@ -321,7 +322,7 @@ redistribution_status
 
 ## 当前实现与后续目标
 
-| 能力 | `v0.7.0` 当前实现 | 后续目标 |
+| 能力 | v0.9 保留的 Legal Pack 实现 | 后续目标 |
 | --- | --- | --- |
 | Ingest | 官方 DOCX/PDF、私有 UTF-8 TXT、Document IR、页级与 segment 级抽取证据、content-addressed SQLite | 官方 TXT、历史 DOC 受控转换与完整 Corpus Coverage Manifest |
 | Organize | 标题/条文分段、顺序、稳定 segment、来源关系 | 完整法律层级、双时态事件账本和双 Map 隔离 |

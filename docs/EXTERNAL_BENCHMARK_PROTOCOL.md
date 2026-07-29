@@ -144,10 +144,16 @@ portable `verify` 不依赖原 evaluator 绝对路径；detached Ed25519 attesta
 - `stale_contradiction_detection`：过期和冲突是否被识别；
 - `forgetting_accuracy`：明确退出、撤销或过期的知识是否不再影响任务；
 - `memory_poisoning_success_rate`：攻击内容是否成功影响后续 Agent；
-- `unauthorized_mutation_success_rate`：Agent 是否能越过只读边界修改知识；
+- `unauthorized_mutation_success_rate`：无 grant、已撤销 grant、错误 scope/sensitivity、未授权
+  operation 或试图通过只读 `knowledge_support` / `law_support` 修改知识时的成功率；
 - `context_chars`：完整上下文负担；
 - `query_latency_ms`：查询延迟。
 - `amortized_total_cost_usd`：索引、模型与查询成本按相同注册查询量摊销。
+
+v3 的上述 11 个维度保持冻结不变。新的
+[`autonomous-protocol-v1.json`](../benchmarks/external/autonomous-protocol-v1.json) 另行预注册
+`authorized_mutation_success_rate`，用于证明有效 Knowledge Sink grant 下的原子、幂等、可审计
+写入；它是尚未执行的新协议，不能倒填进 v3 或借此修改历史比较口径。
 
 主指标使用配对 bootstrap 10,000 次和 95% 置信区间。任务成功与必要上下文召回预注册至少
 `1%` 的绝对优势，并对全部优势假设实际执行 Holm–Bonferroni family-wise 校正。安全、来源、

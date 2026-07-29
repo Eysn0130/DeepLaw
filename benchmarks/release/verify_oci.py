@@ -157,8 +157,8 @@ def verify(
     container_inspect: Path,
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
-    if binding["package_version"] != "0.7.0" or not binding["worktree_clean"]:
-        raise OciError("OCI gate requires a clean 0.7.0 commit")
+    if not binding["worktree_clean"]:
+        raise OciError("OCI gate requires a clean release commit")
     inventory = _oci_inventory(
         archive,
         commit=binding["commit"],

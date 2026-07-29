@@ -24,6 +24,9 @@ _ROOT_COMMANDS = (
     "completion",
 )
 _KNOWLEDGE_COMMANDS = (
+    "init",
+    "autonomy",
+    "sink",
     "source",
     "structure",
     "review",
@@ -42,6 +45,7 @@ _KNOWLEDGE_COMMANDS = (
     "skill",
     "workbench",
     "doctor",
+    "migrate",
     "mcp",
 )
 

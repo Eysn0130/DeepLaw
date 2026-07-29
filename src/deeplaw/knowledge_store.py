@@ -213,7 +213,52 @@ def _manifest_path(root: Path) -> Path:
 
 
 def _database_path(root: Path) -> Path:
-    return root / "vault.sqlite3"
+    """Return the single trusted Ledger path for a Vault.
+
+    The v0.7 compatibility Vault is created at ``vault.sqlite3``. Installing
+    the autonomous v0.8 core atomically promotes that file to
+    ``.deeplaw/ledger.sqlite3``. We do not create a symlink or retain two
+    copies, so there is never an ambiguous canonical database.
+    """
+
+    preferred = root / ".deeplaw" / "ledger.sqlite3"
+    legacy = root / "vault.sqlite3"
+    if preferred.exists() or preferred.is_symlink():
+        return preferred
+    if legacy.exists() or legacy.is_symlink():
+        return legacy
+    return legacy
+
+
+def promote_legacy_knowledge_ledger(root: str | Path) -> Path:
+    """Atomically move a closed legacy Ledger into the v0.8 trusted-core path."""
+
+    vault_root = Path(root).expanduser().absolute()
+    legacy = vault_root / "vault.sqlite3"
+    preferred = vault_root / ".deeplaw" / "ledger.sqlite3"
+    if preferred.exists() or preferred.is_symlink():
+        if legacy.exists() or legacy.is_symlink():
+            raise RuntimeError("knowledge vault contains two competing Ledger files")
+        return preferred
+    if legacy.is_symlink() or not legacy.is_file():
+        raise RuntimeError("legacy knowledge Ledger is missing or unsafe")
+    _owner_directory(preferred.parent)
+    connection = sqlite3.connect(legacy)
+    try:
+        connection.execute("PRAGMA journal_mode = DELETE")
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        connection.commit()
+    finally:
+        connection.close()
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{legacy}{suffix}")
+        if sidecar.exists():
+            if sidecar.is_symlink() or not sidecar.is_file():
+                raise RuntimeError("legacy knowledge Ledger sidecar is unsafe")
+            sidecar.unlink()
+    os.replace(legacy, preferred)
+    os.chmod(preferred, 0o600)
+    return preferred
 
 
 def _migration_backup_manifest_path(root: Path) -> Path:
@@ -249,6 +294,7 @@ def _copy_vault_payload(source_root: Path, destination_root: Path) -> None:
         raise FileExistsError(f"knowledge vault copy target already exists: {destination_root}")
     _owner_directory(destination_root)
     _owner_directory(destination_root / "sources")
+    _owner_directory(destination_root / ".deeplaw")
     try:
         for source_file in sorted((source_root / "sources").iterdir(), key=lambda item: item.name):
             if source_file.is_symlink() or not source_file.is_file():
@@ -780,6 +826,7 @@ def initialize_knowledge_vault(
 
     _owner_directory(root)
     _owner_directory(root / "sources")
+    _owner_directory(root / ".deeplaw")
     created_at = utc_now()
     vault_id = stable_id("vault", secrets.token_hex(32))
     manifest = {

@@ -1,14 +1,15 @@
 # Security Policy
 
-DeepLaw 2.0 is a local, single-OS-user Agent Knowledge OS with a separate Chinese Legal
-Pack. Both Agent/MCP surfaces are read-only; persistent Knowledge Asset and
-Legal Pack administration is local CLI work. The repository distributes code
+DeepLaw is a local, single-OS-user Agent Knowledge OS with a separate Chinese Legal Pack.
+`law_support` and `knowledge_support` are read-only. Agent-derived mutation is available only
+through the different, explicitly enabled, scope-bound `knowledge_sink` process; Legal Pack and
+source administration remain local CLI work. The repository distributes code
 under Apache License 2.0; it does not distribute legal-source packages, case
 documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.7.0`, and the `main` branch.
+Security fixes are evaluated for the current software release, `v0.9.0`, and the `main` branch.
 The release manifest records `commercial_release_eligible=true`; competitive leadership remains
 separate with `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says
@@ -51,7 +52,9 @@ Please keep the report private until a fix or an agreed disclosure date exists.
 
 Examples of security-relevant reports include:
 
-- a write path or command execution reachable through the read-only runtime;
+- a write path or command execution reachable through `law_support` or `knowledge_support`, or a
+  `knowledge_sink` mutation that bypasses its grant, scope, sensitivity, operation, rate, or
+  idempotency contract;
 - path traversal, symlink escape, or release-boundary bypass;
 - receipt, hash, release pinning, or immutable-database verification bypass;
 - official-catalog signature bypass, signing-key exposure, or trust-store confusion;
@@ -102,13 +105,13 @@ administrative write paths apply owner-only ACL hardening. The release workflow 
 Windows-only native ACL, junction, and reparse-point tests on `windows-latest` with zero mandatory
 skips and publishes the bound platform report.
 
-Source files, conversation exports, tool results, packages, and generated
-lessons are untrusted inputs. They compile to proposed or quarantined assets.
-They do not become Agent-visible until a human explicitly approves each asset.
-Instruction-like and invisible-control content quarantines both compiled and
-manual proposals. Quarantine activation requires an additional explicit risk
-confirmation. Even approved source content is data unless the asset is an approved
-constraint/rule/procedure.
+Source files, conversation exports, tool results, packages, and generated lessons are untrusted
+inputs. External/imported material remains proposal or quarantine governed. Agent-derived
+Knowledge Revisions may become active without per-item review only after a concrete sink grant,
+closed schema, exact scope/sensitivity, provenance, idempotency, size/rate/capacity, stored
+prompt-injection, and authority-elevation gates pass. Autonomous activation never means human
+verification, official origin, instruction authority, or permission. Instruction-like and
+invisible-control content is quarantined; retrieved content remains data.
 
 Explicit Source Snapshot connectors are offline administration, not Agent retrieval. HTTPS
 preflight never resolves DNS or opens a connection. Capture requires `--confirm-network`, permits
@@ -131,7 +134,7 @@ only the synthetic repository ID, commit, and encoded relative path.
 Snapshot directories, manifests, and bytes are owner-only and hash-bound to the Vault, connector,
 origin, logical path, and content. Resumable ingest re-verifies the snapshot record and bytes before
 compilation. Snapshot jobs are not registered for watch/sync, connector commands are absent from
-both MCP servers, and capture success never grants review, applicability, legal authority, or
+all MCP servers, and capture success never grants review, applicability, legal authority, or
 activation. These checks reduce SSRF and accidental provenance drift; they do not defend against
 arbitrary same-owner code execution that can rewrite all local files and audit state.
 
@@ -144,17 +147,41 @@ cannot assert `verified_source` through the current CLI or store API. Official
 legal authority and user-private legal references remain separate Legal Pack
 scopes; neither can be rewritten through the Agent interface.
 
+Both read-only Agent interfaces apply the same final provider-output gate: `law_support` and
+`knowledge_support` fail closed, without echoing the match, if a bounded result still contains a
+recognized local absolute path, secret-like value, or unsafe invisible/bidirectional Unicode.
+The same projection applies to MCP exception messages, so filesystem or credential-bearing
+failures become a generic fail-closed error instead of being reflected to the host model.
+
 The optional `knowledge_support` server:
 
 - opens exactly one selected vault read-only;
-- exposes only `search`, `get`, `context`, `verify`, and `inspect`;
-- excludes inactive and restricted assets and strips local filesystem paths;
-- reconciles event history with current Asset/source/relation/FTS state and
-  verifies source bytes for selected source-bound Assets;
+- advertises v1 compatibility for untouched v0.7 Vaults or the v3 read contract after autonomous
+  migration; the frozen v2 autonomous seam remains a compatibility contract;
+- exposes only twelve bounded read operations: search/recall, get, context, explain, verify,
+  inspect, lineage, graph, Wiki discovery, identity lookup, and gap discovery;
+- excludes inactive and restricted revisions and strips local filesystem paths;
+- fails closed without echoing the matched value if any bounded response still contains a local
+  absolute path or recognized secret-like material;
+- reconciles both event histories with current object/source/relation/workspace state and verifies
+  selected source/CAS bytes;
 - returns bounded task context and never writes feedback or memory.
 
-Read-only is a DeepLaw MCP and plugin boundary, not an operating-system
-sandbox. A host that separately grants an Agent arbitrary shell or filesystem
+The optional `knowledge_sink` server:
+
+- is a separate stdio process with one `knowledge_sink` leaf and write/destructive annotations;
+- starts only with an exact owner-created grant ID whose token file is owner-only;
+- authenticates writer, operation allowlist, exact scope, maximum sensitivity, input bytes,
+  mutation rate, capacity, and idempotency on every request;
+- creates immutable Markdown/CAS revisions plus Ledger/audit records through the same domain store
+  used by the CLI;
+- cannot mutate official or private Legal Pack data, source evidence, Authority, audit history,
+  filesystem paths, exports, signing keys, or host permissions;
+- requires explicit confirmation that no Analytix case material is present.
+
+Read-only is the `law_support`/`knowledge_support` boundary and grants are the
+`knowledge_sink` boundary; neither is an operating-system sandbox. A host that separately grants
+an Agent arbitrary shell or filesystem
 access under the vault owner's account also grants access to offline
 administration and local files; DeepLaw cannot distinguish that process from
 the human owner. Hosts must deny Agent writes to `~/.deeplaw`, keep
@@ -186,7 +213,11 @@ it. Backup markers commit the manifest, consistent SQLite backup, stored-source 
 revision, and audit head. Operators must still place backups on storage with an appropriate
 confidentiality and durability policy.
 
-The optional Discovery Index is a derived, removable candidate index and never
+Autonomous Vault snapshots also include capability state and owner-only token material needed for
+an exact restore. Treat such snapshots as credentials: preserve owner-only permissions, never
+commit or publish them, and rotate/revoke restored grants when snapshot custody is uncertain.
+
+The retained v0.7 optional Discovery Index is a derived, removable compatibility candidate index and never
 a source of truth. Provisioning downloads only one fixed model profile and
 accepts it only after the exact repository revision, five-file inventory, byte
 sizes, and SHA-256 values pass. Query execution is local-only. The index binds
@@ -197,8 +228,11 @@ stored source bytes. Extra files, symlinks, unsafe permissions, model drift,
 dimension/row-width drift, non-finite vectors, source changes, vault changes,
 or post-verification file replacement fail closed.
 
-Discovery remains outside both read-only MCP servers and the default Context
-Compiler. It is operator/research CLI functionality until held-out
+That compatibility model-backed Discovery path remains outside the default MCP/Context Compiler.
+The v0.9 autonomous core's deterministic offline hash-dense, FTS, reranker, graph, and Wiki indexes
+are a separate rebuildable path bound to both audit heads, exact derived bytes, and model/profile
+identity. Stale or damaged derived state fails closed and current recall uses a bounded canonical
+fallback. The older model-backed discovery path remains operator/research CLI functionality until held-out
 task-success, noise, provenance, lifecycle, poisoning, resource, and cost gates
 pass. Its case-data confirmation is an explicit operator boundary, not a
 personal-data classifier. Analytix case material remains forbidden.
@@ -214,7 +248,7 @@ when publisher identity is required.
 
 ## Dependency and document-engine boundary
 
-The default DeepLaw runtime and both read-only MCP servers do not import the
+The default DeepLaw runtime, both read-only query servers, and the Knowledge Sink do not import the
 optional document engine. The engine is an offline operator/build dependency,
 not an Agent tool. Model provisioning is a separate explicit administrative
 operation, `deeplaw document-engine setup`; it downloads one pinned repository

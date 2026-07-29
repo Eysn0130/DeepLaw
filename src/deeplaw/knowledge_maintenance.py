@@ -24,6 +24,7 @@ KNOWLEDGE_DOCTOR_SCHEMA = "deeplaw.knowledge-doctor/v2"
 
 _MAX_SNAPSHOT_FILES = 300_000
 _MAX_MANIFEST_BYTES = 64 * 1024 * 1024
+_MAX_SCHEMA_PEEK_BYTES = 128 * 1024 * 1024
 _MAX_SIDECAR_FILE_BYTES = 512 * 1024 * 1024
 _PRESERVED_SIDECARS = (
     PurePosixPath("inbox"),
@@ -39,6 +40,27 @@ def _owner_directory(path: Path) -> Path:
     if os.name != "nt":
         os.chmod(path, 0o700)
     return path
+
+
+def _bounded_sorted_entries(root: Path, *, message: str) -> list[Path]:
+    entries: list[Path] = []
+    for path in root.rglob("*"):
+        entries.append(path)
+        if len(entries) > _MAX_SNAPSHOT_FILES:
+            raise ValueError(message)
+    return sorted(entries, key=lambda item: item.as_posix())
+
+
+def _snapshot_schema(manifest_path: Path) -> str | None:
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        return None
+    try:
+        if not 1 <= manifest_path.stat().st_size <= _MAX_SCHEMA_PEEK_BYTES:
+            return None
+        candidate = strict_json_loads(manifest_path.read_bytes())
+    except (OSError, ValueError):
+        return None
+    return candidate.get("schema_version") if isinstance(candidate, dict) else None
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:
@@ -67,10 +89,11 @@ def _safe_copy_tree(source: Path, destination: Path) -> None:
         raise RuntimeError("snapshot sidecar source is unsafe")
     _owner_directory(destination)
     count = 0
-    for path in sorted(source.rglob("*"), key=lambda item: item.as_posix()):
+    for path in _bounded_sorted_entries(
+        source,
+        message="snapshot sidecar inventory exceeds its file bound",
+    ):
         count += 1
-        if count > _MAX_SNAPSHOT_FILES:
-            raise ValueError("snapshot sidecar inventory exceeds its file bound")
         if path.is_symlink():
             raise RuntimeError("snapshot sidecar contains a symbolic link")
         relative = path.relative_to(source)
@@ -88,7 +111,10 @@ def _safe_copy_tree(source: Path, destination: Path) -> None:
 
 def _snapshot_inventory(root: Path) -> list[dict[str, Any]]:
     inventory: list[dict[str, Any]] = []
-    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+    for path in _bounded_sorted_entries(
+        root,
+        message="snapshot inventory exceeds its file bound",
+    ):
         if path.is_symlink():
             raise RuntimeError("snapshot contains a symbolic link")
         if not path.is_file():
@@ -101,8 +127,6 @@ def _snapshot_inventory(root: Path) -> list[dict[str, Any]]:
                 "sha256": sha256_file(path),
             }
         )
-        if len(inventory) > _MAX_SNAPSHOT_FILES:
-            raise ValueError("snapshot inventory exceeds its file bound")
     return inventory
 
 
@@ -112,6 +136,14 @@ def create_knowledge_snapshot(
     *,
     include_operator_state: bool = True,
 ) -> dict[str, Any]:
+    from .knowledge_autonomy import autonomous_core_installed, create_autonomous_snapshot
+
+    if autonomous_core_installed(vault.root):
+        return create_autonomous_snapshot(
+            vault.root,
+            output,
+            include_operator_state=include_operator_state,
+        )
     if not vault.verify_integrity()["valid"]:
         raise RuntimeError("snapshot requires a healthy canonical knowledge vault")
     source_integrity = vault.verify_source_files(
@@ -186,6 +218,13 @@ def verify_knowledge_snapshot(
     root = Path(snapshot).expanduser().absolute()
     manifest_path = root / "snapshot.json"
     copied_root = root / "vault"
+    if _snapshot_schema(manifest_path) == "deeplaw.autonomous-snapshot/v1":
+        from .knowledge_autonomy import verify_autonomous_snapshot
+
+        return verify_autonomous_snapshot(
+            root,
+            expected_vault_id=expected_vault_id,
+        )
     errors: list[str] = []
     manifest: dict[str, Any] = {}
     try:
@@ -278,10 +317,19 @@ def restore_knowledge_snapshot(
     snapshot: str | Path,
     confirm: bool,
 ) -> dict[str, Any]:
+    snapshot_root = Path(snapshot).expanduser().absolute()
+    manifest_path = snapshot_root / "snapshot.json"
+    if _snapshot_schema(manifest_path) == "deeplaw.autonomous-snapshot/v1":
+        from .knowledge_autonomy import restore_autonomous_snapshot
+
+        return restore_autonomous_snapshot(
+            destination,
+            snapshot=snapshot_root,
+            confirm=confirm,
+        )
     if not confirm:
         raise ValueError("snapshot restore requires explicit confirmation")
     target = Path(destination).expanduser().absolute()
-    snapshot_root = Path(snapshot).expanduser().absolute()
     verification = verify_knowledge_snapshot(snapshot_root)
     if not verification["valid"]:
         raise RuntimeError("snapshot restore requires a valid snapshot")
@@ -451,6 +499,8 @@ def knowledge_doctor(
     *,
     repair_derived: bool = False,
 ) -> dict[str, Any]:
+    from .knowledge_autonomy import AutonomousKnowledgeStore, autonomous_core_installed
+
     permission_report = knowledge_vault_permission_report(vault_path)
     errors: list[str] = []
     checks: dict[str, Any] = {}
@@ -539,6 +589,27 @@ def knowledge_doctor(
                         "derived repair is blocked while canonical integrity is invalid"
                     )
                 repaired = vault.rebuild_derived_indexes()
+        autonomous_installed = autonomous_core_installed(vault_path)
+        checks["autonomous_core"] = {"installed": autonomous_installed}
+        if autonomous_installed:
+            with AutonomousKnowledgeStore(vault_path, read_only=True) as autonomous:
+                autonomous_integrity = autonomous.verify()
+            checks["autonomous_core"] = {
+                "installed": True,
+                "integrity": autonomous_integrity,
+            }
+            canonical_valid = bool(canonical_valid and autonomous_integrity["valid"])
+            if repair_derived:
+                if not canonical_valid:
+                    raise RuntimeError(
+                        "derived repair is blocked while autonomous canonical integrity is invalid"
+                    )
+                with AutonomousKnowledgeStore(vault_path, read_only=False) as autonomous:
+                    autonomous_repair = autonomous.rebuild_derived()
+                repaired = {
+                    "legacy": repaired,
+                    "autonomous": autonomous_repair,
+                }
     except (OSError, RuntimeError, sqlite3.DatabaseError, ValueError) as error:
         errors.append(str(error))
         canonical_valid = False

@@ -1,0 +1,104 @@
+{
+  "schema_version": "deeplaw.autonomous-benchmark-protocol/v1",
+  "status": "preregistered_not_executed",
+  "competitive_claim_eligible": false,
+  "candidate_binding_required": [
+    "git_commit",
+    "source_archive_sha256",
+    "wheel_sha256",
+    "contract_inventory_sha256",
+    "uv_lock_sha256"
+  ],
+  "fixed_dimensions": [
+    "corpus",
+    "train_dev_test_split",
+    "questions_and_expected_evidence",
+    "host_model_and_revision",
+    "system_and_task_prompts",
+    "tool_and_capability_policy",
+    "context_item_character_token_and_graph_budgets",
+    "hardware_and_os",
+    "network_policy",
+    "latency_memory_index_and_token_cost_accounting"
+  ],
+  "required_suites": [
+    {
+      "id": "task-context",
+      "metrics": [
+        "task_success",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "provenance_coverage",
+        "abstention_accuracy"
+      ]
+    },
+    {
+      "id": "authority-temporal",
+      "metrics": [
+        "wrong_version_admission_rate",
+        "invalid_authority_admission_rate",
+        "temporal_update_accuracy",
+        "contradiction_preservation_rate"
+      ]
+    },
+    {
+      "id": "memory-lifecycle",
+      "metrics": [
+        "authorized_mutation_success_rate",
+        "idempotent_replay_accuracy",
+        "update_compare_and_swap_accuracy",
+        "forgetting_accuracy",
+        "expiry_accuracy",
+        "feedback_provenance_coverage"
+      ]
+    },
+    {
+      "id": "mutation-security",
+      "metrics": [
+        "no_grant_mutation_success_rate",
+        "revoked_grant_mutation_success_rate",
+        "wrong_scope_mutation_success_rate",
+        "over_sensitivity_mutation_success_rate",
+        "authority_elevation_admission_rate",
+        "memory_poisoning_admission_rate",
+        "restricted_disclosure_rate",
+        "private_legal_cross_scope_mutation_rate"
+      ]
+    },
+    {
+      "id": "systems-cost",
+      "metrics": [
+        "cold_query_latency",
+        "warm_query_latency",
+        "resident_memory",
+        "index_build_time",
+        "index_bytes",
+        "amortized_build_cost",
+        "provider_visible_tokens"
+      ]
+    }
+  ],
+  "candidate_channels": [
+    "lexical",
+    "embedding",
+    "source_tree",
+    "graph",
+    "graphrag_community",
+    "living_wiki",
+    "agent_memory",
+    "hybrid"
+  ],
+  "statistics": {
+    "held_out_required": true,
+    "paired_confidence_intervals_required": true,
+    "multiple_comparison_correction_required": true,
+    "complete_failure_samples_required": true,
+    "independent_evaluator_signatures_required_for_external_claim": true
+  },
+  "notes": [
+    "Authorized scope-bound writes are measured separately from unauthorized mutation.",
+    "Agent self-report cannot be the sole task-success label.",
+    "A hard authority, wrong-version, isolation, or private-disclosure failure cannot be averaged away.",
+    "This file defines a protocol and contains no benchmark result."
+  ]
+}

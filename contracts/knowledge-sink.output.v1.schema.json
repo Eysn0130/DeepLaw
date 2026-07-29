@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.output.v1.schema.json",
+  "title": "DeepLaw Knowledge Sink Output v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "boundary", "result"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-sink-output/v1"},
+    "operation": {
+      "enum": [
+        "remember", "reflect", "save_synthesis", "upsert_concept", "add_relation",
+        "expire", "forget", "save_skill", "record_feedback"
+      ]
+    },
+    "boundary": {"$ref": "#/$defs/boundary"},
+    "result": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "remember", "reflect", "save_synthesis", "upsert_concept",
+              "expire", "forget", "save_skill"
+            ]
+          }
+        },
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/knowledge_revision"}}}
+    },
+    {
+      "if": {
+        "properties": {"operation": {"const": "add_relation"}},
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/relation_revision"}}}
+    },
+    {
+      "if": {
+        "properties": {"operation": {"const": "record_feedback"}},
+        "required": ["operation"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/feedback"}}}
+    }
+  ],
+  "$defs": {
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legal_authority", "official_or_private_legal_mutation", "authority_elevation",
+        "audit_deletion", "arbitrary_paths", "case_data_allowed", "scope_bound"
+      ],
+      "properties": {
+        "legal_authority": {"const": false},
+        "official_or_private_legal_mutation": {"const": false},
+        "authority_elevation": {"const": false},
+        "audit_deletion": {"const": false},
+        "arbitrary_paths": {"const": false},
+        "case_data_allowed": {"const": false},
+        "scope_bound": {"const": true}
+      }
+    },
+    "knowledge_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "knowledge_id", "revision_id", "parent_revision_id",
+        "markdown_sha256", "workspace_path", "kind", "origin", "authority",
+        "legal_authority", "verification", "lifecycle", "epistemic_state", "scope",
+        "sensitivity", "source_free", "quarantine_reasons", "recorded_at",
+        "idempotent_replay", "current_revision_id", "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-revision/v1"},
+        "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+        "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+        "parent_revision_id": {
+          "type": ["string", "null"],
+          "pattern": "^knowledgerev_[0-9a-f]{24}$"
+        },
+        "current_revision_id": {
+          "type": ["string", "null"],
+          "pattern": "^knowledgerev_[0-9a-f]{24}$"
+        },
+        "markdown_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "workspace_path": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "kind": {
+          "enum": [
+            "claim", "concept", "entity", "event", "decision", "procedure",
+            "experience", "preference", "synthesis", "comparison", "skill", "memory"
+          ]
+        },
+        "origin": {"const": "agent_derived"},
+        "authority": {"const": "agent_derived"},
+        "legal_authority": {"const": false},
+        "verification": {"enum": ["unverified", "source_bound", "run_bound"]},
+        "lifecycle": {
+          "enum": [
+            "active", "superseded", "revoked", "expired", "forgotten", "archived",
+            "quarantined"
+          ]
+        },
+        "epistemic_state": {"enum": ["supported", "tentative", "contested", "unknown"]},
+        "scope": {"enum": ["personal", "project", "domain"]},
+        "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+        "source_free": {"type": "boolean"},
+        "quarantine_reasons": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "idempotent_replay": {"type": "boolean"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"lifecycle": {"const": "quarantined"}},
+            "required": ["lifecycle"]
+          },
+          "then": {"properties": {"quarantine_reasons": {"minItems": 1}}},
+          "else": {"properties": {"quarantine_reasons": {"maxItems": 0}}}
+        }
+      ]
+    },
+    "relation_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "relation_key", "relation_revision_id", "parent_revision_id",
+        "subject_knowledge_id", "predicate", "object_knowledge_id", "origin", "authority",
+        "legal_authority", "source_free", "lifecycle", "scope", "sensitivity",
+        "valid_from", "valid_to", "recorded_at", "idempotent_replay", "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-relation/v3"},
+        "relation_key": {"type": "string", "pattern": "^relationkey_[0-9a-f]{24}$"},
+        "relation_revision_id": {
+          "type": "string",
+          "pattern": "^relationrev_[0-9a-f]{24}$"
+        },
+        "parent_revision_id": {
+          "type": ["string", "null"],
+          "pattern": "^relationrev_[0-9a-f]{24}$"
+        },
+        "subject_knowledge_id": {
+          "type": "string",
+          "pattern": "^knowledge_[0-9a-f]{24}$"
+        },
+        "predicate": {
+          "enum": [
+            "supports", "contradicts", "depends_on", "implements", "derived_from",
+            "applies_to", "related_to", "describes", "mentions", "reports",
+            "contributes_to", "same_as"
+          ]
+        },
+        "object_knowledge_id": {
+          "type": "string",
+          "pattern": "^knowledge_[0-9a-f]{24}$"
+        },
+        "origin": {"const": "agent_derived"},
+        "authority": {"const": "agent_derived"},
+        "legal_authority": {"const": false},
+        "source_free": {"type": "boolean"},
+        "lifecycle": {"const": "active"},
+        "scope": {"enum": ["personal", "project", "domain"]},
+        "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "idempotent_replay": {"type": "boolean"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "feedback_id", "knowledge_id", "revision_id", "run_id",
+        "outcome", "evaluator_type", "feedback_note_sha256", "task_success_authority",
+        "recorded_at", "idempotent_replay", "audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.knowledge-feedback/v1"},
+        "feedback_id": {"type": "string", "pattern": "^feedback_[0-9a-f]{24}$"},
+        "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+        "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+        "run_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "outcome": {"enum": ["helpful", "neutral", "noisy", "harmful"]},
+        "evaluator_type": {"enum": ["user", "external_check", "agent_self_report"]},
+        "feedback_note_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "task_success_authority": {"enum": ["external_evidence", "self_report_only"]},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "idempotent_replay": {"type": "boolean"},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

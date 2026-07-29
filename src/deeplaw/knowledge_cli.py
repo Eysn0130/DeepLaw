@@ -4,10 +4,29 @@ import argparse
 import json
 import os
 import secrets
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
 from .context_compiler import compile_context, verify_capsule_file
+from .knowledge_autonomy import (
+    FEEDBACK_EVALUATOR_TYPES,
+    KNOWLEDGE_KINDS,
+    SINK_OPERATIONS,
+    AutonomousKnowledgeStore,
+    autonomous_core_installed,
+    initialize_autonomous_core,
+    migrate_autonomous_core,
+    rollback_autonomous_core,
+)
+from .knowledge_autonomy import (
+    SCOPES as AUTONOMOUS_SCOPES,
+)
+from .knowledge_autonomy import (
+    SENSITIVITIES as AUTONOMOUS_SENSITIVITIES,
+)
 from .knowledge_compiler import (
     TYPED_EXTRACTION_MODES,
     compile_directory,
@@ -112,6 +131,20 @@ from .skill_factory import (
 from .util import excerpt, strict_json_loads
 
 
+@contextmanager
+def _command_vault(
+    path: Path,
+    *,
+    read_only: bool,
+) -> Iterator[KnowledgeVault]:
+    """Close a successful legacy write before importing its immutable evidence."""
+    with KnowledgeVault(path, read_only=read_only) as vault:
+        yield vault
+    if not read_only and autonomous_core_installed(path):
+        with AutonomousKnowledgeStore(path, read_only=False):
+            pass
+
+
 def _add_typed_extraction_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--typed-extraction",
@@ -140,7 +173,7 @@ def _add_typed_extraction_arguments(parser: argparse.ArgumentParser) -> None:
 def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     knowledge = commands.add_parser(
         "knowledge",
-        help="Compile and read isolated, review-gated Agent Knowledge Assets",
+        help="Operate the local Markdown-native Agent Knowledge OS",
     )
     knowledge.add_argument(
         "--format",
@@ -155,6 +188,11 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     init.add_argument("--vault", type=Path, default=default_knowledge_vault())
     init.add_argument("--name", required=True)
     init.add_argument("--scope", choices=sorted(VAULT_SCOPES), default="personal")
+    init.add_argument(
+        "--legacy-review-core",
+        action="store_true",
+        help="Initialize only the v0.7 migration baseline without the autonomous core",
+    )
 
     ingest = subcommands.add_parser(
         "ingest",
@@ -1076,6 +1114,261 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     workbench.add_argument("--vault", type=Path, default=default_knowledge_vault())
 
+    autonomy = subcommands.add_parser(
+        "autonomy",
+        help="Migrate, verify, reconcile, retrieve, and rebuild the autonomous Markdown core",
+    )
+    autonomy_commands = autonomy.add_subparsers(dest="autonomy_command", required=True)
+    for name in ("status", "inspect", "verify", "recover", "lint", "rebuild"):
+        autonomy_command = autonomy_commands.add_parser(name)
+        autonomy_command.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_migrate = autonomy_commands.add_parser(
+        "migrate",
+        help="Create a verified rollback point and install the additive autonomous core",
+    )
+    autonomy_migrate.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_migrate.add_argument("--backup", type=Path)
+    autonomy_rollback = autonomy_commands.add_parser(
+        "rollback",
+        help="Atomically restore the verified pre-autonomy Vault backup",
+    )
+    autonomy_rollback.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_rollback.add_argument("--backup", type=Path, required=True)
+    autonomy_rollback.add_argument("--confirm", action="store_true")
+    autonomy_reconcile = autonomy_commands.add_parser(
+        "reconcile",
+        help="Commit safe external Markdown edits and preserve conflicts explicitly",
+    )
+    autonomy_reconcile.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_reconcile.add_argument("--grant-id", required=True)
+    autonomy_reconcile.add_argument("--confirm-no-case-data", action="store_true")
+    autonomy_watch = autonomy_commands.add_parser(
+        "watch",
+        help="Poll the bounded Markdown workspace and reconcile changes through the coordinator",
+    )
+    autonomy_watch.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_watch.add_argument("--grant-id", required=True)
+    autonomy_watch.add_argument("--confirm-no-case-data", action="store_true")
+    autonomy_watch.add_argument("--interval", type=float, default=2.0)
+    autonomy_watch.add_argument("--max-cycles", type=int)
+    autonomy_recall = autonomy_commands.add_parser("recall")
+    autonomy_recall.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_recall.add_argument("--query", required=True)
+    autonomy_recall.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_recall.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_recall.add_argument(
+        "--kind",
+        choices=sorted(KNOWLEDGE_KINDS),
+        action="append",
+        default=[],
+    )
+    autonomy_recall.add_argument("--limit", type=int, default=5)
+    autonomy_recall.add_argument("--max-chars", type=int, default=5_000)
+    autonomy_recall.add_argument("--max-tokens", type=int, default=4_000)
+    autonomy_recall.add_argument("--max-sources", type=int, default=8)
+    autonomy_recall.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    autonomy_recall.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
+    autonomy_recall.add_argument("--as-of")
+    autonomy_explain = autonomy_commands.add_parser(
+        "explain",
+        help="Explain recall discovery, admission, selection, budgets, and receipts",
+    )
+    autonomy_explain.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_explain.add_argument("--query", required=True)
+    autonomy_explain.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_explain.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_explain.add_argument(
+        "--kind",
+        choices=sorted(KNOWLEDGE_KINDS),
+        action="append",
+        default=[],
+    )
+    autonomy_explain.add_argument("--limit", type=int, default=5)
+    autonomy_explain.add_argument("--max-chars", type=int, default=5_000)
+    autonomy_explain.add_argument("--max-tokens", type=int, default=4_000)
+    autonomy_explain.add_argument("--max-sources", type=int, default=8)
+    autonomy_explain.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    autonomy_explain.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
+    autonomy_explain.add_argument("--as-of")
+    autonomy_graph = autonomy_commands.add_parser(
+        "graph",
+        help="Read admitted temporal relation revisions and bounded endpoint metadata",
+    )
+    autonomy_graph.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_graph.add_argument("--knowledge-id")
+    autonomy_graph.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_graph.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_graph.add_argument("--limit", type=int, default=100)
+    autonomy_graph.add_argument("--as-of")
+    autonomy_conflicts = autonomy_commands.add_parser(
+        "conflicts",
+        help="List unresolved externally edited Markdown conflicts",
+    )
+    autonomy_conflicts.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_conflicts.add_argument("--limit", type=int, default=100)
+    autonomy_context = autonomy_commands.add_parser("context")
+    autonomy_context.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_context.add_argument("--task", required=True)
+    autonomy_context.add_argument("--goal")
+    autonomy_context.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_context.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_context.add_argument("--limit", type=int, default=8)
+    autonomy_context.add_argument("--max-chars", type=int, default=8_000)
+    autonomy_context.add_argument("--max-tokens", type=int, default=6_000)
+    autonomy_context.add_argument("--max-sources", type=int, default=12)
+    autonomy_context.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    autonomy_context.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
+    autonomy_context.add_argument("--as-of")
+    autonomy_context.add_argument("--confirm-no-case-data", action="store_true")
+    autonomy_identity = autonomy_commands.add_parser(
+        "identity",
+        help="Resolve an exact semantic key or bounded Concept/Entity alias candidates",
+    )
+    autonomy_identity.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_identity.add_argument("--query", required=True)
+    autonomy_identity.add_argument("--kind", choices=("concept", "entity"))
+    autonomy_identity.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_identity.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_identity.add_argument("--limit", type=int, default=10)
+    autonomy_gaps = autonomy_commands.add_parser(
+        "gaps",
+        help="Report bounded missing evidence, orphan, conflict, and unresolved-link gaps",
+    )
+    autonomy_gaps.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_gaps.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    autonomy_gaps.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    autonomy_gc = autonomy_commands.add_parser(
+        "gc",
+        help=(
+            "Owner-only purge of forgotten Knowledge bytes and unreferenced CAS objects; "
+            "governance and audit remain"
+        ),
+    )
+    autonomy_gc.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    autonomy_gc.add_argument(
+        "--dry-run", action=argparse.BooleanOptionalAction, default=True
+    )
+    autonomy_gc.add_argument("--confirm", action="store_true")
+    autonomy_gc.add_argument("--include-expired", action="store_true")
+    autonomy_gc.add_argument("--max-objects", type=int, default=1_000)
+    autonomy_gc.add_argument(
+        "--reason", default="owner-requested Knowledge Object forgetting"
+    )
+    autonomy_skill_draft = autonomy_commands.add_parser(
+        "skill-draft",
+        help=(
+            "Compile explicitly checkable Procedure lines into a governed draft Skill revision"
+        ),
+    )
+    autonomy_skill_draft.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    autonomy_skill_draft.add_argument("--grant-id", required=True)
+    autonomy_skill_draft.add_argument("--request", type=Path, required=True)
+    for name in ("get", "history"):
+        autonomy_read = autonomy_commands.add_parser(name)
+        autonomy_read.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        autonomy_read.add_argument("--knowledge-id", required=True)
+        if name == "get":
+            autonomy_read.add_argument("--include-inactive", action="store_true")
+            autonomy_read.add_argument(
+                "--as-of",
+                help="Read the canonical revision known at this transaction time",
+            )
+
+    sink = subcommands.add_parser(
+        "sink",
+        help="Explicitly enable and use the separate scope-bound Agent mutation capability",
+    )
+    sink_commands = sink.add_subparsers(dest="sink_command", required=True)
+    sink_enable = sink_commands.add_parser("enable")
+    sink_enable.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    sink_enable.add_argument("--writer-id", required=True)
+    sink_enable.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    sink_enable.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        default="private",
+    )
+    sink_enable.add_argument("--operation", choices=sorted(SINK_OPERATIONS), action="append")
+    sink_enable.add_argument(
+        "--feedback-evaluator-type",
+        choices=sorted(FEEDBACK_EVALUATOR_TYPES),
+        action="append",
+        help=(
+            "Grant evaluator identities allowed for record_feedback; defaults to "
+            "agent_self_report only"
+        ),
+    )
+    sink_enable.add_argument("--max-request-bytes", type=int, default=65_536)
+    sink_enable.add_argument("--max-mutations-per-minute", type=int, default=60)
+    sink_enable.add_argument("--max-objects", type=int, default=100_000)
+    sink_disable = sink_commands.add_parser("disable")
+    sink_disable.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    sink_disable.add_argument("--grant-id", required=True)
+    sink_status = sink_commands.add_parser(
+        "status",
+        help="Verify one enabled capability and show only non-secret grant metadata",
+    )
+    sink_status.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    sink_status.add_argument("--grant-id", required=True)
+    sink_apply = sink_commands.add_parser(
+        "apply",
+        help="Apply one closed knowledge-sink.input/v2 JSON request",
+    )
+    sink_apply.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    sink_apply.add_argument("--grant-id", required=True)
+    sink_apply.add_argument("--request", type=Path, required=True)
+    sink_expire = sink_commands.add_parser("expire-due")
+    sink_expire.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    sink_expire.add_argument("--grant-id", required=True)
+    sink_expire.add_argument("--as-of")
+    sink_expire.add_argument("--confirm-no-case-data", action="store_true")
+    sink_mcp = sink_commands.add_parser(
+        "mcp",
+        help="Run the independently enabled write-capable Knowledge Sink MCP server",
+    )
+    sink_mcp.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    sink_mcp.add_argument("--grant-id", required=True)
+    sink_mcp.add_argument("--transport", choices=("stdio",), default="stdio")
+    sink_mcp.add_argument("--stdio", action="store_true")
+
     mcp = subcommands.add_parser(
         "mcp",
         help="Run the optional read-only Knowledge Asset MCP server",
@@ -1334,11 +1627,321 @@ def render_knowledge_result(value: Any, *, output_format: str) -> str:
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "init":
-        return initialize_knowledge_vault(
+        legacy = initialize_knowledge_vault(
             args.vault,
             name=args.name,
             scope=cast(VaultScope, args.scope),
         )
+        if args.legacy_review_core:
+            return legacy
+        autonomous = initialize_autonomous_core(
+            args.vault,
+            migration_source="new-vault",
+        )
+        return {
+            "schema_version": "deeplaw.knowledge-vault-initialization/v2",
+            "vault_id": legacy["vault_id"],
+            "legacy_compatibility": legacy,
+            "autonomous_core": autonomous,
+            "active_write_policy": "agent_derived_autonomous",
+        }
+    if command == "autonomy":
+        action = args.autonomy_command
+        if action == "status":
+            installed = autonomous_core_installed(args.vault)
+            result: dict[str, Any] = {
+                "schema_version": "deeplaw.autonomous-status/v1",
+                "installed": installed,
+            }
+            if installed:
+                with AutonomousKnowledgeStore(args.vault, read_only=True) as store:
+                    result.update(
+                        {
+                            "vault_id": store.vault_id,
+                            "sequence": store.sequence,
+                            "audit_head": store.audit_head,
+                            "verification": store.verify(),
+                        }
+                    )
+            return result
+        if action == "migrate":
+            return migrate_autonomous_core(args.vault, backup_output=args.backup)
+        if action == "rollback":
+            return rollback_autonomous_core(
+                args.vault,
+                backup=args.backup,
+                confirm=args.confirm,
+            )
+        read_only = action in {
+            "inspect",
+            "verify",
+            "lint",
+            "recall",
+            "explain",
+            "graph",
+            "conflicts",
+            "context",
+            "identity",
+            "gaps",
+            "get",
+            "history",
+        }
+        with AutonomousKnowledgeStore(args.vault, read_only=read_only) as store:
+            selected_scope = (
+                args.scope
+                if hasattr(args, "scope") and args.scope
+                else store.vault_scope
+            )
+            agent_read_integrity = None
+            if action in {
+                "recall",
+                "explain",
+                "graph",
+                "context",
+                "identity",
+                "gaps",
+                "get",
+                "history",
+            }:
+                agent_read_integrity = store.verify()
+                if not agent_read_integrity["valid"]:
+                    raise RuntimeError(
+                        "autonomous knowledge canonical integrity is invalid; read stopped"
+                    )
+            if action == "inspect":
+                return store.inspect()
+            if action == "verify":
+                return store.verify()
+            if action == "recover":
+                return store.recover()
+            if action == "reconcile":
+                return store.reconcile_workspace(
+                    grant_id=args.grant_id,
+                    confirm_no_case_data=args.confirm_no_case_data,
+                )
+            if action == "watch":
+                if not 0.25 <= args.interval <= 3_600:
+                    raise ValueError("watch interval must be between 0.25 and 3600 seconds")
+                if args.max_cycles is not None and not 1 <= args.max_cycles <= 1_000_000:
+                    raise ValueError("watch max cycles must be between 1 and 1000000")
+                cycle_count = 0
+                interrupted = False
+                last: dict[str, Any] | None = None
+                try:
+                    while True:
+                        last = store.reconcile_workspace(
+                            grant_id=args.grant_id,
+                            confirm_no_case_data=args.confirm_no_case_data,
+                        )
+                        pending_rebuilds = store.connection.execute(
+                            "SELECT COUNT(*) FROM derived_rebuild_queue_v3 "
+                            "WHERE completed_at IS NULL"
+                        ).fetchone()[0]
+                        if pending_rebuilds:
+                            try:
+                                rebuilt = store.rebuild_derived()
+                                last["derived_maintenance"] = {
+                                    "status": "rebuilt",
+                                    "queued_before": pending_rebuilds,
+                                    "knowledge_count": rebuilt["knowledge_count"],
+                                    "relation_count": rebuilt["relation_count"],
+                                    "input_audit_head": rebuilt["input_audit_head"],
+                                }
+                            except Exception as error:
+                                last["derived_maintenance"] = {
+                                    "status": "retry_pending",
+                                    "queued_before": pending_rebuilds,
+                                    "error_type": type(error).__name__,
+                                }
+                        else:
+                            last["derived_maintenance"] = {
+                                "status": "current",
+                                "queued_before": 0,
+                            }
+                        cycle_count += 1
+                        if args.max_cycles is not None and cycle_count >= args.max_cycles:
+                            break
+                        time.sleep(args.interval)
+                except KeyboardInterrupt:
+                    interrupted = True
+                return {
+                    "schema_version": "deeplaw.workspace-watch/v1",
+                    "cycle_count": cycle_count,
+                    "interrupted": interrupted,
+                    "last": last,
+                    "audit_head": store.audit_head,
+                }
+            if action == "lint":
+                return store.semantic_lint()
+            if action == "rebuild":
+                return store.rebuild_derived()
+            if action == "gc":
+                return store.garbage_collect_content(
+                    dry_run=args.dry_run,
+                    confirm=args.confirm,
+                    include_expired=args.include_expired,
+                    max_objects=args.max_objects,
+                    reason=args.reason,
+                )
+            if action == "skill-draft":
+                request_path = args.request.expanduser().absolute()
+                if (
+                    request_path.is_symlink()
+                    or not request_path.is_file()
+                    or request_path.stat().st_size > 128 * 1024
+                ):
+                    raise ValueError(
+                        "Skill Factory request file is missing, unsafe, or oversized"
+                    )
+                request = strict_json_loads(request_path.read_bytes())
+                if not isinstance(request, dict):
+                    raise ValueError("Skill Factory request must contain a JSON object")
+                return store.create_skill_draft(
+                    grant_id=args.grant_id,
+                    request=request,
+                )
+            if action == "recall":
+                return store.recall(
+                    args.query,
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    limit=args.limit,
+                    max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
+                    as_of=args.as_of,
+                    kinds=tuple(args.kind),
+                    force_canonical_lexical=bool(
+                        agent_read_integrity and not agent_read_integrity["derived_ready"]
+                    ),
+                )
+            if action == "explain":
+                return store.explain_recall(
+                    args.query,
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    limit=args.limit,
+                    max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
+                    as_of=args.as_of,
+                    kinds=tuple(args.kind),
+                    force_canonical_lexical=bool(
+                        agent_read_integrity and not agent_read_integrity["derived_ready"]
+                    ),
+                )
+            if action == "graph":
+                return store.graph(
+                    knowledge_id=args.knowledge_id,
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    limit=args.limit,
+                    as_of=args.as_of,
+                )
+            if action == "conflicts":
+                return store.list_conflicts(limit=args.limit)
+            if action == "context":
+                return store.build_capsule(
+                    task=args.task,
+                    goal=args.goal,
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    limit=args.limit,
+                    max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
+                    as_of=args.as_of,
+                    confirm_no_case_data=args.confirm_no_case_data,
+                    force_canonical_lexical=bool(
+                        agent_read_integrity and not agent_read_integrity["derived_ready"]
+                    ),
+                )
+            if action == "identity":
+                return store.lookup_identity(
+                    args.query,
+                    kind=args.kind,
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    limit=args.limit,
+                )
+            if action == "gaps":
+                return store.discover_gaps(
+                    scope=selected_scope,
+                    max_sensitivity=args.max_sensitivity,
+                )
+            if action == "get":
+                if args.as_of is not None:
+                    if args.include_inactive:
+                        raise ValueError("--include-inactive cannot be combined with --as-of")
+                    return store.get_at(args.knowledge_id, recorded_at=args.as_of)
+                return store.get_current(
+                    args.knowledge_id,
+                    include_inactive=args.include_inactive,
+                )
+            if action == "history":
+                return store.history(args.knowledge_id)
+        raise ValueError(f"unsupported autonomous knowledge action: {action}")
+    if command == "sink":
+        action = args.sink_command
+        if action == "mcp":
+            from .knowledge_sink_mcp_server import run_knowledge_sink_mcp
+
+            run_knowledge_sink_mcp(
+                grant_id=args.grant_id,
+                transport="stdio" if args.stdio else args.transport,
+                vault_path=args.vault,
+            )
+            return None
+        if action == "apply":
+            request_path = args.request.expanduser().absolute()
+            if (
+                request_path.is_symlink()
+                or not request_path.is_file()
+                or request_path.stat().st_size > 320 * 1024
+            ):
+                raise ValueError("Knowledge Sink request file is missing, unsafe, or oversized")
+            request = strict_json_loads(request_path.read_bytes())
+            if not isinstance(request, dict):
+                raise ValueError("Knowledge Sink request file must contain a JSON object")
+            from .knowledge_sink_mcp_server import handle_knowledge_sink
+
+            return handle_knowledge_sink(
+                request,
+                grant_id=args.grant_id,
+                vault_path=args.vault,
+            )
+        with AutonomousKnowledgeStore(
+            args.vault,
+            read_only=action == "status",
+        ) as store:
+            if action == "enable":
+                return store.enable_grant(
+                    writer_id=args.writer_id,
+                    allowed_scope=args.scope or store.vault_scope,
+                    max_sensitivity=args.max_sensitivity,
+                    operations=tuple(args.operation or ("remember",)),
+                    evaluator_types=tuple(args.feedback_evaluator_type or ("agent_self_report",)),
+                    max_request_bytes=args.max_request_bytes,
+                    max_mutations_per_minute=args.max_mutations_per_minute,
+                    max_objects=args.max_objects,
+                )
+            if action == "disable":
+                return store.disable_grant(args.grant_id)
+            if action == "status":
+                return store.grant_status(args.grant_id)
+            if action == "expire-due":
+                return store.expire_due(
+                    grant_id=args.grant_id,
+                    as_of=args.as_of,
+                    confirm_no_case_data=args.confirm_no_case_data,
+                )
+        raise ValueError(f"unsupported Knowledge Sink action: {action}")
     if command == "doctor":
         permission_report = knowledge_vault_permission_report(args.vault)
         if args.permissions:
@@ -1457,9 +2060,10 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         or (command == "projection" and args.projection_command == "propose")
         or (command == "gc" and not args.dry_run and not args.orphans)
     )
-    with KnowledgeVault(
+    command_read_only = command not in write_commands and not nested_write
+    with _command_vault(
         args.vault,
-        read_only=command not in write_commands and not nested_write,
+        read_only=command_read_only,
     ) as vault:
         if command == "job":
             if args.job_command == "list":

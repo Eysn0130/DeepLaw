@@ -1,5 +1,9 @@
 # DeepLaw 2.0 语料治理与发布政策
 
+状态：**v0.9.0 官方/私有 Legal Pack 治理政策**，2026-07-30 复核。本文中的 v0.7 builder
+表述记录当前保留的 Legal Pack compatibility implementation，不适用于 v0.9 Agent 自主知识写入；
+两者的进程、存储和权限保持隔离。
+
 ## 目的与适用范围
 
 DeepLaw 2.0 是跨 Agent 使用的中国法律研究底座。它包含团队维护的官方目录，以及物理分离、
@@ -82,7 +86,8 @@ active -> superseded | revoked
 - `revoked`：发现完整性、来源、许可或重大内容错误；停止新查询并保留审计记录。
 - `rejected`：未通过发布闸门，不能通过 `--allow-needs-ocr` 等开发选项绕过。
 
-当前 v0.7.0 构建器会校验路径、大小、SHA-256、HTTPS 来源和 PDF 文本质量，但尚未机械
+v0.9.0 保留的 v0.7 Legal Pack 构建器会校验路径、大小、SHA-256、HTTPS 来源和 PDF 文本质量，
+但尚未机械
 执行本政策的全部人工闸门。`deeplaw build --activate` 只改变本地 ACTIVE 指针，不是
 许可、隐私、时效或法律有效性证明。生产发布流程必须在其外层实施本政策。
 

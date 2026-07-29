@@ -29,6 +29,31 @@ _INSTRUCTION_PATTERNS = (
     re.compile(r"<(?:script|iframe|object|embed)\b", re.I),
 )
 _INVISIBLE_OR_BIDI = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]")
+_LOCAL_PATH_PATTERNS = (
+    re.compile(
+        r"(?<![A-Za-z0-9:/])/(?:Users|home|private|var|tmp|etc|opt|usr|Volumes|"
+        r"Applications|Library|System|workspace|root|srv|mnt|data|dev|proc|sys|run)"
+        r"(?:/[^/\s<>\"'`]+)+"
+    ),
+    re.compile(
+        r"(?i)(?<![A-Za-z0-9])[A-Z]:[\\/](?:[^\\/\s<>\"'`]+[\\/])+"
+        r"[^\\/\s<>\"'`]+"
+    ),
+    re.compile(r"(?<!\\)\\\\[^\\/\s<>\"'`]+\\[^\\/\s<>\"'`]+"),
+    re.compile(r"(?i)\bfile://(?:localhost)?/[A-Za-z0-9._~!$&'()*+,;=:@%/\\-]+"),
+)
+_SECRET_PATTERNS = (
+    re.compile(r"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----"),
+    re.compile(
+        r"\b(?:sk-[A-Za-z0-9_-]{20,}|github_pat_[A-Za-z0-9_]{20,}|"
+        r"gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
+        r"xox[baprs]-[A-Za-z0-9-]{20,})\b"
+    ),
+    re.compile(
+        r"(?i)\b(?:api[_-]?key|access[_-]?token|password|passwd|client[_-]?secret|"
+        r"secret[_-]?key)\b\s*[:=]\s*[\"']?[^\s\"']{8,}"
+    ),
+)
 
 _STOP_TERMS = {
     "a",
@@ -233,6 +258,36 @@ def has_instruction_risk(text: str) -> bool:
     return bool(_INVISIBLE_OR_BIDI.search(text)) or any(
         pattern.search(text) for pattern in _INSTRUCTION_PATTERNS
     )
+
+
+def assert_provider_output_safe(value: Any, *, interface: str) -> None:
+    """Fail closed before a bounded Agent response can disclose paths or credentials."""
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, dict):
+            pending.extend(item.values())
+            continue
+        if isinstance(item, (list, tuple)):
+            pending.extend(item)
+            continue
+        if not isinstance(item, str):
+            continue
+        if any(pattern.search(item) for pattern in _LOCAL_PATH_PATTERNS):
+            raise PermissionError(f"{interface} output contains a local absolute path")
+        if any(pattern.search(item) for pattern in _SECRET_PATTERNS):
+            raise PermissionError(f"{interface} output contains secret-like material")
+        if _INVISIBLE_OR_BIDI.search(item):
+            raise PermissionError(f"{interface} output contains unsafe invisible Unicode")
+
+
+def provider_safe_exception(error: Exception, *, interface: str) -> Exception:
+    """Preserve useful failures while replacing messages that would cross a data boundary."""
+    try:
+        assert_provider_output_safe(str(error), interface=interface)
+    except PermissionError:
+        return RuntimeError(f"{interface} request failed closed; sensitive details omitted")
+    return error
 
 
 def strict_json_loads(value: str | bytes | bytearray) -> Any:

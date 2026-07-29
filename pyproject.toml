@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deeplaw"
-version = "0.7.0"
+version = "0.9.0"
 description = "Local single-user Agent Knowledge OS with verifiable Knowledge Capsules and a Chinese Legal Pack"
 readme = "README.md"
 requires-python = ">=3.11"

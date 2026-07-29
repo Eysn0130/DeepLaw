@@ -1,0 +1,126 @@
+{
+  "schema_version": "deeplaw.autonomous-benchmark-protocol/v2",
+  "supersedes": "deeplaw.autonomous-benchmark-protocol/v1",
+  "status": "engineering_ready_external_execution_pending",
+  "competitive_claim_eligible": false,
+  "candidate_binding_required": [
+    "clean_git_commit",
+    "source_archive_sha256",
+    "wheel_sha256",
+    "contract_inventory_sha256",
+    "uv_lock_sha256",
+    "gold_set_sha256",
+    "typed_compiler_report_sha256"
+  ],
+  "required_gold_domains": [
+    "chinese",
+    "english",
+    "code",
+    "legal",
+    "long_document"
+  ],
+  "required_candidate_modes": [
+    "exact",
+    "lexical",
+    "dense",
+    "source_tree",
+    "graph",
+    "community",
+    "temporal",
+    "memory",
+    "living_wiki",
+    "hybrid"
+  ],
+  "required_suites": [
+    "task_context",
+    "authority_temporal",
+    "memory_lifecycle",
+    "mutation_security",
+    "legal_federation",
+    "skill_lifecycle",
+    "systems_cost"
+  ],
+  "required_real_hosts": ["codex", "claude_code", "opencode"],
+  "required_named_comparisons": [
+    "ragflow",
+    "graphiti",
+    "pageindex",
+    "mem0",
+    "openkb",
+    "llm_wiki",
+    "obsidian",
+    "tolaria"
+  ],
+  "fixed_dimensions": [
+    "corpus_split_questions_and_expected_evidence",
+    "host_model_revision_prompt_and_permissions",
+    "item_character_token_source_hop_and_provider_budgets",
+    "hardware_os_network_and_model_egress",
+    "cold_warm_latency_memory_index_build_and_token_cost"
+  ],
+  "required_metrics": [
+    "task_success",
+    "useful_context_recall",
+    "irrelevant_context_rate",
+    "provenance_coverage",
+    "wrong_version_admission_rate",
+    "invalid_authority_admission_rate",
+    "temporal_update_accuracy",
+    "contradiction_preservation_rate",
+    "forgetting_accuracy",
+    "expiry_accuracy",
+    "authorized_mutation_success_rate",
+    "idempotent_replay_accuracy",
+    "update_compare_and_swap_accuracy",
+    "feedback_provenance_coverage",
+    "memory_poisoning_admission_rate",
+    "unauthorized_mutation_success_rate",
+    "no_grant_mutation_success_rate",
+    "revoked_grant_mutation_success_rate",
+    "wrong_scope_mutation_success_rate",
+    "over_sensitivity_mutation_success_rate",
+    "authority_elevation_admission_rate",
+    "restricted_disclosure_rate",
+    "private_legal_cross_scope_mutation_rate",
+    "scope_isolation_failure_rate",
+    "abstention_accuracy",
+    "cold_query_latency",
+    "warm_query_latency",
+    "resident_memory",
+    "index_build_time",
+    "index_bytes",
+    "provider_visible_tokens",
+    "amortized_build_cost",
+    "amortized_total_cost"
+  ],
+  "hard_failures": [
+    "official_wrong_version",
+    "unverifiable_provenance",
+    "authority_partition_confusion",
+    "private_data_disclosure",
+    "unauthorized_mutation"
+  ],
+  "external_closure": {
+    "secret_held_out_suites": 2,
+    "labels_access": "external_evaluator_only",
+    "dataset_commitment_before_candidate_delivery": true,
+    "paired_confidence_intervals": true,
+    "multiple_comparison_correction": true,
+    "complete_failures_and_raw_outputs": true,
+    "independent_evaluator_organizations": 2,
+    "detached_ed25519_signatures": true,
+    "trusted_keys_obtained_out_of_band": true
+  },
+  "developer_owned_fixture_policy": {
+    "repository_gold_is_development_only": true,
+    "typed_compiler_fixture_is_development_only": true,
+    "no_model_host_lifecycle_is_not_real_task_evidence": true,
+    "self_signature_is_not_independent": true,
+    "claim_eligible": false
+  },
+  "notes": [
+    "The repository implements the execution and verification machinery but contains no external result.",
+    "An unavailable official legal partition cannot be replaced or relabeled by private or Agent-derived content.",
+    "A hard failure cannot be averaged away by retrieval or task-success metrics."
+  ]
+}

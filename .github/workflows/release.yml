@@ -1,16 +1,16 @@
-name: Publish DeepLaw v0.7.0
+name: Publish DeepLaw release
 
 on:
   push:
     tags:
-      - "v0.7.0"
+      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
         description: Existing immutable tag to publish or resume.
         required: true
         type: string
-        default: "v0.7.0"
+        default: "v0.9.0"
       post_release_only:
         description: Verify an already published release without rebuilding or resigning it.
         required: true
@@ -27,6 +27,7 @@ jobs:
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       commit: ${{ steps.release.outputs.commit }}
+      version: ${{ steps.release.outputs.version }}
 
     steps:
       - name: Check out the requested tag
@@ -43,11 +44,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "${TARGET_TAG}" == "v0.7.0" ]]
+          [[ "${TARGET_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           commit=$(git rev-parse HEAD)
           tag_commit=$(git rev-list -n 1 "${TARGET_TAG}")
           [[ "${commit}" == "${tag_commit}" ]]
-          python - "${TARGET_TAG}" <<'PY'
+          version=$(python - "${TARGET_TAG}" <<'PY'
           import pathlib
           import sys
           import tomllib
@@ -55,13 +56,19 @@ jobs:
           version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())[
               "project"
           ]["version"]
-          if sys.argv[1] != f"v{version}" or version != "0.7.0":
-              raise SystemExit("tag and package version are not the v0.7.0 release")
+          if sys.argv[1] != f"v{version}":
+              raise SystemExit("tag and package version differ")
+          notes = pathlib.Path(f"docs/RELEASE_NOTES_v{version}.md")
+          if not notes.is_file():
+              raise SystemExit("release notes for the package version are missing")
+          print(version)
           PY
+          )
           git diff --check
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
           echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
   commercial-gates:
     name: Reuse exact commercial GA evidence
@@ -187,7 +194,7 @@ jobs:
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
           subject-checksums: ${{ runner.temp }}/release-assets/SHA256SUMS
-          sbom-path: ${{ runner.temp }}/release-assets/sbom/deeplaw-0.7.0.cdx.json
+          sbom-path: ${{ runner.temp }}/release-assets/sbom/deeplaw-${{ needs.release-context.outputs.version }}.cdx.json
 
       - name: Flatten uniquely named release assets
         shell: bash
@@ -214,6 +221,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ needs.release-context.outputs.commit }}
           RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -226,7 +234,7 @@ jobs:
             gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
               --verify-tag --target "${RELEASE_COMMIT}" --draft \
               --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
-              --notes-file docs/RELEASE_NOTES_v0.7.0.md
+              --notes-file "docs/RELEASE_NOTES_v${RELEASE_VERSION}.md"
             releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
             matching_releases=$(jq -c --arg tag "${RELEASE_TAG}" \
               '[.[] | select(.tag_name == $tag)]' <<< "${releases_json}")
@@ -359,15 +367,16 @@ jobs:
         shell: bash
         env:
           CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         run: |
           set -euo pipefail
           exec > >(tee "${RUNNER_TEMP}/post-evidence/sigstore-verification.log") 2>&1
           for artifact_name in \
-            deeplaw-0.7.0-py3-none-any.whl \
-            deeplaw-0.7.0.tar.gz \
-            deeplaw-0.7.0-linux-amd64.oci.tar \
-            deeplaw-0.7.0.cdx.json \
-            deeplaw-0.7.0-licenses.json \
+            "deeplaw-${RELEASE_VERSION}-py3-none-any.whl" \
+            "deeplaw-${RELEASE_VERSION}.tar.gz" \
+            "deeplaw-${RELEASE_VERSION}-linux-amd64.oci.tar" \
+            "deeplaw-${RELEASE_VERSION}.cdx.json" \
+            "deeplaw-${RELEASE_VERSION}-licenses.json" \
             openvex.json \
             commercial-release-manifest.json \
             SHA256SUMS; do
@@ -383,6 +392,7 @@ jobs:
       - name: Verify GitHub provenance and SBOM attestations
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -394,9 +404,9 @@ jobs:
           done < "${RUNNER_TEMP}/downloads/SHA256SUMS" \
             2>&1 | tee "${RUNNER_TEMP}/post-evidence/provenance-verification.log"
           for name in \
-            deeplaw-0.7.0-py3-none-any.whl \
-            deeplaw-0.7.0.tar.gz \
-            deeplaw-0.7.0-linux-amd64.oci.tar; do
+            "deeplaw-${RELEASE_VERSION}-py3-none-any.whl" \
+            "deeplaw-${RELEASE_VERSION}.tar.gz" \
+            "deeplaw-${RELEASE_VERSION}-linux-amd64.oci.tar"; do
             gh attestation verify "${RUNNER_TEMP}/downloads/${name}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
