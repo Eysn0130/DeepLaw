@@ -192,7 +192,7 @@ operator 治理”的原则，但不共享进程、存储或隐式触发：
 | 产品面 | 管理什么 | 交付给 Agent | 可选插件 / MCP tool |
 | --- | --- | --- | --- |
 | **Agent Knowledge OS** | 通用项目知识、决策、约束、经验与工具结果 | 带来源、选择理由、预算和 gaps 的 Knowledge Capsule | `deeplaw-knowledge-os` / `knowledge_support` |
-| **中国 Legal Pack** | 验签、不可变、版本感知的官方法源 release | 最多五张 evidence cards、按 ID 取得的精确 segment 与 receipt | `deeplaw` / `law_support` |
+| **中国 Legal Pack** | 基于经 Ed25519 精确字节验签的 catalog 构建的不可变、版本感知官方法源 release | 最多五张 evidence cards、按 ID 取得的精确 segment 与 receipt | `deeplaw` / `law_support` |
 
 Codex、Claude Code 与 OpenCode 都使用各自的薄适配层；插件必须显式安装和启用，不会接管普通代码
 或数据任务。两个 MCP 面永久只读；所有摄取、审核、激活、导入、撤销与删除都只属于本地 CLI。
@@ -218,8 +218,9 @@ Codex、Claude Code 与 OpenCode 都使用各自的薄适配层；插件必须�
 - 导入文本始终是不可信数据；即使通过审核，也不能覆盖宿主、仓库、开发者或当前用户指令。
 - `restricted` Knowledge、Vault 本地路径、inactive proposal 和无界图遍历不会通过 MCP 暴露。
 - 案件私有文档、事实、聊天和标识符不进入 Knowledge OS、Legal Pack、缓存、日志或查询语料。
-- 通用 Knowledge Asset 始终是 `legal_authority: false`；官方法源只存在于独立、验签、不可变的
-  Legal Pack release 中。
+- 通用 Knowledge Asset 始终是 `legal_authority: false`；官方法源只存在于独立、不可变、基于经
+  Ed25519 精确字节验签的 catalog 构建的 Legal Pack release 中；release artifact 本身没有独立的
+  发布批准签名。
 - Dense、reranker、模型编译器和生成视图都不能批准知识、判断法律效力或补造缺失来源。
 - 仓库包含可复核的 benchmark 与 evaluator 工具，但不把未完成的外部执行写成性能结论。
 
