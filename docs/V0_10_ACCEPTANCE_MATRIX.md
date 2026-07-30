@@ -28,7 +28,7 @@ rewritten as a comparison that was never run.
 | Autonomous safety | 12 actual domain-service cases | score `1.00`; zero mutation/elevation/injection/disclosure hard failures |
 | Typed Compiler | source-bound bilingual deterministic-v2 gold | score `1.00`; zero hallucinated/unsupported claims |
 | Overall quality | fixed weighted score | `>=0.85`, all components pass, `hard_failures=[]` |
-| Candidate artifact | isolated exact wheel install | report version/commit/tree/wheel SHA match the release |
+| Candidate artifact | isolated exact wheel install and installed-package inventory | report version/commit/tree/wheel SHA match; every loaded package file matches wheel bytes, with no unbound extras |
 | Report integrity | verifier and checksum inventory | summary, all component digests, report bytes, and every checksum match |
 | Three operating systems | Linux, macOS, Windows mandatory suites | zero failures, errors, and skips; at least 1,740 aggregate tests |
 | Distribution lifecycle | exact wheel/sdist plus historical v0.6 fixture | clean install, migration, upgrade, rollback point, snapshot/restore, uninstall |

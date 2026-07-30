@@ -105,6 +105,11 @@ python -m benchmarks.evaluation.run_protocol \
   --require-eligible
 ```
 
+Passing `--candidate-wheel` is not a label-only assertion. Before any suite runs, the protocol
+opens the wheel as a bounded ZIP, validates its path and metadata inventory, and compares every
+installed `deeplaw/` package file byte-for-byte with that wheel. Editable-source, mixed-install,
+symlinked, missing, extra, or hash-mismatched runtimes fail before a report can become eligible.
+
 The output directory contains:
 
 - `evaluation-report.json`;
