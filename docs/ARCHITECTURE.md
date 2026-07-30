@@ -8,19 +8,34 @@ new Agent-derived knowledge.
 
 ## Product boundary
 
-DeepLaw is a local, single-user, owner-controlled knowledge layer for Codex, Claude Code,
-OpenCode, and other Agent runtimes. It does not own the model, conversation loop, general tool
-execution, legal adjudication, or a remote control plane.
+DeepLaw is a local-first Agent Knowledge OS that compiles source materials into a governed Living
+Wiki and returns verifiable, bounded knowledge context to Codex, Claude Code, OpenCode, and other
+Agent runtimes. It does not own the model, conversation loop, general tool execution, legal
+adjudication, or a remote control plane.
 
-Its durable semantics are split across two knowledge planes:
+DeepLaw is logically one governed knowledge system with multiple policy planes, not a collection of
+disconnected knowledge products or databases. A plane defines origin, Authority, scope,
+sensitivity, lifecycle, and write policy; it does not justify a separate identity model, graph
+semantics, version system, or retrieval engine.
+
+The current durable model has two primary semantic domains:
 
 1. **Immutable evidence:** signed official Legal Pack bytes, user-provided originals, explicit Web,
    Git, tool, Run, and other Source snapshots, structured Source IR, stable fragments, locators, and
    parser provenance.
-2. **Autonomous Agent knowledge:** claims, concepts, entities, events, decisions, procedures,
-   experiences, preferences, comparisons, syntheses, memories, relations, and versioned Skills.
+2. **Compounding governed knowledge:** source-derived and Agent-derived claims, concepts, entities,
+   events, decisions, procedures, experiences, preferences, comparisons, syntheses, memories,
+   relations, and versioned Skills.
 
-SQLite and derived indexes support these planes. They do not create a third source of Authority.
+Protected authoritative packs are Authority classes within the evidence domain. Agent
+interpretations derived from them remain governed knowledge with `legal_authority=false`; even a
+human-verified interpretation does not become the authoritative source itself. SQLite and derived
+indexes support these domains. They do not create another source of Authority.
+
+Current v0.10 process and storage isolation, especially for `law_support`, enforces trust,
+capability, and privacy boundaries. It does not make the Legal Pack a second Knowledge OS or permit
+duplicated domain logic. Logical unity does not require one physical database or weakening
+official/private isolation.
 
 ## Six stable components
 
@@ -158,6 +173,73 @@ summary revision and evidence-bound relations before archiving inputs. Forgettin
 eligibility through a lifecycle revision; owner-confirmed GC is a separate byte-erasure policy that
 never deletes evidence objects or governance history.
 
+## Target: compounding Source-to-Knowledge compilation
+
+Status: **Target direction.** The lifecycle below constrains new architecture work, but it must not
+be described as current compiled-first behavior until the corresponding contracts, implementation,
+migration, and tests exist.
+
+DeepLaw should ingest a source revision once, compile it into durable typed knowledge, and
+incrementally maintain that knowledge as sources and tasks evolve. It must not regress into a
+traditional RAG loop that repeatedly treats raw fragments as the primary reusable knowledge object
+for every query.
+
+The target compilation lifecycle is:
+
+```text
+source ingestion
+→ immutable Source Revision
+→ extraction and Source IR
+→ semantic compilation plan
+→ identity and evidence validation
+→ governed Knowledge Revisions and typed relations
+→ rebuildable Living Wiki and indexes
+→ compiled-first retrieval
+→ evidence drill-down when required
+```
+
+Compounding updates should:
+
+- resolve or preserve stable semantic identities instead of creating avoidable duplicates;
+- create new revisions rather than rewrite prior knowledge;
+- refresh affected objects and relations when sources change;
+- preserve evidence bindings and record unresolved identity, contradiction, freshness, coverage,
+  and compilation failure states;
+- keep editor drafts and derived Wiki, graph, Canvas, cache, and index files out of normal
+  retrieval until a governed Knowledge Revision is committed.
+
+Models may propose extraction, synthesis, relation, and refresh plans. Deterministic DeepLaw code
+must remain authoritative for schema validation, identity resolution, source and evidence binding,
+grant and operation checks, scope, sensitivity, Authority, conflict handling, idempotency, atomic
+commit, audit, and recovery.
+
+### Compiled-first retrieval policy
+
+For ordinary reusable task context, the target default is to prefer admitted compiled Knowledge
+Revisions and typed relations over reprocessing raw fragments. This preference is conditional, not
+a universal hard-coded ranking by object kind:
+
+- the Query Plan and Knowledge Duties decide which concepts, entities, claims, procedures,
+  syntheses, memory, contradictions, gaps, freshness state, or relations are relevant;
+- exact citation, source verification, incomplete coverage, and authoritative or legal evidence
+  duties may require evidence-first selection or direct source drill-down;
+- raw fragments remain bounded verification and fallback material;
+- every fallback from compiled knowledge to source fragments must be observable in the plan,
+  explanation, gap, or receipt;
+- no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.
+
+The target closed loop is:
+
+```text
+ingest once
+→ compile durable knowledge
+→ reconcile and refresh
+→ reuse across Agents and tasks
+→ verify against original evidence
+→ rebuild derived views
+→ recover safely from failure
+```
+
 ## Cognitive and Wiki layers
 
 The rebuildable layer includes current FTS/BM25, deterministic offline multilingual hash-dense,
@@ -217,6 +299,9 @@ The default plugin registers only its read surface. No retrieval operation hides
 build/update/upload/delete/signing never enters a query MCP. An OS process with arbitrary same-owner
 shell access can bypass MCP and must be constrained by the host or a separate OS identity.
 
+These isolated processes are deployment and trust boundaries within one governed Knowledge OS.
+They must not evolve into disconnected identity, graph, versioning, or retrieval implementations.
+
 ## Legal Pack isolation
 
 The official layer verifies exact catalog bytes with Ed25519 before parsing or downloading,
@@ -254,7 +339,8 @@ ordinary Agent knowledge.
 - CRDT, Git, Neo4j, Elasticsearch, PostgreSQL, or a remote service as the core;
 - fully event-sourced current reads;
 - duplicated CLI/MCP/Watcher business logic;
-- a large GUI before retrieval quality closes;
+- a GUI that becomes the sole control plane or duplicates CLI/MCP domain logic;
+- independent knowledge engines or databases for individual policy planes;
 - automatic legal adjudication;
 - superiority claims without frozen real-task and named-comparator evidence.
 

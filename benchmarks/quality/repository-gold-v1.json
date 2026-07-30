@@ -2,7 +2,7 @@
   "schema_version": "deeplaw.repository-gold-set/v1",
   "status": "curated_development_fixture",
   "claim_eligible": false,
-  "frozen_at": "2026-07-30T16:00:00Z",
+  "frozen_at": "2026-07-30T08:33:21Z",
   "categories": ["chinese", "english", "code", "legal", "long_document"],
   "quality_gate": {
     "lexical": {
@@ -34,11 +34,11 @@
       "anchor": "自主写入不等于权威升级"
     },
     {
-      "document_id": "doc_chinese_agent_guide",
-      "category": "chinese",
+      "document_id": "doc_english_agent_guide",
+      "category": "english",
       "path": "AGENTS.md",
-      "sha256": "4c16900b0fd24651cf57284c4a6fb86dc2c81171e020b4d641b2aec2898c2055",
-      "title": "DeepLaw Agent 工程总纲",
+      "sha256": "3e34c3ff536b1aac6b2590ef071cd078ac4520a5fdd08aff396364962323a747",
+      "title": "DeepLaw repository-wide Agent guide",
       "anchor": "Discovery != Admission != Selection != Authority != Adjudication"
     },
     {
@@ -93,7 +93,7 @@
       "document_id": "doc_long_architecture",
       "category": "long_document",
       "path": "docs/ARCHITECTURE.md",
-      "sha256": "f152151c9059ea4df1789c550b36b41246b8e23adea4dd83ffff9420235ed2d4",
+      "sha256": "3c1c9f3525415d0a24e50ee5ef0381cb85d5957fb802aba80f247eb967ef6a4a",
       "title": "DeepLaw full architecture",
       "anchor": "Source Tree"
     },
@@ -108,26 +108,26 @@
   ],
   "cases": [
     {
-      "case_id": "zh_autonomous_activation",
-      "category": "chinese",
-      "query": "Agent 派生知识默认不再要求用户逐条 Review，在已授权 scope 和策略内自动创建并立即进入可检索的长期知识",
-      "expected_document_ids": ["doc_chinese_agent_guide"],
+      "case_id": "en_product_definition",
+      "category": "english",
+      "query": "DeepLaw local-first Agent Knowledge OS Source-to-Knowledge Compiler governed Living Wiki verifiable bounded knowledge context to any Agent",
+      "expected_document_ids": ["doc_english_agent_guide", "doc_long_architecture"],
       "forbidden_document_ids": [],
       "top_k": 2
     },
     {
-      "case_id": "zh_markdown_ledger",
-      "category": "chinese",
-      "query": "Markdown-native 不是 Markdown-only，规范内容由 Markdown revision 承载，SQLite Ledger 裁决 authority scope sensitivity lineage audit",
-      "expected_document_ids": ["doc_chinese_agent_guide"],
+      "case_id": "en_markdown_ledger",
+      "category": "english",
+      "query": "Markdown-native not Markdown-only registered Markdown Revision trusted Ledger stable identity Authority lifecycle scope sensitivity bitemporal writer lineage audit",
+      "expected_document_ids": ["doc_english_agent_guide"],
       "forbidden_document_ids": [],
       "top_k": 2
     },
     {
       "case_id": "zh_authority_boundary",
       "category": "chinese",
-      "query": "Embedding reranker 社区权重链接数量模型 confidence 使用频次不能修改 Authority 法律效力来源身份权限",
-      "expected_document_ids": ["doc_chinese_agent_guide"],
+      "query": "排名 embedding 图权重和模型 confidence 都不能产生官方身份、法律权威或法律适用结论",
+      "expected_document_ids": ["doc_chinese_readme"],
       "forbidden_document_ids": [],
       "top_k": 2
     },

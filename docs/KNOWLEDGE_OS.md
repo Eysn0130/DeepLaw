@@ -13,14 +13,16 @@ DeepLaw is permanently a local, single-user Agent Knowledge OS. It compiles dura
 review-gated knowledge for long-running Agents without becoming an Agent runtime, hosted RAG
 service, remote database, team collaboration service, or general Markdown editor.
 
-There are two isolated products:
+The v0.7 compatibility deployment exposes two isolated surfaces:
 
 1. the general Knowledge Asset core, exposed only through optional read-only `knowledge_support`;
 2. the version-aware Chinese Legal Pack, exposed only through optional read-only `law_support`.
 
-They do not share canonical storage, authority, cache, ranking, receipts, lifecycle, or MCP process.
-Neither plugin auto-activates. Case-private documents, facts, chats, and identifiers belong outside
-both products.
+They do not share canonical storage, Authority decisions, cache, ranking, receipts, lifecycle, or
+MCP process. Those are trust and deployment boundaries within one governed Knowledge OS, not
+separate product definitions or permission to duplicate identity, graph, versioning, or retrieval
+semantics. Neither plugin auto-activates. Case-private documents, facts, chats, and identifiers
+belong outside both surfaces.
 
 ## Canonical state and trust
 
