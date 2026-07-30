@@ -8,6 +8,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from benchmarks.evaluation.run_protocol import verify_report_directory
 from benchmarks.release.evidence import (
     environment_manifest,
     file_record,
@@ -17,12 +18,12 @@ from benchmarks.release.evidence import (
     write_report,
 )
 
-SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v2"
+SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v3"
 COMPETITIVE_EVIDENCE_MISSING = [
     "real_model_task_e2e",
     "named_baseline_results_17",
-    "secret_held_out_results",
-    "independent_evaluator_signatures",
+    "paired_confidence_intervals",
+    "comparative_failure_and_cost_inventory",
 ]
 
 
@@ -102,7 +103,7 @@ def _artifact_inventory(root: Path) -> list[dict[str, Any]]:
             continue
         records.append(file_record(path, logical_name=relative))
         records[-1]["path"] = records[-1].pop("logical_name")
-    if len(records) < 18:
+    if len(records) < 24:
         raise CommercialReleaseError("release asset inventory is incomplete")
     return records
 
@@ -174,14 +175,20 @@ def _docs(repository: Path) -> dict[str, bool]:
             f"v{version}",
         ),
         "CHANGELOG.md": (version, "competitive_claim_eligible=false"),
-        "SECURITY.md": (f"v{version}", "commercial_release_eligible=true"),
+        "SECURITY.md": (
+            f"v{version}",
+            "commercial_release_eligible=true",
+            "quality_protocol_eligible=true",
+        ),
         "docs/INSTALL_UPGRADE_ROLLBACK.md": ("0.6.0", version),
         acceptance: (
             "commercial_release_eligible=true",
+            "quality_protocol_eligible=true",
             "competitive_claim_eligible=false",
         ),
         release_notes: (
             "commercial_release_eligible=true",
+            "quality_protocol_eligible=true",
             "competitive_claim_eligible=false",
         ),
     }
@@ -212,6 +219,7 @@ def assemble(
     sbom_path: Path,
     licenses_path: Path,
     openvex_path: Path,
+    evaluation_path: Path,
     source_date_epoch: int,
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
@@ -272,6 +280,37 @@ def assemble(
     if distribution_hashes != wheel_hashes | sdist_hashes:
         raise CommercialReleaseError("platform artifacts differ from reproducible build bytes")
 
+    evaluation = verify_report_directory(
+        evaluation_path.parent,
+        repository=repository,
+        require_eligible=True,
+    )
+    candidate = evaluation["candidate"]
+    if (
+        evaluation_path.name != "evaluation-report.json"
+        or candidate.get("version") != version
+        or candidate.get("commit") != binding["commit"]
+        or candidate.get("tree") != binding["tree"]
+        or candidate.get("worktree_clean") is not True
+        or candidate.get("artifact_type") != "wheel"
+        or candidate.get("artifact_sha256") not in wheel_hashes
+        or evaluation.get("freeze", {}).get("freeze_valid") is not True
+        or evaluation.get("scoring", {}).get("quality_gate_passed") is not True
+        or evaluation.get("hard_failures") != []
+        or evaluation.get("claims", {}).get("quality_protocol_eligible") is not True
+        or evaluation.get("claims", {}).get(
+            "comparative_superiority_claim_eligible"
+        )
+        is not False
+        or evaluation.get("claims", {}).get(
+            "external_institution_certification_required"
+        )
+        is not False
+    ):
+        raise CommercialReleaseError(
+            "Evaluation Protocol report is ineligible or targets different bytes"
+        )
+
     oci = _require_report(
         oci_report_path,
         schema_version="deeplaw.oci-release-report/v1",
@@ -311,6 +350,11 @@ def assemble(
         "sha256"
     ) != oci["oci_archive"]["sha256"]:
         raise CommercialReleaseError("verified OCI bytes are absent from release assets")
+    evaluation_asset = artifact_by_path.get("evaluation/evaluation-report.json", {})
+    if evaluation_asset.get("sha256") != file_record(evaluation_path)["sha256"]:
+        raise CommercialReleaseError(
+            "verified Evaluation Protocol report is absent from release assets"
+        )
 
     mandatory_tests = sum(report["mandatory_suite"]["tests"] for report in platform_reports)
     mandatory_skips = sum(report["mandatory_suite"]["skipped"] for report in platform_reports)
@@ -376,15 +420,32 @@ def assemble(
             "byte_reproducible_wheel_sdist": True,
             "non_root_networkless_oci": True,
             "sbom_license_audit_openvex": True,
+            "evaluation_protocol_v1": True,
             "documentation": docs,
         },
+        "evaluation_protocol": {
+            "protocol_id": evaluation["protocol_id"],
+            "protocol_version": evaluation["protocol_version"],
+            "report_path": "evaluation/evaluation-report.json",
+            "report_artifact_sha256": evaluation_asset["sha256"],
+            "report_sha256": evaluation["report_sha256"],
+            "scoring_digest": evaluation["scoring_digest"],
+            "overall_score": evaluation["scoring"]["overall_score"],
+            "freeze_commit": evaluation["freeze"]["freeze_commit"],
+            "freeze_valid": True,
+            "quality_gate_passed": True,
+            "candidate_wheel_sha256": candidate["artifact_sha256"],
+        },
         "commercial_release_eligible": True,
+        "quality_protocol_eligible": True,
         "competitive_claim_eligible": False,
         "competitive_evidence_missing": COMPETITIVE_EVIDENCE_MISSING,
         "claim_policy": {
             "commercial_ga_is_independent_from_competitive_leadership": True,
             "model_task_e2e_counted_as_completed": False,
             "static_or_lifecycle_checks_counted_as_model_acceptance": False,
+            "external_institution_certification_required": False,
+            "public_temporal_holdout_is_secret": False,
             "best_sota_or_overall_leadership_claims_permitted": False,
         },
     }
@@ -403,6 +464,7 @@ def main() -> int:
     parser.add_argument("--sbom", type=Path, required=True)
     parser.add_argument("--licenses", type=Path, required=True)
     parser.add_argument("--openvex", type=Path, required=True)
+    parser.add_argument("--evaluation", type=Path, required=True)
     parser.add_argument("--source-date-epoch", type=int, default=946684800)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -418,11 +480,12 @@ def main() -> int:
             sbom_path=args.sbom.resolve(),
             licenses_path=args.licenses.resolve(),
             openvex_path=args.openvex.resolve(),
+            evaluation_path=args.evaluation.resolve(),
             source_date_epoch=args.source_date_epoch,
         )
         schema = load_json(
             args.repository.resolve()
-            / "contracts/commercial-release-manifest.v2.schema.json"
+            / "contracts/commercial-release-manifest.v3.schema.json"
         )
         Draft202012Validator.check_schema(schema)
         write_report(args.output.resolve(), report)

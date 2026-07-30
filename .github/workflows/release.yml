@@ -10,7 +10,7 @@ on:
         description: Existing immutable tag to publish or resume.
         required: true
         type: string
-        default: "v0.9.0"
+        default: "v0.10.0"
       post_release_only:
         description: Verify an already published release without rebuilding or resigning it.
         required: true
@@ -127,8 +127,17 @@ jobs:
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           release = manifest.get("release", {})
           if (
-              manifest.get("commercial_release_eligible") is not True
+              manifest.get("schema_version")
+              != "deeplaw.commercial-release-manifest/v3"
+              or manifest.get("commercial_release_eligible") is not True
+              or manifest.get("quality_protocol_eligible") is not True
               or manifest.get("competitive_claim_eligible") is not False
+              or manifest.get("evaluation_protocol", {}).get(
+                  "quality_gate_passed"
+              )
+              is not True
+              or manifest.get("evaluation_protocol", {}).get("freeze_valid")
+              is not True
               or release.get("tag") != os.environ["RELEASE_TAG"]
               or release.get("commit") != os.environ["RELEASE_COMMIT"]
           ):
@@ -177,6 +186,9 @@ jobs:
             ${{ runner.temp }}/release-assets/sbom/*.json
             ${{ runner.temp }}/release-assets/licenses/*.json
             ${{ runner.temp }}/release-assets/security/openvex.json
+            ${{ runner.temp }}/release-assets/evaluation/*.json
+            ${{ runner.temp }}/release-assets/evaluation/*.md
+            ${{ runner.temp }}/release-assets/evaluation/EVALUATION_SHA256SUMS
             ${{ runner.temp }}/release-assets/commercial-release-manifest.json
             ${{ runner.temp }}/release-assets/SHA256SUMS
           verify: true
@@ -233,7 +245,7 @@ jobs:
           if [[ "${release_count}" -eq 0 ]]; then
             gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
               --verify-tag --target "${RELEASE_COMMIT}" --draft \
-              --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
+              --title "DeepLaw ${RELEASE_TAG} — Quality and Superiority Closure" \
               --notes-file "docs/RELEASE_NOTES_v${RELEASE_VERSION}.md"
             for attempt in 1 2 3 4 5; do
               releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")

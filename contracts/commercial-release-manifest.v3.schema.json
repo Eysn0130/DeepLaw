@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-release-manifest.v3.schema.json",
+  "title": "DeepLaw release manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "environment",
+    "release",
+    "bindings",
+    "artifacts",
+    "platform_gates",
+    "host_acceptance",
+    "supply_chain",
+    "commercial_gates",
+    "evaluation_protocol",
+    "commercial_release_eligible",
+    "quality_protocol_eligible",
+    "competitive_claim_eligible",
+    "competitive_evidence_missing",
+    "claim_policy",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.commercial-release-manifest/v3"
+    },
+    "environment": {
+      "type": "object"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "version",
+        "tag",
+        "commit",
+        "tree",
+        "source_date_epoch"
+      ],
+      "properties": {
+        "repository": {
+          "const": "Eysn0130/DeepLaw"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "commit": {
+          "$ref": "#/$defs/git"
+        },
+        "tree": {
+          "$ref": "#/$defs/git"
+        },
+        "source_date_epoch": {
+          "type": "integer",
+          "minimum": 315532800
+        }
+      }
+    },
+    "bindings": {
+      "type": "object"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 120,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "byte_size"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "platform_gates": {
+      "type": "object",
+      "required": [
+        "systems",
+        "mandatory_tests",
+        "mandatory_skips",
+        "passed"
+      ],
+      "properties": {
+        "systems": {
+          "const": [
+            "Darwin",
+            "Linux",
+            "Windows"
+          ]
+        },
+        "mandatory_tests": {
+          "type": "integer",
+          "minimum": 1740
+        },
+        "mandatory_skips": {
+          "const": 0
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    },
+    "host_acceptance": {
+      "type": "object"
+    },
+    "supply_chain": {
+      "type": "object"
+    },
+    "commercial_gates": {
+      "type": "object"
+    },
+    "evaluation_protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_id",
+        "protocol_version",
+        "report_path",
+        "report_artifact_sha256",
+        "report_sha256",
+        "scoring_digest",
+        "overall_score",
+        "freeze_commit",
+        "freeze_valid",
+        "quality_gate_passed",
+        "candidate_wheel_sha256"
+      ],
+      "properties": {
+        "protocol_id": {
+          "const": "deeplaw-evaluation-v1"
+        },
+        "protocol_version": {
+          "const": 1
+        },
+        "report_path": {
+          "const": "evaluation/evaluation-report.json"
+        },
+        "report_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scoring_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "overall_score": {
+          "type": "number",
+          "minimum": 0.85,
+          "maximum": 1
+        },
+        "freeze_commit": {
+          "$ref": "#/$defs/git"
+        },
+        "freeze_valid": {
+          "const": true
+        },
+        "quality_gate_passed": {
+          "const": true
+        },
+        "candidate_wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "commercial_release_eligible": {
+      "const": true
+    },
+    "quality_protocol_eligible": {
+      "const": true
+    },
+    "competitive_claim_eligible": {
+      "const": false
+    },
+    "competitive_evidence_missing": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "real_model_task_e2e",
+          "named_baseline_results_17",
+          "paired_confidence_intervals",
+          "comparative_failure_and_cost_inventory"
+        ]
+      }
+    },
+    "claim_policy": {
+      "type": "object"
+    },
+    "record_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

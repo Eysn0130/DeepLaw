@@ -5,13 +5,18 @@
 <h1 align="center">DeepLaw</h1>
 
 <p align="center">
-  <strong>Local single-user Agent Knowledge OS</strong><br />
+  <img src="assets/brand/deeplaw-2-glass.png" width="820" alt="DeepLaw 2.0 product brand" />
+</p>
+
+<p align="center">
+  <strong>DeepLaw 2.0 · Local single-user Agent Knowledge OS</strong><br />
   Immutable evidence · Markdown-native knowledge · Trusted Ledger · Bounded context
 </p>
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.9.0"><img src="https://img.shields.io/badge/latest-v0.9.0-17202A?style=flat-square" alt="Latest release v0.9.0" /></a>
+  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.10.0"><img src="https://img.shields.io/badge/latest-v0.10.0-17202A?style=flat-square" alt="Latest release v0.10.0" /></a>
+  <img src="https://img.shields.io/badge/Evaluation%20Protocol-v1-36CDBB?style=flat-square" alt="DeepLaw Evaluation Protocol v1" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
 </p>
@@ -21,10 +26,12 @@ long-term memory, knowledge relationships, Living Wiki navigation, provenance-aw
 and task-sized Knowledge Capsules while the host keeps control of models, conversations, and
 general tools.
 
-`v0.9.0` delivers the 0.8 Autonomous Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence
-milestones. The older proposal/review workflow remains only for source compilation, untrusted
-external imports, and migration compatibility; it is not the default activation path for admitted
-Agent-derived knowledge.
+**DeepLaw 2.0 is the product brand, not a software version.** Software release `v0.10.0` builds on
+the delivered 0.8 Autonomous Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence, and
+closes the 1.0 Quality and Superiority milestone with a self-verifying quality protocol. The older
+proposal/review workflow remains only for source compilation, untrusted external imports, and
+migration compatibility; it is not the default activation path for admitted Agent-derived
+knowledge.
 
 ## Permanent boundaries
 
@@ -67,11 +74,11 @@ flowchart LR
 
 ## Install and start
 
-Install the verified `v0.9.0` wheel from the GitHub release:
+Install the verified `v0.10.0` wheel from the GitHub release:
 
 ```bash
 uv tool install \
-  https://github.com/Eysn0130/DeepLaw/releases/download/v0.9.0/deeplaw-0.9.0-py3-none-any.whl
+  https://github.com/Eysn0130/DeepLaw/releases/download/v0.10.0/deeplaw-0.10.0-py3-none-any.whl
 deeplaw --version
 ```
 
@@ -171,14 +178,14 @@ administration, or permission changes.
 
 | Status | Capability |
 | --- | --- |
-| **Current in v0.9.0** | Immutable source/CAS objects; canonical Markdown revisions paired with a STRICT Ledger; Run/capture; stable identity and aliases; bitemporal evidence-bound relations; crash recovery, compare-and-swap, reconcile, Watcher, conflicts, snapshot/restore, expiry/forget/owner GC; offline FTS/dense/reranker/graph retrieval; Living Wiki, Semantic Lint, gap discovery, communities, Canvas, and Skill draft Factory; partitioned Legal context; separate read/write MCP processes |
+| **Current in v0.10.0** | All v0.9 autonomous knowledge capabilities plus a public benchmark, fixed scoring, time-frozen holdout, automated reports, release-bound wheel/commit/freeze verification, and hard-failure quality gates |
 | **Compatibility** | v0.7 Source IR, reviewed source-derived Knowledge Assets, Proposal Inbox, Workbench, and Retrieval Fabric remain available in their explicit compatibility partition |
-| **External closure pending** | Real model tasks on all three hosts, actual named competing systems, evaluator-secret held-outs, confidence intervals, and signatures from two independent evaluators |
-| **Not claimed** | Remote SaaS, multi-user control, automatic legal adjudication, model-created permissions, or superiority/SOTA without the frozen external evidence protocol |
+| **Quality closure** | DeepLaw Evaluation Protocol v1 evaluates repository retrieval, autonomy safety, and Typed Compiler quality on a public, maintainer-visible, time-frozen holdout. Release reports bind exact wheel, commit, freeze, and case-level results. No external institution certification is required |
+| **Comparative closure pending** | Real Codex, Claude Code, and OpenCode model tasks and same-condition named-baseline runs have not been executed; paired confidence intervals and complete cost/failure inventories therefore remain absent |
+| **Not claimed** | Remote SaaS, multi-user control, automatic legal adjudication, model-created permissions, secret/unseen/contamination-free status for the public holdout, or overall superiority/SOTA |
 
-The machine-readable release decision remains `competitive_claim_eligible=false` until those
-external facts exist. Static tests, synthetic fixtures, feature matrices, and self-evaluation are
-not substitutes.
+The release decision can set `quality_protocol_eligible=true` only for a clean, frozen, exact wheel.
+It remains `competitive_claim_eligible=false` until actual comparative evidence exists.
 
 ## Security
 
@@ -197,6 +204,13 @@ not substitutes.
 ## Verification
 
 ```bash
+uv run python -m benchmarks.evaluation.run_protocol \
+  --repository . \
+  --output-dir /tmp/deeplaw-evaluation
+uv run python -m benchmarks.evaluation.run_protocol \
+  --repository . \
+  --verify-report-dir /tmp/deeplaw-evaluation
+
 uv run pytest
 uv run ruff check .
 git diff --check
@@ -210,8 +224,8 @@ git diff --check
 | Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Agent and MCP adapters | [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) |
 | Installation, upgrade, rollback | [`docs/INSTALL_UPGRADE_ROLLBACK.md`](docs/INSTALL_UPGRADE_ROLLBACK.md) |
-| v0.9 acceptance and release notes | [`docs/V0_9_ACCEPTANCE_MATRIX.md`](docs/V0_9_ACCEPTANCE_MATRIX.md) · [`docs/RELEASE_NOTES_v0.9.0.md`](docs/RELEASE_NOTES_v0.9.0.md) |
-| Benchmark and external proof protocol | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) · [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md) |
+| v0.10 acceptance and release notes | [`docs/V0_10_ACCEPTANCE_MATRIX.md`](docs/V0_10_ACCEPTANCE_MATRIX.md) · [`docs/RELEASE_NOTES_v0.10.0.md`](docs/RELEASE_NOTES_v0.10.0.md) |
+| Evaluation and comparative proof | [`docs/EVALUATION_PROTOCOL.md`](docs/EVALUATION_PROTOCOL.md) · [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) · [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md) |
 | Security policy | [`SECURITY.md`](SECURITY.md) |
 
 DeepLaw is licensed under the [Apache License 2.0](LICENSE). Do not commit source DOCX/PDF files,

@@ -3,12 +3,44 @@
 All notable product changes are recorded here. DeepLaw 2.0 is the product name; Python package
 versions follow semantic versioning independently.
 
+## 0.10.0 — 2026-07-30
+
+This release completes the engineering portion of **DeepLaw 1.0 Quality and Superiority Closure**.
+The exact release may set `quality_protocol_eligible=true`; actual cross-product comparative
+evidence is still absent, so `competitive_claim_eligible=false`.
+
+### Added
+
+- DeepLaw Evaluation Protocol v1: public Benchmark, fixed scoring, time-frozen holdout, offline
+  automatic runner, complete component reports, functional scoring digest, and checksum verifier.
+- Release-bound evaluation: clean post-freeze commit, exact wheel SHA-256, hard-failure quality
+  gate, manifest v3, root checksums, Sigstore inputs, and GitHub provenance.
+- Actual repository temporal, autonomy/security, and source-bound bilingual Typed Compiler quality
+  suites with closed JSON contracts and regression tests.
+- v0.10 acceptance matrix, canonical evaluation documentation, and corrected optional comparative
+  protocol.
+
+### Changed
+
+- External institution certification, secret holdouts, and two organization signatures are no
+  longer core quality or release prerequisites. Independent reproduction remains optional.
+- DeepLaw 2.0 is consistently identified as the product brand while package, plugins, adapters,
+  documents, and artifacts use software version `0.10.0`.
+- Bilingual repository presentation restores the v0.7 brand artwork and distinguishes core quality
+  evidence from unexecuted comparative claims.
+
+### Retained
+
+- The v0.7 proposal/review route remains for source-derived compilation, untrusted imports,
+  migration, rollback, and compatibility; it is not the autonomous default.
+- Historical external evaluator contracts remain immutable evidence tooling, not current v0.10
+  certification requirements.
+
 ## 0.9.0 — 2026-07-30
 
 This release implements the **DeepLaw 0.8 Autonomous Knowledge Core** and **0.9 Living Wiki and
-Knowledge Intelligence** milestones. The v1.0 engineering/evaluator gates are present, but competitive eligibility
-remains false until evaluator-controlled real-host runs, named baselines, secret held-outs and
-independent signatures exist.
+Knowledge Intelligence** milestones. Historical text below records the evidence boundary at that
+release; v0.10 supersedes its external-certification route.
 
 ### Added
 

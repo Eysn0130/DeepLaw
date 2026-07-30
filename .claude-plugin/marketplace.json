@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "deeplaw",
-  "version": "0.9.0",
-  "description": "DeepLaw 2.0 read-only legal and Knowledge Asset plugins for Agent hosts.",
+  "version": "0.10.0",
+  "description": "DeepLaw 2.0 legal evidence and Markdown-native Agent Knowledge OS plugins.",
   "owner": {
     "name": "Eysn0130"
   },
@@ -10,7 +10,7 @@
     {
       "name": "deeplaw",
       "description": "Explicit-use, read-only Chinese legal research with versioned evidence.",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "author": {
         "name": "Eysn0130"
       },
@@ -19,8 +19,8 @@
     },
     {
       "name": "deeplaw-knowledge-os",
-      "description": "Explicit-use, read-only Knowledge Assets and bounded Context Capsules.",
-      "version": "0.9.0",
+      "description": "Explicit-use, read-only access to autonomous Markdown knowledge and bounded Context Capsules.",
+      "version": "0.10.0",
       "author": {
         "name": "Eysn0130"
       },

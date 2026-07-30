@@ -359,6 +359,10 @@ Skill 内容不能自我声明更高 Authority、扩大工具权限或把引用�
 
 ## 十、评价与领先性证明
 
+- 不追求外部机构认证；优先落地 DeepLaw Evaluation Protocol 与自主可验证评测体系。协议必须包含
+  公开 Benchmark、固定评分规则、时间冻结 holdout、自动化评测脚本和完整报告生成机制，确保结果
+  可复现、可审计。公开 holdout 的标签对维护者可见，因此不得声称其 secret、unseen 或
+  contamination-free；独立复现可以增强证据，但不是质量门禁或软件发布的权威来源。
 - 最终目标是提高真实 Agent 任务成功率，不是最大化 chunk recall、图边数量、记忆数量或 benchmark
   单项分数。
 - 比较 RAG、GraphRAG、Agent Memory、PageIndex/Source Tree、LLM Wiki 和混合方案时，必须固定

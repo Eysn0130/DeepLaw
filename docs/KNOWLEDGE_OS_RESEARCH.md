@@ -145,8 +145,9 @@ DeepLaw `v0.5.0` 的工程能力：
 
 ## 评价协议
 
-冻结协议见
-[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md)，同时报告：
+当前核心质量协议见
+[`EVALUATION_PROTOCOL.md`](EVALUATION_PROTOCOL.md)；比较和独立复现路径见
+[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md)。同时报告：
 
 | 维度 | 最低要求 |
 | --- | --- |
@@ -163,9 +164,10 @@ DeepLaw `v0.5.0` 的工程能力：
 | budget | Capsule 条目、字符、延迟、内存、索引和摊销成本 |
 | abstention | 缺少证据时明确拒绝编造 |
 
-对照实验必须固定 corpus、问题、模型、prompt、工具权限和预算，公开失败样本。十套件真实
-运行、两个秘密 held-out 和两家独立签名复现尚未完成。只有机器 claim gate 通过，才能声称
-某种 sidecar 或策略相对列明基线更好；“功能更多”和单元测试通过都不构成领先证据。
+对照实验必须固定 corpus、问题、模型、prompt、工具权限和预算，公开失败样本。v0.10 的实际
+具名基线和三宿主模型任务尚未完成；只有比较 claim gate 通过，才能声称某种 sidecar 或策略相对
+列明基线更好。外部机构认证和秘密 held-out 不是核心质量门禁；“功能更多”和单元测试通过仍不
+构成领先证据。
 
 10 万资产合成诊断只建立当前本地 vault 的已测工作区间。它证明尾部实体、Capsule、审计重放
 和常驻读路径在该规模下按契约工作，但唯一标识查询不能替代自然语言语义泛化。当前公开开发
