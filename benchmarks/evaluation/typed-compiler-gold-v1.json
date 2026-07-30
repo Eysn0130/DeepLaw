@@ -1,0 +1,103 @@
+{
+  "schema_version": "deeplaw.typed-compiler-quality-suite/v1",
+  "suite_id": "deeplaw-public-typed-compiler-gold-v1",
+  "status": "public_time_frozen_benchmark",
+  "frozen_at": "2026-07-30T12:00:00Z",
+  "compiler_identity": "deeplaw-deterministic/v2",
+  "network_policy": "offline",
+  "quality_gate": {
+    "minimum_precision": 1.0,
+    "minimum_recall": 1.0,
+    "minimum_f1": 1.0,
+    "maximum_hallucinated_claim_rate": 0.0,
+    "maximum_unsupported_claim_rate": 0.0,
+    "minimum_source_span_correctness": 1.0,
+    "maximum_duplicate_claim_rate": 0.0
+  },
+  "sources": [
+    {
+      "source_id": "typed_en_governance",
+      "file_name": "typed-en-governance.md",
+      "content_sha256": "69ef0085fae14ff07d9f90a8c878dcdf8a93ea5696e05946d81465894c2cf5ae",
+      "content": "# Requirement: Local canonical state\nCanonical knowledge state must remain on the owner-controlled local machine.\n\n# Risk: Authority conflation\nA ranking score can cause an unsafe result when it is treated as source authority.\n\n# Decision: One mutation service\nCLI, MCP, and Watcher mutations use the same commit coordinator.\n\n# Rule: Evidence identity\nA summary never replaces the original source bytes, fragment, locator, or hash.\n",
+      "gold_claims": [
+        {
+          "claim_id": "en_requirement_local",
+          "kind": "requirement",
+          "title": "Requirement: Local canonical state",
+          "statement": "Canonical knowledge state must remain on the owner-controlled local machine.",
+          "locator": "section:1;paragraphs:2-3",
+          "quote_sha256": "d7af57b217fb89d6f8040dfb76b763c3daf01cb055c9a097703738062819a846"
+        },
+        {
+          "claim_id": "en_risk_authority",
+          "kind": "risk",
+          "title": "Risk: Authority conflation",
+          "statement": "A ranking score can cause an unsafe result when it is treated as source authority.",
+          "locator": "section:2;paragraphs:5-6",
+          "quote_sha256": "fbc9151bbe9ede9a6f018c4d3177489822d7978b38a5a307030c040a83baec80"
+        },
+        {
+          "claim_id": "en_decision_coordinator",
+          "kind": "decision",
+          "title": "Decision: One mutation service",
+          "statement": "CLI, MCP, and Watcher mutations use the same commit coordinator.",
+          "locator": "section:3;paragraphs:8-9",
+          "quote_sha256": "e9b11b324dc588dcdc1a8fdcb03548a53ac07946b01113cd1b83c516afa04f65"
+        },
+        {
+          "claim_id": "en_rule_evidence",
+          "kind": "rule",
+          "title": "Rule: Evidence identity",
+          "statement": "A summary never replaces the original source bytes, fragment, locator, or hash.",
+          "locator": "section:4;paragraphs:11-11",
+          "quote_sha256": "461ec4e9bf81e77b4fefb55d585191dd75dc8592f6e253eefdf87ce39cfde9c6"
+        }
+      ]
+    },
+    {
+      "source_id": "typed_zh_governance",
+      "file_name": "typed-zh-governance.md",
+      "content_sha256": "f83788ffcab3bb6397f8bae54c70206af62fcc3a4b81e395845626bbe12d51a6",
+      "content": "# 要求：原件修订\n一个已经摄取的原件版本不得原地覆盖，内容变化必须创建新修订。\n\n# 风险：持久化投毒\n检索到的指令文本如果获得宿主指令语义，会形成跨会话投毒风险。\n\n# 决策：统一提交协调器\n所有规范知识写入都通过同一提交协调器完成可恢复事务。\n\n# 规则：评分不是权威\nEmbedding、Reranker 和图权重只能排序候选，不能提升来源权威。\n",
+      "gold_claims": [
+        {
+          "claim_id": "zh_requirement_revision",
+          "kind": "requirement",
+          "title": "要求:原件修订",
+          "statement": "一个已经摄取的原件版本不得原地覆盖，内容变化必须创建新修订。",
+          "locator": "section:1;paragraphs:2-3",
+          "quote_sha256": "c59b70f3aa9a0692f92cfa16903be8559f994a3b0eef12cc26600895305fb4f8"
+        },
+        {
+          "claim_id": "zh_risk_poisoning",
+          "kind": "risk",
+          "title": "风险:持久化投毒",
+          "statement": "检索到的指令文本如果获得宿主指令语义，会形成跨会话投毒风险。",
+          "locator": "section:2;paragraphs:5-6",
+          "quote_sha256": "6e74287e82c216c0d8b42601a8931e31b9857ca395bfb9e54eea926f517b5d0c"
+        },
+        {
+          "claim_id": "zh_decision_coordinator",
+          "kind": "decision",
+          "title": "决策:统一提交协调器",
+          "statement": "所有规范知识写入都通过同一提交协调器完成可恢复事务。",
+          "locator": "section:3;paragraphs:8-9",
+          "quote_sha256": "38500933675f6594d610b0599e637f0f732d117fa63cc008a77010be5dad3112"
+        },
+        {
+          "claim_id": "zh_rule_ranking",
+          "kind": "rule",
+          "title": "规则:评分不是权威",
+          "statement": "Embedding、Reranker 和图权重只能排序候选，不能提升来源权威。",
+          "locator": "section:4;paragraphs:11-11",
+          "quote_sha256": "2c2dd78d9858d2c7822da72e374476bc0175f51f8685639e0016e036c75050fb"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Public deterministic compiler benchmark; it measures exact typed-section classification and source-span binding, not model-generated synthesis.",
+    "The labels are maintainer-visible and cannot support a secrecy or contamination-free claim."
+  ]
+}

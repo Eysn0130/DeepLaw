@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/typed-compiler-quality-suite.v1.schema.json",
+  "title": "DeepLaw public deterministic Typed Compiler Gold Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite_id",
+    "status",
+    "frozen_at",
+    "compiler_identity",
+    "network_policy",
+    "quality_gate",
+    "sources",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.typed-compiler-quality-suite/v1"},
+    "suite_id": {"const": "deeplaw-public-typed-compiler-gold-v1"},
+    "status": {"const": "public_time_frozen_benchmark"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "compiler_identity": {"const": "deeplaw-deterministic/v2"},
+    "network_policy": {"const": "offline"},
+    "quality_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_precision",
+        "minimum_recall",
+        "minimum_f1",
+        "maximum_hallucinated_claim_rate",
+        "maximum_unsupported_claim_rate",
+        "minimum_source_span_correctness",
+        "maximum_duplicate_claim_rate"
+      ],
+      "properties": {
+        "minimum_precision": {"const": 1.0},
+        "minimum_recall": {"const": 1.0},
+        "minimum_f1": {"const": 1.0},
+        "maximum_hallucinated_claim_rate": {"const": 0.0},
+        "maximum_unsupported_claim_rate": {"const": 0.0},
+        "minimum_source_span_correctness": {"const": 1.0},
+        "maximum_duplicate_claim_rate": {"const": 0.0}
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/source"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "kind",
+        "title",
+        "statement",
+        "locator",
+        "quote_sha256"
+      ],
+      "properties": {
+        "claim_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "kind": {
+          "enum": [
+            "decision",
+            "constraint",
+            "procedure",
+            "lesson",
+            "experience",
+            "exception",
+            "definition",
+            "requirement",
+            "risk",
+            "assumption",
+            "question",
+            "rule",
+            "fact"
+          ]
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "statement": {"type": "string", "minLength": 1, "maxLength": 20000},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "file_name",
+        "content_sha256",
+        "content",
+        "gold_claims"
+      ],
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "file_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\\.md$"
+        },
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "content": {"type": "string", "minLength": 1, "maxLength": 100000},
+        "gold_claims": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/claim"}
+        }
+      }
+    }
+  }
+}

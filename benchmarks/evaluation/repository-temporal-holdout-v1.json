@@ -1,0 +1,239 @@
+{
+  "schema_version": "deeplaw.repository-gold-set/v2",
+  "status": "public_time_frozen_holdout",
+  "claim_eligible": false,
+  "frozen_at": "2026-07-30T12:00:00Z",
+  "split": "public_time_frozen_holdout",
+  "freeze_policy": {
+    "visibility": "public",
+    "labels_visible": true,
+    "secret": false,
+    "contamination_claim_eligible": false,
+    "reuse_policy": "immutable_until_protocol_version_change"
+  },
+  "categories": ["chinese", "english", "code", "legal", "long_document"],
+  "quality_gate": {
+    "lexical": {
+      "minimum_hit_at_1": 0.8,
+      "minimum_useful_context_recall": 0.8,
+      "maximum_irrelevant_context_rate": 0.2,
+      "maximum_forbidden_admission_count": 0
+    },
+    "dense": {
+      "minimum_hit_at_1": 0.4,
+      "minimum_useful_context_recall": 0.4,
+      "maximum_irrelevant_context_rate": 0.6,
+      "maximum_forbidden_admission_count": 0
+    },
+    "hybrid": {
+      "minimum_hit_at_1": 0.8,
+      "minimum_useful_context_recall": 0.8,
+      "maximum_irrelevant_context_rate": 0.2,
+      "maximum_forbidden_admission_count": 0
+    }
+  },
+  "documents": [
+    {
+      "document_id": "holdout_zh_implementation_audit",
+      "category": "chinese",
+      "path": "docs/IMPLEMENTATION_AUDIT_2026-07-26.md",
+      "sha256": "ee809f00f4cd3eabf2284ab7c07f3822c7a9e2c7c86350764857a2071b88e372",
+      "title": "DeepLaw 施工方案源码证据复核",
+      "anchor": "当前实现擅长已明确写入的事实、更新和时间信息"
+    },
+    {
+      "document_id": "holdout_zh_source_audit",
+      "category": "chinese",
+      "path": "docs/SOURCE_AUDIT_2026-07-14.md",
+      "sha256": "8f43bd164ccfa9d2dcb989b5e25e1829b9facd976cc6596dfd93983a6c6d12be",
+      "title": "DeepLaw 法律资料来源审计",
+      "anchor": "URL 存在不等于当前仍可访问"
+    },
+    {
+      "document_id": "holdout_en_release_070",
+      "category": "english",
+      "path": "docs/RELEASE_NOTES_v0.7.0.md",
+      "sha256": "55eda59f0c18868bc3e0061b2f2687e6b9bffb1d287376ff38cba6510abe650f",
+      "title": "DeepLaw v0.7.0 release notes",
+      "anchor": "Evidence-Governed Retrieval Fabric"
+    },
+    {
+      "document_id": "holdout_en_release_090",
+      "category": "english",
+      "path": "docs/RELEASE_NOTES_v0.9.0.md",
+      "sha256": "5db6264fc2bd8d27e41a10412ca998439110c7c61b48ecf0712b228aaba2acc8",
+      "title": "DeepLaw v0.9.0 release notes",
+      "anchor": "Canonical Agent knowledge is now an immutable Markdown Revision Object"
+    },
+    {
+      "document_id": "holdout_code_query_plan",
+      "category": "code",
+      "path": "src/deeplaw/query_plan.py",
+      "sha256": "cc00c69e62f52ea524b5827f23593e076da2613a727f9b2cd3ddd91619f6412c",
+      "title": "Query Plan and Knowledge Duty implementation",
+      "anchor": "def compile_query_plan("
+    },
+    {
+      "document_id": "holdout_code_evidence_compiler",
+      "category": "code",
+      "path": "src/deeplaw/evidence_compiler.py",
+      "sha256": "955d310e861e1728c4fdc4ad972e98ae69f0b17fce14e80ba747ee570c25ba00",
+      "title": "Budgeted evidence selection implementation",
+      "anchor": "Every selected candidate must add or improve a duty witness."
+    },
+    {
+      "document_id": "holdout_legal_federation",
+      "category": "legal",
+      "path": "contracts/law-federated-context.v1.schema.json",
+      "sha256": "28dbeaf7145b91fc942db09650d090cdafaaa155a0a69e0c0035fc5bf63e206c",
+      "title": "Federated legal authority partition contract",
+      "anchor": "authority_partitions_preserved"
+    },
+    {
+      "document_id": "holdout_legal_card",
+      "category": "legal",
+      "path": "contracts/legal-evidence-card.v2.schema.json",
+      "sha256": "b12adac3f2fea47a64d1cde3d529007f05b2d7abbbed67ff14c6cc4f2deaa7d5",
+      "title": "Legal evidence card provenance contract",
+      "anchor": "source_sha256"
+    },
+    {
+      "document_id": "holdout_long_delivery",
+      "category": "long_document",
+      "path": "docs/V0_7_DELIVERY_REPORT.md",
+      "sha256": "d5fe0f5bb5e61d511d2b6ed21414160ffb4a40f267add2058f2c350eefb56c77",
+      "title": "DeepLaw v0.7 construction delivery audit",
+      "anchor": "统一 Query Plan + 多通道 Candidate Discovery + 中央 Admission"
+    },
+    {
+      "document_id": "holdout_long_traceability",
+      "category": "long_document",
+      "path": "docs/V0_7_REQUIREMENT_TRACEABILITY.md",
+      "sha256": "37c2893383294d4a4c3f905389de2e5fa0e2ffdb7ac9f55cf616286e52f03f18",
+      "title": "DeepLaw v0.7 requirement evidence traceability",
+      "anchor": "真实长 PDF/office gold set"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "holdout_zh_preference_failure",
+      "category": "chinese",
+      "query": "公开开发集的偏好与语义改写弱项必须保留失败样本，不能用其他五十题的高分隐藏",
+      "expected_document_ids": ["holdout_zh_implementation_audit"],
+      "forbidden_document_ids": ["holdout_zh_source_audit"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_zh_failed_protocol",
+      "category": "chinese",
+      "query": "评测失败时公开失败样本和成本，修复进入新版本新协议，不能回填成绩",
+      "expected_document_ids": ["holdout_zh_implementation_audit"],
+      "forbidden_document_ids": [],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_zh_url_not_authority",
+      "category": "chinese",
+      "query": "来源网址存在不证明仍然可访问，也不能证明文件属于现行法律版本",
+      "expected_document_ids": ["holdout_zh_source_audit"],
+      "forbidden_document_ids": ["holdout_zh_implementation_audit"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_en_v070_retrieval",
+      "category": "english",
+      "query": "The Evidence-Governed Retrieval Fabric combines exact BM25 Source Tree reviewed graph and temporal channels",
+      "expected_document_ids": ["holdout_en_release_070"],
+      "forbidden_document_ids": ["holdout_en_release_090"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_en_v090_markdown_revision",
+      "category": "english",
+      "query": "DeepLaw v0.9.0 Canonical Agent knowledge uses an immutable Markdown Revision Object paired with a STRICT SQLite identity event Ledger",
+      "expected_document_ids": ["holdout_en_release_090"],
+      "forbidden_document_ids": ["holdout_en_release_070"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_en_commit_coordinator",
+      "category": "english",
+      "query": "A recoverable commit coordinator handles CAS bytes compare-and-swap Ledger state materialization and crash recovery",
+      "expected_document_ids": ["holdout_en_release_090"],
+      "forbidden_document_ids": [],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_code_temporal_plan",
+      "category": "code",
+      "query": "compile_query_plan PlanPurpose AS_OF_VERSION TEMPORAL_STATUS_VERSION canonical obligation order",
+      "expected_document_ids": ["holdout_code_query_plan"],
+      "forbidden_document_ids": ["holdout_code_evidence_compiler"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_code_budget_selection",
+      "category": "code",
+      "query": "compile_evidence max_items max_chars incremental duties character_budget item_budget DutyWitness",
+      "expected_document_ids": ["holdout_code_evidence_compiler"],
+      "forbidden_document_ids": ["holdout_code_query_plan"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_code_candidate_validation",
+      "category": "code",
+      "query": "EvidenceCandidate score finite chars bounded duty_ids unique authority_rank between zero and one hundred",
+      "expected_document_ids": ["holdout_code_evidence_compiler"],
+      "forbidden_document_ids": [],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_legal_authority_partitions",
+      "category": "legal",
+      "query": "official user_private agent_interpretation authority_partitions_preserved legal_authority false",
+      "expected_document_ids": ["holdout_legal_federation"],
+      "forbidden_document_ids": ["holdout_legal_card"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_legal_card_hash",
+      "category": "legal",
+      "query": "legal evidence card official_source source_sha256 segment_hash locator validity_evaluation",
+      "expected_document_ids": ["holdout_legal_card"],
+      "forbidden_document_ids": ["holdout_legal_federation"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_legal_private_budget",
+      "category": "legal",
+      "query": "private_limit agent_limit official_limit selected_items max_characters federated legal context budget",
+      "expected_document_ids": ["holdout_legal_federation"],
+      "forbidden_document_ids": [],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_long_discovery_admission",
+      "category": "long_document",
+      "query": "Source Tree reviewed graph temporal Dense local reranker only perform Candidate Discovery before central Admission",
+      "expected_document_ids": ["holdout_long_delivery"],
+      "forbidden_document_ids": ["holdout_long_traceability"],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_long_release_blockers",
+      "category": "long_document",
+      "query": "P1 blocker clean final freeze official baselines Windows host matrix secret held-out independent signatures",
+      "expected_document_ids": ["holdout_long_delivery"],
+      "forbidden_document_ids": [],
+      "top_k": 1
+    },
+    {
+      "case_id": "holdout_long_tree_gap",
+      "category": "long_document",
+      "query": "Source Tree API long content budget tests still need real long PDF office gold set",
+      "expected_document_ids": ["holdout_long_traceability"],
+      "forbidden_document_ids": [],
+      "top_k": 1
+    }
+  ]
+}
