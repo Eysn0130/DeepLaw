@@ -235,10 +235,21 @@ jobs:
               --verify-tag --target "${RELEASE_COMMIT}" --draft \
               --title "DeepLaw ${RELEASE_TAG} — commercial GA" \
               --notes-file "docs/RELEASE_NOTES_v${RELEASE_VERSION}.md"
-            releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
-            matching_releases=$(jq -c --arg tag "${RELEASE_TAG}" \
-              '[.[] | select(.tag_name == $tag)]' <<< "${releases_json}")
-            [[ "$(jq 'length' <<< "${matching_releases}")" -eq 1 ]]
+            for attempt in 1 2 3 4 5; do
+              releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
+              matching_releases=$(jq -c --arg tag "${RELEASE_TAG}" \
+                '[.[] | select(.tag_name == $tag)]' <<< "${releases_json}")
+              release_count=$(jq 'length' <<< "${matching_releases}")
+              [[ "${release_count}" -le 1 ]]
+              if [[ "${release_count}" -eq 1 ]]; then
+                break
+              fi
+              if [[ "${attempt}" -eq 5 ]]; then
+                echo "draft release was not observable after bounded retries" >&2
+                exit 1
+              fi
+              sleep "${attempt}"
+            done
           fi
           release_json=$(jq -c '.[0]' <<< "${matching_releases}")
           release_id=$(jq -r '.id' <<< "${release_json}")
