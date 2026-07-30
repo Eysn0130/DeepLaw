@@ -614,7 +614,7 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
     assert "## Exact evidence drill-down" in source_page
     assert f"`{begun['compilation_run_id']}` · `succeeded`" in source_page
     assert all(
-        f"[[{path.relative_to(root).with_suffix('')}" in source_page
+        f"[[{path.relative_to(root).with_suffix('').as_posix()}" in source_page
         for path in fragment_indexes
     )
     assert first_fragment_id in fragment_indexes[0].read_text(encoding="utf-8")
