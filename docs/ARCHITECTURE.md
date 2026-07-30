@@ -173,18 +173,19 @@ summary revision and evidence-bound relations before archiving inputs. Forgettin
 eligibility through a lifecycle revision; owner-confirmed GC is a separate byte-erasure policy that
 never deletes evidence objects or governance history.
 
-## Target: compounding Source-to-Knowledge compilation
+## Working-tree extension: compounding Source-to-Knowledge compilation
 
-Status: **Target direction.** The lifecycle below constrains new architecture work, but it must not
-be described as current compiled-first behavior until the corresponding contracts, implementation,
-migration, and tests exist.
+Status: **Implemented in the current working tree; not yet part of a new release.** The contracts,
+additive persistence, coordinator and tests are documented in
+[`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). Exact release, three-OS and external evidence
+remain pending in the acceptance report.
 
-DeepLaw should ingest a source revision once, compile it into durable typed knowledge, and
-incrementally maintain that knowledge as sources and tasks evolve. It must not regress into a
+DeepLaw ingests a source revision once, compiles it into durable typed knowledge, and
+incrementally maintains that knowledge as sources and tasks evolve. It must not regress into a
 traditional RAG loop that repeatedly treats raw fragments as the primary reusable knowledge object
 for every query.
 
-The target compilation lifecycle is:
+The implemented compilation lifecycle is:
 
 ```text
 source ingestion
@@ -198,7 +199,7 @@ source ingestion
 → evidence drill-down when required
 ```
 
-Compounding updates should:
+Compounding updates:
 
 - resolve or preserve stable semantic identities instead of creating avoidable duplicates;
 - create new revisions rather than rewrite prior knowledge;
@@ -215,7 +216,7 @@ commit, audit, and recovery.
 
 ### Compiled-first retrieval policy
 
-For ordinary reusable task context, the target default is to prefer admitted compiled Knowledge
+For ordinary reusable task context, the default is to prefer admitted compiled Knowledge
 Revisions and typed relations over reprocessing raw fragments. This preference is conditional, not
 a universal hard-coded ranking by object kind:
 
@@ -228,7 +229,7 @@ a universal hard-coded ranking by object kind:
   explanation, gap, or receipt;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.
 
-The target closed loop is:
+The closed loop is:
 
 ```text
 ingest once

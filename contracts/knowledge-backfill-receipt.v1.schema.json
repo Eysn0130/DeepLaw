@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-backfill-receipt.v1.schema.json",
+  "title": "DeepLaw query backfill promotion receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "draft_id", "revision_id", "knowledge_id",
+    "draft_sha256", "validation_sha256", "evaluator_type", "evaluator_id",
+    "evaluation_reason_sha256", "origin", "authority", "legal_authority",
+    "promoted_at", "audit_head"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-backfill-receipt/v1"},
+    "draft_id": {"type": "string", "pattern": "^backfilldraft_[0-9a-f]{24}$"},
+    "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "draft_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evaluator_type": {"enum": ["user", "external_check", "owner_policy"]},
+    "evaluator_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "evaluation_reason_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "origin": {"const": "agent_derived"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "promoted_at": {"type": "string", "format": "date-time"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

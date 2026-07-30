@@ -435,6 +435,13 @@ or a verdict.
 
 The implementation is exercised by:
 
+- `tests/test_source_compilation.py`: persisted Source IR packets, closed Plans, multi-batch atomic
+  publication, identity ambiguity, revision dependencies/freshness, source successor/withdrawal,
+  rich sharded Wiki projection, purpose-aware retrieval, controlled backfill, API/CLI/MCP parity,
+  migration/snapshot/rollback, failure recovery, and deterministic fake-Agent E2E;
+- `tests/test_editor_bridges.py` and `tests/test_living_wiki_delivery.py`: Editor Context Envelope,
+  Obsidian/Tolaria path and persistence boundaries, frozen comparative fixtures, and honest
+  real-host `not_executed` reporting;
 - `tests/test_autonomous_knowledge.py`: migration/rollback, immediate active revision,
   CAS/Markdown/Ledger binding, authority/injection quarantine, reconcile/conflicts/recovery,
   historical revision semantics, provenance/scope/sensitivity isolation, tamper detection,
@@ -469,3 +476,18 @@ failure samples, and independently reproducible artifacts under
 
 No external benchmark artifact, upstream license review, model checkpoint, SBOM exception, or
 official release signature was fabricated as part of this implementation.
+
+## 13. Working-tree Living Wiki Compiler extension
+
+The current working tree adds the host-neutral compilation saga, rich projection, purpose-aware
+retrieval and controlled query backfill described in
+[`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). It reuses the same Markdown/CAS/Ledger,
+identity, grant, admission, reconciliation and verification primitives; it is not a parallel
+knowledge engine.
+
+The package version remains `0.10.0` while release evidence is incomplete. Current implementation,
+compatibility and exact gate status are separated in:
+
+- [`LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md`](LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md);
+- [`LIVING_WIKI_COMPATIBILITY.md`](LIVING_WIKI_COMPATIBILITY.md);
+- [`LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md).

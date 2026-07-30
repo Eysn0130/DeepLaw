@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.input.v3.schema.json",
+  "title": "DeepLaw Knowledge Sink Input v3",
+  "oneOf": [
+    {"$ref": "knowledge-sink.input.v2.schema.json"},
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": [
+            "source_revision_id", "compiler_profile",
+            "compiler_profile_version", "host_identity",
+            "prompt_template_id", "prompt_config_sha256",
+            "plan_configuration_sha256"
+          ],
+          "properties": {
+            "operation": {"const": "begin_compilation"},
+            "source_revision_id": {"$ref": "#/$defs/bounded_id"},
+            "compiler_profile": {"$ref": "#/$defs/bounded_id"},
+            "compiler_profile_version": {"type": "string", "minLength": 1, "maxLength": 100},
+            "host_identity": {"$ref": "#/$defs/bounded_id"},
+            "model_identity": {"type": "string", "minLength": 1, "maxLength": 500},
+            "prompt_template_id": {"type": "string", "minLength": 1, "maxLength": 300},
+            "prompt_config_sha256": {"$ref": "#/$defs/sha256"},
+            "plan_configuration_sha256": {"$ref": "#/$defs/sha256"},
+            "packet_max_fragments": {"type": "integer", "minimum": 1, "maximum": 128}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["compilation_run_id", "plan"],
+          "properties": {
+            "operation": {"const": "stage_compilation_batch"},
+            "compilation_run_id": {"$ref": "#/$defs/run_id"},
+            "plan": {"$ref": "source-compilation-plan.v1.schema.json"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["compilation_run_id"],
+          "properties": {
+            "operation": {"const": "validate_compilation"},
+            "compilation_run_id": {"$ref": "#/$defs/run_id"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["compilation_run_id"],
+          "properties": {
+            "operation": {"const": "commit_compilation"},
+            "compilation_run_id": {"$ref": "#/$defs/run_id"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["compilation_run_id", "reason"],
+          "properties": {
+            "operation": {"const": "abort_compilation"},
+            "compilation_run_id": {"$ref": "#/$defs/run_id"},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["source_revision_id"],
+          "properties": {
+            "operation": {"const": "refresh_compilation"},
+            "source_revision_id": {"$ref": "#/$defs/bounded_id"},
+            "replacement_source_revision_id": {"$ref": "#/$defs/bounded_id"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["compilation_run_id"],
+          "properties": {
+            "operation": {"const": "resume_compilation"},
+            "compilation_run_id": {"$ref": "#/$defs/run_id"},
+            "project": {"type": "boolean"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": [
+            "query", "title", "body", "kind", "durable", "reusable",
+            "novel", "non_duplicate", "contains_case_data", "source_refs",
+            "source_free", "scope", "sensitivity"
+          ],
+          "properties": {
+            "operation": {"const": "propose_knowledge_backfill"},
+            "query": {"type": "string", "minLength": 1, "maxLength": 5000},
+            "title": {"type": "string", "minLength": 1, "maxLength": 500},
+            "body": {"type": "string", "minLength": 1, "maxLength": 100000},
+            "kind": {
+              "enum": [
+                "claim", "comparison", "concept", "decision", "entity",
+                "event", "experience", "memory", "preference", "procedure",
+                "synthesis"
+              ]
+            },
+            "durable": {"const": true},
+            "reusable": {"const": true},
+            "novel": {"const": true},
+            "non_duplicate": {"const": true},
+            "contains_case_data": {"const": false},
+            "source_refs": {
+              "type": "array", "maxItems": 64,
+              "items": {"$ref": "#/$defs/source_ref"}
+            },
+            "source_free": {"type": "boolean"},
+            "scope": {"enum": ["personal", "project", "domain"]},
+            "sensitivity": {"enum": ["public", "internal", "private"]},
+            "semantic_key": {"type": "string", "minLength": 1, "maxLength": 300},
+            "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+            "expected_revision_id": {
+              "type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"
+            },
+            "tags": {
+              "type": "array", "maxItems": 31, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1, "maxLength": 100}
+            },
+            "run_id": {"type": "string", "minLength": 1, "maxLength": 500},
+            "model_id": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["draft_id"],
+          "properties": {
+            "operation": {"const": "propose_knowledge_backfill"},
+            "draft_id": {
+              "type": "string", "pattern": "^backfilldraft_[0-9a-f]{24}$"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": [
+            "draft_id", "evaluator_type", "evaluator_id",
+            "evaluation_reason"
+          ],
+          "properties": {
+            "operation": {"const": "promote_knowledge_draft"},
+            "draft_id": {
+              "type": "string", "pattern": "^backfilldraft_[0-9a-f]{24}$"
+            },
+            "evaluator_type": {
+              "enum": ["user", "external_check", "owner_policy"]
+            },
+            "evaluator_id": {"type": "string", "minLength": 1, "maxLength": 200},
+            "evaluation_reason": {
+              "type": "string", "minLength": 1, "maxLength": 2000
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  ],
+  "$defs": {
+    "common": {
+      "type": "object",
+      "required": ["operation", "idempotency_key", "confirm_no_case_data"],
+      "properties": {
+        "operation": {
+          "enum": [
+            "abort_compilation", "begin_compilation", "commit_compilation",
+            "promote_knowledge_draft", "propose_knowledge_backfill",
+            "refresh_compilation", "resume_compilation",
+            "stage_compilation_batch", "validate_compilation"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string", "minLength": 1, "maxLength": 200
+        },
+        "confirm_no_case_data": {"const": true}
+      }
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bounded_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "source_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "fragment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "artifact_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "uri": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "quote_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "oneOf": [
+        {
+          "required": ["revision_id"],
+          "not": {
+            "anyOf": [
+              {"required": ["source_id"]},
+              {"required": ["source_revision_id"]},
+              {"required": ["artifact_id"]},
+              {"required": ["fragment_id"]},
+              {"required": ["locator"]},
+              {"required": ["uri"]},
+              {"required": ["quote_sha256"]}
+            ]
+          }
+        },
+        {
+          "required": ["artifact_id"],
+          "not": {
+            "anyOf": [
+              {"required": ["source_id"]},
+              {"required": ["source_revision_id"]},
+              {"required": ["revision_id"]},
+              {"required": ["fragment_id"]},
+              {"required": ["locator"]},
+              {"required": ["uri"]},
+              {"required": ["quote_sha256"]}
+            ]
+          }
+        },
+        {
+          "anyOf": [
+            {"required": ["source_id"]},
+            {"required": ["source_revision_id"]}
+          ],
+          "not": {
+            "anyOf": [
+              {"required": ["artifact_id"]},
+              {"required": ["revision_id"]}
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

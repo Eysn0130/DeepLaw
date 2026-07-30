@@ -23,10 +23,16 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
             root / "skills" / "use-knowledge-assets" / "agents" / "openai.yaml"
         ).read_text(encoding="utf-8")
     )
+    compiler_openai = yaml.safe_load(
+        (
+            root / "skills" / "compile-living-wiki" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
+    )
 
     assert codex["version"] == claude["version"] == __version__
     assert codex["name"] == claude["name"] == "deeplaw-knowledge-os"
     assert openai["policy"]["allow_implicit_invocation"] is False
+    assert compiler_openai["policy"]["allow_implicit_invocation"] is False
     assert mcp == {
         "mcpServers": {
             "deeplaw-knowledge": {
@@ -56,6 +62,13 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     ).read_text(encoding="utf-8")
     assert "Never emulate a write with shell or\nfilesystem tools" in knowledge_skill
     assert "independently enabled" in knowledge_skill
+    compiler_skill = (
+        root / "skills" / "compile-living-wiki" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "knowledge_support" in compiler_skill
+    assert "knowledge_sink" in compiler_skill
+    assert "Never create a grant" in compiler_skill
+    assert "run reaches `succeeded`" in compiler_skill
     assert "Never use shell or\nfilesystem tools to run or bypass" in legal_skill
 
 
@@ -112,3 +125,17 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
         "deeplaw",
         "deeplaw-knowledge-os",
     }
+    knowledge_product = next(
+        item
+        for item in opencode_manifest["products"]
+        if item["id"] == "deeplaw-knowledge-os"
+    )
+    assert knowledge_product["optional_compile_config"] == (
+        "knowledge-compiler.example.jsonc"
+    )
+    assert knowledge_product["optional_compile_agent"] == (
+        "agents/deeplaw-compiler.md"
+    )
+    assert knowledge_product["optional_compile_skill"].endswith(
+        "/skills/compile-living-wiki"
+    )

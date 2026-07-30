@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-validation.v1.schema.json",
+  "title": "DeepLaw Source Compilation Validation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "valid",
+    "staged_object_count", "staged_relation_count",
+    "identity_candidate_count", "plan_inventory_sha256",
+    "validation_sha256", "idempotent_replay"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-validation/v1"},
+    "compilation_run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "valid": {"const": true},
+    "staged_object_count": {
+      "type": "integer", "minimum": 0, "maximum": 100000
+    },
+    "staged_relation_count": {
+      "type": "integer", "minimum": 0, "maximum": 100000
+    },
+    "identity_candidate_count": {
+      "type": "integer", "minimum": 0, "maximum": 100000
+    },
+    "plan_inventory_sha256": {
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "validation_sha256": {
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "idempotent_replay": {"type": "boolean"}
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-receipt.v1.schema.json",
+  "title": "DeepLaw Source Compilation Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "source_revision_id",
+    "input_audit_head", "commit_audit_head", "output_set_sha256",
+    "committed_object_count", "committed_relation_count",
+    "knowledge_revision_ids", "relation_revision_ids", "legal_authority",
+    "status", "idempotent_replay", "committed_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-receipt/v1"},
+    "compilation_run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "source_revision_id": {
+      "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+    },
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commit_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "output_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "committed_object_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "committed_relation_count": {
+      "type": "integer", "minimum": 0, "maximum": 100000
+    },
+    "knowledge_revision_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}
+    },
+    "relation_revision_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"}
+    },
+    "legal_authority": {"const": false},
+    "status": {"const": "projection_pending"},
+    "idempotent_replay": {"type": "boolean"},
+    "committed_at": {"type": "string", "format": "date-time"}
+  }
+}

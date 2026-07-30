@@ -55,6 +55,11 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > 1.0 Quality and Superiority Closure 的自主可验证质量闭环。旧版 proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
+>
+> 当前 `codex/living-wiki-compiler` 工作树已经实现新的宿主中立 Compilation Run、Rich Wiki
+> Projection、compiled-first 查询和受控 backfill，但尚未形成新版本发布证据。实现与发布门禁见
+> [`docs/LIVING_WIKI_COMPILER.md`](docs/LIVING_WIKI_COMPILER.md) 和
+> [`docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md)。
 
 ## 核心边界
 
@@ -250,8 +255,8 @@ vault/
 
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | v3 federated source-derived/autonomous recall、exact get、lineage、graph、identity、gaps、Wiki、verify、Capsule |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | Run/capture、Claim/Concept/Entity/Event/Comparison/Synthesis/Memory、relation、feedback、consolidate、expire/forget、Skill revision |
+| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | 工作树 v4：既有 recall/get/lineage/graph/identity/gaps/Wiki/verify/Capsule，加 compilation 状态与 purpose-aware query |
+| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | 工作树 v3：既有受控 mutation，加独立 allowlist 的 Compilation Run 与 backfill；默认插件仍不注册 |
 | `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主
@@ -262,6 +267,7 @@ vault/
 | 状态 | 内容 |
 | --- | --- |
 | **Current** | v0.10.0：v0.9 全部自主知识能力，加上公开 Benchmark、固定评分、时间冻结 holdout、自动报告、release-bound wheel/commit/freeze 校验与 hard-failure 质量门禁 |
+| **Current working tree** | Source-to-Knowledge Compilation Run、closed Plan、依赖/新鲜度、Rich Living Wiki、compiled-first/evidence-first 查询、受控 backfill、稳定 API/CLI/MCP 与编辑器 Bridge；尚未声明为新发布 |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
 | **Quality closure** | DeepLaw Evaluation Protocol v1 以公开、维护者可见、时间冻结的 holdout 评估仓库检索、自治安全和 Typed Compiler；发布报告绑定 exact wheel、commit、freeze 和逐项结果。无需外部机构认证 |
 | **Comparative closure pending** | 未执行真实 Codex / Claude Code / OpenCode 模型任务与具名基线的同条件比较；没有配对置信区间和完整成本/失败清单，因此 `competitive_claim_eligible=false` |
@@ -305,6 +311,10 @@ git diff --check
 | 文档 | 说明 |
 | --- | --- |
 | [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md) | 当前自主内核契约、迁移、CLI/MCP、安全与限制 |
+| [`docs/LIVING_WIKI_COMPILER.md`](docs/LIVING_WIKI_COMPILER.md) | 工作树 Compiler 协议、CLI/API/MCP、恢复与真实示例 |
+| [`docs/EDITOR_BRIDGES.md`](docs/EDITOR_BRIDGES.md) | Obsidian/Tolaria Bridge、Editor Context Envelope 与安全边界 |
+| [`docs/LIVING_WIKI_BENCHMARK_PROTOCOL.md`](docs/LIVING_WIKI_BENCHMARK_PROTOCOL.md) | 具名比较协议与 `not_executed` 证据状态 |
+| [`docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md) | 48 项验收与发布门禁 |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 当前系统架构、事务边界与派生层 |
 | [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md) | v0.7 兼容面和当前覆盖说明 |
 | [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | 双层 Legal Pack 与法律检索边界 |

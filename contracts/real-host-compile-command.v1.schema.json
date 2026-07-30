@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/real-host-compile-command.v1.schema.json",
+  "title": "DeepLaw Real Host Compile Command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "argv", "prompt_transport", "timeout_seconds",
+    "max_output_bytes"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.real-host-compile-command/v1"},
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "prompt_transport": {"const": "stdin_utf8"},
+    "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 7200},
+    "max_output_bytes": {
+      "type": "integer", "minimum": 1024, "maximum": 16777216
+    }
+  }
+}

@@ -29,7 +29,7 @@
       "document_id": "doc_chinese_readme",
       "category": "chinese",
       "path": "README.md",
-      "sha256": "1f917a3b1caf601b012a1b41ae1ff92dc7a7fd5e7d05077e5db2ecbaf967dee0",
+      "sha256": "1e22493db8f7b5c7b7cbd73f1f16bac5a9154708056d16023cf34330173baa97",
       "title": "DeepLaw 中文产品说明",
       "anchor": "自主写入不等于权威升级"
     },
@@ -53,7 +53,7 @@
       "document_id": "doc_english_adapters",
       "category": "english",
       "path": "docs/AGENT_ADAPTERS.md",
-      "sha256": "ebee51a932646d671e805cbd0680fe170225266e3a2c38d9f2036199a76bde58",
+      "sha256": "12a16b0854f1122728a0f3a14605ef487b882c1d0d858a936078b08bb96be569",
       "title": "DeepLaw Agent adapter contracts",
       "anchor": "Real model/session tasks on all hosts"
     },
@@ -61,7 +61,7 @@
       "document_id": "doc_code_autonomy",
       "category": "code",
       "path": "src/deeplaw/knowledge_autonomy.py",
-      "sha256": "e5590cf8d01976fa41d7be4220bd5b300e8e50701089c79b5f2615bab26c36f9",
+      "sha256": "249a98c8e1529aad7431c3b897198705415e2fed83381aceaf8d6894976aa8f2",
       "title": "Autonomous Knowledge Store implementation",
       "anchor": "def garbage_collect_content("
     },
@@ -93,7 +93,7 @@
       "document_id": "doc_long_architecture",
       "category": "long_document",
       "path": "docs/ARCHITECTURE.md",
-      "sha256": "3c1c9f3525415d0a24e50ee5ef0381cb85d5957fb802aba80f247eb967ef6a4a",
+      "sha256": "a2e63b46f3f095f1b4c46e9b2d40ba1706a755ad581cdbf695dd532a90b6c2d8",
       "title": "DeepLaw full architecture",
       "anchor": "Source Tree"
     },
@@ -101,7 +101,7 @@
       "document_id": "doc_long_autonomous_contract",
       "category": "long_document",
       "path": "docs/AUTONOMOUS_KNOWLEDGE_OS.md",
-      "sha256": "d17a2e8442de1008e7f96afcf69e29c9fa3bfe18f743c3b0fed1b74a678c2262",
+      "sha256": "4d024912e90063ed19ff49d27ff0753f608c69ce9d4594723a46cb29caa8065f",
       "title": "DeepLaw Autonomous Knowledge OS contract",
       "anchor": "Autonomous mutation lifecycle"
     }

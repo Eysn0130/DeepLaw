@@ -1,0 +1,20 @@
+{
+  "schema_version": "deeplaw.obsidian-bridge/v1",
+  "frontend": "obsidian",
+  "context_contract": "deeplaw.editor-context-envelope/v1",
+  "event_activation": "workspace.onLayoutReady",
+  "writable_roots": ["drafts", "notes", "sources/inbox"],
+  "canonical_roots": ["knowledge", "memory"],
+  "derived_roots": ["canvas", "wiki"],
+  "forbidden_metadata": [
+    "authority",
+    "deeplaw_id",
+    "ledger_event",
+    "revision_id",
+    "scope",
+    "sensitivity",
+    "source_refs"
+  ],
+  "deep_law_owns_canonical_mutation": true,
+  "ephemeral_context_default": true
+}

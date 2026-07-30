@@ -5,6 +5,12 @@ the `deeplaw knowledge autonomy ...` and `deeplaw knowledge sink ...` commands d
 [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md). Examples below keep legacy writes
 in the offline CLI; Agent MCP remains read-only.
 
+The current working tree also adds the explicit, resumable
+`deeplaw knowledge compile ...`, purpose-aware `deeplaw knowledge query ...`, and controlled
+`deeplaw knowledge backfill ...` loops. They are documented separately in
+[`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md) and are not represented as part of the
+already-published v0.10.0 wheel.
+
 ## Golden Path
 
 Install the formal wheel once:

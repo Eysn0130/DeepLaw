@@ -1,0 +1,22 @@
+{
+  "schema_version": "deeplaw.tolaria-bridge/v1",
+  "frontend": "tolaria",
+  "context_contract": "deeplaw.editor-context-envelope/v1",
+  "writable_roots": ["drafts", "notes"],
+  "readonly_roots": [
+    ".deeplaw",
+    "canvas",
+    "knowledge",
+    "memory",
+    "sources",
+    "wiki"
+  ],
+  "recommended_mcp_processes": [
+    "tolaria",
+    "knowledge_support",
+    "knowledge_sink",
+    "law_support"
+  ],
+  "deep_law_owns_canonical_mutation": true,
+  "ephemeral_context_default": true
+}

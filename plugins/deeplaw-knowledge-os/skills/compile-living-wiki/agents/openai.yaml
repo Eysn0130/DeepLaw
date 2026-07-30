@@ -1,0 +1,6 @@
+interface:
+  display_name: "DeepLaw Living Wiki Compiler"
+  short_description: "Compile sources into governed Living Wiki knowledge"
+  default_prompt: "Use $compile-living-wiki to compile an admitted Source Revision into governed DeepLaw knowledge."
+policy:
+  allow_implicit_invocation: false

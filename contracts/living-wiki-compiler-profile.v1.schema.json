@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-compiler-profile.v1.schema.json",
+  "title": "DeepLaw Living Wiki Compiler Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compiler_profile", "compiler_profile_version",
+    "prompt_template_id", "prompt_config_sha256",
+    "plan_configuration_sha256", "plan_contract", "authority",
+    "legal_authority", "network_policy", "hidden_reasoning_persistence",
+    "source_instruction_policy", "publication_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-compiler-profile/v1"},
+    "compiler_profile": {"const": "living-wiki-agent"},
+    "compiler_profile_version": {"const": "1"},
+    "prompt_template_id": {"const": "deeplaw.living-wiki-compile/v1"},
+    "prompt_config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "plan_configuration_sha256": {
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "plan_contract": {"const": "deeplaw.source-compilation-plan/v1"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "network_policy": {"const": "host-controlled"},
+    "hidden_reasoning_persistence": {"const": false},
+    "source_instruction_policy": {"const": "untrusted-data"},
+    "publication_policy": {"const": "source-revision-all-or-nothing"}
+  }
+}

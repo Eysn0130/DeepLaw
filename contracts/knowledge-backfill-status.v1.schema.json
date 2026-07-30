@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-backfill-status.v1.schema.json",
+  "title": "DeepLaw Query Backfill Status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "draft_id", "status", "draft_sha256",
+    "validation_sha256", "promoted_revision_id", "promotion_receipt_sha256",
+    "idempotent_replay", "created_at", "updated_at", "audit_head"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-backfill-status/v1"},
+    "draft_id": {"type": "string", "pattern": "^backfilldraft_[0-9a-f]{24}$"},
+    "status": {"enum": ["proposed", "validated", "promoted", "rejected"]},
+    "draft_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "validation_sha256": {
+      "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"
+    },
+    "promoted_revision_id": {
+      "type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "promotion_receipt_sha256": {
+      "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"
+    },
+    "idempotent_replay": {"type": "boolean"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

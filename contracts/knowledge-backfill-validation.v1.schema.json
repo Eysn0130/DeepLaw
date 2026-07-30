@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-backfill-validation.v1.schema.json",
+  "title": "DeepLaw Query Backfill Validation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "draft_id", "valid", "checks", "draft_sha256",
+    "validated_at", "validation_sha256", "idempotent_replay"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-backfill-validation/v1"},
+    "draft_id": {"type": "string", "pattern": "^backfilldraft_[0-9a-f]{24}$"},
+    "valid": {"const": true},
+    "checks": {
+      "const": [
+        "durable_reusable_novel", "no_case_data", "source_binding",
+        "scope_sensitivity", "identity_expected_revision", "instruction_risk"
+      ]
+    },
+    "draft_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "validated_at": {"type": "string", "format": "date-time"},
+    "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "idempotent_replay": {"type": "boolean"}
+  }
+}

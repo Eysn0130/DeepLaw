@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-benchmark-protocol.v1.schema.json",
+  "title": "DeepLaw Living Wiki Benchmark Protocol v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "protocol_id", "status", "frozen_at",
+    "candidate_binding_requirements", "fairness", "comparators", "metrics",
+    "fixture_categories", "failure_definitions", "claim_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-benchmark-protocol/v1"},
+    "protocol_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "status": {"const": "preregistered_not_executed"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "candidate_binding_requirements": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "exact_repository_commit", "exact_release_version", "exact_wheel_sha256",
+          "exact_contract_inventory_sha256", "exact_migration_identity",
+          "exact_corpus_sha256", "exact_source_update_sequence",
+          "exact_split_sha256", "exact_host_model", "exact_prompt_sha256",
+          "exact_permissions", "exact_context_budget", "exact_token_budget",
+          "exact_hardware", "exact_network_policy", "build_cost",
+          "query_cost", "complete_failure_inventory"
+        ]
+      }
+    },
+    "fairness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_corpus", "same_update_sequence", "same_split",
+        "same_host_model", "same_prompt_intent", "same_permissions",
+        "same_context_budget", "same_token_budget", "same_hardware",
+        "same_network_policy", "case_level_outputs_required",
+        "paired_uncertainty_required"
+      ],
+      "properties": {
+        "same_corpus": {"const": true},
+        "same_update_sequence": {"const": true},
+        "same_split": {"const": true},
+        "same_host_model": {"const": true},
+        "same_prompt_intent": {"const": true},
+        "same_permissions": {"const": true},
+        "same_context_budget": {"const": true},
+        "same_token_budget": {"const": true},
+        "same_hardware": {"const": true},
+        "same_network_policy": {"const": true},
+        "case_level_outputs_required": {"const": true},
+        "paired_uncertainty_required": {"const": true}
+      }
+    },
+    "comparators": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/comparator"}
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/boundedIdentifier"}
+    },
+    "fixture_categories": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/boundedIdentifier"}
+    },
+    "failure_definitions": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/boundedIdentifier"}
+    },
+    "claim_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "competitive_claim_eligible", "named_comparison_requires_actual_execution",
+        "unavailable_systems_reported_not_executed", "forbidden_claims"
+      ],
+      "properties": {
+        "competitive_claim_eligible": {"const": false},
+        "named_comparison_requires_actual_execution": {"const": true},
+        "unavailable_systems_reported_not_executed": {"const": true},
+        "forbidden_claims": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "boundedIdentifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,99}$"
+    },
+    "comparator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comparator_id", "display_name", "mode", "status",
+        "exact_version_required", "exact_workflow_required", "notes"
+      ],
+      "properties": {
+        "comparator_id": {"$ref": "#/$defs/boundedIdentifier"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "mode": {
+          "enum": [
+            "living_wiki_compiler", "source_fragment_fallback", "traditional_rag",
+            "embedding_retrieval", "graph_rag", "agent_knowledge_workflow"
+          ]
+        },
+        "status": {"const": "not_executed"},
+        "exact_version_required": {"const": true},
+        "exact_workflow_required": {"const": true},
+        "notes": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    }
+  }
+}

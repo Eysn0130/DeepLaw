@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-plan.v1.schema.json",
+  "title": "DeepLaw Source Compilation Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_revision_id", "packet_id", "expected_audit_head",
+    "object_actions", "relation_actions", "identity_actions",
+    "unresolved_identities", "contradictions", "coverage", "skipped_fragments",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-plan/v1"},
+    "source_revision_id": {
+      "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+    },
+    "packet_id": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"},
+    "expected_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "object_actions": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/objectAction"}
+    },
+    "relation_actions": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/relationAction"}
+    },
+    "identity_actions": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/identityAction"}
+    },
+    "unresolved_identities": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/boundedNote"}
+    },
+    "contradictions": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/boundedNote"}
+    },
+    "coverage": {"$ref": "#/$defs/coverage"},
+    "skipped_fragments": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fragment_id", "reason"],
+        "properties": {
+          "fragment_id": {
+            "type": "string", "pattern": "^fragment_[0-9a-f]{24}$"
+          },
+          "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  },
+  "$defs": {
+    "knowledgeKind": {
+      "enum": [
+        "claim", "concept", "entity", "event", "decision", "procedure",
+        "experience", "preference", "synthesis", "comparison", "skill", "memory"
+      ]
+    },
+    "sourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision_id", "fragment_id", "locator", "quote_sha256"
+      ],
+      "properties": {
+        "source_revision_id": {
+          "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+        },
+        "fragment_id": {
+          "type": "string", "pattern": "^fragment_[0-9a-f]{24}$"
+        },
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "assertion": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subject", "predicate", "object", "polarity"],
+          "properties": {
+            "subject": {"type": "string", "minLength": 1, "maxLength": 500},
+            "predicate": {"type": "string", "minLength": 1, "maxLength": 200},
+            "object": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "polarity": {"enum": ["positive", "negative"]}
+          }
+        }
+      ]
+    },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "scopes", "conditions", "exclusions"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "scopes": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "conditions": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "exclusions": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "objectAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action", "kind", "semantic_key", "knowledge_id",
+        "expected_revision_id", "title", "body", "aliases", "epistemic_state",
+        "source_refs", "assertion", "tags", "valid_from", "valid_to",
+        "applicability", "synthesis_inputs", "reason"
+      ],
+      "properties": {
+        "action": {"enum": ["create", "revise", "retain", "archive", "propose"]},
+        "kind": {"$ref": "#/$defs/knowledgeKind"},
+        "semantic_key": {"type": "string", "minLength": 1, "maxLength": 300},
+        "knowledge_id": {
+          "type": ["string", "null"], "pattern": "^knowledge_[0-9a-f]{24}$"
+        },
+        "expected_revision_id": {
+          "type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "body": {"type": "string", "minLength": 1, "maxLength": 200000},
+        "aliases": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 300}
+        },
+        "epistemic_state": {
+          "enum": ["supported", "tentative", "contested", "unknown"]
+        },
+        "source_refs": {
+          "type": "array", "minItems": 1, "maxItems": 100,
+          "items": {"$ref": "#/$defs/sourceReference"}
+        },
+        "assertion": {"$ref": "#/$defs/assertion"},
+        "tags": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "applicability": {"$ref": "#/$defs/applicability"},
+        "synthesis_inputs": {"$ref": "#/$defs/synthesisInputs"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "synthesisInputs": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_revision_ids", "knowledge_revision_ids",
+            "relation_revision_ids", "compilation_run_ids",
+            "input_set_sha256"
+          ],
+          "properties": {
+            "source_revision_ids": {
+              "type": "array", "minItems": 1, "maxItems": 100,
+              "uniqueItems": true,
+              "items": {
+                "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+              }
+            },
+            "knowledge_revision_ids": {
+              "type": "array", "maxItems": 1000, "uniqueItems": true,
+              "items": {
+                "type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"
+              }
+            },
+            "relation_revision_ids": {
+              "type": "array", "maxItems": 1000, "uniqueItems": true,
+              "items": {
+                "type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"
+              }
+            },
+            "compilation_run_ids": {
+              "type": "array", "minItems": 1, "maxItems": 1000,
+              "uniqueItems": true,
+              "items": {
+                "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+              }
+            },
+            "input_set_sha256": {
+              "type": "string", "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knowledge_id", "semantic_key", "kind"],
+      "properties": {
+        "knowledge_id": {
+          "type": ["string", "null"], "pattern": "^knowledge_[0-9a-f]{24}$"
+        },
+        "semantic_key": {"type": ["string", "null"], "maxLength": 300},
+        "kind": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/knowledgeKind"}
+          ]
+        }
+      },
+      "anyOf": [
+        {"required": ["knowledge_id"], "properties": {"knowledge_id": {"type": "string"}}},
+        {"required": ["semantic_key"], "properties": {"semantic_key": {"type": "string", "minLength": 1}}}
+      ]
+    },
+    "relationAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action", "subject", "predicate", "object",
+        "expected_relation_revision_id", "evidence_refs", "valid_from",
+        "valid_to", "reason"
+      ],
+      "properties": {
+        "action": {"enum": ["create", "revise", "retain", "archive", "propose"]},
+        "subject": {"$ref": "#/$defs/endpoint"},
+        "predicate": {
+          "enum": [
+            "supports", "contradicts", "depends_on", "implements", "derived_from",
+            "applies_to", "related_to", "describes", "mentions", "reports",
+            "contributes_to", "same_as", "alias_of", "consolidates", "split_from"
+          ]
+        },
+        "object": {"$ref": "#/$defs/endpoint"},
+        "expected_relation_revision_id": {
+          "type": ["string", "null"], "pattern": "^relationrev_[0-9a-f]{24}$"
+        },
+        "evidence_refs": {
+          "type": "array", "minItems": 1, "maxItems": 100,
+          "items": {"$ref": "#/$defs/sourceReference"}
+        },
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "identityAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "subject", "objects", "evidence_refs", "reason"],
+      "properties": {
+        "action": {
+          "enum": ["same_as", "possible_duplicate", "merge", "split", "ambiguous"]
+        },
+        "subject": {"$ref": "#/$defs/endpoint"},
+        "objects": {
+          "type": "array", "minItems": 1, "maxItems": 32,
+          "items": {"$ref": "#/$defs/endpoint"}
+        },
+        "evidence_refs": {
+          "type": "array", "minItems": 1, "maxItems": 100,
+          "items": {"$ref": "#/$defs/sourceReference"}
+        },
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "boundedNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "reason"],
+      "properties": {
+        "subject": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_fragment_count", "covered_fragment_ids", "omitted_fragment_ids",
+        "ratio", "completeness"
+      ],
+      "properties": {
+        "packet_fragment_count": {"type": "integer", "minimum": 1, "maximum": 128},
+        "covered_fragment_ids": {
+          "type": "array", "maxItems": 128, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+        },
+        "omitted_fragment_ids": {
+          "type": "array", "maxItems": 128, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+        },
+        "ratio": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "completeness": {"enum": ["complete", "partial", "empty"]}
+      }
+    }
+  }
+}

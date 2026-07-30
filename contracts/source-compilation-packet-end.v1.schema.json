@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-packet-end.v1.schema.json",
+  "title": "DeepLaw Source Compilation Packet End v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "compilation_run_id", "complete"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-packet-end/v1"},
+    "compilation_run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "complete": {"const": true}
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-benchmark-fixtures.v1.schema.json",
+  "title": "DeepLaw Living Wiki Benchmark Fixtures v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "fixture_set_id", "status", "license",
+    "private_content", "cases"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-benchmark-fixtures/v1"},
+    "fixture_set_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "status": {"const": "public_development_fixture"},
+    "license": {"const": "Apache-2.0"},
+    "private_content": {"const": false},
+    "cases": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id", "category", "description", "materialization",
+        "source_sequence", "queries", "expected_properties"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string", "pattern": "^lw_[a-z0-9][a-z0-9_-]{0,79}$"
+        },
+        "category": {
+          "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+        },
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "materialization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "formats", "object_target"],
+          "properties": {
+            "kind": {"enum": ["inline_text", "deterministic_generator"]},
+            "formats": {
+              "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "markdown", "pdf", "docx", "pptx", "xlsx", "epub", "json"
+                ]
+              }
+            },
+            "object_target": {"type": "integer", "minimum": 1, "maximum": 10000}
+          }
+        },
+        "source_sequence": {
+          "type": "array", "minItems": 1, "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["step", "action", "content"],
+            "properties": {
+              "step": {"type": "integer", "minimum": 1, "maximum": 16},
+              "action": {
+                "enum": [
+                  "ingest", "supersede", "withdraw", "raise_sensitivity",
+                  "restore_access"
+                ]
+              },
+              "content": {"type": "string", "maxLength": 20000}
+            }
+          }
+        },
+        "queries": {
+          "type": "array", "minItems": 1, "maxItems": 32,
+          "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+        },
+        "expected_properties": {
+          "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+          "items": {
+            "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,99}$"
+          }
+        }
+      }
+    }
+  }
+}

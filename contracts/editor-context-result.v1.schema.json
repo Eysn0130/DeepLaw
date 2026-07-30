@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/editor-context-result.v1.schema.json",
+  "title": "DeepLaw Editor Context Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "frontend", "active_note", "selection_included",
+    "ephemeral_context", "persistence_requested", "persistence_performed",
+    "retrieval"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.editor-context-result/v1"},
+    "frontend": {"enum": ["obsidian", "tolaria"]},
+    "active_note": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["note_id", "content_sha256"],
+      "properties": {
+        "note_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "selection_included": {"type": "boolean"},
+    "ephemeral_context": {"const": true},
+    "persistence_requested": {"type": "boolean"},
+    "persistence_performed": {"const": false},
+    "retrieval": {
+      "type": "object",
+      "required": [
+        "schema_version", "purpose", "policy_id", "query_plan_sha256",
+        "write_performed"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.purpose-aware-retrieval/v1"},
+        "purpose": {"const": "answer"},
+        "policy_id": {"const": "compiled-first-v1"},
+        "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "write_performed": {"const": false}
+      }
+    }
+  }
+}

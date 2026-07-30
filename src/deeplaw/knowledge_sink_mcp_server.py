@@ -16,6 +16,7 @@ from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
 from . import __version__
+from .api import KnowledgeOS
 from .knowledge_autonomy import (
     FEEDBACK_EVALUATOR_TYPES,
     AutonomousKnowledgeStore,
@@ -23,12 +24,15 @@ from .knowledge_autonomy import (
     KnowledgeKind,
     Scope,
     Sensitivity,
+    _read_object,
+    _write_object,
 )
 from .knowledge_store import default_knowledge_vault
 from .util import (
     assert_provider_output_safe,
     canonical_json,
     provider_safe_exception,
+    sha256_bytes,
     strict_json_loads,
 )
 
@@ -46,6 +50,21 @@ _INSTRUCTIONS = (
     "attachments, or permission changes."
 )
 _MAX_OUTPUT_CHARS = 65_536
+_COMPILATION_OPERATIONS = frozenset(
+    {
+        "abort_compilation",
+        "begin_compilation",
+        "commit_compilation",
+        "refresh_compilation",
+        "resume_compilation",
+        "stage_compilation_batch",
+        "validate_compilation",
+    }
+)
+_BACKFILL_OPERATIONS = frozenset(
+    {"promote_knowledge_draft", "propose_knowledge_backfill"}
+)
+_EXTENDED_OPERATIONS = _COMPILATION_OPERATIONS | _BACKFILL_OPERATIONS
 _BOUNDARY = {
     "legal_authority": False,
     "official_or_private_legal_mutation": False,
@@ -199,6 +218,112 @@ _OPERATION_FIELDS = {
             "tags",
         }
     ),
+    "begin_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "source_revision_id",
+            "compiler_profile",
+            "compiler_profile_version",
+            "host_identity",
+            "model_identity",
+            "prompt_template_id",
+            "prompt_config_sha256",
+            "plan_configuration_sha256",
+            "packet_max_fragments",
+        }
+    ),
+    "stage_compilation_batch": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+            "plan",
+        }
+    ),
+    "validate_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+        }
+    ),
+    "commit_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+        }
+    ),
+    "abort_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+            "reason",
+        }
+    ),
+    "refresh_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "source_revision_id",
+            "replacement_source_revision_id",
+        }
+    ),
+    "resume_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+            "project",
+        }
+    ),
+    "propose_knowledge_backfill": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "query",
+            "title",
+            "body",
+            "kind",
+            "durable",
+            "reusable",
+            "novel",
+            "non_duplicate",
+            "contains_case_data",
+            "source_refs",
+            "source_free",
+            "scope",
+            "sensitivity",
+            "semantic_key",
+            "knowledge_id",
+            "expected_revision_id",
+            "tags",
+            "run_id",
+            "model_id",
+            "draft_id",
+        }
+    ),
+    "promote_knowledge_draft": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "draft_id",
+            "evaluator_type",
+            "evaluator_id",
+            "evaluation_reason",
+        }
+    ),
 }
 
 
@@ -228,17 +353,92 @@ def _contract(name: str) -> dict[str, Any]:
     return value
 
 
+def _hydrated_v2_input_schema() -> dict[str, Any]:
+    schema = deepcopy(_contract("knowledge-sink.input.v2.schema.json"))
+    schema["$defs"]["skill_manifest"] = deepcopy(
+        _contract("knowledge-skill.v1.schema.json")
+    )
+    return schema
+
+
+def _v3_input_schema(
+    *,
+    operations: tuple[str, ...] | None = None,
+    evaluator_types: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    schema = deepcopy(_contract("knowledge-sink.input.v3.schema.json"))
+    base = _hydrated_v2_input_schema()
+    base.pop("$schema", None)
+    schema["oneOf"][0] = base
+    compilation_plan = deepcopy(_contract("source-compilation-plan.v1.schema.json"))
+    compilation_plan.pop("$schema", None)
+    compilation_plan.pop("$id", None)
+
+    def rewrite_plan_references(value: Any) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                value["$ref"] = reference.replace(
+                    "#/$defs/",
+                    "#/$defs/compilationPlan/$defs/",
+                    1,
+                )
+            for item in value.values():
+                rewrite_plan_references(item)
+        elif isinstance(value, list):
+            for item in value:
+                rewrite_plan_references(item)
+
+    rewrite_plan_references(compilation_plan)
+    schema["$defs"]["compilationPlan"] = compilation_plan
+    for branch in schema["oneOf"][1:]:
+        properties = branch["allOf"][1]["properties"]
+        if properties["operation"].get("const") == "stage_compilation_batch":
+            properties["plan"] = {"$ref": "#/$defs/compilationPlan"}
+    if operations is not None:
+        allowed = set(operations)
+        legacy = [item for item in base["properties"]["operation"]["enum"] if item in allowed]
+        branches: list[dict[str, Any]] = []
+        if legacy:
+            base["properties"]["operation"]["enum"] = legacy
+            branches.append(base)
+        for branch in schema["oneOf"][1:]:
+            operation = branch["allOf"][1]["properties"]["operation"]["const"]
+            if operation in allowed:
+                branches.append(branch)
+        if not branches:
+            raise ValueError("Knowledge Sink advertised operations are invalid")
+        schema["oneOf"] = branches
+    if evaluator_types is not None:
+        for branch in schema["oneOf"]:
+            if "properties" in branch:
+                properties = branch["properties"]
+                if "evaluator_type" in properties:
+                    properties["evaluator_type"]["enum"] = list(evaluator_types)
+            else:
+                properties = branch["allOf"][1]["properties"]
+                operation = properties["operation"].get("const")
+                if operation == "promote_knowledge_draft":
+                    allowed_promoters = [
+                        item
+                        for item in ("user", "external_check", "owner_policy")
+                        if item == "owner_policy" or item in evaluator_types
+                    ]
+                    properties["evaluator_type"]["enum"] = allowed_promoters
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def knowledge_sink_tool_definition(
     *,
     operations: tuple[str, ...] | None = None,
     evaluator_types: tuple[str, ...] | None = None,
 ) -> types.Tool:
-    input_schema = deepcopy(_contract("knowledge-sink.input.v2.schema.json"))
-    # MCP schemas must be self-contained. Hydrate the embedded Skill branch
-    # from the canonical Skill contract so the advertised write surface cannot
-    # drift from the domain validator.
-    input_schema["$defs"]["skill_manifest"] = deepcopy(
-        _contract("knowledge-skill.v1.schema.json")
+    extended = bool(operations and _EXTENDED_OPERATIONS.intersection(operations))
+    input_schema = (
+        _v3_input_schema(operations=operations, evaluator_types=evaluator_types)
+        if extended
+        else _hydrated_v2_input_schema()
     )
     if operations is not None:
         if (
@@ -247,7 +447,8 @@ def knowledge_sink_tool_definition(
             or any(operation not in _OPERATION_FIELDS for operation in operations)
         ):
             raise ValueError("Knowledge Sink advertised operations are invalid")
-        input_schema["properties"]["operation"]["enum"] = list(operations)
+        if not extended:
+            input_schema["properties"]["operation"]["enum"] = list(operations)
     if evaluator_types is not None:
         if (
             not evaluator_types
@@ -255,12 +456,19 @@ def knowledge_sink_tool_definition(
             or any(item not in FEEDBACK_EVALUATOR_TYPES for item in evaluator_types)
         ):
             raise ValueError("Knowledge Sink advertised evaluator types are invalid")
-        input_schema["properties"]["evaluator_type"]["enum"] = list(evaluator_types)
+        if not extended:
+            input_schema["properties"]["evaluator_type"]["enum"] = list(evaluator_types)
     return types.Tool(
         name="knowledge_sink",
         description=_DESCRIPTION,
         inputSchema=input_schema,
-        outputSchema=deepcopy(_contract("knowledge-sink.output.v2.schema.json")),
+        outputSchema=deepcopy(
+            _contract(
+                "knowledge-sink.output.v3.schema.json"
+                if extended
+                else "knowledge-sink.output.v2.schema.json"
+            )
+        ),
         annotations=types.ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=True,
@@ -271,9 +479,14 @@ def knowledge_sink_tool_definition(
 
 
 def _validate(name: str, value: dict[str, Any]) -> None:
+    schema = (
+        _v3_input_schema()
+        if name == "knowledge-sink.input.v3.schema.json"
+        else _contract(name)
+    )
     error = next(
         Draft202012Validator(
-            _contract(name),
+            schema,
             format_checker=FormatChecker(),
         ).iter_errors(value),
         None,
@@ -284,7 +497,10 @@ def _validate(name: str, value: dict[str, Any]) -> None:
         raise ValueError(
             f"Knowledge Sink request does not match its contract{location}: {error.message}"
         )
-    if name == "knowledge-sink.input.v2.schema.json":
+    if name in {
+        "knowledge-sink.input.v2.schema.json",
+        "knowledge-sink.input.v3.schema.json",
+    }:
         operation = value.get("operation")
         allowed = _OPERATION_FIELDS.get(operation)
         if allowed is None:
@@ -306,9 +522,55 @@ def handle_knowledge_sink(
     """Apply one contract-validated mutation through the single domain store."""
     if not isinstance(request, dict):
         raise TypeError("Knowledge Sink request must be an object")
-    _validate("knowledge-sink.input.v2.schema.json", request)
     selected_path = Path(vault_path) if vault_path is not None else default_knowledge_vault()
     operation = str(request["operation"])
+    with AutonomousKnowledgeStore(selected_path, read_only=True) as read_store:
+        grant_status = read_store.grant_status(grant_id)
+    grant_operations = cast(list[str], grant_status["operations"])
+    extended = bool(_EXTENDED_OPERATIONS.intersection(grant_operations))
+    _validate(
+        (
+            "knowledge-sink.input.v3.schema.json"
+            if extended
+            else "knowledge-sink.input.v2.schema.json"
+        ),
+        request,
+    )
+    if operation in _EXTENDED_OPERATIONS:
+        replay = _extended_replay(
+            request,
+            grant_id=grant_id,
+            vault_path=selected_path,
+        )
+        if replay is not None:
+            return _sink_response(
+                operation=operation,
+                result=replay,
+                extended=True,
+            )
+        result = _handle_extended_sink(
+            request,
+            grant_id=grant_id,
+            vault_path=selected_path,
+        )
+        response = _sink_response(
+            operation=operation,
+            result=result,
+            extended=True,
+        )
+        persisted = _record_extended_replay(
+            request,
+            result=result,
+            grant_id=grant_id,
+            vault_path=selected_path,
+        )
+        if persisted != result:
+            response = _sink_response(
+                operation=operation,
+                result=persisted,
+                extended=True,
+            )
+        return response
     with AutonomousKnowledgeStore(selected_path, read_only=False) as store:
         grant_scope = store.grant_status(grant_id)["allowed_scope"]
         if operation == "record_run":
@@ -459,17 +721,253 @@ def handle_knowledge_sink(
                 operation=operation,
                 skill_manifest=cast(dict[str, Any] | None, request.get("skill_manifest")),
             )
+    return _sink_response(
+        operation=operation,
+        result=result,
+        extended=False,
+    )
+
+
+def _extended_replay(
+    request: dict[str, Any],
+    *,
+    grant_id: str,
+    vault_path: Path,
+) -> dict[str, Any] | None:
+    request_sha256 = sha256_bytes(canonical_json(request).encode("utf-8"))
+    with AutonomousKnowledgeStore(vault_path, read_only=True) as store:
+        row = store.connection.execute(
+            """
+            SELECT operation, request_sha256, result_sha256
+            FROM source_compilation_mcp_replays_v1
+            WHERE grant_id = ? AND idempotency_key = ?
+            """,
+            (grant_id, str(request["idempotency_key"])),
+        ).fetchone()
+        if row is None:
+            return None
+        if (
+            row["operation"] != request["operation"]
+            or row["request_sha256"] != request_sha256
+        ):
+            raise RuntimeError(
+                "Knowledge Sink idempotency key was reused with another request"
+            )
+        stored = strict_json_loads(_read_object(store.root, row["result_sha256"]))
+    if (
+        not isinstance(stored, dict)
+        or stored.get("schema_version")
+        != "deeplaw.source-compilation-mcp-result/v1"
+        or stored.get("operation") != request["operation"]
+        or not isinstance(stored.get("result"), dict)
+    ):
+        raise RuntimeError("Knowledge Sink idempotency result is invalid")
+    result = dict(cast(dict[str, Any], stored["result"]))
+    if isinstance(result.get("idempotent_replay"), bool):
+        result["idempotent_replay"] = True
+    return result
+
+
+def _record_extended_replay(
+    request: dict[str, Any],
+    *,
+    result: dict[str, Any],
+    grant_id: str,
+    vault_path: Path,
+) -> dict[str, Any]:
+    request_sha256 = sha256_bytes(canonical_json(request).encode("utf-8"))
+    stored = {
+        "schema_version": "deeplaw.source-compilation-mcp-result/v1",
+        "operation": request["operation"],
+        "result": result,
+    }
+    stored_bytes = canonical_json(stored).encode("utf-8")
+    with AutonomousKnowledgeStore(vault_path, read_only=False) as store:
+        result_sha256, _ = _write_object(store.root, stored_bytes)
+        recorded_at = store._next_transaction_time()
+        try:
+            store.connection.execute("BEGIN IMMEDIATE")
+            existing = store.connection.execute(
+                """
+                SELECT operation, request_sha256, result_sha256
+                FROM source_compilation_mcp_replays_v1
+                WHERE grant_id = ? AND idempotency_key = ?
+                """,
+                (grant_id, str(request["idempotency_key"])),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["operation"] != request["operation"]
+                    or existing["request_sha256"] != request_sha256
+                ):
+                    raise RuntimeError(
+                        "Knowledge Sink idempotency key was reused with another request"
+                    )
+                store.connection.rollback()
+                replay = _extended_replay(
+                    request,
+                    grant_id=grant_id,
+                    vault_path=vault_path,
+                )
+                if replay is None:
+                    raise RuntimeError("Knowledge Sink idempotency result disappeared")
+                return replay
+            store.connection.execute(
+                """
+                INSERT OR IGNORE INTO source_compilation_artifacts_v1(
+                    artifact_sha256, artifact_role, byte_size,
+                    media_type, created_at
+                ) VALUES (?, 'mcp_result', ?, 'application/json', ?)
+                """,
+                (result_sha256, len(stored_bytes), recorded_at),
+            )
+            artifact = store.connection.execute(
+                """
+                SELECT artifact_role FROM source_compilation_artifacts_v1
+                WHERE artifact_sha256 = ?
+                """,
+                (result_sha256,),
+            ).fetchone()
+            if artifact is None or artifact["artifact_role"] != "mcp_result":
+                raise RuntimeError("Knowledge Sink idempotency artifact role collided")
+            store.connection.execute(
+                """
+                INSERT INTO source_compilation_mcp_replays_v1(
+                    grant_id, idempotency_key, operation,
+                    request_sha256, result_sha256, recorded_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    grant_id,
+                    str(request["idempotency_key"]),
+                    str(request["operation"]),
+                    request_sha256,
+                    result_sha256,
+                    recorded_at,
+                ),
+            )
+            store.connection.commit()
+        except BaseException:
+            store.connection.rollback()
+            raise
+    return result
+
+
+def _sink_response(
+    *,
+    operation: str,
+    result: dict[str, Any],
+    extended: bool,
+) -> dict[str, Any]:
     response = {
-        "schema_version": "deeplaw.knowledge-sink-output/v2",
+        "schema_version": (
+            "deeplaw.knowledge-sink-output/v3"
+            if extended
+            else "deeplaw.knowledge-sink-output/v2"
+        ),
         "operation": operation,
         "boundary": dict(_BOUNDARY),
         "result": result,
     }
     assert_provider_output_safe(response, interface="knowledge_sink")
-    if len(canonical_json(response)) > _MAX_OUTPUT_CHARS:
+    if len(canonical_json(response).encode("utf-8")) > _MAX_OUTPUT_CHARS:
         raise RuntimeError("knowledge_sink output exceeds its hard 64 KiB budget")
-    _validate("knowledge-sink.output.v2.schema.json", response)
+    _validate(
+        (
+            "knowledge-sink.output.v3.schema.json"
+            if extended
+            else "knowledge-sink.output.v2.schema.json"
+        ),
+        response,
+    )
     return response
+
+
+def _handle_extended_sink(
+    request: dict[str, Any],
+    *,
+    grant_id: str,
+    vault_path: Path,
+) -> dict[str, Any]:
+    operation = str(request["operation"])
+    knowledge_os = KnowledgeOS.open(vault_path)
+    if operation == "begin_compilation":
+        run = knowledge_os.compilations.begin(
+            grant_id=grant_id,
+            source_revision_id=str(request["source_revision_id"]),
+            compiler_profile=str(request["compiler_profile"]),
+            compiler_profile_version=str(request["compiler_profile_version"]),
+            host_identity=str(request["host_identity"]),
+            model_identity=cast(str | None, request.get("model_identity")),
+            prompt_template_id=str(request["prompt_template_id"]),
+            prompt_config_sha256=str(request["prompt_config_sha256"]),
+            plan_configuration_sha256=str(request["plan_configuration_sha256"]),
+            packet_max_fragments=int(request.get("packet_max_fragments", 32)),
+            confirm_no_case_data=True,
+        )
+        return run.begin_receipt()
+    if operation == "refresh_compilation":
+        return knowledge_os.compilations.refresh(
+            grant_id=grant_id,
+            source_revision_id=str(request["source_revision_id"]),
+            replacement_source_revision_id=cast(
+                str | None,
+                request.get("replacement_source_revision_id"),
+            ),
+            confirm_no_case_data=True,
+        )
+    if operation in _COMPILATION_OPERATIONS:
+        run = knowledge_os.compilations.open(
+            compilation_run_id=str(request["compilation_run_id"]),
+            grant_id=grant_id,
+        )
+        if operation == "stage_compilation_batch":
+            return run.stage(
+                cast(dict[str, Any], request["plan"]),
+                confirm_no_case_data=True,
+            )
+        if operation == "validate_compilation":
+            return run.validate(confirm_no_case_data=True)
+        if operation == "commit_compilation":
+            return run.commit(confirm_no_case_data=True)
+        if operation == "abort_compilation":
+            return run.abort(
+                reason=str(request["reason"]),
+                confirm_no_case_data=True,
+            )
+        if operation == "resume_compilation":
+            return run.resume(
+                project=bool(request.get("project", False)),
+                confirm_no_case_data=True,
+            )
+    if operation == "propose_knowledge_backfill":
+        if "draft_id" in request:
+            return knowledge_os.backfill.validate(
+                grant_id=grant_id,
+                draft_id=str(request["draft_id"]),
+                confirm_no_case_data=True,
+            )
+        proposal = {
+            key: value
+            for key, value in request.items()
+            if key not in {"operation", "confirm_no_case_data"}
+        }
+        return knowledge_os.backfill.propose(
+            **proposal,
+            grant_id=grant_id,
+            confirm_no_case_data=True,
+        )
+    if operation == "promote_knowledge_draft":
+        return knowledge_os.backfill.promote(
+            grant_id=grant_id,
+            draft_id=str(request["draft_id"]),
+            idempotency_key=str(request["idempotency_key"]),
+            evaluator_type=str(request["evaluator_type"]),
+            evaluator_id=str(request["evaluator_id"]),
+            evaluation_reason=str(request["evaluation_reason"]),
+            confirm_no_case_data=True,
+        )
+    raise ValueError(f"unsupported extended Knowledge Sink operation: {operation}")
 
 
 def create_knowledge_sink_mcp_server(

@@ -1,0 +1,2393 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from jsonschema import Draft202012Validator
+
+from benchmarks.hosts.deterministic_fake_agent import compile_with_fake_agent
+from deeplaw.api import KnowledgeOS, KnowledgeOSValidationError
+from deeplaw.backfill import BackfillService
+from deeplaw.compilation.coordinator import CompilationCoordinator
+from deeplaw.compilation.models import (
+    COMPILER_GRANT_OPERATIONS,
+    MAX_PACKET_PROVIDER_BYTES,
+)
+from deeplaw.knowledge_autonomy import (
+    AutonomousKnowledgeStore,
+    autonomous_core_installed,
+    create_autonomous_snapshot,
+    initialize_autonomous_core,
+    migrate_autonomous_core,
+    restore_autonomous_snapshot,
+    rollback_autonomous_core,
+    verify_autonomous_snapshot,
+)
+from deeplaw.knowledge_compiler import compile_source
+from deeplaw.knowledge_mcp_server import (
+    handle_knowledge_support,
+    knowledge_tool_definition,
+)
+from deeplaw.knowledge_sink_mcp_server import (
+    handle_knowledge_sink,
+    knowledge_sink_tool_definition,
+)
+from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.retrieval import PurposeAwareRetrievalService
+from deeplaw.util import canonical_json, sha256_bytes, strict_json_loads
+
+
+def _ready_source(tmp_path: Path, *, section_count: int = 4) -> tuple[Path, dict, str]:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="compiler", scope="project")
+    initialize_autonomous_core(root)
+    source = tmp_path / "source.md"
+    source.write_text(
+        "\n\n".join(
+            f"# Section {index}\nDurable source statement {index}."
+            for index in range(1, section_count + 1)
+        ),
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deterministic-fake-agent",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    return root, compiled, grant_id
+
+
+def _plan(packet: dict, *, expected_audit_head: str) -> dict:
+    actions = []
+    for fragment in packet["fragments"]:
+        ordinal = fragment["ordinal"]
+        actions.append(
+            {
+                "action": "create",
+                "kind": "claim",
+                "semantic_key": f"source-claim:{packet['source_revision_id']}:{ordinal}",
+                "knowledge_id": None,
+                "expected_revision_id": None,
+                "title": f"Compiled source claim {ordinal}",
+                "body": fragment["text"],
+                "aliases": [],
+                "epistemic_state": "supported",
+                "source_refs": [
+                    {
+                        "source_revision_id": packet["source_revision_id"],
+                        "fragment_id": fragment["fragment_id"],
+                        "locator": fragment["locator"],
+                        "quote_sha256": fragment["text_sha256"],
+                    }
+                ],
+                "assertion": None,
+                "tags": ["compiled"],
+                "valid_from": None,
+                "valid_to": None,
+                "applicability": {
+                    "description": "This source revision.",
+                    "scopes": [],
+                    "conditions": [],
+                    "exclusions": [],
+                },
+                "synthesis_inputs": None,
+                "reason": "Persist a reusable source-bound claim.",
+            }
+        )
+    fragment_ids = [item["fragment_id"] for item in packet["fragments"]]
+    return {
+        "schema_version": "deeplaw.source-compilation-plan/v1",
+        "source_revision_id": packet["source_revision_id"],
+        "packet_id": packet["packet_id"],
+        "expected_audit_head": expected_audit_head,
+        "object_actions": actions,
+        "relation_actions": [],
+        "identity_actions": [],
+        "unresolved_identities": [],
+        "contradictions": [],
+        "coverage": {
+            "packet_fragment_count": len(fragment_ids),
+            "covered_fragment_ids": fragment_ids,
+            "omitted_fragment_ids": [],
+            "ratio": 1.0,
+            "completeness": "complete",
+        },
+        "skipped_fragments": [],
+        "warnings": [],
+    }
+
+
+def _stage_all(
+    coordinator: CompilationCoordinator,
+    *,
+    grant_id: str,
+    begun: dict,
+) -> None:
+    while packet := coordinator.next_packet(begun["compilation_run_id"]):
+        coordinator.stage(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            plan=_plan(packet, expected_audit_head=begun["input_audit_head"]),
+            confirm_no_case_data=True,
+        )
+
+
+def _cli_json(*arguments: str) -> dict:
+    result = subprocess.run(
+        [sys.executable, "-m", "deeplaw", *arguments],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    value = json.loads(result.stdout)
+    assert isinstance(value, dict)
+    return value
+
+
+def test_compilation_batches_remain_invisible_until_one_atomic_commit(tmp_path: Path) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=40)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"deterministic-fake-agent/v1")
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        other_grant_id = store.enable_grant(
+            writer_id="another-compiler",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-default",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    assert begun["source_key"] == compiled["identity"]["source_key"]
+    replay = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-default",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    assert replay["compilation_run_id"] == begun["compilation_run_id"]
+    assert replay["idempotent_replay"] is True
+    with pytest.raises(PermissionError, match="bound to another grant"):
+        coordinator.begin(
+            grant_id=other_grant_id,
+            source_revision_id=compiled["identity"]["source_revision_id"],
+            compiler_profile="living-wiki-default",
+            compiler_profile_version="1",
+            host_identity="another-compiler",
+            model_identity=None,
+            prompt_template_id="deeplaw.compile.fake/v1",
+            prompt_config_sha256=configuration_sha256,
+            plan_configuration_sha256=configuration_sha256,
+            confirm_no_case_data=True,
+            packet_max_fragments=8,
+        )
+
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.recall("Durable source statement", limit=20)["results"] == []
+
+    validated = coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert validated["valid"] is True
+    assert validated["staged_object_count"] == 40
+
+    receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert receipt["committed_object_count"] == 40
+    assert receipt["committed_relation_count"] == 0
+    assert receipt["status"] == "projection_pending"
+    assert receipt["idempotent_replay"] is False
+    replayed_receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert replayed_receipt["idempotent_replay"] is True
+    assert replayed_receipt["output_set_sha256"] == receipt["output_set_sha256"]
+
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert (
+            store.connection.execute(
+                """
+            SELECT COUNT(*)
+            FROM knowledge_objects_v3
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id =
+                 knowledge_objects_v3.current_revision_id
+            WHERE knowledge_revisions_v3.lifecycle = 'active'
+            """
+            ).fetchone()[0]
+            == 40
+        )
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_retained_only_compilation_has_a_verifiable_empty_output_set(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
+    coordinator = CompilationCoordinator(root)
+    first_configuration = sha256_bytes(b"retain-only/seed-v1")
+    first = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="retain-only-seed",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=first_configuration,
+        plan_configuration_sha256=first_configuration,
+        confirm_no_case_data=True,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=first)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=first["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=first["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.resume(
+        grant_id=grant_id,
+        compilation_run_id=first["compilation_run_id"],
+        confirm_no_case_data=True,
+        project=True,
+    )
+
+    retain_configuration = sha256_bytes(b"retain-only/no-op-v1")
+    retained = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="retain-only-no-op",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=retain_configuration,
+        plan_configuration_sha256=retain_configuration,
+        confirm_no_case_data=True,
+    )
+    packet = coordinator.next_packet(retained["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=retained["input_audit_head"])
+    plan["object_actions"][0]["action"] = "retain"
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=retained["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=retained["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=retained["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert receipt["committed_object_count"] == 0
+    assert receipt["committed_relation_count"] == 0
+    completed = coordinator.resume(
+        grant_id=grant_id,
+        compilation_run_id=retained["compilation_run_id"],
+        confirm_no_case_data=True,
+        project=True,
+    )
+    assert completed["status"] == "succeeded"
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_cli_api_and_mcp_share_one_compilation_domain_result(tmp_path: Path) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=2)
+    vault_args = ("--vault", str(root))
+    begun = _cli_json(
+        "knowledge",
+        "compile",
+        "begin",
+        *vault_args,
+        "--grant-id",
+        grant_id,
+        "--source-revision-id",
+        compiled["identity"]["source_revision_id"],
+        "--host-identity",
+        "cli-contract-test",
+        "--packet-max-fragments",
+        "8",
+        "--confirm-no-case-data",
+    )
+    run_id = begun["compilation_run_id"]
+    packet = _cli_json(
+        "knowledge",
+        "compile",
+        "packet",
+        *vault_args,
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run_id,
+    )
+    plan_path = tmp_path / "compilation-plan.json"
+    plan_path.write_text(
+        canonical_json(
+            _plan(packet, expected_audit_head=begun["input_audit_head"])
+        ),
+        encoding="utf-8",
+    )
+    staged = _cli_json(
+        "knowledge",
+        "compile",
+        "stage",
+        *vault_args,
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run_id,
+        "--plan",
+        str(plan_path),
+        "--confirm-no-case-data",
+    )
+    assert staged["object_count"] == 2
+    assert _cli_json(
+        "knowledge",
+        "compile",
+        "validate",
+        *vault_args,
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run_id,
+        "--confirm-no-case-data",
+    )["valid"] is True
+    receipt = _cli_json(
+        "knowledge",
+        "compile",
+        "commit",
+        *vault_args,
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run_id,
+        "--confirm-no-case-data",
+    )
+    assert receipt["committed_object_count"] == 2
+    cli_status = _cli_json(
+        "knowledge",
+        "compile",
+        "status",
+        *vault_args,
+        "--run-id",
+        run_id,
+    )
+    api_status = KnowledgeOS.open(root).compilations.status(run_id)
+    mcp_status = handle_knowledge_support(
+        operation="compilation",
+        compilation_action="status",
+        compilation_run_id=run_id,
+        confirm_no_case_data=True,
+        vault_path=root,
+    )["result"]
+    assert cli_status == api_status == mcp_status
+    human = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deeplaw",
+            "knowledge",
+            "--format",
+            "human",
+            "compile",
+            "status",
+            *vault_args,
+            "--run-id",
+            run_id,
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert human.returncode == 0, human.stderr
+    assert run_id in human.stdout
+
+
+def test_compiler_grant_profile_is_least_privilege_and_api_requires_case_confirmation(
+    tmp_path: Path,
+) -> None:
+    root, compiled, _grant_id = _ready_source(tmp_path, section_count=1)
+    grant = _cli_json(
+        "knowledge",
+        "sink",
+        "enable",
+        "--vault",
+        str(root),
+        "--writer-id",
+        "profiled-compiler",
+        "--scope",
+        "project",
+        "--profile",
+        "compiler",
+    )
+    status = _cli_json(
+        "knowledge",
+        "sink",
+        "status",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant["grant_id"],
+    )
+    assert status["operations"] == list(COMPILER_GRANT_OPERATIONS)
+    assert "remember" not in status["operations"]
+    assert "promote_knowledge_draft" not in status["operations"]
+
+    knowledge_os = KnowledgeOS.open(root)
+    profile = knowledge_os.compilations.profile()
+    with pytest.raises(KnowledgeOSValidationError):
+        knowledge_os.compilations.begin(
+            grant_id=grant["grant_id"],
+            source_revision_id=compiled["identity"]["source_revision_id"],
+            compiler_profile=profile["compiler_profile"],
+            compiler_profile_version=profile["compiler_profile_version"],
+            host_identity="case-boundary-test",
+            prompt_template_id=profile["prompt_template_id"],
+            prompt_config_sha256=profile["prompt_config_sha256"],
+            plan_configuration_sha256=profile["plan_configuration_sha256"],
+        )
+
+
+def test_deterministic_fake_agent_executes_real_source_to_knowledge_e2e(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=35)
+    report = compile_with_fake_agent(
+        vault=root,
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        packet_max_fragments=5,
+    )
+    assert report["status"] == "succeeded"
+    assert report["packet_count"] == 7
+    assert report["staged_object_count"] == 35
+    assert report["compiled_result_count"] > 0
+    assert report["verification_valid"] is True
+    assert report["network_used"] is False
+    assert report["external_credentials_used"] is False
+
+
+def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=305)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"deterministic-fake-agent/sharding-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-sharding",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=64,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    validated = coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert validated["staged_object_count"] == 305
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    completed = coordinator.resume(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+        project=True,
+    )
+    assert completed["status"] == "succeeded"
+    living_wiki = completed["projection"]["living_wiki"]
+    assert living_wiki["knowledge_count"] == 305
+    assert living_wiki["index_shard_count"] == 2
+    assert len(canonical_json(completed["projection"]).encode("utf-8")) < 65_536
+    pages = sorted((root / "wiki" / "claims").glob("knowledge_*.md"))
+    assert len(pages) == 305
+    index_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((root / "wiki" / "indexes").glob("claim-*.md"))
+    )
+    fragment_indexes = sorted(
+        (root / "wiki" / "indexes").glob("source-*-fragments-*.md")
+    )
+    source_page = (
+        root
+        / "wiki"
+        / "sources"
+        / f"{compiled['identity']['source_revision_id']}.md"
+    ).read_text(encoding="utf-8")
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        knowledge_ids = [
+            row["knowledge_id"]
+            for row in store.connection.execute(
+                "SELECT knowledge_id FROM knowledge_objects_v3 ORDER BY knowledge_id"
+            )
+        ]
+        first_fragment_id = store.connection.execute(
+            """
+            SELECT legacy_fragment_bindings_v2.fragment_id
+            FROM legacy_fragment_bindings_v2
+            JOIN fragments_v2 USING(fragment_revision_id)
+            ORDER BY fragments_v2.ordinal
+            LIMIT 1
+            """
+        ).fetchone()["fragment_id"]
+        verification = store.verify()
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt = store.rebuild_derived()
+    assert all(knowledge_id in index_text for knowledge_id in knowledge_ids)
+    assert len(fragment_indexes) == 5
+    assert "## Exact evidence drill-down" in source_page
+    assert f"`{begun['compilation_run_id']}` · `succeeded`" in source_page
+    assert all(
+        f"[[{path.relative_to(root).with_suffix('')}" in source_page
+        for path in fragment_indexes
+    )
+    assert first_fragment_id in fragment_indexes[0].read_text(encoding="utf-8")
+    assert (
+        rebuilt["living_wiki"]["manifest_sha256"]
+        == living_wiki["manifest_sha256"]
+    )
+    assert (root / "wiki" / "overview.md").read_bytes() != (root / "wiki" / "index.md").read_bytes()
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_source_removal_invalidates_dependencies_and_recall(tmp_path: Path) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"deterministic-fake-agent/freshness-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-freshness",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=3,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    source_page = (
+        root
+        / "wiki"
+        / "sources"
+        / f"{compiled['identity']['source_revision_id']}.md"
+    )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_derived()
+        assert store.recall("Durable source statement", limit=20)["results"]
+    assert source_page.is_file()
+    with KnowledgeVault(root, read_only=False) as vault:
+        vault.remove_source(
+            compiled["source"]["source_id"],
+            reason="Freshness propagation regression.",
+            confirm=True,
+        )
+    report = coordinator.refresh(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        confirm_no_case_data=True,
+    )
+    assert report["source_status"] == "removed"
+    assert len(report["affected_knowledge_revision_ids"]) == 3
+    assert len(report["missing_fragment_ids"]) == 3
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_derived()
+        states = {
+            row["freshness"]
+            for row in store.connection.execute("SELECT freshness FROM knowledge_dependencies_v1")
+        }
+        assert states == {"invalidated"}
+        assert store.recall("Durable source statement", limit=20)["results"] == []
+        verification = store.verify()
+    assert source_page.exists() is False
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_source_successor_stales_only_changed_fragments_and_carries_exact_matches(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="successor-freshness", scope="project")
+    initialize_autonomous_core(root)
+    source = tmp_path / "source.md"
+    source.write_text(
+        "\n\n".join(
+            (
+                "# One\nDurable unchanged statement one.",
+                "# Two\nDurable original statement two.",
+                "# Three\nDurable unchanged statement three.",
+            )
+        ),
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        first = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(first["source"]["source_id"])
+        vault.approve_source_assets(
+            first["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="freshness-test",
+            review_reason="Activate the exact initial Source Revision.",
+        )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deterministic-fake-agent",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"successor-freshness-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=first["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-successor",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+
+    source.write_text(
+        "\n\n".join(
+            (
+                "# One\nDurable unchanged statement one.",
+                "# Two\nDurable revised statement two.",
+                "# Three\nDurable unchanged statement three.",
+            )
+        ),
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        second = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(second["source"]["source_id"])
+        vault.approve_source_assets(
+            second["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="freshness-test",
+            review_reason="Activate the exact successor Source Revision.",
+        )
+    report = coordinator.refresh(
+        grant_id=grant_id,
+        source_revision_id=first["identity"]["source_revision_id"],
+        replacement_source_revision_id=second["identity"]["source_revision_id"],
+        confirm_no_case_data=True,
+    )
+    assert len(report["changed_fragment_ids"]) == 1
+    assert len(report["unchanged_fragment_ids"]) == 2
+    assert report["added_fragment_ids"] == []
+    assert report["moved_fragment_ids"] == []
+    assert report["missing_fragment_ids"] == []
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        counts = {
+            row["freshness"]: row["count"]
+            for row in store.connection.execute(
+                """
+                SELECT freshness, COUNT(*) AS count
+                FROM knowledge_dependencies_v1
+                GROUP BY freshness
+                """
+            )
+        }
+        current = [
+            store.get_current(row["knowledge_id"])
+            for row in store.connection.execute(
+                "SELECT knowledge_id FROM knowledge_objects_v3 ORDER BY knowledge_id"
+            )
+        ]
+        admitted_titles = {
+            item["title"]
+            for item in current
+            if store.revision_provenance_admitted(item)
+        }
+        verification = store.verify()
+    assert counts == {"fresh": 2, "stale": 1}
+    assert "Compiled source claim 1" in admitted_titles
+    assert "Compiled source claim 3" in admitted_titles
+    assert "Compiled source claim 2" not in admitted_titles
+    stale_query = PurposeAwareRetrievalService(root).query(
+        "Durable original statement two",
+        purpose="answer",
+    )
+    assert any(gap["code"] == "stale_knowledge" for gap in stale_query["gaps"])
+    assert stale_query["metrics"]["stale_selection_prevented_count"] == 1
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_source_structural_diff_reports_added_and_moved_fragments(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="structural-diff", scope="project")
+    initialize_autonomous_core(root)
+    source = tmp_path / "structure.md"
+    source.write_text(
+        "# One\nAlpha.\n\n# Two\nBeta.\n\n# Three\nGamma.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        first = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(first["source"]["source_id"])
+        vault.approve_source_assets(
+            first["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="structural-diff-test",
+            review_reason="Activate the initial structural fixture.",
+        )
+    source.write_text(
+        "# Three\nGamma.\n\n# One\nAlpha.\n\n# Two\nBeta.\n\n# Four\nDelta.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        successor = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(successor["source"]["source_id"])
+        vault.approve_source_assets(
+            successor["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="structural-diff-test",
+            review_reason="Activate the reordered and extended structural fixture.",
+        )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deterministic-fake-agent",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    report = CompilationCoordinator(root).refresh(
+        grant_id=grant_id,
+        source_revision_id=first["identity"]["source_revision_id"],
+        replacement_source_revision_id=successor["identity"]["source_revision_id"],
+        confirm_no_case_data=True,
+    )
+    assert len(report["added_fragment_ids"]) == 1
+    assert len(report["moved_fragment_ids"]) == 3
+    assert report["changed_fragment_ids"] == []
+    assert report["missing_fragment_ids"] == []
+
+
+def test_synthesis_records_exact_inputs_and_transitively_stales(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="synthesis-dependencies", scope="project")
+    initialize_autonomous_core(root)
+    first_source = tmp_path / "first.md"
+    second_source = tmp_path / "second.md"
+    first_source.write_text("# First\nStable upstream statement.", encoding="utf-8")
+    second_source.write_text("# Second\nStable synthesis statement.", encoding="utf-8")
+    with KnowledgeVault(root, read_only=False) as vault:
+        first = compile_source(
+            vault,
+            first_source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        second = compile_source(
+            vault,
+            second_source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deterministic-fake-agent",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"synthesis-dependencies-v1")
+
+    first_run = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=first["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-synthesis",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=first_run)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=first_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    first_receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=first_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    upstream_revision_id = first_receipt["knowledge_revision_ids"][0]
+
+    second_run = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=second["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-synthesis",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    packet = coordinator.next_packet(second_run["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=second_run["input_audit_head"])
+    input_set = {
+        "source_revision_ids": sorted(
+            (
+                first["identity"]["source_revision_id"],
+                second["identity"]["source_revision_id"],
+            )
+        ),
+        "knowledge_revision_ids": [upstream_revision_id],
+        "relation_revision_ids": [],
+        "compilation_run_ids": sorted(
+            (
+                first_run["compilation_run_id"],
+                second_run["compilation_run_id"],
+            )
+        ),
+    }
+    plan["object_actions"].append(
+        {
+            **plan["object_actions"][0],
+            "semantic_key": "living-wiki-overview",
+            "title": "Living Wiki Overview",
+            "body": "A governed Synthesis over the exact registered inputs.",
+            "kind": "synthesis",
+            "synthesis_inputs": {
+                **input_set,
+                "input_set_sha256": sha256_bytes(
+                    canonical_json(input_set).encode("utf-8")
+                ),
+            },
+            "reason": "Register the exact full Synthesis input set.",
+        }
+    )
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=second_run["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=second_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    second_receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=second_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        synthesis = store.connection.execute(
+            """
+            SELECT knowledge_revisions_v3.*
+            FROM knowledge_revisions_v3
+            WHERE kind = 'synthesis'
+            """
+        ).fetchone()
+        assert synthesis is not None
+        synthesis_revision_id = synthesis["revision_id"]
+        registered = store.connection.execute(
+            """
+            SELECT * FROM synthesis_input_sets_v1
+            WHERE synthesis_revision_id = ?
+            """,
+            (synthesis_revision_id,),
+        ).fetchone()
+        assert registered is not None
+        assert registered["input_set_sha256"] == sha256_bytes(
+            canonical_json(input_set).encode("utf-8")
+        )
+        dependency_inputs = {
+            (row["input_kind"], row["input_id"])
+            for row in store.connection.execute(
+                """
+                SELECT input_kind, input_id FROM revision_dependencies_v1
+                WHERE consumer_revision_id = ?
+                """,
+                (synthesis_revision_id,),
+            )
+        }
+        assert ("knowledge_revision", upstream_revision_id) in dependency_inputs
+        assert (
+            "compilation_run",
+            first_run["compilation_run_id"],
+        ) in dependency_inputs
+        assert (
+            "compilation_run",
+            second_run["compilation_run_id"],
+        ) in dependency_inputs
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+    assert synthesis_revision_id in second_receipt["knowledge_revision_ids"]
+
+    first_source.write_text("# First\nChanged upstream statement.", encoding="utf-8")
+    with KnowledgeVault(root, read_only=False) as vault:
+        successor = compile_source(
+            vault,
+            first_source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(successor["source"]["source_id"])
+        vault.approve_source_assets(
+            successor["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="synthesis-freshness-test",
+            review_reason="Activate the changed Source Revision.",
+        )
+    report = coordinator.refresh(
+        grant_id=grant_id,
+        source_revision_id=first["identity"]["source_revision_id"],
+        replacement_source_revision_id=successor["identity"]["source_revision_id"],
+        confirm_no_case_data=True,
+    )
+    assert synthesis_revision_id in report["affected_knowledge_revision_ids"]
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        revision_dependency = store.connection.execute(
+            """
+            SELECT freshness FROM revision_dependencies_v1
+            WHERE consumer_revision_id = ?
+              AND input_kind = 'knowledge_revision'
+              AND input_id = ?
+            """,
+            (synthesis_revision_id, upstream_revision_id),
+        ).fetchone()
+        assert revision_dependency is not None
+        assert revision_dependency["freshness"] == "stale"
+        synthesis_current = store._revision_row(synthesis, include_body=False)
+        assert store.revision_provenance_admitted(synthesis_current) is False
+        assert all(
+            item["revision_id"] != synthesis_revision_id
+            for item in store.recall("governed Synthesis", limit=20)["results"]
+        )
+
+
+def test_compilation_recovers_before_and_after_atomic_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"deterministic-fake-agent/recovery-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-recovery",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=2,
+    )
+    coordinator = CompilationCoordinator(root)
+    assert coordinator.status(begun["compilation_run_id"])["status"] == "planned"
+    first_packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert first_packet is not None
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=_plan(first_packet, expected_audit_head=begun["input_audit_head"]),
+        confirm_no_case_data=True,
+    )
+    resumed_packet = CompilationCoordinator(root).next_packet(begun["compilation_run_id"])
+    assert resumed_packet is not None
+    assert resumed_packet["ordinal"] == 2
+    assert coordinator.status(begun["compilation_run_id"])["status"] == "staging"
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator = CompilationCoordinator(root)
+    assert coordinator.status(begun["compilation_run_id"])["status"] == "validating"
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert coordinator.status(begun["compilation_run_id"])["status"] == "ready_to_commit"
+
+    original_commit_object = CompilationCoordinator._commit_object
+    calls = 0
+
+    def fail_second_object(
+        store: AutonomousKnowledgeStore,
+        *,
+        run: object,
+        grant: object,
+        value: dict,
+    ) -> None:
+        nonlocal calls
+        calls += 1
+        original_commit_object(store, run=run, grant=grant, value=value)
+        if calls == 2:
+            raise RuntimeError("injected pre-commit crash")
+
+    monkeypatch.setattr(
+        CompilationCoordinator,
+        "_commit_object",
+        staticmethod(fail_second_object),
+    )
+    with pytest.raises(RuntimeError, match="injected pre-commit crash"):
+        coordinator.commit(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_objects_v3").fetchone()[0] == 0
+        )
+    monkeypatch.setattr(
+        CompilationCoordinator,
+        "_commit_object",
+        staticmethod(original_commit_object),
+    )
+
+    original_finish_materialization = CompilationCoordinator._finish_materialization
+
+    def fail_before_materialization(
+        _store: AutonomousKnowledgeStore,
+        *,
+        compilation_run_id: str,
+        revision_ids: list[str],
+    ) -> None:
+        del compilation_run_id, revision_ids
+        raise RuntimeError("injected crash after canonical commit")
+
+    monkeypatch.setattr(
+        CompilationCoordinator,
+        "_finish_materialization",
+        staticmethod(fail_before_materialization),
+    )
+    with pytest.raises(RuntimeError, match="injected crash after canonical commit"):
+        coordinator.commit(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_objects_v3").fetchone()[0] == 3
+        )
+        assert (
+            store.connection.execute(
+                """
+                SELECT status FROM source_compilation_runs_v1
+                WHERE compilation_run_id = ?
+                """,
+                (begun["compilation_run_id"],),
+            ).fetchone()["status"]
+            == "committed"
+        )
+    monkeypatch.setattr(
+        CompilationCoordinator,
+        "_finish_materialization",
+        staticmethod(original_finish_materialization),
+    )
+
+    original_materialize = AutonomousKnowledgeStore._materialize_pending
+
+    def fail_materialization(
+        _store: AutonomousKnowledgeStore,
+        _revision_id: str,
+    ) -> None:
+        raise RuntimeError("injected post-commit crash")
+
+    monkeypatch.setattr(
+        AutonomousKnowledgeStore,
+        "_materialize_pending",
+        fail_materialization,
+    )
+    with pytest.raises(RuntimeError, match="injected post-commit crash"):
+        coordinator.resume(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_objects_v3").fetchone()[0] == 3
+        )
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM pending_materializations_v3").fetchone()[
+                0
+            ]
+            == 3
+        )
+    monkeypatch.setattr(
+        AutonomousKnowledgeStore,
+        "_materialize_pending",
+        original_materialize,
+    )
+    resumed = coordinator.resume(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert resumed["status"] == "projection_pending"
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+
+    original_rebuild = AutonomousKnowledgeStore.rebuild_derived
+
+    def fail_projection(
+        _store: AutonomousKnowledgeStore,
+        *,
+        run_status_overrides: dict[str, str] | None = None,
+    ) -> dict:
+        del run_status_overrides
+        raise RuntimeError("injected projection crash")
+
+    monkeypatch.setattr(
+        AutonomousKnowledgeStore,
+        "rebuild_derived",
+        fail_projection,
+    )
+    with pytest.raises(RuntimeError, match="injected projection crash"):
+        coordinator.resume(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            confirm_no_case_data=True,
+            project=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        run = store.connection.execute(
+            """
+            SELECT status, failure_stage FROM source_compilation_runs_v1
+            WHERE compilation_run_id = ?
+            """,
+            (begun["compilation_run_id"],),
+        ).fetchone()
+        assert run is not None
+        assert dict(run) == {
+            "status": "projection_pending",
+            "failure_stage": "projection",
+        }
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_objects_v3").fetchone()[0] == 3
+        )
+    monkeypatch.setattr(
+        AutonomousKnowledgeStore,
+        "rebuild_derived",
+        original_rebuild,
+    )
+    completed = coordinator.resume(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+        project=True,
+    )
+    assert completed["status"] == "succeeded"
+    assert completed["projection"]["living_wiki"]["knowledge_count"] == 3
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_compilation_abort_is_idempotent_before_commit_and_forbidden_after_commit(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"abort-boundary-v1")
+    abortable = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-abortable",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    abortable_packet = coordinator.next_packet(abortable["compilation_run_id"])
+    assert abortable_packet is not None
+    abortable_plan = _plan(
+        abortable_packet,
+        expected_audit_head=abortable["input_audit_head"],
+    )
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=abortable["compilation_run_id"],
+        plan=abortable_plan,
+        confirm_no_case_data=True,
+    )
+    aborted = coordinator.abort(
+        grant_id=grant_id,
+        compilation_run_id=abortable["compilation_run_id"],
+        reason="Owner cancelled the pre-commit compilation.",
+        confirm_no_case_data=True,
+    )
+    assert aborted["status"] == "aborted"
+    assert aborted["idempotent_replay"] is False
+    replay = coordinator.abort(
+        grant_id=grant_id,
+        compilation_run_id=abortable["compilation_run_id"],
+        reason="Owner cancelled the pre-commit compilation.",
+        confirm_no_case_data=True,
+    )
+    assert replay["idempotent_replay"] is True
+    assert coordinator.next_packet(abortable["compilation_run_id"]) is None
+    with pytest.raises(RuntimeError, match="cannot be resumed"):
+        coordinator.resume(
+            grant_id=grant_id,
+            compilation_run_id=abortable["compilation_run_id"],
+            confirm_no_case_data=True,
+        )
+    with pytest.raises(RuntimeError, match="no longer accepts"):
+        coordinator.stage(
+            grant_id=grant_id,
+            compilation_run_id=abortable["compilation_run_id"],
+            plan=abortable_plan,
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.recall("Durable source statement", limit=20)["results"] == []
+
+    committed_configuration_sha256 = sha256_bytes(b"abort-boundary-committed-v1")
+    committed = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-abort-committed",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=committed_configuration_sha256,
+        plan_configuration_sha256=committed_configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=committed)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=committed["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=committed["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    with pytest.raises(RuntimeError, match="cannot be aborted"):
+        coordinator.abort(
+            grant_id=grant_id,
+            compilation_run_id=committed["compilation_run_id"],
+            reason="This must not erase a canonical commit.",
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"deterministic-fake-agent/query-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-query",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=3,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        audit_head = store.audit_head
+        object_count = store.connection.execute(
+            "SELECT COUNT(*) FROM knowledge_objects_v3"
+        ).fetchone()[0]
+
+    result = PurposeAwareRetrievalService(root).query(
+        "Durable source statement",
+        purpose="answer",
+    )
+    api_result = KnowledgeOS.open(root).retrieval.query(
+        "Durable source statement",
+        purpose="answer",
+    )
+
+    assert result["policy_id"] == "compiled-first-v1"
+    assert result["compiled"]
+    assert result["evidence"] == []
+    assert result["query_plan"]["fallback"]["used"] is False
+    assert result["write_performed"] is False
+    assert result["metrics"]["compiled_hit"] is True
+    assert api_result["query_plan"]["query_sha256"] == result["query_plan"]["query_sha256"]
+    assert [item["revision_id"] for item in api_result["compiled"]] == [
+        item["revision_id"] for item in result["compiled"]
+    ]
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.audit_head == audit_head
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_objects_v3").fetchone()[0]
+            == object_count
+        )
+
+    legal = PurposeAwareRetrievalService(root).query(
+        "Durable source statement",
+        purpose="legal",
+    )
+    assert legal["compiled"] == []
+    assert legal["evidence"] == []
+    assert legal["gaps"][0]["code"] == "law_support_required"
+
+
+def test_query_backfill_requires_draft_validation_and_explicit_promotion(
+    tmp_path: Path,
+) -> None:
+    root, _compiled, _compiler_grant_id = _ready_source(tmp_path, section_count=1)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="backfill-reviewer",
+            operations=(
+                "promote_knowledge_draft",
+                "propose_knowledge_backfill",
+            ),
+            evaluator_types=("user",),
+        )["grant_id"]
+    service = BackfillService(root)
+    with pytest.raises(ValueError, match="durable"):
+        service.propose(
+            grant_id=grant_id,
+            idempotency_key="rejected",
+            query="What should be retained?",
+            title="Reusable query synthesis",
+            body="This synthesis remains useful across future tasks.",
+            kind="synthesis",
+            durable=False,
+            reusable=True,
+            novel=True,
+            non_duplicate=True,
+            contains_case_data=False,
+            source_refs=None,
+            source_free=True,
+            scope="project",
+            sensitivity="private",
+            confirm_no_case_data=True,
+        )
+    proposed = service.propose(
+        grant_id=grant_id,
+        idempotency_key="accepted",
+        query="What should be retained?",
+        title="Reusable query synthesis",
+        body="This synthesis remains useful across future tasks.",
+        kind="synthesis",
+        durable=True,
+        reusable=True,
+        novel=True,
+        non_duplicate=True,
+        contains_case_data=False,
+        source_refs=None,
+        source_free=True,
+        scope="project",
+        sensitivity="private",
+        semantic_key="reusable-query-synthesis",
+        confirm_no_case_data=True,
+    )
+    replay = service.propose(
+        grant_id=grant_id,
+        idempotency_key="accepted",
+        query="What should be retained?",
+        title="Reusable query synthesis",
+        body="This synthesis remains useful across future tasks.",
+        kind="synthesis",
+        durable=True,
+        reusable=True,
+        novel=True,
+        non_duplicate=True,
+        contains_case_data=False,
+        source_refs=None,
+        source_free=True,
+        scope="project",
+        sensitivity="private",
+        semantic_key="reusable-query-synthesis",
+        confirm_no_case_data=True,
+    )
+    assert replay["draft_id"] == proposed["draft_id"]
+    assert replay["idempotent_replay"] is True
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.connection.execute(
+            "SELECT COUNT(*) FROM knowledge_objects_v3"
+        ).fetchone()[0] == 0
+
+    validated = service.validate(
+        grant_id=grant_id,
+        draft_id=proposed["draft_id"],
+        confirm_no_case_data=True,
+    )
+    assert validated["valid"] is True
+    promoted = service.promote(
+        grant_id=grant_id,
+        draft_id=proposed["draft_id"],
+        idempotency_key="promote-accepted",
+        evaluator_type="user",
+        evaluator_id="owner-review",
+        evaluation_reason="Reusable and suitable for governed Agent memory.",
+        confirm_no_case_data=True,
+    )
+    assert promoted["origin"] == "agent_derived"
+    assert promoted["authority"] == "agent_derived"
+    assert promoted["legal_authority"] is False
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        current = store.get_current(promoted["knowledge_id"])
+        assert current["origin"] == "agent_derived"
+        assert current["authority"] == "agent_derived"
+        assert current["legal_authority"] is False
+        verification = store.verify()
+    assert verification["valid"] is True, verification["failures"]
+
+
+def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
+    profile = KnowledgeOS.open(root).compilations.profile()
+    begin_request = {
+        "operation": "begin_compilation",
+        "idempotency_key": "begin-mcp-compilation",
+        "confirm_no_case_data": True,
+        "source_revision_id": compiled["identity"]["source_revision_id"],
+        "compiler_profile": profile["compiler_profile"],
+        "compiler_profile_version": profile["compiler_profile_version"],
+        "host_identity": "deterministic-fake-agent",
+        "prompt_template_id": profile["prompt_template_id"],
+        "prompt_config_sha256": profile["prompt_config_sha256"],
+        "plan_configuration_sha256": profile["plan_configuration_sha256"],
+        "packet_max_fragments": 3,
+    }
+    definition = knowledge_sink_tool_definition(
+        operations=COMPILER_GRANT_OPERATIONS,
+        evaluator_types=("agent_self_report",),
+    )
+    Draft202012Validator(definition.inputSchema).validate(begin_request)
+    begun = handle_knowledge_sink(
+        begin_request,
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert begun["schema_version"] == "deeplaw.knowledge-sink-output/v3"
+    run_id = begun["result"]["compilation_run_id"]
+    replayed_begin = handle_knowledge_sink(
+        begin_request,
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert replayed_begin["result"]["compilation_run_id"] == run_id
+    assert replayed_begin["result"]["idempotent_replay"] is True
+    with pytest.raises(RuntimeError, match="idempotency key"):
+        handle_knowledge_sink(
+            {**begin_request, "host_identity": "changed-host"},
+            grant_id=grant_id,
+            vault_path=root,
+        )
+    packet = CompilationCoordinator(root).next_packet(run_id)
+    assert packet is not None
+    stage = handle_knowledge_sink(
+        {
+            "operation": "stage_compilation_batch",
+            "idempotency_key": "stage-mcp-compilation",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run_id,
+            "plan": _plan(
+                packet,
+                expected_audit_head=begun["result"]["input_audit_head"],
+            ),
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert stage["result"]["object_count"] == 3
+    validated = handle_knowledge_sink(
+        {
+            "operation": "validate_compilation",
+            "idempotency_key": "validate-mcp-compilation",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run_id,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert validated["result"]["valid"] is True
+    committed = handle_knowledge_sink(
+        {
+            "operation": "commit_compilation",
+            "idempotency_key": "commit-mcp-compilation",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run_id,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert committed["result"]["committed_object_count"] == 3
+    assert committed["result"]["idempotent_replay"] is False
+    committed_replay = handle_knowledge_sink(
+        {
+            "operation": "commit_compilation",
+            "idempotency_key": "commit-mcp-compilation",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run_id,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert committed_replay["result"]["idempotent_replay"] is True
+    Draft202012Validator(definition.outputSchema).validate(committed)
+    resumed = handle_knowledge_sink(
+        {
+            "operation": "resume_compilation",
+            "idempotency_key": "resume-mcp-compilation",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run_id,
+            "project": True,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert resumed["result"]["status"] == "succeeded"
+    assert resumed["result"]["projection"]["living_wiki"]["knowledge_count"] == 3
+    assert len(canonical_json(resumed).encode("utf-8")) < 65_536
+    Draft202012Validator(definition.outputSchema).validate(resumed)
+    support = knowledge_tool_definition(autonomous=True)
+    status = handle_knowledge_support(
+        operation="compilation",
+        compilation_action="status",
+        compilation_run_id=run_id,
+        confirm_no_case_data=True,
+        vault_path=root,
+    )
+    assert status["schema_version"] == "deeplaw.knowledge-support-output/v4"
+    assert status["result"]["status"] == "succeeded"
+    query = handle_knowledge_support(
+        operation="query",
+        query="Durable source statement",
+        purpose="answer",
+        vault_path=root,
+    )
+    assert query["result"]["policy_id"] == "compiled-first-v1"
+    assert query["result"]["compiled"]
+    Draft202012Validator(support.outputSchema).validate(status)
+    Draft202012Validator(support.outputSchema).validate(query)
+    assert KnowledgeOS.open(root).verify()["valid"] is True
+    with pytest.raises(
+        KnowledgeOSValidationError,
+        match="public contract",
+    ):
+        KnowledgeOS.open(root).context.compile(task="Durable source statement")
+
+    with pytest.raises(
+        KnowledgeOSValidationError,
+        match="registered compiler profile",
+    ):
+        KnowledgeOS.open(root).compilations.begin(
+            grant_id=grant_id,
+            source_revision_id=compiled["identity"]["source_revision_id"],
+            compiler_profile=profile["compiler_profile"],
+            compiler_profile_version=profile["compiler_profile_version"],
+            host_identity="tampered-profile",
+            prompt_template_id=profile["prompt_template_id"],
+            prompt_config_sha256="0" * 64,
+            plan_configuration_sha256=profile["plan_configuration_sha256"],
+            confirm_no_case_data=True,
+        )
+
+
+def test_compiler_profile_and_uncompiled_inventory_are_actionable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "deeplaw.knowledge_compiler.mimetypes.guess_type",
+        lambda _name: ("application/x-host-specific", None),
+    )
+    root, compiled, _grant_id = _ready_source(tmp_path, section_count=2)
+
+    profile = handle_knowledge_support(
+        operation="compilation",
+        compilation_action="profile",
+        confirm_no_case_data=True,
+        vault_path=root,
+    )["result"]
+    assert profile["compiler_profile"] == "living-wiki-agent"
+    assert profile["prompt_template_id"] == "deeplaw.living-wiki-compile/v1"
+    assert len(profile["prompt_config_sha256"]) == 64
+    assert len(profile["plan_configuration_sha256"]) == 64
+
+    inventory = handle_knowledge_support(
+        operation="compilation",
+        compilation_action="list_uncompiled",
+        confirm_no_case_data=True,
+        limit=1,
+        vault_path=root,
+    )["result"]
+    assert inventory["sources"] == [
+        {
+            "source_revision_id": compiled["identity"]["source_revision_id"],
+            "title": "source",
+            "source_kind": "document",
+            "media_type": "text/markdown",
+            "media_identity": "text/markdown",
+            "content_sha256": compiled["source"]["content_sha256"],
+            "byte_size": compiled["source"]["byte_size"],
+            "instruction_risk": False,
+            "status": "pending",
+        }
+    ]
+    assert inventory["next_after_source_revision_id"] is None
+
+
+def test_sink_advertises_the_complete_closed_compilation_plan_contract() -> None:
+    definition = knowledge_sink_tool_definition(
+        operations=COMPILER_GRANT_OPERATIONS,
+        evaluator_types=("agent_self_report",),
+    )
+    schema = definition.inputSchema
+    stage_branch = next(
+        branch
+        for branch in schema["oneOf"]
+        if "allOf" in branch
+        and branch["allOf"][1]["properties"]["operation"].get("const")
+        == "stage_compilation_batch"
+    )
+    assert stage_branch["allOf"][1]["properties"]["plan"] == {
+        "$ref": "#/$defs/compilationPlan"
+    }
+    plan = schema["$defs"]["compilationPlan"]
+    assert plan["additionalProperties"] is False
+    assert {
+        "source_revision_id",
+        "packet_id",
+        "expected_audit_head",
+        "object_actions",
+        "relation_actions",
+        "identity_actions",
+        "coverage",
+    }.issubset(plan["required"])
+    assert plan["$defs"]["objectAction"]["additionalProperties"] is False
+
+
+def test_staged_packet_can_be_atomically_replaced_before_validation(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=2)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"restage-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-restage",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    first = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=first,
+        confirm_no_case_data=True,
+    )
+    replacement = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    replacement["object_actions"][0]["title"] = "Corrected compiled source claim"
+    replacement["object_actions"][0]["body"] += "\n\nValidated correction."
+    restaged = coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=replacement,
+        confirm_no_case_data=True,
+    )
+    assert restaged["idempotent_replay"] is False
+    validated = coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert validated["staged_object_count"] == 2
+
+
+def test_validation_fails_closed_when_a_staged_plan_changes_concurrently(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=2)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"validation-cas-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-validation-cas",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    original_plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=original_plan,
+        confirm_no_case_data=True,
+    )
+    replacement = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    replacement["object_actions"][0]["body"] += "\n\nConcurrent corrected plan."
+    original_prepare = CompilationCoordinator._prepare_object
+    replaced = False
+
+    def replace_during_validation(
+        self: CompilationCoordinator,
+        store: AutonomousKnowledgeStore,
+        *,
+        run: object,
+        grant: object,
+        row: object,
+        action: dict,
+        recorded_at: str,
+    ) -> dict:
+        nonlocal replaced
+        if not replaced:
+            replaced = True
+            CompilationCoordinator(root).stage(
+                grant_id=grant_id,
+                compilation_run_id=begun["compilation_run_id"],
+                plan=replacement,
+                confirm_no_case_data=True,
+            )
+        return original_prepare(
+            self,
+            store,
+            run=run,
+            grant=grant,
+            row=row,
+            action=action,
+            recorded_at=recorded_at,
+        )
+
+    monkeypatch.setattr(
+        CompilationCoordinator,
+        "_prepare_object",
+        replace_during_validation,
+    )
+    with pytest.raises(RuntimeError, match="validation precondition changed"):
+        coordinator.validate(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            confirm_no_case_data=True,
+        )
+    monkeypatch.setattr(
+        CompilationCoordinator,
+        "_prepare_object",
+        original_prepare,
+    )
+    validated = coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert validated["valid"] is True
+    assert len(validated["plan_inventory_sha256"]) == 64
+
+
+def test_empty_semantic_compilation_cannot_report_success(tmp_path: Path) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"empty-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-empty",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    fragment_ids = [item["fragment_id"] for item in packet["fragments"]]
+    empty = {
+        **_plan(packet, expected_audit_head=begun["input_audit_head"]),
+        "object_actions": [],
+        "coverage": {
+            "packet_fragment_count": len(fragment_ids),
+            "covered_fragment_ids": [],
+            "omitted_fragment_ids": fragment_ids,
+            "ratio": 0.0,
+            "completeness": "empty",
+        },
+        "skipped_fragments": [
+            {"fragment_id": item, "reason": "No reusable semantic output."}
+            for item in fragment_ids
+        ],
+    }
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=empty,
+        confirm_no_case_data=True,
+    )
+    with pytest.raises(ValueError, match="semantic output"):
+        coordinator.validate(
+            grant_id=grant_id,
+            compilation_run_id=begun["compilation_run_id"],
+            confirm_no_case_data=True,
+        )
+
+
+def test_packet_byte_budget_is_hard_and_packet_policy_changes_run_identity(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=12)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"packet-budget-v1")
+    common = {
+        "grant_id": grant_id,
+        "source_revision_id": compiled["identity"]["source_revision_id"],
+        "compiler_profile": "living-wiki-packet-budget",
+        "compiler_profile_version": "1",
+        "host_identity": "deterministic-fake-agent",
+        "model_identity": None,
+        "prompt_template_id": "deeplaw.compile.fake/v1",
+        "prompt_config_sha256": configuration_sha256,
+        "plan_configuration_sha256": configuration_sha256,
+        "confirm_no_case_data": True,
+    }
+    wide = coordinator.begin(**common, packet_max_fragments=64)
+    narrow = coordinator.begin(**common, packet_max_fragments=1)
+    assert wide["compilation_run_id"] != narrow["compilation_run_id"]
+    packet = coordinator.next_packet(wide["compilation_run_id"])
+    assert packet is not None
+    assert len(canonical_json(packet).encode("utf-8")) <= MAX_PACKET_PROVIDER_BYTES
+
+
+def test_compiler_reuses_exact_identity_and_preserves_explicit_ambiguity(
+    tmp_path: Path,
+) -> None:
+    root, compiled, compiler_grant_id = _ready_source(tmp_path, section_count=1)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        identity_grant_id = store.enable_grant(
+            writer_id="identity-fixture",
+            operations=("upsert_entity",),
+        )["grant_id"]
+        canonical = store.remember(
+            grant_id=identity_grant_id,
+            idempotency_key="canonical-acme",
+            title="Acme Corporation",
+            body="The existing canonical entity.",
+            kind="entity",
+            operation="upsert_entity",
+            semantic_key="acme-canonical",
+            aliases=["ACME"],
+            confirm_no_case_data=True,
+        )
+
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"identity-exact-v1")
+    exact_run = coordinator.begin(
+        grant_id=compiler_grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-identity-exact",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    exact_packet = coordinator.next_packet(exact_run["compilation_run_id"])
+    assert exact_packet is not None
+    exact_plan = _plan(
+        exact_packet,
+        expected_audit_head=exact_run["input_audit_head"],
+    )
+    exact_action = exact_plan["object_actions"][0]
+    exact_action.update(
+        {
+            "kind": "entity",
+            "semantic_key": "acme-canonical",
+            "title": "Acme Corporation",
+            "aliases": ["ACME", "Acme Corp."],
+            "body": "The existing canonical entity now has exact source-bound evidence.",
+        }
+    )
+    coordinator.stage(
+        grant_id=compiler_grant_id,
+        compilation_run_id=exact_run["compilation_run_id"],
+        plan=exact_plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=compiler_grant_id,
+        compilation_run_id=exact_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    exact_receipt = coordinator.commit(
+        grant_id=compiler_grant_id,
+        compilation_run_id=exact_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert exact_receipt["committed_object_count"] == 1
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        entities = store.connection.execute(
+            """
+            SELECT knowledge_id, current_revision_id
+            FROM knowledge_objects_v3 WHERE kind = 'entity'
+            """
+        ).fetchall()
+        assert len(entities) == 1
+        assert entities[0]["knowledge_id"] == canonical["knowledge_id"]
+        assert entities[0]["current_revision_id"] != canonical["revision_id"]
+
+    ambiguous_configuration_sha256 = sha256_bytes(b"identity-ambiguous-v1")
+    ambiguous_run = coordinator.begin(
+        grant_id=compiler_grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-identity-ambiguous",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=ambiguous_configuration_sha256,
+        plan_configuration_sha256=ambiguous_configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    ambiguous_packet = coordinator.next_packet(ambiguous_run["compilation_run_id"])
+    assert ambiguous_packet is not None
+    ambiguous_plan = _plan(
+        ambiguous_packet,
+        expected_audit_head=ambiguous_run["input_audit_head"],
+    )
+    ambiguous_action = ambiguous_plan["object_actions"][0]
+    ambiguous_action.update(
+        {
+            "kind": "entity",
+            "semantic_key": "acme-unrelated-source-identity",
+            "title": "ACME",
+            "aliases": [],
+            "body": "A same-name source entity that must remain independently identified.",
+        }
+    )
+    ambiguous_plan["identity_actions"] = [
+        {
+            "action": "possible_duplicate",
+            "subject": {
+                "knowledge_id": None,
+                "semantic_key": "acme-unrelated-source-identity",
+                "kind": "entity",
+            },
+            "objects": [
+                {
+                    "knowledge_id": canonical["knowledge_id"],
+                    "semantic_key": None,
+                    "kind": "entity",
+                }
+            ],
+            "evidence_refs": ambiguous_action["source_refs"],
+            "reason": "The exact alias is shared, but the source does not prove identity.",
+        }
+    ]
+    coordinator.stage(
+        grant_id=compiler_grant_id,
+        compilation_run_id=ambiguous_run["compilation_run_id"],
+        plan=ambiguous_plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=compiler_grant_id,
+        compilation_run_id=ambiguous_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=compiler_grant_id,
+        compilation_run_id=ambiguous_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert (
+            store.connection.execute(
+                "SELECT COUNT(*) FROM knowledge_objects_v3 WHERE kind = 'entity'"
+            ).fetchone()[0]
+            == 2
+        )
+        candidate = store.connection.execute(
+            """
+            SELECT status, candidate_json
+            FROM source_compilation_identity_candidates_v1
+            WHERE compilation_run_id = ?
+            """,
+            (ambiguous_run["compilation_run_id"],),
+        ).fetchone()
+        assert candidate is not None
+        assert candidate["status"] == "ambiguous"
+        assert strict_json_loads(candidate["candidate_json"])["action"] == (
+            "possible_duplicate"
+        )
+
+
+def test_relation_freshness_propagates_from_changed_endpoint_revision(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=2)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"relation-dependency-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-relation-dependency",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    assert len(plan["object_actions"]) == 2
+    subject_action, object_action = plan["object_actions"]
+    plan["relation_actions"] = [
+        {
+            "action": "create",
+            "subject": {
+                "knowledge_id": None,
+                "semantic_key": subject_action["semantic_key"],
+                "kind": "claim",
+            },
+            "predicate": "supports",
+            "object": {
+                "knowledge_id": None,
+                "semantic_key": object_action["semantic_key"],
+                "kind": "claim",
+            },
+            "expected_relation_revision_id": None,
+            "evidence_refs": object_action["source_refs"],
+            "valid_from": None,
+            "valid_to": None,
+            "reason": "The second unchanged section supports the first claim.",
+        }
+    ]
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    relation_revision_id = receipt["relation_revision_ids"][0]
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        subject_revision = store.connection.execute(
+            """
+            SELECT revision_id FROM knowledge_revisions_v3
+            WHERE semantic_key = ?
+            """,
+            (subject_action["semantic_key"],),
+        ).fetchone()
+        assert subject_revision is not None
+        subject_revision_id = subject_revision["revision_id"]
+        endpoint_dependencies = {
+            row["input_id"]
+            for row in store.connection.execute(
+                """
+                SELECT input_id FROM revision_dependencies_v1
+                WHERE consumer_kind = 'relation_revision'
+                  AND consumer_revision_id = ?
+                  AND input_kind = 'knowledge_revision'
+                """,
+                (relation_revision_id,),
+            )
+        }
+        assert subject_revision_id in endpoint_dependencies
+
+    source = tmp_path / "source.md"
+    source.write_text(
+        "# Section 1\nChanged durable source statement 1.\n\n"
+        "# Section 2\nDurable source statement 2.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        successor = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        manifest = vault.source_review_manifest(successor["source"]["source_id"])
+        vault.approve_source_assets(
+            successor["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="relation-freshness-test",
+            review_reason="Activate the changed Source Revision.",
+        )
+    report = coordinator.refresh(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        replacement_source_revision_id=successor["identity"]["source_revision_id"],
+        confirm_no_case_data=True,
+    )
+    assert relation_revision_id in report["affected_relation_revision_ids"]
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        endpoint_dependency = store.connection.execute(
+            """
+            SELECT freshness FROM revision_dependencies_v1
+            WHERE consumer_kind = 'relation_revision'
+              AND consumer_revision_id = ?
+              AND input_kind = 'knowledge_revision'
+              AND input_id = ?
+            """,
+            (relation_revision_id, subject_revision_id),
+        ).fetchone()
+        assert endpoint_dependency is not None
+        assert endpoint_dependency["freshness"] == "stale"
+        assert all(
+            relation["relation_revision_id"] != relation_revision_id
+            for relation in store.graph(limit=100)["relations"]
+        )
+
+
+def test_old_vault_migration_snapshot_restore_and_rollback_preserve_compilation(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "legacy-vault"
+    initialize_knowledge_vault(root, name="compiler-migration", scope="project")
+    source = tmp_path / "migration-source.md"
+    source.write_text("# Migration\nDurable migrated source statement.", encoding="utf-8")
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+    assert autonomous_core_installed(root) is False
+
+    backup = tmp_path / "pre-compiler-backup"
+    migration = migrate_autonomous_core(root, backup_output=backup)
+    assert migration["verification"]["valid"] is True
+    assert migration["backup_path"] == str(backup)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deterministic-fake-agent",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"migration-round-trip-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-migration",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    completed = coordinator.resume(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        project=True,
+        confirm_no_case_data=True,
+    )
+    assert completed["status"] == "succeeded"
+
+    snapshot = tmp_path / "compiler-snapshot"
+    create_autonomous_snapshot(root, snapshot)
+    assert verify_autonomous_snapshot(snapshot)["valid"] is True
+    restored = tmp_path / "restored-vault"
+    restore_autonomous_snapshot(restored, snapshot=snapshot, confirm=True)
+    restored_os = KnowledgeOS.open(restored)
+    assert (
+        restored_os.compilations.status(begun["compilation_run_id"])["status"]
+        == "succeeded"
+    )
+    assert restored_os.retrieval.query(
+        "Durable migrated source statement.",
+        purpose="answer",
+    )["compiled"]
+
+    rolled_back = rollback_autonomous_core(root, backup=backup, confirm=True)
+    assert rolled_back["autonomous_core_present_after_rollback"] is False
+    with KnowledgeVault(root, read_only=True) as vault:
+        assert vault.verify_integrity()["valid"] is True
