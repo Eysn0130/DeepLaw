@@ -1,6 +1,6 @@
 # DeepLaw comparative evaluation and independent replication
 
-Status: **Optional v0.10 comparative track**. This document does not define the core release or
+Status: **Optional v0.11 comparative track**. This document does not define the core release or
 quality gate; see [`EVALUATION_PROTOCOL.md`](EVALUATION_PROTOCOL.md).
 
 ## Corrected decision
@@ -118,16 +118,16 @@ An evaluator may choose a private holdout or detached Ed25519 signature. If so:
 
 The historical external tooling under [`benchmarks/external`](../benchmarks/external) is retained
 for this optional path and for audit reproducibility. Its v1-v3 protocol files keep their original
-meaning and must not be relabeled as current v0.10 results. Placeholder example manifests are not
+meaning and must not be relabeled as current v0.11 results. Placeholder example manifests are not
 evidence.
 
 ## Current state
 
-For v0.10:
+For v0.11:
 
 - Evaluation Protocol v1 is implemented and wired into the exact-wheel release gate;
 - the named-baseline registry and collection machinery are available;
-- no complete same-condition v0.10 named-baseline collection is recorded;
+- no complete same-condition v0.11 named-baseline collection is recorded;
 - no real three-host model-task collection is recorded;
 - no paired comparative confidence report or complete comparative cost/failure inventory exists.
 

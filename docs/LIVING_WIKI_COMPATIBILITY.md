@@ -1,12 +1,11 @@
 # Living Wiki Compiler compatibility
 
-Status: current working-tree compatibility note, 2026-07-30.
+Status: v0.11.0 compatibility note, 2026-07-30.
 
 ## Version discipline
 
-The package remains `0.10.0` during implementation. The new compiler is not presented as part of
-the already published `v0.10.0` artifact. A version decision requires the full release gate,
-including exact candidate artifacts and three-OS evidence.
+The package is `0.11.0`. The compiler is released only after the full release gate binds exact
+candidate artifacts, migration identities, three-host evidence and three-OS results.
 
 ## Vault and migration behavior
 

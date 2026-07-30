@@ -3,6 +3,43 @@
 All notable product changes are recorded here. DeepLaw 2.0 is the product name; Python package
 versions follow semantic versioning independently.
 
+## 0.11.0 — 2026-07-30
+
+This release formalizes the Living Wiki Compiler and its release-bound quality closure.
+`commercial_release_eligible=true`, `quality_protocol_eligible=true`, and
+`competitive_claim_eligible=false`.
+
+### Added
+
+- Closed Source Compilation Packet/Plan/Receipt transactions, resumable run Saga, atomic
+  Knowledge/Relation commit, freshness propagation, controlled query backfill, and stable
+  CLI/MCP/Python entry points.
+- Rich Living Wiki pages, sharded indexes, fragment drill-down, Canvas views, and deterministic
+  rebuild after destructive deletion of every derived layer.
+- Frozen first-party CLI Living Wiki quality suite and a sanitized, per-source 28-document
+  Authoritative Pack decision matrix.
+- Release manifest v4 binding exact artifacts, Schema inventory, migration identities,
+  three-platform and three-host evidence, fresh-wheel quality, release documentation, limitations,
+  and unclaimed capabilities.
+- Explicit signed-catalog `--rebuild-current-catalog` operation for owner-authorized reparse of
+  unchanged authoritative source bytes.
+
+### Fixed
+
+- Preserve exact/reranker recall order inside kind priority instead of re-sorting candidates by ID.
+- Prevent item and character over-allocation across compiled/evidence partitions, including
+  `limit=1`.
+- Recreate deleted controlled derived directories safely while rejecting symlink or non-directory
+  targets.
+
+### Verified boundaries
+
+- 13 of the 28 signed-catalog documents required no action; 15 required parser-provenance reparse.
+  No general Source Revision was fabricated and no authoritative source entered the ordinary
+  Knowledge ingest path.
+- Real model tasks and unknown hosts remain unexecuted. No superiority, SOTA, legal adjudication,
+  external certification, or all-Agent compatibility claim is made.
+
 ## 0.10.0 — 2026-07-30
 
 This release completes the engineering portion of **DeepLaw 1.0 Quality and Superiority Closure**.

@@ -1,6 +1,6 @@
 # DeepLaw editor bridge contracts
 
-Status: **Current working-tree contracts and mock integration**, 2026-07-30. This phase deliberately
+Status: **Current v0.11.0 contracts and mock integration**, 2026-07-30. This release deliberately
 does not ship a full Obsidian product, fork Tolaria, or make either editor authoritative.
 
 ## Shared Editor Context Envelope

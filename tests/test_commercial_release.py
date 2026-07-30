@@ -8,7 +8,9 @@ from jsonschema import Draft202012Validator
 
 from benchmarks.release.commercial_release import (
     COMPETITIVE_EVIDENCE_MISSING,
+    CommercialReleaseError,
     _docs,
+    _source_quality_matrix,
     _unified_versions,
 )
 from benchmarks.release.evidence import verify_record_digest, write_report
@@ -49,7 +51,7 @@ def _junit(path: Path, *, skipped: int = 0) -> None:
 
 
 def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
-    assert set(_unified_versions(REPOSITORY).values()) == {"0.10.0"}
+    assert set(_unified_versions(REPOSITORY).values()) == {"0.11.0"}
     assert all(_docs(REPOSITORY).values())
     assert "商业" not in (REPOSITORY / "README.md").read_text(encoding="utf-8")
     assert "commercial" not in (
@@ -66,7 +68,7 @@ def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
 def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
     schema = json.loads(
         (
-            REPOSITORY / "contracts/commercial-release-manifest.v3.schema.json"
+            REPOSITORY / "contracts/commercial-release-manifest.v4.schema.json"
         ).read_text(encoding="utf-8")
     )
     Draft202012Validator.check_schema(schema)
@@ -77,6 +79,24 @@ def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
     assert set(properties["competitive_evidence_missing"]["items"]["enum"]) == set(
         COMPETITIVE_EVIDENCE_MISSING
     )
+
+
+def test_authoritative_source_matrix_binds_exact_signed_catalog(
+    tmp_path: Path,
+) -> None:
+    matrix_path = (
+        REPOSITORY
+        / "benchmarks/quality/v0.11-28-source-decision-matrix.json"
+    )
+    matrix = _source_quality_matrix(REPOSITORY, matrix_path)
+    assert len(matrix["sources"]) == 28
+
+    tampered = json.loads(matrix_path.read_text(encoding="utf-8"))
+    tampered["sources"][0]["immutable_bytes_sha256"] = "0" * 64
+    tampered_path = tmp_path / "tampered-matrix.json"
+    write_report(tampered_path, tampered)
+    with pytest.raises(CommercialReleaseError, match="matrix is incomplete"):
+        _source_quality_matrix(REPOSITORY, tampered_path)
 
 
 def test_release_reports_are_content_digest_bound(tmp_path: Path) -> None:
@@ -126,7 +146,19 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert "test -z \"$(git status --porcelain=v1 --untracked-files=all)\"" in gate
     assert "--evaluation" in gate
     assert "evaluation/EVALUATION_SHA256SUMS" in release
-    assert "deeplaw.commercial-release-manifest/v3" in release
+    assert "deeplaw.commercial-release-manifest/v4" in release
+    assert "living-wiki-quality:" in gate
+    assert "--living-wiki-quality" in gate
+    assert "--living-wiki-baseline" in gate
+    assert "--living-wiki-comparison" in gate
+    assert "42382b264f4297965c25aaac6e85619e9e0d49b7" in gate
+    assert "9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0" in gate
+    assert "benchmarks.living_wiki.compare_quality" in gate
+    assert "--source-quality-matrix" in gate
+    assert gate.count('python: "3.11"') == 3
+    assert gate.count('python: "3.12"') == 3
+    assert gate.count('python: "3.13"') == 3
+    assert "--expected-python" in gate
     assert 'manifest.get("quality_protocol_eligible") is not True' in release
 
 

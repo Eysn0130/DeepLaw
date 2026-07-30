@@ -203,6 +203,14 @@ def _parser() -> argparse.ArgumentParser:
             action="store_true",
             help="Development only: accept an explicitly selected local unsigned catalog",
         )
+        sync.add_argument(
+            "--rebuild-current-catalog",
+            action="store_true",
+            help=(
+                "Reparse the exact installed signed catalog from an explicit verified "
+                "source root"
+            ),
+        )
     official_commands.add_parser("status", help="Show official catalog installation state")
     official_commands.add_parser("enable", help="Enable the installed official release")
     official_commands.add_parser("disable", help="Disable without modifying the release")
@@ -433,6 +441,7 @@ def main(argv: list[str] | None = None) -> None:
                         update=args.official_command == "update",
                         pdf_fallback=args.pdf_fallback,
                         allow_unsigned_local_catalog=args.allow_unsigned_local_catalog,
+                        rebuild_current_catalog=args.rebuild_current_catalog,
                     )
                 )
             elif args.official_command == "status":

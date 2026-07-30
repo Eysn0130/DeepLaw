@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -1833,6 +1834,42 @@ def test_canonical_tampering_fails_while_stale_derived_indexes_only_warn(
             "current_revision_identity_invalid",
             "knowledge_revision_binding_invalid",
         }
+
+
+def test_destructive_derived_state_deletion_is_rebuilt_deterministically(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store)
+        store.remember(
+            grant_id=grant_id,
+            idempotency_key="derived-rebuild-source",
+            title="Derived rebuild source",
+            body="Canonical knowledge survives deletion of every derived surface.",
+            semantic_key="derived.rebuild.source",
+            confirm_no_case_data=True,
+        )
+        baseline = store.rebuild_derived()
+
+    with sqlite3.connect(root / ".deeplaw" / "ledger.sqlite3") as connection:
+        connection.execute("DELETE FROM autonomous_search_v3")
+        connection.commit()
+    for disposable in (
+        root / ".deeplaw" / "derived",
+        root / "wiki",
+        root / "canvas",
+    ):
+        shutil.rmtree(disposable)
+
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt = store.rebuild_derived()
+        assert (
+            rebuilt["living_wiki"]["manifest_sha256"]
+            == baseline["living_wiki"]["manifest_sha256"]
+        )
+        assert rebuilt["knowledge_count"] == 1
+        assert store.verify()["valid"] is True
 
 
 def test_stale_fts_candidates_never_override_the_canonical_fallback(tmp_path: Path) -> None:

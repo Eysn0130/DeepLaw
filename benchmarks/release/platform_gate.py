@@ -17,6 +17,7 @@ from benchmarks.release.evidence import (
 
 SCHEMA_VERSION = "deeplaw.platform-release-gate/v1"
 SUPPORTED_SYSTEMS = frozenset({"Linux", "Darwin", "Windows"})
+SUPPORTED_PYTHON_MINORS = frozenset({"3.11", "3.12", "3.13"})
 REQUIRED_TEST_MODULES = frozenset(
     {
         "tests.test_golden_cli",
@@ -90,11 +91,16 @@ def _junit_report(path: Path, *, expected_system: str) -> dict[str, Any]:
 
 
 def _same_binding(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    return all(
+    scalar_binding_matches = all(
         left.get(field) == right.get(field)
         for field in ("commit", "tree", "package_version", "lock_sha256", "pyproject_sha256")
-    ) and left.get("contracts", {}).get("inventory_sha256") == right.get("contracts", {}).get(
-        "inventory_sha256"
+    )
+    return (
+        scalar_binding_matches
+        and left.get("contracts", {}).get("inventory_sha256")
+        == right.get("contracts", {}).get("inventory_sha256")
+        and left.get("migrations", {}).get("inventory_sha256")
+        == right.get("migrations", {}).get("inventory_sha256")
     )
 
 
@@ -104,14 +110,24 @@ def build_report(
     junit: Path,
     lifecycle_path: Path,
     expected_system: str,
+    expected_python: str,
 ) -> dict[str, Any]:
     if expected_system not in SUPPORTED_SYSTEMS:
         raise PlatformGateError(f"unsupported platform gate: {expected_system}")
+    if expected_python not in SUPPORTED_PYTHON_MINORS:
+        raise PlatformGateError(
+            f"unsupported Python platform gate: {expected_python}"
+        )
     binding = repository_binding(repository)
     environment = environment_manifest()
     if environment["platform_system"] != expected_system:
         raise PlatformGateError(
             f"runner platform is {environment['platform_system']}, expected {expected_system}"
+        )
+    observed_python = ".".join(environment["python_version"].split(".")[:2])
+    if observed_python != expected_python:
+        raise PlatformGateError(
+            f"runner Python is {observed_python}, expected {expected_python}"
         )
     if not binding["worktree_clean"]:
         raise PlatformGateError("platform gate requires a clean release commit")
@@ -126,6 +142,11 @@ def build_report(
     lifecycle_system = lifecycle.get("environment", {}).get("platform_system")
     if lifecycle_system != expected_system:
         raise PlatformGateError("distribution lifecycle targets a different operating system")
+    lifecycle_python = ".".join(
+        lifecycle.get("environment", {}).get("python_version", "").split(".")[:2]
+    )
+    if lifecycle_python != expected_python:
+        raise PlatformGateError("distribution lifecycle targets a different Python version")
     mandatory = _junit_report(junit, expected_system=expected_system)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -152,6 +173,7 @@ def build_report(
             "file_lock_regressions": True,
             "permission_regressions": True,
             "windows_acl_junction_reparse": expected_system == "Windows",
+            "python_minor": expected_python,
         },
         "mandatory_skips_accepted": False,
         "passed": True,
@@ -167,6 +189,11 @@ def main() -> int:
     parser.add_argument("--junit", type=Path, required=True)
     parser.add_argument("--lifecycle", type=Path, required=True)
     parser.add_argument("--expected-system", choices=sorted(SUPPORTED_SYSTEMS), required=True)
+    parser.add_argument(
+        "--expected-python",
+        choices=sorted(SUPPORTED_PYTHON_MINORS),
+        required=True,
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -175,6 +202,7 @@ def main() -> int:
             junit=args.junit.resolve(),
             lifecycle_path=args.lifecycle.resolve(),
             expected_system=args.expected_system,
+            expected_python=args.expected_python,
         )
         write_report(args.output.resolve(), report)
     except (OSError, RuntimeError) as error:

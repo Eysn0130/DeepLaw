@@ -1,6 +1,6 @@
 # DeepLaw Architecture
 
-Status: **v0.10.0 current architecture**, reviewed 2026-07-30. Historical v0.7 source-derived,
+Status: **v0.11.0 current architecture**, reviewed 2026-07-30. Historical v0.7 source-derived,
 proposal/review, parser, and Legal Pack details remain in
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md), [`DOCUMENT_IR.md`](DOCUMENT_IR.md), and
 [`DEEPLAW_2.md`](DEEPLAW_2.md). They are compatibility components, not the activation policy for
@@ -32,7 +32,7 @@ interpretations derived from them remain governed knowledge with `legal_authorit
 human-verified interpretation does not become the authoritative source itself. SQLite and derived
 indexes support these domains. They do not create another source of Authority.
 
-Current v0.10 process and storage isolation, especially for `law_support`, enforces trust,
+Current v0.11 process and storage isolation, especially for `law_support`, enforces trust,
 capability, and privacy boundaries. It does not make the Legal Pack a second Knowledge OS or permit
 duplicated domain logic. Logical unity does not require one physical database or weakening
 official/private isolation.

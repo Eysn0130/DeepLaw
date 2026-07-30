@@ -63,7 +63,7 @@ jobs:
           path: dist/
 
   platform-gates:
-    name: ${{ matrix.system }} mandatory gate
+    name: ${{ matrix.system }} Python ${{ matrix.python }} mandatory gate
     needs: build-distributions
     runs-on: ${{ matrix.os }}
     timeout-minutes: 50
@@ -75,15 +75,48 @@ jobs:
         include:
           - os: ubuntu-latest
             system: Linux
-            slug: linux
+            python: "3.11"
+            slug: linux-py311
+            marker: not windows_native
+          - os: ubuntu-latest
+            system: Linux
+            python: "3.12"
+            slug: linux-py312
+            marker: not windows_native
+          - os: ubuntu-latest
+            system: Linux
+            python: "3.13"
+            slug: linux-py313
             marker: not windows_native
           - os: macos-latest
             system: Darwin
-            slug: darwin
+            python: "3.11"
+            slug: darwin-py311
+            marker: not windows_native
+          - os: macos-latest
+            system: Darwin
+            python: "3.12"
+            slug: darwin-py312
+            marker: not windows_native
+          - os: macos-latest
+            system: Darwin
+            python: "3.13"
+            slug: darwin-py313
             marker: not windows_native
           - os: windows-latest
             system: Windows
-            slug: windows
+            python: "3.11"
+            slug: windows-py311
+            marker: all
+          - os: windows-latest
+            system: Windows
+            python: "3.12"
+            slug: windows-py312
+            marker: all
+          - os: windows-latest
+            system: Windows
+            python: "3.13"
+            slug: windows-py313
             marker: all
 
     steps:
@@ -97,7 +130,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -165,6 +198,7 @@ jobs:
             --junit "${RUNNER_TEMP}/pytest-${{ matrix.slug }}.xml" \
             --lifecycle "${RUNNER_TEMP}/distribution-lifecycle-${{ matrix.slug }}.json" \
             --expected-system "${{ matrix.system }}" \
+            --expected-python "${{ matrix.python }}" \
             --output "${RUNNER_TEMP}/platform-${{ matrix.slug }}.json"
           mkdir -p "${RUNNER_TEMP}/platform-evidence"
           cp "${RUNNER_TEMP}/pytest-${{ matrix.slug }}.xml" \
@@ -400,6 +434,95 @@ jobs:
           if-no-files-found: error
           path: ${{ runner.temp }}/evaluation-protocol/
 
+  living-wiki-quality:
+    name: Living Wiki baseline and fresh-wheel quality
+    needs: build-distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download exact verified wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-dist
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Run same-condition baseline and exact-wheel quality suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+
+          baseline_commit="42382b264f4297965c25aaac6e85619e9e0d49b7"
+          baseline_source="${RUNNER_TEMP}/living-wiki-baseline-source"
+          baseline_dist="${RUNNER_TEMP}/living-wiki-baseline-dist"
+          baseline_runtime="${RUNNER_TEMP}/living-wiki-baseline-runtime"
+          git worktree add --detach "${baseline_source}" "${baseline_commit}"
+          SOURCE_DATE_EPOCH=946684800 PYTHONHASHSEED=0 TZ=UTC \
+            uv build --project "${baseline_source}" --wheel \
+              --build-constraints \
+                "${baseline_source}/benchmarks/release/build-constraints.txt" \
+              --out-dir "${baseline_dist}"
+          baseline_wheels=("${baseline_dist}"/deeplaw-0.10.0-*.whl)
+          [[ "${#baseline_wheels[@]}" -eq 1 ]]
+          uv venv --python 3.12 --no-project "${baseline_runtime}"
+          uv pip install --python "${baseline_runtime}/bin/python" \
+            "${baseline_wheels[0]}"
+          baseline_wheel_sha256=$(sha256sum "${baseline_wheels[0]}" | awk '{print $1}')
+          [[ "${baseline_wheel_sha256}" == \
+            "9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0" ]]
+          uv run --frozen python -m benchmarks.living_wiki.run_quality_gate \
+            --deeplaw "${baseline_runtime}/bin/deeplaw" \
+            --candidate-role baseline \
+            --candidate-commit "${baseline_commit}" \
+            --artifact-sha256 "${baseline_wheel_sha256}" \
+            --allow-fail \
+            --output "${RUNNER_TEMP}/living-wiki-quality-baseline.json"
+
+          candidate_runtime="${RUNNER_TEMP}/living-wiki-quality-runtime"
+          uv venv --python 3.12 --no-project "${candidate_runtime}"
+          candidate_wheels=("${RUNNER_TEMP}"/verified-dist/deeplaw-*.whl)
+          [[ "${#candidate_wheels[@]}" -eq 1 ]]
+          uv pip install --python "${candidate_runtime}/bin/python" \
+            "${candidate_wheels[0]}"
+          wheel_sha256=$(sha256sum "${candidate_wheels[0]}" | awk '{print $1}')
+          uv run --frozen python -m benchmarks.living_wiki.run_quality_gate \
+            --deeplaw "${candidate_runtime}/bin/deeplaw" \
+            --candidate-role fresh_wheel \
+            --candidate-commit "$(git rev-parse HEAD)" \
+            --artifact-sha256 "${wheel_sha256}" \
+            --output "${RUNNER_TEMP}/living-wiki-quality-report.json"
+          uv run --frozen python -m benchmarks.living_wiki.compare_quality \
+            --baseline "${RUNNER_TEMP}/living-wiki-quality-baseline.json" \
+            --candidate "${RUNNER_TEMP}/living-wiki-quality-report.json" \
+            --output "${RUNNER_TEMP}/living-wiki-quality-comparison.json"
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Upload Living Wiki quality evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: living-wiki-quality
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/living-wiki-quality-baseline.json
+            ${{ runner.temp }}/living-wiki-quality-report.json
+            ${{ runner.temp }}/living-wiki-quality-comparison.json
+
   assemble:
     name: Assemble commercial manifest
     needs:
@@ -408,6 +531,7 @@ jobs:
       - no-model-hosts
       - oci
       - evaluation-protocol
+      - living-wiki-quality
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -448,7 +572,8 @@ jobs:
           assets="${RUNNER_TEMP}/release-assets"
           mkdir -p "${assets}/dist" "${assets}/evidence" "${assets}/oci" \
             "${assets}/security" "${assets}/sbom" "${assets}/licenses" \
-            "${assets}/evaluation"
+            "${assets}/evaluation" "${assets}/quality" \
+            "${assets}/documentation"
           cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}"-*.whl \
             "${assets}/dist/"
           cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}".tar.gz \
@@ -472,6 +597,25 @@ jobs:
           done
           cp "${RUNNER_TEMP}/gate-evidence/evaluation-protocol/SHA256SUMS" \
             "${assets}/evaluation/EVALUATION_SHA256SUMS"
+          cp "${RUNNER_TEMP}/gate-evidence/living-wiki-quality/living-wiki-quality-report.json" \
+            "${assets}/quality/living-wiki-quality-report.json"
+          cp "${RUNNER_TEMP}/gate-evidence/living-wiki-quality/living-wiki-quality-baseline.json" \
+            "${assets}/quality/living-wiki-quality-baseline.json"
+          cp "${RUNNER_TEMP}/gate-evidence/living-wiki-quality/living-wiki-quality-comparison.json" \
+            "${assets}/quality/living-wiki-quality-comparison.json"
+          cp benchmarks/quality/v0.11-28-source-decision-matrix.json \
+            "${assets}/quality/v0.11-28-source-decision-matrix.json"
+          cp "docs/RELEASE_NOTES_v${version}.md" \
+            "${assets}/documentation/RELEASE_NOTES_v${version}.md"
+          major_minor=$(python - "${version}" <<'PY'
+          import sys
+
+          major, minor, _patch = sys.argv[1].split(".")
+          print(f"V{major}_{minor}")
+          PY
+          )
+          cp "docs/${major_minor}_ACCEPTANCE_MATRIX.md" \
+            "${assets}/documentation/${major_minor}_ACCEPTANCE_MATRIX.md"
           for profile in default build discovery document-engine; do
             uv run --frozen python -m benchmarks.release.audit_dependencies \
               --profile "${profile}" \
@@ -485,9 +629,15 @@ jobs:
           cp security/openvex.json "${assets}/security/openvex.json"
           uv run --frozen python -m benchmarks.release.commercial_release \
             --assets-root "${assets}" \
-            --platform "${assets}/evidence/platform-linux.json" \
-            --platform "${assets}/evidence/platform-darwin.json" \
-            --platform "${assets}/evidence/platform-windows.json" \
+            --platform "${assets}/evidence/platform-linux-py311.json" \
+            --platform "${assets}/evidence/platform-linux-py312.json" \
+            --platform "${assets}/evidence/platform-linux-py313.json" \
+            --platform "${assets}/evidence/platform-darwin-py311.json" \
+            --platform "${assets}/evidence/platform-darwin-py312.json" \
+            --platform "${assets}/evidence/platform-darwin-py313.json" \
+            --platform "${assets}/evidence/platform-windows-py311.json" \
+            --platform "${assets}/evidence/platform-windows-py312.json" \
+            --platform "${assets}/evidence/platform-windows-py313.json" \
             --host "${assets}/evidence/no-model-host-acceptance.json" \
             --reproducible "${assets}/evidence/reproducible-build.json" \
             --oci-report "${assets}/evidence/oci-release-report.json" \
@@ -500,6 +650,14 @@ jobs:
             --openvex "${assets}/security/openvex.json" \
             --evaluation \
               "${RUNNER_TEMP}/gate-evidence/evaluation-protocol/evaluation-report.json" \
+            --living-wiki-quality \
+              "${assets}/quality/living-wiki-quality-report.json" \
+            --living-wiki-baseline \
+              "${assets}/quality/living-wiki-quality-baseline.json" \
+            --living-wiki-comparison \
+              "${assets}/quality/living-wiki-quality-comparison.json" \
+            --source-quality-matrix \
+              "${assets}/quality/v0.11-28-source-decision-matrix.json" \
             --output "${assets}/commercial-release-manifest.json"
           uv run --frozen python -m benchmarks.release.write_checksums \
             --assets-root "${assets}" \

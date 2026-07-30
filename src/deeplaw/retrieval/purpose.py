@@ -9,7 +9,7 @@ from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
 )
-from ..knowledge_intelligence import estimate_tokens
+from ..knowledge_intelligence import estimate_tokens, rerank_candidates
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
 from ..retrieval_fabric import retrieve
@@ -98,6 +98,8 @@ _KIND_PRIORITY: Final = {
     "skill": 11,
 }
 _MAX_PROVIDER_CHARS: Final = 65_536
+_MIN_COMPILED_RERANKER_SCORE: Final = 0.20
+_MIN_EVIDENCE_RERANKER_SCORE: Final = 0.10
 
 
 @dataclass(frozen=True)
@@ -417,15 +419,44 @@ class PurposeAwareRetrievalService:
             )
         if policy == "evidence-first-v1":
             evidence_items = min(5, max(1, (limit + 1) // 2))
-            compiled_items = max(1, limit - evidence_items)
+            compiled_items = limit - evidence_items
         else:
             compiled_items = max(1, (limit + 1) // 2)
-            evidence_items = min(5, max(1, limit - compiled_items))
+            evidence_items = min(5, limit - compiled_items)
+        if compiled_items == 0:
+            return (
+                {"items": 0, "characters": 0},
+                {"items": evidence_items, "characters": min(6_000, max_chars)},
+            )
+        if evidence_items == 0:
+            return (
+                {"items": compiled_items, "characters": max_chars},
+                {"items": 0, "characters": 0},
+            )
+        if max_chars < 400:
+            if policy == "evidence-first-v1":
+                return (
+                    {"items": 0, "characters": 0},
+                    {
+                        "items": min(5, limit),
+                        "characters": min(6_000, max_chars),
+                    },
+                )
+            return (
+                {"items": limit, "characters": max_chars},
+                {"items": 0, "characters": 0},
+            )
         evidence_chars = min(
             6_000,
-            max(200, max_chars * evidence_items // (compiled_items + evidence_items)),
+            max(
+                200,
+                min(
+                    max_chars - 200,
+                    max_chars * evidence_items // (compiled_items + evidence_items),
+                ),
+            ),
         )
-        compiled_chars = max(200, max_chars - evidence_chars)
+        compiled_chars = max_chars - evidence_chars
         return (
             {"items": compiled_items, "characters": compiled_chars},
             {"items": evidence_items, "characters": evidence_chars},
@@ -448,6 +479,16 @@ class PurposeAwareRetrievalService:
         as_of: str | None,
         kinds: tuple[str, ...],
     ) -> dict[str, Any]:
+        if limit == 0 or max_chars == 0:
+            return {
+                "results": [],
+                "contradictions": [],
+                "gaps": [],
+                "freshness_gaps": [],
+                "candidate_count": 0,
+                "selected_characters": 0,
+                "stale_prevented_count": 0,
+            }
         raw = store.recall(
             query,
             scope=cast(Any, scope),
@@ -464,7 +505,30 @@ class PurposeAwareRetrievalService:
         accepted: list[dict[str, Any]] = []
         freshness_gaps: list[dict[str, Any]] = []
         stale_prevented = 0
+        low_relevance_prevented = 0
+        exact_identity_discovery = any(
+            "exact" in item.get("channels", []) for item in raw["results"]
+        )
         for item in raw["results"]:
+            channels = set(item.get("channels", []))
+            reranker = item.get("reranker")
+            reranker_score = (
+                float(reranker["score"])
+                if isinstance(reranker, dict)
+                and isinstance(reranker.get("score"), (int, float))
+                and not isinstance(reranker.get("score"), bool)
+                else None
+            )
+            if (
+                not exact_identity_discovery
+                and "exact" not in channels
+                and (
+                    reranker_score is None
+                    or reranker_score < _MIN_COMPILED_RERANKER_SCORE
+                )
+            ):
+                low_relevance_prevented += 1
+                continue
             freshness = self._revision_freshness(store, item["revision_id"])
             projected = dict(item)
             projected["freshness"] = freshness
@@ -483,8 +547,14 @@ class PurposeAwareRetrievalService:
                 )
                 continue
             accepted.append(projected)
+        recall_rank = {
+            str(item["knowledge_id"]): index
+            for index, item in enumerate(raw["results"])
+        }
         accepted.sort(
             key=lambda item: (
+                0 if "exact" in item.get("channels", []) else 1,
+                recall_rank.get(str(item.get("knowledge_id")), len(recall_rank)),
                 _KIND_PRIORITY.get(str(item.get("kind")), 99),
                 str(item.get("knowledge_id")),
             )
@@ -499,7 +569,19 @@ class PurposeAwareRetrievalService:
         return {
             "results": accepted,
             "contradictions": contradictions,
-            "gaps": list(raw["gaps"]),
+            "gaps": [
+                *raw["gaps"],
+                *(
+                    [
+                        (
+                            f"{low_relevance_prevented} compiled "
+                            "candidate(s) were below the deterministic relevance floor"
+                        )
+                    ]
+                    if low_relevance_prevented
+                    else []
+                ),
+            ],
             "freshness_gaps": freshness_gaps,
             "candidate_count": raw["query_plan"]["candidate_count"],
             "selected_characters": sum(
@@ -755,15 +837,48 @@ class PurposeAwareRetrievalService:
             explain=False,
         )
         sensitivity_order = ("public", "internal", "private", "restricted")
-        cards = [
-            self._evidence_card(item)
+        boundary_candidates = [
+            item
             for item in raw.get("results", [])
             if isinstance(item, dict)
             and item.get("sensitivity") in sensitivity_order
             and sensitivity_order.index(item["sensitivity"])
             <= sensitivity_order.index(max_sensitivity)
             and item.get("sensitivity") != "restricted"
+            and isinstance(item.get("asset_id"), str)
         ]
+        evidence_scores = {
+            item["knowledge_id"]: float(item["reranker_score"])
+            for item in rerank_candidates(
+                query,
+                [
+                    {
+                        "knowledge_id": item["asset_id"],
+                        "title": item.get("title", ""),
+                        "body": item.get("excerpt", ""),
+                        "semantic_key": item.get("semantic_key"),
+                        "epistemic_state": "supported",
+                        "feedback_utility": 0.0,
+                    }
+                    for item in boundary_candidates
+                ],
+            )
+        }
+        cards: list[dict[str, Any]] = []
+        unbound_evidence_count = 0
+        low_relevance_evidence_count = 0
+        for item in boundary_candidates:
+            if (
+                evidence_scores.get(item["asset_id"], 0.0)
+                < _MIN_EVIDENCE_RERANKER_SCORE
+            ):
+                low_relevance_evidence_count += 1
+                continue
+            card = self._evidence_card(item, evidence_store=evidence_store)
+            if card is None:
+                unbound_evidence_count += 1
+                continue
+            cards.append(card)
         source_revision_ids = sorted(
             {
                 reference["source_revision_id"]
@@ -791,14 +906,44 @@ class PurposeAwareRetrievalService:
                 {"code": "evidence_gap", "message": str(message)}
                 for message in raw.get("gaps", [])
                 if isinstance(message, str)
-            ],
+            ]
+            + (
+                [
+                    {
+                        "code": "evidence_gap",
+                        "message": (
+                            "Evidence candidates without exact Source Revision "
+                            "bindings were excluded."
+                        ),
+                    }
+                ]
+                if unbound_evidence_count
+                else []
+            )
+            + (
+                [
+                    {
+                        "code": "evidence_gap",
+                        "message": (
+                            "Source evidence candidates below the deterministic "
+                            "relevance floor were excluded."
+                        ),
+                    }
+                ]
+                if low_relevance_evidence_count
+                else []
+            ),
             sum(len(str(item.get("excerpt", ""))) for item in cards),
             source_revision_ids,
             fragment_ids,
         )
 
     @staticmethod
-    def _evidence_card(value: dict[str, Any]) -> dict[str, Any]:
+    def _evidence_card(
+        value: dict[str, Any],
+        *,
+        evidence_store: KnowledgeVault,
+    ) -> dict[str, Any] | None:
         allowed = {
             "asset_id",
             "asset_revision_id",
@@ -818,23 +963,34 @@ class PurposeAwareRetrievalService:
             "channels",
         }
         card = {key: item for key, item in value.items() if key in allowed}
-        references = card.get("source_refs")
-        if isinstance(references, list):
-            card["source_refs"] = [
-                {
-                    key: reference.get(key)
-                    for key in (
-                        "source_revision_id",
-                        "fragment_revision_id",
-                        "fragment_id",
-                        "locator",
-                        "quote_sha256",
-                    )
-                    if reference.get(key) is not None
-                }
-                for reference in references[:2]
-                if isinstance(reference, dict)
-            ]
+        asset_id = card.get("asset_id")
+        if not isinstance(asset_id, str):
+            return None
+        identity = evidence_store.connection.execute(
+            """
+            SELECT asset_revision_id
+            FROM asset_revision_bindings_v2
+            WHERE legacy_asset_id = ?
+            """,
+            (asset_id,),
+        ).fetchone()
+        if identity is None:
+            return None
+        references = evidence_store.connection.execute(
+            """
+            SELECT source_revision_id, fragment_revision_id,
+                   locator, quote_sha256
+            FROM proposal_source_refs_v2
+            WHERE asset_revision_id = ?
+            ORDER BY ref_ordinal
+            """,
+            (identity["asset_revision_id"],),
+        ).fetchall()
+        if not references:
+            return None
+        card["source_refs"] = [dict(reference) for reference in references[:2]]
+        card["source_ref_count"] = len(references)
+        card["source_refs_truncated"] = len(references) > 2
         return card
 
     @staticmethod

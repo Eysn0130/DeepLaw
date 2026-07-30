@@ -1,0 +1,208 @@
+{
+  "schema_version": "deeplaw.living-wiki-quality-suite/v1",
+  "suite_id": "deeplaw-living-wiki-cli-quality-v1",
+  "status": "public_deterministic_gold",
+  "frozen_at": "2026-07-30T00:00:00Z",
+  "evaluator": {
+    "type": "deterministic_expected_identity_and_citation",
+    "human_semantic_gold": false,
+    "limitations": [
+      "The suite scores deterministic object identity, source binding, policy, gap and lifecycle outcomes.",
+      "It does not treat Agent self-evaluation as human relevance judgment.",
+      "Authoritative Pack retrieval is evaluated separately through law_support."
+    ]
+  },
+  "corpus": {
+    "generator": "deeplaw-public-quality-corpus/v1",
+    "main_object_count": 360,
+    "formats": [
+      "text/markdown"
+    ],
+    "source_labels": [
+      "main",
+      "corroborating",
+      "refresh-v1",
+      "refresh-v2",
+      "withdrawn",
+      "uncompiled",
+      "restricted"
+    ],
+    "private_content": false,
+    "case_data": false
+  },
+  "configuration": {
+    "scope": "project",
+    "max_sensitivity": "public",
+    "limit": 8,
+    "max_characters": 8000,
+    "max_tokens": 6000,
+    "max_sources": 12,
+    "graph_hops": 1,
+    "retrieval_mode": "hybrid",
+    "network_policy": "offline_no_acquisition",
+    "cold_repetitions": 1,
+    "warm_repetitions": 2
+  },
+  "ranked_cases": [
+    {
+      "case_id": "exact_identity",
+      "category": "exact_title_and_identifier",
+      "query": "$EXACT_KNOWLEDGE_ID",
+      "purpose": "answer",
+      "expected_titles": [
+        "Exact Identity Claim"
+      ],
+      "top_k": 2
+    },
+    {
+      "case_id": "exact_title",
+      "category": "exact_title_and_identifier",
+      "query": "Quality Object 359 QID-359",
+      "purpose": "answer",
+      "expected_titles": [
+        "Quality Object 359"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "identifier",
+      "category": "exact_title_and_identifier",
+      "query": "QID-173",
+      "purpose": "answer",
+      "expected_titles": [
+        "Quality Object 173"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "entity_alias",
+      "category": "entity_alias",
+      "query": "NRL former name",
+      "purpose": "answer",
+      "expected_titles": [
+        "Northwind Research"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "same_name_ambiguity",
+      "category": "same_name_entity_ambiguity",
+      "query": "ACME organization",
+      "purpose": "answer",
+      "expected_titles": [
+        "ACME Research Lab",
+        "ACME Shipping Firm"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "concept_fusion",
+      "category": "concept_fusion",
+      "query": "discovery admission selection authority",
+      "purpose": "answer",
+      "expected_titles": [
+        "Governed Admission"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "multi_source",
+      "category": "multi_source_consistency",
+      "query": "KAPPA control requires signed receipts",
+      "purpose": "answer",
+      "expected_titles": [
+        "KAPPA Control Main",
+        "KAPPA Control Corroborating"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "contradiction",
+      "category": "contradictory_sources",
+      "query": "ORBIT launch date",
+      "purpose": "answer",
+      "expected_titles": [
+        "ORBIT Launch May 1",
+        "ORBIT Launch May 3"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "procedure",
+      "category": "procedure",
+      "query": "SIGMA recovery procedure verify restore",
+      "purpose": "answer",
+      "expected_titles": [
+        "SIGMA Recovery Procedure"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "historical",
+      "category": "time_and_historical_version",
+      "query": "historical limit H-10 before 2026",
+      "purpose": "historical",
+      "expected_titles": [
+        "Historical Limit H-10"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "exact_quote",
+      "category": "fragment_locator_drill_down",
+      "query": "evidence precedes interpretation",
+      "purpose": "quote",
+      "expected_titles": [
+        "Exact Quote Evidence"
+      ],
+      "top_k": 8
+    },
+    {
+      "case_id": "compiled_first",
+      "category": "compiled_knowledge_answer",
+      "query": "COMPILED-OMEGA reusable invariant",
+      "purpose": "answer",
+      "expected_titles": [
+        "Compiled OMEGA"
+      ],
+      "top_k": 5
+    },
+    {
+      "case_id": "raw_fallback",
+      "category": "raw_fragment_fallback",
+      "query": "RAW-FALLBACK-TAU",
+      "purpose": "answer",
+      "expected_titles": [
+        "Uncompiled TAU Evidence"
+      ],
+      "top_k": 5
+    }
+  ],
+  "lifecycle_cases": [
+    "latest_source_revision",
+    "stale_synthesis_or_knowledge",
+    "source_withdrawal",
+    "unauthorized_content",
+    "unanswerable",
+    "repeated_query_reuse",
+    "legal_boundary",
+    "projection_retry",
+    "destructive_derived_rebuild"
+  ],
+  "quality_gate": {
+    "minimum_recall_at_k": 0.9,
+    "minimum_precision_at_k": 0.3,
+    "minimum_mrr": 0.8,
+    "minimum_citation_validity": 1.0,
+    "minimum_claim_evidence_binding_accuracy": 1.0,
+    "minimum_stale_selection_prevention": 1.0,
+    "minimum_repeated_query_reuse_rate": 1.0,
+    "maximum_unauthorized_disclosure": 0,
+    "maximum_silent_fallback": 0,
+    "maximum_stale_prohibited_selection": 0,
+    "maximum_invalid_official_citation": 0,
+    "maximum_provider_hard_limit_violation": 0,
+    "maximum_authority_elevation": 0
+  },
+  "competitive_claim_eligible": false
+}

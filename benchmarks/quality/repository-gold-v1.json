@@ -29,7 +29,7 @@
       "document_id": "doc_chinese_readme",
       "category": "chinese",
       "path": "README.md",
-      "sha256": "1e22493db8f7b5c7b7cbd73f1f16bac5a9154708056d16023cf34330173baa97",
+      "sha256": "82d350621eab259b51c48482cc311374cb31b183961af7dc2a096fce6d5c8878",
       "title": "DeepLaw 中文产品说明",
       "anchor": "自主写入不等于权威升级"
     },
@@ -45,7 +45,7 @@
       "document_id": "doc_english_readme",
       "category": "english",
       "path": "README_EN.md",
-      "sha256": "c4ed1235352a71986fbdb61e98d7d24acc9d323284f59577e119915ec40c7491",
+      "sha256": "5164926dff1cd091434ed877f171ae6ed5a638fcccc66132cc1707b6d31bbba8",
       "title": "DeepLaw English v0.10 product contract",
       "anchor": "Knowledge Duties"
     },
@@ -53,7 +53,7 @@
       "document_id": "doc_english_adapters",
       "category": "english",
       "path": "docs/AGENT_ADAPTERS.md",
-      "sha256": "12a16b0854f1122728a0f3a14605ef487b882c1d0d858a936078b08bb96be569",
+      "sha256": "eb37085873ebef4a8e3cb55242cfe5d599c0f44f122774b8394e2ea6f9ad856d",
       "title": "DeepLaw Agent adapter contracts",
       "anchor": "Real model/session tasks on all hosts"
     },
@@ -61,7 +61,7 @@
       "document_id": "doc_code_autonomy",
       "category": "code",
       "path": "src/deeplaw/knowledge_autonomy.py",
-      "sha256": "249a98c8e1529aad7431c3b897198705415e2fed83381aceaf8d6894976aa8f2",
+      "sha256": "2a24ca02b366fd9a5b24d3878cd3f4c56f2a789488d23411aabcdde25e8cd7d1",
       "title": "Autonomous Knowledge Store implementation",
       "anchor": "def garbage_collect_content("
     },
@@ -77,7 +77,7 @@
       "document_id": "doc_legal_architecture",
       "category": "legal",
       "path": "docs/DEEPLAW_2.md",
-      "sha256": "11fcdf6e6e18e5e04c54685f47090bc4d4b9261ca03d2f08df4ea24455c0ee6c",
+      "sha256": "e2313a81bbdceaafb2cbf68efce8f82ff60efe047e9f994377b0dca3a3add213",
       "title": "DeepLaw dual Legal Pack architecture",
       "anchor": "用户私有法律参考库"
     },
@@ -93,7 +93,7 @@
       "document_id": "doc_long_architecture",
       "category": "long_document",
       "path": "docs/ARCHITECTURE.md",
-      "sha256": "a2e63b46f3f095f1b4c46e9b2d40ba1706a755ad581cdbf695dd532a90b6c2d8",
+      "sha256": "a421112d443f32d016aaef00af3ca16a8ed8d220fe7e3a1f32e0703b4b062b77",
       "title": "DeepLaw full architecture",
       "anchor": "Source Tree"
     },
@@ -101,7 +101,7 @@
       "document_id": "doc_long_autonomous_contract",
       "category": "long_document",
       "path": "docs/AUTONOMOUS_KNOWLEDGE_OS.md",
-      "sha256": "4d024912e90063ed19ff49d27ff0753f608c69ce9d4594723a46cb29caa8065f",
+      "sha256": "50c7a098b7270201633736ea2a37183d6bf46819916b34460974a1012dc61dcd",
       "title": "DeepLaw Autonomous Knowledge OS contract",
       "anchor": "Autonomous mutation lifecycle"
     }

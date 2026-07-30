@@ -1,12 +1,12 @@
 # DeepLaw 2.0 Legal Pack 技术设计：面向 Agent 的可验证法律知识
 
-Status: **v0.10.0 Legal Pack architecture and research roadmap**, reviewed 2026-07-30.
+Status: **v0.11.0 Legal Pack architecture and research roadmap**, reviewed 2026-07-30.
 
 > **Files in. Verifiable knowledge out.**
 > 文件进入，Agent 得到可验证的知识。
 
 `DeepLaw 2.0` 是产品名；仓库名保持 `DeepLaw`，Python 包、CLI 和本地目录保持 `deeplaw`。
-当前软件版本是 `v0.10.0`。本文记录独立 Legal Pack；通用自主知识内核见
+当前软件版本是 `v0.11.0`。本文记录独立 Legal Pack；通用自主知识内核见
 [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md)，v0.7 source-derived 兼容面见
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md)。下文标注 `v0.7.0` 的段落是仍由 v0.9 保留的 Legal Pack
 实现基线，不代表当前包版本或 Agent 派生知识仍走统一 Review。
@@ -14,7 +14,7 @@ Status: **v0.10.0 Legal Pack architecture and research roadmap**, reviewed 2026-
 ## DeepLaw 是什么
 
 DeepLaw 2.0 是面向 Agent 的法律知识库。它将 DOCX、PDF、TXT 文件处理为只读、版本化、
-可追溯的 Knowledge Release，并向 Agent 交付小型 Evidence Pack；`v0.10.0` 官方团队
+可追溯的 Knowledge Release，并向 Agent 交付小型 Evidence Pack；`v0.11.0` 官方团队
 目录输入为 DOCX/PDF，物理分离的用户私有法律参考库另支持 UTF-8 TXT。
 
 DeepLaw 不是聊天记忆，不保存案件项目私有资料，也不把整座知识库塞进模型上下文。用户私有
@@ -26,7 +26,7 @@ DeepLaw 范围只保存法律参考资料，始终标记为用户提供且未经
 3. 哪些内容满足当前问题的证据要求；
 4. 哪些地方仍然缺失、不确定或不能使用。
 
-官方目录、用户私有法律参考与 Analytix 案件项目必须物理隔离。当前 `v0.10.0` 不提供内容级
+官方目录、用户私有法律参考与 Analytix 案件项目必须物理隔离。当前 `v0.11.0` 不提供内容级
 DLP 或案件私有资料分类器；宿主必须在调用或导入 DeepLaw 前完成隔离和拒绝，不能依赖
 DeepLaw 自动识别误传内容。
 

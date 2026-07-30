@@ -1,9 +1,8 @@
 # DeepLaw Living Wiki Compiler
 
-Status: **Current working-tree implementation**, 2026-07-30. This document describes the
-Source-to-Knowledge compiler implemented on the `codex/living-wiki-compiler` branch. It does not
-change the released `v0.10.0` claim or version. Release eligibility is tracked separately in
-[`LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md).
+Status: **Current v0.11.0 implementation**, 2026-07-30. Release eligibility and exact evidence are
+tracked in [`V0_11_ACCEPTANCE_MATRIX.md`](V0_11_ACCEPTANCE_MATRIX.md) and the formal release
+manifest.
 
 ## Contract boundary
 

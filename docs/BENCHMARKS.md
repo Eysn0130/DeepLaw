@@ -1,6 +1,6 @@
 # DeepLaw benchmarks and evidence
 
-Status: **v0.10.0 current evaluation map**, 2026-07-30.
+Status: **v0.11.0 current evaluation map**, 2026-07-30.
 
 ## One quality source of truth
 
@@ -53,6 +53,35 @@ list must be empty. The release report binds:
 The holdout is deliberately public and maintainer-visible. Time freezing prevents a release
 candidate from modifying the benchmark after seeing its current results, but it cannot prove
 secrecy or absence of contamination. The runner encodes that boundary rather than relying on prose.
+
+## v0.11 Living Wiki and Authoritative Pack gates
+
+The source-free
+[`quality-suite-v1.json`](../benchmarks/living_wiki/quality-suite-v1.json) is a separate first-party
+CLI gate. Its runner executes governed source registration, fake-Agent compilation, ranked and
+lifecycle queries, exact citation checks, withdrawal/restriction handling, context compilation,
+Wiki/Canvas inspection, and destructive derived-state rebuild. It records Recall@K, Precision@K,
+MRR, nDCG, citation/evidence binding, source coverage, compiled/fallback ratios, byte savings,
+cold/warm latency, compilation/refresh/rebuild latency, peak RSS, recovery and zero-cost offline
+execution. The deterministic labels are not presented as human semantic gold.
+
+The release job first builds the exact `0.10.0` baseline commit
+`42382b264f4297965c25aaac6e85619e9e0d49b7` with the frozen build environment; its
+reproducible wheel SHA-256 is
+`9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0`. Baseline and
+candidate then run sequentially on the same runner with identical source bytes, suite, query
+configuration, Python, SQLite, hardware identity, and network policy. The separately validated
+comparison report rejects any functional metric decrease, any security failure, or latency beyond
+the declared deterministic noise tolerance. All three JSON reports are release assets and are
+bound by manifest v4.
+
+The signed Legal Pack is assessed separately through the sanitized
+[`v0.11-28-source-decision-matrix.json`](../benchmarks/quality/v0.11-28-source-decision-matrix.json).
+That matrix binds all 28 exact catalog hashes, per-source parser/fragment/locator state, snapshot
+and rollback evidence, rebuild reproducibility, and the same frozen 37-case legal evaluation before
+and after the controlled reparse. It does not copy titles, source text, local paths, or private
+payloads into the repository, and it does not merge `law_support` Authority with the Living Wiki
+permission plane.
 
 ## What is actually exercised
 
@@ -131,7 +160,7 @@ DeepLaw operating points. A complete comparison must preserve:
   monetary cost;
 - paired confidence intervals and every preregistered loss, timeout, abstention, and hard failure.
 
-Those runners validate evidence structure; they do not manufacture results. No complete v0.10
+Those runners validate evidence structure; they do not manufacture results. No complete v0.11
 named-baseline collection or real Codex/Claude Code/OpenCode model-task collection exists in this
 repository, so comparative claims remain closed.
 

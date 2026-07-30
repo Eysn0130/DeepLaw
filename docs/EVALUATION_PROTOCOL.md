@@ -1,6 +1,6 @@
 # DeepLaw Evaluation Protocol
 
-Status: **Current v1 contract for software v0.10.0**, frozen on 2026-07-30.
+Status: **Current v1 contract for software v0.11.0**, frozen on 2026-07-30.
 
 ## Decision
 
@@ -95,7 +95,7 @@ The formal release job installs the exact candidate wheel into an isolated envir
 ```bash
 python -m benchmarks.evaluation.run_protocol \
   --repository . \
-  --candidate-wheel /path/to/deeplaw-0.10.0-py3-none-any.whl \
+  --candidate-wheel /path/to/deeplaw-0.11.0-py3-none-any.whl \
   --output-dir /path/to/evaluation \
   --require-eligible
 

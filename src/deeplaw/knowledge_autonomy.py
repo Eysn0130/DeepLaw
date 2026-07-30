@@ -317,6 +317,14 @@ _WORKSPACE_DIRECTORIES = (
     ".deeplaw/capabilities",
 )
 
+_DERIVED_REBUILD_DIRECTORIES = tuple(
+    relative
+    for relative in _WORKSPACE_DIRECTORIES
+    if relative == "canvas"
+    or relative.startswith("wiki/")
+    or relative.startswith(".deeplaw/derived/")
+)
+
 _VAULT_GITIGNORE = """# DeepLaw trusted/local state (back up with `deeplaw knowledge snapshot`)
 .deeplaw/
 sources/
@@ -459,6 +467,26 @@ def _owner_directory(path: Path) -> Path:
     if os.name != "nt":
         os.chmod(path, 0o700)
     return path
+
+
+def _restore_owner_subdirectory(root: Path, relative: str) -> Path:
+    """Recreate one known derived directory without traversing symlink ancestors."""
+    if root.is_symlink() or not root.is_dir():
+        raise RuntimeError("DeepLaw vault root is missing or unsafe")
+    path = PurePosixPath(relative)
+    if path.is_absolute() or not path.parts or any(
+        part in {"", ".", ".."} for part in path.parts
+    ):
+        raise RuntimeError("DeepLaw derived directory identity is unsafe")
+    current = root
+    for part in path.parts:
+        current = current / part
+        if current.is_symlink() or (current.exists() and not current.is_dir()):
+            raise RuntimeError("DeepLaw derived directory is unsafe")
+        current.mkdir(exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            os.chmod(current, 0o700)
+    return current
 
 
 def _atomic_owner_write(path: Path, payload: bytes) -> None:
@@ -9625,6 +9653,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         run_status_overrides: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         self._require_write()
+        for relative in _DERIVED_REBUILD_DIRECTORIES:
+            _restore_owner_subdirectory(self.root, relative)
         reference_time = utc_now()
         self.connection.execute("BEGIN IMMEDIATE")
         try:

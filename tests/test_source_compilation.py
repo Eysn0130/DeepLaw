@@ -9,6 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from benchmarks.hosts.deterministic_fake_agent import compile_with_fake_agent
+from benchmarks.living_wiki.run_quality_gate import _score_case
 from deeplaw.api import KnowledgeOS, KnowledgeOSValidationError
 from deeplaw.backfill import BackfillService
 from deeplaw.compilation.coordinator import CompilationCoordinator
@@ -155,6 +156,19 @@ def _cli_json(*arguments: str) -> dict:
     value = json.loads(result.stdout)
     assert isinstance(value, dict)
     return value
+
+
+def test_quality_scoring_does_not_credit_duplicate_channel_hits() -> None:
+    score = _score_case(
+        ["Expected", "Expected", "Irrelevant"],
+        ["Expected"],
+        3,
+    )
+
+    assert score["hit_count"] == 1
+    assert score["recall_at_k"] == 1.0
+    assert score["precision_at_k"] == pytest.approx(1 / 3)
+    assert score["ndcg"] == 1.0
 
 
 def test_compilation_batches_remain_invisible_until_one_atomic_commit(tmp_path: Path) -> None:
@@ -1471,6 +1485,352 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     assert legal["compiled"] == []
     assert legal["evidence"] == []
     assert legal["gaps"][0]["code"] == "law_support_required"
+
+
+def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
+    tmp_path: Path,
+) -> None:
+    root, compiled, _grant_id = _ready_source(tmp_path, section_count=2)
+    with KnowledgeVault(root, read_only=False) as vault:
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="purpose-evidence-test",
+            review_reason="Activate exact source evidence for fallback verification.",
+        )
+
+    result = PurposeAwareRetrievalService(root).query(
+        "Durable source statement 1",
+        purpose="answer",
+        limit=5,
+    )
+
+    assert result["compiled"] == []
+    assert result["evidence"]
+    assert result["metrics"]["source_fallback_used"] is True
+    assert result["query_plan"]["fallback"]["used"] is True
+    assert any(gap["code"] == "source_fallback" for gap in result["gaps"])
+    reference = result["evidence"][0]["source_refs"][0]
+    assert set(reference) == {
+        "source_revision_id",
+        "fragment_revision_id",
+        "locator",
+        "quote_sha256",
+    }
+    assert (
+        reference["source_revision_id"]
+        == compiled["identity"]["source_revision_id"]
+    )
+
+    unanswerable = PurposeAwareRetrievalService(root).query(
+        "NO-SUCH-FACT-CHI",
+        purpose="answer",
+        limit=5,
+    )
+    assert unanswerable["compiled"] == []
+    assert unanswerable["evidence"] == []
+    assert any(gap["code"] == "evidence_gap" for gap in unanswerable["gaps"])
+
+
+def test_dense_only_low_relevance_candidates_trigger_visible_fallback(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"dense-relevance-floor-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-relevance-floor",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+
+    result = PurposeAwareRetrievalService(root).query(
+        "NO-SUCH-FACT-CHI",
+        purpose="answer",
+        limit=5,
+    )
+
+    assert result["compiled"] == []
+    assert result["metrics"]["source_fallback_used"] is True
+    assert result["query_plan"]["fallback"]["used"] is True
+    assert any(gap["code"] == "source_fallback" for gap in result["gaps"])
+    assert any(gap["code"] == "retrieval_gap" for gap in result["gaps"])
+
+
+def test_weak_single_term_lexical_match_cannot_answer_unknown_identifier(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"lexical-relevance-floor-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-lexical-relevance-floor",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    plan["object_actions"][0]["title"] = "Known Fact Alpha"
+    plan["object_actions"][0]["body"] = "A known fact applies only to ALPHA."
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+
+    result = PurposeAwareRetrievalService(root).query(
+        "NO-SUCH-FACT-CHI",
+        purpose="answer",
+        limit=5,
+    )
+
+    assert result["compiled"] == []
+    assert any(gap["code"] == "retrieval_gap" for gap in result["gaps"])
+
+
+def test_purpose_aware_query_keeps_exact_identity_ahead_of_kind_priority(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=2)
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"exact-identity-order-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-exact-identity",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    synthesis_action, claim_action = plan["object_actions"]
+    synthesis_action["kind"] = "synthesis"
+    synthesis_action["semantic_key"] = "exact-order:synthesis"
+    synthesis_action["title"] = "Higher kind-priority synthesis"
+    synthesis_input_set = {
+        "source_revision_ids": [compiled["identity"]["source_revision_id"]],
+        "knowledge_revision_ids": [],
+        "relation_revision_ids": [],
+        "compilation_run_ids": [begun["compilation_run_id"]],
+    }
+    synthesis_action["synthesis_inputs"] = {
+        **synthesis_input_set,
+        "input_set_sha256": sha256_bytes(
+            canonical_json(synthesis_input_set).encode("utf-8")
+        ),
+    }
+    claim_action["semantic_key"] = "exact-order:claim"
+    claim_action["title"] = "Exact identity claim"
+    plan["relation_actions"] = [
+        {
+            "action": "create",
+            "subject": {
+                "knowledge_id": None,
+                "semantic_key": synthesis_action["semantic_key"],
+                "kind": "synthesis",
+            },
+            "predicate": "supports",
+            "object": {
+                "knowledge_id": None,
+                "semantic_key": claim_action["semantic_key"],
+                "kind": "claim",
+            },
+            "expected_relation_revision_id": None,
+            "evidence_refs": claim_action["source_refs"],
+            "valid_from": None,
+            "valid_to": None,
+            "reason": "Connect the exact claim to a graph neighbor.",
+        }
+    ]
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        claim_id = store.connection.execute(
+            """
+            SELECT knowledge_id FROM knowledge_revisions_v3
+            WHERE semantic_key = ?
+            """,
+            (claim_action["semantic_key"],),
+        ).fetchone()["knowledge_id"]
+
+    result = PurposeAwareRetrievalService(root).query(
+        claim_id,
+        purpose="answer",
+        limit=2,
+        graph_hops=1,
+    )
+
+    assert [item["kind"] for item in result["compiled"]] == ["claim", "synthesis"]
+    assert result["compiled"][0]["knowledge_id"] == claim_id
+    assert "exact" in result["compiled"][0]["channels"]
+
+
+@pytest.mark.parametrize(
+    ("policy", "expected_compiled_items", "expected_evidence_items"),
+    [
+        ("compiled-first-v1", 1, 0),
+        ("evidence-first-v1", 0, 1),
+        ("balanced-v1", 1, 0),
+    ],
+)
+def test_purpose_aware_single_item_budget_is_not_double_allocated(
+    policy: str,
+    expected_compiled_items: int,
+    expected_evidence_items: int,
+) -> None:
+    compiled, evidence = PurposeAwareRetrievalService._partition_budget(
+        policy,
+        limit=1,
+        max_chars=200,
+    )
+
+    assert compiled == {
+        "items": expected_compiled_items,
+        "characters": 200 if expected_compiled_items else 0,
+    }
+    assert evidence == {
+        "items": expected_evidence_items,
+        "characters": 200 if expected_evidence_items else 0,
+    }
+    assert compiled["items"] + evidence["items"] == 1
+    assert compiled["characters"] + evidence["characters"] == 200
+
+
+@pytest.mark.parametrize(
+    "policy",
+    ["compiled-first-v1", "evidence-first-v1", "balanced-v1"],
+)
+@pytest.mark.parametrize("limit", [1, 2, 3, 8, 20])
+@pytest.mark.parametrize("max_chars", [200, 399, 400, 8_000, 20_000])
+def test_purpose_aware_partition_never_exceeds_caller_budgets(
+    policy: str,
+    limit: int,
+    max_chars: int,
+) -> None:
+    compiled, evidence = PurposeAwareRetrievalService._partition_budget(
+        policy,
+        limit=limit,
+        max_chars=max_chars,
+    )
+
+    assert compiled["items"] + evidence["items"] <= limit
+    assert compiled["characters"] + evidence["characters"] <= max_chars
+    for partition in (compiled, evidence):
+        assert (partition["items"] == 0) == (partition["characters"] == 0)
+        if partition["items"]:
+            assert partition["characters"] >= 200
+
+
+def test_purpose_aware_query_enforces_single_item_budget_across_channels(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=2)
+    with KnowledgeVault(root, read_only=False) as vault:
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="purpose-budget-test",
+            review_reason="Activate exact source evidence for the cross-channel budget.",
+        )
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"cross-channel-budget-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-cross-channel-budget",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+
+    result = PurposeAwareRetrievalService(root).query(
+        "Durable source statement",
+        purpose="verify",
+        limit=1,
+        max_chars=200,
+    )
+
+    assert result["policy_id"] == "evidence-first-v1"
+    assert result["budget"]["selected_items"] <= 1
+    assert result["budget"]["selected_characters"] <= 200
+    assert len(canonical_json(result).encode("utf-8")) <= 65_536
 
 
 def test_query_backfill_requires_draft_validation_and_explicit_promotion(

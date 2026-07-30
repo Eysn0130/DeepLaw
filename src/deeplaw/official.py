@@ -1005,6 +1005,7 @@ def sync_official(
     home: str | Path | None = None,
     allow_unsigned_local_catalog: bool = False,
     trust_store_path: str | Path | None = None,
+    rebuild_current_catalog: bool = False,
 ) -> dict[str, Any]:
     if update and catalog_source is None:
         catalog_source = DEFAULT_CATALOG_URL
@@ -1022,6 +1023,19 @@ def sync_official(
     state = _load_state(home)
     previous = state["catalog"]
     digest = sha256_bytes(payload)
+    if rebuild_current_catalog:
+        if previous is None or digest != previous["sha256"]:
+            raise ValueError(
+                "official reparse requires the exact currently installed catalog"
+            )
+        if not signature_verification["verified"]:
+            raise PermissionError(
+                "official reparse requires a verified signed catalog"
+            )
+        if source_root is None:
+            raise ValueError(
+                "official reparse requires an explicit verified source root"
+            )
     if previous is not None:
         if catalog["catalogId"] != previous["catalog_id"]:
             raise ValueError("official catalog ID cannot change during an update")
@@ -1029,7 +1043,7 @@ def sync_official(
             raise ValueError("official catalog rollback is not allowed")
         if catalog["sequence"] == previous["sequence"] and digest != previous["sha256"]:
             raise ValueError("official catalog sequence was rewritten with different content")
-        if digest == previous["sha256"]:
+        if digest == previous["sha256"] and not rebuild_current_catalog:
             _save_catalog(
                 catalog,
                 payload,
@@ -1117,7 +1131,12 @@ def sync_official(
         _restore_active(previous_active, home=home)
         raise
     return {
-        "changed": previous is None or previous["sha256"] != digest,
+        "changed": (
+            previous is None
+            or previous["sha256"] != digest
+            or state["active_release_id"] != release_dir.name
+        ),
+        "rebuilt_current_catalog": rebuild_current_catalog,
         "enabled": should_enable,
         "active_release_id": release_dir.name,
         "catalog": next_state["catalog"],

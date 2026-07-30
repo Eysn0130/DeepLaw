@@ -10,7 +10,7 @@ on:
         description: Existing immutable tag to publish or resume.
         required: true
         type: string
-        default: "v0.10.0"
+        default: "v0.11.0"
       post_release_only:
         description: Verify an already published release without rebuilding or resigning it.
         required: true
@@ -128,7 +128,7 @@ jobs:
           release = manifest.get("release", {})
           if (
               manifest.get("schema_version")
-              != "deeplaw.commercial-release-manifest/v3"
+              != "deeplaw.commercial-release-manifest/v4"
               or manifest.get("commercial_release_eligible") is not True
               or manifest.get("quality_protocol_eligible") is not True
               or manifest.get("competitive_claim_eligible") is not False
@@ -138,6 +138,22 @@ jobs:
               is not True
               or manifest.get("evaluation_protocol", {}).get("freeze_valid")
               is not True
+              or manifest.get("living_wiki_quality", {}).get("passed")
+              is not True
+              or manifest.get("living_wiki_quality", {}).get(
+                  "quality_regression"
+              )
+              is not False
+              or manifest.get("living_wiki_quality", {}).get(
+                  "performance_regression"
+              )
+              is not False
+              or manifest.get("authoritative_source_quality", {}).get("passed")
+              is not True
+              or manifest.get("authoritative_source_quality", {}).get(
+                  "source_count"
+              )
+              != 28
               or release.get("tag") != os.environ["RELEASE_TAG"]
               or release.get("commit") != os.environ["RELEASE_COMMIT"]
           ):
@@ -189,6 +205,8 @@ jobs:
             ${{ runner.temp }}/release-assets/evaluation/*.json
             ${{ runner.temp }}/release-assets/evaluation/*.md
             ${{ runner.temp }}/release-assets/evaluation/EVALUATION_SHA256SUMS
+            ${{ runner.temp }}/release-assets/quality/*.json
+            ${{ runner.temp }}/release-assets/documentation/*.md
             ${{ runner.temp }}/release-assets/commercial-release-manifest.json
             ${{ runner.temp }}/release-assets/SHA256SUMS
           verify: true
@@ -245,7 +263,7 @@ jobs:
           if [[ "${release_count}" -eq 0 ]]; then
             gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
               --verify-tag --target "${RELEASE_COMMIT}" --draft \
-              --title "DeepLaw ${RELEASE_TAG} — Quality and Superiority Closure" \
+              --title "DeepLaw ${RELEASE_TAG} — Formal Release" \
               --notes-file "docs/RELEASE_NOTES_v${RELEASE_VERSION}.md"
             for attempt in 1 2 3 4 5; do
               releases_json=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
@@ -342,7 +360,7 @@ jobs:
       (needs.publish.result == 'success' ||
       (github.event_name == 'workflow_dispatch' && inputs.post_release_only)) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     permissions:
       contents: write
       id-token: write
@@ -390,19 +408,10 @@ jobs:
         shell: bash
         env:
           CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
-          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         run: |
           set -euo pipefail
           exec > >(tee "${RUNNER_TEMP}/post-evidence/sigstore-verification.log") 2>&1
-          for artifact_name in \
-            "deeplaw-${RELEASE_VERSION}-py3-none-any.whl" \
-            "deeplaw-${RELEASE_VERSION}.tar.gz" \
-            "deeplaw-${RELEASE_VERSION}-linux-amd64.oci.tar" \
-            "deeplaw-${RELEASE_VERSION}.cdx.json" \
-            "deeplaw-${RELEASE_VERSION}-licenses.json" \
-            openvex.json \
-            commercial-release-manifest.json \
-            SHA256SUMS; do
+          while read -r _digest artifact_name; do
             artifact="${RUNNER_TEMP}/downloads/${artifact_name}"
             bundle="${artifact}.sigstore.json"
             uvx --from sigstore==4.3.0 sigstore verify identity \
@@ -410,7 +419,12 @@ jobs:
               --cert-identity "${CERT_IDENTITY}" \
               --cert-oidc-issuer https://token.actions.githubusercontent.com \
               "${artifact}"
-          done
+          done < "${RUNNER_TEMP}/downloads/SHA256SUMS"
+          uvx --from sigstore==4.3.0 sigstore verify identity \
+            --bundle "${RUNNER_TEMP}/downloads/SHA256SUMS.sigstore.json" \
+            --cert-identity "${CERT_IDENTITY}" \
+            --cert-oidc-issuer https://token.actions.githubusercontent.com \
+            "${RUNNER_TEMP}/downloads/SHA256SUMS"
 
       - name: Verify GitHub provenance and SBOM attestations
         env:
@@ -459,6 +473,18 @@ jobs:
             --dist "${RUNNER_TEMP}/downloads" \
             --legacy-wheel "${LEGACY_WHEEL}" \
             --output "${RUNNER_TEMP}/post-evidence/post-release-distribution-lifecycle.json"
+          formal_wheel="${RUNNER_TEMP}/downloads/deeplaw-${{ needs.release-context.outputs.version }}-py3-none-any.whl"
+          formal_runtime="${RUNNER_TEMP}/formal-quality-runtime"
+          uv venv --python 3.12 --no-project "${formal_runtime}"
+          uv pip install --python "${formal_runtime}/bin/python" "${formal_wheel}"
+          formal_wheel_sha256=$(sha256sum "${formal_wheel}" | awk '{print $1}')
+          uv run --frozen python -m benchmarks.living_wiki.run_quality_gate \
+            --deeplaw "${formal_runtime}/bin/deeplaw" \
+            --candidate-role formal_release \
+            --candidate-commit "${{ needs.release-context.outputs.commit }}" \
+            --artifact-sha256 "${formal_wheel_sha256}" \
+            --output \
+              "${RUNNER_TEMP}/post-evidence/formal-release-living-wiki-quality.json"
           uv run --frozen python -m benchmarks.release.post_release_verify \
             --downloads "${RUNNER_TEMP}/downloads" \
             --lifecycle \
@@ -466,6 +492,8 @@ jobs:
             --checksum-log "${RUNNER_TEMP}/post-evidence/checksum-verification.log" \
             --signature-log "${RUNNER_TEMP}/post-evidence/sigstore-verification.log" \
             --provenance-log "${RUNNER_TEMP}/post-evidence/provenance-verification.log" \
+            --formal-quality \
+              "${RUNNER_TEMP}/post-evidence/formal-release-living-wiki-quality.json" \
             --release-url "${RELEASE_URL}" \
             --output "${RUNNER_TEMP}/post-evidence/post-release-verification.json"
 
@@ -500,6 +528,7 @@ jobs:
             "${RUNNER_TEMP}/post-evidence/provenance-verification.log" \
             "${RUNNER_TEMP}/post-evidence/sbom-verification.log" \
             "${RUNNER_TEMP}/post-evidence/post-release-distribution-lifecycle.json" \
+            "${RUNNER_TEMP}/post-evidence/formal-release-living-wiki-quality.json" \
             "${RUNNER_TEMP}/post-evidence/post-release-verification.json" \
             "${RUNNER_TEMP}/post-evidence/post-release-verification.json.sigstore.json"; do
             name=$(basename "${asset}")
