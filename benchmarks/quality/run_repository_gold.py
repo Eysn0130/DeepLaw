@@ -17,7 +17,9 @@ from deeplaw.knowledge_intelligence import (
 from deeplaw.util import canonical_json, search_terms, sha256_bytes, sha256_file, strict_json_loads
 
 SUITE_SCHEMA = "deeplaw.repository-gold-set/v1"
+SUITE_SCHEMA_V2 = "deeplaw.repository-gold-set/v2"
 REPORT_SCHEMA = "deeplaw.repository-gold-report/v1"
+REPORT_SCHEMA_V2 = "deeplaw.repository-gold-report/v2"
 CATEGORIES = ("chinese", "english", "code", "legal", "long_document")
 MODES = ("lexical", "dense", "hybrid")
 _MAX_SUITE_BYTES = 4 * 1024 * 1024
@@ -43,7 +45,10 @@ def _load_suite(path: Path, *, repository: Path) -> tuple[dict[str, Any], list[d
     if not 1 <= len(payload) <= _MAX_SUITE_BYTES:
         raise ValueError("repository Gold Set exceeds its byte bound")
     suite = strict_json_loads(payload)
-    if not isinstance(suite, dict) or set(suite) != {
+    if not isinstance(suite, dict):
+        raise ValueError("repository Gold Set does not match its closed contract")
+    schema_version = suite.get("schema_version")
+    expected_keys = {
         "schema_version",
         "status",
         "claim_eligible",
@@ -52,15 +57,36 @@ def _load_suite(path: Path, *, repository: Path) -> tuple[dict[str, Any], list[d
         "quality_gate",
         "documents",
         "cases",
-    }:
+    }
+    if schema_version == SUITE_SCHEMA_V2:
+        expected_keys |= {"split", "freeze_policy"}
+    if set(suite) != expected_keys:
         raise ValueError("repository Gold Set does not match its closed contract")
+    if schema_version not in {SUITE_SCHEMA, SUITE_SCHEMA_V2}:
+        raise ValueError("repository Gold Set schema is unsupported")
+    expected_status = (
+        "curated_development_fixture"
+        if schema_version == SUITE_SCHEMA
+        else "public_time_frozen_holdout"
+    )
     if (
-        suite["schema_version"] != SUITE_SCHEMA
-        or suite["status"] != "curated_development_fixture"
+        suite["status"] != expected_status
         or suite["claim_eligible"] is not False
         or tuple(suite["categories"]) != CATEGORIES
     ):
         raise ValueError("repository Gold Set governance is invalid")
+    if schema_version == SUITE_SCHEMA_V2:
+        if suite["split"] != "public_time_frozen_holdout":
+            raise ValueError("repository Gold Set split is invalid")
+        freeze_policy = suite["freeze_policy"]
+        if not isinstance(freeze_policy, dict) or freeze_policy != {
+            "visibility": "public",
+            "labels_visible": True,
+            "secret": False,
+            "contamination_claim_eligible": False,
+            "reuse_policy": "immutable_until_protocol_version_change",
+        }:
+            raise ValueError("repository Gold Set freeze policy is invalid")
     _bounded_text(suite["frozen_at"], field="frozen_at", maximum=40)
     quality_gate = suite["quality_gate"]
     if not isinstance(quality_gate, dict) or set(quality_gate) != set(MODES):
@@ -337,7 +363,11 @@ def run_suite(path: Path, *, repository: Path) -> dict[str, Any]:
         for item in documents
     ]
     report = {
-        "schema_version": REPORT_SCHEMA,
+        "schema_version": (
+            REPORT_SCHEMA_V2
+            if suite["schema_version"] == SUITE_SCHEMA_V2
+            else REPORT_SCHEMA
+        ),
         "suite_schema_version": suite["schema_version"],
         "suite_sha256": sha256_file(path.resolve(strict=True)),
         "source_inventory_sha256": sha256_bytes(
@@ -357,11 +387,22 @@ def run_suite(path: Path, *, repository: Path) -> dict[str, Any]:
             "mode_results": gate_results,
             "passed": all(result["passed"] for result in gate_results.values()),
         },
-        "development_fixture": True,
+        "development_fixture": suite["schema_version"] == SUITE_SCHEMA,
         "secret_held_out": False,
         "independently_evaluated": False,
         "competitive_claim_eligible": False,
     }
+    if suite["schema_version"] == SUITE_SCHEMA_V2:
+        report.update(
+            {
+                "split": suite["split"],
+                "visibility": suite["freeze_policy"]["visibility"],
+                "labels_visible": suite["freeze_policy"]["labels_visible"],
+                "contamination_claim_eligible": suite["freeze_policy"][
+                    "contamination_claim_eligible"
+                ],
+            }
+        )
     report["report_sha256"] = sha256_bytes(canonical_json(report).encode("utf-8"))
     return report
 

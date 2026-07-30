@@ -1,15 +1,15 @@
-# DeepLaw v0.9 总纲逐项落地核对
+# DeepLaw v0.10 总纲逐项落地核对
 
-状态：**v0.9.0 release audit，2026-07-30**。本表以用户提供的最新《一、DeepLaw
+状态：**v0.10.0 release audit，2026-07-30**。本表以用户提供的最新《一、DeepLaw
 项目总纲》及其“十九、终局实施顺序”为基准，代码事实以 `src/deeplaw`、`contracts`、迁移、测试和
-`uv.lock` 为准。v0.9.0 对应总纲 0.8/0.9 工程交付；发布成功也不等于取得 1.0 外部竞争领先证明。
+`uv.lock` 为准。DeepLaw 2.0 是产品品牌，不是软件版本；`v0.10.0` 在 0.8/0.9 工程交付之上完成
+1.0 自主可验证质量闭环。质量协议通过不等于取得跨产品竞争领先证明。
 
 状态含义：
 
 - **已实现**：存在运行时代码、闭合 contract、迁移/恢复或测试证据。
 - **兼容实现**：由 v0.7 已有正确能力继续提供，并被新内核纳入验证/分区。
-- **外部待完成**：需要未受开发团队控制的数据、宿主、竞争系统或机构身份；仓库只实现验证协议，
-  不能伪造结果。
+- **比较待执行**：需要真实宿主或竞争系统的同条件结果；仓库只实现协议和门禁，不能伪造结果。
 
 ## 1. DeepLaw 0.8：Autonomous Knowledge Core
 
@@ -52,17 +52,20 @@ manifest 全量 hash 绑定和 stale-index fail closed。
 
 | 总纲要求 | 状态 | 当前事实与不可伪造边界 |
 | --- | --- | --- |
-| 真实中文、英文、代码、法律和长文档 Gold Set | 已实现开发集；外部金标待完成 | `benchmarks/quality/repository-gold-v1.json` 绑定真实仓库文件 bytes/anchor/hash，覆盖五类并运行 lexical/dense/hybrid；每种模式有冻结的质量阈值和非零失败退出码；永久标记 development、非秘密、不可用于领先声明。专家/外部 held-out 金标仍须评测方提供 |
+| 公开 Benchmark 与固定评分 | 已实现 | `benchmarks/evaluation/protocol-v1.json` 固定四组件、权重、分项/总分阈值、hard failures、离线策略和宣称边界；JSON Schema 与测试拒绝口径漂移 |
+| 时间冻结 holdout | 已实现 | `repository-temporal-holdout-v1.json` 绑定真实仓库来源 bytes/anchor/hash，覆盖中文、英文、代码、法律和长文档；候选必须严格晚于最后 freeze commit。数据公开且维护者可见，明确 `secret=false`、不声称 contamination-free |
+| 自动化报告与验证 | 已实现 | `run_protocol.py` 生成 summary、四份完整组件报告、Markdown 报告、functional scoring digest 和 SHA256SUMS；verify 模式检查 schema、内部 digest、组件 bytes 与完整 checksum inventory |
+| 发布制品绑定 | 已实现 | 正式门禁在隔离环境安装 exact wheel，要求 clean worktree、freeze ancestor、candidate commit/tree/version/wheel SHA 全一致，并把报告纳入 release manifest、checksums、Sigstore 与 provenance |
 | 默认本地 Dense/Reranker | 已实现 | `knowledge_intelligence.py`；offline、固定 identity/revision/dimension/quantization、audit/input/bytes manifest；损坏/过期拒绝，Authority 不受分数影响 |
-| Typed Compiler 质量门禁 | 已实现评分与 contract；真实外部运行待完成 | `benchmarks/typed_compiler/score.py` 计算 precision/recall/F1、hallucination、support、source span、duplicate、review、cross-document；开发 fixture 只校验 scorer 语义 |
-| Codex、Claude Code、OpenCode 真实任务 | 外部待完成 | 三宿主薄 adapter、manifest、MCP/no-model lifecycle gate 已实现；当前机器只有 Codex CLI，不能把静态配置或自调用冒充三宿主真实模型任务 |
-| 与列明系统公平比较 | 外部待完成 | 17-system registry、official/manual adapters、环境/plan/receipt/resource/raw-output/collection contracts 已实现；所有 actual third-party results 仍是 `pending_execution` |
-| 秘密 Held-out | 外部待完成 | v2 external protocol 要求 pre-delivery commitment、external-only labels、paired statistics、完整 failures；开发团队不能生成“秘密”数据后声称未见 |
-| 独立机构签名 | 外部待完成 | evaluator-kit freeze/verify 与 detached Ed25519 trusted-key verification 已实现；至少两家真实独立机构身份和签名必须来自仓库外，不能自签替代 |
+| Typed Compiler 质量门禁 | 已实现并实际运行 | v1 gold suite 调用 shipped `deterministic-v2` 处理 source-bound bilingual input，按 precision/recall/F1/source span/hallucination/support/duplicate 计分；不冒充模型跨文档 synthesis |
+| 自主写入与安全质量 | 已实现并实际运行 | 12 个实际 domain-service case 覆盖授权写入、幂等、CJK、stale CAS、grant/scope/revoke、authority elevation、stored injection、restricted disclosure、forget 与 Ledger hash-chain；所有安全 case 为硬门禁 |
+| Codex、Claude Code、OpenCode 真实任务 | 比较待执行 | 三宿主 adapter 和 no-model lifecycle gate 已实现；当前本地仅有 Codex CLI，不能把静态配置或生命周期检查冒充三宿主真实模型任务 |
+| 与列明系统公平比较 | 比较待执行 | 17-system registry、official/manual adapters、环境/plan/receipt/resource/raw-output/collection contracts 已实现；actual third-party results 仍未执行，需 paired CI 与完整成本/失败清单 |
+| 外部机构认证 | 正确清退 | 不是 DeepLaw 质量或发布门禁。独立复现可选；签名只绑定 bytes/key，不自动证明机构独立、结果正确或产品 Authority |
 
-因此，1.0 的**可实现工程面已闭环**，但竞争证明的外部事实仍未发生，机器状态必须保持
-`competitive_claim_eligible=false`。这不是遗漏，而是总纲“真实任务和公平基准证明”与“独立机构
-签名”的正确 fail-closed 实现；在本仓库伪造这些产物会直接违反总纲。
+因此，1.0 的**自主可验证质量工程面已闭环**：exact release wheel 可以取得
+`quality_protocol_eligible=true`。竞争比较的实际事实仍未发生，所以
+`competitive_claim_eligible=false` 保持 fail closed。
 
 ## 4. 最终架构逐项核对
 
@@ -92,9 +95,10 @@ manifest 全量 hash 绑定和 stale-index fail closed。
 
 ## 5. 本次发现并修正的总纲风险
 
-1. **不能把 1.0 外部证明写成仓库内部已完成。** 真实三宿主、竞争系统、秘密 held-out 和独立机构
-   身份都不受开发 Agent 控制；已用机器门禁和 `competitive_claim_eligible=false` 表达，而不是生成
-   假报告。
+1. **质量闭环不应依赖外部机构。** 旧路线把 secret held-out 和两家机构签名设为发布前提，既不可
+   自主复现，也会混淆签名与正确性。现由公开 Benchmark、固定评分、时间冻结 holdout、自动报告和
+   exact-wheel 门禁取代；公开标签不冒充秘密数据。真实三宿主和竞争系统仍由
+   `competitive_claim_eligible=false` 约束，不能生成假报告。
 2. **Dense 的名称不能冒充神经模型。** 当前默认是确定性、离线、multilingual hash-dense；它有
    exact model identity 和公平评测入口，但文档不宣称等同某个外部 embedding checkpoint。
 3. **Contract 不能原地扩写旧版本。** `knowledge_support` 和 `law_support` 的 v2 文件保持冻结；新增
@@ -128,6 +132,8 @@ uv run ruff check .
 git diff --check
 ```
 
-外部竞争声明还必须通过 `docs/EXTERNAL_BENCHMARK_PROTOCOL.md`、17-system collection gate、两个
-evaluator-controlled secret held-out、paired statistics 和两家独立 trusted-key attestation。任何一个
-缺失都必须保持 claim gate 关闭。
+正式质量发布还必须从 clean candidate 的 exact wheel 运行
+`benchmarks.evaluation.run_protocol --require-eligible` 并验证完整报告目录。竞争声明另须通过
+`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`、实际具名系统与三宿主任务、paired statistics 和完整
+resource/failure inventory；独立复现可选，不是认证门槛。任何比较证据缺失都必须保持
+`competitive_claim_eligible=false`。

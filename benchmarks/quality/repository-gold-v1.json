@@ -29,7 +29,7 @@
       "document_id": "doc_chinese_readme",
       "category": "chinese",
       "path": "README.md",
-      "sha256": "2c3e486d2d26acf865868056ebb367ee8af6d9f033920b244695cec6d2486856",
+      "sha256": "4b0053cb360d271f81d2935fcdd6152864e00363a68ee2c0e6bd67463c037bff",
       "title": "DeepLaw 中文产品说明",
       "anchor": "自主写入不等于权威升级"
     },
@@ -37,7 +37,7 @@
       "document_id": "doc_chinese_agent_guide",
       "category": "chinese",
       "path": "AGENTS.md",
-      "sha256": "b1b48b5c1d3c66a08ed40cbcc34379d6c0b9b54a07edb670074ef9991938d2c3",
+      "sha256": "4c16900b0fd24651cf57284c4a6fb86dc2c81171e020b4d641b2aec2898c2055",
       "title": "DeepLaw Agent 工程总纲",
       "anchor": "Discovery != Admission != Selection != Authority != Adjudication"
     },
@@ -45,15 +45,15 @@
       "document_id": "doc_english_readme",
       "category": "english",
       "path": "README_EN.md",
-      "sha256": "a99745c4db18d443d623b1d5c2d7c55107c90bce4c49a06fe76e85fdc85ca039",
-      "title": "DeepLaw English v0.9 product contract",
+      "sha256": "ed4a41173510217b7fec15a8af29b745c9e9ba2aef18f0bc845582a49a4aa6b7",
+      "title": "DeepLaw English v0.10 product contract",
       "anchor": "Knowledge Duties"
     },
     {
       "document_id": "doc_english_adapters",
       "category": "english",
       "path": "docs/AGENT_ADAPTERS.md",
-      "sha256": "25d7b355a3cf29a9397b989ec5216df930c12fee9650edb88634f2f40c8c5451",
+      "sha256": "ebee51a932646d671e805cbd0680fe170225266e3a2c38d9f2036199a76bde58",
       "title": "DeepLaw Agent adapter contracts",
       "anchor": "Real model/session tasks on all hosts"
     },
@@ -77,7 +77,7 @@
       "document_id": "doc_legal_architecture",
       "category": "legal",
       "path": "docs/DEEPLAW_2.md",
-      "sha256": "25fa0427025dd0bb640a5485ef6385ef283928add08c13cab693f79f5f8d651a",
+      "sha256": "11fcdf6e6e18e5e04c54685f47090bc4d4b9261ca03d2f08df4ea24455c0ee6c",
       "title": "DeepLaw dual Legal Pack architecture",
       "anchor": "用户私有法律参考库"
     },
@@ -93,7 +93,7 @@
       "document_id": "doc_long_architecture",
       "category": "long_document",
       "path": "docs/ARCHITECTURE.md",
-      "sha256": "2c2e1c16048dc01677fb55086bdd0bb990c88390b50491717eca318a717c345e",
+      "sha256": "f152151c9059ea4df1789c550b36b41246b8e23adea4dd83ffff9420235ed2d4",
       "title": "DeepLaw full architecture",
       "anchor": "Source Tree"
     },
@@ -101,7 +101,7 @@
       "document_id": "doc_long_autonomous_contract",
       "category": "long_document",
       "path": "docs/AUTONOMOUS_KNOWLEDGE_OS.md",
-      "sha256": "9338e1af600bfbb94af44ee824b416eeeec9d727e6c457a7d69061052b91c32c",
+      "sha256": "d17a2e8442de1008e7f96afcf69e29c9fa3bfe18f743c3b0fed1b74a678c2262",
       "title": "DeepLaw Autonomous Knowledge OS contract",
       "anchor": "Autonomous mutation lifecycle"
     }
@@ -148,9 +148,9 @@
       "top_k": 2
     },
     {
-      "case_id": "en_v090_status",
+      "case_id": "en_v010_status",
       "category": "english",
-      "query": "v0.9.0 delivers Autonomous Knowledge Core Living Wiki Knowledge Intelligence offline FTS dense reranker graph Skill draft Factory",
+      "query": "v0.10.0 Autonomous Knowledge Core Living Wiki Knowledge Intelligence Evaluation Protocol offline FTS dense reranker graph Skill draft Factory",
       "expected_document_ids": ["doc_english_readme"],
       "forbidden_document_ids": [],
       "top_k": 2

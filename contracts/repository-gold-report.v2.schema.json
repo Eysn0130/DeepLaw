@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/repository-gold-report.v2.schema.json",
+  "title": "DeepLaw public time-frozen repository Gold report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite_schema_version",
+    "suite_sha256",
+    "source_inventory_sha256",
+    "categories",
+    "document_count",
+    "case_count",
+    "models",
+    "modes",
+    "quality_gate",
+    "development_fixture",
+    "secret_held_out",
+    "independently_evaluated",
+    "competitive_claim_eligible",
+    "split",
+    "visibility",
+    "labels_visible",
+    "contamination_claim_eligible",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.repository-gold-report/v2"},
+    "suite_schema_version": {"const": "deeplaw.repository-gold-set/v2"},
+    "suite_sha256": {"$ref": "#/$defs/sha256"},
+    "source_inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "categories": {
+      "const": ["chinese", "english", "code", "legal", "long_document"]
+    },
+    "document_count": {"type": "integer", "minimum": 5, "maximum": 100},
+    "case_count": {"type": "integer", "minimum": 10, "maximum": 1000},
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dense", "reranker", "network_policy"],
+      "properties": {
+        "dense": {"const": "deeplaw-multilingual-hash-dense/1"},
+        "reranker": {"const": "deeplaw-evidence-duty-reranker/1"},
+        "network_policy": {"const": "offline"}
+      }
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lexical", "dense", "hybrid"],
+      "properties": {
+        "lexical": {
+          "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/mode"
+        },
+        "dense": {
+          "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/mode"
+        },
+        "hybrid": {
+          "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/mode"
+        }
+      }
+    },
+    "quality_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thresholds", "mode_results", "passed"],
+      "properties": {
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lexical", "dense", "hybrid"],
+          "properties": {
+            "lexical": {
+              "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/gate"
+            },
+            "dense": {
+              "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/gate"
+            },
+            "hybrid": {
+              "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/gate"
+            }
+          }
+        },
+        "mode_results": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lexical", "dense", "hybrid"],
+          "properties": {
+            "lexical": {
+              "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/gate_result"
+            },
+            "dense": {
+              "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/gate_result"
+            },
+            "hybrid": {
+              "$ref": "https://deeplaw.dev/contracts/repository-gold-report.v1.schema.json#/$defs/gate_result"
+            }
+          }
+        },
+        "passed": {"type": "boolean"}
+      }
+    },
+    "development_fixture": {"const": false},
+    "secret_held_out": {"const": false},
+    "independently_evaluated": {"const": false},
+    "competitive_claim_eligible": {"const": false},
+    "split": {"const": "public_time_frozen_holdout"},
+    "visibility": {"const": "public"},
+    "labels_visible": {"const": true},
+    "contamination_claim_eligible": {"const": false},
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

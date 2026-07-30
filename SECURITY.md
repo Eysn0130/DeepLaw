@@ -9,11 +9,13 @@ documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.9.0`, and the `main` branch.
-The release manifest records `commercial_release_eligible=true`; competitive leadership remains
-separate with `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
-third-party packages are not separately supported unless a release notice says
-otherwise.
+Security fixes are evaluated for the current software release, `v0.10.0`, and the `main` branch.
+The release manifest records `commercial_release_eligible=true` and
+`quality_protocol_eligible=true`; comparative leadership remains separate with
+`competitive_claim_eligible=false`. The quality decision is produced by the public, time-frozen
+DeepLaw Evaluation Protocol and does not require external institution certification. Older
+versions, local knowledge-release artifacts, and third-party packages are not separately supported
+unless a release notice says otherwise.
 
 ## Report a vulnerability privately
 

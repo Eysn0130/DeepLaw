@@ -49,8 +49,9 @@ def verify(
     verify_record_digest(manifest, field="commercial release manifest")
     release = manifest.get("release", {})
     if (
-        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v2"
+        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v3"
         or manifest.get("commercial_release_eligible") is not True
+        or manifest.get("quality_protocol_eligible") is not True
         or manifest.get("competitive_claim_eligible") is not False
         or release.get("version") != version
         or release.get("tag") != tag
@@ -146,6 +147,7 @@ def verify(
             "uninstall": True,
         },
         "commercial_release_eligible": True,
+        "quality_protocol_eligible": True,
         "competitive_claim_eligible": False,
         "passed": True,
     }

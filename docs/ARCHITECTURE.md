@@ -1,6 +1,6 @@
 # DeepLaw Architecture
 
-Status: **v0.9.0 current architecture**, reviewed 2026-07-30. Historical v0.7 source-derived,
+Status: **v0.10.0 current architecture**, reviewed 2026-07-30. Historical v0.7 source-derived,
 proposal/review, parser, and Legal Pack details remain in
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md), [`DOCUMENT_IR.md`](DOCUMENT_IR.md), and
 [`DEEPLAW_2.md`](DEEPLAW_2.md). They are compatibility components, not the activation policy for
@@ -254,9 +254,9 @@ ordinary Agent knowledge.
 - CRDT, Git, Neo4j, Elasticsearch, PostgreSQL, or a remote service as the core;
 - fully event-sourced current reads;
 - duplicated CLI/MCP/Watcher business logic;
-- a large GUI before retrieval quality and external evidence close;
+- a large GUI before retrieval quality closes;
 - automatic legal adjudication;
-- superiority claims without frozen real-task evidence and independent evaluation.
+- superiority claims without frozen real-task and named-comparator evidence.
 
 ## Verification and claim boundary
 
@@ -269,8 +269,10 @@ uv run ruff check .
 git diff --check
 ```
 
-Engineering completion does not prove competitive superiority. Real three-host tasks, named
-third-party systems, evaluator-secret held-outs, confidence intervals, retained failures/resources,
-and two independent evaluator signatures remain governed by
-[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md). Until those facts exist,
-`competitive_claim_eligible=false` is mandatory.
+Core quality is governed by the public, time-frozen, exact-wheel
+[`Evaluation Protocol`](EVALUATION_PROTOCOL.md); external institution certification is not
+required. Engineering completion still does not prove competitive superiority. Real three-host
+tasks, actual named third-party results, paired confidence intervals, and retained
+failures/resources remain governed by
+[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md). Until those comparative facts
+exist, `competitive_claim_eligible=false` is mandatory.

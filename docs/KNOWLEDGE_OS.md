@@ -1,6 +1,6 @@
 # DeepLaw Knowledge OS
 
-Status: **v0.7 compatibility baseline retained by v0.9.0**, reviewed 2026-07-30. The current autonomous
+Status: **v0.7 compatibility baseline retained by v0.10.0**, reviewed 2026-07-30. The current autonomous
 contract is [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md); where this document requires
 per-item human review or describes Markdown as projection-only, it records the legacy path rather
 than the current default for Agent-derived knowledge. Runtime behavior is defined by code, tests,

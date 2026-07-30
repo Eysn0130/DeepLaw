@@ -345,6 +345,61 @@ jobs:
           if-no-files-found: error
           path: ${{ runner.temp }}/oci-evidence/
 
+  evaluation-protocol:
+    name: Evaluation Protocol v1
+    needs: build-distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact candidate and freeze history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download exact verified wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-dist
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Run and independently verify the frozen protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_wheels=("${RUNNER_TEMP}"/verified-dist/deeplaw-*.whl)
+          [[ "${#candidate_wheels[@]}" -eq 1 ]]
+          runtime="${RUNNER_TEMP}/evaluation-runtime"
+          uv venv --python 3.12 --no-project "${runtime}"
+          uv pip install --python "${runtime}/bin/python" "${candidate_wheels[0]}"
+          "${runtime}/bin/python" -m benchmarks.evaluation.run_protocol \
+            --repository . \
+            --candidate-wheel "${candidate_wheels[0]}" \
+            --output-dir "${RUNNER_TEMP}/evaluation-protocol" \
+            --require-eligible
+          "${runtime}/bin/python" -m benchmarks.evaluation.run_protocol \
+            --repository . \
+            --verify-report-dir "${RUNNER_TEMP}/evaluation-protocol" \
+            --require-eligible
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Upload frozen evaluation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evaluation-protocol
+          if-no-files-found: error
+          path: ${{ runner.temp }}/evaluation-protocol/
+
   assemble:
     name: Assemble commercial manifest
     needs:
@@ -352,6 +407,7 @@ jobs:
       - platform-gates
       - no-model-hosts
       - oci
+      - evaluation-protocol
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -391,7 +447,8 @@ jobs:
           )
           assets="${RUNNER_TEMP}/release-assets"
           mkdir -p "${assets}/dist" "${assets}/evidence" "${assets}/oci" \
-            "${assets}/security" "${assets}/sbom" "${assets}/licenses"
+            "${assets}/security" "${assets}/sbom" "${assets}/licenses" \
+            "${assets}/evaluation"
           cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}"-*.whl \
             "${assets}/dist/"
           cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}".tar.gz \
@@ -407,6 +464,14 @@ jobs:
             "${assets}/evidence/oci-release-report.json"
           cp "${RUNNER_TEMP}/gate-evidence/verified-oci/runtime-requirements.txt" \
             "${assets}/oci/runtime-requirements.txt"
+          for name in evaluation-report.json repository-development.json \
+            repository-temporal-holdout.json autonomy-safety.json \
+            typed-compiler-quality.json EVALUATION_REPORT.md; do
+            cp "${RUNNER_TEMP}/gate-evidence/evaluation-protocol/${name}" \
+              "${assets}/evaluation/${name}"
+          done
+          cp "${RUNNER_TEMP}/gate-evidence/evaluation-protocol/SHA256SUMS" \
+            "${assets}/evaluation/EVALUATION_SHA256SUMS"
           for profile in default build discovery document-engine; do
             uv run --frozen python -m benchmarks.release.audit_dependencies \
               --profile "${profile}" \
@@ -433,6 +498,8 @@ jobs:
             --sbom "${assets}/sbom/deeplaw-${version}.cdx.json" \
             --licenses "${assets}/licenses/deeplaw-${version}-licenses.json" \
             --openvex "${assets}/security/openvex.json" \
+            --evaluation \
+              "${RUNNER_TEMP}/gate-evidence/evaluation-protocol/evaluation-report.json" \
             --output "${assets}/commercial-release-manifest.json"
           uv run --frozen python -m benchmarks.release.write_checksums \
             --assets-root "${assets}" \

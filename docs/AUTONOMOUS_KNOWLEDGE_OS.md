@@ -1,6 +1,6 @@
 # DeepLaw Autonomous Knowledge OS
 
-Status: **Current v0.9.0 contract**, 2026-07-30. This document defines the released 0.8 Autonomous
+Status: **Current v0.10.0 contract**, 2026-07-30. This document defines the released 0.8 Autonomous
 Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence implementation. Historical v0.7
 proposal/review documents remain source-governance and migration evidence, not the default policy
 for new Agent-derived knowledge.

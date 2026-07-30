@@ -1,6 +1,7 @@
 # DeepLaw roadmap
 
-Status: v0.9.0 delivery line, updated 2026-07-30. Runtime truth is `src/deeplaw`, contracts,
+Status: v0.10.0 delivery line, updated 2026-07-30. DeepLaw 2.0 is the product brand, not the
+software version. Runtime truth is `src/deeplaw`, contracts,
 migrations, tests, and `uv.lock`. A roadmap item never becomes a delivery claim without those
 artifacts.
 
@@ -17,7 +18,7 @@ permissions, and audit destruction remain owner/maintainer-only.
 
 ## v0.8 — Autonomous Knowledge Core
 
-**Implemented in v0.9.0.** The milestone is an additive migration from the published v0.7
+**Implemented in v0.9.0 and retained in v0.10.0.** The milestone is an additive migration from the published v0.7
 foundation:
 
 - additive migration with a verified v0.7 rollback point;
@@ -40,12 +41,12 @@ foundation:
   fail-closed build validation, and atomic activation.
 - autonomous snapshot/restore and legacy compatibility.
 
-The v0.9 release line freezes the package/version, supported-OS matrix, security/package audit,
-signed release metadata, and release notes independently from competitive evidence.
+The v0.10 release line freezes the package/version, supported-OS matrix, security/package audit,
+quality report, signed release metadata, and release notes independently from comparative evidence.
 
 ## v0.9 — Living Wiki and Knowledge Intelligence
 
-**Implemented in v0.9.0; cross-system quality evaluation remains separate.**
+**Implemented in v0.9.0 and retained in v0.10.0; cross-system comparison remains separate.**
 
 - deterministic offline multilingual dense index and evidence-duty reranker, both bound to model
   identity, audit heads, revision inventory, exact index bytes, offline policy, and hard limits;
@@ -68,13 +69,13 @@ signed release metadata, and release notes independently from competitive eviden
 - governance filters are applied before bounded lexical/dense/temporal/graph candidate windows and
   revalidated before reranking; Lint/gaps enforce the same scope/sensitivity boundary.
 
-## v1.0 — Quality and Superiority Closure
+## DeepLaw 1.0 milestone — Quality and Superiority Closure
 
-**Engineering gates exist; external proof is intentionally open.** v0.9 provides the
-offline Dense/Reranker implementation, Typed Compiler scorer, real-repository Chinese/English/code/
-legal/long-document development Gold Set, host adapters, 17-system fair-baseline execution kit,
-secret-held-out protocol, evaluator-kit freezer, detached-signature verification, and a fail-closed
-claim gate. The following are facts that only external evaluators can complete:
+**Core quality engineering is implemented in software v0.10.0; comparative execution remains
+open.** Evaluation Protocol v1 provides a public Benchmark, fixed scoring, a maintainer-visible
+time-frozen holdout, actual autonomy/security and Typed Compiler suites, complete automatic
+reports, independent verification, and an exact-wheel release gate. No external institution
+certification is required. The 17-system comparison kit is retained for the following work:
 
 - frozen corpus/candidate/split/questions and preregistered third-party baselines;
 - fixed host model, prompt, permissions, context budgets, hardware, network, latency, memory,
@@ -85,12 +86,12 @@ claim gate. The following are facts that only external evaluators can complete:
 - held-out task success, useful-context recall, irrelevant-context rate, provenance coverage,
   wrong-version/invalid-authority admission, temporal updates, contradiction, forgetting,
   poisoning, unauthorized mutation, isolation, abstention, cold/warm latency, and build cost;
-- confidence intervals, paired tests, correction for multiple comparisons, complete failures and
-  raw outputs from two evaluator-controlled secret held-outs;
-- two genuine independent organizations and signatures verified against separately trusted keys;
+- confidence intervals, paired tests, correction for multiple comparisons, complete failures,
+  raw outputs, and full build/query cost records.
 
-Until those artifacts exist, `competitive_claim_eligible=false`; no better/leading/SOTA statement
-is permitted.
+The exact release may set `quality_protocol_eligible=true`. Until the comparative artifacts exist,
+`competitive_claim_eligible=false`; no better/leading/SOTA statement is permitted. Independent
+replication is welcome but optional and does not create product Authority.
 
 ## Sequencing rule
 

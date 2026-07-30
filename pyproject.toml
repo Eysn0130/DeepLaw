@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deeplaw"
-version = "0.9.0"
-description = "Local single-user Agent Knowledge OS with verifiable Knowledge Capsules and a Chinese Legal Pack"
+version = "0.10.0"
+description = "DeepLaw 2.0: a local-first Agent Knowledge OS with autonomous memory, bounded context, and verifiable legal evidence"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -15,6 +15,8 @@ keywords = [
   "agent-memory",
   "context-engineering",
   "knowledge-assets",
+  "markdown",
+  "graphrag",
   "law",
   "mcp",
   "legal-research",

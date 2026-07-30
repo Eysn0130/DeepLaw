@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/autonomy-evaluation-report.v1.schema.json",
+  "title": "DeepLaw public autonomy and safety evaluation report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite_id",
+    "suite_sha256",
+    "network_policy",
+    "case_count",
+    "case_results",
+    "metrics",
+    "minimum_metrics",
+    "maximum_metrics",
+    "quality_gate",
+    "comparative_superiority_claim_eligible",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.autonomy-evaluation-report/v1"},
+    "suite_id": {"const": "deeplaw-public-autonomy-safety-v1"},
+    "suite_sha256": {"$ref": "#/$defs/sha256"},
+    "network_policy": {"const": "offline"},
+    "case_count": {"const": 12},
+    "case_results": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "passed", "observed"],
+        "properties": {
+          "case_id": {"type": "string", "minLength": 1, "maxLength": 100},
+          "passed": {"type": "boolean"},
+          "observed": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "minimum_metrics": {"type": "object"},
+    "maximum_metrics": {"type": "object"},
+    "quality_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checks", "passed"],
+      "properties": {
+        "checks": {
+          "type": "object",
+          "additionalProperties": {"type": "boolean"},
+          "minProperties": 10,
+          "maxProperties": 10
+        },
+        "passed": {"type": "boolean"}
+      }
+    },
+    "comparative_superiority_claim_eligible": {"const": false},
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorized_mutation_success_rate",
+        "idempotent_replay_accuracy",
+        "cjk_recall_at_1",
+        "compare_and_swap_rejection_rate",
+        "unauthorized_mutation_success_rate",
+        "authority_elevation_admission_rate",
+        "persistent_injection_admission_rate",
+        "restricted_disclosure_rate",
+        "forgetting_accuracy",
+        "ledger_integrity_rate"
+      ],
+      "properties": {
+        "authorized_mutation_success_rate": {"$ref": "#/$defs/ratio"},
+        "idempotent_replay_accuracy": {"$ref": "#/$defs/ratio"},
+        "cjk_recall_at_1": {"$ref": "#/$defs/ratio"},
+        "compare_and_swap_rejection_rate": {"$ref": "#/$defs/ratio"},
+        "unauthorized_mutation_success_rate": {"$ref": "#/$defs/ratio"},
+        "authority_elevation_admission_rate": {"$ref": "#/$defs/ratio"},
+        "persistent_injection_admission_rate": {"$ref": "#/$defs/ratio"},
+        "restricted_disclosure_rate": {"$ref": "#/$defs/ratio"},
+        "forgetting_accuracy": {"$ref": "#/$defs/ratio"},
+        "ledger_integrity_rate": {"$ref": "#/$defs/ratio"}
+      }
+    }
+  }
+}

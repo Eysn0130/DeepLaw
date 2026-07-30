@@ -1,424 +1,182 @@
-# DeepLaw 2.0 评测说明
+# DeepLaw benchmarks and evidence
 
-> v0.9 autonomous mutation、Authority、生命周期、poisoning、隔离与成本门禁已在
-> [`autonomous-protocol-v2.json`](../benchmarks/external/autonomous-protocol-v2.json) 预注册；v1
-> 保留为历史协议。该文件是
-> protocol，不是结果；现有 v0.7 报告不能复用为自主内核或竞争领先证据。
+Status: **v0.10.0 current evaluation map**, 2026-07-30.
 
-## v0.9 五域开发 Gold Set
+## One quality source of truth
 
-[`repository-gold-v1.json`](../benchmarks/quality/repository-gold-v1.json) 绑定 10 个真实仓库文件的
-exact bytes/anchor/hash，并以 15 个策展查询覆盖中文、英文、代码、法律和长文档五类。运行器
-[`run_repository_gold.py`](../benchmarks/quality/run_repository_gold.py) 在离线条件下分别报告 lexical、
-本地 hash-dense 和 hybrid reranker 的逐题结果、Hit@1、useful-context recall、irrelevant-context
-rate、分类指标、完整 failure samples 与延迟。fixture 冻结每种模式的最低 Hit@1/recall、最高
-irrelevant-context rate 和零 forbidden-admission 门禁；任何门禁失败时运行器返回非零退出码：
+The canonical quality gate is
+[`DeepLaw Evaluation Protocol v1`](EVALUATION_PROTOCOL.md). It replaces the earlier design in
+which a software release was blocked on secret datasets and signatures from outside institutions.
+External certification is not required. The new protocol is public, time-frozen, executable,
+release-artifact-bound, and independently verifiable from its emitted files.
 
-```bash
-uv run python -m benchmarks.quality.run_repository_gold \
-  --suite benchmarks/quality/repository-gold-v1.json
+The following decisions are intentionally separate:
+
+| Decision | Current machine state | Meaning |
+| --- | --- | --- |
+| Release engineering | `commercial_release_eligible=true` | exact package bytes, three-OS tests, lifecycle, supply chain, docs, and security gates passed |
+| Core quality protocol | `quality_protocol_eligible=true` for a clean exact release wheel | the fixed public protocol, component minima, overall minimum, and hard-failure rules passed |
+| Comparative superiority | `competitive_claim_eligible=false` | actual named-system and real host-model comparative evidence is not complete |
+
+The retained `commercial_release_eligible` field is a backward-compatible machine contract name.
+It is not an external certification, legal status, or homepage positioning claim.
+
+## Evaluation Protocol v1
+
+Canonical inputs:
+
+- [`protocol-v1.json`](../benchmarks/evaluation/protocol-v1.json);
+- [`repository-temporal-holdout-v1.json`](../benchmarks/evaluation/repository-temporal-holdout-v1.json);
+- [`autonomy-safety-v1.json`](../benchmarks/evaluation/autonomy-safety-v1.json);
+- [`typed-compiler-gold-v1.json`](../benchmarks/evaluation/typed-compiler-gold-v1.json).
+
+The protocol fixes four weighted components:
+
+| Component | Weight | Minimum | Hard-failure examples |
+| --- | ---: | ---: | --- |
+| repository development | 0.10 | 0.75 | suite quality gate or forbidden admission |
+| repository temporal holdout | 0.35 | 0.80 | wrong version/authority admission |
+| autonomy and safety | 0.35 | 1.00 | unauthorized mutation, elevation, persistent injection, restricted disclosure |
+| Typed Compiler quality | 0.20 | 1.00 | hallucinated or unsupported claim |
+
+The weighted overall minimum is `0.85`. Every component minimum must pass and the hard-failure
+list must be empty. The release report binds:
+
+- exact candidate commit and tree;
+- exact wheel name and SHA-256;
+- the strict ancestor freeze commit;
+- protocol and suite bytes;
+- complete case-level component reports;
+- a functional scoring digest;
+- report and artifact checksums.
+
+The holdout is deliberately public and maintainer-visible. Time freezing prevents a release
+candidate from modifying the benchmark after seeing its current results, but it cannot prove
+secrecy or absence of contamination. The runner encodes that boundary rather than relying on prose.
+
+## What is actually exercised
+
+### Repository retrieval
+
+The public development set and temporal holdout both run lexical, deterministic local dense, and
+hybrid retrieval. Reports retain Hit@1, useful-context recall, irrelevant-context rate, forbidden
+admissions, category results, per-case rankings, source inventory hashes, and elapsed time.
+
+The quality score uses the hybrid operating point:
+
+```text
+(Hit@1 + useful-context recall + (1 - irrelevant-context rate)) / 3
 ```
 
-该集合解决的是 v0.9 多域回归入口，不是假装“秘密”的竞争数据。manifest 和 report
-contract 都固定 `competitive_claim_eligible=false`、`secret_held_out=false`、
-`independently_evaluated=false`；任一源文件漂移会在评分前失败。运行器保留每一种模式的失败样本，
-因此不能用 hybrid 的较好平均数隐藏纯 Dense 或个别类别的退化；该开发集不支持领先声明，也不能
-替代专家法律金标、真实三宿主任务或 evaluator-controlled held-out。
+Mode-specific results remain visible. A weak pure dense score cannot be hidden by describing the
+hybrid result as if every retrieval mode achieved it.
 
-## v0.9.0 发布与竞争证据边界
+### Autonomous Knowledge Core security
 
-v0.9.0 release-manifest v2 固定 `commercial_release_eligible=true`，同时固定
-`competitive_claim_eligible=false`。wheel、sdist、OCI、SBOM、lock、contracts、三 OS、无模型
-宿主生命周期、签名和 provenance 属于软件发布证据；真实模型任务、17 项具名基线、秘密
-held-out 和独立机构签名属于竞争性领先证据，尚未完成。
+The autonomy suite invokes the actual domain services for:
 
-### 具名基线
+- an authorized, audited mutation and idempotent replay;
+- CJK recall;
+- stale compare-and-swap rejection;
+- missing, wrong-scope, and revoked grants;
+- attempted authority elevation;
+- persistent prompt-injection quarantine;
+- restricted disclosure rejection;
+- forgetting;
+- hash-chained Ledger verification.
 
-冻结的历史命名文件
-[`registry-v0.7.json`](../benchmarks/baselines/registry-v0.7.json) 继续登记 17 个系统/配置；它是
-外部协议的不可变候选目录，不是 v0.7 结果复用。目录包括 BM25、
-Dense、BM25+Dense+Reranker、RAGFlow、Microsoft GraphRAG、LightRAG、Graphiti、Mem0、Cognee、
-MemOS、PageIndex、OpenKB、WikiGraph、Obsidian native workflow，以及 DeepLaw lexical、hybrid、
-full。每项固定官方 upstream、commit/version、推荐配置、模型 revision、adapter policy 和结果
-状态。无法合理自动化的 Obsidian 任务使用固定人工操作/计时协议。
+Every v1 case must pass. An average score cannot offset a mutation, authority, injection, or
+disclosure failure.
 
-```bash
-uv run python -m benchmarks.baselines.registry
-```
+### Typed Compiler
 
-当前 17 项结果全部为 `pending_execution`。仓库没有实现简陋竞争系统来冒充官方基线。正式
-比较必须固定语料、问题、Token、硬件、网络政策，记录构建/查询成本、失败和原始输出，并对逐题
-结果执行 paired bootstrap、置信区间和 Holm–Bonferroni。
+The v1 gold suite runs the shipped `deterministic-v2` compiler over source-bound bilingual input.
+It computes precision, recall, F1, source-span correctness, hallucination, unsupported claim, and
+duplicate claim rates. This proves the declared deterministic extraction contract only. It does
+not claim model-generated cross-document synthesis quality.
 
-subprocess-capable systems 使用 execution-plan/receipt v2。新增的 closed environment record 固定
-hardware、software artifact、系统模型、共同 reader、query-offline 声明和统一计量协议；resource
-record 固定记录 build/query time、peak memory、index/workspace bytes、model calls/tokens/cost 与逐项
-failure inventory。collection gate 会对 17 项 plan/receipt、clean checkout、冻结输入和保留产物重新
-验 hash，并检查同语料、问题、case inventory、硬件、reader、Token/top-k 和 evaluator run。该门禁
-只证明收集完整性，永久输出 `claim_eligible=false`，不能替代统计结果或独立签名。
+The older
+[`dev-fixture-v1.json`](../benchmarks/typed_compiler/dev-fixture-v1.json) remains a scorer
+contract fixture; it is not used as a release quality result.
 
-Obsidian 不被伪装为 subprocess：`manual_adapter.py` 先冻结人工执行 plan，再校验并封存同一 JSONL
-输出、resource record、逐题人工指标、screen recording 与执行前后 vault archive。任务失败可作为
-有效数据保留；seal 成功只表示三套记录一致，不表示任务全部成功。
+## Running the protocol
 
-`benchmarks.release.evaluator_candidate` 是最后的 portable freeze/verify 层：它要求上述 17 项全部
-成功、统计 gate 已通过，并重新绑定完整 model file manifests、预交付 corpus commitment、Git
-source/archive/contracts、tokenizer/fusion/index profiles、release bytes 与 commit/version-labeled OCI
-archive。content-addressed kit 和 detached signature 仍不改变 `claim_eligible=false`；验签必须使用
-attestation 之外获得的 trusted public key，且不能自动证明机构身份或独立性。
-
-### Typed Compiler 评分契约
-
-[`typed_compiler/score.py`](../benchmarks/typed_compiler/score.py) 对显式 evaluator label 计算
-precision、recall、F1、hallucinated/unsupported claim rate、source-span correctness、duplicate
-rate、review acceptance 和 cross-document synthesis correctness。闭合输入要求每条预测绑定已知
-source ref，并明确 claim equivalence、support 和 review label；scorer 不从相似度或 confidence
-伪造金标。
-
-仓库内 [`dev fixture`](../benchmarks/typed_compiler/dev-fixture-v1.json) 与
-[`checked report`](../benchmarks/typed_compiler/dev-fixture-report-2026-07-28.json) 只验证计分语义，
-预测和标签都是开发团队嵌入的，永久 `claim_eligible=false`，不是 deterministic-v2 质量结果。
-真实 compiler benchmark 仍须冻结真实来源、span、gold claims、raw outputs、review decisions 和
-失败样本。
-
-### Retrieval Fabric 规模诊断
-
-[`run_retrieval_fabric_scale.py`](../benchmarks/scale/run_retrieval_fabric_scale.py) 通过真实
-Identity v2 compile/review、lexical/hybrid recall、Capsule 验证、no-answer、provenance 和完整性
-路径运行 100k 或 1m 诊断。语料使用开发团队生成的 exact token，因此只能验证机械规模、延迟、
-生命周期和来源，不验证自然语言质量，也不参与竞争宣传。
-
-100k 实测报告已登记为
-[`retrieval-fabric-100k-2026-07-27.json`](../benchmarks/scale/retrieval-fabric-100k-2026-07-27.json)。
-它实际完成 100,000 个 source-bound Asset 的 Identity v2 编译与逐项审核、完整性重放、100 次
-lexical/hybrid/Capsule 查询、一次独立冷进程 Golden `recall`，并在同一 100k Vault 中完成真实
-Source Revision 更新、原子审核切换、Lineage 检查和选择性遗忘。更新前旧版仍可检索，审核后
-旧版退出且新版进入；遗忘后当前召回为空、历史记录仍保留，最终完整性有效。本机 macOS arm64
-实测：主语料构建 `88.76 s`、冷完整性 `16.69 s`、冷 CLI `17.28 s`、峰值 RSS
-`1,548,713,984 bytes`、SQLite `739,250,176 bytes`；warm lexical p50/p95
-`0.34/0.56 ms`、warm hybrid `3.03/3.51 ms`、recall+Context `3.35/3.99 ms`。
-生命周期探针初始编译与审核 `25.17 s`、来源更新与原子审核 `25.70 s`、选择性遗忘
-`4.37 s`；遗忘后的召回加完整性检查 `17.15 s`，随后同一 audit head 的完整性缓存读取
-`0.026 ms`。Hit@1、Capsule recall、Capsule 验证和 provenance coverage 均为 `1.0`，
-no-answer 为空，更新、遗忘和历史保留检查均为真。报告绑定当前实现文件 hash，但运行时工作树
-非 clean 且使用开发团队生成的 exact-token 合成语料，因此固定
-`claim_eligible=false`：它是正式数量级的施工诊断，不是自然语言、第三方复现或领先性证据。
-
-100 万实测报告登记为
-[`retrieval-fabric-1m-2026-07-28.json`](../benchmarks/scale/retrieval-fabric-1m-2026-07-28.json)。
-它不是从 100k 外推，而是实际编译、审核并检索 `1,000,000` 个 source-bound Asset（10 个
-来源），随后运行同一批 100 次 lexical/hybrid/Capsule、冷进程 Golden `recall`、来源更新、
-Lineage 和选择性遗忘工作负载。本机实测：构建 `6,003.04 s`、冷完整性 `384.71 s`、冷 CLI
-`425.35 s`、峰值 RSS `4,857,741,312 bytes`、SQLite `7,380,508,672 bytes`；warm lexical
-p50/p95 `2.27/3.97 ms`、warm hybrid `27.73/30.05 ms`、recall+Context
-`28.61/30.91 ms`。生命周期初始编译与审核 `542.65 s`、来源更新与审核 `572.93 s`、选择性
-遗忘 `71.98 s`、遗忘后召回加完整性 `388.02 s`，缓存读取 `0.033 ms`。三项发布延迟门禁、
-Hit@1、Capsule/provenance、no-answer、更新、遗忘、历史保留和最终完整性均通过。该工作树仍非
-clean，语料仍为开发团队生成的 exact-token 合成数据，所以报告同样固定
-`claim_eligible=false`，不支持自然语言质量、竞争领先或可发布版本声明。
-
-发布性能门禁为 warm lexical p95 `< 50 ms`、warm hybrid p95 `< 500 ms`、无外部 LLM 的
-recall+Context p95 `< 750 ms`，同时记录 cold open/integrity、build time、峰值 RSS、数据库/
-索引大小、Hit@1、Capsule/provenance、no-answer 和失败样本。看到 held-out 结果后不得降低门禁。
-
-### 发布工程证据
-
-[`document-engine-actual-pdf-2026-07-28.json`](../benchmarks/release/document-engine-actual-pdf-2026-07-28.json)
-记录了一次真实引擎路径的本机诊断：DeepLaw 校验固定 `MinerU 3.4.4` 和 15 个模型文件
-（`1,082,446,509 bytes`，manifest SHA-256
-`c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12`），在不联网的摄取阶段
-以固定 `pipeline/txt/en` 参数处理一页 ReportLab 生成的 PDF。最新绑定重跑耗时 `13.88 s`，输出 2 个
-paragraph block，预期文本和输出 SHA-256 均精确匹配。该诊断覆盖真实 PDF 解析入口、固定模型
-校验、closed argv 和结构化输出，不覆盖 OCR、表格、图片、损坏文件、多语言版面或跨平台；工作树
-非 clean 且 fixture 为开发团队生成，因此仍固定 `claim_eligible=false`。
-
-CI 分开审核 default、Discovery 和 document-engine 依赖；document-engine 只有精确
-OpenVEX `not_affected` 路径才可忽略 advisory。release job 生成 CycloneDX SBOM、安装环境
-license inventory、wheel/sdist package inventory、两次 byte-identical build、fresh-wheel 结果、
-Sigstore signature 和 GitHub provenance/SBOM attestation。工作树非 clean 时，可复现构建报告
-明确 `release_claim_eligible=false`。
-
-原生 Windows ACL、Linux/macOS/Windows clean install、Golden CLI、TUI、MCP、migration、
-Codex/Claude Code/OpenCode/通用 Skill 和两个独立秘密 held-out 的最终结果仍是
-`External verification pending`。
-
-## 历史 v0.6.0 control-plane 内部候选
-
-当前源码绑定摘要位于
-[`knowledge-os-control-plane-candidate-2026-07-27.json`](../benchmarks/knowledge-os-control-plane-candidate-2026-07-27.json)，
-机器诊断位于
-[`knowledge-control-diagnostic-2026-07-27.json`](../benchmarks/knowledge-control-diagnostic-2026-07-27.json)。
-两者均明确 `claim_eligible=false`：运行使用 24 个合成同名章节来源、20 个唯一标识查询和
-单台 macOS arm64 机器，不是隐藏评测或外部复现。诊断绑定 clean tracked tree
-`bdef19555e6adfe1be3be15073356c4d93076a78`；最终内部候选 manifest 绑定包含诊断和候选生成器的
-commit `3633258a4a83f1aafc6497b5467e464a4a9fb326`，两者的 Python source tree、`pyproject.toml`
-和 `uv.lock` 身份一致。
-
-本次诊断实测：
-
-| 项目 | 结果 |
-| --- | ---: |
-| 目录摄取（24 文件） | 64.221 ms |
-| 精确查询 Hit@1 | 1.0 |
-| source-bound item 来源引用覆盖 | 1.0 |
-| 跨来源同名章节 | 两个来源均保留 |
-| 原子来源更新 | 审核前旧版可见；审核后旧版不可见、新版可见 |
-| 常驻 MCP handler search p50 / p95 | 0.502 / 0.711 ms |
-| 常驻 MCP handler context p50 / p95 | 2.606 / 2.923 ms |
-| 冷 CLI search p50 / p95（5 次） | 270.901 / 272.933 ms |
-| Review Receipt / Run Receipt / Feedback / replay | 全部完整性通过 |
-| SQLite / 进程峰值 RSS | 266,240 / 65,765,376 bytes |
-
-这些数字只证明本轮 CLI control plane、同名章节、逐项来源、更新、回执和反馈路径在该合成
-fixture 上闭环。它不证明同义检索、自然语言泛化、Windows ACL、并发服务或跨系统领先；冷
-CLI 与资源数字也不能外推到其他机器。
-
-候选 commit 已连续两次生成字节一致的本地 wheel/sdist，并在全新临时虚拟环境中从 wheel
-完成 `init → source add → review → context → verify-capsule`：
-
-- wheel SHA-256：`6de2da3d8cc357d8b2ff1b26b51886255038502bdbe9f77ddb79ff85f9342bdb`；
-- sdist SHA-256 仅记录在被 sdist 排除的候选 manifest 中，避免自引用。
-
-这形成的是内部发布候选，不会替换 2026-07-26 已冻结的外部 v0.5.0 候选。v0.6.0 新的外部
-执行必须在评测方预交付 secret dataset/baseline commitment 后另行冻结并由两家真实独立机构
-签名运行。当前外部状态仍是 `pending_external_execution`。
-当前候选摘要是包外 artifact manifest，构建配置明确不把它写入 sdist，避免 manifest
-记录 sdist hash 时形成自引用；机器诊断报告仍随 sdist 保留。
-
-## 冻结的 v0.5.0 Knowledge OS 历史候选
-
-2026-07-26 候选摘要位于
-[`knowledge-os-v0.5.0-candidate-2026-07-26.json`](../benchmarks/knowledge-os-v0.5.0-candidate-2026-07-26.json)。
-它绑定 `pyproject.toml`、`uv.lock`、完整 Python source tree，以及两份 v0.5.0 Discovery
-报告；它现在与 v0.4.0 Legal Pack、Knowledge Core 规模结果同样作为历史证据保留，避免把旧实现
-的数字移植到新版本。
-
-本轮新增的真实证据：
-
-- 英文固定模型完成 60 个独立 vault 的公开开发消融；Discovery Hit@1 `0.85`、
-  Recall@5 `0.9611`、MRR `0.9083`，相对 Context 的 Hit@1 为 6 改善、48 不变、6 退化，
-  irrelevant rate 为 `0.6794`，因此默认激活被拒绝；
-- 中文—英文固定模型完成实际 CLI 的 `setup → build → verify → search`，模型五文件、
-  ONNX 双输入契约、向量维度/行宽和索引身份均实际验证；
-- 10 万 Asset 派生索引完成构建、冷验证打开和 100 次查询：构建 `18.12 s`、验证打开
-  `4.46 s`、Hit@1 `1.0`、查询 p50/p95 `69.15/77.26 ms`、索引
-  `133,891,396 bytes`、进程峰值 RSS `441,761,792 bytes`；
-- 上述 10 万结果使用确定性稀疏测试向量和唯一标识，只验证索引机械边界，固定
-  `claim_eligible=false`，不证明自然语言质量。
-
-v0.5.0 没有沿用 v0.4.0 的外部候选 artifact 或 pending evidence。旧 v2 协议已经冻结候选
-版本 `0.4.0`，不能改名后转移给 `0.5.0`。当前 v3 已绑定候选 commit
-`0b7d21bfaadaa2143381b1c585f34ab4e3322999` 与 wheel SHA-256
-`e9481f901ab68485d5bcf687263f8fed6538c4343ecc123c260fa5a27941c5fb`；
-状态是 `pending_external_execution`，只能由外部 held-out 与独立签名运行补齐。
-
-## 保留的 v0.4.0 Legal Pack 安装后快照
-
-保留的可复现摘要记录在
-[`benchmarks/core-v0.4.0-candidate-2026-07-26.json`](../benchmarks/core-v0.4.0-candidate-2026-07-26.json)，
-绑定安装后的 `deeplaw 0.4.0`、签名目录 sequence 2、28 份本地 release、当时的 Python source
-tree、固定文档模型文件清单、review governance/build-report 身份和当时的时效分桶契约。
-它不再被测试成“当前 v0.5.0 Python source tree”；测试只保护其语料、用例和历史身份不被
-原地改写。
-
-该次黑盒重建固定：
-
-- release `lawrel_5fd93dee88cd55c68706cd1a3dfa527a`；
-- database SHA-256
-  `c5582f5f1553cbcaa4df4a263a16be524307051b7bfa6ded50053dbe3b4287db`；
-- 28 份文档、3237 个 segment、111 条确定性关系；
-- 15 个风险页精确传播到 8 个 segment。
-
-该次用例固定在
-[`evals/core-v0.4.0-2026-07-25.jsonl`](../evals/core-v0.4.0-2026-07-25.jsonl)。
-历史 `evals/core-2026-07-14.jsonl` 保持原始 hash，不用新规则原地改写，因而 v0.3.0
-快照仍可按其记录复现。
-
-这次复核先暴露并修正了一个评测 P1：实现已经按安全规则把已知历史、废止、替代或尚未施行
-法源在缺少 `as_of` 时移入 `uncertain_evidence`，旧用例却仍要求它们进入主证据。最初运行因此
-只有 28/37 通过；9 个失败用例实际都准确返回了不确定候选且 receipt 有效。用例没有放宽标题、
-条款、禁入噪声或预算要求，只把预期桶改为与当前权威边界一致。
-
-修正后的 v0.4.0 快照：
-
-- 37/37 通过已编码的检索、分桶、禁入噪声、预算和 receipt 约束；
-- 27 个用例以主证据为目标，10 个用例明确以 `uncertain_evidence` 为目标；
-- 34 个有排名目标的用例为 Hit@1 0.971、MRR 0.985；
-- 37 张返回卡 receipt 往返核验通过率为 1.0；
-- 平均 evidence excerpt 为 230.541 字符，平均完整 search response 为 5985.676 字符；
-- 已打开数据库后的 `law.search()` 为 p50 16.868 ms、p95 28.951 ms；
-- 25/37 个用例保留 83 个 blocking gap；138 个必需 Duty 中 68 个 covered、26 个 uncertain、
-  44 个 uncovered，covered rate 为 0.493。
-
-最后一组数字和 37/37 同等重要：该次结果证明系统能把预期的不确定来源隔离到正确桶，并不
-表示这些查询已经具备可直接引用的主证据，更不表示法律适用结论完整。release 仍为
-`partially_verified`、`restricted`、`ai_precheck`。这不是盲测、独立专家金标或外部系统对照，
-不能据此宣称跨系统领先。
-
-2026-07-25 的
-[`core-v0.4.0-candidate-2026-07-25.json`](../benchmarks/core-v0.4.0-candidate-2026-07-25.json)
-作为历史候选保留，不原地改写。2026-07-26 复核补齐了 `release_id` 对 review governance 和
-build-report 身份的绑定，因此当时的逻辑 release ID 已改变；新旧快照都同时绑定各自的
-`release_id + database_sha256 + source tree`，不能混用。
-
-## 历史 v0.3.0 / SQLite v5 候选快照
-
-历史可复现摘要记录在
-[`benchmarks/core-v5-candidate-2026-07-15.json`](../benchmarks/core-v5-candidate-2026-07-15.json)，
-绑定当时的 `deeplaw.release/v2` / `deeplaw.sqlite/v5`、28 份本地 release、签名目录、review
-overlay、37 项 case 文件、`v0.3.0` Python source tree 与关键实现 hash：
-
-- 37/37 同时通过已编码的检索目标与噪声、分桶、卡片、excerpt 和 receipt 约束；其中新增
-  4 项相邻罪名与错误标准负例，要求主题无法确定时失败关闭；
-- 题名与条款同时存在时，必须由**同一张卡片**命中，不再把两张不同卡片拼成成功；
-- 34 个有排名目标的 case 为 Hit@1 0.971、MRR 0.985；
-- 37/37 张返回卡 receipt 往返核验通过率为 1.0；
-- 平均 evidence excerpt 为 235.730 字符；平均完整序列化 search response 为 6362.135 字符，
-  证明 excerpt budget 不等于整个 Agent 上下文或 Token budget；
-- 已打开数据库后的 `law.search()` 本机延迟为 p50 16.722 ms、p95 30.102 ms；数据库打开、
-  receipt 核验、JSON 序列化和 MCP transport 不计入该延迟；
-- 20/37 个 case 保留至少一个 blocking gap，共 51 个；138 个必需 compiler Duty 中，91 个
-  `covered`、3 个 `uncertain`、44 个 `uncovered`，covered rate 为 0.659。
-
-最后一组数字是报告的重要组成部分：37/37 只说明预先编码的定位与安全回归通过，不说明每个
-问题已有完整法源、Evidence Duty 已满足或可给出确定性案件适用结论。Skill 必须在回答前检查
-`duty_witnesses`、`obligation_coverage`、`uncertain_duty_ids` 与全部 blocking gaps。
-
-release 仍为 `partially_verified`、`restricted`、`ai_precheck`；语料二进制、Markdown 导出和
-SQLite 不进入 Git。该结果不是盲测、留出集、独立专家金标或外部系统对照，不能证明法律内容
-获人工批准，也不能证明 DeepLaw 超过其他方法。
-
-本节全部数字都是 `v0.3.0` 历史候选证据，不代表当前 `v0.5.0` 实现。
-`core-v3-candidate-2026-07-15.json`、`core-v2-candidate-2026-07-15.json` 和
-`core-candidate-2026-07-15.json` 是更早的 v4/v3 storage 快照。外部复现需要调用者合法取得
-相同原件，或用相同 source manifest、overlay 和匹配实现重建；不同软件版本或 release 必须产生
-新的评测快照，不能沿用这里的数字。
-
-## 运行方法
+Development run:
 
 ```bash
-DEEPLAW_DB="${DEEPLAW_DB:?set DEEPLAW_DB to the candidate database}"
+uv run python -m benchmarks.evaluation.run_protocol \
+  --repository . \
+  --output-dir /tmp/deeplaw-evaluation
 
-deeplaw doctor --db "$DEEPLAW_DB"
-deeplaw eval \
-  --db "$DEEPLAW_DB" \
-  --cases evals/core-v0.4.0-2026-07-25.jsonl \
-  --limit 5 \
-  --output tmp/core-eval-report.json
+uv run python -m benchmarks.evaluation.run_protocol \
+  --repository . \
+  --verify-report-dir /tmp/deeplaw-evaluation
 ```
 
-评测器检查：
+Only the release workflow may add `--candidate-wheel ... --require-eligible`; it runs from a clean
+candidate commit that strictly postdates the freeze and installs the exact wheel in isolation.
+Copying a source-tree report into release assets does not grant eligibility.
 
-- expected title/article 是否由明确分桶中的同一张卡片满足及其桶内 rank；
-- `expected_empty` case 是否在两个分桶都没有返回候选；
-- forbidden title/article 是否在任一分桶被错误返回；
-- expected route；
-- 两个分桶合计数量和 excerpt 字符预算（不是完整序列化响应的字节预算）；
-- 指定 case 的 `extraction_review_required` 标记；
-- 每张主证据和不确定证据的 receipt、release、source hash 与 segment hash 往返核验；
-- 预期的 blocking gap `(code, obligation_id)` 原子配对、必需 compiler Duty 的
-  covered/uncertain/uncovered 数量，
-  以及完整序列化响应字符；
-- retrieval、constraint 和 overall pass rate；
-- Hit@1、MRR、p50/p95 latency；
-- release、database、source manifest 和 case hash。
+## Comparative track
 
-`evals/activation-boundary.jsonl` 是宿主激活正负例。DeepLaw 本身无法证明 Codex、Claude
-Code、OpenCode 或未来 Analytix 的模型一定遵守 Skill；必须在每个宿主测试“未安装/已安装但
-未激活/显式激活”三种状态的 provider-visible schema、路由、Token 和工具调用。
+The named-baseline registry and runners under [`benchmarks/baselines`](../benchmarks/baselines)
+remain the canonical same-condition comparison kit. The registry currently covers 17 operating
+points, including RAGFlow, Graphiti, PageIndex, Mem0, OpenKB/LLM Wiki-style systems, Obsidian, and
+DeepLaw operating points. A complete comparison must preserve:
 
-## 通用 Knowledge OS 规模与公开开发诊断
+- one frozen corpus, query set, case inventory, and evaluator run;
+- the same reader, prompt, context budget, top-k, hardware, network policy, and measurement rules;
+- exact baseline repository commits, dependency/model inventories, commands or manual workflow;
+- raw outputs, per-case scores, stdout/stderr, failures, build/query time, memory, disk, token, and
+  monetary cost;
+- paired confidence intervals and every preregistered loss, timeout, abstention, and hard failure.
 
-> 本节冻结的是 v0.7 source-derived compatibility baseline：其中的逐项 source review、Proposal
-> Inbox 和“默认只存储已审核 Asset”不描述 v0.9 Agent 自主知识平面。v0.9 当前回归与写入政策见
-> 本文开头的五域 Gold Set、[`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md) 和
-> [`V0_9_ACCEPTANCE_MATRIX.md`](V0_9_ACCEPTANCE_MATRIX.md)。历史指标不会被复用为自主知识或领先
-> 证据。
+Those runners validate evidence structure; they do not manufacture results. No complete v0.10
+named-baseline collection or real Codex/Claude Code/OpenCode model-task collection exists in this
+repository, so comparative claims remain closed.
 
-10 万资产报告位于
-[`knowledge-scale-100k-2026-07-26.json`](../benchmarks/scale/knowledge-scale-100k-2026-07-26.json)。
-它实际通过 subprocess 执行 `deeplaw knowledge` 的 init、ingest、approve-source、search、
-context 和 verify-capsule 命令，并在同一只读进程内执行 100 个长任务查询：
+[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md) describes this optional
+comparative and replication path. Its older secret-held-out and organization-signature machinery
+is retained only for historical reproducibility and for evaluators who independently choose it.
+It is not the core quality or release gate.
 
-| 指标 | 实测 |
-| --- | ---: |
-| source-bound Asset | 100,000 |
-| 原子 source 审核 | 100,000/100,000，12.62 s |
-| search Hit@1 | 1.0 |
-| Capsule recall / verification | 1.0 / 1.0 |
-| 常驻进程 search p50 / p95 | 0.60 / 0.82 ms |
-| 常驻进程 context p50 / p95 | 0.99 / 1.28 ms |
-| 冷完整性重放 | 5.85 s |
-| SQLite / 进程峰值 RSS | 184,733,696 / 442,662,912 bytes |
+## Scale and engineering diagnostics
 
-这是合成唯一标识语料，报告固定 `claim_eligible=false`。它验证已编码的规模、长查询尾部实体、
-Capsule 和完整性路径，不代表自然语言语义泛化，不外推百万资产，也不用于跨系统比较。宿主
-应使用常驻只读 MCP 复用已验证快照；超过该工作区间时，应按 project/domain vault 分区并重新
-执行冻结的质量与资源门禁。
+These reports remain useful but do not participate in Evaluation Protocol v1:
 
-公开 LongMemEval-S cleaned 诊断位于
-[`longmemeval-s-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json)。
-最终源码绑定重跑覆盖 6 类、每类 10 题：search Hit@1 `0.85`、Recall@5 `0.9078`；
-Capsule Hit@1 `0.85`、Recall@5 `0.8906`、无关率 `0.3342`、重复数 `0`，平均选择正文
-`3646.8` 字符。批量 source 审核后的平均单 case 摄取为 `0.139 s`。
+- [`retrieval-fabric-100k-2026-07-27.json`](../benchmarks/scale/retrieval-fabric-100k-2026-07-27.json)
+  executes 100,000 source-bound assets, update, lineage, forgetting, cold integrity, and warm
+  retrieval/Capsule paths.
+- [`retrieval-fabric-1m-2026-07-28.json`](../benchmarks/scale/retrieval-fabric-1m-2026-07-28.json)
+  executes the same class of workload over 1,000,000 assets.
+- [`document-engine-actual-pdf-2026-07-28.json`](../benchmarks/release/document-engine-actual-pdf-2026-07-28.json)
+  covers the fixed offline MinerU pipeline and exact local model bundle on one generated PDF.
 
-该公开样本已经用于开发，且隔离评测 vault 中有 1,040 个指令风险候选由 frozen fixture
-授权路径显式激活；因此它不能证明投毒安全，也永久标记为 `claim_eligible=false`。剩余失败
-集中于偏好与语义改写：10 个 `single-session-preference` case 的 Capsule Hit@1 仅 `0.20`、
-Recall@5 `0.60`、无关率 `0.85`；其余 50 题 Hit@1 为 `0.98`。这不是可隐藏的平均分噪声，
-也说明原始会话直接编译成 reference 不等于形成了已审核的长期偏好。DeepLaw 默认只存储经
-判断、提议和人工审核的 durable Asset；任何补足语义发现的 sidecar 都必须可删除、来源绑定，
-并在未见数据上证明任务收益和安全非劣后才能进入默认路径。
+They use developer-generated fixtures or non-clean historical trees and therefore remain
+diagnostics, not natural-language quality, generalization, or superiority evidence.
 
-显式 Discovery 消融位于
-[`longmemeval-s-discovery-dev-2026-07-26.json`](../benchmarks/external/longmemeval-s-discovery-dev-2026-07-26.json)。
-它使用固定英文模型 revision 和五文件 hash 清单，逐题构建派生索引。整体 Recall@5
-`0.9611` 高于 Context 的 `0.8906`，偏好子集 Hit@1 `0.80` 高于 `0.20`；但整体 Hit@1
-同为 `0.85`，6 题退化，irrelevant rate 从 Context 的 `0.3342` 增至 `0.6794`。因此报告
-机器记录 `default_activation=rejected` 和 `claim_eligible=false`。这正是 DeepLaw 不把
-“更多候选”直接等同于“更强 Agent”的门禁。
+## Historical evidence
 
-10 万派生索引报告位于
-[`discovery-scale-100k-2026-07-26.json`](../benchmarks/scale/discovery-scale-100k-2026-07-26.json)。
-它证明 100,000 × 512 维 float16 的 owner-only mmap 索引在当前机器上的有界构建、完整性
-打开、查询、磁盘和内存工作区间，不证明模型语义泛化。
+Historical snapshots are intentionally immutable:
 
-## 外部 held-out 与宣称硬门禁
+- v0.9 three-OS and release-engineering evidence;
+- v0.7 named-baseline collection contracts and compatibility fixtures;
+- v0.6 control-plane diagnostics;
+- v0.5 external-protocol candidate manifests;
+- v0.4 Legal Pack installation snapshots;
+- v0.3 SQLite v5 diagnostic snapshots.
 
-跨系统性能主张按
-[`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md) 执行。当前 v3 协议为
-`0.5.0` 冻结了十个互补套件、55 个预注册具名 baseline、11 个质量/安全/效率维度、逐题
-配对统计、资源计量、两个秘密 held-out 和至少两家独立 Ed25519 attestation。机器门禁位于
-[`benchmarks/external/claim_gate.py`](../benchmarks/external/claim_gate.py)；当前 pending
-evidence 按设计返回退出码 `2`。
+Their version, schema, `claim_eligible`, and limitation fields continue to mean what they meant
+when recorded. A newer release must not rewrite an old report or relabel it as current evidence.
 
-v3 逐套件要求数据与 baseline 配置 commitment 早于候选交付，重新核验候选 artifact、
-commit、版本与固定 `knowledge-context-v1` 运行面，并签名确认干净安装、隔离 workspace、
-查询期断网/无遥测、写入边界和隐藏数据不保留。当前尚无真实外部运行，所以 v0.5.0
-候选没有跨系统性能主张资格。
+## Non-negotiable claim rules
 
-v0.7 的 17 项 named-baseline construction kit 另有 closed execution-plan/receipt v2。runner
-会在启动前重新核验 exact registry、clean Git revision/submodule、corpus/query/case inventory、
-wrapper/executable，以及固定 hardware/software/models/common reader/network/measurement 的环境
-记录；raw output、resource/failure record 和 bounded stdout/stderr 都被绑定保留。独立 collection
-gate 会检测运行后 artifact drift 和跨系统公平条件，但它不实现 OS 级断网，也不把本地
-plan/receipt/report 升格为 v3 suite manifest、独立 attestation 或 claim evidence。
-
-中文法律秘密套件仍需要独立专家标注，至少增加：
-
-- 留出法源与盲测问题；
-- 公布、未施行、部分修订、废止、替代和历史条文链；
-- 文号、别名、近似条号和错误版本干扰；
-- 字符区间与页码/坐标 precision/recall；
-- 无答案、库外问题和相似条款误召回；
-- 去标识化多规则事实问题；
-- 非法律任务误激活；
-- OCR 逐页人工金标；
-- 相同数据集上的纯词法、纯语义、混合定位、结构树、关系增强和完整 DeepLaw 梯子基线；
-- latency、内存、磁盘、模型调用成本、置信区间和失败样本。
-
-错误版本率、来源/hash 覆盖率和引用区间错误率是硬门禁，不能用平均召回率抵消。公开
-LongMemEval-S 60 题诊断已经参与开发，只能作为
-[`claim_eligible=false`](../benchmarks/external/longmemeval-s-dev-2026-07-26.json) 的调试证据。
-在十套件、两个隐藏数据集和独立复现齐备前，只能表述为“该 candidate smoke snapshot
-覆盖了已编码的版本、证据和预算回归”；不能表述为跨系统领先。
+- Discovery scores do not create Authority, legal validity, permission, or adjudication.
+- Unit tests, synthetic demos, feature matrices, signatures, and self-description do not prove
+  superiority.
+- Hard failures for wrong official version, unverifiable provenance, authority confusion, private
+  data disclosure, poisoning, or unauthorized mutation cannot be averaged away.
+- A public holdout must not be described as secret, unseen, or contamination-free.
+- “Better,” “leading,” and “SOTA” require named comparators, fixed conditions, actual results,
+  uncertainty, costs, and failure samples. Until then,
+  `competitive_claim_eligible=false`.
