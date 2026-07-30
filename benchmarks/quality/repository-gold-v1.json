@@ -29,7 +29,7 @@
       "document_id": "doc_chinese_readme",
       "category": "chinese",
       "path": "README.md",
-      "sha256": "4b0053cb360d271f81d2935fcdd6152864e00363a68ee2c0e6bd67463c037bff",
+      "sha256": "1f917a3b1caf601b012a1b41ae1ff92dc7a7fd5e7d05077e5db2ecbaf967dee0",
       "title": "DeepLaw 中文产品说明",
       "anchor": "自主写入不等于权威升级"
     },
@@ -45,7 +45,7 @@
       "document_id": "doc_english_readme",
       "category": "english",
       "path": "README_EN.md",
-      "sha256": "ed4a41173510217b7fec15a8af29b745c9e9ba2aef18f0bc845582a49a4aa6b7",
+      "sha256": "c4ed1235352a71986fbdb61e98d7d24acc9d323284f59577e119915ec40c7491",
       "title": "DeepLaw English v0.10 product contract",
       "anchor": "Knowledge Duties"
     },
@@ -111,9 +111,13 @@
       "case_id": "en_product_definition",
       "category": "english",
       "query": "DeepLaw local-first Agent Knowledge OS Source-to-Knowledge Compiler governed Living Wiki verifiable bounded knowledge context to any Agent",
-      "expected_document_ids": ["doc_english_agent_guide", "doc_long_architecture"],
+      "expected_document_ids": [
+        "doc_english_agent_guide",
+        "doc_english_readme",
+        "doc_long_architecture"
+      ],
       "forbidden_document_ids": [],
-      "top_k": 2
+      "top_k": 3
     },
     {
       "case_id": "en_markdown_ledger",

@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <strong>DeepLaw 2.0 · 本地单用户 Agent Knowledge OS</strong><br />
-  Immutable evidence · Markdown-native knowledge · Trusted Ledger · Bounded context
+  <strong>Local-first Agent Knowledge OS</strong><br />
+  <sub>Source-to-Knowledge Compiler · Governed Living Wiki · Verifiable Context</sub>
 </p>
 
 <p align="center">
@@ -21,16 +21,40 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
-DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。它在本机为这些宿主提供长期
-记忆、知识关系、Living Wiki、来源追踪、检索编排与任务级 Knowledge Capsule，同时保持模型、会话
-和通用工具仍由宿主控制。
+<p align="center">
+  <strong>DeepLaw 是面向 Agent 的本地优先知识操作系统</strong><br />
+  将原始资料持续编译为受治理的 Living Wiki，并向不同 Agent 提供可验证、有边界、可追溯的知识上下文。
+</p>
 
-**DeepLaw 2.0 是产品品牌，不是软件版本号。** 当前软件版本 `v0.10.0` 在已交付的
-0.8 Autonomous Knowledge Core 与 0.9 Living Wiki / Knowledge Intelligence 之上，完成
-1.0 Quality and Superiority Closure 的自主可验证质量闭环。
-旧版 proposal/review 工作流只保留为来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的
-默认激活路径。当前契约与迁移边界见
-[`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
+## 从原始资料到可用知识
+
+DeepLaw 是 **Source-to-Knowledge Compiler**：它不把资料简单转换成 Markdown，而是保留原始来源，
+将其持续编译为长期、类型化、可验证、可演化的知识对象，再投影为人和 Agent 都能使用的
+Living Wiki。
+
+| Compile · 编译 | Govern · 治理 | Deliver · 交付 |
+| --- | --- | --- |
+| 保留原始字节、结构、locator 与 hash，生成稳定、类型化的知识对象 | 以 identity、revision、provenance、authority、scope 和 audit 约束持续演化 | 通过 CLI 与 MCP 为每个任务返回有界 Knowledge Capsule，而不是倾倒整个 Vault |
+
+### DeepLaw 不是什么
+
+- 普通 RAG；
+- 单纯的 Markdown 笔记工具；
+- Obsidian 替代品；
+- 只面向法律的问答系统；
+- 单一 Agent 的 Memory 插件。
+
+DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模型、会话编排和通用工具仍由
+宿主控制；DeepLaw CLI 是第一方核心入口，MCP 是面向 Agent 的核心协议入口。未来 GUI 只会建立在
+同一领域服务之上。
+
+> [!NOTE]
+> **DeepLaw 2.0 是产品品牌，不是软件版本号。** **本地单用户 Agent Knowledge OS** 是当前交付边界。
+> 当前软件版本 `v0.10.0` 在已交付的
+> 0.8 Autonomous Knowledge Core 与 0.9 Living Wiki / Knowledge Intelligence 之上，完成
+> 1.0 Quality and Superiority Closure 的自主可验证质量闭环。旧版 proposal/review 工作流只保留为
+> 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
+> [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
 
 ## 核心边界
 

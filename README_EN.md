@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <strong>DeepLaw 2.0 · Local single-user Agent Knowledge OS</strong><br />
-  Immutable evidence · Markdown-native knowledge · Trusted Ledger · Bounded context
+  <strong>Local-first Agent Knowledge OS</strong><br />
+  <sub>Source-to-Knowledge Compiler · Governed Living Wiki · Verifiable Context</sub>
 </p>
 
 <p align="center">
@@ -21,17 +21,42 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
-DeepLaw does not replace Codex, Claude Code, OpenCode, or another Agent runtime. It provides
-long-term memory, knowledge relationships, Living Wiki navigation, provenance-aware retrieval,
-and task-sized Knowledge Capsules while the host keeps control of models, conversations, and
-general tools.
+<p align="center">
+  <strong>DeepLaw is a local-first Agent Knowledge OS that compiles source materials into a governed
+  Living Wiki and returns verifiable, bounded knowledge context to any Agent.</strong>
+</p>
 
-**DeepLaw 2.0 is the product brand, not a software version.** Software release `v0.10.0` builds on
-the delivered 0.8 Autonomous Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence, and
-closes the 1.0 Quality and Superiority milestone with a self-verifying quality protocol. The older
-proposal/review workflow remains only for source compilation, untrusted external imports, and
-migration compatibility; it is not the default activation path for admitted Agent-derived
-knowledge.
+## From source materials to usable knowledge
+
+DeepLaw is a **Source-to-Knowledge Compiler**. It does not merely convert files into Markdown. It
+preserves original sources, compiles them into durable, typed, verifiable, and evolvable knowledge
+objects, then projects a Living Wiki that both humans and Agents can use.
+
+| Compile | Govern | Deliver |
+| --- | --- | --- |
+| Preserve source bytes, structure, locators, and hashes; produce stable typed knowledge objects | Govern evolution through identity, revisions, provenance, authority, scope, and audit | Return a bounded Knowledge Capsule for each task through CLI and MCP instead of dumping the entire Vault |
+
+### What DeepLaw is not
+
+- A generic RAG pipeline;
+- a simple Markdown note-taking tool;
+- an Obsidian replacement;
+- a law-only question-answering system;
+- a Memory plugin for a single Agent.
+
+DeepLaw does not replace Codex, Claude Code, OpenCode, or another Agent runtime. The host retains
+control of models, conversation orchestration, and general tools. DeepLaw CLI is the first-party
+core entry point, and MCP is the core protocol entry point for Agents. A future GUI will use the
+same domain services.
+
+> [!NOTE]
+> **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
+> is the current delivery boundary. Software release `v0.10.0` builds on
+> the delivered 0.8 Autonomous Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence, and
+> closes the 1.0 Quality and Superiority milestone with a self-verifying quality protocol. The older
+> proposal/review workflow remains only for source compilation, untrusted external imports, and
+> migration compatibility; it is not the default activation path for admitted Agent-derived
+> knowledge.
 
 ## Permanent boundaries
 
