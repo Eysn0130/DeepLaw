@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/obsidian-bridge.v1.schema.json",
+  "title": "DeepLaw Obsidian Bridge Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "frontend", "context_contract", "event_activation",
+    "writable_roots", "canonical_roots", "derived_roots",
+    "forbidden_metadata", "deep_law_owns_canonical_mutation",
+    "ephemeral_context_default"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.obsidian-bridge/v1"},
+    "frontend": {"const": "obsidian"},
+    "context_contract": {"const": "deeplaw.editor-context-envelope/v1"},
+    "event_activation": {"const": "workspace.onLayoutReady"},
+    "writable_roots": {
+      "const": ["drafts", "notes", "sources/inbox"]
+    },
+    "canonical_roots": {
+      "const": ["knowledge", "memory"]
+    },
+    "derived_roots": {
+      "const": ["canvas", "wiki"]
+    },
+    "forbidden_metadata": {
+      "const": [
+        "authority", "deeplaw_id", "ledger_event", "revision_id",
+        "scope", "sensitivity", "source_refs"
+      ]
+    },
+    "deep_law_owns_canonical_mutation": {"const": true},
+    "ephemeral_context_default": {"const": true}
+  }
+}

@@ -20,11 +20,18 @@ governance, and retrieval internals are separate concerns.
 | MCP protocol and closed tool schemas | **Supported** | contract and subprocess tests |
 | Codex/Claude/OpenCode manifests and static configuration | **Supported local-only** | repository validators/tests |
 | Generic read-only Skill bundle | **Supported local-only** | source/hash/budget/test manifest verification |
-| Autonomous Knowledge Sink domain/MCP contract | **Supported in v0.10.0, explicit opt-in** | contract, capability, idempotency, scope, rate, integrity, and stdio tests |
+| Autonomous Knowledge Sink domain/MCP contract | **Supported in v0.11.0, explicit opt-in** | contract, capability, idempotency, scope, rate, integrity, and stdio tests |
+| Living Wiki Compile Skill and compiler Sink operations | **Current working-tree implementation, explicit opt-in** | shared coordinator, closed Plan, fake-Agent E2E and least-privilege host examples |
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
 | Real model/session tasks on all hosts | **External verification pending** | competitive evidence only; no-model lifecycle is not task acceptance |
+
+The compiler workflow and grant boundary are specified in
+[`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
+must separately configure `knowledge_sink` with an owner-created grant limited to compilation
+operations, and the Agent must load the shared `compile-living-wiki` Skill. The opt-in real-host
+harness records unavailable model tasks as `not_executed`.
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate

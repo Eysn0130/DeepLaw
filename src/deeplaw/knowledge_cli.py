@@ -10,12 +10,15 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
+from .api import KnowledgeOS
+from .compilation.models import COMPILER_GRANT_OPERATIONS
 from .context_compiler import compile_context, verify_capsule_file
 from .knowledge_autonomy import (
     FEEDBACK_EVALUATOR_TYPES,
     KNOWLEDGE_KINDS,
     SINK_OPERATIONS,
     AutonomousKnowledgeStore,
+    _validate_contract,
     autonomous_core_installed,
     initialize_autonomous_core,
     migrate_autonomous_core,
@@ -1312,6 +1315,181 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
                 help="Read the canonical revision known at this transaction time",
             )
 
+    compilation = subcommands.add_parser(
+        "compile",
+        help="Operate resumable Source-to-Knowledge Compilation Runs",
+    )
+    compilation_commands = compilation.add_subparsers(
+        dest="compilation_command",
+        required=True,
+    )
+    compilation_profile = compilation_commands.add_parser("profile")
+    compilation_profile.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_profile.add_argument(
+        "--compiler-profile", default="living-wiki-agent"
+    )
+    compilation_profile.add_argument("--compiler-profile-version", default="1")
+    compilation_begin = compilation_commands.add_parser("begin")
+    compilation_begin.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_begin.add_argument("--grant-id", required=True)
+    compilation_begin.add_argument("--source-revision-id", required=True)
+    compilation_begin.add_argument(
+        "--compiler-profile", default="living-wiki-agent"
+    )
+    compilation_begin.add_argument("--compiler-profile-version", default="1")
+    compilation_begin.add_argument("--host-identity", required=True)
+    compilation_begin.add_argument("--model-identity")
+    compilation_begin.add_argument("--prompt-template-id")
+    compilation_begin.add_argument("--prompt-config-sha256")
+    compilation_begin.add_argument("--plan-configuration-sha256")
+    compilation_begin.add_argument("--packet-max-fragments", type=int, default=32)
+    compilation_begin.add_argument("--confirm-no-case-data", action="store_true")
+    for name in ("packet", "status", "explain"):
+        compilation_read = compilation_commands.add_parser(name)
+        compilation_read.add_argument(
+            "--vault", type=Path, default=default_knowledge_vault()
+        )
+        compilation_read.add_argument("--run-id", required=True)
+        if name == "packet":
+            compilation_read.add_argument("--grant-id", required=True)
+    compilation_stage = compilation_commands.add_parser("stage")
+    compilation_stage.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_stage.add_argument("--grant-id", required=True)
+    compilation_stage.add_argument("--run-id", required=True)
+    compilation_stage.add_argument("--plan", type=Path, required=True)
+    compilation_stage.add_argument("--confirm-no-case-data", action="store_true")
+    for name in ("validate", "commit"):
+        compilation_write = compilation_commands.add_parser(name)
+        compilation_write.add_argument(
+            "--vault", type=Path, default=default_knowledge_vault()
+        )
+        compilation_write.add_argument("--grant-id", required=True)
+        compilation_write.add_argument("--run-id", required=True)
+        compilation_write.add_argument(
+            "--confirm-no-case-data", action="store_true"
+        )
+    compilation_resume = compilation_commands.add_parser("resume")
+    compilation_resume.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_resume.add_argument("--grant-id", required=True)
+    compilation_resume.add_argument("--run-id", required=True)
+    compilation_resume.add_argument("--project", action="store_true")
+    compilation_resume.add_argument("--confirm-no-case-data", action="store_true")
+    compilation_abort = compilation_commands.add_parser("abort")
+    compilation_abort.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_abort.add_argument("--grant-id", required=True)
+    compilation_abort.add_argument("--run-id", required=True)
+    compilation_abort.add_argument("--reason", required=True)
+    compilation_abort.add_argument("--confirm-no-case-data", action="store_true")
+    compilation_refresh = compilation_commands.add_parser("refresh")
+    compilation_refresh.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_refresh.add_argument("--grant-id", required=True)
+    compilation_refresh.add_argument("--source-revision-id", required=True)
+    compilation_refresh.add_argument("--replacement-source-revision-id")
+    compilation_refresh.add_argument(
+        "--confirm-no-case-data", action="store_true"
+    )
+
+    purpose_query = subcommands.add_parser(
+        "query",
+        help="Run purpose-aware compiled-first or evidence-first retrieval",
+    )
+    purpose_query.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    purpose_query.add_argument("--query", required=True)
+    purpose_query.add_argument(
+        "--purpose",
+        choices=(
+            "answer",
+            "verify",
+            "quote",
+            "historical",
+            "legal",
+            "debug",
+            "freshness_check",
+        ),
+        default="answer",
+    )
+    purpose_query.add_argument(
+        "--policy",
+        choices=("compiled-first-v1", "evidence-first-v1", "balanced-v1"),
+    )
+    purpose_query.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
+    purpose_query.add_argument(
+        "--max-sensitivity",
+        choices=("public", "internal", "private"),
+        default="private",
+    )
+    purpose_query.add_argument(
+        "--kind", choices=sorted(KNOWLEDGE_KINDS), action="append", default=[]
+    )
+    purpose_query.add_argument("--limit", type=int, default=8)
+    purpose_query.add_argument("--max-chars", type=int, default=8_000)
+    purpose_query.add_argument("--max-tokens", type=int, default=6_000)
+    purpose_query.add_argument("--max-sources", type=int, default=12)
+    purpose_query.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    purpose_query.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
+    purpose_query.add_argument("--as-of")
+
+    backfill = subcommands.add_parser(
+        "backfill",
+        help="Propose, validate, and explicitly promote query-synthesis drafts",
+    )
+    backfill_commands = backfill.add_subparsers(
+        dest="backfill_command",
+        required=True,
+    )
+    backfill_propose = backfill_commands.add_parser("propose")
+    backfill_propose.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    backfill_propose.add_argument("--grant-id", required=True)
+    backfill_propose.add_argument("--request", type=Path, required=True)
+    backfill_propose.add_argument("--confirm-no-case-data", action="store_true")
+    backfill_validate = backfill_commands.add_parser("validate")
+    backfill_validate.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    backfill_validate.add_argument("--grant-id", required=True)
+    backfill_validate.add_argument("--draft-id", required=True)
+    backfill_validate.add_argument("--confirm-no-case-data", action="store_true")
+    backfill_promote = backfill_commands.add_parser("promote")
+    backfill_promote.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    backfill_promote.add_argument("--grant-id", required=True)
+    backfill_promote.add_argument("--draft-id", required=True)
+    backfill_promote.add_argument("--idempotency-key", required=True)
+    backfill_promote.add_argument(
+        "--evaluator-type",
+        choices=("user", "external_check", "owner_policy"),
+        required=True,
+    )
+    backfill_promote.add_argument("--evaluator-id", required=True)
+    backfill_promote.add_argument("--evaluation-reason", required=True)
+    backfill_promote.add_argument("--confirm-no-case-data", action="store_true")
+    backfill_status = backfill_commands.add_parser("status")
+    backfill_status.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    backfill_status.add_argument("--draft-id", required=True)
+
     sink = subcommands.add_parser(
         "sink",
         help="Explicitly enable and use the separate scope-bound Agent mutation capability",
@@ -1334,6 +1512,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         help=(
             "Grant evaluator identities allowed for record_feedback; defaults to "
             "agent_self_report only"
+        ),
+    )
+    sink_enable.add_argument(
+        "--profile",
+        choices=("compiler",),
+        help=(
+            "Use the least-privilege built-in operation set for Source Compilation Runs; "
+            "cannot be combined with --operation"
         ),
     )
     sink_enable.add_argument("--max-request-bytes", type=int, default=65_536)
@@ -1624,6 +1810,20 @@ def render_knowledge_result(value: Any, *, output_format: str) -> str:
     return "\n".join(human_lines(value))
 
 
+def _read_bounded_json_object(path: Path, *, label: str, max_bytes: int) -> dict[str, Any]:
+    selected = path.expanduser().absolute()
+    if (
+        selected.is_symlink()
+        or not selected.is_file()
+        or not 1 <= selected.stat().st_size <= max_bytes
+    ):
+        raise ValueError(f"{label} must be a regular bounded JSON file")
+    value = strict_json_loads(selected.read_bytes())
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must contain one JSON object")
+    return value
+
+
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "init":
@@ -1645,6 +1845,156 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             "autonomous_core": autonomous,
             "active_write_policy": "agent_derived_autonomous",
         }
+    if command == "compile":
+        action = args.compilation_command
+        knowledge_os = KnowledgeOS.open(args.vault)
+        if action == "profile":
+            return knowledge_os.compilations.profile(
+                args.compiler_profile,
+                args.compiler_profile_version,
+            )
+        if action == "begin":
+            profile = knowledge_os.compilations.profile(
+                args.compiler_profile,
+                args.compiler_profile_version,
+            )
+            provided = {
+                "prompt_template_id": args.prompt_template_id,
+                "prompt_config_sha256": args.prompt_config_sha256,
+                "plan_configuration_sha256": args.plan_configuration_sha256,
+            }
+            if any(
+                value is not None and value != profile[field]
+                for field, value in provided.items()
+            ):
+                raise ValueError(
+                    "Compilation provenance differs from the registered compiler profile"
+                )
+            run = knowledge_os.compilations.begin(
+                grant_id=args.grant_id,
+                source_revision_id=args.source_revision_id,
+                compiler_profile=args.compiler_profile,
+                compiler_profile_version=args.compiler_profile_version,
+                host_identity=args.host_identity,
+                model_identity=args.model_identity,
+                prompt_template_id=profile["prompt_template_id"],
+                prompt_config_sha256=profile["prompt_config_sha256"],
+                plan_configuration_sha256=profile["plan_configuration_sha256"],
+                packet_max_fragments=args.packet_max_fragments,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+            return run.begin_receipt()
+        if action == "status":
+            return knowledge_os.compilations.status(args.run_id)
+        if action == "explain":
+            return knowledge_os.compilations.explain(args.run_id)
+        if action == "refresh":
+            return knowledge_os.compilations.refresh(
+                grant_id=args.grant_id,
+                source_revision_id=args.source_revision_id,
+                replacement_source_revision_id=args.replacement_source_revision_id,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        run = knowledge_os.compilations.open(
+            compilation_run_id=args.run_id,
+            grant_id=args.grant_id,
+        )
+        if action == "packet":
+            packet = run.next_packet()
+            if packet is not None:
+                return packet
+            response = {
+                "schema_version": "deeplaw.source-compilation-packet-end/v1",
+                "compilation_run_id": args.run_id,
+                "complete": True,
+            }
+            _validate_contract(
+                "source-compilation-packet-end.v1.schema.json",
+                response,
+            )
+            return response
+        if action == "stage":
+            plan = _read_bounded_json_object(
+                args.plan,
+                label="Compilation Plan",
+                max_bytes=320 * 1024,
+            )
+            return run.stage(
+                plan,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "validate":
+            return run.validate(
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "commit":
+            return run.commit(
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "resume":
+            return run.resume(
+                project=args.project,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "abort":
+            return run.abort(
+                reason=args.reason,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        raise ValueError(f"unsupported Compilation Run action: {action}")
+    if command == "query":
+        return KnowledgeOS.open(args.vault).retrieval.query(
+            args.query,
+            purpose=args.purpose,
+            policy=args.policy,
+            scope=args.scope,
+            max_sensitivity=args.max_sensitivity,
+            limit=args.limit,
+            max_chars=args.max_chars,
+            max_tokens=args.max_tokens,
+            max_sources=args.max_sources,
+            graph_hops=args.graph_hops,
+            retrieval_mode=args.retrieval_mode,
+            as_of=args.as_of,
+            kinds=tuple(args.kind),
+        )
+    if command == "backfill":
+        action = args.backfill_command
+        backfill_api = KnowledgeOS.open(args.vault).backfill
+        if action == "propose":
+            request = _read_bounded_json_object(
+                args.request,
+                label="query backfill request",
+                max_bytes=320 * 1024,
+            )
+            if {"grant_id", "confirm_no_case_data"}.intersection(request):
+                raise ValueError(
+                    "query backfill request cannot override CLI capability parameters"
+                )
+            return backfill_api.propose(
+                **request,
+                grant_id=args.grant_id,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "validate":
+            return backfill_api.validate(
+                grant_id=args.grant_id,
+                draft_id=args.draft_id,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "promote":
+            return backfill_api.promote(
+                grant_id=args.grant_id,
+                draft_id=args.draft_id,
+                idempotency_key=args.idempotency_key,
+                evaluator_type=args.evaluator_type,
+                evaluator_id=args.evaluator_id,
+                evaluation_reason=args.evaluation_reason,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if action == "status":
+            return backfill_api.status(args.draft_id)
+        raise ValueError(f"unsupported query backfill action: {action}")
     if command == "autonomy":
         action = args.autonomy_command
         if action == "status":
@@ -1921,11 +2271,20 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             read_only=action == "status",
         ) as store:
             if action == "enable":
+                if args.profile is not None and args.operation:
+                    raise ValueError(
+                        "Knowledge Sink --profile cannot be combined with --operation"
+                    )
+                operations = (
+                    COMPILER_GRANT_OPERATIONS
+                    if args.profile == "compiler"
+                    else tuple(args.operation or ("remember",))
+                )
                 return store.enable_grant(
                     writer_id=args.writer_id,
                     allowed_scope=args.scope or store.vault_scope,
                     max_sensitivity=args.max_sensitivity,
-                    operations=tuple(args.operation or ("remember",)),
+                    operations=operations,
                     evaluator_types=tuple(args.feedback_evaluator_type or ("agent_self_report",)),
                     max_request_bytes=args.max_request_bytes,
                     max_mutations_per_minute=args.max_mutations_per_minute,

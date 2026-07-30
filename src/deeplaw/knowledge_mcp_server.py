@@ -17,6 +17,7 @@ from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
 from . import __version__
+from .compilation import CompilationCoordinator, compiler_profile
 from .context_compiler import compile_context
 from .knowledge_autonomy import (
     KNOWLEDGE_KINDS,
@@ -26,6 +27,7 @@ from .knowledge_autonomy import (
 )
 from .knowledge_models import ASSET_KINDS, MEMORY_TIERS, canonical_timestamp, utc_now
 from .knowledge_store import KnowledgeVault, default_knowledge_vault
+from .retrieval import PurposeAwareRetrievalService
 from .retrieval_fabric import retrieve
 from .util import (
     assert_provider_output_safe,
@@ -49,6 +51,17 @@ KnowledgeOperation = Literal[
     "explain",
     "identity_lookup",
     "gaps",
+    "query",
+    "compilation",
+]
+CompilationAction = Literal[
+    "next_packet",
+    "status",
+    "explain",
+    "list_uncompiled",
+    "list_stale",
+    "coverage",
+    "profile",
 ]
 
 _DESCRIPTION = (
@@ -112,6 +125,13 @@ def _load_contract(name: str) -> dict[str, Any]:
 
 @cache
 def _autonomous_output_validator() -> Draft202012Validator:
+    schema = _load_contract("knowledge-support.output.v4.schema.json")
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+@cache
+def _autonomous_v3_output_validator() -> Draft202012Validator:
     schema = _load_contract("knowledge-support.output.v3.schema.json")
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema, format_checker=FormatChecker())
@@ -133,13 +153,23 @@ def _autonomous_capsule_validators() -> tuple[
 
 
 def _validate_autonomous_output(value: dict[str, Any]) -> None:
-    error = next(_autonomous_output_validator().iter_errors(value), None)
+    validators = [_autonomous_output_validator()]
+    if value.get("schema_version") == "deeplaw.knowledge-support-output/v3":
+        validators.append(_autonomous_v3_output_validator())
+    error = next(
+        (
+            validation_error
+            for validator in validators
+            for validation_error in validator.iter_errors(value)
+        ),
+        None,
+    )
     if error is None:
         return
     path = ".".join(str(item) for item in error.absolute_path)
     location = f" at {path}" if path else ""
     raise RuntimeError(
-        f"knowledge_support produced an invalid v3 response{location}: {error.message}"
+        f"knowledge_support produced an invalid v4 response{location}: {error.message}"
     )
 
 
@@ -206,8 +236,8 @@ def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
             "bounded Knowledge Capsules. Persistent writes exist only in the separate, "
             "explicitly enabled knowledge_sink process."
         )
-        input_schema = _load_contract("knowledge-support.input.v3.schema.json")
-        output_schema = _load_contract("knowledge-support.output.v3.schema.json")
+        input_schema = _load_contract("knowledge-support.input.v4.schema.json")
+        output_schema = _load_contract("knowledge-support.output.v4.schema.json")
     else:
         description = _DESCRIPTION
         input_schema = _load_contract("knowledge-support.input.v1.schema.json")
@@ -1010,6 +1040,390 @@ def _empty_autonomous_capsule(
     return capsule
 
 
+def _autonomous_v4_response(
+    *,
+    operation: KnowledgeOperation,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    response = {
+        "schema_version": "deeplaw.knowledge-support-output/v4",
+        "operation": operation,
+        "authority_boundary": dict(_AUTONOMOUS_AUTHORITY_BOUNDARY),
+        "result": result,
+    }
+    assert_provider_output_safe(response, interface="knowledge_support")
+    if len(canonical_json(response).encode("utf-8")) > _MAX_MCP_OUTPUT_CHARS:
+        raise RuntimeError("knowledge_support output exceeds its hard 64 KiB budget")
+    _validate_autonomous_output(response)
+    return response
+
+
+def _handle_purpose_query(
+    *,
+    query: str,
+    purpose: str,
+    policy: str | None,
+    scope: str | None,
+    max_sensitivity: str,
+    limit: int,
+    max_chars: int,
+    max_tokens: int,
+    max_sources: int,
+    graph_hops: int,
+    retrieval_mode: str,
+    as_of: str | None,
+    kinds: list[str] | None,
+    vault_path: Path,
+) -> dict[str, Any]:
+    result = PurposeAwareRetrievalService(vault_path).query(
+        query,
+        purpose=cast(Any, purpose),
+        policy=cast(Any, policy),
+        scope=scope,
+        max_sensitivity=max_sensitivity,
+        limit=limit,
+        max_chars=max_chars,
+        max_tokens=max_tokens,
+        max_sources=max_sources,
+        graph_hops=graph_hops,
+        retrieval_mode=retrieval_mode,
+        as_of=as_of,
+        kinds=tuple(kinds or ()),
+    )
+    return _autonomous_v4_response(operation="query", result=result)
+
+
+def _handle_compilation_support(
+    *,
+    action: str | None,
+    compilation_run_id: str | None,
+    scope: str | None,
+    max_sensitivity: str,
+    limit: int,
+    after_source_revision_id: str | None,
+    profile_name: str | None,
+    profile_version: str | None,
+    confirm_no_case_data: bool,
+    vault_path: Path,
+) -> dict[str, Any]:
+    if action not in {
+        "next_packet",
+        "status",
+        "explain",
+        "list_uncompiled",
+        "list_stale",
+        "coverage",
+        "profile",
+    }:
+        raise ValueError("compilation support action is invalid")
+    if not confirm_no_case_data:
+        raise ValueError(
+            "compilation support requires confirmation that no case data is present"
+        )
+    if not 1 <= limit <= 20:
+        raise ValueError("compilation support limit is invalid")
+    with AutonomousKnowledgeStore(vault_path, read_only=True) as store:
+        selected_scope = scope or store.vault_scope
+        if selected_scope not in {"personal", "project", "domain"}:
+            raise ValueError("compilation support scope is invalid")
+        if max_sensitivity not in {"public", "internal", "private"}:
+            raise ValueError("compilation support sensitivity is invalid")
+        verification = store.verify()
+        if not verification["valid"]:
+            raise RuntimeError("knowledge vault integrity is invalid; compilation read stopped")
+        if action in {"next_packet", "status", "explain"}:
+            if compilation_run_id is None:
+                raise ValueError("compilation run ID is required")
+            _require_compilation_run_admission(
+                store,
+                compilation_run_id=compilation_run_id,
+                scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+            )
+        if action == "list_uncompiled":
+            result = _list_uncompiled_sources(
+                store,
+                scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+                limit=limit,
+                after_source_revision_id=after_source_revision_id,
+            )
+        elif action == "list_stale":
+            result = _list_stale_compiled_knowledge(
+                store,
+                scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+                limit=limit,
+            )
+        elif action == "coverage":
+            result = _compilation_coverage(
+                store,
+                scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+            )
+        elif action == "profile":
+            result = compiler_profile(
+                profile_name or "living-wiki-agent",
+                profile_version or "1",
+            )
+        else:
+            coordinator = CompilationCoordinator(vault_path)
+            if action == "next_packet":
+                packet = coordinator.next_packet(cast(str, compilation_run_id))
+                result = (
+                    packet
+                    if packet is not None
+                    else {
+                        "schema_version": "deeplaw.source-compilation-packet-end/v1",
+                        "compilation_run_id": compilation_run_id,
+                        "complete": True,
+                    }
+                )
+            elif action == "status":
+                result = coordinator.status(cast(str, compilation_run_id))
+            else:
+                result = coordinator.explain(cast(str, compilation_run_id))
+    return _autonomous_v4_response(operation="compilation", result=result)
+
+
+def _require_compilation_run_admission(
+    store: AutonomousKnowledgeStore,
+    *,
+    compilation_run_id: str,
+    scope: str,
+    max_sensitivity: str,
+) -> None:
+    row = store.connection.execute(
+        """
+        SELECT sources.sensitivity
+        FROM source_compilation_runs_v1
+        JOIN source_revision_bindings_v2 USING(source_revision_id)
+        JOIN sources
+          ON sources.source_id = source_revision_bindings_v2.legacy_source_id
+        WHERE source_compilation_runs_v1.compilation_run_id = ?
+        ORDER BY sources.source_id
+        LIMIT 1
+        """,
+        (compilation_run_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError("source compilation run is unavailable")
+    order = ("public", "internal", "private", "restricted")
+    sensitivity = row["sensitivity"]
+    if (
+        scope != store.vault_scope
+        or sensitivity not in order
+        or sensitivity == "restricted"
+        or order.index(sensitivity) > order.index(max_sensitivity)
+    ):
+        raise KeyError("source compilation run is unavailable in the admitted scope")
+
+
+def _list_uncompiled_sources(
+    store: AutonomousKnowledgeStore,
+    *,
+    scope: str,
+    max_sensitivity: str,
+    limit: int,
+    after_source_revision_id: str | None,
+) -> dict[str, Any]:
+    order = ("public", "internal", "private", "restricted")
+    if scope != store.vault_scope:
+        rows: list[Any] = []
+    else:
+        admitted = order[: order.index(max_sensitivity) + 1]
+        placeholders = ",".join("?" for _ in admitted)
+        cursor_clause = ""
+        parameters: tuple[Any, ...] = (*admitted,)
+        if after_source_revision_id is not None:
+            cursor_clause = "AND source_revisions_v2.source_revision_id > ?"
+            parameters = (*parameters, after_source_revision_id)
+        rows = store.connection.execute(
+            f"""
+            SELECT DISTINCT source_revisions_v2.source_revision_id,
+                   source_revisions_v2.content_sha256,
+                   source_revisions_v2.media_identity,
+                   sources.title, sources.kind, sources.media_type,
+                   sources.byte_size, sources.instruction_risk,
+                   source_lifecycle.status
+            FROM source_revisions_v2
+            JOIN source_revision_bindings_v2 USING(source_revision_id)
+            JOIN sources
+              ON sources.source_id = source_revision_bindings_v2.legacy_source_id
+            JOIN source_lifecycle
+              ON source_lifecycle.source_id = sources.source_id
+            WHERE sources.sensitivity IN ({placeholders})
+              AND sources.sensitivity != 'restricted'
+              AND source_lifecycle.status IN ('active', 'pending')
+              {cursor_clause}
+              AND NOT EXISTS (
+                  SELECT 1 FROM source_compilation_runs_v1
+                  WHERE source_compilation_runs_v1.source_revision_id =
+                        source_revisions_v2.source_revision_id
+                    AND source_compilation_runs_v1.status IN (
+                        'committed', 'projection_pending', 'succeeded'
+                    )
+              )
+            ORDER BY source_revisions_v2.source_revision_id
+            LIMIT ?
+            """,
+            (*parameters, limit + 1),
+        ).fetchall()
+    selected = [
+        {
+            "source_revision_id": row["source_revision_id"],
+            "title": row["title"],
+            "source_kind": row["kind"],
+            "media_type": row["media_type"],
+            "media_identity": row["media_identity"],
+            "content_sha256": row["content_sha256"],
+            "byte_size": row["byte_size"],
+            "instruction_risk": bool(row["instruction_risk"]),
+            "status": row["status"],
+        }
+        for row in rows[:limit]
+    ]
+    return {
+        "schema_version": "deeplaw.uncompiled-sources/v1",
+        "sources": selected,
+        "returned_count": len(selected),
+        "truncated": len(rows) > limit,
+        "next_after_source_revision_id": (
+            selected[-1]["source_revision_id"] if len(rows) > limit and selected else None
+        ),
+        "scope": scope,
+        "max_sensitivity": max_sensitivity,
+        "audit_head": store.audit_head,
+    }
+
+
+def _list_stale_compiled_knowledge(
+    store: AutonomousKnowledgeStore,
+    *,
+    scope: str,
+    max_sensitivity: str,
+    limit: int,
+) -> dict[str, Any]:
+    order = ("public", "internal", "private", "restricted")
+    admitted = order[: order.index(max_sensitivity) + 1]
+    placeholders = ",".join("?" for _ in admitted)
+    rows = store.connection.execute(
+        f"""
+        SELECT knowledge_revisions_v3.knowledge_id,
+               knowledge_revisions_v3.revision_id,
+               knowledge_revisions_v3.kind,
+               knowledge_dependencies_v1.freshness,
+               COUNT(*) AS dependency_count
+        FROM knowledge_dependencies_v1
+        JOIN knowledge_revisions_v3
+          ON knowledge_revisions_v3.revision_id =
+             knowledge_dependencies_v1.consumer_revision_id
+        JOIN knowledge_objects_v3
+          ON knowledge_objects_v3.current_revision_id =
+             knowledge_revisions_v3.revision_id
+        WHERE knowledge_dependencies_v1.consumer_kind = 'knowledge_revision'
+          AND knowledge_dependencies_v1.freshness != 'fresh'
+          AND knowledge_revisions_v3.scope = ?
+          AND knowledge_revisions_v3.sensitivity IN ({placeholders})
+          AND knowledge_revisions_v3.sensitivity != 'restricted'
+        GROUP BY knowledge_revisions_v3.knowledge_id,
+                 knowledge_revisions_v3.revision_id,
+                 knowledge_revisions_v3.kind,
+                 knowledge_dependencies_v1.freshness
+        ORDER BY knowledge_revisions_v3.knowledge_id,
+                 knowledge_dependencies_v1.freshness
+        LIMIT ?
+        """,
+        (scope, *admitted, limit + 1),
+    ).fetchall()
+    selected = [dict(row) for row in rows[:limit]]
+    return {
+        "schema_version": "deeplaw.stale-compiled-knowledge/v1",
+        "items": selected,
+        "returned_count": len(selected),
+        "truncated": len(rows) > limit,
+        "scope": scope,
+        "max_sensitivity": max_sensitivity,
+        "audit_head": store.audit_head,
+    }
+
+
+def _compilation_coverage(
+    store: AutonomousKnowledgeStore,
+    *,
+    scope: str,
+    max_sensitivity: str,
+) -> dict[str, Any]:
+    order = ("public", "internal", "private", "restricted")
+    admitted = order[: order.index(max_sensitivity) + 1]
+    placeholders = ",".join("?" for _ in admitted)
+    source_count = (
+        store.connection.execute(
+            f"""
+            SELECT COUNT(DISTINCT source_revisions_v2.source_revision_id)
+            FROM source_revisions_v2
+            JOIN source_revision_bindings_v2 USING(source_revision_id)
+            JOIN sources
+              ON sources.source_id = source_revision_bindings_v2.legacy_source_id
+            JOIN source_lifecycle
+              ON source_lifecycle.source_id = sources.source_id
+            WHERE sources.sensitivity IN ({placeholders})
+              AND sources.sensitivity != 'restricted'
+              AND source_lifecycle.status IN ('active', 'pending')
+            """,
+            admitted,
+        ).fetchone()[0]
+        if scope == store.vault_scope
+        else 0
+    )
+    compiled_source_count = (
+        store.connection.execute(
+            f"""
+            SELECT COUNT(DISTINCT source_compilation_runs_v1.source_revision_id)
+            FROM source_compilation_runs_v1
+            JOIN source_revision_bindings_v2 USING(source_revision_id)
+            JOIN sources
+              ON sources.source_id = source_revision_bindings_v2.legacy_source_id
+            WHERE sources.sensitivity IN ({placeholders})
+              AND sources.sensitivity != 'restricted'
+              AND source_compilation_runs_v1.status IN (
+                  'committed', 'projection_pending', 'succeeded'
+              )
+            """,
+            admitted,
+        ).fetchone()[0]
+        if scope == store.vault_scope
+        else 0
+    )
+    freshness_counts = {
+        row["freshness"]: row["count"]
+        for row in store.connection.execute(
+            f"""
+            SELECT knowledge_dependencies_v1.freshness, COUNT(*) AS count
+            FROM knowledge_dependencies_v1
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id =
+                 knowledge_dependencies_v1.consumer_revision_id
+            WHERE knowledge_revisions_v3.scope = ?
+              AND knowledge_revisions_v3.sensitivity IN ({placeholders})
+              AND knowledge_revisions_v3.sensitivity != 'restricted'
+            GROUP BY knowledge_dependencies_v1.freshness
+            """,
+            (scope, *admitted),
+        )
+    }
+    return {
+        "schema_version": "deeplaw.source-compilation-coverage/v1",
+        "source_revision_count": source_count,
+        "compiled_source_revision_count": compiled_source_count,
+        "uncompiled_source_revision_count": max(0, source_count - compiled_source_count),
+        "freshness_counts": freshness_counts,
+        "scope": scope,
+        "max_sensitivity": max_sensitivity,
+        "audit_head": store.audit_head,
+    }
+
+
 def _handle_autonomous_knowledge_support(
     *,
     operation: KnowledgeOperation,
@@ -1031,6 +1445,13 @@ def _handle_autonomous_knowledge_support(
     as_of: str | None,
     plane: str,
     confirm_no_case_data: bool,
+    purpose: str,
+    policy: str | None,
+    compilation_action: str | None,
+    compilation_run_id: str | None,
+    after_source_revision_id: str | None,
+    compiler_profile: str | None,
+    compiler_profile_version: str | None,
     vault_path: Path,
 ) -> dict[str, Any]:
     if plane not in {"all", "source_derived", "autonomous"}:
@@ -1049,6 +1470,36 @@ def _handle_autonomous_knowledge_support(
         raise ValueError("source-derived exact reads do not support historical as_of")
     if as_of is not None:
         as_of = canonical_timestamp(as_of, field="knowledge as_of")
+    if operation == "query":
+        return _handle_purpose_query(
+            query=query,
+            purpose=purpose,
+            policy=policy,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            max_chars=max_chars,
+            max_tokens=max_tokens,
+            max_sources=max_sources,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            as_of=as_of,
+            kinds=kinds,
+            vault_path=vault_path,
+        )
+    if operation == "compilation":
+        return _handle_compilation_support(
+            action=compilation_action,
+            compilation_run_id=compilation_run_id,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            after_source_revision_id=after_source_revision_id,
+            profile_name=compiler_profile,
+            profile_version=compiler_profile_version,
+            confirm_no_case_data=confirm_no_case_data,
+            vault_path=vault_path,
+        )
     if operation in {"lineage", "graph", "identity_lookup", "gaps"} and plane == "source_derived":
         raise ValueError(f"operation={operation} requires the autonomous plane")
     requested_kinds = tuple(kinds or ())
@@ -1540,7 +1991,7 @@ def _handle_autonomous_knowledge_support(
         "result": result,
     }
     assert_provider_output_safe(response, interface="knowledge_support")
-    if len(canonical_json(response)) > _MAX_MCP_OUTPUT_CHARS:
+    if len(canonical_json(response).encode("utf-8")) > _MAX_MCP_OUTPUT_CHARS:
         raise RuntimeError("knowledge_support output exceeds its hard 64 KiB budget")
     _validate_autonomous_output(response)
     return response
@@ -1567,6 +2018,13 @@ def handle_knowledge_support(
     as_of: str | None = None,
     plane: str = "all",
     confirm_no_case_data: bool = False,
+    purpose: str = "answer",
+    policy: str | None = None,
+    compilation_action: str | None = None,
+    compilation_run_id: str | None = None,
+    after_source_revision_id: str | None = None,
+    compiler_profile: str | None = None,
+    compiler_profile_version: str | None = None,
     vault_path: str | Path | None = None,
 ) -> dict[str, Any]:
     selected_path = (
@@ -1595,6 +2053,13 @@ def handle_knowledge_support(
             as_of=as_of,
             plane=plane,
             confirm_no_case_data=confirm_no_case_data,
+            purpose=purpose,
+            policy=policy,
+            compilation_action=compilation_action,
+            compilation_run_id=compilation_run_id,
+            after_source_revision_id=after_source_revision_id,
+            compiler_profile=compiler_profile,
+            compiler_profile_version=compiler_profile_version,
             vault_path=selected_path,
         )
     with _open_agent_vault(selected_path) as vault:
@@ -1682,7 +2147,7 @@ def handle_knowledge_support(
         "result": result,
     }
     assert_provider_output_safe(response, interface="knowledge_support")
-    if len(canonical_json(response)) > _MAX_MCP_OUTPUT_CHARS:
+    if len(canonical_json(response).encode("utf-8")) > _MAX_MCP_OUTPUT_CHARS:
         raise RuntimeError("knowledge_support output exceeds its hard 64 KiB budget")
     return response
 
@@ -1747,6 +2212,28 @@ def create_knowledge_mcp_server(
                     as_of=cast(str | None, arguments.get("as_of")),
                     plane=str(arguments.get("plane", "all")),
                     confirm_no_case_data=bool(arguments.get("confirm_no_case_data", False)),
+                    purpose=str(arguments.get("purpose", "answer")),
+                    policy=cast(str | None, arguments.get("policy")),
+                    compilation_action=cast(
+                        str | None,
+                        arguments.get("compilation_action"),
+                    ),
+                    compilation_run_id=cast(
+                        str | None,
+                        arguments.get("compilation_run_id"),
+                    ),
+                    after_source_revision_id=cast(
+                        str | None,
+                        arguments.get("after_source_revision_id"),
+                    ),
+                    compiler_profile=cast(
+                        str | None,
+                        arguments.get("compiler_profile"),
+                    ),
+                    compiler_profile_version=cast(
+                        str | None,
+                        arguments.get("compiler_profile_version"),
+                    ),
                     vault_path=runtime.vault_path,
                 )
             except Exception as error:

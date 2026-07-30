@@ -9,6 +9,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from benchmarks.evaluation.run_protocol import verify_report_directory
+from benchmarks.living_wiki.compare_quality import compare as compare_living_wiki_quality
 from benchmarks.release.evidence import (
     environment_manifest,
     file_record,
@@ -17,8 +18,13 @@ from benchmarks.release.evidence import (
     verify_record_digest,
     write_report,
 )
+from deeplaw.catalog_signing import verify_catalog_signature
 
-SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v3"
+SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v4"
+LIVING_WIKI_BASELINE_COMMIT = "42382b264f4297965c25aaac6e85619e9e0d49b7"
+LIVING_WIKI_BASELINE_WHEEL_SHA256 = (
+    "9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0"
+)
 COMPETITIVE_EVIDENCE_MISSING = [
     "real_model_task_e2e",
     "named_baseline_results_17",
@@ -32,12 +38,17 @@ class CommercialReleaseError(RuntimeError):
 
 
 def _same_binding(expected: dict[str, Any], observed: dict[str, Any]) -> bool:
-    return all(
+    scalar_binding_matches = all(
         expected.get(field) == observed.get(field)
         for field in ("commit", "tree", "package_version", "lock_sha256", "pyproject_sha256")
-    ) and expected.get("contracts", {}).get("inventory_sha256") == observed.get(
-        "contracts", {}
-    ).get("inventory_sha256")
+    )
+    return (
+        scalar_binding_matches
+        and expected.get("contracts", {}).get("inventory_sha256")
+        == observed.get("contracts", {}).get("inventory_sha256")
+        and expected.get("migrations", {}).get("inventory_sha256")
+        == observed.get("migrations", {}).get("inventory_sha256")
+    )
 
 
 def _require_report(
@@ -207,6 +218,166 @@ def _docs(repository: Path) -> dict[str, bool]:
     return result
 
 
+def _living_wiki_quality(
+    repository: Path,
+    path: Path,
+    *,
+    binding: dict[str, Any],
+    wheel_hashes: set[str],
+) -> dict[str, Any]:
+    report = load_json(path)
+    verify_record_digest(report, field="Living Wiki quality report")
+    schema = load_json(
+        repository / "contracts/living-wiki-quality-report.v1.schema.json"
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(report)
+    candidate = report.get("candidate", {})
+    security = report.get("security", {})
+    cli_coverage = report.get("cli_coverage", {})
+    gate_checks = report.get("retrieval", {}).get("gate_checks", {})
+    required_cli_checks = (
+        "source_list_get_verify_fragment_diff",
+        "compilation_status_explain",
+        "freshness_contradictions_gaps",
+        "context",
+        "verify",
+        "law_support_boundary",
+    )
+    if (
+        report.get("schema_version")
+        != "deeplaw.living-wiki-quality-report/v1"
+        or report.get("passed") is not True
+        or report.get("competitive_claim_eligible") is not False
+        or candidate.get("role") != "fresh_wheel"
+        or candidate.get("commit") != binding["commit"]
+        or candidate.get("version") != binding["package_version"]
+        or candidate.get("artifact_sha256") not in wheel_hashes
+        or not cli_coverage
+        or not all(cli_coverage.get(field) is True for field in required_cli_checks)
+        or not gate_checks
+        or not all(value is True for value in gate_checks.values())
+        or security.get("unauthorized_disclosure") != 0
+        or security.get("silent_fallback") != 0
+        or security.get("stale_prohibited_selection") != 0
+        or security.get("invalid_official_citation") != 0
+        or security.get("provider_hard_limit_violation") != 0
+        or security.get("authority_elevation_by_ranking_or_model") != 0
+        or security.get("unauthorized_write_rejected") is not True
+    ):
+        raise CommercialReleaseError("Living Wiki fresh-wheel quality gate did not pass")
+    suite_path = repository / "benchmarks/living_wiki/quality-suite-v1.json"
+    runner_path = repository / "benchmarks/living_wiki/run_quality_gate.py"
+    if (
+        report.get("suite", {}).get("suite_sha256")
+        != file_record(suite_path)["sha256"]
+        or report.get("suite", {}).get("runner_sha256")
+        != file_record(runner_path)["sha256"]
+    ):
+        raise CommercialReleaseError("Living Wiki quality report uses a different suite")
+    return report
+
+
+def _living_wiki_comparison(
+    repository: Path,
+    *,
+    baseline_path: Path,
+    comparison_path: Path,
+    candidate: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    report_schema = load_json(
+        repository / "contracts/living-wiki-quality-report.v1.schema.json"
+    )
+    comparison_schema = load_json(
+        repository / "contracts/living-wiki-quality-comparison.v1.schema.json"
+    )
+    Draft202012Validator.check_schema(report_schema)
+    Draft202012Validator.check_schema(comparison_schema)
+    baseline = load_json(baseline_path)
+    comparison = load_json(comparison_path)
+    verify_record_digest(baseline, field="Living Wiki baseline quality report")
+    verify_record_digest(comparison, field="Living Wiki quality comparison")
+    Draft202012Validator(report_schema).validate(baseline)
+    Draft202012Validator(comparison_schema).validate(comparison)
+    baseline_candidate = baseline.get("candidate", {})
+    if (
+        baseline.get("schema_version")
+        != "deeplaw.living-wiki-quality-report/v1"
+        or baseline.get("competitive_claim_eligible") is not False
+        or baseline_candidate.get("role") != "baseline"
+        or baseline_candidate.get("commit") != LIVING_WIKI_BASELINE_COMMIT
+        or baseline_candidate.get("version") != "0.10.0"
+        or baseline_candidate.get("artifact_sha256")
+        != LIVING_WIKI_BASELINE_WHEEL_SHA256
+        or baseline.get("suite", {}).get("suite_sha256")
+        != candidate.get("suite", {}).get("suite_sha256")
+        or baseline.get("suite", {}).get("runner_sha256")
+        != candidate.get("suite", {}).get("runner_sha256")
+    ):
+        raise CommercialReleaseError("Living Wiki baseline is not the frozen candidate")
+    expected_comparison = compare_living_wiki_quality(baseline, candidate)
+    if comparison != expected_comparison:
+        raise CommercialReleaseError(
+            "Living Wiki baseline comparison is not reproducible"
+        )
+    return baseline, comparison
+
+
+def _source_quality_matrix(
+    repository: Path,
+    path: Path,
+) -> dict[str, Any]:
+    matrix = load_json(path)
+    verify_record_digest(matrix, field="28-source decision matrix")
+    schema = load_json(
+        repository
+        / "contracts/authoritative-source-quality-decision-matrix.v1.schema.json"
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(matrix)
+    sources = matrix.get("sources", [])
+    catalog_path = repository / "catalogs/deeplaw-official-cn.json"
+    signature_path = repository / "catalogs/deeplaw-official-cn.json.sig"
+    signature_verification = verify_catalog_signature(
+        catalog_path.read_bytes(),
+        signature_path.read_bytes(),
+        trust_store_path=repository / "trust/official-catalog-keys.v1.json",
+    )
+    catalog = load_json(catalog_path)
+    expected_sources = sorted(
+        (item["sha256"], item["byteSize"], item["format"])
+        for item in catalog.get("documents", [])
+    )
+    observed_sources = sorted(
+        (
+            item.get("immutable_bytes_sha256"),
+            item.get("byte_size"),
+            item.get("format"),
+        )
+        for item in sources
+    )
+    if (
+        matrix.get("status") != "executed_and_verified"
+        or matrix.get("release_target") != "0.11.0"
+        or matrix.get("competitive_claim_eligible") is not False
+        or len(sources) != 28
+        or len({item.get("stable_source_id") for item in sources}) != 28
+        or any(item.get("execution_status") != "verified" for item in sources)
+        or matrix.get("active_after", {}).get("verified") is not True
+        or matrix.get("retrieval_quality", {}).get("quality_regression") is not False
+        or signature_verification.get("verified") is not True
+        or matrix.get("catalog", {}).get("sha256")
+        != signature_verification.get("catalog_sha256")
+        or matrix.get("catalog", {}).get("signature_sha256")
+        != signature_verification.get("signature_sha256")
+        or matrix.get("catalog", {}).get("signature_key_id")
+        != signature_verification.get("key_id")
+        or expected_sources != observed_sources
+    ):
+        raise CommercialReleaseError("28-source decision matrix is incomplete")
+    return matrix
+
+
 def assemble(
     repository: Path,
     *,
@@ -220,6 +391,10 @@ def assemble(
     licenses_path: Path,
     openvex_path: Path,
     evaluation_path: Path,
+    living_wiki_quality_path: Path,
+    living_wiki_baseline_path: Path,
+    living_wiki_comparison_path: Path,
+    source_quality_matrix_path: Path,
     source_date_epoch: int,
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
@@ -237,9 +412,26 @@ def assemble(
         )
         for path in platform_paths
     ]
-    systems = sorted(report["environment"]["platform_system"] for report in platform_reports)
-    if systems != ["Darwin", "Linux", "Windows"]:
-        raise CommercialReleaseError(f"platform reports are incomplete: {systems}")
+    platform_matrix = sorted(
+        (
+            report["environment"]["platform_system"],
+            ".".join(report["environment"]["python_version"].split(".")[:2]),
+        )
+        for report in platform_reports
+    )
+    expected_platform_matrix = sorted(
+        (system, python_version)
+        for system in ("Darwin", "Linux", "Windows")
+        for python_version in ("3.11", "3.12", "3.13")
+    )
+    if platform_matrix != expected_platform_matrix:
+        raise CommercialReleaseError(
+            f"platform/Python reports are incomplete: {platform_matrix}"
+        )
+    systems = sorted({system for system, _python in platform_matrix})
+    python_versions = sorted(
+        {python_version for _system, python_version in platform_matrix}
+    )
     wheel_hashes = {
         report["distribution_lifecycle"]["wheel_sha256"] for report in platform_reports
     }
@@ -248,6 +440,22 @@ def assemble(
     }
     if len(wheel_hashes) != 1 or len(sdist_hashes) != 1:
         raise CommercialReleaseError("operating systems did not install identical distributions")
+    living_wiki_quality = _living_wiki_quality(
+        repository,
+        living_wiki_quality_path,
+        binding=binding,
+        wheel_hashes=wheel_hashes,
+    )
+    living_wiki_baseline, living_wiki_comparison = _living_wiki_comparison(
+        repository,
+        baseline_path=living_wiki_baseline_path,
+        comparison_path=living_wiki_comparison_path,
+        candidate=living_wiki_quality,
+    )
+    source_quality_matrix = _source_quality_matrix(
+        repository,
+        source_quality_matrix_path,
+    )
 
     host = _require_report(
         host_path,
@@ -355,10 +563,64 @@ def assemble(
         raise CommercialReleaseError(
             "verified Evaluation Protocol report is absent from release assets"
         )
+    living_wiki_quality_asset = artifact_by_path.get(
+        "quality/living-wiki-quality-report.json", {}
+    )
+    if living_wiki_quality_asset.get("sha256") != file_record(
+        living_wiki_quality_path
+    )["sha256"]:
+        raise CommercialReleaseError(
+            "verified Living Wiki quality report is absent from release assets"
+        )
+    living_wiki_baseline_asset = artifact_by_path.get(
+        "quality/living-wiki-quality-baseline.json", {}
+    )
+    if living_wiki_baseline_asset.get("sha256") != file_record(
+        living_wiki_baseline_path
+    )["sha256"]:
+        raise CommercialReleaseError(
+            "verified Living Wiki baseline report is absent from release assets"
+        )
+    living_wiki_comparison_asset = artifact_by_path.get(
+        "quality/living-wiki-quality-comparison.json", {}
+    )
+    if living_wiki_comparison_asset.get("sha256") != file_record(
+        living_wiki_comparison_path
+    )["sha256"]:
+        raise CommercialReleaseError(
+            "verified Living Wiki comparison is absent from release assets"
+        )
+    source_quality_asset = artifact_by_path.get(
+        "quality/v0.11-28-source-decision-matrix.json", {}
+    )
+    if source_quality_asset.get("sha256") != file_record(
+        source_quality_matrix_path
+    )["sha256"]:
+        raise CommercialReleaseError(
+            "verified 28-source decision matrix is absent from release assets"
+        )
+    major, minor, _patch = version.split(".")
+    release_notes_relative = f"docs/RELEASE_NOTES_v{version}.md"
+    acceptance_relative = f"docs/V{major}_{minor}_ACCEPTANCE_MATRIX.md"
+    release_notes_asset = artifact_by_path.get(
+        f"documentation/RELEASE_NOTES_v{version}.md", {}
+    )
+    acceptance_asset = artifact_by_path.get(
+        f"documentation/V{major}_{minor}_ACCEPTANCE_MATRIX.md", {}
+    )
+    if (
+        release_notes_asset.get("sha256")
+        != file_record(repository / release_notes_relative)["sha256"]
+        or acceptance_asset.get("sha256")
+        != file_record(repository / acceptance_relative)["sha256"]
+    ):
+        raise CommercialReleaseError(
+            "release notes or acceptance matrix are absent from release assets"
+        )
 
     mandatory_tests = sum(report["mandatory_suite"]["tests"] for report in platform_reports)
     mandatory_skips = sum(report["mandatory_suite"]["skipped"] for report in platform_reports)
-    if mandatory_tests < 1740 or mandatory_skips != 0:
+    if mandatory_tests < 5220 or mandatory_skips != 0:
         raise CommercialReleaseError("mandatory test total is incomplete or includes skips")
     return {
         "schema_version": SCHEMA_VERSION,
@@ -376,11 +638,20 @@ def assemble(
             "pyproject_sha256": binding["pyproject_sha256"],
             "contracts_inventory_sha256": binding["contracts"]["inventory_sha256"],
             "contracts_count": binding["contracts"]["count"],
+            "migrations_inventory_sha256": binding["migrations"][
+                "inventory_sha256"
+            ],
+            "migration_identities": binding["migrations"]["identities"],
             "versions": versions,
         },
         "artifacts": artifacts,
         "platform_gates": {
             "systems": systems,
+            "python_versions": python_versions,
+            "matrix": [
+                {"system": system, "python_version": python_version}
+                for system, python_version in platform_matrix
+            ],
             "mandatory_tests": mandatory_tests,
             "mandatory_skips": mandatory_skips,
             "windows_native_acl_junction_reparse": True,
@@ -421,6 +692,9 @@ def assemble(
             "non_root_networkless_oci": True,
             "sbom_license_audit_openvex": True,
             "evaluation_protocol_v1": True,
+            "living_wiki_fresh_wheel_quality": True,
+            "living_wiki_baseline_no_regression": True,
+            "authoritative_28_source_quality": True,
             "documentation": docs,
         },
         "evaluation_protocol": {
@@ -435,6 +709,67 @@ def assemble(
             "freeze_valid": True,
             "quality_gate_passed": True,
             "candidate_wheel_sha256": candidate["artifact_sha256"],
+        },
+        "living_wiki_quality": {
+            "suite_id": living_wiki_quality["suite"]["suite_id"],
+            "report_path": "quality/living-wiki-quality-report.json",
+            "report_sha256": living_wiki_quality_asset["sha256"],
+            "baseline_report_path": "quality/living-wiki-quality-baseline.json",
+            "baseline_report_sha256": living_wiki_baseline_asset["sha256"],
+            "baseline_record_sha256": living_wiki_baseline["record_sha256"],
+            "baseline_commit": LIVING_WIKI_BASELINE_COMMIT,
+            "baseline_version": living_wiki_baseline["candidate"]["version"],
+            "baseline_wheel_sha256": living_wiki_baseline["candidate"][
+                "artifact_sha256"
+            ],
+            "baseline_passed": living_wiki_baseline["passed"],
+            "baseline_failure_codes": sorted(
+                str(item.get("code")) for item in living_wiki_baseline["failures"]
+            ),
+            "comparison_path": "quality/living-wiki-quality-comparison.json",
+            "comparison_sha256": living_wiki_comparison_asset["sha256"],
+            "comparison_record_sha256": living_wiki_comparison["record_sha256"],
+            "candidate_wheel_sha256": living_wiki_quality["candidate"][
+                "artifact_sha256"
+            ],
+            "recall_at_k": living_wiki_quality["retrieval"]["recall_at_k"],
+            "precision_at_k": living_wiki_quality["retrieval"][
+                "precision_at_k"
+            ],
+            "mrr": living_wiki_quality["retrieval"]["mrr"],
+            "citation_validity": living_wiki_quality["retrieval"][
+                "citation_validity"
+            ],
+            "security_failures": 0,
+            "quality_regression": False,
+            "performance_regression": False,
+            "passed": True,
+        },
+        "authoritative_source_quality": {
+            "matrix_path": "quality/v0.11-28-source-decision-matrix.json",
+            "matrix_sha256": source_quality_asset["sha256"],
+            "record_sha256": source_quality_matrix["record_sha256"],
+            "catalog_sha256": source_quality_matrix["catalog"]["sha256"],
+            "active_release_id": source_quality_matrix["active_after"][
+                "release_id"
+            ],
+            "active_database_sha256": source_quality_matrix["active_after"][
+                "database_sha256"
+            ],
+            "source_count": len(source_quality_matrix["sources"]),
+            "decision_summary": source_quality_matrix["decision_summary"],
+            "quality_regression": False,
+            "passed": True,
+        },
+        "release_documentation": {
+            "release_notes_path": f"documentation/RELEASE_NOTES_v{version}.md",
+            "release_notes_sha256": release_notes_asset["sha256"],
+            "acceptance_matrix_path": (
+                f"documentation/V{major}_{minor}_ACCEPTANCE_MATRIX.md"
+            ),
+            "acceptance_matrix_sha256": acceptance_asset["sha256"],
+            "known_limitations_declared": True,
+            "unclaimed_capabilities_declared": True,
         },
         "commercial_release_eligible": True,
         "quality_protocol_eligible": True,
@@ -465,6 +800,10 @@ def main() -> int:
     parser.add_argument("--licenses", type=Path, required=True)
     parser.add_argument("--openvex", type=Path, required=True)
     parser.add_argument("--evaluation", type=Path, required=True)
+    parser.add_argument("--living-wiki-quality", type=Path, required=True)
+    parser.add_argument("--living-wiki-baseline", type=Path, required=True)
+    parser.add_argument("--living-wiki-comparison", type=Path, required=True)
+    parser.add_argument("--source-quality-matrix", type=Path, required=True)
     parser.add_argument("--source-date-epoch", type=int, default=946684800)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -481,11 +820,15 @@ def main() -> int:
             licenses_path=args.licenses.resolve(),
             openvex_path=args.openvex.resolve(),
             evaluation_path=args.evaluation.resolve(),
+            living_wiki_quality_path=args.living_wiki_quality.resolve(),
+            living_wiki_baseline_path=args.living_wiki_baseline.resolve(),
+            living_wiki_comparison_path=args.living_wiki_comparison.resolve(),
+            source_quality_matrix_path=args.source_quality_matrix.resolve(),
             source_date_epoch=args.source_date_epoch,
         )
         schema = load_json(
             args.repository.resolve()
-            / "contracts/commercial-release-manifest.v3.schema.json"
+            / "contracts/commercial-release-manifest.v4.schema.json"
         )
         Draft202012Validator.check_schema(schema)
         write_report(args.output.resolve(), report)

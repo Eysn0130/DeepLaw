@@ -1,6 +1,6 @@
 {
   "name": "deeplaw-knowledge-os",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Explicit-use read-only DeepLaw Knowledge OS and bounded Context Capsule runtime.",
   "author": {
     "name": "Eysn0130",

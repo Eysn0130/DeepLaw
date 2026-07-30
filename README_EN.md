@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.10.0"><img src="https://img.shields.io/badge/latest-v0.10.0-17202A?style=flat-square" alt="Latest release v0.10.0" /></a>
+  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.11.0"><img src="https://img.shields.io/badge/latest-v0.11.0-17202A?style=flat-square" alt="Latest release v0.11.0" /></a>
   <img src="https://img.shields.io/badge/Evaluation%20Protocol-v1-36CDBB?style=flat-square" alt="DeepLaw Evaluation Protocol v1" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
@@ -51,9 +51,9 @@ same domain services.
 
 > [!NOTE]
 > **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
-> is the current delivery boundary. Software release `v0.10.0` builds on
-> the delivered 0.8 Autonomous Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence, and
-> closes the 1.0 Quality and Superiority milestone with a self-verifying quality protocol. The older
+> is the current delivery boundary. Software release `v0.11.0` adds the host-neutral governed
+> compilation transaction, Rich Living Wiki projection, compiled-first/evidence-first retrieval,
+> controlled backfill, and Living Wiki/28-source formal quality gates. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
@@ -99,11 +99,11 @@ flowchart LR
 
 ## Install and start
 
-Install the verified `v0.10.0` wheel from the GitHub release:
+Install the verified `v0.11.0` wheel from the GitHub release:
 
 ```bash
 uv tool install \
-  https://github.com/Eysn0130/DeepLaw/releases/download/v0.10.0/deeplaw-0.10.0-py3-none-any.whl
+  https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/deeplaw-0.11.0-py3-none-any.whl
 deeplaw --version
 ```
 
@@ -191,8 +191,8 @@ lexical fallback remains available.
 
 | Process / leaf | Permission | Purpose |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | Read-only | v3 federated recall, exact get, explain, lineage, graph, identity, gaps, Wiki, verification, and Knowledge Capsule |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | Run/capture, typed knowledge and memory, evidence-bound relation, feedback, consolidation, lifecycle, and Skill revision |
+| `deeplaw knowledge mcp --stdio` / `knowledge_support` | Read-only | v4 recall/query, exact get, explain, lineage, graph, identity, gaps, Wiki, compilation state, verification, and Knowledge Capsule |
+| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | v3 controlled mutation, governed Compilation Run, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
 | `deeplaw mcp --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
 
 The default Knowledge OS plugin registers only `knowledge_support`. A sink requires an owner-created
@@ -203,7 +203,7 @@ administration, or permission changes.
 
 | Status | Capability |
 | --- | --- |
-| **Current in v0.10.0** | All v0.9 autonomous knowledge capabilities plus a public benchmark, fixed scoring, time-frozen holdout, automated reports, release-bound wheel/commit/freeze verification, and hard-failure quality gates |
+| **Current in v0.11.0** | Governed Source-to-Knowledge compilation, Rich Living Wiki projection, compiled-first/evidence-first retrieval, controlled backfill, stable CLI/MCP/Python surfaces, editor bridges, and Living Wiki/28-source/fresh-wheel release-bound quality gates |
 | **Compatibility** | v0.7 Source IR, reviewed source-derived Knowledge Assets, Proposal Inbox, Workbench, and Retrieval Fabric remain available in their explicit compatibility partition |
 | **Quality closure** | DeepLaw Evaluation Protocol v1 evaluates repository retrieval, autonomy safety, and Typed Compiler quality on a public, maintainer-visible, time-frozen holdout. Release reports bind exact wheel, commit, freeze, and case-level results. No external institution certification is required |
 | **Comparative closure pending** | Real Codex, Claude Code, and OpenCode model tasks and same-condition named-baseline runs have not been executed; paired confidence intervals and complete cost/failure inventories therefore remain absent |
@@ -249,7 +249,7 @@ git diff --check
 | Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Agent and MCP adapters | [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) |
 | Installation, upgrade, rollback | [`docs/INSTALL_UPGRADE_ROLLBACK.md`](docs/INSTALL_UPGRADE_ROLLBACK.md) |
-| v0.10 acceptance and release notes | [`docs/V0_10_ACCEPTANCE_MATRIX.md`](docs/V0_10_ACCEPTANCE_MATRIX.md) · [`docs/RELEASE_NOTES_v0.10.0.md`](docs/RELEASE_NOTES_v0.10.0.md) |
+| v0.11 acceptance and release notes | [`docs/V0_11_ACCEPTANCE_MATRIX.md`](docs/V0_11_ACCEPTANCE_MATRIX.md) · [`docs/RELEASE_NOTES_v0.11.0.md`](docs/RELEASE_NOTES_v0.11.0.md) |
 | Evaluation and comparative proof | [`docs/EVALUATION_PROTOCOL.md`](docs/EVALUATION_PROTOCOL.md) · [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) · [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md) |
 | Security policy | [`SECURITY.md`](SECURITY.md) |
 

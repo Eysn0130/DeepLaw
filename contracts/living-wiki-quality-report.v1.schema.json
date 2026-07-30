@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-quality-report.v1.schema.json",
+  "title": "DeepLaw Living Wiki CLI quality report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite",
+    "candidate",
+    "corpus",
+    "environment",
+    "configuration",
+    "cli_coverage",
+    "compilation",
+    "retrieval",
+    "living_wiki",
+    "lifecycle",
+    "security",
+    "failures",
+    "passed",
+    "competitive_claim_eligible",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.living-wiki-quality-report/v1"
+    },
+    "suite": {
+      "$ref": "#/$defs/object"
+    },
+    "candidate": {
+      "$ref": "#/$defs/object"
+    },
+    "corpus": {
+      "$ref": "#/$defs/object"
+    },
+    "environment": {
+      "$ref": "#/$defs/object"
+    },
+    "configuration": {
+      "$ref": "#/$defs/object"
+    },
+    "cli_coverage": {
+      "$ref": "#/$defs/object"
+    },
+    "compilation": {
+      "$ref": "#/$defs/object"
+    },
+    "retrieval": {
+      "$ref": "#/$defs/object"
+    },
+    "living_wiki": {
+      "$ref": "#/$defs/object"
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/object"
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unauthorized_disclosure",
+        "silent_fallback",
+        "stale_prohibited_selection",
+        "invalid_official_citation",
+        "provider_hard_limit_violation",
+        "authority_elevation_by_ranking_or_model",
+        "unauthorized_write_rejected"
+      ],
+      "properties": {
+        "unauthorized_disclosure": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "silent_fallback": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "stale_prohibited_selection": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "invalid_official_citation": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "provider_hard_limit_violation": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "authority_elevation_by_ranking_or_model": {
+          "$ref": "#/$defs/non_negative_integer"
+        },
+        "unauthorized_write_rejected": {
+          "type": "boolean"
+        }
+      }
+    },
+    "failures": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object"
+      }
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "competitive_claim_eligible": {
+      "const": false
+    },
+    "record_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "object": {
+      "type": "object"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "non_negative_integer": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

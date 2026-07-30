@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-manifest.v1.schema.json",
+  "title": "DeepLaw Living Wiki Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "input_audit_head", "legacy_audit_head", "generator",
+    "generator_version", "configuration", "configuration_sha256",
+    "knowledge_revision_count", "knowledge_revision_ids_sha256",
+    "relation_revision_count", "relation_revision_ids_sha256",
+    "source_revision_count", "community_count", "files", "canvas_manifests",
+    "generated_at", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-manifest/v1"},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generator": {"const": "deeplaw.living-wiki-projector/1"},
+    "generator_version": {"const": "1"},
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index_shard_size", "source_fragment_shard_size",
+        "canvas_node_limit", "canvas_edge_limit", "page_kinds",
+        "community_algorithm", "local_canvas_per_object",
+        "compilation_state_sha256"
+      ],
+      "properties": {
+        "index_shard_size": {"const": 200},
+        "source_fragment_shard_size": {"const": 64},
+        "canvas_node_limit": {"const": 200},
+        "canvas_edge_limit": {"const": 400},
+        "page_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "claim", "comparison", "concept", "decision", "entity",
+              "event", "experience", "memory", "preference", "procedure",
+              "skill", "synthesis"
+            ]
+          }
+        },
+        "community_algorithm": {
+          "const": "weighted-label-propagation+semantic-bridges/1"
+        },
+        "local_canvas_per_object": {"const": true},
+        "compilation_state_sha256": {
+          "type": "string", "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "knowledge_revision_count": {
+      "type": "integer", "minimum": 0, "maximum": 1000000
+    },
+    "knowledge_revision_ids_sha256": {
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "relation_revision_count": {
+      "type": "integer", "minimum": 0, "maximum": 2000000
+    },
+    "relation_revision_ids_sha256": {
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_revision_count": {
+      "type": "integer", "minimum": 0, "maximum": 1000000
+    },
+    "community_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "files": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "byte_size", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "byte_size": {"type": "integer", "minimum": 0, "maximum": 262144},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "canvas_manifests": {
+      "type": "array", "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name", "node_count", "edge_count", "truncated_nodes",
+          "truncated_edges", "path", "sha256"
+        ],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 512},
+          "node_count": {"type": "integer", "minimum": 0, "maximum": 200},
+          "edge_count": {"type": "integer", "minimum": 0, "maximum": 400},
+          "truncated_nodes": {
+            "type": "integer", "minimum": 0, "maximum": 1000000
+          },
+          "truncated_edges": {
+            "type": "integer", "minimum": 0, "maximum": 2000000
+          },
+          "path": {"type": "string", "pattern": "^canvas/.+\\.canvas$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

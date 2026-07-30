@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-freshness-report.v1.schema.json",
+  "title": "DeepLaw Source Freshness Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_revision_id", "replacement_source_revision_id",
+    "source_status", "added_fragment_ids", "changed_fragment_ids",
+    "moved_fragment_ids", "unchanged_fragment_ids", "missing_fragment_ids",
+    "affected_knowledge_revision_ids",
+    "affected_relation_revision_ids", "freshness_event_ids", "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-freshness-report/v1"},
+    "source_revision_id": {
+      "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+    },
+    "replacement_source_revision_id": {
+      "type": ["string", "null"], "pattern": "^sourcerev_[0-9a-f]{24}$"
+    },
+    "source_status": {"enum": ["active", "superseded", "removed", "unavailable"]},
+    "added_fragment_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+    },
+    "changed_fragment_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+    },
+    "unchanged_fragment_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+    },
+    "moved_fragment_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+    },
+    "missing_fragment_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+    },
+    "affected_knowledge_revision_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}
+    },
+    "affected_relation_revision_ids": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"}
+    },
+    "freshness_event_ids": {
+      "type": "array", "maxItems": 200000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^freshness_[0-9a-f]{24}$"}
+    },
+    "recorded_at": {"type": "string", "format": "date-time"}
+  }
+}

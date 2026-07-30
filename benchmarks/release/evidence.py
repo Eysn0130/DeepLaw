@@ -72,6 +72,42 @@ def contracts_binding(repository: Path) -> dict[str, Any]:
     }
 
 
+def migrations_binding(repository: Path) -> dict[str, Any]:
+    identities = [
+        "deeplaw.knowledge-vault/v1",
+        "deeplaw.knowledge-sqlite/v1",
+        "deeplaw.knowledge-control/v1",
+        "deeplaw.autonomous-knowledge-core/v1",
+        "deeplaw.autonomous-knowledge-core/v2",
+        "deeplaw.source-compilation-core/v1",
+    ]
+    relative_paths = [
+        "src/deeplaw/knowledge_store.py",
+        "src/deeplaw/knowledge_autonomy.py",
+        "src/deeplaw/knowledge_maintenance.py",
+        "src/deeplaw/compilation/store.py",
+    ]
+    records = []
+    for relative in relative_paths:
+        path = repository / relative
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError(f"migration implementation is missing or unsafe: {relative}")
+        records.append(
+            {
+                "path": relative,
+                "sha256": sha256_file(path),
+                "byte_size": path.stat().st_size,
+            }
+        )
+    inventory = {"identities": identities, "files": records}
+    return {
+        **inventory,
+        "inventory_sha256": sha256_bytes(
+            canonical_json(inventory).encode("utf-8")
+        ),
+    }
+
+
 def repository_binding(repository: Path) -> dict[str, Any]:
     selected = repository.resolve(strict=True)
     project = tomllib.loads((selected / "pyproject.toml").read_text(encoding="utf-8"))
@@ -87,6 +123,7 @@ def repository_binding(repository: Path) -> dict[str, Any]:
         "lock_sha256": sha256_file(selected / "uv.lock"),
         "pyproject_sha256": sha256_file(selected / "pyproject.toml"),
         "contracts": contracts_binding(selected),
+        "migrations": migrations_binding(selected),
     }
 
 

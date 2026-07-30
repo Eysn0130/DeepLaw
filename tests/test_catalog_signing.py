@@ -165,6 +165,28 @@ def test_official_sync_requires_signatures_except_explicit_local_development(
     assert signed["catalog"]["signature_verified"] is True
     assert signed["catalog"]["signature_key_id"].startswith("ed25519:")
 
+    rebuilt = sync_official(
+        catalog_source=catalog,
+        catalog_signature_source=signature_path,
+        source_root=source_root,
+        home=tmp_path / "signed-home",
+        trust_store_path=trust_path,
+        rebuild_current_catalog=True,
+    )
+    assert rebuilt["rebuilt_current_catalog"] is True
+    assert rebuilt["report"].get("cached") is None
+
+    unsigned_rebuild_catalog = tmp_path / "unsigned-rebuild.json"
+    unsigned_rebuild_catalog.write_bytes(catalog.read_bytes())
+    with pytest.raises(PermissionError, match="verified signed catalog"):
+        sync_official(
+            catalog_source=unsigned_rebuild_catalog,
+            source_root=source_root,
+            home=tmp_path / "developer-home",
+            allow_unsigned_local_catalog=True,
+            rebuild_current_catalog=True,
+        )
+
     catalog.write_bytes(catalog.read_bytes() + b" ")
     with pytest.raises(ValueError, match="SHA-256"):
         sync_official(

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-backfill-draft.v1.schema.json",
+  "title": "DeepLaw query backfill draft v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "draft_id", "query_sha256", "title", "body", "kind",
+    "durable", "reusable", "novel", "non_duplicate", "contains_case_data",
+    "source_refs", "source_free", "scope", "sensitivity", "semantic_key",
+    "knowledge_id", "expected_revision_id", "tags", "generation", "origin",
+    "authority", "legal_authority", "status", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-backfill-draft/v1"},
+    "draft_id": {"type": "string", "pattern": "^backfilldraft_[0-9a-f]{24}$"},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "body": {"type": "string", "minLength": 1, "maxLength": 100000},
+    "kind": {
+      "enum": [
+        "claim", "comparison", "concept", "decision", "entity", "event",
+        "experience", "memory", "preference", "procedure", "synthesis"
+      ]
+    },
+    "durable": {"const": true},
+    "reusable": {"const": true},
+    "novel": {"const": true},
+    "non_duplicate": {"const": true},
+    "contains_case_data": {"const": false},
+    "source_refs": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "source_revision_id": {
+            "type": "string", "minLength": 1, "maxLength": 200
+          },
+          "fragment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "artifact_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "uri": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "oneOf": [
+          {
+            "required": ["revision_id"],
+            "not": {
+              "anyOf": [
+                {"required": ["source_id"]},
+                {"required": ["source_revision_id"]},
+                {"required": ["artifact_id"]},
+                {"required": ["fragment_id"]},
+                {"required": ["locator"]},
+                {"required": ["uri"]},
+                {"required": ["quote_sha256"]}
+              ]
+            }
+          },
+          {
+            "required": ["artifact_id"],
+            "not": {
+              "anyOf": [
+                {"required": ["source_id"]},
+                {"required": ["source_revision_id"]},
+                {"required": ["revision_id"]},
+                {"required": ["fragment_id"]},
+                {"required": ["locator"]},
+                {"required": ["uri"]},
+                {"required": ["quote_sha256"]}
+              ]
+            }
+          },
+          {
+            "anyOf": [
+              {"required": ["source_id"]},
+              {"required": ["source_revision_id"]}
+            ],
+            "not": {
+              "anyOf": [
+                {"required": ["artifact_id"]},
+                {"required": ["revision_id"]}
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "source_free": {"type": "boolean"},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "sensitivity": {"enum": ["public", "internal", "private"]},
+    "semantic_key": {"type": ["string", "null"], "minLength": 1, "maxLength": 300},
+    "knowledge_id": {
+      "type": ["string", "null"],
+      "pattern": "^knowledge_[0-9a-f]{24}$"
+    },
+    "expected_revision_id": {
+      "type": ["string", "null"],
+      "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "tags": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "model_id", "tool_id"],
+      "properties": {
+        "run_id": {"type": ["string", "null"], "maxLength": 500},
+        "model_id": {"type": ["string", "null"], "maxLength": 500},
+        "tool_id": {"const": "purpose-aware-query-backfill"}
+      }
+    },
+    "origin": {"const": "agent_derived"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "status": {"const": "proposed"},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"source_free": {"const": true}}, "required": ["source_free"]},
+      "then": {"properties": {"source_refs": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"source_free": {"const": false}}, "required": ["source_free"]},
+      "then": {"properties": {"source_refs": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"knowledge_id": {"type": "null"}}, "required": ["knowledge_id"]},
+      "then": {"properties": {"expected_revision_id": {"type": "null"}}}
+    }
+  ]
+}

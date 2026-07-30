@@ -1,6 +1,6 @@
 # DeepLaw roadmap
 
-Status: v0.10.0 delivery line, updated 2026-07-30. DeepLaw 2.0 is the product brand, not the
+Status: v0.11.0 delivery line, updated 2026-07-30. DeepLaw 2.0 is the product brand, not the
 software version. Runtime truth is `src/deeplaw`, contracts,
 migrations, tests, and `uv.lock`. A roadmap item never becomes a delivery claim without those
 artifacts.
@@ -18,7 +18,7 @@ permissions, and audit destruction remain owner/maintainer-only.
 
 ## v0.8 — Autonomous Knowledge Core
 
-**Implemented in v0.9.0 and retained in v0.10.0.** The milestone is an additive migration from the published v0.7
+**Implemented in v0.9.0 and retained in v0.11.0.** The milestone is an additive migration from the published v0.7
 foundation:
 
 - additive migration with a verified v0.7 rollback point;
@@ -41,12 +41,14 @@ foundation:
   fail-closed build validation, and atomic activation.
 - autonomous snapshot/restore and legacy compatibility.
 
-The v0.10 release line freezes the package/version, supported-OS matrix, security/package audit,
-quality report, signed release metadata, and release notes independently from comparative evidence.
+The v0.11 release line additionally freezes governed compilation, Living Wiki quality, the
+28-source Authoritative Pack decision matrix, package/version, supported-OS matrix,
+security/package audit, signed release metadata, and release notes independently from comparative
+evidence.
 
 ## v0.9 — Living Wiki and Knowledge Intelligence
 
-**Implemented in v0.9.0 and retained in v0.10.0; cross-system comparison remains separate.**
+**Implemented in v0.9.0 and retained in v0.11.0; cross-system comparison remains separate.**
 
 - deterministic offline multilingual dense index and evidence-duty reranker, both bound to model
   identity, audit heads, revision inventory, exact index bytes, offline policy, and hard limits;
@@ -71,7 +73,7 @@ quality report, signed release metadata, and release notes independently from co
 
 ## DeepLaw 1.0 milestone — Quality and Superiority Closure
 
-**Core quality engineering is implemented in software v0.10.0; comparative execution remains
+**Core quality engineering is retained in software v0.11.0; comparative execution remains
 open.** Evaluation Protocol v1 provides a public Benchmark, fixed scoring, a maintainer-visible
 time-frozen holdout, actual autonomy/security and Typed Compiler suites, complete automatic
 reports, independent verification, and an exact-wheel release gate. No external institution

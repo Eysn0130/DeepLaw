@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/editor-context-envelope.v1.schema.json",
+  "title": "DeepLaw Editor Context Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "frontend", "frontend_version", "vault_identity",
+    "active_note", "selected_text", "selection_range", "open_tabs",
+    "explicit_note_references", "backlinks", "outlinks", "active_canvas",
+    "active_bases_view", "user_intent", "persistence_allowed", "scope",
+    "max_sensitivity", "budgets", "confirm_no_case_data"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.editor-context-envelope/v1"},
+    "frontend": {"enum": ["obsidian", "tolaria"]},
+    "frontend_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "vault_identity": {
+      "type": "string",
+      "pattern": "^vault_[0-9a-f]{24}$"
+    },
+    "active_note": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["note_id", "content_sha256"],
+      "properties": {
+        "note_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "selected_text": {"type": ["string", "null"], "maxLength": 12000},
+    "selection_range": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "integer", "minimum": 0, "maximum": 10000000},
+        "end": {"type": "integer", "minimum": 0, "maximum": 10000000}
+      }
+    },
+    "open_tabs": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "explicit_note_references": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "backlinks": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "outlinks": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "active_canvas": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["canvas_id", "content_sha256"],
+      "properties": {
+        "canvas_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "active_bases_view": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["view_id", "filter_sha256"],
+      "properties": {
+        "view_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "filter_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "user_intent": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "persistence_allowed": {"type": "boolean"},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private"]},
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_notes", "max_context_characters", "max_selected_characters",
+        "max_provider_characters"
+      ],
+      "properties": {
+        "max_notes": {"type": "integer", "minimum": 1, "maximum": 32},
+        "max_context_characters": {
+          "type": "integer", "minimum": 200, "maximum": 20000
+        },
+        "max_selected_characters": {
+          "type": "integer", "minimum": 0, "maximum": 12000
+        },
+        "max_provider_characters": {"const": 65536}
+      }
+    },
+    "confirm_no_case_data": {"const": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"selected_text": {"type": "string"}}},
+      "then": {"properties": {"selection_range": {"type": "object"}}}
+    },
+    {
+      "if": {"properties": {"selected_text": {"type": "null"}}},
+      "then": {"properties": {"selection_range": {"type": "null"}}}
+    }
+  ]
+}

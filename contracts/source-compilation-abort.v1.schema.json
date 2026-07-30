@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-abort.v1.schema.json",
+  "title": "DeepLaw Source Compilation Abort v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "status", "idempotent_replay"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-abort/v1"},
+    "compilation_run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "status": {"const": "aborted"},
+    "idempotent_replay": {"type": "boolean"}
+  }
+}

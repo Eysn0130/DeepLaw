@@ -80,15 +80,19 @@ AUTONOMOUS_EVENT_TYPES = frozenset(
         "knowledge_run_recorded",
         "knowledge_sink_grant_enabled",
         "knowledge_sink_grant_revoked",
+        "knowledge_backfill_promoted",
+        "knowledge_backfill_proposed",
+        "knowledge_backfill_validated",
+        "source_compilation_aborted",
+        "source_compilation_committed",
+        "source_freshness_changed",
         "autonomous_core_migrated",
         "workspace_conflict_preserved",
         "workspace_location_recorded",
         "workspace_materialized",
     }
 )
-AUTONOMOUS_UNIQUE_OBJECT_EVENT_TYPES = AUTONOMOUS_EVENT_TYPES - {
-    "workspace_location_recorded"
-}
+AUTONOMOUS_UNIQUE_OBJECT_EVENT_TYPES = AUTONOMOUS_EVENT_TYPES - {"workspace_location_recorded"}
 
 KnowledgeKind = Literal[
     "claim",
@@ -142,6 +146,15 @@ SINK_OPERATIONS = frozenset(
         "save_comparison",
         "resolve_identity",
         "consolidate_memory",
+        "abort_compilation",
+        "begin_compilation",
+        "commit_compilation",
+        "promote_knowledge_draft",
+        "propose_knowledge_backfill",
+        "refresh_compilation",
+        "resume_compilation",
+        "stage_compilation_batch",
+        "validate_compilation",
     }
 )
 OBJECT_OPERATION_KINDS = {
@@ -156,6 +169,7 @@ OBJECT_OPERATION_KINDS = {
     "save_claim": frozenset({"claim"}),
     "save_comparison": frozenset({"comparison"}),
     "consolidate_memory": frozenset({"memory"}),
+    "promote_knowledge_draft": KNOWLEDGE_KINDS - {"skill"},
     "expire": KNOWLEDGE_KINDS,
     "forget": KNOWLEDGE_KINDS,
 }
@@ -266,21 +280,32 @@ _WORKSPACE_DIRECTORIES = (
     "memory/procedural",
     "memory/reflective",
     "wiki/sources",
+    "wiki/claims",
     "wiki/concepts",
     "wiki/entities",
     "wiki/events",
+    "wiki/decisions",
+    "wiki/procedures",
+    "wiki/experiences",
+    "wiki/preferences",
     "wiki/comparisons",
     "wiki/syntheses",
+    "wiki/skills",
+    "wiki/memory",
+    "wiki/indexes",
+    "wiki/contradictions",
     "wiki/questions",
     "wiki/communities",
     "wiki/gaps",
     "wiki/reports",
     "skills",
+    "drafts",
     "attachments",
     "canvas",
     "policies",
     ".deeplaw/objects/sha256",
     ".deeplaw/staging/conflicts",
+    ".deeplaw/compilation/staging",
     ".deeplaw/derived/fts",
     ".deeplaw/derived/vectors",
     ".deeplaw/derived/tree",
@@ -290,6 +315,14 @@ _WORKSPACE_DIRECTORIES = (
     ".deeplaw/snapshots",
     ".deeplaw/update",
     ".deeplaw/capabilities",
+)
+
+_DERIVED_REBUILD_DIRECTORIES = tuple(
+    relative
+    for relative in _WORKSPACE_DIRECTORIES
+    if relative == "canvas"
+    or relative.startswith("wiki/")
+    or relative.startswith(".deeplaw/derived/")
 )
 
 _VAULT_GITIGNORE = """# DeepLaw trusted/local state (back up with `deeplaw knowledge snapshot`)
@@ -434,6 +467,26 @@ def _owner_directory(path: Path) -> Path:
     if os.name != "nt":
         os.chmod(path, 0o700)
     return path
+
+
+def _restore_owner_subdirectory(root: Path, relative: str) -> Path:
+    """Recreate one known derived directory without traversing symlink ancestors."""
+    if root.is_symlink() or not root.is_dir():
+        raise RuntimeError("DeepLaw vault root is missing or unsafe")
+    path = PurePosixPath(relative)
+    if path.is_absolute() or not path.parts or any(
+        part in {"", ".", ".."} for part in path.parts
+    ):
+        raise RuntimeError("DeepLaw derived directory identity is unsafe")
+    current = root
+    for part in path.parts:
+        current = current / part
+        if current.is_symlink() or (current.exists() and not current.is_dir()):
+            raise RuntimeError("DeepLaw derived directory is unsafe")
+        current.mkdir(exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            os.chmod(current, 0o700)
+    return current
 
 
 def _atomic_owner_write(path: Path, payload: bytes) -> None:
@@ -644,11 +697,16 @@ def _safe_relative_path(value: str) -> str:
 def _safe_knowledge_workspace_path(value: str) -> str:
     canonical = _safe_relative_path(value)
     path = PurePosixPath(canonical)
-    if path.suffix != ".md" or not path.parts or path.parts[0] not in {
-        "knowledge",
-        "memory",
-        "skills",
-    }:
+    if (
+        path.suffix != ".md"
+        or not path.parts
+        or path.parts[0]
+        not in {
+            "knowledge",
+            "memory",
+            "skills",
+        }
+    ):
         raise ValueError("Knowledge workspace path is outside its open Markdown roots")
     return canonical
 
@@ -1366,9 +1424,7 @@ def initialize_autonomous_core(
             if not isinstance(aliases, list):
                 raise RuntimeError("existing Knowledge Object alias metadata is invalid")
             alias_values = list(
-                dict.fromkeys(
-                    [revision["title"], *aliases, revision["semantic_key"] or ""]
-                )
+                dict.fromkeys([revision["title"], *aliases, revision["semantic_key"] or ""])
             )
             for alias in alias_values:
                 if not isinstance(alias, str) or not alias:
@@ -1504,6 +1560,13 @@ def initialize_autonomous_core(
             raise RuntimeError("unsupported autonomous knowledge schema")
         else:
             installed_at = existing["installed_at"]
+        from .compilation.store import install_compilation_schema
+
+        install_compilation_schema(
+            connection,
+            installed_at=installed_at,
+            migration_source=migration_source,
+        )
     except BaseException:
         connection.rollback()
         raise
@@ -1602,11 +1665,13 @@ _SNAPSHOT_CANONICAL_DIRECTORIES = (
     "inbox",
     "knowledge",
     "memory",
+    "drafts",
     "skills",
     "attachments",
     "policies",
     ".deeplaw/objects",
     ".deeplaw/staging",
+    ".deeplaw/compilation",
     ".deeplaw/capabilities",
 )
 _SNAPSHOT_CANONICAL_FILES = (
@@ -1801,9 +1866,7 @@ def create_autonomous_snapshot(
             source_database_size = _database_path(root).stat().st_size
             if copied_bytes + source_database_size > _MAX_SNAPSHOT_TOTAL_BYTES:
                 raise ValueError("autonomous snapshot exceeds its total-byte bound")
-            destination_database = sqlite3.connect(
-                copied_root / ".deeplaw" / "ledger.sqlite3"
-            )
+            destination_database = sqlite3.connect(copied_root / ".deeplaw" / "ledger.sqlite3")
             try:
                 store.connection.backup(destination_database)
                 journal_mode = destination_database.execute(
@@ -1818,8 +1881,7 @@ def create_autonomous_snapshot(
             finally:
                 destination_database.close()
             if (
-                copied_bytes
-                + (copied_root / ".deeplaw" / "ledger.sqlite3").stat().st_size
+                copied_bytes + (copied_root / ".deeplaw" / "ledger.sqlite3").stat().st_size
                 > _MAX_SNAPSHOT_TOTAL_BYTES
             ):
                 raise ValueError("autonomous snapshot exceeds its total-byte bound")
@@ -2231,9 +2293,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         holder_id = stable_id("leaseholder", self.vault_id, secrets.token_hex(16))
         acquired_at = self._next_transaction_time()
         expires_at = (
-            datetime.fromisoformat(acquired_at.replace("Z", "+00:00"))
-            + timedelta(seconds=_MAX_LEASE_SECONDS)
-        ).isoformat(timespec="seconds").replace("+00:00", "Z")
+            (
+                datetime.fromisoformat(acquired_at.replace("Z", "+00:00"))
+                + timedelta(seconds=_MAX_LEASE_SECONDS)
+            )
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             self.connection.execute(
@@ -2270,8 +2336,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if row is not None:
             candidates.append(row["recorded_at"])
         canonical_priors = [
-            canonical_timestamp(prior, field="prior transaction timestamp")
-            for prior in candidates
+            canonical_timestamp(prior, field="prior transaction timestamp") for prior in candidates
         ]
         if canonical_priors:
             latest = max(canonical_priors)
@@ -2294,10 +2359,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             raise ValueError("unsupported autonomous event type")
         if object_id is None:
             raise ValueError("autonomous object event requires an object identity")
-        if event_type in AUTONOMOUS_UNIQUE_OBJECT_EVENT_TYPES and self.connection.execute(
-            "SELECT 1 FROM autonomous_events_v3 WHERE event_type = ? AND object_id = ?",
-            (event_type, object_id),
-        ).fetchone() is not None:
+        if (
+            event_type in AUTONOMOUS_UNIQUE_OBJECT_EVENT_TYPES
+            and self.connection.execute(
+                "SELECT 1 FROM autonomous_events_v3 WHERE event_type = ? AND object_id = ?",
+                (event_type, object_id),
+            ).fetchone()
+            is not None
+        ):
             raise RuntimeError("autonomous object event already exists")
         timestamp = recorded_at or self._next_transaction_time()
         if canonical_timestamp(timestamp, field="event recorded_at") != timestamp:
@@ -2692,6 +2761,20 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             """,
             (grant["grant_id"], cutoff),
         ).fetchone()["count"]
+        compilation_usage = self.connection.execute(
+            """
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'source_compilation_usage_v1'
+            """
+        ).fetchone()
+        if compilation_usage is not None:
+            recent += self.connection.execute(
+                """
+                SELECT COUNT(*) FROM source_compilation_usage_v1
+                WHERE grant_id = ? AND recorded_at >= ?
+                """,
+                (grant["grant_id"], cutoff),
+            ).fetchone()[0]
         if recent >= grant["max_mutations_per_minute"]:
             raise RuntimeError("knowledge sink rate limit exceeded")
         if enforce_object_capacity:
@@ -2753,8 +2836,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 "scope": row["scope"],
                 "sensitivity": row["sensitivity"],
                 "active": row["lifecycle"] not in {"quarantined", "forgotten", "revoked"}
-                and row["current_lifecycle"]
-                not in {None, "quarantined", "forgotten", "revoked"},
+                and row["current_lifecycle"] not in {None, "quarantined", "forgotten", "revoked"},
             }
         artifact_id = reference.get("artifact_id")
         if isinstance(artifact_id, str):
@@ -2928,19 +3010,98 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             )
         )
 
+    def _successor_equivalent_reference_is_admitted(
+        self,
+        reference: dict[str, Any],
+        *,
+        consumer_kind: Literal["knowledge_revision", "relation_revision"],
+        consumer_revision_id: str,
+        scope: str | None,
+        max_sensitivity: str | None,
+    ) -> bool:
+        """Admit an unchanged exact fragment through a recorded active successor."""
+
+        source_revision_id = reference.get("source_revision_id")
+        fragment_id = reference.get("fragment_id")
+        if not isinstance(source_revision_id, str) or not isinstance(fragment_id, str):
+            return False
+        dependency = self.connection.execute(
+            """
+            SELECT freshness FROM knowledge_dependencies_v1
+            WHERE consumer_kind = ? AND consumer_revision_id = ?
+              AND source_revision_id = ? AND fragment_id = ?
+              AND dependency_kind = 'direct'
+            """,
+            (
+                consumer_kind,
+                consumer_revision_id,
+                source_revision_id,
+                fragment_id,
+            ),
+        ).fetchone()
+        event = self.connection.execute(
+            """
+            SELECT freshness, replacement_source_revision_id
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ?
+              AND source_revision_id = ?
+            ORDER BY recorded_at DESC, freshness_event_id DESC
+            LIMIT 1
+            """,
+            (consumer_kind, consumer_revision_id, source_revision_id),
+        ).fetchone()
+        if (
+            dependency is None
+            or dependency["freshness"] != "fresh"
+            or event is None
+            or event["freshness"] != "fresh"
+            or event["replacement_source_revision_id"] is None
+        ):
+            return False
+        successor = self._source_reference_binding(
+            {"source_revision_id": event["replacement_source_revision_id"]}
+        )
+        if successor is None or successor["active"] is not True:
+            return False
+        if scope is not None and successor["scope"] != scope:
+            return False
+        return not (
+            max_sensitivity is not None
+            and (
+                max_sensitivity not in SENSITIVITIES
+                or successor["sensitivity"] not in SENSITIVITIES
+                or SENSITIVITY_ORDER.index(successor["sensitivity"])
+                > SENSITIVITY_ORDER.index(max_sensitivity)
+            )
+        )
+
     def revision_provenance_admitted(self, revision: dict[str, Any]) -> bool:
         """Check current source lifecycle without changing immutable revision history."""
         references = revision.get("source_refs", [])
-        if revision.get("verification") != "source_bound":
-            return True
-        return bool(references) and all(
-            isinstance(reference, dict)
-            and self._source_reference_is_bound(
-                reference,
-                scope=cast(str | None, revision.get("scope")),
-                max_sensitivity=cast(str | None, revision.get("sensitivity")),
+        source_admitted = revision.get("verification") != "source_bound" or (
+            bool(references)
+            and all(
+                isinstance(reference, dict)
+                and (
+                    self._source_reference_is_bound(
+                        reference,
+                        scope=cast(str | None, revision.get("scope")),
+                        max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                    )
+                    or self._successor_equivalent_reference_is_admitted(
+                        reference,
+                        consumer_kind="knowledge_revision",
+                        consumer_revision_id=cast(str, revision.get("revision_id")),
+                        scope=cast(str | None, revision.get("scope")),
+                        max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                    )
+                )
+                for reference in references
             )
-            for reference in references
+        )
+        return source_admitted and self._revision_dependencies_admitted(
+            consumer_kind="knowledge_revision",
+            consumer_revision_id=cast(str, revision.get("revision_id")),
         )
 
     def relation_provenance_admitted(self, relation: dict[str, Any]) -> bool:
@@ -2948,12 +3109,49 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         references = relation.get("evidence_refs", [])
         return bool(references) and all(
             isinstance(reference, dict)
-            and self._source_reference_is_bound(
-                reference,
-                scope=cast(str | None, relation.get("scope")),
-                max_sensitivity=cast(str | None, relation.get("sensitivity")),
+            and (
+                self._source_reference_is_bound(
+                    reference,
+                    scope=cast(str | None, relation.get("scope")),
+                    max_sensitivity=cast(str | None, relation.get("sensitivity")),
+                )
+                or self._successor_equivalent_reference_is_admitted(
+                    reference,
+                    consumer_kind="relation_revision",
+                    consumer_revision_id=cast(
+                        str,
+                        relation.get("relation_revision_id"),
+                    ),
+                    scope=cast(str | None, relation.get("scope")),
+                    max_sensitivity=cast(str | None, relation.get("sensitivity")),
+                )
             )
             for reference in references
+        ) and self._revision_dependencies_admitted(
+            consumer_kind="relation_revision",
+            consumer_revision_id=cast(
+                str,
+                relation.get("relation_revision_id"),
+            ),
+        )
+
+    def _revision_dependencies_admitted(
+        self,
+        *,
+        consumer_kind: str,
+        consumer_revision_id: str,
+    ) -> bool:
+        row = self.connection.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN freshness = 'fresh' THEN 1 ELSE 0 END) AS fresh
+            FROM revision_dependencies_v1
+            WHERE consumer_kind = ? AND consumer_revision_id = ?
+            """,
+            (consumer_kind, consumer_revision_id),
+        ).fetchone()
+        return row is not None and (
+            row["total"] == 0 or row["fresh"] == row["total"]
         )
 
     def _knowledge_admission_reasons(
@@ -3014,9 +3212,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         self._require_write()
         if not confirm_no_case_data:
             raise ValueError("knowledge sink requires confirmation that no case data is present")
-        idempotency_key = _bounded_string(
-            idempotency_key, field="idempotency key", maximum=200
-        )
+        idempotency_key = _bounded_string(idempotency_key, field="idempotency key", maximum=200)
         task = _bounded_string(task, field="run task", maximum=5_000)
         host_id = _bounded_string(host_id, field="run host", maximum=200)
         if model_id is not None:
@@ -3131,10 +3327,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 self.connection.rollback()
                 return locked_replay
             self._enforce_grant_limits(locked_grant, enforce_object_capacity=False)
-            if self.connection.execute(
-                "SELECT 1 FROM knowledge_run_records_v4 WHERE run_id = ?",
-                (selected_run_id,),
-            ).fetchone() is not None:
+            if (
+                self.connection.execute(
+                    "SELECT 1 FROM knowledge_run_records_v4 WHERE run_id = ?",
+                    (selected_run_id,),
+                ).fetchone()
+                is not None
+            ):
                 raise ValueError("run identity already belongs to a different record")
             self.connection.execute(
                 """
@@ -3161,9 +3360,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     recorded_at,
                 ),
             )
-            mutation_id = stable_id(
-                "mutation", grant_id, idempotency_key, request_sha256
-            )
+            mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
                 "INSERT INTO knowledge_sink_usage_v3 VALUES (?, ?, ?, ?, ?)",
                 (mutation_id, grant_id, "record_run", request_sha256, recorded_at),
@@ -3174,9 +3371,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 payload={
                     "operation": "record_run",
                     "grant_id": grant_id,
-                    "idempotency_key_sha256": sha256_bytes(
-                        idempotency_key.encode("utf-8")
-                    ),
+                    "idempotency_key_sha256": sha256_bytes(idempotency_key.encode("utf-8")),
                     "request_sha256": request_sha256,
                     "writer_id": locked_grant["writer_id"],
                     "host_id": host_id,
@@ -3240,8 +3435,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             row is not None
             and row["writer_id"] == writer_id
             and row["scope"] == scope
-            and SENSITIVITY_ORDER.index(row["sensitivity"])
-            <= SENSITIVITY_ORDER.index(sensitivity)
+            and SENSITIVITY_ORDER.index(row["sensitivity"]) <= SENSITIVITY_ORDER.index(sensitivity)
         )
 
     def _run_visible_to_grant(self, run_id: str, grant: sqlite3.Row) -> bool:
@@ -3278,9 +3472,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             raise ValueError("knowledge sink requires confirmation that no case data is present")
         if not isinstance(items, list) or not 1 <= len(items) <= _MAX_CAPTURE_ITEMS:
             raise ValueError("capture item inventory is invalid")
-        idempotency_key = _bounded_string(
-            idempotency_key, field="idempotency key", maximum=200
-        )
+        idempotency_key = _bounded_string(idempotency_key, field="idempotency key", maximum=200)
         if not _RUN_ID.fullmatch(run_id):
             raise ValueError("run identity is invalid")
         request = {
@@ -3336,21 +3528,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     kind=cast(KnowledgeKind, kind),
                     scope=scope,
                     sensitivity=sensitivity,
-                    epistemic_state=cast(
-                        EpistemicState | None, item.get("epistemic_state")
-                    ),
-                    source_refs=cast(
-                        list[dict[str, Any]] | None, item.get("source_refs")
-                    ),
+                    epistemic_state=cast(EpistemicState | None, item.get("epistemic_state")),
+                    source_refs=cast(list[dict[str, Any]] | None, item.get("source_refs")),
                     run_id=run_id,
                     model_id=model_id,
                     tool_id=tool_id,
                     tags=cast(list[str] | None, item.get("tags")),
                     semantic_key=cast(str | None, item.get("semantic_key")),
                     aliases=cast(list[str] | None, item.get("aliases")),
-                    relation_hints=cast(
-                        list[dict[str, Any]] | None, item.get("relation_hints")
-                    ),
+                    relation_hints=cast(list[dict[str, Any]] | None, item.get("relation_hints")),
                     assertion=cast(dict[str, Any] | None, item.get("assertion")),
                     valid_from=cast(str | None, item.get("valid_from")),
                     valid_to=cast(str | None, item.get("valid_to")),
@@ -3373,9 +3559,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "lifecycle": result["lifecycle"],
                 }
             )
-        capture_id = stable_id(
-            "capture", self.vault_id, grant_id, idempotency_key, request_sha256
-        )
+        capture_id = stable_id("capture", self.vault_id, grant_id, idempotency_key, request_sha256)
         recorded_at = self._next_transaction_time()
         response = {
             "schema_version": "deeplaw.knowledge-capture/v1",
@@ -3411,9 +3595,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     recorded_at,
                 ),
             )
-            mutation_id = stable_id(
-                "mutation", grant_id, idempotency_key, request_sha256
-            )
+            mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
                 "INSERT INTO knowledge_sink_usage_v3 VALUES (?, ?, ?, ?, ?)",
                 (mutation_id, grant_id, "capture", request_sha256, recorded_at),
@@ -3424,17 +3606,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 payload={
                     "operation": "capture",
                     "grant_id": grant_id,
-                    "idempotency_key_sha256": sha256_bytes(
-                        idempotency_key.encode("utf-8")
-                    ),
+                    "idempotency_key_sha256": sha256_bytes(idempotency_key.encode("utf-8")),
                     "request_sha256": request_sha256,
                     "run_id": run_id,
-                    "committed_revision_ids": [
-                        item["revision_id"] for item in committed
-                    ],
-                    "rejected_item_digests": [
-                        item["item_sha256"] for item in rejected
-                    ],
+                    "committed_revision_ids": [item["revision_id"] for item in committed],
+                    "rejected_item_digests": [item["item_sha256"] for item in rejected],
                 },
                 recorded_at=recorded_at,
             )
@@ -3505,9 +3681,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         }
         try:
             self.connection.execute("BEGIN IMMEDIATE")
-            locked_grant = self._grant(
-                grant_id, operation=operation, request_bytes=request_bytes
-            )
+            locked_grant = self._grant(grant_id, operation=operation, request_bytes=request_bytes)
             locked_replay = self._idempotent_response(
                 grant_id=grant_id,
                 idempotency_key=idempotency_key,
@@ -3543,9 +3717,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     recorded_at,
                 ),
             )
-            mutation_id = stable_id(
-                "mutation", grant_id, idempotency_key, request_sha256
-            )
+            mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
                 "INSERT INTO knowledge_sink_usage_v3 VALUES (?, ?, ?, ?, ?)",
                 (mutation_id, grant_id, operation, request_sha256, recorded_at),
@@ -3556,9 +3728,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 payload={
                     "operation": operation,
                     "grant_id": grant_id,
-                    "idempotency_key_sha256": sha256_bytes(
-                        idempotency_key.encode("utf-8")
-                    ),
+                    "idempotency_key_sha256": sha256_bytes(idempotency_key.encode("utf-8")),
                     "request_sha256": request_sha256,
                     "knowledge_id": current["knowledge_id"],
                     "revision_id": current["revision_id"],
@@ -3741,9 +3911,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 _bounded_string(assertion[field], field=f"assertion {field}", maximum=maximum)
             if assertion["polarity"] not in {"positive", "negative"}:
                 raise ValueError("structured assertion polarity is invalid")
-            assertion = cast(
-                dict[str, Any], strict_json_loads(canonical_json(assertion))
-            )
+            assertion = cast(dict[str, Any], strict_json_loads(canonical_json(assertion)))
         if semantic_key is not None:
             semantic_key = _bounded_string(
                 semantic_key,
@@ -4037,9 +4205,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "Knowledge Object update duplicates another active identity: "
                         f"{duplicate['knowledge_id']}"
                     )
-                if knowledge_id is not None and expected_revision_id != duplicate[
-                    "current_revision_id"
-                ]:
+                if (
+                    knowledge_id is not None
+                    and expected_revision_id != duplicate["current_revision_id"]
+                ):
                     raise RuntimeError("Knowledge Object compare-and-swap conflict")
                 return self._collapse_duplicate(
                     duplicate_knowledge_id=duplicate["knowledge_id"],
@@ -4400,9 +4569,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
             if lifecycle == "active":
                 alias_values = list(
-                    dict.fromkeys(
-                        [title, *cast(list[str], selected_aliases), semantic_key or ""]
-                    )
+                    dict.fromkeys([title, *cast(list[str], selected_aliases), semantic_key or ""])
                 )
                 for alias in alias_values:
                     if not alias:
@@ -4864,9 +5031,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             kind="skill",
             scope=cast(Scope, grant["allowed_scope"]),
             sensitivity=output_sensitivity,
-            source_refs=[
-                {"revision_id": revision_id} for revision_id in source_revision_ids
-            ],
+            source_refs=[{"revision_id": revision_id} for revision_id in source_revision_ids],
             run_id=request["run_id"],
             model_id=request["model_id"],
             tool_id="skill-factory",
@@ -5052,9 +5217,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     or not _KNOWLEDGE_ID.fullmatch(record["knowledge_id"])
                     or not _SHA256.fullmatch(record["markdown_sha256"])
                     or not _SHA256.fullmatch(record["request_sha256"])
-                    or canonical_timestamp(
-                        record["created_at"], field="staging created_at"
-                    )
+                    or canonical_timestamp(record["created_at"], field="staging created_at")
                     != record["created_at"]
                 ):
                     raise ValueError("staging record contract is invalid")
@@ -5410,8 +5573,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if frontmatter.get("schema") == KNOWLEDGE_OBJECT_SCHEMA and not (
                     frontmatter.get("mutability") == AGENT_KNOWLEDGE_MUTABILITY
                     and frontmatter.get("writer_scope") == frontmatter.get("scope")
-                    and frontmatter.get("activation_policy")
-                    == AUTONOMOUS_ACTIVATION_POLICY
+                    and frontmatter.get("activation_policy") == AUTONOMOUS_ACTIVATION_POLICY
                 ):
                     raise ValueError("Markdown activation governance metadata is invalid")
                 if existing is None and (
@@ -5559,9 +5721,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     tags=cast(list[str], frontmatter.get("tags", [])),
                     semantic_key=cast(str | None, frontmatter.get("semantic_key")),
                     aliases=cast(list[str], frontmatter.get("aliases", [])),
-                    relation_hints=cast(
-                        list[dict[str, Any]], frontmatter.get("relations", [])
-                    ),
+                    relation_hints=cast(list[dict[str, Any]], frontmatter.get("relations", [])),
                     assertion=cast(dict[str, Any] | None, frontmatter.get("assertion")),
                     valid_from=valid_from,
                     valid_to=valid_to,
@@ -5729,9 +5889,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     ),
                     relation_hints=cast(
                         list[dict[str, Any]],
-                        frontmatter.get(
-                            "relations", current["metadata"].get("relation_hints", [])
-                        ),
+                        frontmatter.get("relations", current["metadata"].get("relation_hints", [])),
                     ),
                     assertion=cast(
                         dict[str, Any] | None,
@@ -5748,9 +5906,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     requested_origin=requested_origin,
                     requested_authority=requested_authority,
                     confirm_no_case_data=True,
-                    operation=_workspace_mutation_operation(
-                        cast(KnowledgeKind, current["kind"])
-                    ),
+                    operation=_workspace_mutation_operation(cast(KnowledgeKind, current["kind"])),
                     skill_manifest=cast(
                         dict[str, Any] | None,
                         frontmatter.get("skill"),
@@ -5802,9 +5958,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 ),
                 relation_hints=cast(
                     list[dict[str, Any]],
-                    frontmatter.get(
-                        "relations", current["metadata"].get("relation_hints", [])
-                    ),
+                    frontmatter.get("relations", current["metadata"].get("relation_hints", [])),
                 ),
                 assertion=cast(
                     dict[str, Any] | None,
@@ -5821,9 +5975,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 requested_origin="agent_derived",
                 requested_authority="agent_derived",
                 confirm_no_case_data=True,
-                operation=_workspace_mutation_operation(
-                    cast(KnowledgeKind, current["kind"])
-                ),
+                operation=_workspace_mutation_operation(cast(KnowledgeKind, current["kind"])),
                 skill_manifest=cast(
                     dict[str, Any] | None,
                     frontmatter.get("skill"),
@@ -5942,9 +6094,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "authority": row["authority"],
             "mutability": metadata.get("mutability", AGENT_KNOWLEDGE_MUTABILITY),
             "writer_scope": metadata.get("writer_scope", row["scope"]),
-            "activation_policy": metadata.get(
-                "activation_policy", AUTONOMOUS_ACTIVATION_POLICY
-            ),
+            "activation_policy": metadata.get("activation_policy", AUTONOMOUS_ACTIVATION_POLICY),
             "verification": row["verification"],
             "scope": row["scope"],
             "sensitivity": row["sensitivity"],
@@ -6029,9 +6179,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         alias_key = normalize_identity_text(query)
         if not alias_key:
             raise ValueError("identity query has no searchable content")
-        admitted_sensitivities = SENSITIVITY_ORDER[
-            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
-        ]
+        admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
         reference_time = utc_now()
         rows = self.connection.execute(
@@ -6076,9 +6224,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         scan_truncated = len(rows) > 2_000
         candidates: dict[str, dict[str, Any]] = {}
         for row in rows[:2_000]:
-            if not self.revision_provenance_admitted(
-                self._revision_row(row, include_body=False)
-            ):
+            if not self.revision_provenance_admitted(self._revision_row(row, include_body=False)):
                 continue
             exact = row["alias_key"] == alias_key
             score = 1.0 if exact else semantic_similarity(query, row["alias_text"])
@@ -6161,11 +6307,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 normalized_path,
                 scope,
                 canonical_json(
-                    list(
-                        SENSITIVITY_ORDER[
-                            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
-                        ]
-                    )
+                    list(SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1])
                 ),
             ),
         ).fetchone()
@@ -6213,13 +6355,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             raise ValueError("identity resolution targets are invalid")
         selected_objects = sorted(object_knowledge_ids)
         selected_refs = self._pin_source_references(
-            _canonical_source_references(
-                evidence_refs or [], field="identity resolution evidence"
-            )
+            _canonical_source_references(evidence_refs or [], field="identity resolution evidence")
         )
-        idempotency_key = _bounded_string(
-            idempotency_key, field="idempotency key", maximum=200
-        )
+        idempotency_key = _bounded_string(idempotency_key, field="idempotency key", maximum=200)
         request = {
             "operation": "resolve_identity",
             "action": action,
@@ -6274,9 +6412,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "action": action,
             "subject_knowledge_id": subject_knowledge_id,
             "object_knowledge_ids": selected_objects,
-            "evidence_refs_sha256": sha256_bytes(
-                canonical_json(selected_refs).encode("utf-8")
-            ),
+            "evidence_refs_sha256": sha256_bytes(canonical_json(selected_refs).encode("utf-8")),
             "run_id": run_id,
             "writer_id": grant["writer_id"],
             "recorded_at": recorded_at,
@@ -6311,9 +6447,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     recorded_at,
                 ),
             )
-            mutation_id = stable_id(
-                "mutation", grant_id, idempotency_key, request_sha256
-            )
+            mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
                 "INSERT INTO knowledge_sink_usage_v3 VALUES (?, ?, ?, ?, ?)",
                 (
@@ -6330,9 +6464,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 payload={
                     "operation": "resolve_identity",
                     "grant_id": grant_id,
-                    "idempotency_key_sha256": sha256_bytes(
-                        idempotency_key.encode("utf-8")
-                    ),
+                    "idempotency_key_sha256": sha256_bytes(idempotency_key.encode("utf-8")),
                     "request_sha256": request_sha256,
                     "action": action,
                     "subject_knowledge_id": subject_knowledge_id,
@@ -6405,9 +6537,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 max_sensitivity=cast(Sensitivity, grant["max_sensitivity"]),
             )
             if target_id is None or target_id == revision["knowledge_id"]:
-                unresolved.append(
-                    sha256_bytes(str(hint["target"]).encode("utf-8"))
-                )
+                unresolved.append(sha256_bytes(str(hint["target"]).encode("utf-8")))
                 continue
             relation_key = stable_id(
                 "relationkey",
@@ -6445,9 +6575,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 continue
             relation = self.add_relation(
                 grant_id=grant_id,
-                idempotency_key=(
-                    f"connect:{revision_id}:{hint['predicate']}:{target_id}"[:200]
-                ),
+                idempotency_key=(f"connect:{revision_id}:{hint['predicate']}:{target_id}"[:200]),
                 subject_knowledge_id=revision["knowledge_id"],
                 predicate=hint["predicate"],
                 object_knowledge_id=target_id,
@@ -6818,9 +6946,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         self._require_write()
         if not confirm_no_case_data:
             raise ValueError("knowledge sink requires confirmation that no case data is present")
-        idempotency_key = _bounded_string(
-            idempotency_key, field="idempotency key", maximum=200
-        )
+        idempotency_key = _bounded_string(idempotency_key, field="idempotency key", maximum=200)
         if (
             not isinstance(knowledge_ids, list)
             or not 2 <= len(knowledge_ids) <= 16
@@ -6912,15 +7038,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     )
                 inputs.append(current)
         if any(
-            item["kind"] != "memory" or item["scope"] != grant["allowed_scope"]
-            for item in inputs
+            item["kind"] != "memory" or item["scope"] != grant["allowed_scope"] for item in inputs
         ):
             raise ValueError("memory consolidation inputs are not active memories in scope")
         output_sensitivity = cast(
             Sensitivity,
-            SENSITIVITY_ORDER[
-                max(SENSITIVITY_ORDER.index(item["sensitivity"]) for item in inputs)
-            ],
+            SENSITIVITY_ORDER[max(SENSITIVITY_ORDER.index(item["sensitivity"]) for item in inputs)],
         )
         if SENSITIVITY_ORDER.index(output_sensitivity) > SENSITIVITY_ORDER.index(
             grant["max_sensitivity"]
@@ -6952,6 +7075,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             confirm_no_case_data=True,
             operation="consolidate_memory",
         )
+
         def lineage_relations_ready() -> bool:
             for current in inputs:
                 relation_key = stable_id(
@@ -6976,9 +7100,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     return False
                 relation = {
                     **dict(relation_row),
-                    "evidence_refs": strict_json_loads(
-                        relation_row["evidence_refs_json"]
-                    ),
+                    "evidence_refs": strict_json_loads(relation_row["evidence_refs_json"]),
                     "source_free": bool(relation_row["source_free"]),
                 }
                 if (
@@ -7023,9 +7145,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 run_id=cast(str | None, current["generation"].get("run_id")),
                 model_id=cast(str | None, current["generation"].get("model_id")),
                 tool_id="memory-consolidator",
-                generation_activity_id=cast(
-                    str | None, current["generation"].get("activity_id")
-                ),
+                generation_activity_id=cast(str | None, current["generation"].get("activity_id")),
                 tags=cast(list[str], current["tags"]),
                 semantic_key=cast(str | None, current["semantic_key"]),
                 aliases=cast(list[str], current["metadata"].get("aliases", [])),
@@ -7098,9 +7218,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     recorded_at,
                 ),
             )
-            mutation_id = stable_id(
-                "mutation", grant_id, idempotency_key, request_sha256
-            )
+            mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
                 "INSERT INTO knowledge_sink_usage_v3 VALUES (?, ?, ?, ?, ?)",
                 (
@@ -7117,9 +7235,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 payload={
                     "operation": "consolidate_memory",
                     "grant_id": grant_id,
-                    "idempotency_key_sha256": sha256_bytes(
-                        idempotency_key.encode("utf-8")
-                    ),
+                    "idempotency_key_sha256": sha256_bytes(idempotency_key.encode("utf-8")),
                     "request_sha256": request_sha256,
                     "run_id": run_id,
                     "input_revision_ids_sha256": sha256_bytes(
@@ -7545,27 +7661,35 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         roles = {
             row["object_role"]
             for row in self.connection.execute(
-                "SELECT object_role FROM content_object_roles_v3 "
-                "WHERE object_sha256 = ?",
+                "SELECT object_role FROM content_object_roles_v3 WHERE object_sha256 = ?",
                 (object_sha256,),
             )
         }
         if "knowledge_revision" not in roles or "evidence" in roles:
             return False, 0
-        if self.connection.execute(
-            "SELECT 1 FROM content_tombstones_v4 WHERE object_sha256 = ?",
-            (object_sha256,),
-        ).fetchone() is not None:
+        if (
+            self.connection.execute(
+                "SELECT 1 FROM content_tombstones_v4 WHERE object_sha256 = ?",
+                (object_sha256,),
+            ).fetchone()
+            is not None
+        ):
             return False, 0
-        if self.connection.execute(
-            "SELECT 1 FROM workspace_conflicts_v3 WHERE object_sha256 = ? LIMIT 1",
-            (object_sha256,),
-        ).fetchone() is not None:
+        if (
+            self.connection.execute(
+                "SELECT 1 FROM workspace_conflicts_v3 WHERE object_sha256 = ? LIMIT 1",
+                (object_sha256,),
+            ).fetchone()
+            is not None
+        ):
             return False, 0
-        if self.connection.execute(
-            "SELECT 1 FROM pending_materializations_v3 WHERE markdown_sha256 = ? LIMIT 1",
-            (object_sha256,),
-        ).fetchone() is not None:
+        if (
+            self.connection.execute(
+                "SELECT 1 FROM pending_materializations_v3 WHERE markdown_sha256 = ? LIMIT 1",
+                (object_sha256,),
+            ).fetchone()
+            is not None
+        ):
             return False, 0
         revisions = self.connection.execute(
             """
@@ -7608,10 +7732,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             raise ValueError("content GC flags must be boolean")
         if not dry_run and not confirm:
             raise ValueError("content-erasing GC requires explicit confirmation")
-        if (
-            isinstance(max_objects, bool)
-            or not 1 <= max_objects <= _MAX_CONTENT_GC_OBJECTS
-        ):
+        if isinstance(max_objects, bool) or not 1 <= max_objects <= _MAX_CONTENT_GC_OBJECTS:
             raise ValueError("content GC object limit is outside its allowed bound")
         reason = _bounded_string(reason, field="content GC reason", maximum=2_000)
         if has_instruction_risk(reason):
@@ -7650,9 +7771,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
         known_objects = {
             row["object_sha256"]
-            for row in self.connection.execute(
-                "SELECT object_sha256 FROM content_objects_v3"
-            )
+            for row in self.connection.execute("SELECT object_sha256 FROM content_objects_v3")
         }
         orphan_candidates: list[dict[str, Any]] = []
         orphan_budget = max_objects - len(canonical_candidates)
@@ -7663,12 +7782,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if object_root.is_symlink() or not object_root.is_dir():
             raise RuntimeError("content object root is missing or unsafe")
         for prefix in (
-            sorted(object_root.iterdir(), key=lambda item: item.name)
-            if orphan_budget
-            else ()
+            sorted(object_root.iterdir(), key=lambda item: item.name) if orphan_budget else ()
         ):
-            if prefix.is_symlink() or not prefix.is_dir() or not re.fullmatch(
-                r"[0-9a-f]{2}", prefix.name
+            if (
+                prefix.is_symlink()
+                or not prefix.is_dir()
+                or not re.fullmatch(r"[0-9a-f]{2}", prefix.name)
             ):
                 raise RuntimeError("content object repository contains an unsafe prefix")
             for path in sorted(prefix.iterdir(), key=lambda item: item.name):
@@ -7676,11 +7795,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if scanned > _MAX_OBJECTS + _MAX_STAGING_RECORDS:
                     raise RuntimeError("content object repository exceeds its scan bound")
                 digest = f"{prefix.name}{path.name}"
-                if (
-                    path.is_symlink()
-                    or not path.is_file()
-                    or not _SHA256.fullmatch(digest)
-                ):
+                if path.is_symlink() or not path.is_file() or not _SHA256.fullmatch(digest):
                     raise RuntimeError("content object repository contains an unsafe entry")
                 if digest not in known_objects:
                     if sha256_file(path) != digest:
@@ -7811,9 +7926,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if as_of is not None:
             as_of = canonical_timestamp(as_of, field="recall as_of")
         reference_time = as_of or utc_now()
-        admitted_sensitivities = SENSITIVITY_ORDER[
-            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
-        ]
+        admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         terms = search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
         exact_id = query if _KNOWLEDGE_ID.fullmatch(query) else None
         candidate_ids: list[str] = []
@@ -7840,8 +7953,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "SELECT COUNT(*) FROM autonomous_search_v3"
                     ).fetchone()[0]
                     and self.connection.execute(
-                        "SELECT COUNT(*) FROM derived_rebuild_queue_v3 "
-                        "WHERE completed_at IS NULL"
+                        "SELECT COUNT(*) FROM derived_rebuild_queue_v3 WHERE completed_at IS NULL"
                     ).fetchone()[0]
                     == 0
                 )
@@ -7866,8 +7978,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 f"knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})",
                 "(knowledge_revisions_v3.valid_from IS NULL "
                 "OR knowledge_revisions_v3.valid_from <= ?)",
-                "(knowledge_revisions_v3.valid_to IS NULL "
-                "OR knowledge_revisions_v3.valid_to > ?)",
+                "(knowledge_revisions_v3.valid_to IS NULL OR knowledge_revisions_v3.valid_to > ?)",
                 "(knowledge_revisions_v3.expires_at IS NULL "
                 "OR knowledge_revisions_v3.expires_at > ?)",
             ]
@@ -7881,9 +7992,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             ]
             if kinds:
                 kind_placeholders = ",".join("?" for _ in kinds)
-                lexical_filters.append(
-                    f"knowledge_revisions_v3.kind IN ({kind_placeholders})"
-                )
+                lexical_filters.append(f"knowledge_revisions_v3.kind IN ({kind_placeholders})")
                 lexical_parameters.extend(kinds)
             for tag in required_tags:
                 lexical_filters.append(
@@ -7902,7 +8011,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     JOIN knowledge_revisions_v3
                       ON knowledge_revisions_v3.revision_id =
                          knowledge_objects_v3.current_revision_id
-                    WHERE {' AND '.join(lexical_filters)}
+                    WHERE {" AND ".join(lexical_filters)}
                     ORDER BY bm25(autonomous_search_v3), autonomous_search_v3.knowledge_id
                     LIMIT ?
                     """,
@@ -7975,7 +8084,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     FROM knowledge_revisions_v3
                     WHERE knowledge_revisions_v3.recorded_at <= ?
                 )
-                SELECT * FROM ranked WHERE {' AND '.join(temporal_filters)}
+                SELECT * FROM ranked WHERE {" AND ".join(temporal_filters)}
                 ORDER BY knowledge_id LIMIT 501
                 """,
                 tuple(temporal_parameters),
@@ -8015,8 +8124,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 f"knowledge_revisions_v3.sensitivity IN ({placeholders})",
                 "(knowledge_revisions_v3.valid_from IS NULL "
                 "OR knowledge_revisions_v3.valid_from <= ?)",
-                "(knowledge_revisions_v3.valid_to IS NULL "
-                "OR knowledge_revisions_v3.valid_to > ?)",
+                "(knowledge_revisions_v3.valid_to IS NULL OR knowledge_revisions_v3.valid_to > ?)",
                 "(knowledge_revisions_v3.expires_at IS NULL "
                 "OR knowledge_revisions_v3.expires_at > ?)",
             ]
@@ -8029,9 +8137,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             ]
             if kinds:
                 kind_placeholders = ",".join("?" for _ in kinds)
-                canonical_filters.append(
-                    f"knowledge_revisions_v3.kind IN ({kind_placeholders})"
-                )
+                canonical_filters.append(f"knowledge_revisions_v3.kind IN ({kind_placeholders})")
                 canonical_parameters.extend(kinds)
             for tag in required_tags:
                 canonical_filters.append(
@@ -8122,16 +8228,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     graph_relation_scan_truncated = True
                 relation_rows: list[dict[str, Any]] = []
                 for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
-                    if relation["source_free"] or not self.relation_provenance_admitted(
-                        relation
-                    ):
+                    if relation["source_free"] or not self.relation_provenance_admitted(relation):
                         continue
                     if (
                         relation["valid_from"] is not None
                         and relation["valid_from"] > reference_time
                     ) or (
-                        relation["valid_to"] is not None
-                        and relation["valid_to"] <= reference_time
+                        relation["valid_to"] is not None and relation["valid_to"] <= reference_time
                     ):
                         continue
                     relation_rows.append(relation)
@@ -8151,8 +8254,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         relation["valid_from"] is not None
                         and relation["valid_from"] > reference_time
                     ) or (
-                        relation["valid_to"] is not None
-                        and relation["valid_to"] <= reference_time
+                        relation["valid_to"] is not None and relation["valid_to"] <= reference_time
                     ):
                         continue
                     for candidate in (
@@ -8386,9 +8488,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             if selected_knowledge_ids
             else []
         )
-        contradiction_relation_scan_truncated = (
-            len(admitted_relations) > _MAX_GRAPH_RELATION_SCAN
-        )
+        contradiction_relation_scan_truncated = len(admitted_relations) > _MAX_GRAPH_RELATION_SCAN
         admitted_relations = admitted_relations[:_MAX_GRAPH_RELATION_SCAN]
 
         def has_admitted_contradiction(item: dict[str, Any]) -> bool:
@@ -8448,16 +8548,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     }
                 )
         planned_channels = sorted(
-            {
-                channel
-                for candidate_id in candidate_ids
-                for channel in channels[candidate_id]
-            }
-            | (
-                {"lexical"}
-                if expression and as_of is None and derived_lexical_ready
-                else set()
-            )
+            {channel for candidate_id in candidate_ids for channel in channels[candidate_id]}
+            | ({"lexical"} if expression and as_of is None and derived_lexical_ready else set())
             | ({"temporal_lexical"} if as_of is not None else set())
         )
         plan = {
@@ -8744,9 +8836,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if max_sensitivity not in SENSITIVITIES:
             raise ValueError("semantic Lint sensitivity is invalid")
         reference_time = utc_now()
-        admitted_sensitivities = SENSITIVITY_ORDER[
-            : SENSITIVITY_ORDER.index(max_sensitivity) + 1
-        ]
+        admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
         current_filters = [
             "knowledge_revisions_v3.lifecycle = 'active'",
@@ -8762,7 +8852,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             FROM knowledge_objects_v3
             JOIN knowledge_revisions_v3
               ON knowledge_revisions_v3.revision_id = knowledge_objects_v3.current_revision_id
-            WHERE {' AND '.join(current_filters)}
+            WHERE {" AND ".join(current_filters)}
             ORDER BY knowledge_objects_v3.knowledge_id
             LIMIT ?
             """,
@@ -8896,9 +8986,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 relation = (
                     {
                         **dict(relation_row),
-                        "evidence_refs": strict_json_loads(
-                            relation_row["evidence_refs_json"]
-                        ),
+                        "evidence_refs": strict_json_loads(relation_row["evidence_refs_json"]),
                         "source_free": bool(relation_row["source_free"]),
                     }
                     if relation_row is not None
@@ -8973,9 +9061,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     {
                         "code": "relation_provenance_inactive",
                         "severity": "warning",
-                        "relation_sha256": sha256_bytes(
-                            relation["relation_key"].encode("utf-8")
-                        ),
+                        "relation_sha256": sha256_bytes(relation["relation_key"].encode("utf-8")),
                     }
                 )
                 continue
@@ -9063,7 +9149,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             JOIN knowledge_revisions_v3
               ON knowledge_revisions_v3.revision_id =
                  knowledge_objects_v3.current_revision_id
-            WHERE {' AND '.join(conflict_filters)}
+            WHERE {" AND ".join(conflict_filters)}
             ORDER BY workspace_conflicts_v3.detected_at,
                      workspace_conflicts_v3.conflict_id
             LIMIT ?
@@ -9177,11 +9263,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "OR knowledge_relation_revisions_v3.valid_from <= ?)",
                     "(knowledge_relation_revisions_v3.valid_to IS NULL "
                     "OR knowledge_relation_revisions_v3.valid_to > ?)",
-                    "(subject_revision.valid_from IS NULL "
-                    "OR subject_revision.valid_from <= ?)",
+                    "(subject_revision.valid_from IS NULL OR subject_revision.valid_from <= ?)",
                     "(subject_revision.valid_to IS NULL OR subject_revision.valid_to > ?)",
-                    "(subject_revision.expires_at IS NULL "
-                    "OR subject_revision.expires_at > ?)",
+                    "(subject_revision.expires_at IS NULL OR subject_revision.expires_at > ?)",
                     "(object_revision.valid_from IS NULL OR object_revision.valid_from <= ?)",
                     "(object_revision.valid_to IS NULL OR object_revision.valid_to > ?)",
                     "(object_revision.expires_at IS NULL OR object_revision.expires_at > ?)",
@@ -9202,9 +9286,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 : SENSITIVITY_ORDER.index(max_sensitivity) + 1
             ]
             placeholders = ",".join("?" for _ in admitted_sensitivities)
-            filters.append(
-                f"knowledge_relation_revisions_v3.sensitivity IN ({placeholders})"
-            )
+            filters.append(f"knowledge_relation_revisions_v3.sensitivity IN ({placeholders})")
             parameters.extend(admitted_sensitivities)
             filters.append(f"subject_revision.sensitivity IN ({placeholders})")
             parameters.extend(admitted_sensitivities)
@@ -9241,7 +9323,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                  knowledge_relation_revisions_v3.object_knowledge_id
             JOIN knowledge_revisions_v3 AS object_revision
               ON object_revision.revision_id = object_object.current_revision_id
-            WHERE {' AND '.join(filters)}
+            WHERE {" AND ".join(filters)}
             ORDER BY knowledge_relation_revisions_v3.relation_key
             {limit_clause}
             """,
@@ -9353,7 +9435,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
               ON subject_revision.knowledge_id = ranked.subject_knowledge_id
             JOIN endpoint_ranked AS object_revision
               ON object_revision.knowledge_id = ranked.object_knowledge_id
-            WHERE {' AND '.join(filters)}
+            WHERE {" AND ".join(filters)}
             ORDER BY ranked.relation_key
             {limit_clause}
             """,
@@ -9403,9 +9485,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             if not self.relation_provenance_admitted(relation):
                 rejected.append(
                     {
-                        "candidate_sha256": sha256_bytes(
-                            relation["relation_key"].encode("utf-8")
-                        ),
+                        "candidate_sha256": sha256_bytes(relation["relation_key"].encode("utf-8")),
                         "reason": "relation_evidence_inactive",
                     }
                 )
@@ -9567,8 +9647,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         }
 
     @_with_file_lease("derived-rebuild")
-    def rebuild_derived(self) -> dict[str, Any]:
+    def rebuild_derived(
+        self,
+        *,
+        run_status_overrides: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         self._require_write()
+        for relative in _DERIVED_REBUILD_DIRECTORIES:
+            _restore_owner_subdirectory(self.root, relative)
         reference_time = utc_now()
         self.connection.execute("BEGIN IMMEDIATE")
         try:
@@ -9587,9 +9673,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             rows = [
                 row
                 for row in candidate_rows
-                if self.revision_provenance_admitted(
-                    self._revision_row(row, include_body=False)
-                )
+                if self.revision_provenance_admitted(self._revision_row(row, include_body=False))
                 and _interval_admits(
                     reference_time=reference_time,
                     valid_from=row["valid_from"],
@@ -9901,6 +9985,18 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             + "\n"
         )
         write("canvas/knowledge-graph.canvas", canvas_payload)
+        from .projection.builder import rebuild_living_wiki
+
+        living_wiki = rebuild_living_wiki(
+            self,
+            input_audit_head=input_audit_head,
+            run_status_overrides=run_status_overrides,
+        )
+        generated_by_path = {item["path"]: item for item in generated_files}
+        generated_by_path.update(
+            {item["path"]: item for item in living_wiki["files"]}
+        )
+        generated_files = list(generated_by_path.values())
         manifest = {
             "schema_version": DERIVED_MANIFEST_SCHEMA,
             "input_audit_head": input_audit_head,
@@ -9958,6 +10054,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "relation_count": len(relations),
             "community_count": len(communities),
             "lint": lint,
+            "living_wiki": living_wiki,
         }
 
     @staticmethod
@@ -10045,6 +10142,28 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         foreign_keys = self.connection.execute("PRAGMA foreign_key_check").fetchall()
         if foreign_keys:
             failures.append({"code": "foreign_key_invalid", "object_id": self.vault_id})
+        compilation_core = self.connection.execute(
+            """
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'source_compilation_core_v1'
+            """
+        ).fetchone()
+        if compilation_core is None:
+            warnings.append(
+                {
+                    "code": "source_compilation_core_not_installed",
+                    "object_id": self.vault_id,
+                }
+            )
+        else:
+            from .compilation.store import verify_compilation_schema
+
+            failures.extend(
+                verify_compilation_schema(
+                    self.connection,
+                    root=self.root,
+                )
+            )
         try:
             with KnowledgeVault(self.root, read_only=True) as legacy:
                 legacy_integrity = legacy.verify_integrity()
@@ -10122,21 +10241,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "autonomous_core_initialized": {self.vault_id},
             "evidence_object_bound": {
                 row["binding_id"]
-                for row in self.connection.execute(
-                    "SELECT binding_id FROM evidence_bindings_v3"
-                )
+                for row in self.connection.execute("SELECT binding_id FROM evidence_bindings_v3")
             },
             "knowledge_feedback_recorded": {
                 row["feedback_id"]
-                for row in self.connection.execute(
-                    "SELECT feedback_id FROM knowledge_feedback_v3"
-                )
+                for row in self.connection.execute("SELECT feedback_id FROM knowledge_feedback_v3")
             },
             "knowledge_run_recorded": {
                 row["run_id"]
-                for row in self.connection.execute(
-                    "SELECT run_id FROM knowledge_run_records_v4"
-                )
+                for row in self.connection.execute("SELECT run_id FROM knowledge_run_records_v4")
             },
             "knowledge_capture_recorded": {
                 row["capture_id"]
@@ -10176,9 +10289,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             },
             "knowledge_revision_committed": {
                 row["revision_id"]
-                for row in self.connection.execute(
-                    "SELECT revision_id FROM knowledge_revisions_v3"
-                )
+                for row in self.connection.execute("SELECT revision_id FROM knowledge_revisions_v3")
             },
             "knowledge_sink_grant_enabled": set(grant_writers),
             "knowledge_sink_grant_revoked": {
@@ -10189,9 +10300,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             },
             "workspace_conflict_preserved": {
                 row["conflict_id"]
-                for row in self.connection.execute(
-                    "SELECT conflict_id FROM workspace_conflicts_v3"
-                )
+                for row in self.connection.execute("SELECT conflict_id FROM workspace_conflicts_v3")
             },
             "workspace_materialized": {
                 row["revision_id"]
@@ -10249,8 +10358,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         replay_objects = {
             row["knowledge_id"]: dict(row)
             for row in self.connection.execute(
-                "SELECT knowledge_id, current_revision_id, workspace_path "
-                "FROM knowledge_objects_v3"
+                "SELECT knowledge_id, current_revision_id, workspace_path FROM knowledge_objects_v3"
             )
         }
         replay_locations: dict[str, str] = {}
@@ -10300,9 +10408,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     continue
                 replay_locations[object_id] = workspace_path
         for knowledge_id, knowledge in replay_objects.items():
-            if knowledge["current_revision_id"] is not None and replay_locations.get(
-                knowledge_id
-            ) != knowledge["workspace_path"]:
+            if (
+                knowledge["current_revision_id"] is not None
+                and replay_locations.get(knowledge_id) != knowledge["workspace_path"]
+            ):
                 failures.append(
                     {
                         "code": "workspace_location_replay_invalid",
@@ -10434,8 +10543,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         actual_legacy_evidence_bindings = {
             row["binding_id"]
             for row in self.connection.execute(
-                "SELECT binding_id FROM evidence_bindings_v3 "
-                "WHERE legacy_source_id IS NOT NULL"
+                "SELECT binding_id FROM evidence_bindings_v3 WHERE legacy_source_id IS NOT NULL"
             )
         }
         if actual_legacy_evidence_bindings != expected_legacy_evidence_bindings:
@@ -10543,21 +10651,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         (row["knowledge_id"],),
                     ).fetchone()
                     object_row = self.connection.execute(
-                        "SELECT byte_size FROM content_objects_v3 "
-                        "WHERE object_sha256 = ?",
+                        "SELECT byte_size FROM content_objects_v3 WHERE object_sha256 = ?",
                         (row["markdown_sha256"],),
                     ).fetchone()
                     revision_count = self.connection.execute(
-                        "SELECT COUNT(*) FROM knowledge_revisions_v3 "
-                        "WHERE markdown_sha256 = ?",
+                        "SELECT COUNT(*) FROM knowledge_revisions_v3 WHERE markdown_sha256 = ?",
                         (row["markdown_sha256"],),
                     ).fetchone()[0]
                     materialized = event_payloads.get(
                         ("workspace_materialized", row["revision_id"])
                     )
-                    expected_action = (
-                        "write" if row["lifecycle"] == "active" else "delete"
-                    )
+                    expected_action = "write" if row["lifecycle"] == "active" else "delete"
                     parent = (
                         revision_index.get(row["parent_revision_id"])
                         if row["parent_revision_id"] is not None
@@ -10574,16 +10678,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                             source_refs, field="purged revision source references"
                         )
                         and isinstance(generation, dict)
-                        and set(generation)
-                        == {"activity_id", "run_id", "model_id", "tool_id"}
+                        and set(generation) == {"activity_id", "run_id", "model_id", "tool_id"}
                         and isinstance(tags, list)
                         and isinstance(metadata, dict)
                         and row["kind"] in KNOWLEDGE_KINDS
                         and row["lifecycle"] in LIFECYCLES
                         and row["epistemic_state"] in EPISTEMIC_STATES
                         and row["origin"] == row["authority"] == "agent_derived"
-                        and row["verification"]
-                        in {"unverified", "source_bound", "run_bound"}
+                        and row["verification"] in {"unverified", "source_bound", "run_bound"}
                         and row["scope"] in SCOPES
                         and row["sensitivity"] in SENSITIVITIES
                         and row["parent_revision_id"] == row["supersedes_revision_id"]
@@ -10597,9 +10699,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         )
                         and current is not None
                         and current["lifecycle"] in {"forgotten", "revoked", "expired"}
-                        and canonical_timestamp(
-                            tombstone["purged_at"], field="content purge time"
-                        )
+                        and canonical_timestamp(tombstone["purged_at"], field="content purge time")
                         == tombstone["purged_at"]
                         and tombstone["purged_by"] == "owner"
                         and isinstance(tombstone["reason"], str)
@@ -10626,8 +10726,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                             if row["lifecycle"] == "quarantined"
                             else bool(
                                 materialized is not None
-                                and materialized.get("markdown_sha256")
-                                == row["markdown_sha256"]
+                                and materialized.get("markdown_sha256") == row["markdown_sha256"]
                                 and materialized.get("action") == expected_action
                             )
                         )
@@ -10803,10 +10902,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if source_free:
                     if (
                         source_refs
-                        or (
-                            generation["run_id"] is not None
-                            and not invalid_run_quarantined
-                        )
+                        or (generation["run_id"] is not None and not invalid_run_quarantined)
                         or row["verification"] != "unverified"
                     ):
                         raise ValueError("source-free knowledge provenance is invalid")
@@ -10899,9 +10995,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     tags=tags,
                     semantic_key=row["semantic_key"],
                     aliases=cast(list[str], metadata.get("aliases", [])),
-                    relation_hints=cast(
-                        list[dict[str, Any]], metadata.get("relation_hints", [])
-                    ),
+                    relation_hints=cast(list[dict[str, Any]], metadata.get("relation_hints", [])),
                     assertion=cast(dict[str, Any] | None, metadata.get("assertion")),
                     parent_revision_id=row["parent_revision_id"],
                     supersedes_revision_id=row["supersedes_revision_id"],
@@ -11223,10 +11317,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 metadata = strict_json_loads(row["metadata_json"])
                 if (
                     not isinstance(metadata, dict)
-                    or set(metadata)
-                    - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256"}
-                    or len(canonical_json(metadata).encode("utf-8"))
-                    > _MAX_RUN_METADATA_BYTES
+                    or set(metadata) - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256"}
+                    or len(canonical_json(metadata).encode("utf-8")) > _MAX_RUN_METADATA_BYTES
                 ):
                     raise ValueError("Run Record metadata is invalid")
                 for list_field in ("tool_ids", "artifact_ids"):
@@ -11241,9 +11333,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     ):
                         raise ValueError("Run Record metadata list is invalid")
                 notes_sha256 = metadata.get("notes_sha256")
-                if notes_sha256 is not None and not _SHA256.fullmatch(
-                    str(notes_sha256)
-                ):
+                if notes_sha256 is not None and not _SHA256.fullmatch(str(notes_sha256)):
                     raise ValueError("Run Record notes digest is invalid")
                 receipt_body = {
                     "schema_version": "deeplaw.knowledge-run-record/v1",
@@ -11275,29 +11365,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and grant_writers.get(row["grant_id"]) == row["writer_id"]
                     and isinstance(row["host_id"], str)
                     and 1 <= len(row["host_id"]) <= 200
-                    and (
-                        row["model_id"] is None
-                        or 1 <= len(row["model_id"]) <= 500
-                    )
-                    and all(
-                        digest is None or _SHA256.fullmatch(digest)
-                        for digest in digest_fields
-                    )
+                    and (row["model_id"] is None or 1 <= len(row["model_id"]) <= 500)
+                    and all(digest is None or _SHA256.fullmatch(digest) for digest in digest_fields)
                     and row["scope"] in SCOPES
                     and row["sensitivity"] in SENSITIVITIES
-                    and row["status"]
-                    in {"succeeded", "failed", "partial", "aborted"}
-                    and canonical_timestamp(
-                        row["started_at"], field="Run Record started_at"
-                    )
+                    and row["status"] in {"succeeded", "failed", "partial", "aborted"}
+                    and canonical_timestamp(row["started_at"], field="Run Record started_at")
                     == row["started_at"]
-                    and canonical_timestamp(
-                        row["ended_at"], field="Run Record ended_at"
-                    )
+                    and canonical_timestamp(row["ended_at"], field="Run Record ended_at")
                     == row["ended_at"]
-                    and canonical_timestamp(
-                        row["recorded_at"], field="Run Record recorded_at"
-                    )
+                    and canonical_timestamp(row["recorded_at"], field="Run Record recorded_at")
                     == row["recorded_at"]
                     and row["started_at"] <= row["ended_at"] <= row["recorded_at"]
                     and row["receipt_sha256"]
@@ -11312,9 +11389,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and committed.get("sensitivity") == row["sensitivity"]
                     and committed.get("status") == row["status"]
                     and committed.get("receipt_sha256") == row["receipt_sha256"]
-                    and event_recorded_at.get(
-                        ("knowledge_run_recorded", row["run_id"])
-                    )
+                    and event_recorded_at.get(("knowledge_run_recorded", row["run_id"]))
                     == row["recorded_at"]
                 ):
                     raise ValueError("Run Record binding is inconsistent")
@@ -11328,9 +11403,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         for row in self.connection.execute(
             "SELECT * FROM knowledge_capture_batches_v4 ORDER BY capture_id"
         ):
-            committed = event_payloads.get(
-                ("knowledge_capture_recorded", row["capture_id"])
-            )
+            committed = event_payloads.get(("knowledge_capture_recorded", row["capture_id"]))
             try:
                 revision_ids = strict_json_loads(row["accepted_revision_ids_json"])
                 rejected = strict_json_loads(row["rejected_digests_json"])
@@ -11352,9 +11425,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         SELECT revision_id, generation_json
                         FROM knowledge_revisions_v3
                         WHERE revision_id IN ({})
-                        """.format(
-                            ",".join("?" for _item in revision_ids) or "NULL"
-                        ),
+                        """.format(",".join("?" for _item in revision_ids) or "NULL"),
                         tuple(revision_ids),
                     ).fetchall()
                     if isinstance(revision_ids, list)
@@ -11365,14 +11436,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and len(revision_ids) <= _MAX_CAPTURE_ITEMS
                     and len(set(revision_ids)) == len(revision_ids)
                     and all(
-                        isinstance(revision_id, str)
-                        and _REVISION_ID.fullmatch(revision_id)
+                        isinstance(revision_id, str) and _REVISION_ID.fullmatch(revision_id)
                         for revision_id in revision_ids
                     )
                     and len(accepted_rows) == len(revision_ids)
                     and all(
-                        strict_json_loads(item["generation_json"]).get("run_id")
-                        == row["run_id"]
+                        strict_json_loads(item["generation_json"]).get("run_id") == row["run_id"]
                         for item in accepted_rows
                     )
                     and valid_rejections
@@ -11383,9 +11452,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and committed.get("committed_revision_ids") == revision_ids
                     and committed.get("rejected_item_digests")
                     == [item["item_sha256"] for item in rejected]
-                    and event_recorded_at.get(
-                        ("knowledge_capture_recorded", row["capture_id"])
-                    )
+                    and event_recorded_at.get(("knowledge_capture_recorded", row["capture_id"]))
                     == row["recorded_at"]
                 ):
                     raise ValueError("capture batch binding is inconsistent")
@@ -11397,8 +11464,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     }
                 )
         for row in self.connection.execute(
-            "SELECT * FROM knowledge_duplicate_resolutions_v4 "
-            "ORDER BY deduplication_id"
+            "SELECT * FROM knowledge_duplicate_resolutions_v4 ORDER BY deduplication_id"
         ):
             committed = event_payloads.get(
                 ("knowledge_duplicate_collapsed", row["deduplication_id"])
@@ -11420,8 +11486,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and committed.get("grant_id") == row["grant_id"]
                     and committed.get("knowledge_id") == row["knowledge_id"]
                     and committed.get("revision_id") == row["revision_id"]
-                    and committed.get("semantic_digest")
-                    == row["incoming_semantic_digest"]
+                    and committed.get("semantic_digest") == row["incoming_semantic_digest"]
                     and event_recorded_at.get(
                         ("knowledge_duplicate_collapsed", row["deduplication_id"])
                     )
@@ -11438,9 +11503,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         for row in self.connection.execute(
             "SELECT * FROM knowledge_identity_resolutions_v4 ORDER BY resolution_id"
         ):
-            committed = event_payloads.get(
-                ("knowledge_identity_resolved", row["resolution_id"])
-            )
+            committed = event_payloads.get(("knowledge_identity_resolved", row["resolution_id"]))
             try:
                 object_ids = strict_json_loads(row["object_knowledge_ids_json"])
                 evidence_refs = strict_json_loads(row["evidence_refs_json"])
@@ -11468,17 +11531,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and (row["run_id"] is None or _RUN_ID.fullmatch(row["run_id"]))
                     and committed is not None
                     and committed.get("action") == row["action"]
-                    and committed.get("subject_knowledge_id")
-                    == row["subject_knowledge_id"]
+                    and committed.get("subject_knowledge_id") == row["subject_knowledge_id"]
                     and committed.get("object_knowledge_ids_sha256")
                     == sha256_bytes(canonical_json(object_ids).encode("utf-8"))
                     and committed.get("evidence_refs_sha256")
                     == sha256_bytes(canonical_json(evidence_refs).encode("utf-8"))
                     and committed.get("run_id") == row["run_id"]
                     and committed.get("writer_id") == row["writer_id"]
-                    and event_recorded_at.get(
-                        ("knowledge_identity_resolved", row["resolution_id"])
-                    )
+                    and event_recorded_at.get(("knowledge_identity_resolved", row["resolution_id"]))
                     == row["recorded_at"]
                 ):
                     raise ValueError("identity resolution binding is inconsistent")
@@ -11510,15 +11570,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     SELECT COUNT(*)
                     FROM knowledge_revisions_v3
                     WHERE revision_id IN ({}) AND kind = 'memory'
-                    """.format(
-                        ",".join("?" for _item in input_revision_ids) or "NULL"
-                    ),
+                    """.format(",".join("?" for _item in input_revision_ids) or "NULL"),
                     tuple(input_revision_ids),
                 ).fetchone()[0]
                 output_refs = (
-                    strict_json_loads(output["source_refs_json"])
-                    if output is not None
-                    else []
+                    strict_json_loads(output["source_refs_json"]) if output is not None else []
                 )
                 if not (
                     isinstance(input_revision_ids, list)
@@ -11541,11 +11597,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and committed is not None
                     and committed.get("run_id") == row["run_id"]
                     and committed.get("input_revision_ids_sha256")
-                    == sha256_bytes(
-                        canonical_json(input_revision_ids).encode("utf-8")
-                    )
-                    and committed.get("output_revision_id")
-                    == row["output_revision_id"]
+                    == sha256_bytes(canonical_json(input_revision_ids).encode("utf-8"))
+                    and committed.get("output_revision_id") == row["output_revision_id"]
                     and committed.get("policy_sha256")
                     == sha256_bytes(canonical_json(policy).encode("utf-8"))
                     and event_recorded_at.get(
@@ -11583,9 +11636,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 aliases = metadata.get("aliases", [])
                 if not isinstance(aliases, list):
                     raise ValueError("stored alias metadata is invalid")
-                values = list(
-                    dict.fromkeys([row["title"], *aliases, row["semantic_key"] or ""])
-                )
+                values = list(dict.fromkeys([row["title"], *aliases, row["semantic_key"] or ""]))
                 expected_active_aliases.update(
                     (
                         normalize_identity_text(alias),
@@ -11615,15 +11666,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and row["scope"] in SCOPES
                     and _KNOWLEDGE_ID.fullmatch(row["knowledge_id"])
                     and _REVISION_ID.fullmatch(row["revision_id"])
-                    and canonical_timestamp(
-                        row["recorded_at"], field="alias recorded_at"
-                    )
+                    and canonical_timestamp(row["recorded_at"], field="alias recorded_at")
                     == row["recorded_at"]
                     and (
                         row["retired_at"] is None
-                        or canonical_timestamp(
-                            row["retired_at"], field="alias retired_at"
-                        )
+                        or canonical_timestamp(row["retired_at"], field="alias retired_at")
                         == row["retired_at"]
                     )
                 ):
@@ -11646,9 +11693,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     }
                 )
         if actual_active_aliases != expected_active_aliases:
-            failures.append(
-                {"code": "knowledge_alias_set_invalid", "object_id": self.vault_id}
-            )
+            failures.append({"code": "knowledge_alias_set_invalid", "object_id": self.vault_id})
         expected_usage_ids: set[str] = set()
         for row in self.connection.execute(
             "SELECT * FROM mutation_idempotency_v3 ORDER BY grant_id, idempotency_key"
@@ -11734,9 +11779,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     raise ValueError("stored mutation result kind is invalid")
                 event_type, response_id_field, table, table_id, schema_version = result_contract
                 accepted_schema_versions = (
-                    schema_version
-                    if isinstance(schema_version, tuple)
-                    else (schema_version,)
+                    schema_version if isinstance(schema_version, tuple) else (schema_version,)
                 )
                 if (
                     response.get(response_id_field) != row["result_id"]
@@ -11868,9 +11911,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         for row in self.connection.execute(
             "SELECT * FROM content_tombstones_v4 ORDER BY object_sha256"
         ):
-            purged = event_payloads.get(
-                ("knowledge_content_purged", row["object_sha256"])
-            )
+            purged = event_payloads.get(("knowledge_content_purged", row["object_sha256"]))
             try:
                 object_row = self.connection.execute(
                     "SELECT byte_size FROM content_objects_v3 WHERE object_sha256 = ?",
@@ -11879,14 +11920,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 roles = {
                     item["object_role"]
                     for item in self.connection.execute(
-                        "SELECT object_role FROM content_object_roles_v3 "
-                        "WHERE object_sha256 = ?",
+                        "SELECT object_role FROM content_object_roles_v3 WHERE object_sha256 = ?",
                         (row["object_sha256"],),
                     )
                 }
                 revision_count = self.connection.execute(
-                    "SELECT COUNT(*) FROM knowledge_revisions_v3 "
-                    "WHERE markdown_sha256 = ?",
+                    "SELECT COUNT(*) FROM knowledge_revisions_v3 WHERE markdown_sha256 = ?",
                     (row["object_sha256"],),
                 ).fetchone()[0]
                 if not (
@@ -11896,20 +11935,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and row["purged_by"] == "owner"
                     and isinstance(row["reason"], str)
                     and 1 <= len(row["reason"]) <= 2_000
-                    and canonical_timestamp(
-                        row["purged_at"], field="content tombstone time"
-                    )
+                    and canonical_timestamp(row["purged_at"], field="content tombstone time")
                     == row["purged_at"]
                     and purged is not None
                     and purged.get("object_sha256") == row["object_sha256"]
-                    and purged.get("reason_sha256")
-                    == sha256_bytes(row["reason"].encode("utf-8"))
+                    and purged.get("reason_sha256") == sha256_bytes(row["reason"].encode("utf-8"))
                     and purged.get("purged_by") == row["purged_by"]
                     and purged.get("byte_size") == object_row["byte_size"]
                     and purged.get("revision_count") == revision_count
-                    and event_recorded_at.get(
-                        ("knowledge_content_purged", row["object_sha256"])
-                    )
+                    and event_recorded_at.get(("knowledge_content_purged", row["object_sha256"]))
                     == row["purged_at"]
                 ):
                     raise ValueError("content tombstone binding is invalid")
@@ -12020,15 +12054,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             )
         }
         if actual_role_times != expected_role_times:
-            failures.append(
-                {"code": "content_object_role_set_invalid", "object_id": self.vault_id}
-            )
+            failures.append({"code": "content_object_role_set_invalid", "object_id": self.vault_id})
         for row in self.connection.execute(
             "SELECT object_sha256, object_kind, created_at FROM content_objects_v3"
         ):
-            if expected_role_times.get(
-                (row["object_sha256"], row["object_kind"])
-            ) != row["created_at"]:
+            if (
+                expected_role_times.get((row["object_sha256"], row["object_kind"]))
+                != row["created_at"]
+            ):
                 failures.append(
                     {
                         "code": "content_object_first_observation_invalid",
@@ -12048,9 +12081,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         ):
             workspace_checked += 1
             try:
-                path = self.root / _safe_knowledge_workspace_path(
-                    row["current_workspace_path"]
-                )
+                path = self.root / _safe_knowledge_workspace_path(row["current_workspace_path"])
                 valid_workspace = bool(
                     not path.is_symlink()
                     and path.is_file()
@@ -12198,9 +12229,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
                 if (
                     relative in seen_derived_paths
-                    or not relative.startswith(
-                        ("wiki/", "canvas/", ".deeplaw/derived/vectors/")
-                    )
+                    or not relative.startswith(("wiki/", "canvas/", ".deeplaw/derived/vectors/"))
                     or not isinstance(item["byte_size"], int)
                     or isinstance(item["byte_size"], bool)
                     or not 0 <= item["byte_size"] <= derived_byte_limit
@@ -12267,8 +12296,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 == sha256_bytes(canonical_json(current_relation_revisions).encode("utf-8"))
                 and derived_manifest.get("fts_rows_sha256")
                 == sha256_bytes(canonical_json(expected_search).encode("utf-8"))
-                and derived_manifest.get("dense_manifest_sha256")
-                == dense_manifest_digest
+                and derived_manifest.get("dense_manifest_sha256") == dense_manifest_digest
                 and dense_binding_valid
                 and known_event_hash is not None
                 and derived_manifest.get("input_audit_head") == self.audit_head
@@ -12395,10 +12423,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         capability_inventory_valid = bool(
             not capability_root.is_symlink()
             and capability_root.is_dir()
-            and not (
-                os.name != "nt"
-                and stat.S_IMODE(capability_root.stat().st_mode) & 0o077
-            )
+            and not (os.name != "nt" and stat.S_IMODE(capability_root.stat().st_mode) & 0o077)
         )
         if capability_inventory_valid:
             for index, path in enumerate(capability_root.iterdir(), start=1):
@@ -12409,10 +12434,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     capability_inventory_valid = False
                     break
                 actual_capability_files.add(path.name)
-        if (
-            not capability_inventory_valid
-            or actual_capability_files != expected_capability_files
-        ):
+        if not capability_inventory_valid or actual_capability_files != expected_capability_files:
             failures.append(
                 {
                     "code": "knowledge_sink_capability_inventory_invalid",
@@ -12440,13 +12462,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if path.is_symlink() or not path.is_file():
                     raise RuntimeError("autonomous staging inventory is unsafe")
         except (OSError, RuntimeError, ValueError):
-            failures.append(
-                {"code": "staging_inventory_invalid", "object_id": self.vault_id}
-            )
+            failures.append({"code": "staging_inventory_invalid", "object_id": self.vault_id})
         if staging_recovery_count:
-            failures.append(
-                {"code": "staging_recovery_required", "object_id": self.vault_id}
-            )
+            failures.append({"code": "staging_recovery_required", "object_id": self.vault_id})
         return {
             "schema_version": "deeplaw.autonomous-verification/v1",
             "vault_id": self.vault_id,

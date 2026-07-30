@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-batch.v1.schema.json",
+  "title": "DeepLaw Source Compilation Batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "batch_id", "compilation_run_id", "packet_id",
+    "plan_sha256", "object_count", "relation_count", "identity_count",
+    "coverage_ratio", "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-batch/v1"},
+    "batch_id": {"type": "string", "pattern": "^batch_[0-9a-f]{24}$"},
+    "compilation_run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "packet_id": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"},
+    "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "object_count": {"type": "integer", "minimum": 0, "maximum": 512},
+    "relation_count": {"type": "integer", "minimum": 0, "maximum": 512},
+    "identity_count": {"type": "integer", "minimum": 0, "maximum": 512},
+    "coverage_ratio": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "recorded_at": {"type": "string", "format": "date-time"}
+  }
+}

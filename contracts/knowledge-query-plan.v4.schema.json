@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-query-plan.v4.schema.json",
+  "title": "DeepLaw purpose-aware Knowledge Query Plan v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "intent", "purpose", "policy_id", "query_sha256",
+    "channel_order", "used_channels", "scope", "max_sensitivity", "as_of",
+    "filters", "budget", "input_audit_head", "input_legacy_audit_head",
+    "compiled_candidate_count", "compiled_selected_count",
+    "evidence_selected_count", "uncompiled_source_count",
+    "stale_selection_prevented_count", "evidence_attachment_count",
+    "fallback", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-query-plan/v4"},
+    "intent": {"const": "purpose_aware_knowledge_retrieval"},
+    "purpose": {
+      "enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]
+    },
+    "policy_id": {
+      "enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
+    },
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "channel_order": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "used_channels": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "compiled_knowledge", "source_evidence", "raw_fragment_fallback",
+          "law_support_boundary"
+        ]
+      }
+    },
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private"]},
+    "as_of": {"type": ["string", "null"], "format": "date-time"},
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kinds"],
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "maxItems": 23,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items", "characters", "tokens", "sources", "graph_hops",
+        "provider_characters"
+      ],
+      "properties": {
+        "items": {"type": "integer", "minimum": 1, "maximum": 20},
+        "characters": {"type": "integer", "minimum": 200, "maximum": 20000},
+        "tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "sources": {"type": "integer", "minimum": 1, "maximum": 32},
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "provider_characters": {"const": 65536}
+      }
+    },
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compiled_candidate_count": {"type": "integer", "minimum": 0},
+    "compiled_selected_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "evidence_selected_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "uncompiled_source_count": {"type": "integer", "minimum": 0, "maximum": 16},
+    "stale_selection_prevented_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "evidence_attachment_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "used", "reason", "source_revision_ids", "selected_fragment_ids",
+        "characters", "tokens", "new_synthesis_created"
+      ],
+      "properties": {
+        "used": {"type": "boolean"},
+        "reason": {"type": ["string", "null"], "maxLength": 200},
+        "source_revision_ids": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "selected_fragment_ids": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "characters": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "tokens": {"type": "integer", "minimum": 0, "maximum": 32000},
+        "new_synthesis_created": {"const": false}
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

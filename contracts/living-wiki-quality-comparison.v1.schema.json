@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-quality-comparison.v1.schema.json",
+  "title": "DeepLaw Living Wiki baseline comparison v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite",
+    "environment_match",
+    "baseline",
+    "candidate",
+    "functional_comparisons",
+    "performance_comparisons",
+    "security",
+    "quality_regression",
+    "performance_regression",
+    "passed",
+    "competitive_claim_eligible",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.living-wiki-quality-comparison/v1"
+    },
+    "suite": {
+      "type": "object"
+    },
+    "environment_match": {
+      "const": true
+    },
+    "baseline": {
+      "type": "object"
+    },
+    "candidate": {
+      "type": "object"
+    },
+    "functional_comparisons": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/comparison"
+      }
+    },
+    "performance_comparisons": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/comparison"
+      }
+    },
+    "security": {
+      "type": "object"
+    },
+    "quality_regression": {
+      "const": false
+    },
+    "performance_regression": {
+      "const": false
+    },
+    "passed": {
+      "const": true
+    },
+    "competitive_claim_eligible": {
+      "const": false
+    },
+    "record_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "baseline",
+        "candidate",
+        "direction",
+        "tolerance",
+        "passed"
+      ],
+      "properties": {
+        "metric": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "baseline": {
+          "type": "number"
+        },
+        "candidate": {
+          "type": "number"
+        },
+        "direction": {
+          "enum": [
+            "higher_or_equal",
+            "lower_or_equal"
+          ]
+        },
+        "tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    }
+  }
+}

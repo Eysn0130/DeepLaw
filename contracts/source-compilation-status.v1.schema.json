@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-status.v1.schema.json",
+  "title": "DeepLaw Source Compilation Status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_revision_id", "runs", "run_count",
+    "truncated", "audit_head"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-status/v1"},
+    "source_revision_id": {
+      "type": ["string", "null"], "pattern": "^sourcerev_[0-9a-f]{24}$"
+    },
+    "runs": {
+      "type": "array", "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "compilation_run_id", "source_revision_id", "compiler_profile",
+          "compiler_profile_version", "status", "packet_count", "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "compilation_run_id": {
+            "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+          },
+          "source_revision_id": {
+            "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+          },
+          "compiler_profile": {"type": "string", "minLength": 1, "maxLength": 200},
+          "compiler_profile_version": {
+            "type": "string", "minLength": 1, "maxLength": 100
+          },
+          "status": {
+            "enum": [
+              "planned", "staging", "validating", "ready_to_commit",
+              "committed", "projection_pending", "succeeded", "failed", "aborted"
+            ]
+          },
+          "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "run_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+    "truncated": {"type": "boolean"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

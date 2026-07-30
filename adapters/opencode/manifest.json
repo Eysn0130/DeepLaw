@@ -1,6 +1,6 @@
 {
   "schema_version": "deeplaw.opencode-adapter-manifest/v1",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "host": "opencode",
   "products": [
     {
@@ -15,6 +15,9 @@
       "config": "knowledge-os.jsonc",
       "agent": "agents/deeplaw-knowledge.md",
       "skill": "../../plugins/deeplaw-knowledge-os/skills/use-knowledge-assets",
+      "optional_compile_config": "knowledge-compiler.example.jsonc",
+      "optional_compile_agent": "agents/deeplaw-compiler.md",
+      "optional_compile_skill": "../../plugins/deeplaw-knowledge-os/skills/compile-living-wiki",
       "mcp_server": "deeplaw_knowledge"
     }
   ],

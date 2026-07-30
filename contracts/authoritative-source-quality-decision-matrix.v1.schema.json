@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-source-quality-decision-matrix.v1.schema.json",
+  "title": "DeepLaw Authoritative Pack 28-source quality decision matrix v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_target",
+    "status",
+    "catalog",
+    "snapshot",
+    "target_rebuild",
+    "reproducibility",
+    "retrieval_quality",
+    "decision_summary",
+    "sources",
+    "active_after",
+    "limitations",
+    "competitive_claim_eligible",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.authoritative-source-quality-decision-matrix/v1"
+    },
+    "release_target": {
+      "const": "0.11.0"
+    },
+    "status": {
+      "enum": [
+        "dry_run_verified",
+        "executed_and_verified"
+      ]
+    },
+    "catalog": {
+      "$ref": "#/$defs/object"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/object"
+    },
+    "target_rebuild": {
+      "$ref": "#/$defs/object"
+    },
+    "reproducibility": {
+      "$ref": "#/$defs/object"
+    },
+    "retrieval_quality": {
+      "$ref": "#/$defs/object"
+    },
+    "decision_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "no_action",
+        "rebuild_derived",
+        "recompile_knowledge",
+        "reparse_source_ir",
+        "ingest_new_source_revision",
+        "blocked_invalid_evidence"
+      ],
+      "properties": {
+        "no_action": {
+          "const": 13
+        },
+        "rebuild_derived": {
+          "const": 0
+        },
+        "recompile_knowledge": {
+          "const": 0
+        },
+        "reparse_source_ir": {
+          "const": 15
+        },
+        "ingest_new_source_revision": {
+          "const": 0
+        },
+        "blocked_invalid_evidence": {
+          "const": 0
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 28,
+      "maxItems": 28,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "active_after": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/object"
+        }
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 12,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "competitive_claim_eligible": {
+      "const": false
+    },
+    "record_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "object": {
+      "type": "object"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_source_id",
+        "source_revision_id",
+        "source_revision_semantics",
+        "immutable_bytes_sha256",
+        "byte_size",
+        "format",
+        "media_type",
+        "lifecycle",
+        "scope",
+        "sensitivity",
+        "origin",
+        "authority",
+        "parser",
+        "source_ir",
+        "fragments",
+        "extraction_quality",
+        "compilation",
+        "knowledge_output",
+        "derived_state",
+        "authoritative_pack",
+        "decision",
+        "reason_codes",
+        "execution_status",
+        "rollback"
+      ],
+      "properties": {
+        "stable_source_id": {
+          "type": "string",
+          "pattern": "^doc_[0-9a-f]{24}$"
+        },
+        "source_revision_id": {
+          "type": "null"
+        },
+        "source_revision_semantics": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "immutable_bytes_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "format": {
+          "enum": [
+            "PDF",
+            "DOCX"
+          ]
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          ]
+        },
+        "lifecycle": {
+          "const": "active"
+        },
+        "scope": {
+          "const": "law_support_official"
+        },
+        "sensitivity": {
+          "const": "public"
+        },
+        "origin": {
+          "const": "official"
+        },
+        "authority": {
+          "const": "official"
+        },
+        "parser": {
+          "$ref": "#/$defs/object"
+        },
+        "source_ir": {
+          "$ref": "#/$defs/object"
+        },
+        "fragments": {
+          "$ref": "#/$defs/object"
+        },
+        "extraction_quality": {
+          "$ref": "#/$defs/object"
+        },
+        "compilation": {
+          "$ref": "#/$defs/object"
+        },
+        "knowledge_output": {
+          "$ref": "#/$defs/object"
+        },
+        "derived_state": {
+          "$ref": "#/$defs/object"
+        },
+        "authoritative_pack": {
+          "$ref": "#/$defs/object"
+        },
+        "decision": {
+          "enum": [
+            "no_action",
+            "rebuild_derived",
+            "recompile_knowledge",
+            "reparse_source_ir",
+            "ingest_new_source_revision",
+            "blocked_invalid_evidence"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "execution_status": {
+          "enum": [
+            "dry_run_verified",
+            "verified"
+          ]
+        },
+        "rollback": {
+          "$ref": "#/$defs/object"
+        }
+      }
+    }
+  }
+}

@@ -156,10 +156,10 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
             }
         )
     )
-    assert len(canonical_json(response)) <= 65_536
+    assert len(canonical_json(response).encode("utf-8")) <= 65_536
 
 
-def test_knowledge_support_v3_extends_without_mutating_frozen_v2() -> None:
+def test_knowledge_support_v4_extends_without_mutating_frozen_v2_or_v3() -> None:
     repository = Path(__file__).resolve().parents[1]
     v2 = json.loads(
         (repository / "contracts/knowledge-support.input.v2.schema.json").read_text()
@@ -167,13 +167,20 @@ def test_knowledge_support_v3_extends_without_mutating_frozen_v2() -> None:
     v3 = json.loads(
         (repository / "contracts/knowledge-support.input.v3.schema.json").read_text()
     )
+    v4 = json.loads(
+        (repository / "contracts/knowledge-support.input.v4.schema.json").read_text()
+    )
 
     v2_operations = set(v2["properties"]["operation"]["enum"])
     v3_operations = set(v3["properties"]["operation"]["enum"])
     assert {"identity_lookup", "gaps"}.isdisjoint(v2_operations)
     assert v3_operations == v2_operations | {"identity_lookup", "gaps"}
+    assert set(v4["properties"]["operation"]["enum"]) == v3_operations | {
+        "query",
+        "compilation",
+    }
     assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
-        "knowledge-support.input.v3.schema.json"
+        "knowledge-support.input.v4.schema.json"
     )
 
 
@@ -417,7 +424,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
         verification,
     ):
         Draft202012Validator(schema).validate(response)
-        assert len(canonical_json(response)) <= 65_536
+        assert len(canonical_json(response).encode("utf-8")) <= 65_536
 
 
 def test_source_derived_context_does_not_probe_or_report_autonomous_candidates(
@@ -915,7 +922,7 @@ def test_skill_and_preference_contracts_preserve_lifecycle_and_statement_basis(
     bounded_manifest = exact_skill["result"]["metadata"]["skill_manifest"]
     assert bounded_manifest["lifecycle"] == "promoted"
     assert bounded_manifest["canonical_manifest_omitted"] is True
-    assert len(canonical_json(exact_skill)) <= 65_536
+    assert len(canonical_json(exact_skill).encode("utf-8")) <= 65_536
 
 
 def test_mcp_budgets_temporal_reads_and_scope_admission_are_closed(
@@ -1291,7 +1298,13 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
             await session.initialize()
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_sink"]
-            assert listed.tools[0].inputSchema["properties"]["evaluator_type"]["enum"] == [
+            advertised_schema = listed.tools[0].inputSchema
+            legacy_branch = next(
+                branch
+                for branch in advertised_schema["oneOf"]
+                if "properties" in branch
+            )
+            assert legacy_branch["properties"]["evaluator_type"]["enum"] == [
                 "agent_self_report"
             ]
             result = await session.call_tool(

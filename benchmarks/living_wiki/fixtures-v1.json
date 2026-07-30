@@ -1,0 +1,126 @@
+{
+  "schema_version": "deeplaw.living-wiki-benchmark-fixtures/v1",
+  "fixture_set_id": "deeplaw-living-wiki-public-development-v1",
+  "status": "public_development_fixture",
+  "license": "Apache-2.0",
+  "private_content": false,
+  "cases": [
+    {
+      "case_id": "lw_same_name_entities",
+      "category": "same_name_entities",
+      "description": "Two unrelated organizations share the exact name ACME and must remain separate with an explicit ambiguity candidate.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 2},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "ACME (research lab) and ACME (shipping firm) are unrelated organizations."}],
+      "queries": ["Are the two ACME organizations the same entity?"],
+      "expected_properties": ["no_automatic_merge", "identity_gap_visible"]
+    },
+    {
+      "case_id": "lw_multiple_aliases",
+      "category": "multiple_aliases",
+      "description": "One entity is referenced by a canonical name, acronym, and prior name.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 1},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Northwind Research, formerly Northwind Lab, is also called NRL."}],
+      "queries": ["What is NRL?", "What was Northwind Research previously called?"],
+      "expected_properties": ["one_canonical_identity", "previous_aliases_retrievable"]
+    },
+    {
+      "case_id": "lw_conflicting_sources",
+      "category": "conflicting_sources",
+      "description": "Two admitted sources make incompatible claims about the same dated event.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 4},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Source A says launch was 2025-05-01. Source B says launch was 2025-05-03."}],
+      "queries": ["When was the launch?"],
+      "expected_properties": ["contradiction_visible", "no_false_resolution"]
+    },
+    {
+      "case_id": "lw_source_successor",
+      "category": "source_successor",
+      "description": "A source successor changes one section and leaves one section byte-equivalent.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 3},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Policy A is required. Policy B is optional."}, {"step": 2, "action": "supersede", "content": "Policy A is optional. Policy B is optional."}],
+      "queries": ["Which policies are required?"],
+      "expected_properties": ["selective_staleness", "unchanged_dependency_fresh"]
+    },
+    {
+      "case_id": "lw_source_withdrawal",
+      "category": "source_withdrawal",
+      "description": "An admitted source and its only-supported knowledge are withdrawn.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 2},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Retired rule Z is required."}, {"step": 2, "action": "withdraw", "content": ""}],
+      "queries": ["Is rule Z currently required?"],
+      "expected_properties": ["withdrawn_content_not_admitted", "historical_revision_preserved"]
+    },
+    {
+      "case_id": "lw_permission_change",
+      "category": "permission_change",
+      "description": "A source sensitivity is raised beyond the querying grant.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 2},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Project constraint Q applies."}, {"step": 2, "action": "raise_sensitivity", "content": "Project constraint Q applies."}],
+      "queries": ["What does constraint Q require?"],
+      "expected_properties": ["restricted_content_not_disclosed", "gap_redacted"]
+    },
+    {
+      "case_id": "lw_long_document",
+      "category": "long_document",
+      "description": "A deterministic long-document generator places relevant facts near the beginning, middle, and end.",
+      "materialization": {"kind": "deterministic_generator", "formats": ["markdown"], "object_target": 180},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "generator:long-document-v1"}],
+      "queries": ["What fact appears in the final section?"],
+      "expected_properties": ["bounded_packets", "complete_coverage"]
+    },
+    {
+      "case_id": "lw_multiple_formats",
+      "category": "multiple_formats",
+      "description": "Equivalent public fixture facts are encoded in every supported office and publication format.",
+      "materialization": {"kind": "deterministic_generator", "formats": ["markdown", "pdf", "docx", "pptx", "xlsx", "epub"], "object_target": 18},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "generator:multi-format-v1"}],
+      "queries": ["Which format states control K?"],
+      "expected_properties": ["original_bytes_preserved", "format_provenance_visible"]
+    },
+    {
+      "case_id": "lw_more_than_300_objects",
+      "category": "more_than_300_objects",
+      "description": "A generator produces 360 distinct admitted objects to exercise sharded indexes and local Canvas output.",
+      "materialization": {"kind": "deterministic_generator", "formats": ["markdown"], "object_target": 360},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "generator:360-objects-v1"}],
+      "queries": ["Find object 359."],
+      "expected_properties": ["all_objects_indexed", "next_shard_explicit"]
+    },
+    {
+      "case_id": "lw_repeated_reuse_queries",
+      "category": "repeated_reuse_queries",
+      "description": "Repeated answer queries should reuse admitted compiled knowledge without reparsing the original.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 5},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Reusable invariant R applies to every build."}],
+      "queries": ["What is invariant R?", "What is invariant R?", "What is invariant R?"],
+      "expected_properties": ["compiled_hit_reused", "no_source_reparse"]
+    },
+    {
+      "case_id": "lw_exact_quote",
+      "category": "exact_quote",
+      "description": "A quote query requires exact Source Revision, fragment, locator, and quote digest drill-down.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 2},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "The exact phrase is: evidence precedes interpretation."}],
+      "queries": ["Quote the exact phrase."],
+      "expected_properties": ["evidence_first", "citation_valid"]
+    },
+    {
+      "case_id": "lw_historical_version",
+      "category": "historical_version",
+      "description": "A historical query selects the prior valid revision while an ordinary answer selects current state.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 3},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Limit L was 10 before 2026."}, {"step": 2, "action": "supersede", "content": "Limit L is 12 from 2026."}],
+      "queries": ["What is limit L now?", "What was limit L before 2026?"],
+      "expected_properties": ["current_and_historical_separated", "temporal_receipt_bound"]
+    },
+    {
+      "case_id": "lw_unanswerable",
+      "category": "unanswerable",
+      "description": "The corpus contains no support for the requested fact.",
+      "materialization": {"kind": "inline_text", "formats": ["markdown"], "object_target": 1},
+      "source_sequence": [{"step": 1, "action": "ingest", "content": "Only fact A is available."}],
+      "queries": ["What is fact B?"],
+      "expected_properties": ["explicit_gap", "no_fabricated_answer"]
+    }
+  ]
+}

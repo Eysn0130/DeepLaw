@@ -78,6 +78,16 @@ _TEXT_SUFFIXES = {
     ".log",
 }
 _MARKDOWN_SUFFIXES = {".md", ".markdown"}
+_CANONICAL_SOURCE_MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".epub": "application/epub+zip",
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+}
 _MARKDOWN_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _COMPILED_PART_SUFFIX = re.compile(r"^(?P<title>.+) · part [2-9][0-9]*$")
 _MAX_SECTION_CHARS = 12_000
@@ -164,6 +174,16 @@ def _source_format(path: Path) -> str:
         "UTF-8 text, Markdown, "
         "JSON, source code, CSV/TSV, YAML, TOML, XML, HTML, SQL, or log files; "
         "legacy DOC additionally requires LibreOffice"
+    )
+
+
+def _source_media_type(path: Path) -> str:
+    """Return stable media identities for the first-party document formats."""
+
+    return (
+        _CANONICAL_SOURCE_MEDIA_TYPES.get(path.suffix.lower())
+        or mimetypes.guess_type(path.name)[0]
+        or "application/octet-stream"
     )
 
 
@@ -530,7 +550,7 @@ def compile_source(
             "renamed" if old_path.parent == new_path.parent else "moved"
         )
     format_name = _source_format(path)
-    source_media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    source_media_type = _source_media_type(path)
     extraction = (
         _extract_legacy_doc(path)
         if format_name == "DOC"

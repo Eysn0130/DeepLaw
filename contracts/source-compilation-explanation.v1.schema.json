@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-explanation.v1.schema.json",
+  "title": "DeepLaw Source Compilation Explanation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run", "packets", "counts", "canonical_visible",
+    "projection_required", "audit_head"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-explanation/v1"},
+    "run": {"type": "object"},
+    "packets": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packet_id", "ordinal", "fragment_count", "state", "plan_sha256"
+        ],
+        "properties": {
+          "packet_id": {"type": "string", "minLength": 1, "maxLength": 200},
+          "ordinal": {"type": "integer", "minimum": 1},
+          "fragment_count": {"type": "integer", "minimum": 1, "maximum": 128},
+          "state": {"enum": ["pending", "staged", "validated"]},
+          "plan_sha256": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["staged_objects", "staged_relations", "outputs", "dependencies"],
+      "properties": {
+        "staged_objects": {"type": "integer", "minimum": 0},
+        "staged_relations": {"type": "integer", "minimum": 0},
+        "outputs": {"type": "integer", "minimum": 0},
+        "dependencies": {"type": "integer", "minimum": 0}
+      }
+    },
+    "canonical_visible": {"type": "boolean"},
+    "projection_required": {"type": "boolean"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
