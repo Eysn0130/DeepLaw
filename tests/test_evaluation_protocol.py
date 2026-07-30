@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from referencing import Registry, Resource
 from benchmarks.evaluation.run_autonomy_safety import run_suite as run_autonomy
 from benchmarks.evaluation.run_protocol import (
     EvaluationProtocolError,
+    _verify_installed_candidate_wheel,
     run_protocol,
     verify_report_directory,
 )
@@ -148,6 +150,24 @@ def test_protocol_generates_and_verifies_complete_report_package(
     } == {path.name for path in output.iterdir()}
     verified = verify_report_directory(output, repository=repository)
     assert verified["report_sha256"] == report["report_sha256"]
+
+
+def test_candidate_wheel_cannot_be_claimed_from_an_editable_source_runtime(
+    tmp_path: Path,
+) -> None:
+    wheel = tmp_path / "deeplaw-0.10.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("deeplaw/__init__.py", '__version__ = "0.10.0"\n')
+        archive.writestr(
+            "deeplaw-0.10.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: deeplaw\nVersion: 0.10.0\n",
+        )
+
+    with pytest.raises(
+        EvaluationProtocolError,
+        match="runtime is not loaded from the candidate wheel",
+    ):
+        _verify_installed_candidate_wheel(wheel, version="0.10.0")
 
 
 def test_report_verifier_rejects_component_tampering(tmp_path: Path) -> None:

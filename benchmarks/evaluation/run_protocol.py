@@ -1,23 +1,26 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import platform
+import stat
 import subprocess
 import sys
 import tomllib
+import zipfile
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+import deeplaw
 from benchmarks.evaluation.run_autonomy_safety import run_suite as run_autonomy
 from benchmarks.evaluation.run_typed_compiler_quality import (
     run_suite as run_typed_compiler,
 )
 from benchmarks.quality.run_repository_gold import run_suite as run_repository_gold
-from deeplaw import __version__
 from deeplaw.util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
 
 PROTOCOL_SCHEMA = "deeplaw.evaluation-protocol/v1"
@@ -30,6 +33,8 @@ _COMPONENTS = (
 )
 _MAX_PROTOCOL_BYTES = 2 * 1024 * 1024
 _MAX_REPORT_BYTES = 20 * 1024 * 1024
+_MAX_WHEEL_BYTES = 100 * 1024 * 1024
+_MAX_INSTALLED_PACKAGE_BYTES = 50 * 1024 * 1024
 
 
 class EvaluationProtocolError(RuntimeError):
@@ -91,6 +96,123 @@ def _load_protocol(path: Path, *, repository: Path) -> dict[str, Any]:
     return protocol
 
 
+def _wheel_package_inventory(
+    wheel: Path,
+    *,
+    expected_version: str,
+) -> dict[str, str]:
+    if not 1 <= wheel.stat().st_size <= _MAX_WHEEL_BYTES:
+        raise EvaluationProtocolError("Candidate wheel exceeds its byte bound")
+    package_files: dict[str, str] = {}
+    seen: set[str] = set()
+    metadata_versions: list[str] = []
+    total_package_bytes = 0
+    try:
+        with zipfile.ZipFile(wheel) as archive:
+            for item in archive.infolist():
+                relative = PurePosixPath(item.filename)
+                if (
+                    relative.is_absolute()
+                    or not relative.parts
+                    or ".." in relative.parts
+                    or item.filename in seen
+                    or stat.S_ISLNK(item.external_attr >> 16)
+                ):
+                    raise EvaluationProtocolError(
+                        "Candidate wheel contains an unsafe path"
+                    )
+                seen.add(item.filename)
+                if item.is_dir():
+                    continue
+                if (
+                    len(relative.parts) == 2
+                    and relative.parts[0] == f"deeplaw-{expected_version}.dist-info"
+                    and relative.parts[1] == "METADATA"
+                ):
+                    metadata_text = archive.read(item).decode("utf-8", errors="strict")
+                    metadata_versions.extend(
+                        line.removeprefix("Version: ").strip()
+                        for line in metadata_text.splitlines()
+                        if line.startswith("Version: ")
+                    )
+                if relative.parts[0] != "deeplaw":
+                    continue
+                total_package_bytes += item.file_size
+                if total_package_bytes > _MAX_INSTALLED_PACKAGE_BYTES:
+                    raise EvaluationProtocolError(
+                        "Candidate wheel package exceeds its byte bound"
+                    )
+                package_files[relative.as_posix()] = sha256_bytes(archive.read(item))
+    except (UnicodeDecodeError, zipfile.BadZipFile) as error:
+        raise EvaluationProtocolError("Candidate wheel is malformed") from error
+    if not package_files or metadata_versions != [expected_version]:
+        raise EvaluationProtocolError(
+            "Candidate wheel metadata does not match the candidate version"
+        )
+    return package_files
+
+
+def _verify_installed_candidate_wheel(wheel: Path, *, version: str) -> None:
+    expected = _wheel_package_inventory(wheel, expected_version=version)
+    try:
+        distribution = importlib.metadata.distribution("deeplaw")
+        installed_root = Path(distribution.locate_file("")).resolve(strict=True)
+        loaded_init = Path(deeplaw.__file__ or "").resolve(strict=True)
+    except (importlib.metadata.PackageNotFoundError, OSError) as error:
+        raise EvaluationProtocolError(
+            "Installed DeepLaw candidate is unavailable"
+        ) from error
+    expected_init = (installed_root / "deeplaw" / "__init__.py").resolve(
+        strict=False
+    )
+    if distribution.version != version or loaded_init != expected_init:
+        raise EvaluationProtocolError(
+            "Evaluation runtime is not loaded from the candidate wheel"
+        )
+    observed: dict[str, str] = {}
+    for relative, expected_digest in expected.items():
+        unresolved = installed_root / Path(*PurePosixPath(relative).parts)
+        try:
+            installed = unresolved.resolve(strict=True)
+            installed.relative_to(installed_root)
+        except (OSError, ValueError) as error:
+            raise EvaluationProtocolError(
+                "Installed candidate package inventory is incomplete"
+            ) from error
+        if (
+            installed != unresolved
+            or installed.is_symlink()
+            or not installed.is_file()
+            or installed.stat().st_size > _MAX_INSTALLED_PACKAGE_BYTES
+        ):
+            raise EvaluationProtocolError(
+                "Installed candidate package path is unsafe"
+            )
+        digest = sha256_file(installed)
+        if digest != expected_digest:
+            raise EvaluationProtocolError(
+                "Installed candidate bytes differ from the candidate wheel"
+            )
+        observed[relative] = digest
+    package_root = installed_root / "deeplaw"
+    for path in package_root.rglob("*"):
+        if (
+            not path.is_file()
+            or "__pycache__" in path.parts
+            or path.suffix in {".pyc", ".pyo"}
+        ):
+            continue
+        relative = path.relative_to(installed_root).as_posix()
+        if relative not in expected:
+            raise EvaluationProtocolError(
+                "Installed candidate package has unbound extra files"
+            )
+    if observed != expected:
+        raise EvaluationProtocolError(
+            "Installed candidate package inventory differs from the wheel"
+        )
+
+
 def _candidate_binding(
     repository: Path,
     *,
@@ -100,7 +222,7 @@ def _candidate_binding(
         (repository / "pyproject.toml").read_text(encoding="utf-8")
     )
     version = project["project"]["version"]
-    if __version__ != version:
+    if deeplaw.__version__ != version:
         raise EvaluationProtocolError(
             "Installed candidate version does not match pyproject.toml"
         )
@@ -123,6 +245,7 @@ def _candidate_binding(
         expected_prefix = f"deeplaw-{version}-"
         if not wheel.name.startswith(expected_prefix):
             raise EvaluationProtocolError("Candidate wheel filename does not match the version")
+        _verify_installed_candidate_wheel(wheel, version=version)
         artifact_type = "wheel"
         artifact_name = wheel.name
         artifact_sha256 = sha256_file(wheel)
