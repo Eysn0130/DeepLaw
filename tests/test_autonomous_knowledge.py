@@ -22,7 +22,7 @@ from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_inbox import reject_inbox_artifact, submit_inbox_artifact
 from deeplaw.knowledge_maintenance import knowledge_doctor
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
-from deeplaw.util import canonical_json, sha256_bytes
+from deeplaw.util import canonical_json, sha256_bytes, stable_id
 
 
 def _vault(tmp_path: Path) -> Path:
@@ -1156,9 +1156,27 @@ def test_graph_candidate_budget_filters_relation_valid_time_before_its_cut(
             operation="upsert_concept",
             confirm_no_case_data=True,
         )
+        candidate_specs: list[tuple[str, str]] = []
+        for suffix in ("a", "b"):
+            idempotency_key = f"temporal-graph-neighbor-{suffix}"
+            predicted_knowledge_id = stable_id(
+                "knowledge",
+                store.vault_id,
+                grant_id,
+                idempotency_key,
+            )
+            predicted_relation_key = stable_id(
+                "relationkey",
+                store.vault_id,
+                source["knowledge_id"],
+                "related_to",
+                predicted_knowledge_id,
+            )
+            candidate_specs.append((predicted_relation_key, idempotency_key))
+        future_spec, visible_spec = sorted(candidate_specs)
         visible_neighbor = store.remember(
             grant_id=grant_id,
-            idempotency_key="temporal-graph-visible",
+            idempotency_key=visible_spec[1],
             title="Current graph neighbor",
             body="This relation is valid at the current instant.",
             kind="concept",
@@ -1174,31 +1192,28 @@ def test_graph_candidate_budget_filters_relation_valid_time_before_its_cut(
             evidence_refs=[{"revision_id": source["revision_id"]}],
             confirm_no_case_data=True,
         )
-        future_key: str | None = None
-        for index in range(32):
-            future_neighbor = store.remember(
-                grant_id=grant_id,
-                idempotency_key=f"temporal-graph-future-{index}",
-                title=f"Future graph neighbor {index}",
-                body="This relation is not yet valid.",
-                kind="concept",
-                operation="upsert_concept",
-                confirm_no_case_data=True,
-            )
-            future = store.add_relation(
-                grant_id=grant_id,
-                idempotency_key=f"temporal-graph-future-edge-{index}",
-                subject_knowledge_id=source["knowledge_id"],
-                predicate="related_to",
-                object_knowledge_id=future_neighbor["knowledge_id"],
-                evidence_refs=[{"revision_id": source["revision_id"]}],
-                valid_from="2099-01-01T00:00:00Z",
-                confirm_no_case_data=True,
-            )
-            if future["relation_key"] < visible["relation_key"]:
-                future_key = future["relation_key"]
-                break
-        assert future_key is not None
+        future_neighbor = store.remember(
+            grant_id=grant_id,
+            idempotency_key=future_spec[1],
+            title="Future graph neighbor",
+            body="This relation is not yet valid.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        future = store.add_relation(
+            grant_id=grant_id,
+            idempotency_key="temporal-graph-future-edge",
+            subject_knowledge_id=source["knowledge_id"],
+            predicate="related_to",
+            object_knowledge_id=future_neighbor["knowledge_id"],
+            evidence_refs=[{"revision_id": source["revision_id"]}],
+            valid_from="2099-01-01T00:00:00Z",
+            confirm_no_case_data=True,
+        )
+        assert future["relation_key"] == future_spec[0]
+        assert visible["relation_key"] == visible_spec[0]
+        assert future["relation_key"] < visible["relation_key"]
 
         result = store.graph(
             knowledge_id=source["knowledge_id"],
@@ -1233,48 +1248,76 @@ def test_historical_graph_filters_endpoint_governance_before_its_candidate_cut(
             operation="upsert_concept",
             confirm_no_case_data=True,
         )
-        minimum_hidden_key: str | None = None
-        visible_relation: dict[str, object] | None = None
-        for index in range(32):
-            neighbor = store.remember(
-                grant_id=grant_id,
-                idempotency_key=f"historical-boundary-neighbor-{index}",
-                title=f"Historical boundary neighbor {index}",
-                body="This endpoint starts private and may become restricted.",
-                kind="concept",
-                operation="upsert_concept",
-                confirm_no_case_data=True,
+        candidate_specs: list[tuple[str, str]] = []
+        for suffix in ("a", "b"):
+            idempotency_key = f"historical-boundary-neighbor-{suffix}"
+            predicted_knowledge_id = stable_id(
+                "knowledge",
+                store.vault_id,
+                grant_id,
+                idempotency_key,
             )
-            relation = store.add_relation(
-                grant_id=grant_id,
-                idempotency_key=f"historical-boundary-edge-{index}",
-                subject_knowledge_id=source["knowledge_id"],
-                predicate="related_to",
-                object_knowledge_id=neighbor["knowledge_id"],
-                evidence_refs=[{"revision_id": source["revision_id"]}],
-                confirm_no_case_data=True,
+            predicted_relation_key = stable_id(
+                "relationkey",
+                store.vault_id,
+                source["knowledge_id"],
+                "related_to",
+                predicted_knowledge_id,
             )
-            if minimum_hidden_key is not None and relation["relation_key"] > minimum_hidden_key:
-                visible_relation = relation
-                break
-            restricted = store.remember(
-                grant_id=grant_id,
-                idempotency_key=f"historical-boundary-restrict-{index}",
-                title=f"Historical boundary neighbor {index}",
-                body="This endpoint is now restricted.",
-                kind="concept",
-                operation="upsert_concept",
-                knowledge_id=neighbor["knowledge_id"],
-                expected_revision_id=neighbor["revision_id"],
-                sensitivity="restricted",
-                confirm_no_case_data=True,
-            )
-            assert restricted["lifecycle"] == "active"
-            minimum_hidden_key = min(
-                minimum_hidden_key or relation["relation_key"],
-                relation["relation_key"],
-            )
-        assert visible_relation is not None
+            candidate_specs.append((predicted_relation_key, idempotency_key))
+        hidden_spec, visible_spec = sorted(candidate_specs)
+        hidden_neighbor = store.remember(
+            grant_id=grant_id,
+            idempotency_key=hidden_spec[1],
+            title="Historical restricted neighbor",
+            body="This endpoint starts private and then becomes restricted.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        hidden_relation = store.add_relation(
+            grant_id=grant_id,
+            idempotency_key="historical-boundary-hidden-edge",
+            subject_knowledge_id=source["knowledge_id"],
+            predicate="related_to",
+            object_knowledge_id=hidden_neighbor["knowledge_id"],
+            evidence_refs=[{"revision_id": source["revision_id"]}],
+            confirm_no_case_data=True,
+        )
+        restricted = store.remember(
+            grant_id=grant_id,
+            idempotency_key="historical-boundary-restrict-hidden",
+            title="Historical restricted neighbor",
+            body="This endpoint is now restricted.",
+            kind="concept",
+            operation="upsert_concept",
+            knowledge_id=hidden_neighbor["knowledge_id"],
+            expected_revision_id=hidden_neighbor["revision_id"],
+            sensitivity="restricted",
+            confirm_no_case_data=True,
+        )
+        visible_neighbor = store.remember(
+            grant_id=grant_id,
+            idempotency_key=visible_spec[1],
+            title="Historical visible neighbor",
+            body="This endpoint remains visible at the historical boundary.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        visible_relation = store.add_relation(
+            grant_id=grant_id,
+            idempotency_key="historical-boundary-visible-edge",
+            subject_knowledge_id=source["knowledge_id"],
+            predicate="related_to",
+            object_knowledge_id=visible_neighbor["knowledge_id"],
+            evidence_refs=[{"revision_id": source["revision_id"]}],
+            confirm_no_case_data=True,
+        )
+        assert restricted["lifecycle"] == "active"
+        assert hidden_relation["relation_key"] == hidden_spec[0]
+        assert visible_relation["relation_key"] == visible_spec[0]
+        assert hidden_relation["relation_key"] < visible_relation["relation_key"]
 
         result = store.graph(
             knowledge_id=source["knowledge_id"],

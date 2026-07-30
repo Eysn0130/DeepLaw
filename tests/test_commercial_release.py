@@ -144,6 +144,9 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
     assert "uvx --from sigstore==4.3.0 sigstore verify identity" in workflow
     assert '--cert-identity "${CERT_IDENTITY}"' in workflow
     assert 'releases?per_page=100' in workflow
+    assert "for attempt in 1 2 3 4 5; do" in workflow
+    assert 'if [[ "${attempt}" -eq 5 ]]; then' in workflow
+    assert "draft release was not observable after bounded retries" in workflow
     assert "release_id=$(jq -r '.id'" in workflow
     assert (
         "uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets"
