@@ -407,24 +407,40 @@ jobs:
       - name: Verify Sigstore identity bundles
         shell: bash
         env:
-          CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
+          RELEASE_CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ needs.release-context.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         run: |
           set -euo pipefail
           exec > >(tee "${RUNNER_TEMP}/post-evidence/sigstore-verification.log") 2>&1
-          while read -r _digest artifact_name; do
-            artifact="${RUNNER_TEMP}/downloads/${artifact_name}"
-            bundle="${artifact}.sigstore.json"
+          required_signed_assets=(
+            "deeplaw-${RELEASE_VERSION}-py3-none-any.whl"
+            "deeplaw-${RELEASE_VERSION}.tar.gz"
+            "deeplaw-${RELEASE_VERSION}-linux-amd64.oci.tar"
+            "deeplaw-${RELEASE_VERSION}.cdx.json"
+            "deeplaw-${RELEASE_VERSION}-licenses.json"
+            "commercial-release-manifest.json"
+            "openvex.json"
+            "SHA256SUMS"
+          )
+          for artifact_name in "${required_signed_assets[@]}"; do
+            test -f "${RUNNER_TEMP}/downloads/${artifact_name}"
+            test -f "${RUNNER_TEMP}/downloads/${artifact_name}.sigstore.json"
+          done
+          verified_bundle_count=0
+          while IFS= read -r -d '' bundle; do
+            artifact="${bundle%.sigstore.json}"
+            test -f "${artifact}"
             uvx --from sigstore==4.3.0 sigstore verify identity \
               --bundle "${bundle}" \
-              --cert-identity "${CERT_IDENTITY}" \
+              --cert-identity "${RELEASE_CERT_IDENTITY}" \
               --cert-oidc-issuer https://token.actions.githubusercontent.com \
               "${artifact}"
-          done < "${RUNNER_TEMP}/downloads/SHA256SUMS"
-          uvx --from sigstore==4.3.0 sigstore verify identity \
-            --bundle "${RUNNER_TEMP}/downloads/SHA256SUMS.sigstore.json" \
-            --cert-identity "${CERT_IDENTITY}" \
-            --cert-oidc-issuer https://token.actions.githubusercontent.com \
-            "${RUNNER_TEMP}/downloads/SHA256SUMS"
+            verified_bundle_count=$((verified_bundle_count + 1))
+          done < <(
+            find "${RUNNER_TEMP}/downloads" -maxdepth 1 -type f \
+              -name '*.sigstore.json' -print0 | sort -z
+          )
+          [[ "${verified_bundle_count}" -ge "${#required_signed_assets[@]}" ]]
 
       - name: Verify GitHub provenance and SBOM attestations
         env:
