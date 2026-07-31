@@ -194,7 +194,17 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
     assert "verified CycloneDX SBOM: %s" in workflow
     assert "uvx --from sigstore==4.3.0 sigstore sign" in workflow
     assert "uvx --from sigstore==4.3.0 sigstore verify identity" in workflow
-    assert '--cert-identity "${CERT_IDENTITY}"' in workflow
+    assert '--cert-identity "${RELEASE_CERT_IDENTITY}"' in workflow
+    assert (
+        "https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/"
+        in workflow
+    )
+    assert 'required_signed_assets=(' in workflow
+    assert '"commercial-release-manifest.json"' in workflow
+    assert '"SHA256SUMS"' in workflow
+    assert "-name '*.sigstore.json' -print0 | sort -z" in workflow
+    assert 'artifact="${bundle%.sigstore.json}"' in workflow
+    assert 'verified_bundle_count=$((verified_bundle_count + 1))' in workflow
     assert 'releases?per_page=100' in workflow
     assert "for attempt in 1 2 3 4 5; do" in workflow
     assert 'if [[ "${attempt}" -eq 5 ]]; then' in workflow
