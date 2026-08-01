@@ -1043,7 +1043,12 @@ def test_compiler_grant_profile_is_least_privilege_and_api_requires_case_confirm
 def test_deterministic_fake_agent_executes_real_source_to_knowledge_e2e(
     tmp_path: Path,
 ) -> None:
-    root, compiled, grant_id = _ready_source(tmp_path, section_count=35)
+    root, compiled, _grant_id = _ready_source(tmp_path, section_count=35)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deeplaw-deterministic-fake-agent",
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
     report = compile_with_fake_agent(
         vault=root,
         grant_id=grant_id,
@@ -1052,10 +1057,18 @@ def test_deterministic_fake_agent_executes_real_source_to_knowledge_e2e(
     )
     assert report["status"] == "succeeded"
     assert report["packet_count"] == 7
-    assert report["staged_object_count"] == 35
+    assert report["observation_count"] == 35
+    assert report["staged_object_count"] == 36
+    assert report["semantic_status"] == "complete"
     assert report["compiled_result_count"] > 0
     assert report["verification_valid"] is True
     assert report["network_used"] is False
+    source_page = (
+        root / "wiki/sources" / f"{compiled['identity']['source_revision_id']}.md"
+    ).read_text(encoding="utf-8")
+    assert "transaction `succeeded` · semantic `complete`" in source_page
+    assert "`source_summary`: `satisfied` (required)" in source_page
+    assert "`identity_resolution`: `not_applicable` (required)" in source_page
     assert report["external_credentials_used"] is False
 
 
@@ -1456,6 +1469,8 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
         confirm_no_case_data=True,
     )
     upstream_revision_id = first_receipt["knowledge_revision_ids"][0]
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        overview_semantic_key = f"overview:{store.vault_id}"
 
     second_run = coordinator.begin(
         grant_id=grant_id,
@@ -1492,7 +1507,7 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
     plan["object_actions"].append(
         {
             **plan["object_actions"][0],
-            "semantic_key": "living-wiki-overview",
+            "semantic_key": overview_semantic_key,
             "title": "Living Wiki Overview",
             "body": "A governed Synthesis over the exact registered inputs.",
             "kind": "synthesis",
@@ -1679,7 +1694,7 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
             **refresh_plan["object_actions"][0],
             "action": "revise",
             "kind": "synthesis",
-            "semantic_key": "living-wiki-overview",
+            "semantic_key": overview_semantic_key,
             "knowledge_id": synthesis["knowledge_id"],
             "expected_revision_id": synthesis_revision_id,
             "title": "Living Wiki Overview",

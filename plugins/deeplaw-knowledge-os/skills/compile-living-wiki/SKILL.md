@@ -24,12 +24,12 @@ atomic commit, projection, and audit.
 Read [host-configurations.md](references/host-configurations.md) only when configuring or checking
 Codex, Claude Code, or OpenCode.
 
-## Run the compilation
+## Run a semantic v2 compilation
 
-1. Call `knowledge_support` with `operation=compilation`,
-   `compilation_action=profile`, and `confirm_no_case_data=true`. Use the returned
-   repository-owned profile/version, prompt template ID, and exact configuration hashes; never
-   invent provenance digests.
+1. Call `knowledge_support` with `operation=semantic`, `semantic_action=profile`,
+   `compiler_profile=living-wiki-agent`, and `compiler_profile_version=2`. Use the returned
+   repository-owned prompt template ID and exact configuration hashes; never invent provenance
+   digests. Version 1 remains available only for explicit compatibility runs.
 2. Call `knowledge_support` with `operation=compilation`,
    `compilation_action=list_uncompiled`, `confirm_no_case_data=true`, and a bounded limit. Match
    the requested material using its title, source kind, media type, content hash, byte size, and
@@ -39,35 +39,47 @@ Codex, Claude Code, or OpenCode.
    `idempotency_key`, `confirm_no_case_data=true`, the exact Source
    Revision, compiler profile/version, host/model identity, prompt template ID, and configuration
    hashes.
-4. Repeat until the packet-end receipt:
-   - call `knowledge_support` with `operation=compilation`,
-     `compilation_action=next_packet`, `confirm_no_case_data=true`, and the exact
-     `compilation_run_id`;
-   - create one closed `deeplaw.source-compilation-plan/v1` that covers only that packet;
+4. Repeat the observation phase until `operation=semantic`,
+   `semantic_action=next_packet` returns the end receipt:
+   - create one closed `deeplaw.source-compilation-observation-plan/v2` covering only that packet;
    - cite exact `source_revision_id`, `fragment_id`, `locator`, and `quote_sha256`;
-   - preserve omissions, contradictions, ambiguity, and gaps explicitly;
-   - call `knowledge_sink` with `operation=stage_compilation_batch`, a new
+   - record semantic candidates, aliases, applicability, omissions, ambiguity, contradictions,
+     and gaps without publishing them into Recall;
+   - call `knowledge_sink` with `operation=stage_semantic_observations`, a new
      `idempotency_key`, and `confirm_no_case_data=true`.
-5. Do not claim semantic identity certainty when candidates are ambiguous. Do not invent a source,
-   locator, quote hash, expected revision, relation endpoint, or Authority.
-6. Call `knowledge_sink` with `operation=validate_compilation`, a new `idempotency_key`, and
+5. Call `knowledge_sink` with `operation=freeze_semantic_inventory`. Then read the exact frozen
+   inventory with `knowledge_support` `operation=semantic`, `semantic_action=inventory`, and obtain
+   `semantic_action=finalization`. Do not continue while packets are unobserved or the inventory is
+   truncated.
+6. Create one closed `deeplaw.semantic-publication-plan/v2` for the whole run. It must:
+   - assign exactly one final disposition to every observation;
+   - resolve identities across packets without merging ambiguous same-name entities;
+   - contain all 15 policy-owned Duty Reports;
+   - publish exactly one canonical `source-summary:<source_revision_id>` revision-bound Synthesis
+     when semantic status is complete;
+   - expose unresolved duties and use `semantic_status=partial` or `blocked` when completeness is
+     not supported.
+   Submit it through `knowledge_sink` `operation=finalize_semantic_compilation`. Do not claim
+   semantic identity certainty, invent evidence, or let ranking/model confidence create Authority.
+7. Call `knowledge_sink` with `operation=validate_compilation`, a new `idempotency_key`, and
    `confirm_no_case_data=true`. On any invalid action, revise the responsible packet and call
-   `stage_compilation_batch` again while the run remains `staging` or `validating`; DeepLaw
-   atomically replaces that packet's prior staging batch. Do not bypass the validator.
-7. Call `knowledge_sink` with `operation=commit_compilation`, a new `idempotency_key`, and
+   `finalize_semantic_compilation` again only if the run still permits a replacement. Do not bypass
+   the validator or write canonical Markdown directly.
+8. Call `knowledge_sink` with `operation=commit_compilation`, a new `idempotency_key`, and
    `confirm_no_case_data=true`. The canonical commit must return one
-   receipt for the complete staged set. Staged objects are not usable before this receipt.
-8. Call `knowledge_sink` with `operation=resume_compilation`, a new `idempotency_key`,
+   semantic quality receipt for the complete staged set. Observations and staged objects are not
+   usable before this receipt.
+9. Call `knowledge_sink` with `operation=resume_compilation`, a new `idempotency_key`,
    `confirm_no_case_data=true`, and `project=true` to finish pending materialization and
    deterministic Living Wiki/Canvas projection.
-9. Call `knowledge_support` with:
-   - `operation=compilation`, `compilation_action=explain`, and
-     `confirm_no_case_data=true`;
+10. Call `knowledge_support` with:
+   - `operation=semantic`, `semantic_action=status` and `semantic_action=explain`;
    - `operation=verify`;
-   - `operation=query`, `purpose=answer`, and a concrete bounded `query`.
+   - `operation=query`, `query_plan_version=5`, `purpose=answer`, and a concrete bounded `query`.
    Report success only when canonical verification passes, the run reaches `succeeded`, coverage
-   is explicit, and the run receipt contains at least one semantic output. If the receipt is a
-   no-op or an expected source is missing, report that exact state instead of “compiled”.
+   is explicit, every required Duty is satisfied or correctly not applicable, the Source Summary
+   exists, and `semantic_status=complete`. A transaction may succeed while semantic status remains
+   partial; report that exact state instead of “fully compiled”.
 
 ## Recover safely
 
@@ -76,8 +88,9 @@ Codex, Claude Code, or OpenCode.
 - Never abort or roll back a committed canonical run by deleting files.
 - If projection fails, preserve the committed receipt and retry `resume_compilation`; do not
   recreate Knowledge Objects manually.
-- After a source update or withdrawal, call `refresh_compilation`, then inspect `list_stale`,
-  `coverage`, contradictions, and gaps.
+- After a source update, withdrawal, or relation invalidation, inspect Synthesis freshness and use
+  the explicit begin/stage/validate/commit/resume Synthesis Refresh saga. Rebuild only derived
+  projection state; deterministic rebuild never calls a model.
 - Packet byte size is automatically bounded for the 64 KiB MCP limit. If DeepLaw rejects one
   oversized Source IR fragment, re-ingest under an owner-selected smaller fragment policy; changing
   only the packet-count option cannot alter Source evidence identity.

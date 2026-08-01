@@ -1,0 +1,183 @@
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from copy import deepcopy
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from jsonschema import Draft202012Validator, FormatChecker
+
+from deeplaw.util import canonical_json
+
+
+def _repository() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _schema() -> dict[str, Any]:
+    value = json.loads(
+        (_repository() / "contracts/semantic-gold.v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    Draft202012Validator.check_schema(value)
+    return value
+
+
+def _validate_schema(value: dict[str, Any]) -> None:
+    Draft202012Validator(
+        _schema(),
+        format_checker=FormatChecker(),
+    ).validate(value)
+
+
+def _candidate_digest(value: dict[str, Any]) -> str:
+    candidate = deepcopy(value)
+    candidate["status"] = "maintainer_review_pending"
+    candidate["review"] = None
+    return hashlib.sha256(canonical_json(candidate).encode("utf-8")).hexdigest()
+
+
+def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
+    _validate_schema(value)
+    if value["status"] == "maintainer_confirmed" and value["review"] is None:
+        raise ValueError("maintainer-confirmed Semantic Gold requires review metadata")
+    source_keys = [source["source_key"] for source in value["sources"]]
+    if len(source_keys) != len(set(source_keys)):
+        raise ValueError("Semantic Gold source_key values must be unique")
+    case_ids = [case["case_id"] for case in value["cases"]]
+    if len(case_ids) != len(set(case_ids)):
+        raise ValueError("Semantic Gold case_id values must be unique")
+    task_types = [case["task_type"] for case in value["cases"]]
+    if len(task_types) != len(set(task_types)):
+        raise ValueError("Semantic Gold must contain one case per task_type")
+    known_sources = set(source_keys)
+    hashes: list[str] = []
+    for source in value["sources"]:
+        relative_path = Path(source["relative_path"])
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise ValueError("Semantic Gold fixture paths must be repository-relative")
+        fixture = (repository / relative_path).resolve(strict=True)
+        fixture.relative_to(repository.resolve(strict=True))
+        actual = hashlib.sha256(fixture.read_bytes()).hexdigest()
+        if actual != source["bytes_sha256"]:
+            raise ValueError(
+                f"fixture hash mismatch for source_key={source['source_key']}"
+            )
+        hashes.append(actual)
+    manifest = hashlib.sha256("".join(hashes).encode("ascii")).hexdigest()
+    if manifest != value["fixture_manifest_sha256"]:
+        raise ValueError("Semantic Gold fixture manifest digest does not match")
+    for case in value["cases"]:
+        if not set(case["source_keys"]).issubset(known_sources):
+            raise ValueError(f"unknown source_key in case_id={case['case_id']}")
+        labels = {
+            expected["label_id"] for expected in case["expected_objects"]
+        }
+        for left, right in case["forbidden_merges"]:
+            if left not in labels or right not in labels:
+                raise ValueError(
+                    f"forbidden merge references an unknown label in {case['case_id']}"
+                )
+    digest = _candidate_digest(value)
+    if value["status"] == "maintainer_confirmed":
+        assert value["review"] is not None
+        if value["review"]["gold_sha256"] != digest:
+            raise ValueError("maintainer review digest does not bind the candidate labels")
+    return digest
+
+
+def confirm_candidate(
+    value: dict[str, Any],
+    *,
+    repository: Path,
+    reviewer_id: str,
+    reason: str,
+    reviewed_at: str | None = None,
+) -> dict[str, Any]:
+    if value["status"] != "maintainer_review_pending" or value["review"] is not None:
+        raise ValueError("only an unreviewed candidate can be confirmed")
+    digest = validate_candidate(value, repository=repository)
+    reviewer_id = reviewer_id.strip()
+    reason = reason.strip()
+    if not reviewer_id or not reason:
+        raise ValueError("reviewer_id and reason must be non-empty")
+    confirmed = deepcopy(value)
+    confirmed["status"] = "maintainer_confirmed"
+    confirmed["review"] = {
+        "reviewer_id": reviewer_id,
+        "reviewed_at": reviewed_at
+        or datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+        "reason": reason,
+        "gold_sha256": digest,
+    }
+    validate_candidate(confirmed, repository=repository)
+    return confirmed
+
+
+def _render(value: dict[str, Any]) -> str:
+    return canonical_json(value) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate the public Semantic Gold candidate or record an explicit "
+            "maintainer confirmation. This tool never infers approval."
+        )
+    )
+    parser.add_argument(
+        "gold",
+        nargs="?",
+        type=Path,
+        default=Path("benchmarks/semantic/semantic-gold-candidate-v1.json"),
+    )
+    parser.add_argument("--confirm", action="store_true")
+    parser.add_argument("--reviewer-id")
+    parser.add_argument("--reason")
+    parser.add_argument("--output", type=Path)
+    arguments = parser.parse_args()
+    repository = _repository()
+    gold_path = arguments.gold
+    if not gold_path.is_absolute():
+        gold_path = repository / gold_path
+    value = json.loads(gold_path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        parser.error("Semantic Gold must contain one JSON object")
+    digest = validate_candidate(value, repository=repository)
+    if arguments.confirm:
+        if not arguments.reviewer_id or not arguments.reason or arguments.output is None:
+            parser.error(
+                "--confirm requires --reviewer-id, --reason and an explicit --output"
+            )
+        value = confirm_candidate(
+            value,
+            repository=repository,
+            reviewer_id=arguments.reviewer_id,
+            reason=arguments.reason,
+        )
+        arguments.output.parent.mkdir(parents=True, exist_ok=True)
+        arguments.output.write_text(_render(value), encoding="utf-8")
+        return 0
+    print(
+        canonical_json(
+            {
+                "gold_id": value["gold_id"],
+                "status": value["status"],
+                "candidate_sha256": digest,
+                "source_count": len(value["sources"]),
+                "case_count": len(value["cases"]),
+                "maintainer_confirmation_required": (
+                    value["status"] != "maintainer_confirmed"
+                ),
+            }
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

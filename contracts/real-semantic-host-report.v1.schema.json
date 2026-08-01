@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/real-semantic-host-report.v1.schema.json",
+  "title": "DeepLaw Real Semantic Host Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "report_id", "status", "executed", "host", "host_version",
+    "model_identity", "network_policy", "gold_id", "gold_status",
+    "fixture_manifest_sha256", "prompt_sha256", "command_sha256", "exit_code",
+    "stdout_sha256", "stdout_bytes", "stderr_sha256", "stderr_bytes", "runs",
+    "vault_verification_valid", "elapsed_ms", "failure_class", "failure_summary",
+    "recorded_at", "formal_release_evidence_ready", "competitive_claim_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.real-semantic-host-report/v1"},
+    "report_id": {"type": "string", "pattern": "^semantichostrun_[0-9a-f]{24}$"},
+    "status": {"enum": ["not_executed", "passed", "failed"]},
+    "executed": {"type": "boolean"},
+    "host": {"enum": ["codex", "claude_code", "opencode"]},
+    "host_version": {"type": "string", "minLength": 1, "maxLength": 500},
+    "model_identity": {"type": "string", "minLength": 1, "maxLength": 500},
+    "network_policy": {"enum": ["offline", "explicit_bounded"]},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "gold_status": {"enum": ["maintainer_review_pending", "maintainer_confirmed", "rejected"]},
+    "fixture_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "command_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "exit_code": {"type": ["integer", "null"], "minimum": -255, "maximum": 255},
+    "stdout_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "stdout_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+    "stderr_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "stderr_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/run"}
+    },
+    "vault_verification_valid": {"type": ["boolean", "null"]},
+    "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 86400000},
+    "failure_class": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9_-]{0,99}$"},
+    "failure_summary": {"type": ["string", "null"], "maxLength": 1000},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "formal_release_evidence_ready": {"type": "boolean"},
+    "competitive_claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_key", "source_revision_id", "compilation_run_id", "transaction_status",
+        "semantic_status", "quality_receipt_sha256", "source_summary_revision_id",
+        "projection_manifest_sha256"
+      ],
+      "properties": {
+        "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "compilation_run_id": {"type": ["string", "null"], "pattern": "^compilationrun_[0-9a-f]{24}$"},
+        "transaction_status": {"type": ["string", "null"], "enum": [null, "planned", "staging", "validating", "ready_to_commit", "committed", "projection_pending", "succeeded", "failed", "aborted"]},
+        "semantic_status": {"type": ["string", "null"], "enum": [null, "complete", "partial", "blocked", "unknown"]},
+        "quality_receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "source_summary_revision_id": {"type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+        "projection_manifest_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "not_executed"}}},
+      "then": {
+        "properties": {
+          "executed": {"const": false},
+          "exit_code": {"const": null},
+          "vault_verification_valid": {"const": null},
+          "formal_release_evidence_ready": {"const": false}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "passed"}}},
+      "then": {
+        "properties": {
+          "executed": {"const": true},
+          "exit_code": {"const": 0},
+          "vault_verification_valid": {"const": true},
+          "failure_class": {"const": null},
+          "failure_summary": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"formal_release_evidence_ready": {"const": true}}},
+      "then": {
+        "properties": {
+          "status": {"const": "passed"},
+          "gold_status": {"const": "maintainer_confirmed"}
+        }
+      }
+    }
+  ]
+}

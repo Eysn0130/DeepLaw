@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-host-corpus.v1.schema.json",
+  "title": "DeepLaw Real Semantic Host Corpus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "gold_id", "fixture_manifest_sha256", "sources"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-host-corpus/v1"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "fixture_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_key", "source_revision_id"],
+        "properties": {
+          "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
+          "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+        }
+      }
+    }
+  }
+}

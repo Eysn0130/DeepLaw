@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/deterministic-fake-agent-compile.v2.schema.json",
+  "title": "DeepLaw Deterministic Fake-Agent Semantic Compile Report v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "host_identity", "model_identity", "source_revision_id",
+    "compilation_run_id", "packet_count", "observation_count",
+    "staged_object_count", "semantic_status", "inventory_sha256",
+    "quality_receipt_sha256", "source_summary_revision_id", "validation_sha256",
+    "receipt_sha256", "projection_manifest_sha256", "compiled_result_count",
+    "status", "verification_valid", "network_used", "external_credentials_used"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.deterministic-fake-agent-compile/v2"},
+    "host_identity": {"const": "deeplaw-deterministic-fake-agent"},
+    "model_identity": {"type": "null"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "observation_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "staged_object_count": {"type": "integer", "minimum": 2, "maximum": 100001},
+    "semantic_status": {"const": "complete"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "quality_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_summary_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "projection_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compiled_result_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "status": {"const": "succeeded"},
+    "verification_valid": {"const": true},
+    "network_used": {"const": false},
+    "external_credentials_used": {"const": false}
+  }
+}

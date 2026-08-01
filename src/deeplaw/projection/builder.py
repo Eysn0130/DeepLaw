@@ -402,11 +402,18 @@ def _source_pages(
         ).fetchall()
         stored_runs = store.connection.execute(
             """
-            SELECT compilation_run_id, status, compiler_profile,
-                   compiler_profile_version, created_at, completed_at
-            FROM source_compilation_runs_v1
-            WHERE source_revision_id = ?
-            ORDER BY created_at DESC
+            SELECT runs.compilation_run_id, runs.status, runs.compiler_profile,
+                   runs.compiler_profile_version, runs.created_at, runs.completed_at,
+                   semantic.semantic_status, semantic.observation_packet_count,
+                   semantic.observed_packet_count, semantic.observation_count,
+                   semantic.inventory_sha256, semantic.publication_plan_sha256,
+                   semantic.quality_receipt_sha256,
+                   semantic.source_summary_revision_id
+            FROM source_compilation_runs_v1 AS runs
+            LEFT JOIN semantic_compilation_runs_v2 AS semantic
+              USING(compilation_run_id)
+            WHERE runs.source_revision_id = ?
+            ORDER BY runs.created_at DESC
             """,
             (source["source_revision_id"],),
         ).fetchall()
@@ -417,6 +424,16 @@ def _source_pages(
                     run["compilation_run_id"],
                     run["status"],
                 ),
+                "duty_reports": [
+                    strict_json_loads(item["report_json"])
+                    for item in store.connection.execute(
+                        """
+                        SELECT report_json FROM semantic_duty_reports_v1
+                        WHERE compilation_run_id = ? ORDER BY duty_type
+                        """,
+                        (run["compilation_run_id"],),
+                    )
+                ],
             }
             for run in stored_runs
         ]
@@ -642,11 +659,36 @@ def _source_pages(
             lines.append("- Explicit gap: no admitted source-bound Knowledge Revision.")
         lines.extend(["", "## Compilation runs", ""])
         if runs:
-            lines.extend(
-                f"- `{item['compilation_run_id']}` · `{item['status']}` · "
-                f"`{item['compiler_profile']}@{item['compiler_profile_version']}`"
-                for item in runs
-            )
+            for item in runs:
+                lines.append(
+                    f"- `{item['compilation_run_id']}` · `{item['status']}` · "
+                    f"`{item['compiler_profile']}@{item['compiler_profile_version']}` · "
+                    f"transaction `{item['status']}` · semantic "
+                    f"`{item['semantic_status'] or 'not_recorded'}`"
+                )
+                if item["compiler_profile_version"] != "2":
+                    continue
+                lines.extend(
+                    [
+                        f"  - Observed packets: `{item['observed_packet_count'] or 0}` / "
+                        f"`{item['observation_packet_count'] or 0}`; observations: "
+                        f"`{item['observation_count'] or 0}`",
+                        f"  - Inventory: `{item['inventory_sha256'] or 'missing'}`",
+                        f"  - Publication plan: "
+                        f"`{item['publication_plan_sha256'] or 'missing'}`",
+                        f"  - Quality receipt: "
+                        f"`{item['quality_receipt_sha256'] or 'missing'}`",
+                    ]
+                )
+                if item["duty_reports"]:
+                    lines.append("  - Semantic duties:")
+                    lines.extend(
+                        f"    - `{report['duty_type']}`: `{report['status']}`"
+                        f"{' (required)' if report['required'] else ''}"
+                        for report in item["duty_reports"]
+                    )
+                else:
+                    lines.append("  - Explicit gap: no semantic Duty Report is registered.")
         else:
             lines.append("- Explicit gap: Source Revision has not been compiled.")
         _write(
@@ -1210,7 +1252,7 @@ def rebuild_living_wiki(
             row
             for row in rows
             if row["kind"] == "synthesis"
-            and row.get("semantic_key") == "living-wiki-overview"
+            and row.get("semantic_key") == f"overview:{store.vault_id}"
         ),
         None,
     )
@@ -1232,7 +1274,7 @@ def rebuild_living_wiki(
     if overview_synthesis is None:
         overview_lines.append(
             "- Explicit gap: no canonical synthesis with semantic key "
-            "`living-wiki-overview` has been compiled."
+            f"`overview:{store.vault_id}` has been compiled."
         )
     else:
         overview_lines.extend(
