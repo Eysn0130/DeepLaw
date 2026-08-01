@@ -2170,6 +2170,7 @@ class CompilationCoordinator:
                 }
             ).encode("utf-8")
         )
+        verification = "revision_bound" if kind == "synthesis" else "source_bound"
         markdown = render_knowledge_markdown(
             knowledge_id=knowledge_id,
             revision_id=revision_id,
@@ -2178,7 +2179,7 @@ class CompilationCoordinator:
             kind=kind,
             lifecycle=lifecycle,
             epistemic_state=epistemic_state,
-            verification="source_bound",
+            verification=verification,
             scope=scope,
             sensitivity=sensitivity,
             writer_id=grant["writer_id"],
@@ -2220,7 +2221,7 @@ class CompilationCoordinator:
             "semantic_digest": semantic_digest,
             "lifecycle": lifecycle,
             "epistemic_state": epistemic_state,
-            "verification": "source_bound",
+            "verification": verification,
             "scope": scope,
             "sensitivity": sensitivity,
             "writer_id": grant["writer_id"],

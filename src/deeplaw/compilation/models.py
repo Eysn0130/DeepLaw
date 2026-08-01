@@ -26,7 +26,14 @@ SEMANTIC_COMPILER_GRANT_OPERATIONS: Final = tuple(
         (
             *COMPILER_GRANT_OPERATIONS,
             "finalize_semantic_compilation",
+            "freeze_semantic_inventory",
             "stage_semantic_observations",
+            "abort_synthesis_refresh",
+            "begin_synthesis_refresh",
+            "commit_synthesis_refresh",
+            "resume_synthesis_refresh",
+            "stage_synthesis_refresh",
+            "validate_synthesis_refresh",
         )
     )
 )

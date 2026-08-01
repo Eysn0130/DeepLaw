@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.input.v4.schema.json",
+  "title": "DeepLaw Knowledge Sink Input v4",
+  "oneOf": [
+    {"$ref": "knowledge-sink.input.v3.schema.json"},
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object", "required": ["compilation_run_id", "plan"],
+          "properties": {
+            "operation": {"const": "stage_semantic_observations"},
+            "compilation_run_id": {"$ref": "#/$defs/compilation_run_id"},
+            "plan": {"$ref": "source-compilation-observation-plan.v2.schema.json"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object", "required": ["compilation_run_id"],
+          "properties": {
+            "operation": {"const": "freeze_semantic_inventory"},
+            "compilation_run_id": {"$ref": "#/$defs/compilation_run_id"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object", "required": ["compilation_run_id", "plan"],
+          "properties": {
+            "operation": {"const": "finalize_semantic_compilation"},
+            "compilation_run_id": {"$ref": "#/$defs/compilation_run_id"},
+            "plan": {"$ref": "semantic-publication-plan.v2.schema.json"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": [
+            "refresh_task_id", "source_revision_ids", "knowledge_revision_ids",
+            "relation_revision_ids", "host_identity", "profile_id", "prompt_sha256",
+            "config_sha256"
+          ],
+          "properties": {
+            "operation": {"const": "begin_synthesis_refresh"},
+            "refresh_task_id": {"$ref": "#/$defs/bounded_id"},
+            "source_revision_ids": {"$ref": "#/$defs/id_list"},
+            "knowledge_revision_ids": {"$ref": "#/$defs/id_list"},
+            "relation_revision_ids": {"$ref": "#/$defs/id_list"},
+            "host_identity": {"$ref": "#/$defs/bounded_id"},
+            "model_identity": {"type": "string", "minLength": 1, "maxLength": 500},
+            "profile_id": {"type": "string", "minLength": 1, "maxLength": 300},
+            "prompt_sha256": {"$ref": "#/$defs/sha256"},
+            "config_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object", "required": ["synthesis_refresh_run_id", "plan"],
+          "properties": {
+            "operation": {"const": "stage_synthesis_refresh"},
+            "synthesis_refresh_run_id": {"$ref": "#/$defs/synthesis_run_id"},
+            "plan": {"$ref": "synthesis-refresh-plan.v1.schema.json"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object", "required": ["synthesis_refresh_run_id"],
+          "properties": {
+            "operation": {
+              "enum": [
+                "validate_synthesis_refresh", "commit_synthesis_refresh",
+                "resume_synthesis_refresh"
+              ]
+            },
+            "synthesis_refresh_run_id": {"$ref": "#/$defs/synthesis_run_id"},
+            "project": {"type": "boolean"}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object", "required": ["synthesis_refresh_run_id", "reason"],
+          "properties": {
+            "operation": {"const": "abort_synthesis_refresh"},
+            "synthesis_refresh_run_id": {"$ref": "#/$defs/synthesis_run_id"},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  ],
+  "$defs": {
+    "common": {
+      "type": "object",
+      "required": ["operation", "idempotency_key", "confirm_no_case_data"],
+      "properties": {
+        "operation": {
+          "enum": [
+            "stage_semantic_observations", "freeze_semantic_inventory",
+            "finalize_semantic_compilation", "begin_synthesis_refresh",
+            "stage_synthesis_refresh", "validate_synthesis_refresh",
+            "commit_synthesis_refresh", "resume_synthesis_refresh",
+            "abort_synthesis_refresh"
+          ]
+        },
+        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+        "confirm_no_case_data": {"const": true}
+      }
+    },
+    "bounded_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compilation_run_id": {
+      "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+    },
+    "synthesis_run_id": {
+      "type": "string", "pattern": "^synthesisrefresh_[0-9a-f]{24}$"
+    },
+    "id_list": {
+      "type": "array", "maxItems": 10000, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/bounded_id"}
+    }
+  }
+}

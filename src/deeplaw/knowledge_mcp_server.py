@@ -18,15 +18,20 @@ from mcp.server.stdio import stdio_server
 
 from . import __version__
 from .compilation import CompilationCoordinator, compiler_profile
+from .compilation.semantic import SemanticCompilationService
+from .compilation.synthesis_refresh import SynthesisRefreshService
 from .context_compiler import compile_context
+from .editor_bridge import context_for_editor
 from .knowledge_autonomy import (
     KNOWLEDGE_KINDS,
     AutonomousKnowledgeStore,
+    _read_object,
     autonomous_core_installed,
     bounded_source_reference,
 )
 from .knowledge_models import ASSET_KINDS, MEMORY_TIERS, canonical_timestamp, utc_now
 from .knowledge_store import KnowledgeVault, default_knowledge_vault
+from .read_services import SourceReadService, WikiReadService
 from .retrieval import PurposeAwareRetrievalService
 from .retrieval_fabric import retrieve
 from .util import (
@@ -53,6 +58,11 @@ KnowledgeOperation = Literal[
     "gaps",
     "query",
     "compilation",
+    "source",
+    "wiki",
+    "editor_context",
+    "synthesis",
+    "semantic",
 ]
 CompilationAction = Literal[
     "next_packet",
@@ -228,6 +238,25 @@ def bundled_knowledge_output_schema() -> dict[str, Any]:
     return _replace_capsule_ref(schema)
 
 
+def _v5_input_schema() -> dict[str, Any]:
+    schema = deepcopy(_load_contract("knowledge-support.input.v5.schema.json"))
+    legacy = deepcopy(_load_contract("knowledge-support.input.v4.schema.json"))
+    legacy.pop("$schema", None)
+    legacy.pop("$id", None)
+    legacy_defs = legacy.pop("$defs")
+    schema["$defs"].update(legacy_defs)
+    schema["oneOf"][0] = legacy
+    editor = deepcopy(_load_contract("editor-context-envelope.v1.schema.json"))
+    editor.pop("$schema", None)
+    editor.pop("$id", None)
+    for branch in schema["oneOf"]:
+        properties = branch.get("properties", {})
+        if properties.get("operation", {}).get("const") == "editor_context":
+            properties["editor_context"] = editor
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
     if autonomous:
         description = (
@@ -236,8 +265,8 @@ def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
             "bounded Knowledge Capsules. Persistent writes exist only in the separate, "
             "explicitly enabled knowledge_sink process."
         )
-        input_schema = _load_contract("knowledge-support.input.v4.schema.json")
-        output_schema = _load_contract("knowledge-support.output.v4.schema.json")
+        input_schema = _v5_input_schema()
+        output_schema = _load_contract("knowledge-support.output.v5.schema.json")
     else:
         description = _DESCRIPTION
         input_schema = _load_contract("knowledge-support.input.v1.schema.json")
@@ -1058,6 +1087,198 @@ def _autonomous_v4_response(
     return response
 
 
+def _autonomous_v5_response(
+    *,
+    operation: KnowledgeOperation,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    response = {
+        "schema_version": "deeplaw.knowledge-support-output/v5",
+        "operation": operation,
+        "authority_boundary": dict(_AUTONOMOUS_AUTHORITY_BOUNDARY),
+        "result": result,
+    }
+    assert_provider_output_safe(response, interface="knowledge_support")
+    if len(canonical_json(response).encode("utf-8")) > _MAX_MCP_OUTPUT_CHARS:
+        raise RuntimeError("knowledge_support output exceeds its hard 64 KiB budget")
+    Draft202012Validator(_load_contract("knowledge-support.output.v5.schema.json")).validate(
+        response
+    )
+    return response
+
+
+
+
+def _handle_source_support(
+    *,
+    action: str | None,
+    source_id: str | None,
+    old_source_id: str | None,
+    new_source_id: str | None,
+    fragment_id: str | None,
+    scope: str | None,
+    max_sensitivity: str,
+    limit: int,
+    vault_path: Path,
+) -> dict[str, Any]:
+    result = SourceReadService(vault_path).execute(
+        action=cast(str, action),
+        source_id=source_id,
+        old_source_id=old_source_id,
+        new_source_id=new_source_id,
+        fragment_id=fragment_id,
+        scope=scope,
+        max_sensitivity=max_sensitivity,
+        limit=limit,
+    )
+    return _autonomous_v5_response(operation="source", result=result)
+
+
+
+
+def _handle_wiki_support(
+    *,
+    action: str | None,
+    wiki_path: str | None,
+    knowledge_id: str | None,
+    kind: str | None,
+    scope: str | None,
+    max_sensitivity: str,
+    limit: int,
+    vault_path: Path,
+) -> dict[str, Any]:
+    result = WikiReadService(vault_path).execute(
+        action=cast(str, action),
+        wiki_path=wiki_path,
+        knowledge_id=knowledge_id,
+        kind=kind,
+        scope=scope,
+        max_sensitivity=max_sensitivity,
+        limit=limit,
+    )
+    return _autonomous_v5_response(operation="wiki", result=result)
+
+
+
+def _handle_synthesis_support(
+    *,
+    action: str | None,
+    synthesis_refresh_run_id: str | None,
+    limit: int,
+    vault_path: Path,
+) -> dict[str, Any]:
+    if action not in {"list_stale", "status", "explain", "next_packet", "coverage"}:
+        raise ValueError("Synthesis support action is invalid")
+    if not 1 <= limit <= 20:
+        raise ValueError("Synthesis support limit is invalid")
+    service = SynthesisRefreshService(vault_path)
+    if action == "list_stale":
+        result = {
+            "schema_version": "deeplaw.synthesis-refresh-task-list/v1",
+            "tasks": service.tasks(status="planned")[:limit],
+            "write_performed": False,
+        }
+    elif action == "coverage":
+        result = service.coverage()
+    else:
+        if synthesis_refresh_run_id is None:
+            raise ValueError("Synthesis refresh run ID is required")
+        if action == "status":
+            result = service.status(synthesis_refresh_run_id)
+        elif action == "explain":
+            result = service.explain(synthesis_refresh_run_id)
+        else:
+            packet = service.packet(synthesis_refresh_run_id)
+            result = packet or {
+                "schema_version": "deeplaw.synthesis-refresh-packet-end/v1",
+                "synthesis_refresh_run_id": synthesis_refresh_run_id,
+                "complete": True,
+            }
+    return _autonomous_v5_response(operation="synthesis", result=result)
+
+
+def _handle_semantic_support(
+    *,
+    action: str | None,
+    compilation_run_id: str | None,
+    profile_name: str | None,
+    profile_version: str | None,
+    scope: str | None,
+    max_sensitivity: str,
+    vault_path: Path,
+) -> dict[str, Any]:
+    if action not in {
+        "profile", "duties", "next_packet", "inventory", "finalization", "status", "explain"
+    }:
+        raise ValueError("semantic support action is invalid")
+    if action == "profile":
+        result = compiler_profile(profile_name or "living-wiki-agent", profile_version or "2")
+    elif action == "duties":
+        profile = compiler_profile(profile_name or "living-wiki-agent", profile_version or "2")
+        result = {
+            "schema_version": "deeplaw.semantic-compilation-duties/v1",
+            "compiler_profile": profile["compiler_profile"],
+            "compiler_profile_version": profile["compiler_profile_version"],
+            "semantic_duties": profile["semantic_duties"],
+            "write_performed": False,
+        }
+    else:
+        if compilation_run_id is None:
+            raise ValueError("semantic compilation run ID is required")
+        with AutonomousKnowledgeStore(vault_path, read_only=True) as store:
+            _require_compilation_run_admission(
+                store,
+                compilation_run_id=compilation_run_id,
+                scope=scope or store.vault_scope,
+                max_sensitivity=max_sensitivity,
+            )
+        service = SemanticCompilationService(vault_path)
+        if action == "next_packet":
+            packet = service.next_observation_packet(compilation_run_id)
+            result = packet or {
+                "schema_version": "deeplaw.semantic-observation-packet-end/v1",
+                "compilation_run_id": compilation_run_id,
+                "complete": True,
+            }
+        elif action == "inventory":
+            with AutonomousKnowledgeStore(vault_path, read_only=True) as store:
+                row = store.connection.execute(
+                    """
+                    SELECT artifact_sha256 FROM semantic_inventories_v1
+                    WHERE compilation_run_id = ?
+                    ORDER BY inventory_sha256 LIMIT 1
+                    """,
+                    (compilation_run_id,),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError(
+                        "semantic inventory is not frozen; use the explicit CLI or Sink mutation"
+                    )
+                loaded = strict_json_loads(_read_object(vault_path, row["artifact_sha256"]))
+                if not isinstance(loaded, dict):
+                    raise RuntimeError("semantic inventory artifact is invalid")
+                result = loaded
+        elif action == "finalization":
+            with AutonomousKnowledgeStore(vault_path, read_only=True) as store:
+                frozen = store.connection.execute(
+                    """
+                    SELECT 1 FROM semantic_inventories_v1
+                    WHERE compilation_run_id = ? LIMIT 1
+                    """,
+                    (compilation_run_id,),
+                ).fetchone()
+                if frozen is None:
+                    raise RuntimeError(
+                        "semantic inventory is not frozen; use the explicit CLI or Sink mutation"
+                    )
+            result = service.finalization_packet(compilation_run_id)
+        elif action == "status":
+            result = service.status(compilation_run_id)
+        else:
+            result = service.explain(compilation_run_id)
+    return _autonomous_v5_response(operation="semantic", result=result)
+
+
 def _handle_purpose_query(
     *,
     query: str,
@@ -1073,6 +1294,7 @@ def _handle_purpose_query(
     retrieval_mode: str,
     as_of: str | None,
     kinds: list[str] | None,
+    query_plan_version: str,
     vault_path: Path,
 ) -> dict[str, Any]:
     result = PurposeAwareRetrievalService(vault_path).query(
@@ -1089,7 +1311,10 @@ def _handle_purpose_query(
         retrieval_mode=retrieval_mode,
         as_of=as_of,
         kinds=tuple(kinds or ()),
+        query_plan_version=query_plan_version,
     )
+    if query_plan_version == "5":
+        return _autonomous_v5_response(operation="query", result=result)
     return _autonomous_v4_response(operation="query", result=result)
 
 
@@ -1452,6 +1677,19 @@ def _handle_autonomous_knowledge_support(
     after_source_revision_id: str | None,
     compiler_profile: str | None,
     compiler_profile_version: str | None,
+    query_plan_version: str,
+    source_action: str | None,
+    source_id: str | None,
+    old_source_id: str | None,
+    new_source_id: str | None,
+    fragment_id: str | None,
+    wiki_action: str | None,
+    wiki_path: str | None,
+    wiki_kind: str | None,
+    editor_context: dict[str, Any] | None,
+    synthesis_action: str | None,
+    synthesis_refresh_run_id: str | None,
+    semantic_action: str | None,
     vault_path: Path,
 ) -> dict[str, Any]:
     if plane not in {"all", "source_derived", "autonomous"}:
@@ -1470,6 +1708,53 @@ def _handle_autonomous_knowledge_support(
         raise ValueError("source-derived exact reads do not support historical as_of")
     if as_of is not None:
         as_of = canonical_timestamp(as_of, field="knowledge as_of")
+    if operation == "source":
+        return _handle_source_support(
+            action=source_action,
+            source_id=source_id,
+            old_source_id=old_source_id,
+            new_source_id=new_source_id,
+            fragment_id=fragment_id,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            vault_path=vault_path,
+        )
+    if operation == "wiki":
+        return _handle_wiki_support(
+            action=wiki_action,
+            wiki_path=wiki_path,
+            knowledge_id=knowledge_id,
+            kind=wiki_kind,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            vault_path=vault_path,
+        )
+    if operation == "editor_context":
+        if editor_context is None:
+            raise ValueError("Editor Context Envelope is required")
+        return _autonomous_v5_response(
+            operation="editor_context",
+            result=context_for_editor(vault_path, editor_context),
+        )
+    if operation == "synthesis":
+        return _handle_synthesis_support(
+            action=synthesis_action,
+            synthesis_refresh_run_id=synthesis_refresh_run_id,
+            limit=limit,
+            vault_path=vault_path,
+        )
+    if operation == "semantic":
+        return _handle_semantic_support(
+            action=semantic_action,
+            compilation_run_id=compilation_run_id,
+            profile_name=compiler_profile,
+            profile_version=compiler_profile_version,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            vault_path=vault_path,
+        )
     if operation == "query":
         return _handle_purpose_query(
             query=query,
@@ -1485,6 +1770,7 @@ def _handle_autonomous_knowledge_support(
             retrieval_mode=retrieval_mode,
             as_of=as_of,
             kinds=kinds,
+            query_plan_version=query_plan_version,
             vault_path=vault_path,
         )
     if operation == "compilation":
@@ -2025,6 +2311,19 @@ def handle_knowledge_support(
     after_source_revision_id: str | None = None,
     compiler_profile: str | None = None,
     compiler_profile_version: str | None = None,
+    query_plan_version: str = "4",
+    source_action: str | None = None,
+    source_id: str | None = None,
+    old_source_id: str | None = None,
+    new_source_id: str | None = None,
+    fragment_id: str | None = None,
+    wiki_action: str | None = None,
+    wiki_path: str | None = None,
+    wiki_kind: str | None = None,
+    editor_context: dict[str, Any] | None = None,
+    synthesis_action: str | None = None,
+    synthesis_refresh_run_id: str | None = None,
+    semantic_action: str | None = None,
     vault_path: str | Path | None = None,
 ) -> dict[str, Any]:
     selected_path = (
@@ -2060,6 +2359,19 @@ def handle_knowledge_support(
             after_source_revision_id=after_source_revision_id,
             compiler_profile=compiler_profile,
             compiler_profile_version=compiler_profile_version,
+            query_plan_version=query_plan_version,
+            source_action=source_action,
+            source_id=source_id,
+            old_source_id=old_source_id,
+            new_source_id=new_source_id,
+            fragment_id=fragment_id,
+            wiki_action=wiki_action,
+            wiki_path=wiki_path,
+            wiki_kind=wiki_kind,
+            editor_context=editor_context,
+            synthesis_action=synthesis_action,
+            synthesis_refresh_run_id=synthesis_refresh_run_id,
+            semantic_action=semantic_action,
             vault_path=selected_path,
         )
     with _open_agent_vault(selected_path) as vault:
@@ -2234,6 +2546,25 @@ def create_knowledge_mcp_server(
                         str | None,
                         arguments.get("compiler_profile_version"),
                     ),
+                    query_plan_version=str(arguments.get("query_plan_version", "4")),
+                    source_action=cast(str | None, arguments.get("source_action")),
+                    source_id=cast(str | None, arguments.get("source_id")),
+                    old_source_id=cast(str | None, arguments.get("old_source_id")),
+                    new_source_id=cast(str | None, arguments.get("new_source_id")),
+                    fragment_id=cast(str | None, arguments.get("fragment_id")),
+                    wiki_action=cast(str | None, arguments.get("wiki_action")),
+                    wiki_path=cast(str | None, arguments.get("wiki_path")),
+                    wiki_kind=cast(str | None, arguments.get("kind")),
+                    editor_context=cast(
+                        dict[str, Any] | None, arguments.get("editor_context")
+                    ),
+                    synthesis_action=cast(
+                        str | None, arguments.get("synthesis_action")
+                    ),
+                    synthesis_refresh_run_id=cast(
+                        str | None, arguments.get("synthesis_refresh_run_id")
+                    ),
+                    semantic_action=cast(str | None, arguments.get("semantic_action")),
                     vault_path=runtime.vault_path,
                 )
             except Exception as error:

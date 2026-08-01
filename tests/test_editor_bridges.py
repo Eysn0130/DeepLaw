@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+from deeplaw.api import KnowledgeOS
 from deeplaw.editor_bridge import (
     bridge_contract,
     context_for_editor,
@@ -77,9 +78,7 @@ def test_editor_context_and_bridge_manifests_match_closed_contracts() -> None:
     ):
         expected = bridge_contract(frontend)  # type: ignore[arg-type]
         manifest = json.loads(
-            (REPOSITORY / "adapters" / frontend / "manifest.json").read_text(
-                encoding="utf-8"
-            )
+            (REPOSITORY / "adapters" / frontend / "manifest.json").read_text(encoding="utf-8")
         )
         assert manifest == expected
         Draft202012Validator(
@@ -128,19 +127,15 @@ def test_editor_write_policy_rejects_escape_and_deeplaw_owned_roots(
 
 
 def test_obsidian_mock_waits_for_layout_and_opencode_overlay_is_least_privilege() -> None:
-    mock = (REPOSITORY / "adapters" / "obsidian" / "mock-bridge.ts").read_text(
-        encoding="utf-8"
-    )
-    assert mock.index("app.workspace.onLayoutReady") < mock.index(
-        'app.vault.on("create"'
-    )
+    mock = (REPOSITORY / "adapters" / "obsidian" / "mock-bridge.ts").read_text(encoding="utf-8")
+    assert mock.index("app.workspace.onLayoutReady") < mock.index('app.vault.on("create"')
     assert 'import { TFile, type App, type EventRef } from "obsidian";' in mock
     assert "knowledge/" not in mock
     assert ".deeplaw/" not in mock
 
-    overlay = (
-        REPOSITORY / "adapters" / "opencode" / "knowledge-compiler.example.jsonc"
-    ).read_text(encoding="utf-8")
+    overlay = (REPOSITORY / "adapters" / "opencode" / "knowledge-compiler.example.jsonc").read_text(
+        encoding="utf-8"
+    )
     parsed = json.loads(overlay)
     assert parsed["permission"]["*"] == "deny"
     assert parsed["permission"]["deeplaw_knowledge_knowledge_support"] == "allow"
@@ -156,19 +151,42 @@ def test_editor_context_is_ephemeral_and_does_not_mutate_the_ledger(
     initialize_autonomous_core(root)
     database = root / ".deeplaw" / "ledger.sqlite3"
     with sqlite3.connect(database) as connection:
-        before = connection.execute(
-            "SELECT COUNT(*) FROM autonomous_events_v3"
-        ).fetchone()[0]
+        before = connection.execute("SELECT COUNT(*) FROM autonomous_events_v3").fetchone()[0]
 
     result = context_for_editor(root, _envelope(initialized["vault_id"]))
+    api_result = KnowledgeOS.open(root).editor_context.compile(_envelope(initialized["vault_id"]))
+    envelope_path = tmp_path / "editor-context.json"
+    envelope_path.write_text(json.dumps(_envelope(initialized["vault_id"])), encoding="utf-8")
+    cli = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deeplaw",
+            "knowledge",
+            "editor",
+            "context",
+            "--vault",
+            str(root),
+            "--envelope",
+            str(envelope_path),
+        ],
+        cwd=REPOSITORY,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    cli_result = json.loads(cli.stdout)
 
     assert result["ephemeral_context"] is True
     assert result["persistence_requested"] is False
     assert result["persistence_performed"] is False
+    assert api_result["retrieval"]["query_plan"] == result["retrieval"]["query_plan"]
+    assert cli_result["retrieval"]["query_plan"]["query_sha256"] == result[
+        "retrieval"
+    ]["query_plan"]["query_sha256"]
+    assert cli_result["retrieval"]["compiled"] == result["retrieval"]["compiled"]
     with sqlite3.connect(database) as connection:
-        after = connection.execute(
-            "SELECT COUNT(*) FROM autonomous_events_v3"
-        ).fetchone()[0]
+        after = connection.execute("SELECT COUNT(*) FROM autonomous_events_v3").fetchone()[0]
     assert after == before
     mismatched = _envelope("vault_" + "0" * 24)
     with pytest.raises(PermissionError, match="another Vault"):

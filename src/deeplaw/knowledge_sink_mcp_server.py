@@ -64,7 +64,25 @@ _COMPILATION_OPERATIONS = frozenset(
 _BACKFILL_OPERATIONS = frozenset(
     {"promote_knowledge_draft", "propose_knowledge_backfill"}
 )
-_EXTENDED_OPERATIONS = _COMPILATION_OPERATIONS | _BACKFILL_OPERATIONS
+_SEMANTIC_OPERATIONS = frozenset(
+    {
+        "stage_semantic_observations",
+        "freeze_semantic_inventory",
+        "finalize_semantic_compilation",
+    }
+)
+_SYNTHESIS_OPERATIONS = frozenset(
+    {
+        "abort_synthesis_refresh",
+        "begin_synthesis_refresh",
+        "commit_synthesis_refresh",
+        "resume_synthesis_refresh",
+        "stage_synthesis_refresh",
+        "validate_synthesis_refresh",
+    }
+)
+_V4_OPERATIONS = _SEMANTIC_OPERATIONS | _SYNTHESIS_OPERATIONS
+_EXTENDED_OPERATIONS = _COMPILATION_OPERATIONS | _BACKFILL_OPERATIONS | _V4_OPERATIONS
 _BOUNDARY = {
     "legal_authority": False,
     "official_or_private_legal_mutation": False,
@@ -324,6 +342,91 @@ _OPERATION_FIELDS = {
             "evaluation_reason",
         }
     ),
+    "stage_semantic_observations": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+            "plan",
+        }
+    ),
+    "freeze_semantic_inventory": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+        }
+    ),
+    "finalize_semantic_compilation": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "compilation_run_id",
+            "plan",
+        }
+    ),
+    "begin_synthesis_refresh": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "refresh_task_id",
+            "source_revision_ids",
+            "knowledge_revision_ids",
+            "relation_revision_ids",
+            "host_identity",
+            "model_identity",
+            "profile_id",
+            "prompt_sha256",
+            "config_sha256",
+        }
+    ),
+    "stage_synthesis_refresh": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "synthesis_refresh_run_id",
+            "plan",
+        }
+    ),
+    "validate_synthesis_refresh": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "synthesis_refresh_run_id",
+        }
+    ),
+    "commit_synthesis_refresh": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "synthesis_refresh_run_id",
+        }
+    ),
+    "resume_synthesis_refresh": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "synthesis_refresh_run_id",
+            "project",
+        }
+    ),
+    "abort_synthesis_refresh": frozenset(
+        {
+            "operation",
+            "idempotency_key",
+            "confirm_no_case_data",
+            "synthesis_refresh_run_id",
+            "reason",
+        }
+    ),
 }
 
 
@@ -429,14 +532,79 @@ def _v3_input_schema(
     return schema
 
 
+def _v4_input_schema(
+    *,
+    operations: tuple[str, ...] | None = None,
+    evaluator_types: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    schema = deepcopy(_contract("knowledge-sink.input.v4.schema.json"))
+    previous = _v3_input_schema(evaluator_types=evaluator_types)
+    schema["oneOf"][0] = previous
+    embedded = {
+        "stage_semantic_observations": (
+            "plan",
+            "source-compilation-observation-plan.v2.schema.json",
+        ),
+        "finalize_semantic_compilation": (
+            "plan",
+            "semantic-publication-plan.v2.schema.json",
+        ),
+        "stage_synthesis_refresh": (
+            "plan",
+            "synthesis-refresh-plan.v1.schema.json",
+        ),
+    }
+    for branch in schema["oneOf"][1:]:
+        properties = branch["allOf"][1]["properties"]
+        operation_schema = properties["operation"]
+        operation = operation_schema.get("const")
+        if operation in embedded:
+            field, contract_name = embedded[operation]
+            properties[field] = deepcopy(_contract(contract_name))
+    if operations is not None:
+        allowed = set(operations)
+        branches = []
+        v3_allowed = tuple(item for item in operations if item not in _V4_OPERATIONS)
+        if v3_allowed:
+            branches.append(
+                _v3_input_schema(
+                    operations=v3_allowed,
+                    evaluator_types=evaluator_types,
+                )
+            )
+        for branch in schema["oneOf"][1:]:
+            operation_schema = branch["allOf"][1]["properties"]["operation"]
+            candidates = (
+                {operation_schema["const"]}
+                if "const" in operation_schema
+                else set(operation_schema["enum"])
+            )
+            selected = sorted(candidates & allowed)
+            if not selected:
+                continue
+            copied = deepcopy(branch)
+            copied_operation = copied["allOf"][1]["properties"]["operation"]
+            if "enum" in copied_operation:
+                copied_operation["enum"] = selected
+            branches.append(copied)
+        if not branches:
+            raise ValueError("Knowledge Sink advertised operations are invalid")
+        schema["oneOf"] = branches
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def knowledge_sink_tool_definition(
     *,
     operations: tuple[str, ...] | None = None,
     evaluator_types: tuple[str, ...] | None = None,
 ) -> types.Tool:
+    v4 = bool(operations and _V4_OPERATIONS.intersection(operations))
     extended = bool(operations and _EXTENDED_OPERATIONS.intersection(operations))
     input_schema = (
-        _v3_input_schema(operations=operations, evaluator_types=evaluator_types)
+        _v4_input_schema(operations=operations, evaluator_types=evaluator_types)
+        if v4
+        else _v3_input_schema(operations=operations, evaluator_types=evaluator_types)
         if extended
         else _hydrated_v2_input_schema()
     )
@@ -464,7 +632,9 @@ def knowledge_sink_tool_definition(
         inputSchema=input_schema,
         outputSchema=deepcopy(
             _contract(
-                "knowledge-sink.output.v3.schema.json"
+                "knowledge-sink.output.v4.schema.json"
+                if v4
+                else "knowledge-sink.output.v3.schema.json"
                 if extended
                 else "knowledge-sink.output.v2.schema.json"
             )
@@ -480,7 +650,9 @@ def knowledge_sink_tool_definition(
 
 def _validate(name: str, value: dict[str, Any]) -> None:
     schema = (
-        _v3_input_schema()
+        _v4_input_schema()
+        if name == "knowledge-sink.input.v4.schema.json"
+        else _v3_input_schema()
         if name == "knowledge-sink.input.v3.schema.json"
         else _contract(name)
     )
@@ -500,6 +672,7 @@ def _validate(name: str, value: dict[str, Any]) -> None:
     if name in {
         "knowledge-sink.input.v2.schema.json",
         "knowledge-sink.input.v3.schema.json",
+        "knowledge-sink.input.v4.schema.json",
     }:
         operation = value.get("operation")
         allowed = _OPERATION_FIELDS.get(operation)
@@ -527,10 +700,15 @@ def handle_knowledge_sink(
     with AutonomousKnowledgeStore(selected_path, read_only=True) as read_store:
         grant_status = read_store.grant_status(grant_id)
     grant_operations = cast(list[str], grant_status["operations"])
+    if operation not in grant_operations:
+        raise PermissionError("Knowledge Sink operation is outside the active grant")
+    v4 = bool(_V4_OPERATIONS.intersection(grant_operations))
     extended = bool(_EXTENDED_OPERATIONS.intersection(grant_operations))
     _validate(
         (
-            "knowledge-sink.input.v3.schema.json"
+            "knowledge-sink.input.v4.schema.json"
+            if v4
+            else "knowledge-sink.input.v3.schema.json"
             if extended
             else "knowledge-sink.input.v2.schema.json"
         ),
@@ -547,6 +725,7 @@ def handle_knowledge_sink(
                 operation=operation,
                 result=replay,
                 extended=True,
+                v4=operation in _V4_OPERATIONS,
             )
         result = _handle_extended_sink(
             request,
@@ -557,6 +736,7 @@ def handle_knowledge_sink(
             operation=operation,
             result=result,
             extended=True,
+            v4=operation in _V4_OPERATIONS,
         )
         persisted = _record_extended_replay(
             request,
@@ -569,6 +749,7 @@ def handle_knowledge_sink(
                 operation=operation,
                 result=persisted,
                 extended=True,
+                v4=operation in _V4_OPERATIONS,
             )
         return response
     with AutonomousKnowledgeStore(selected_path, read_only=False) as store:
@@ -725,6 +906,7 @@ def handle_knowledge_sink(
         operation=operation,
         result=result,
         extended=False,
+        v4=False,
     )
 
 
@@ -858,10 +1040,13 @@ def _sink_response(
     operation: str,
     result: dict[str, Any],
     extended: bool,
+    v4: bool,
 ) -> dict[str, Any]:
     response = {
         "schema_version": (
-            "deeplaw.knowledge-sink-output/v3"
+            "deeplaw.knowledge-sink-output/v4"
+            if v4
+            else "deeplaw.knowledge-sink-output/v3"
             if extended
             else "deeplaw.knowledge-sink-output/v2"
         ),
@@ -874,7 +1059,9 @@ def _sink_response(
         raise RuntimeError("knowledge_sink output exceeds its hard 64 KiB budget")
     _validate(
         (
-            "knowledge-sink.output.v3.schema.json"
+            "knowledge-sink.output.v4.schema.json"
+            if v4
+            else "knowledge-sink.output.v3.schema.json"
             if extended
             else "knowledge-sink.output.v2.schema.json"
         ),
@@ -916,6 +1103,68 @@ def _handle_extended_sink(
             ),
             confirm_no_case_data=True,
         )
+    if operation in _SEMANTIC_OPERATIONS:
+        run = knowledge_os.compilations.open(
+            compilation_run_id=str(request["compilation_run_id"]),
+            grant_id=grant_id,
+        )
+        if run.compiler_profile_version != "2":
+            raise ValueError("semantic operation requires compiler profile version 2")
+        if operation == "stage_semantic_observations":
+            return run.stage_observations(
+                cast(dict[str, Any], request["plan"]),
+                confirm_no_case_data=True,
+            )
+        if operation == "freeze_semantic_inventory":
+            return run.semantic_inventory(confirm_no_case_data=True)
+        if operation == "finalize_semantic_compilation":
+            return run.stage_publication(
+                cast(dict[str, Any], request["plan"]),
+                confirm_no_case_data=True,
+            )
+    if operation == "begin_synthesis_refresh":
+        return knowledge_os.syntheses.begin_refresh(
+            grant_id=grant_id,
+            refresh_task_id=str(request["refresh_task_id"]),
+            source_revision_ids=cast(list[str], request["source_revision_ids"]),
+            knowledge_revision_ids=cast(
+                list[str], request["knowledge_revision_ids"]
+            ),
+            relation_revision_ids=cast(
+                list[str], request["relation_revision_ids"]
+            ),
+            host_identity=str(request["host_identity"]),
+            model_identity=cast(str | None, request.get("model_identity")),
+            profile_id=str(request["profile_id"]),
+            prompt_sha256=str(request["prompt_sha256"]),
+            config_sha256=str(request["config_sha256"]),
+            confirm_no_case_data=True,
+        )
+    if operation in _SYNTHESIS_OPERATIONS:
+        common = {
+            "grant_id": grant_id,
+            "synthesis_refresh_run_id": str(request["synthesis_refresh_run_id"]),
+            "confirm_no_case_data": True,
+        }
+        if operation == "stage_synthesis_refresh":
+            return knowledge_os.syntheses.stage_refresh(
+                **common,
+                plan=cast(dict[str, Any], request["plan"]),
+            )
+        if operation == "validate_synthesis_refresh":
+            return knowledge_os.syntheses.validate_refresh(**common)
+        if operation == "commit_synthesis_refresh":
+            return knowledge_os.syntheses.commit_refresh(**common)
+        if operation == "resume_synthesis_refresh":
+            return knowledge_os.syntheses.resume_refresh(
+                **common,
+                project=bool(request.get("project", False)),
+            )
+        if operation == "abort_synthesis_refresh":
+            return knowledge_os.syntheses.abort_refresh(
+                **common,
+                reason=str(request["reason"]),
+            )
     if operation in _COMPILATION_OPERATIONS:
         run = knowledge_os.compilations.open(
             compilation_run_id=str(request["compilation_run_id"]),

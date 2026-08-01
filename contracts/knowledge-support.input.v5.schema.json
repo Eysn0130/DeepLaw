@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.input.v5.schema.json",
+  "title": "DeepLaw Knowledge Support Input v5",
+  "oneOf": [
+    {"$ref": "knowledge-support.input.v4.schema.json"},
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "query", "query_plan_version"],
+      "properties": {
+        "operation": {"const": "query"},
+        "query": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "query_plan_version": {"const": "5"},
+        "purpose": {
+          "enum": [
+            "answer", "verify", "quote", "historical", "legal", "debug",
+            "freshness_check"
+          ]
+        },
+        "policy": {
+          "enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
+        },
+        "scope": {"$ref": "#/$defs/scope"},
+        "max_sensitivity": {"$ref": "#/$defs/sensitivity"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_chars": {"type": "integer", "minimum": 200, "maximum": 20000},
+        "max_tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "max_sources": {"type": "integer", "minimum": 1, "maximum": 32},
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "retrieval_mode": {"enum": ["exact", "lexical", "dense", "graph", "hybrid"]},
+        "as_of": {"type": "string", "format": "date-time"},
+        "kinds": {
+          "type": "array", "maxItems": 12, "uniqueItems": true,
+          "items": {
+            "enum": [
+              "claim", "comparison", "concept", "decision", "entity", "event",
+              "experience", "memory", "preference", "procedure", "skill", "synthesis"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "source_action"],
+      "properties": {
+        "operation": {"const": "source"},
+        "source_action": {"enum": ["list", "get", "fragment", "diff"]},
+        "source_id": {"$ref": "#/$defs/bounded_id"},
+        "old_source_id": {"$ref": "#/$defs/bounded_id"},
+        "new_source_id": {"$ref": "#/$defs/bounded_id"},
+        "fragment_id": {"$ref": "#/$defs/bounded_id"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "max_sensitivity": {"$ref": "#/$defs/sensitivity"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"source_action": {"const": "get"}}},
+          "then": {"required": ["source_id"]}
+        },
+        {
+          "if": {"properties": {"source_action": {"const": "fragment"}}},
+          "then": {"required": ["fragment_id"]}
+        },
+        {
+          "if": {"properties": {"source_action": {"const": "diff"}}},
+          "then": {"required": ["old_source_id", "new_source_id"]}
+        }
+      ]
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "wiki_action"],
+      "properties": {
+        "operation": {"const": "wiki"},
+        "wiki_action": {
+          "enum": [
+            "page", "backlinks", "outlinks", "local_graph", "browse_kind",
+            "recent_changes"
+          ]
+        },
+        "wiki_path": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "knowledge_id": {
+          "type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"
+        },
+        "kind": {
+          "enum": [
+            "claim", "comparison", "concept", "decision", "entity", "event",
+            "experience", "memory", "preference", "procedure", "skill", "synthesis"
+          ]
+        },
+        "scope": {"$ref": "#/$defs/scope"},
+        "max_sensitivity": {"$ref": "#/$defs/sensitivity"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"wiki_action": {"enum": ["page", "backlinks", "outlinks"]}}
+          },
+          "then": {"required": ["wiki_path"]}
+        },
+        {
+          "if": {"properties": {"wiki_action": {"const": "local_graph"}}},
+          "then": {"required": ["knowledge_id"]}
+        },
+        {
+          "if": {"properties": {"wiki_action": {"const": "browse_kind"}}},
+          "then": {"required": ["kind"]}
+        }
+      ]
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "editor_context"],
+      "properties": {
+        "operation": {"const": "editor_context"},
+        "editor_context": {"$ref": "editor-context-envelope.v1.schema.json"}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "synthesis_action"],
+      "properties": {
+        "operation": {"const": "synthesis"},
+        "synthesis_action": {
+          "enum": ["list_stale", "status", "explain", "next_packet", "coverage"]
+        },
+        "synthesis_refresh_run_id": {
+          "type": "string", "pattern": "^synthesisrefresh_[0-9a-f]{24}$"
+        },
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "synthesis_action": {"enum": ["status", "explain", "next_packet"]}
+            }
+          },
+          "then": {"required": ["synthesis_refresh_run_id"]}
+        }
+      ]
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "semantic_action"],
+      "properties": {
+        "operation": {"const": "semantic"},
+        "semantic_action": {
+          "enum": [
+            "profile", "duties", "next_packet", "inventory", "finalization",
+            "status", "explain"
+          ]
+        },
+        "compilation_run_id": {
+          "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+        },
+        "compiler_profile": {"$ref": "#/$defs/bounded_id"},
+        "compiler_profile_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "scope": {"$ref": "#/$defs/scope"},
+        "max_sensitivity": {"$ref": "#/$defs/sensitivity"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "semantic_action": {
+                "enum": ["next_packet", "inventory", "finalization", "status", "explain"]
+              }
+            }
+          },
+          "then": {"required": ["compilation_run_id"]}
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "bounded_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "sensitivity": {"enum": ["public", "internal", "private"]}
+  }
+}

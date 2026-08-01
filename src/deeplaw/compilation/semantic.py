@@ -54,8 +54,18 @@ class SemanticCompilationService:
             confirm_no_case_data=confirm_no_case_data,
         )
 
-    def inventory(self, compilation_run_id: str) -> dict[str, Any]:
-        return self.inventories.build(compilation_run_id)
+    def inventory(
+        self,
+        *,
+        grant_id: str,
+        compilation_run_id: str,
+        confirm_no_case_data: bool,
+    ) -> dict[str, Any]:
+        return self.inventories.build(
+            compilation_run_id,
+            grant_id=grant_id,
+            confirm_no_case_data=confirm_no_case_data,
+        )
 
     def finalization_packet(self, compilation_run_id: str) -> dict[str, Any]:
         return self.inventories.finalization_packet(compilation_run_id)

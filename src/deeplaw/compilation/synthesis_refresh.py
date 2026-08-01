@@ -73,7 +73,7 @@ class SynthesisRefreshService:
         knowledge_revision_ids: list[str],
         relation_revision_ids: list[str],
         host_identity: str,
-        model_identity: str | None,
+        model_identity: str | None = None,
         profile_id: str,
         prompt_sha256: str,
         config_sha256: str,
@@ -419,3 +419,108 @@ class SynthesisRefreshService:
             }
             _validate_contract("synthesis-refresh-run.v1.schema.json", result)
             return result
+
+    def explain(self, synthesis_refresh_run_id: str) -> dict[str, Any]:
+        with AutonomousKnowledgeStore(self.root, read_only=True) as store:
+            run = self._refresh_run(store, synthesis_refresh_run_id)
+            return {
+                "schema_version": "deeplaw.synthesis-refresh-explanation/v1",
+                "synthesis_refresh_run_id": synthesis_refresh_run_id,
+                "refresh_task_id": run["refresh_task_id"],
+                "target_knowledge_id": run["target_knowledge_id"],
+                "expected_revision_id": run["expected_revision_id"],
+                "input_set": self._input_set(store, run),
+                "transaction": self.coordinator.explain(run["compilation_run_id"]),
+                "write_performed": False,
+            }
+
+    def coverage(self) -> dict[str, Any]:
+        with AutonomousKnowledgeStore(self.root, read_only=True) as store:
+            rows = store.connection.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM synthesis_refresh_tasks_v1 GROUP BY status ORDER BY status
+                """
+            ).fetchall()
+            stale = store.connection.execute(
+                """
+                SELECT COUNT(*) FROM knowledge_revisions_v3 AS revisions
+                JOIN knowledge_objects_v3 AS objects
+                  ON objects.current_revision_id = revisions.revision_id
+                WHERE revisions.kind = 'synthesis'
+                  AND EXISTS (
+                    SELECT 1 FROM knowledge_dependencies_v1 AS dependencies
+                    WHERE dependencies.consumer_revision_id = revisions.revision_id
+                      AND dependencies.freshness != 'fresh'
+                  )
+                """
+            ).fetchone()[0]
+            return {
+                "schema_version": "deeplaw.synthesis-refresh-coverage/v1",
+                "task_counts": {row["status"]: row["count"] for row in rows},
+                "stale_current_synthesis_count": stale,
+                "audit_head": store.audit_head,
+                "write_performed": False,
+            }
+
+    def resume(
+        self,
+        *,
+        grant_id: str,
+        synthesis_refresh_run_id: str,
+        project: bool,
+        confirm_no_case_data: bool,
+    ) -> dict[str, Any]:
+        with AutonomousKnowledgeStore(self.root, read_only=True) as store:
+            run = self._refresh_run(store, synthesis_refresh_run_id)
+        transaction = self.coordinator.resume(
+            grant_id=grant_id,
+            compilation_run_id=run["compilation_run_id"],
+            project=project,
+            confirm_no_case_data=confirm_no_case_data,
+        )
+        return {
+            "schema_version": "deeplaw.synthesis-refresh-resume/v1",
+            "synthesis_refresh_run_id": synthesis_refresh_run_id,
+            "transaction": transaction,
+        }
+
+    def abort(
+        self,
+        *,
+        grant_id: str,
+        synthesis_refresh_run_id: str,
+        reason: str,
+        confirm_no_case_data: bool,
+    ) -> dict[str, Any]:
+        with AutonomousKnowledgeStore(self.root, read_only=True) as store:
+            run = self._refresh_run(store, synthesis_refresh_run_id)
+        transaction = self.coordinator.abort(
+            grant_id=grant_id,
+            compilation_run_id=run["compilation_run_id"],
+            reason=reason,
+            confirm_no_case_data=confirm_no_case_data,
+        )
+        with AutonomousKnowledgeStore(self.root, read_only=False) as store:
+            updated_at = store._next_transaction_time()
+            store.connection.execute(
+                """
+                UPDATE synthesis_refresh_tasks_v1
+                SET status = 'blocked', updated_at = ?
+                WHERE refresh_task_id = ?
+                """,
+                (updated_at, run["refresh_task_id"]),
+            )
+            store.connection.execute(
+                """
+                UPDATE synthesis_refresh_runs_v1 SET updated_at = ?
+                WHERE synthesis_refresh_run_id = ?
+                """,
+                (updated_at, synthesis_refresh_run_id),
+            )
+            store.connection.commit()
+        return {
+            "schema_version": "deeplaw.synthesis-refresh-abort/v1",
+            "synthesis_refresh_run_id": synthesis_refresh_run_id,
+            "transaction": transaction,
+        }

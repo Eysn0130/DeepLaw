@@ -107,7 +107,11 @@ def compilation_tables_sql() -> str:
                 'propose_knowledge_backfill',
                 'refresh_compilation', 'resume_compilation',
                 'stage_compilation_batch', 'stage_semantic_observations',
-                'finalize_semantic_compilation', 'validate_compilation'
+                'finalize_semantic_compilation', 'freeze_semantic_inventory',
+                'abort_synthesis_refresh', 'begin_synthesis_refresh',
+                'commit_synthesis_refresh', 'resume_synthesis_refresh',
+                'stage_synthesis_refresh', 'validate_synthesis_refresh',
+                'validate_compilation'
             )),
             request_sha256 TEXT NOT NULL,
             recorded_at TEXT NOT NULL
@@ -123,7 +127,11 @@ def compilation_tables_sql() -> str:
                 'promote_knowledge_draft', 'propose_knowledge_backfill',
                 'refresh_compilation', 'resume_compilation',
                 'stage_compilation_batch', 'stage_semantic_observations',
-                'finalize_semantic_compilation', 'validate_compilation'
+                'finalize_semantic_compilation', 'freeze_semantic_inventory',
+                'abort_synthesis_refresh', 'begin_synthesis_refresh',
+                'commit_synthesis_refresh', 'resume_synthesis_refresh',
+                'stage_synthesis_refresh', 'validate_synthesis_refresh',
+                'validate_compilation'
             )),
             request_sha256 TEXT NOT NULL,
             result_sha256 TEXT NOT NULL
@@ -505,6 +513,124 @@ def compilation_tables_sql() -> str:
     """
 
 
+def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) -> None:
+    """Expand frozen v0.11 CHECK domains without losing existing rows or FKs."""
+    required = {
+        "source_compilation_artifacts_v1": "semantic_receipt",
+        "source_compilation_usage_v1": "freeze_semantic_inventory",
+        "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
+    }
+    definitions = {
+        "source_compilation_artifacts_v1": """
+            CREATE TABLE _source_compilation_artifacts_v1_next (
+                artifact_sha256 TEXT PRIMARY KEY,
+                artifact_role TEXT NOT NULL CHECK(artifact_role IN (
+                    'packet', 'plan', 'batch', 'validation', 'receipt',
+                    'freshness', 'query_backfill', 'mcp_result',
+                    'observation_plan', 'semantic_inventory', 'finalization_packet',
+                    'publication_plan', 'semantic_receipt', 'synthesis_packet',
+                    'synthesis_plan', 'synthesis_receipt'
+                )),
+                byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
+                media_type TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            ) STRICT
+        """,
+        "source_compilation_usage_v1": """
+            CREATE TABLE _source_compilation_usage_v1_next (
+                operation_id TEXT PRIMARY KEY,
+                grant_id TEXT NOT NULL REFERENCES knowledge_sink_grants_v3(grant_id),
+                operation TEXT NOT NULL CHECK(operation IN (
+                    'abort_compilation', 'begin_compilation', 'commit_compilation',
+                    'propose_knowledge_backfill',
+                    'refresh_compilation', 'resume_compilation',
+                    'stage_compilation_batch', 'stage_semantic_observations',
+                    'finalize_semantic_compilation', 'freeze_semantic_inventory',
+                    'abort_synthesis_refresh', 'begin_synthesis_refresh',
+                    'commit_synthesis_refresh', 'resume_synthesis_refresh',
+                    'stage_synthesis_refresh', 'validate_synthesis_refresh',
+                    'validate_compilation'
+                )),
+                request_sha256 TEXT NOT NULL,
+                recorded_at TEXT NOT NULL
+            ) STRICT
+        """,
+        "source_compilation_mcp_replays_v1": """
+            CREATE TABLE _source_compilation_mcp_replays_v1_next (
+                grant_id TEXT NOT NULL REFERENCES knowledge_sink_grants_v3(grant_id),
+                idempotency_key TEXT NOT NULL,
+                operation TEXT NOT NULL CHECK(operation IN (
+                    'abort_compilation', 'begin_compilation', 'commit_compilation',
+                    'promote_knowledge_draft', 'propose_knowledge_backfill',
+                    'refresh_compilation', 'resume_compilation',
+                    'stage_compilation_batch', 'stage_semantic_observations',
+                    'finalize_semantic_compilation', 'freeze_semantic_inventory',
+                    'abort_synthesis_refresh', 'begin_synthesis_refresh',
+                    'commit_synthesis_refresh', 'resume_synthesis_refresh',
+                    'stage_synthesis_refresh', 'validate_synthesis_refresh',
+                    'validate_compilation'
+                )),
+                request_sha256 TEXT NOT NULL,
+                result_sha256 TEXT NOT NULL
+                    REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+                recorded_at TEXT NOT NULL,
+                PRIMARY KEY(grant_id, idempotency_key)
+            ) STRICT
+        """,
+    }
+    selected = []
+    for table, marker in required.items():
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError(f"source compilation table is unavailable: {table}")
+        if marker not in row[0]:
+            selected.append(table)
+    if not selected:
+        return
+    if connection.in_transaction:
+        connection.commit()
+    connection.execute("PRAGMA foreign_keys = OFF")
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        for table in selected:
+            temporary = f"_{table}_next"
+            connection.execute(f"DROP TABLE IF EXISTS {temporary}")
+            connection.execute(definitions[table])
+            columns = {
+                "source_compilation_artifacts_v1": (
+                    "artifact_sha256, artifact_role, byte_size, media_type, created_at"
+                ),
+                "source_compilation_usage_v1": (
+                    "operation_id, grant_id, operation, request_sha256, recorded_at"
+                ),
+                "source_compilation_mcp_replays_v1": (
+                    "grant_id, idempotency_key, operation, request_sha256, "
+                    "result_sha256, recorded_at"
+                ),
+            }[table]
+            connection.execute(
+                f"INSERT INTO {temporary}({columns}) SELECT {columns} FROM {table}"
+            )
+            connection.execute(f"DROP TABLE {table}")
+            connection.execute(f"ALTER TABLE {temporary} RENAME TO {table}")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS source_compilation_usage_v1_rate "
+            "ON source_compilation_usage_v1(grant_id, recorded_at)"
+        )
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
+    failure = connection.execute("PRAGMA foreign_key_check").fetchone()
+    if failure is not None:
+        raise RuntimeError("source compilation constraint migration broke a foreign key")
+
+
 def install_compilation_schema(
     connection: sqlite3.Connection,
     *,
@@ -513,6 +639,7 @@ def install_compilation_schema(
 ) -> None:
     canonical_timestamp(installed_at, field="source compilation installed_at")
     connection.executescript(compilation_tables_sql())
+    _upgrade_extended_compilation_constraints(connection)
     connection.execute(
         """
         INSERT OR IGNORE INTO source_compilation_core_v1(
@@ -1009,6 +1136,23 @@ def verify_compilation_schema(
                     "object_id": input_set["synthesis_revision_id"],
                 }
             )
+    for revision in connection.execute(
+        """
+        SELECT revision_id FROM knowledge_revisions_v3
+        WHERE verification = 'revision_bound'
+          AND NOT EXISTS (
+            SELECT 1 FROM synthesis_input_sets_v1
+            WHERE synthesis_revision_id = knowledge_revisions_v3.revision_id
+          )
+        ORDER BY revision_id
+        """
+    ):
+        failures.append(
+            {
+                "code": "revision_bound_input_set_missing",
+                "object_id": revision["revision_id"],
+            }
+        )
     for draft in connection.execute(
         """
         SELECT draft_id, workspace_path, workspace_sha256

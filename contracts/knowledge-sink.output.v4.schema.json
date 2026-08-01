@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.output.v4.schema.json",
+  "title": "DeepLaw Knowledge Sink Output v4",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "operation", "boundary", "result"],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "deeplaw.knowledge-sink-output/v2", "deeplaw.knowledge-sink-output/v3",
+        "deeplaw.knowledge-sink-output/v4"
+      ]
+    },
+    "operation": {
+      "enum": [
+        "remember", "reflect", "save_synthesis", "upsert_concept",
+        "upsert_entity", "record_event", "save_claim", "save_comparison",
+        "add_relation", "expire", "forget", "save_skill", "record_feedback",
+        "record_run", "capture", "resolve_identity", "consolidate_memory",
+        "abort_compilation", "begin_compilation", "commit_compilation",
+        "promote_knowledge_draft", "propose_knowledge_backfill",
+        "refresh_compilation", "resume_compilation", "stage_compilation_batch",
+        "validate_compilation",
+        "stage_semantic_observations", "freeze_semantic_inventory",
+        "finalize_semantic_compilation", "begin_synthesis_refresh",
+        "stage_synthesis_refresh", "validate_synthesis_refresh",
+        "commit_synthesis_refresh", "resume_synthesis_refresh",
+        "abort_synthesis_refresh"
+      ]
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "legal_authority", "official_or_private_legal_mutation",
+        "authority_elevation", "audit_deletion", "arbitrary_paths",
+        "case_data_allowed", "scope_bound"
+      ],
+      "properties": {
+        "legal_authority": {"const": false},
+        "official_or_private_legal_mutation": {"const": false},
+        "authority_elevation": {"const": false},
+        "audit_deletion": {"const": false},
+        "arbitrary_paths": {"const": false},
+        "case_data_allowed": {"const": false},
+        "scope_bound": {"const": true}
+      }
+    },
+    "result": {"type": "object"}
+  }
+}

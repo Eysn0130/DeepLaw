@@ -55,7 +55,14 @@ from .util import (
 AUTONOMOUS_CORE_SCHEMA_V1 = "deeplaw.autonomous-knowledge-core/v1"
 AUTONOMOUS_CORE_SCHEMA = "deeplaw.autonomous-knowledge-core/v2"
 KNOWLEDGE_OBJECT_SCHEMA_V1 = "deeplaw.knowledge-object/v1"
-KNOWLEDGE_OBJECT_SCHEMA = "deeplaw.knowledge-object/v2"
+KNOWLEDGE_OBJECT_SCHEMA_V2 = "deeplaw.knowledge-object/v2"
+KNOWLEDGE_OBJECT_SCHEMA = "deeplaw.knowledge-object/v3"
+MODERN_KNOWLEDGE_OBJECT_SCHEMAS = frozenset(
+    {KNOWLEDGE_OBJECT_SCHEMA_V2, KNOWLEDGE_OBJECT_SCHEMA}
+)
+KNOWLEDGE_OBJECT_SCHEMAS = frozenset(
+    {KNOWLEDGE_OBJECT_SCHEMA_V1, *MODERN_KNOWLEDGE_OBJECT_SCHEMAS}
+)
 KNOWLEDGE_REVISION_SCHEMA = "deeplaw.knowledge-revision/v2"
 KNOWLEDGE_RELATION_SCHEMA = "deeplaw.knowledge-relation/v3"
 KNOWLEDGE_CAPSULE_SCHEMA = "deeplaw.knowledge-capsule/v2"
@@ -156,6 +163,13 @@ SINK_OPERATIONS = frozenset(
         "stage_compilation_batch",
         "stage_semantic_observations",
         "finalize_semantic_compilation",
+        "freeze_semantic_inventory",
+        "abort_synthesis_refresh",
+        "begin_synthesis_refresh",
+        "commit_synthesis_refresh",
+        "resume_synthesis_refresh",
+        "stage_synthesis_refresh",
+        "validate_synthesis_refresh",
         "validate_compilation",
     }
 )
@@ -866,7 +880,7 @@ def render_knowledge_markdown(
         "quarantine_reasons": quarantine_reasons,
         "lifecycle_reason": lifecycle_reason,
     }
-    if schema_version == KNOWLEDGE_OBJECT_SCHEMA:
+    if schema_version in MODERN_KNOWLEDGE_OBJECT_SCHEMAS:
         frontmatter["mutability"] = AGENT_KNOWLEDGE_MUTABILITY
         frontmatter["writer_scope"] = scope
         frontmatter["activation_policy"] = AUTONOMOUS_ACTIVATION_POLICY
@@ -882,9 +896,13 @@ def render_knowledge_markdown(
     if canonical_skill is not None:
         frontmatter["skill"] = canonical_skill
     _validate_contract(
-        "knowledge-object.v2.schema.json"
-        if schema_version == KNOWLEDGE_OBJECT_SCHEMA
-        else "knowledge-object.v1.schema.json",
+        (
+            "knowledge-object.v3.schema.json"
+            if schema_version == KNOWLEDGE_OBJECT_SCHEMA
+            else "knowledge-object.v2.schema.json"
+            if schema_version == KNOWLEDGE_OBJECT_SCHEMA_V2
+            else "knowledge-object.v1.schema.json"
+        ),
         frontmatter,
     )
     markdown = f"---\n{_frontmatter_dump(frontmatter)}\n---\n\n# {title}\n\n{body.rstrip()}\n"
@@ -922,12 +940,14 @@ def parse_knowledge_markdown(
     if not isinstance(frontmatter, dict):
         raise ValueError("Knowledge Object frontmatter must be an object")
     schema_version = frontmatter.get("schema")
-    if schema_version not in {KNOWLEDGE_OBJECT_SCHEMA_V1, KNOWLEDGE_OBJECT_SCHEMA}:
+    if schema_version not in KNOWLEDGE_OBJECT_SCHEMAS:
         raise ValueError("Knowledge Object schema is unsupported")
     if validate_contract:
         contract = (
-            "knowledge-object.v2.schema.json"
+            "knowledge-object.v3.schema.json"
             if schema_version == KNOWLEDGE_OBJECT_SCHEMA
+            else "knowledge-object.v2.schema.json"
+            if schema_version == KNOWLEDGE_OBJECT_SCHEMA_V2
             else "knowledge-object.v1.schema.json"
         )
         _validate_contract(contract, frontmatter)
@@ -5516,9 +5536,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     if isinstance(existing_id, str) and existing_id in current_rows
                     else None
                 )
+                markdown_schema = frontmatter.get("schema")
                 markdown_contract = (
-                    "knowledge-object.v2.schema.json"
-                    if frontmatter.get("schema") == KNOWLEDGE_OBJECT_SCHEMA
+                    "knowledge-object.v3.schema.json"
+                    if markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
+                    else "knowledge-object.v2.schema.json"
+                    if markdown_schema == KNOWLEDGE_OBJECT_SCHEMA_V2
                     else "knowledge-object.v1.schema.json"
                 )
                 try:
@@ -5563,7 +5586,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                             "lifecycle_reason": existing["metadata"].get("lifecycle_reason"),
                         }
                     )
-                    if markdown_contract == "knowledge-object.v2.schema.json":
+                    if markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS:
                         normalized.update(
                             {
                                 "mutability": AGENT_KNOWLEDGE_MUTABILITY,
@@ -5572,7 +5595,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                             }
                         )
                     _validate_contract(markdown_contract, normalized)
-                if frontmatter.get("schema") == KNOWLEDGE_OBJECT_SCHEMA and not (
+                if frontmatter.get("schema") in MODERN_KNOWLEDGE_OBJECT_SCHEMAS and not (
                     frontmatter.get("mutability") == AGENT_KNOWLEDGE_MUTABILITY
                     and frontmatter.get("writer_scope") == frontmatter.get("scope")
                     and frontmatter.get("activation_policy") == AUTONOMOUS_ACTIVATION_POLICY
@@ -5616,7 +5639,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     )
             except ValueError:
                 current_id = current_paths.get(relative)
-                if current_id is None and KNOWLEDGE_OBJECT_SCHEMA.encode() not in payload[:32_768]:
+                if current_id is None and not any(
+                    schema.encode() in payload[:32_768]
+                    for schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
+                ):
                     unmanaged.append(relative)
                     continue
                 conflict = record_conflict(
@@ -5837,7 +5863,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 ),
                 "lifecycle_reason": current["metadata"].get("lifecycle_reason"),
             }
-            if current_markdown["schema"] == KNOWLEDGE_OBJECT_SCHEMA:
+            if current_markdown["schema"] in MODERN_KNOWLEDGE_OBJECT_SCHEMAS:
                 governed_fields.update(
                     {
                         "mutability": AGENT_KNOWLEDGE_MUTABILITY,
@@ -10687,7 +10713,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         and row["lifecycle"] in LIFECYCLES
                         and row["epistemic_state"] in EPISTEMIC_STATES
                         and row["origin"] == row["authority"] == "agent_derived"
-                        and row["verification"] in {"unverified", "source_bound", "run_bound"}
+                        and row["verification"]
+                        in {"unverified", "source_bound", "revision_bound", "run_bound"}
                         and row["scope"] in SCOPES
                         and row["sensitivity"] in SENSITIVITIES
                         and row["parent_revision_id"] == row["supersedes_revision_id"]
@@ -10818,14 +10845,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
                 if set(metadata) != expected_metadata_fields:
                     raise ValueError("knowledge revision metadata is not closed")
-                if markdown_schema == KNOWLEDGE_OBJECT_SCHEMA and not (
+                if markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS and not (
                     metadata["mutability"] == AGENT_KNOWLEDGE_MUTABILITY
                     and metadata["writer_scope"] == row["scope"]
                     and metadata["activation_policy"] == AUTONOMOUS_ACTIVATION_POLICY
                 ):
                     raise ValueError("knowledge activation governance metadata is invalid")
                 if (
-                    markdown_schema == KNOWLEDGE_OBJECT_SCHEMA
+                    markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
                     and row["kind"] == "claim"
                     and row["lifecycle"] != "quarantined"
                     and bool(row["source_free"])
@@ -10837,7 +10864,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     or row["epistemic_state"] not in EPISTEMIC_STATES
                     or row["origin"] != "agent_derived"
                     or row["authority"] != "agent_derived"
-                    or row["verification"] not in {"unverified", "source_bound", "run_bound"}
+                    or row["verification"]
+                    not in {"unverified", "source_bound", "revision_bound", "run_bound"}
                     or row["scope"] not in SCOPES
                     or row["sensitivity"] not in SENSITIVITIES
                     or row["parent_revision_id"] != row["supersedes_revision_id"]
@@ -10911,11 +10939,27 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 elif row["verification"] == "source_bound":
                     if not source_bindings_valid:
                         raise ValueError("source-bound knowledge provenance is invalid")
+                elif row["verification"] == "revision_bound":
+                    input_set = self.connection.execute(
+                        """
+                        SELECT input_set_sha256 FROM synthesis_input_sets_v1
+                        WHERE synthesis_revision_id = ?
+                        """,
+                        (row["revision_id"],),
+                    ).fetchone()
+                    if (
+                        row["kind"] != "synthesis"
+                        or not source_bindings_valid
+                        or input_set is None
+                    ):
+                        raise ValueError(
+                            "revision-bound Synthesis provenance is invalid"
+                        )
                 elif row["verification"] == "run_bound":
                     if source_refs or not generation["run_id"]:
                         raise ValueError("run-bound knowledge provenance is invalid")
                     if (
-                        markdown_schema == KNOWLEDGE_OBJECT_SCHEMA
+                        markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
                         and not self._run_binding_admitted(
                             generation["run_id"],
                             scope=cast(Scope, row["scope"]),
@@ -11022,7 +11066,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                             "semantic_key": row["semantic_key"],
                             **(
                                 {"assertion": metadata.get("assertion")}
-                                if markdown_schema == KNOWLEDGE_OBJECT_SCHEMA
+                                if markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
                                 else {}
                             ),
                         }

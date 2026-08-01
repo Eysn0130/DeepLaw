@@ -14,12 +14,14 @@ from ..compilation import (
 from ..compilation import (
     compiler_profile as get_compiler_profile,
 )
+from ..editor_bridge import context_for_editor
 from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
     autonomous_core_installed,
 )
 from ..knowledge_store import KnowledgeVault
+from ..read_services import SourceReadService, WikiReadService
 from ..retrieval import PurposeAwareRetrievalService
 
 _T = TypeVar("_T")
@@ -114,9 +116,18 @@ class CompilationRun:
             confirm_no_case_data=confirm_no_case_data,
         )
 
-    def semantic_inventory(self) -> dict[str, Any]:
+    def semantic_inventory(
+        self,
+        *,
+        confirm_no_case_data: bool = False,
+    ) -> dict[str, Any]:
         service = _invoke(SemanticCompilationService, self._coordinator.root)
-        return _invoke(service.inventory, self.compilation_run_id)
+        return _invoke(
+            service.inventory,
+            grant_id=self.grant_id,
+            compilation_run_id=self.compilation_run_id,
+            confirm_no_case_data=confirm_no_case_data,
+        )
 
     def finalization_packet(self) -> dict[str, Any]:
         service = _invoke(SemanticCompilationService, self._coordinator.root)
@@ -253,8 +264,7 @@ class _CompilationsAPI:
         if (
             prompt_template_id != registered_profile["prompt_template_id"]
             or prompt_config_sha256 != registered_profile["prompt_config_sha256"]
-            or plan_configuration_sha256
-            != registered_profile["plan_configuration_sha256"]
+            or plan_configuration_sha256 != registered_profile["plan_configuration_sha256"]
         ):
             raise KnowledgeOSValidationError(
                 "compiler_profile_mismatch",
@@ -382,6 +392,39 @@ class _ContextAPI:
 class _SourcesAPI:
     _root: Path
 
+    def list(self, **options: Any) -> dict[str, Any]:
+        return _invoke(SourceReadService(self._root).execute, action="list", **options)
+
+    def get(self, source_id: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            SourceReadService(self._root).execute,
+            action="get",
+            source_id=source_id,
+            **options,
+        )
+
+    def fragment(self, fragment_id: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            SourceReadService(self._root).execute,
+            action="fragment",
+            fragment_id=fragment_id,
+            **options,
+        )
+
+    def diff(
+        self,
+        old_source_id: str,
+        new_source_id: str,
+        **options: Any,
+    ) -> dict[str, Any]:
+        return _invoke(
+            SourceReadService(self._root).execute,
+            action="diff",
+            old_source_id=old_source_id,
+            new_source_id=new_source_id,
+            **options,
+        )
+
     def compilation_status(
         self,
         *,
@@ -468,6 +511,81 @@ class _SynthesesAPI:
             synthesis_refresh_run_id,
         )
 
+    def refresh_explain(self, synthesis_refresh_run_id: str) -> dict[str, Any]:
+        return _invoke(
+            SynthesisRefreshService(self._root).explain,
+            synthesis_refresh_run_id,
+        )
+
+    def refresh_coverage(self) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).coverage)
+
+    def resume_refresh(self, **request: Any) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).resume, **request)
+
+    def abort_refresh(self, **request: Any) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).abort, **request)
+
+
+@dataclass(frozen=True)
+class _WikiAPI:
+    _root: Path
+
+    def page(self, wiki_path: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            WikiReadService(self._root).execute,
+            action="page",
+            wiki_path=wiki_path,
+            **options,
+        )
+
+    def backlinks(self, wiki_path: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            WikiReadService(self._root).execute,
+            action="backlinks",
+            wiki_path=wiki_path,
+            **options,
+        )
+
+    def outlinks(self, wiki_path: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            WikiReadService(self._root).execute,
+            action="outlinks",
+            wiki_path=wiki_path,
+            **options,
+        )
+
+    def local_graph(self, knowledge_id: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            WikiReadService(self._root).execute,
+            action="local_graph",
+            knowledge_id=knowledge_id,
+            **options,
+        )
+
+    def browse_kind(self, kind: str, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            WikiReadService(self._root).execute,
+            action="browse_kind",
+            kind=kind,
+            **options,
+        )
+
+    def recent_changes(self, **options: Any) -> dict[str, Any]:
+        return _invoke(
+            WikiReadService(self._root).execute,
+            action="recent_changes",
+            **options,
+        )
+
+
+@dataclass(frozen=True)
+class _EditorContextAPI:
+    _root: Path
+
+    def compile(self, envelope: dict[str, Any]) -> dict[str, Any]:
+        return _invoke(context_for_editor, self._root, envelope)
+
 
 @dataclass(frozen=True)
 class KnowledgeOS:
@@ -501,6 +619,10 @@ class KnowledgeOS:
         return _CompilationsAPI(self._root)
 
     @property
+    def semantic_compilations(self) -> _CompilationsAPI:
+        return _CompilationsAPI(self._root)
+
+    @property
     def retrieval(self) -> _RetrievalAPI:
         return _RetrievalAPI(self._root)
 
@@ -519,6 +641,14 @@ class KnowledgeOS:
     @property
     def syntheses(self) -> _SynthesesAPI:
         return _SynthesesAPI(self._root)
+
+    @property
+    def wiki(self) -> _WikiAPI:
+        return _WikiAPI(self._root)
+
+    @property
+    def editor_context(self) -> _EditorContextAPI:
+        return _EditorContextAPI(self._root)
 
     def verify(self) -> dict[str, Any]:
         """Return the bounded canonical and derived integrity receipt."""

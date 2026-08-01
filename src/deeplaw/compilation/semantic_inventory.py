@@ -135,7 +135,17 @@ class SemanticInventoryBuilder:
         ]
         return duplicate_clusters, alias_collisions
 
-    def build(self, compilation_run_id: str) -> dict[str, Any]:
+    def build(
+        self,
+        compilation_run_id: str,
+        *,
+        grant_id: str,
+        confirm_no_case_data: bool,
+    ) -> dict[str, Any]:
+        if not confirm_no_case_data:
+            raise ValueError(
+                "semantic inventory requires confirmation that no case data is present"
+            )
         with AutonomousKnowledgeStore(self.root, read_only=False) as store:
             run = CompilationCoordinator._run(store, compilation_run_id)
             semantic_run = store.connection.execute(
@@ -147,6 +157,14 @@ class SemanticInventoryBuilder:
             ).fetchone()
             if semantic_run is None or run["compiler_profile_version"] != "2":
                 raise ValueError("semantic inventory requires compiler profile v2")
+            if run["grant_id"] != grant_id:
+                raise PermissionError("semantic compilation run is bound to another grant")
+            grant = store._grant(
+                grant_id,
+                operation="freeze_semantic_inventory",
+                request_bytes=len(compilation_run_id.encode("utf-8")),
+            )
+            store._enforce_grant_limits(grant, enforce_object_capacity=False)
             if semantic_run["observed_packet_count"] != run["packet_count"]:
                 raise RuntimeError("semantic inventory requires every observation packet")
             if semantic_run["inventory_sha256"] is not None:
@@ -282,6 +300,14 @@ class SemanticInventoryBuilder:
                     """,
                     (inventory["inventory_sha256"], recorded_at, compilation_run_id),
                 )
+                CompilationCoordinator._record_usage(
+                    store,
+                    grant_id=grant_id,
+                    operation="freeze_semantic_inventory",
+                    request_sha256=sha256_bytes(compilation_run_id.encode("utf-8")),
+                    recorded_at=recorded_at,
+                    discriminator=compilation_run_id,
+                )
                 store.connection.commit()
             except BaseException:
                 store.connection.rollback()
@@ -289,9 +315,22 @@ class SemanticInventoryBuilder:
             return inventory
 
     def finalization_packet(self, compilation_run_id: str) -> dict[str, Any]:
-        inventory = self.build(compilation_run_id)
         with AutonomousKnowledgeStore(self.root, read_only=True) as store:
             run = CompilationCoordinator._run(store, compilation_run_id)
+            row = store.connection.execute(
+                """
+                SELECT artifact_sha256 FROM semantic_inventories_v1
+                WHERE compilation_run_id = ?
+                """,
+                (compilation_run_id,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("semantic finalization requires a frozen inventory")
+            inventory = _decoded_artifact(
+                store,
+                row["artifact_sha256"],
+                role="semantic_inventory",
+            )
             keys = sorted(
                 {
                     (item["kind"], normalize_identity_text(candidate))

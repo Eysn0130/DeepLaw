@@ -362,7 +362,7 @@ def test_agent_revision_activates_without_review_and_binds_markdown_cas_ledger(
         )
         assert workspace.read_bytes() == object_path.read_bytes()
         parsed = parse_knowledge_markdown(workspace.read_bytes())
-        _validate_contract("knowledge-object.v2.schema.json", parsed["frontmatter"])
+        _validate_contract("knowledge-object.v3.schema.json", parsed["frontmatter"])
         assert parsed["frontmatter"]["deeplaw_id"] == revision["knowledge_id"]
         assert parsed["frontmatter"]["revision"] == revision["revision_id"]
         assert parsed["frontmatter"]["mutability"] == "revision_only"

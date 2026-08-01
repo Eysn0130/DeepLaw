@@ -105,8 +105,9 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
     assert sink.inputSchema["additionalProperties"] is False
     assert support.name == "knowledge_support"
     assert support.annotations.readOnlyHint is True
-    assert "remember" not in support.inputSchema["properties"]["operation"]["enum"]
-    assert "add_relation" not in support.inputSchema["properties"]["operation"]["enum"]
+    support_schema = canonical_json(support.inputSchema)
+    assert '"remember"' not in support_schema
+    assert '"add_relation"' not in support_schema
     validator = Draft202012Validator(
         sink.inputSchema,
         format_checker=FormatChecker(),
@@ -159,7 +160,7 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
     assert len(canonical_json(response).encode("utf-8")) <= 65_536
 
 
-def test_knowledge_support_v4_extends_without_mutating_frozen_v2_or_v3() -> None:
+def test_knowledge_support_v5_extends_without_mutating_frozen_v2_to_v4() -> None:
     repository = Path(__file__).resolve().parents[1]
     v2 = json.loads(
         (repository / "contracts/knowledge-support.input.v2.schema.json").read_text()
@@ -180,7 +181,7 @@ def test_knowledge_support_v4_extends_without_mutating_frozen_v2_or_v3() -> None
         "compilation",
     }
     assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
-        "knowledge-support.input.v4.schema.json"
+        "knowledge-support.input.v5.schema.json"
     )
 
 
@@ -1299,11 +1300,8 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_sink"]
             advertised_schema = listed.tools[0].inputSchema
-            legacy_branch = next(
-                branch
-                for branch in advertised_schema["oneOf"]
-                if "properties" in branch
-            )
+            v3_branch = advertised_schema["oneOf"][0]
+            legacy_branch = v3_branch["oneOf"][0]
             assert legacy_branch["properties"]["evaluator_type"]["enum"] == [
                 "agent_self_report"
             ]
@@ -1312,5 +1310,89 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
                 _remember_request("stdio-write"),
             )
             assert result.isError is False
+
+    asyncio.run(exercise())
+
+
+def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> None:
+    root, _grant_id = _ready(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        vault_id = store.vault_id
+
+    async def exercise() -> None:
+        parameters = StdioServerParameters(
+            command=sys.executable,
+            args=[
+                "-m",
+                "deeplaw",
+                "knowledge",
+                "mcp",
+                "--stdio",
+                "--vault",
+                str(root),
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            env=os.environ.copy(),
+        )
+        async with (
+            stdio_client(parameters) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            listed = await session.list_tools()
+            assert [tool.name for tool in listed.tools] == ["knowledge_support"]
+            assert listed.tools[0].inputSchema["$id"].endswith(
+                "knowledge-support.input.v5.schema.json"
+            )
+            semantic = await session.call_tool(
+                "knowledge_support",
+                {"operation": "semantic", "semantic_action": "profile"},
+            )
+            sources = await session.call_tool(
+                "knowledge_support",
+                {"operation": "source", "source_action": "list"},
+            )
+            syntheses = await session.call_tool(
+                "knowledge_support",
+                {"operation": "synthesis", "synthesis_action": "coverage"},
+            )
+            editor = await session.call_tool(
+                "knowledge_support",
+                {
+                    "operation": "editor_context",
+                    "editor_context": {
+                        "schema_version": "deeplaw.editor-context-envelope/v1",
+                        "frontend": "obsidian",
+                        "frontend_version": "test-1",
+                        "vault_identity": vault_id,
+                        "active_note": None,
+                        "selected_text": None,
+                        "selection_range": None,
+                        "open_tabs": [],
+                        "explicit_note_references": [],
+                        "backlinks": [],
+                        "outlinks": [],
+                        "active_canvas": None,
+                        "active_bases_view": None,
+                        "user_intent": "Find governed knowledge.",
+                        "persistence_allowed": False,
+                        "scope": "project",
+                        "max_sensitivity": "private",
+                        "budgets": {
+                            "max_notes": 5,
+                            "max_context_characters": 2000,
+                            "max_selected_characters": 500,
+                            "max_provider_characters": 65536,
+                        },
+                        "confirm_no_case_data": True,
+                    },
+                },
+            )
+            assert semantic.isError is False
+            assert sources.isError is False
+            assert syntheses.isError is False
+            assert editor.isError is False
+            assert editor.structuredContent["result"]["ephemeral_context"] is True
+            assert editor.structuredContent["result"]["persistence_performed"] is False
 
     asyncio.run(exercise())

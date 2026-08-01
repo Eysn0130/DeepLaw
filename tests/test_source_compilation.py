@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -10,7 +12,11 @@ from jsonschema import Draft202012Validator
 
 from benchmarks.hosts.deterministic_fake_agent import compile_with_fake_agent
 from benchmarks.living_wiki.run_quality_gate import _score_case
-from deeplaw.api import KnowledgeOS, KnowledgeOSValidationError
+from deeplaw.api import (
+    KnowledgeOS,
+    KnowledgeOSPermissionError,
+    KnowledgeOSValidationError,
+)
 from deeplaw.backfill import BackfillService
 from deeplaw.compilation.coordinator import CompilationCoordinator
 from deeplaw.compilation.models import (
@@ -217,6 +223,125 @@ def _cli_json(*arguments: str) -> dict:
     return value
 
 
+def test_v011_compilation_check_domains_migrate_without_reimport(tmp_path: Path) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="old-check-domain", scope="project")
+    initialize_autonomous_core(root)
+    source_path = tmp_path / "v011-source.md"
+    source_path.write_text("# Existing\nPreserved compilation artifact.", encoding="utf-8")
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source_path,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="v011-compiler",
+            operations=COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"v011-migration-fixture")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="v011-migration-fixture",
+        compiler_profile_version="1",
+        host_identity="v011-compiler",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    database = root / ".deeplaw" / "ledger.sqlite3"
+    with sqlite3.connect(database) as connection:
+        artifact_count = connection.execute(
+            "SELECT COUNT(*) FROM source_compilation_artifacts_v1"
+        ).fetchone()[0]
+        usage_count = connection.execute(
+            "SELECT COUNT(*) FROM source_compilation_usage_v1"
+        ).fetchone()[0]
+    tables = {
+        "source_compilation_artifacts_v1": "semantic_receipt",
+        "source_compilation_usage_v1": "freeze_semantic_inventory",
+        "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
+    }
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("BEGIN IMMEDIATE")
+        for table in tables:
+            current_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()[0]
+            old_sql = re.sub(
+                r",\s*'observation_plan'.*?'synthesis_receipt'",
+                "",
+                current_sql,
+                flags=re.DOTALL,
+            )
+            old_sql = re.sub(
+                r",\s*'stage_semantic_observations'.*?'validate_synthesis_refresh'",
+                "",
+                old_sql,
+                flags=re.DOTALL,
+            )
+            legacy = f"_{table}_v011"
+            old_sql = old_sql.replace(
+                f"CREATE TABLE {table}",
+                f"CREATE TABLE {legacy}",
+                1,
+            )
+            connection.execute(old_sql)
+            columns = ", ".join(row[1] for row in connection.execute(f"PRAGMA table_info({table})"))
+            connection.execute(f"INSERT INTO {legacy}({columns}) SELECT {columns} FROM {table}")
+            connection.execute(f"DROP TABLE {table}")
+            connection.execute(f"ALTER TABLE {legacy} RENAME TO {table}")
+        connection.commit()
+    finally:
+        connection.close()
+
+    migrated = initialize_autonomous_core(root, migration_source="v0.11-to-v0.12")
+    assert migrated["verification"]["valid"] is True
+    connection = sqlite3.connect(database)
+    try:
+        for table, marker in tables.items():
+            sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()[0]
+            assert marker in sql
+        assert connection.execute("PRAGMA foreign_key_check").fetchone() is None
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM source_compilation_artifacts_v1"
+            ).fetchone()[0]
+            == artifact_count
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM source_compilation_usage_v1"
+            ).fetchone()[0]
+            == usage_count
+        )
+    finally:
+        connection.close()
+
+
 def test_quality_scoring_does_not_credit_duplicate_channel_hits() -> None:
     score = _score_case(
         ["Expected", "Expected", "Irrelevant"],
@@ -239,6 +364,10 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
             writer_id="deterministic-semantic-agent",
             operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
         )["grant_id"]
+        unrelated_grant = store.enable_grant(
+            writer_id="unrelated-semantic-agent",
+            operations=("freeze_semantic_inventory",),
+        )["grant_id"]
     profile = KnowledgeOS.open(root).compilations.profile(version="2")
     run = KnowledgeOS.open(root).compilations.begin(
         grant_id=grant_id,
@@ -257,21 +386,98 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
     packets = []
     while packet := run.next_packet():
         packets.append(packet)
-        run.stage_observations(
-            _semantic_observation_plan(service, packet),
-            confirm_no_case_data=True,
+        observation_plan = _semantic_observation_plan(service, packet)
+        observation_request = {
+            "operation": "stage_semantic_observations",
+            "idempotency_key": f"observe:{packet['packet_id']}",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run.compilation_run_id,
+            "plan": observation_plan,
+        }
+        semantic_tool = knowledge_sink_tool_definition(
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+            evaluator_types=("agent_self_report",),
         )
+        Draft202012Validator(semantic_tool.inputSchema).validate(observation_request)
+        if len(packets) == 1:
+            plan_path = tmp_path / "semantic-observation-plan.json"
+            plan_path.write_text(canonical_json(observation_plan), encoding="utf-8")
+            observed = _cli_json(
+                "knowledge",
+                "semantic",
+                "observe",
+                "--vault",
+                str(root),
+                "--grant-id",
+                grant_id,
+                "--run-id",
+                run.compilation_run_id,
+                "--plan",
+                str(plan_path),
+                "--confirm-no-case-data",
+            )
+            assert observed["schema_version"] == "deeplaw.semantic-observation-batch/v1"
+        else:
+            observed = handle_knowledge_sink(
+                observation_request,
+                grant_id=grant_id,
+                vault_path=root,
+            )
+            assert observed["schema_version"] == "deeplaw.knowledge-sink-output/v4"
         with AutonomousKnowledgeStore(root, read_only=True) as store:
             assert store.recall("DeepLaw", limit=20)["results"] == []
     assert len(packets) == 3
     assert packets[1]["semantic_protocol"]["prior_inventory"]["observation_count"] == 1
 
-    inventory = run.semantic_inventory()
+    with pytest.raises(KnowledgeOSPermissionError, match="granted boundary"):
+        handle_knowledge_sink(
+            {
+                "operation": "freeze_semantic_inventory",
+                "idempotency_key": "unauthorized-freeze",
+                "confirm_no_case_data": True,
+                "compilation_run_id": run.compilation_run_id,
+            },
+            grant_id=unrelated_grant,
+            vault_path=root,
+        )
+    inventory = _cli_json(
+        "knowledge",
+        "semantic",
+        "inventory",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run.compilation_run_id,
+        "--confirm-no-case-data",
+    )
+    sink_inventory = handle_knowledge_sink(
+        {
+            "operation": "freeze_semantic_inventory",
+            "idempotency_key": "freeze-semantic-inventory",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run.compilation_run_id,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )["result"]
+    assert sink_inventory["inventory_sha256"] == inventory["inventory_sha256"]
     assert inventory["observation_count"] == 3
     assert inventory["duplicate_clusters"][0]["observation_ids"] == sorted(
         item["observation_id"] for item in inventory["observations"]
     )
-    finalization_packet = run.finalization_packet()
+    finalization_packet = _cli_json(
+        "knowledge",
+        "semantic",
+        "finalization",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run.compilation_run_id,
+    )
     assert len(finalization_packet["duties"]) == 15
 
     all_source_refs = [
@@ -335,9 +541,7 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
             },
             "synthesis_inputs": {
                 **input_set_body,
-                "input_set_sha256": sha256_bytes(
-                    canonical_json(input_set_body).encode("utf-8")
-                ),
+                "input_set_sha256": sha256_bytes(canonical_json(input_set_body).encode("utf-8")),
             },
             "reason": "Publish the canonical source-bound summary.",
         },
@@ -384,8 +588,35 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
         "semantic_status": "complete",
         "warnings": [],
     }
-    staged = run.stage_publication(publication_plan, confirm_no_case_data=True)
+    publication_path = tmp_path / "semantic-publication-plan.json"
+    publication_path.write_text(canonical_json(publication_plan), encoding="utf-8")
+    staged = _cli_json(
+        "knowledge",
+        "semantic",
+        "finalize",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant_id,
+        "--run-id",
+        run.compilation_run_id,
+        "--plan",
+        str(publication_path),
+        "--confirm-no-case-data",
+    )
+    sink_staged = handle_knowledge_sink(
+        {
+            "operation": "finalize_semantic_compilation",
+            "idempotency_key": "finalize-semantic-compilation",
+            "confirm_no_case_data": True,
+            "compilation_run_id": run.compilation_run_id,
+            "plan": publication_plan,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )["result"]
     assert staged["semantic_status"] == "complete"
+    assert sink_staged["publication_plan_sha256"] == staged["publication_plan_sha256"]
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.recall("DeepLaw", limit=20)["results"] == []
     assert run.validate(confirm_no_case_data=True)["valid"] is True
@@ -396,6 +627,73 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
     status = run.status()
     assert status["semantic_status"] == "complete"
     assert status["gaps"] == []
+
+    support_tool = knowledge_tool_definition(autonomous=True)
+    support_validator = Draft202012Validator(support_tool.inputSchema)
+    for request in (
+        {
+            "operation": "semantic",
+            "semantic_action": "status",
+            "compilation_run_id": run.compilation_run_id,
+        },
+        {"operation": "source", "source_action": "list"},
+        {"operation": "wiki", "wiki_action": "browse_kind", "kind": "entity"},
+        {
+            "operation": "query",
+            "query": "DeepLaw",
+            "query_plan_version": "5",
+            "purpose": "answer",
+        },
+    ):
+        support_validator.validate(request)
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        audit_head = store.audit_head
+    semantic_status = handle_knowledge_support(
+        operation="semantic",
+        semantic_action="status",
+        compilation_run_id=run.compilation_run_id,
+        vault_path=root,
+    )
+    source_list = handle_knowledge_support(
+        operation="source",
+        source_action="list",
+        vault_path=root,
+    )
+    wiki_browse = handle_knowledge_support(
+        operation="wiki",
+        wiki_action="browse_kind",
+        wiki_kind="entity",
+        vault_path=root,
+    )
+    api_wiki_browse = KnowledgeOS.open(root).wiki.browse_kind("entity")
+    cli_wiki_browse = _cli_json(
+        "knowledge",
+        "wiki",
+        "browse-kind",
+        "--vault",
+        str(root),
+        "--kind",
+        "entity",
+    )
+    semantic_query = handle_knowledge_support(
+        operation="query",
+        query="DeepLaw",
+        query_plan_version="5",
+        purpose="answer",
+        vault_path=root,
+    )
+    assert semantic_status["result"]["semantic_status"] == "complete"
+    assert source_list["result"]["source_count"] == 0
+    assert wiki_browse["result"]["items"][0]["kind"] == "entity"
+    assert api_wiki_browse["items"] == wiki_browse["result"]["items"]
+    assert cli_wiki_browse["items"] == wiki_browse["result"]["items"]
+    assert semantic_query["schema_version"] == "deeplaw.knowledge-support-output/v5"
+    assert (
+        semantic_query["result"]["query_plan"]["schema_version"]
+        == "deeplaw.knowledge-query-plan/v5"
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.audit_head == audit_head
 
 
 def test_compilation_batches_remain_invisible_until_one_atomic_commit(tmp_path: Path) -> None:
@@ -613,9 +911,7 @@ def test_cli_api_and_mcp_share_one_compilation_domain_result(tmp_path: Path) -> 
     )
     plan_path = tmp_path / "compilation-plan.json"
     plan_path.write_text(
-        canonical_json(
-            _plan(packet, expected_audit_head=begun["input_audit_head"])
-        ),
+        canonical_json(_plan(packet, expected_audit_head=begun["input_audit_head"])),
         encoding="utf-8",
     )
     staged = _cli_json(
@@ -632,17 +928,20 @@ def test_cli_api_and_mcp_share_one_compilation_domain_result(tmp_path: Path) -> 
         "--confirm-no-case-data",
     )
     assert staged["object_count"] == 2
-    assert _cli_json(
-        "knowledge",
-        "compile",
-        "validate",
-        *vault_args,
-        "--grant-id",
-        grant_id,
-        "--run-id",
-        run_id,
-        "--confirm-no-case-data",
-    )["valid"] is True
+    assert (
+        _cli_json(
+            "knowledge",
+            "compile",
+            "validate",
+            *vault_args,
+            "--grant-id",
+            grant_id,
+            "--run-id",
+            run_id,
+            "--confirm-no-case-data",
+        )["valid"]
+        is True
+    )
     receipt = _cli_json(
         "knowledge",
         "compile",
@@ -808,14 +1107,9 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
         path.read_text(encoding="utf-8")
         for path in sorted((root / "wiki" / "indexes").glob("claim-*.md"))
     )
-    fragment_indexes = sorted(
-        (root / "wiki" / "indexes").glob("source-*-fragments-*.md")
-    )
+    fragment_indexes = sorted((root / "wiki" / "indexes").glob("source-*-fragments-*.md"))
     source_page = (
-        root
-        / "wiki"
-        / "sources"
-        / f"{compiled['identity']['source_revision_id']}.md"
+        root / "wiki" / "sources" / f"{compiled['identity']['source_revision_id']}.md"
     ).read_text(encoding="utf-8")
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         knowledge_ids = [
@@ -845,10 +1139,7 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
         for path in fragment_indexes
     )
     assert first_fragment_id in fragment_indexes[0].read_text(encoding="utf-8")
-    assert (
-        rebuilt["living_wiki"]["manifest_sha256"]
-        == living_wiki["manifest_sha256"]
-    )
+    assert rebuilt["living_wiki"]["manifest_sha256"] == living_wiki["manifest_sha256"]
     assert (root / "wiki" / "overview.md").read_bytes() != (root / "wiki" / "index.md").read_bytes()
     assert verification["valid"] is True, verification["failures"]
 
@@ -881,12 +1172,7 @@ def test_source_removal_invalidates_dependencies_and_recall(tmp_path: Path) -> N
         compilation_run_id=begun["compilation_run_id"],
         confirm_no_case_data=True,
     )
-    source_page = (
-        root
-        / "wiki"
-        / "sources"
-        / f"{compiled['identity']['source_revision_id']}.md"
-    )
+    source_page = root / "wiki" / "sources" / f"{compiled['identity']['source_revision_id']}.md"
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         store.rebuild_derived()
         assert store.recall("Durable source statement", limit=20)["results"]
@@ -1036,9 +1322,7 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
             )
         ]
         admitted_titles = {
-            item["title"]
-            for item in current
-            if store.revision_provenance_admitted(item)
+            item["title"] for item in current if store.revision_provenance_admitted(item)
         }
         verification = store.verify()
     assert counts == {"fresh": 2, "stale": 1}
@@ -1142,7 +1426,7 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         grant_id = store.enable_grant(
             writer_id="deterministic-fake-agent",
-            operations=COMPILER_GRANT_OPERATIONS,
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
         )["grant_id"]
     coordinator = CompilationCoordinator(root)
     configuration_sha256 = sha256_bytes(b"synthesis-dependencies-v1")
@@ -1214,9 +1498,7 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
             "kind": "synthesis",
             "synthesis_inputs": {
                 **input_set,
-                "input_set_sha256": sha256_bytes(
-                    canonical_json(input_set).encode("utf-8")
-                ),
+                "input_set_sha256": sha256_bytes(canonical_json(input_set).encode("utf-8")),
             },
             "reason": "Register the exact full Synthesis input set.",
         }
@@ -1246,6 +1528,7 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
             """
         ).fetchone()
         assert synthesis is not None
+        assert synthesis["verification"] == "revision_bound"
         synthesis_revision_id = synthesis["revision_id"]
         registered = store.connection.execute(
             """
@@ -1327,27 +1610,63 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
     refresh_service = SynthesisRefreshService(root)
     task = refresh_service.tasks(status="planned")[0]
     assert task["refresh_task_id"] == report["synthesis_refresh_task_ids"][0]
+    cli_tasks = _cli_json(
+        "knowledge",
+        "synthesis",
+        "list-stale",
+        "--vault",
+        str(root),
+    )
+    assert cli_tasks["tasks"][0]["refresh_task_id"] == task["refresh_task_id"]
     prompt_sha256 = sha256_bytes(b"synthesis-refresh-prompt/v1")
-    refresh_run = refresh_service.begin(
-        grant_id=grant_id,
-        refresh_task_id=task["refresh_task_id"],
-        source_revision_ids=sorted(
+    refresh_begin_request = {
+        "refresh_task_id": task["refresh_task_id"],
+        "source_revision_ids": sorted(
             (
                 successor["identity"]["source_revision_id"],
                 second["identity"]["source_revision_id"],
             )
         ),
-        knowledge_revision_ids=[],
-        relation_revision_ids=[],
-        host_identity="deterministic-fake-agent",
-        model_identity=None,
-        profile_id="deeplaw.synthesis-refresh.fake/v1",
-        prompt_sha256=prompt_sha256,
-        config_sha256=prompt_sha256,
-        confirm_no_case_data=True,
+        "knowledge_revision_ids": [],
+        "relation_revision_ids": [],
+        "host_identity": "deterministic-fake-agent",
+        "profile_id": "deeplaw.synthesis-refresh.fake/v1",
+        "prompt_sha256": prompt_sha256,
+        "config_sha256": prompt_sha256,
+    }
+    begin_path = tmp_path / "synthesis-refresh-begin.json"
+    begin_path.write_text(canonical_json(refresh_begin_request), encoding="utf-8")
+    refresh_run = _cli_json(
+        "knowledge",
+        "synthesis",
+        "begin",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant_id,
+        "--request",
+        str(begin_path),
+        "--confirm-no-case-data",
     )
-    refresh_packet = refresh_service.packet(
-        refresh_run["synthesis_refresh_run_id"]
+    sink_refresh_run = handle_knowledge_sink(
+        {
+            "operation": "begin_synthesis_refresh",
+            "idempotency_key": "begin-synthesis-refresh",
+            "confirm_no_case_data": True,
+            **refresh_begin_request,
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )["result"]
+    assert sink_refresh_run["synthesis_refresh_run_id"] == refresh_run["synthesis_refresh_run_id"]
+    refresh_packet = _cli_json(
+        "knowledge",
+        "synthesis",
+        "packet",
+        "--vault",
+        str(root),
+        "--refresh-run-id",
+        refresh_run["synthesis_refresh_run_id"],
     )
     assert refresh_packet is not None
     refresh_input_set = refresh_packet["synthesis_refresh"]["input_set"]
@@ -1369,52 +1688,127 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
             "reason": "Refresh the stale Overview from the exact successor input set.",
         }
     ]
-    staged_refresh = refresh_service.stage(
-        grant_id=grant_id,
-        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
-        plan={
-            "schema_version": "deeplaw.synthesis-refresh-plan/v1",
+    refresh_publication_plan = {
+        "schema_version": "deeplaw.synthesis-refresh-plan/v1",
+        "synthesis_refresh_run_id": refresh_run["synthesis_refresh_run_id"],
+        "compilation_run_id": refresh_run["transaction"]["compilation_run_id"],
+        "target_knowledge_id": synthesis["knowledge_id"],
+        "expected_revision_id": synthesis_revision_id,
+        "input_set_sha256": refresh_input_set["input_set_sha256"],
+        "packet_plans": [refresh_plan],
+        "reason": "Deterministic governed Overview refresh.",
+        "warnings": [],
+    }
+    refresh_plan_path = tmp_path / "synthesis-refresh-plan.json"
+    refresh_plan_path.write_text(canonical_json(refresh_publication_plan), encoding="utf-8")
+    staged_refresh = _cli_json(
+        "knowledge",
+        "synthesis",
+        "stage",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant_id,
+        "--refresh-run-id",
+        refresh_run["synthesis_refresh_run_id"],
+        "--plan",
+        str(refresh_plan_path),
+        "--confirm-no-case-data",
+    )
+    sink_staged_refresh = handle_knowledge_sink(
+        {
+            "operation": "stage_synthesis_refresh",
+            "idempotency_key": "stage-synthesis-refresh",
+            "confirm_no_case_data": True,
             "synthesis_refresh_run_id": refresh_run["synthesis_refresh_run_id"],
-            "compilation_run_id": refresh_run["transaction"]["compilation_run_id"],
-            "target_knowledge_id": synthesis["knowledge_id"],
-            "expected_revision_id": synthesis_revision_id,
-            "input_set_sha256": refresh_input_set["input_set_sha256"],
-            "packet_plans": [refresh_plan],
-            "reason": "Deterministic governed Overview refresh.",
-            "warnings": [],
+            "plan": refresh_publication_plan,
         },
-        confirm_no_case_data=True,
-    )
+        grant_id=grant_id,
+        vault_path=root,
+    )["result"]
     assert staged_refresh["staged_packet_count"] == 1
-    assert refresh_service.validate(
-        grant_id=grant_id,
-        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
-        confirm_no_case_data=True,
-    )["valid"] is True
-    refresh_receipt = refresh_service.commit(
-        grant_id=grant_id,
-        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
-        confirm_no_case_data=True,
+    assert sink_staged_refresh["input_set_sha256"] == staged_refresh["input_set_sha256"]
+    assert (
+        _cli_json(
+            "knowledge",
+            "synthesis",
+            "validate",
+            "--vault",
+            str(root),
+            "--grant-id",
+            grant_id,
+            "--refresh-run-id",
+            refresh_run["synthesis_refresh_run_id"],
+            "--confirm-no-case-data",
+        )["valid"]
+        is True
     )
+    assert (
+        handle_knowledge_sink(
+            {
+                "operation": "validate_synthesis_refresh",
+                "idempotency_key": "validate-synthesis-refresh",
+                "confirm_no_case_data": True,
+                "synthesis_refresh_run_id": refresh_run["synthesis_refresh_run_id"],
+            },
+            grant_id=grant_id,
+            vault_path=root,
+        )["result"]["valid"]
+        is True
+    )
+    refresh_receipt = _cli_json(
+        "knowledge",
+        "synthesis",
+        "commit",
+        "--vault",
+        str(root),
+        "--grant-id",
+        grant_id,
+        "--refresh-run-id",
+        refresh_run["synthesis_refresh_run_id"],
+        "--confirm-no-case-data",
+    )
+    sink_refresh_receipt = handle_knowledge_sink(
+        {
+            "operation": "commit_synthesis_refresh",
+            "idempotency_key": "commit-synthesis-refresh",
+            "confirm_no_case_data": True,
+            "synthesis_refresh_run_id": refresh_run["synthesis_refresh_run_id"],
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )["result"]
     assert refresh_receipt["previous_revision_id"] == synthesis_revision_id
+    assert sink_refresh_receipt["input_set_sha256"] == refresh_receipt["input_set_sha256"]
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         current = store.connection.execute(
             "SELECT current_revision_id FROM knowledge_objects_v3 WHERE knowledge_id = ?",
             (synthesis["knowledge_id"],),
         ).fetchone()["current_revision_id"]
         assert current != synthesis_revision_id
-        assert store.revision_provenance_admitted(
-            store._revision_row(
-                store.connection.execute(
-                    "SELECT * FROM knowledge_revisions_v3 WHERE revision_id = ?",
-                    (current,),
-                ).fetchone(),
-                include_body=False,
+        current_row = store.connection.execute(
+            "SELECT * FROM knowledge_revisions_v3 WHERE revision_id = ?",
+            (current,),
+        ).fetchone()
+        assert current_row["verification"] == "revision_bound"
+        assert (
+            store.revision_provenance_admitted(
+                store._revision_row(
+                    current_row,
+                    include_body=False,
+                )
             )
-        ) is True
-    assert refresh_service.tasks(status="completed")[0]["refresh_task_id"] == task[
-        "refresh_task_id"
-    ]
+            is True
+        )
+    assert (
+        refresh_service.tasks(status="completed")[0]["refresh_task_id"] == task["refresh_task_id"]
+    )
+    assert (
+        _cli_json("knowledge", "synthesis", "coverage", "--vault", str(root))[
+            "stale_current_synthesis_count"
+        ]
+        == 0
+    )
 
 
 def test_compilation_recovers_before_and_after_atomic_commit(
@@ -1797,9 +2191,7 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         item["revision_id"] for item in result["compiled"]
     ]
     assert v5_result["schema_version"] == "deeplaw.purpose-aware-retrieval/v2"
-    assert v5_result["query_plan"]["schema_version"] == (
-        "deeplaw.knowledge-query-plan/v5"
-    )
+    assert v5_result["query_plan"]["schema_version"] == ("deeplaw.knowledge-query-plan/v5")
     assert [item["duty"] for item in v5_result["query_plan"]["knowledge_duties"]] == [
         "primary_answer",
         "definition",
@@ -1810,9 +2202,7 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "applicability",
         "unresolved_gap",
     ]
-    assert v5_result["query_plan"]["knowledge_partitions"][
-        "source_bound_compiled"
-    ]
+    assert v5_result["query_plan"]["knowledge_partitions"]["source_bound_compiled"]
     assert v5_result["metrics"]["source_free_selection_rate"] == 0.0
     assert v5_result["metrics"]["provider_payload_bytes"] <= 65_536
     with AutonomousKnowledgeStore(root, read_only=True) as store:
@@ -1863,10 +2253,42 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
         "locator",
         "quote_sha256",
     }
-    assert (
-        reference["source_revision_id"]
-        == compiled["identity"]["source_revision_id"]
+    assert reference["source_revision_id"] == compiled["identity"]["source_revision_id"]
+    source_id = compiled["source"]["source_id"]
+    with KnowledgeVault(root, read_only=True) as vault:
+        fragment_id = vault.connection.execute(
+            "SELECT fragment_id FROM source_fragments WHERE source_id = ? ORDER BY ordinal LIMIT 1",
+            (source_id,),
+        ).fetchone()["fragment_id"]
+    mcp_source = handle_knowledge_support(
+        operation="source",
+        source_action="get",
+        source_id=source_id,
+        vault_path=root,
+    )["result"]
+    api_source = KnowledgeOS.open(root).sources.get(source_id)
+    cli_source = _cli_json(
+        "knowledge",
+        "source",
+        "get",
+        "--vault",
+        str(root),
+        "--source-id",
+        source_id,
     )
+    assert mcp_source == api_source == cli_source
+    api_fragment = KnowledgeOS.open(root).sources.fragment(fragment_id)
+    cli_fragment = _cli_json(
+        "knowledge",
+        "source",
+        "fragment",
+        "--vault",
+        str(root),
+        "--fragment-id",
+        fragment_id,
+    )
+    assert api_fragment == cli_fragment
+    assert api_fragment["fragment"]["source_revision_id"] == reference["source_revision_id"]
 
     unanswerable = PurposeAwareRetrievalService(root).query(
         "NO-SUCH-FACT-CHI",
@@ -2005,9 +2427,7 @@ def test_purpose_aware_query_keeps_exact_identity_ahead_of_kind_priority(
     }
     synthesis_action["synthesis_inputs"] = {
         **synthesis_input_set,
-        "input_set_sha256": sha256_bytes(
-            canonical_json(synthesis_input_set).encode("utf-8")
-        ),
+        "input_set_sha256": sha256_bytes(canonical_json(synthesis_input_set).encode("utf-8")),
     }
     claim_action["semantic_key"] = "exact-order:claim"
     claim_action["title"] = "Exact identity claim"
@@ -2251,9 +2671,9 @@ def test_query_backfill_requires_draft_validation_and_explicit_promotion(
     assert replay["draft_id"] == proposed["draft_id"]
     assert replay["idempotent_replay"] is True
     with AutonomousKnowledgeStore(root, read_only=True) as store:
-        assert store.connection.execute(
-            "SELECT COUNT(*) FROM knowledge_objects_v3"
-        ).fetchone()[0] == 0
+        assert (
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_objects_v3").fetchone()[0] == 0
+        )
 
     validated = service.validate(
         grant_id=grant_id,
@@ -2488,12 +2908,9 @@ def test_sink_advertises_the_complete_closed_compilation_plan_contract() -> None
         branch
         for branch in schema["oneOf"]
         if "allOf" in branch
-        and branch["allOf"][1]["properties"]["operation"].get("const")
-        == "stage_compilation_batch"
+        and branch["allOf"][1]["properties"]["operation"].get("const") == "stage_compilation_batch"
     )
-    assert stage_branch["allOf"][1]["properties"]["plan"] == {
-        "$ref": "#/$defs/compilationPlan"
-    }
+    assert stage_branch["allOf"][1]["properties"]["plan"] == {"$ref": "#/$defs/compilationPlan"}
     plan = schema["$defs"]["compilationPlan"]
     assert plan["additionalProperties"] is False
     assert {
@@ -2673,8 +3090,7 @@ def test_empty_semantic_compilation_cannot_report_success(tmp_path: Path) -> Non
             "completeness": "empty",
         },
         "skipped_fragments": [
-            {"fragment_id": item, "reason": "No reusable semantic output."}
-            for item in fragment_ids
+            {"fragment_id": item, "reason": "No reusable semantic output."} for item in fragment_ids
         ],
     }
     coordinator.stage(
@@ -2879,9 +3295,7 @@ def test_compiler_reuses_exact_identity_and_preserves_explicit_ambiguity(
         ).fetchone()
         assert candidate is not None
         assert candidate["status"] == "ambiguous"
-        assert strict_json_loads(candidate["candidate_json"])["action"] == (
-            "possible_duplicate"
-        )
+        assert strict_json_loads(candidate["candidate_json"])["action"] == ("possible_duplicate")
 
 
 def test_relation_freshness_propagates_from_changed_endpoint_revision(
@@ -3082,10 +3496,7 @@ def test_old_vault_migration_snapshot_restore_and_rollback_preserve_compilation(
     restored = tmp_path / "restored-vault"
     restore_autonomous_snapshot(restored, snapshot=snapshot, confirm=True)
     restored_os = KnowledgeOS.open(restored)
-    assert (
-        restored_os.compilations.status(begun["compilation_run_id"])["status"]
-        == "succeeded"
-    )
+    assert restored_os.compilations.status(begun["compilation_run_id"])["status"] == "succeeded"
     assert restored_os.retrieval.query(
         "Durable migrated source statement.",
         purpose="answer",
