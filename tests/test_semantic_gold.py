@@ -407,20 +407,30 @@ def test_query_environment_is_probed_from_first_party_runtime() -> None:
     assert environment["network_policy"] == "offline"
 
 
-def test_runtime_probe_preserves_symlinked_venv_python(tmp_path: Path) -> None:
-    if sys.platform == "win32":
-        pytest.skip("Windows virtual environments use python.exe rather than a Python symlink")
-    executable_directory = tmp_path / "runtime" / "bin"
+def test_runtime_probe_uses_sibling_venv_python_without_canonicalizing(
+    tmp_path: Path,
+) -> None:
+    executable_directory = tmp_path / "runtime" / (
+        "Scripts" if sys.platform == "win32" else "bin"
+    )
     executable_directory.mkdir(parents=True)
-    deeplaw = executable_directory / "deeplaw"
+    deeplaw = executable_directory / (
+        "deeplaw.exe" if sys.platform == "win32" else "deeplaw"
+    )
     deeplaw.write_text("runtime probe fixture\n", encoding="utf-8")
-    python = executable_directory / "python"
-    python.symlink_to(sys.executable)
+    python = executable_directory / (
+        "python.exe" if sys.platform == "win32" else "python"
+    )
+    if sys.platform == "win32":
+        python.write_text("runtime probe fixture\n", encoding="utf-8")
+    else:
+        python.symlink_to(sys.executable)
 
     selected = _runtime_python([str(deeplaw)])
 
     assert selected == python.absolute()
-    assert selected != python.resolve(strict=True)
+    if sys.platform != "win32":
+        assert selected != python.resolve(strict=True)
 
 
 def test_temporal_and_retention_gold_are_unambiguous() -> None:
