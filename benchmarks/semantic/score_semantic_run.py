@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
-from deeplaw.util import canonical_json, stable_id, strict_json_loads
+from deeplaw.util import canonical_json, sha256_bytes, stable_id, strict_json_loads
 
 THRESHOLDS = {
     "entity_canonicalization_precision": 0.95,
@@ -240,6 +240,20 @@ def _query_cost(
     return value
 
 
+def _query_report(
+    value: dict[str, Any] | None,
+    *,
+    gold_id: str,
+    host_report_id: str,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    _validate("semantic-query-run.v1.schema.json", value)
+    if value["gold_id"] != gold_id or value["host_report_id"] != host_report_id:
+        raise ValueError("semantic query report does not bind Gold and the host run")
+    return value
+
+
 def score(
     *,
     gold: dict[str, Any],
@@ -247,11 +261,18 @@ def score(
     vault: Path,
     manual_review: dict[str, Any] | None = None,
     query_cost: dict[str, Any] | None = None,
+    query_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     gold_sha256 = validate_candidate(gold, repository=_repository())
     if gold["status"] != "maintainer_confirmed":
         raise ValueError("semantic scoring requires maintainer-confirmed Semantic Gold")
-    _validate("real-semantic-host-report.v1.schema.json", host_report)
+    host_schema = host_report.get("schema_version")
+    if host_schema == "deeplaw.real-semantic-host-report/v1":
+        _validate("real-semantic-host-report.v1.schema.json", host_report)
+    elif host_schema == "deeplaw.real-semantic-host-report/v2":
+        _validate("real-semantic-host-report.v2.schema.json", host_report)
+    else:
+        raise ValueError("real semantic host report schema is unsupported")
     if host_report["gold_id"] != gold["gold_id"]:
         raise ValueError("host report does not bind the selected Semantic Gold")
     if host_report["gold_status"] != "maintainer_confirmed":
@@ -262,6 +283,15 @@ def score(
         gold_id=gold["gold_id"],
         host_report_id=host_report["report_id"],
     )
+    measured_query_report = _query_report(
+        query_report,
+        gold_id=gold["gold_id"],
+        host_report_id=host_report["report_id"],
+    )
+    query_cases = {
+        item["case_id"]: item
+        for item in (measured_query_report or {}).get("cases", [])
+    }
     host_report_sha256 = hashlib.sha256(
         canonical_json(host_report).encode("utf-8")
     ).hexdigest()
@@ -334,11 +364,19 @@ def score(
                     ),
                 ).fetchall()
                 outcome_pass = bool(lifecycle_rows) and all(
-                    row["status"] in {"withdrawn", "rejected", "deleted"}
+                    row["status"] in {"removed", "withdrawn", "rejected", "deleted"}
                     for row in lifecycle_rows
                 )
             elif case["task_type"] == "unanswerable":
                 outcome_pass = False
+            query_case = query_cases.get(case["case_id"])
+            if query_case is not None:
+                if case["expected_objects"] or case["task_type"] == "source_withdrawal":
+                    outcome_pass = bool(
+                        outcome_pass and query_case["status"] == "passed"
+                    )
+                else:
+                    outcome_pass = query_case["status"] == "passed"
             status = "passed" if outcome_pass else "failed"
             if not outcome_pass:
                 failure_cases.append(
@@ -498,9 +536,9 @@ def score(
             """,
             (withdrawn_source_id,),
         ).fetchone()[0]
-        withdrawn_current = store.connection.execute(
+        withdrawn_current_rows = store.connection.execute(
             """
-            SELECT COUNT(*)
+            SELECT revisions.*
             FROM knowledge_dependencies_v1 AS dependencies
             JOIN knowledge_objects_v3 AS objects
               ON objects.current_revision_id = dependencies.consumer_revision_id
@@ -511,12 +549,30 @@ def score(
               AND revisions.lifecycle = 'active'
             """,
             (withdrawn_source_id,),
-        ).fetchone()[0]
+        ).fetchall()
+        withdrawn_current = sum(
+            store.revision_provenance_admitted(
+                store._revision_row(row, include_body=False)
+            )
+            for row in withdrawn_current_rows
+        )
         stale_withdrawal_prevention = (
             1.0 if withdrawn_dependencies > 0 and withdrawn_current == 0 else 0.0
         )
         hard_failures["withdrawn_content_admission"] = withdrawn_current
         hard_failures["stale_prohibited_selection"] = withdrawn_current
+        if measured_query_report is not None:
+            query_metrics = measured_query_report["metrics"]
+            hard_failures["unauthorized_mutation"] += query_metrics[
+                "unauthorized_writes"
+            ]
+            hard_failures["authority_elevation"] += query_metrics[
+                "authority_elevations"
+            ]
+            hard_failures["silent_fallback"] += query_metrics["silent_fallbacks"]
+            hard_failures["stale_prohibited_selection"] += query_metrics[
+                "stale_prohibited_selections"
+            ]
 
         partial_complete = sum(
             1
@@ -626,12 +682,16 @@ def score(
     )
     passed = bool(
         host_report["status"] == "passed"
+        and measured_query_report is not None
+        and measured_query_report["status"] == "passed"
         and threshold_pass
         and not any(hard_failures.values())
         and all(item["status"] == "passed" for item in case_results)
     )
     formal_release_eligible = bool(
         passed
+        and measured_query_report is not None
+        and measured_query_report["status"] == "passed"
         and reviewed["status"] == "recorded"
         and metrics["build_tokens"] is not None
         and metrics["query_tokens"] is not None
@@ -646,6 +706,16 @@ def score(
         "gold_sha256": gold_sha256,
         "host_report_id": host_report["report_id"],
         "host_report_sha256": host_report_sha256,
+        "query_report_id": (
+            measured_query_report["report_id"]
+            if measured_query_report is not None
+            else None
+        ),
+        "query_report_sha256": (
+            sha256_bytes(canonical_json(measured_query_report).encode("utf-8"))
+            if measured_query_report is not None
+            else None
+        ),
         "host": host_report["host"],
         "host_version": host_report["host_version"],
         "model_identity": host_report["model_identity"],
@@ -685,6 +755,7 @@ def main() -> int:
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--manual-review", type=Path)
     parser.add_argument("--query-cost", type=Path)
+    parser.add_argument("--query-report", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
     manual = _load(arguments.manual_review) if arguments.manual_review else None
@@ -694,6 +765,7 @@ def main() -> int:
         vault=arguments.vault,
         manual_review=manual,
         query_cost=_load(arguments.query_cost) if arguments.query_cost else None,
+        query_report=_load(arguments.query_report) if arguments.query_report else None,
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(canonical_json(result) + "\n", encoding="utf-8")

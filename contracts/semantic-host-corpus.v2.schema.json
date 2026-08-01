@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-host-corpus.v2.schema.json",
+  "title": "DeepLaw Phased Real Semantic Host Corpus v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "corpus_id", "gold_id", "fixture_manifest_sha256",
+    "vault_id", "snapshot_sha256", "grant_id", "sources", "transitions"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-host-corpus/v2"},
+    "corpus_id": {"type": "string", "pattern": "^semanticcorpus_[0-9a-f]{24}$"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "fixture_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "grant_id": {"type": "string", "pattern": "^grant_[0-9a-f]{24}$"},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/source"}
+    },
+    "transitions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/successor"},
+        {"$ref": "#/$defs/withdrawal"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_key", "canonical_source_key", "source_id", "source_revision_id",
+        "phase", "initial_lifecycle_status", "review_manifest_sha256"
+      ],
+      "properties": {
+        "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
+        "canonical_source_key": {"type": "string", "pattern": "^sourcekey_[0-9a-f]{24}$"},
+        "source_id": {"type": "string", "pattern": "^source_[0-9a-f]{24}$"},
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "phase": {"enum": ["baseline", "successor"]},
+        "initial_lifecycle_status": {"enum": ["active", "pending"]},
+        "review_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "successor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "predecessor_source_key", "successor_source_key"],
+      "properties": {
+        "operation": {"const": "activate_successor"},
+        "predecessor_source_key": {"const": "update-v1"},
+        "successor_source_key": {"const": "update-v2"}
+      }
+    },
+    "withdrawal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "source_key"],
+      "properties": {
+        "operation": {"const": "withdraw_source"},
+        "source_key": {"const": "retention-a"}
+      }
+    }
+  }
+}

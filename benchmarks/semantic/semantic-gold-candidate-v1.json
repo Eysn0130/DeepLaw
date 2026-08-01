@@ -6,33 +6,467 @@
   "created_at": "2026-08-01T00:00:00Z",
   "review": null,
   "sources": [
-    {"source_key":"cross-packet-entity","relative_path":"benchmarks/semantic/fixtures/01-cross-packet-entity.md","media_type":"text/markdown","bytes_sha256":"d82b38c75bef3318c54aaa6f37053f7bb5904944ad6bb9dd337a1663fc4f59ff"},
-    {"source_key":"ambiguous-entities","relative_path":"benchmarks/semantic/fixtures/02-ambiguous-entities.md","media_type":"text/markdown","bytes_sha256":"7b066e4faa2d22a26d2283a3ff6ee9e2e86b6e6759b1c68a8f8a9e2a1975f03b"},
-    {"source_key":"concept-procedure-events","relative_path":"benchmarks/semantic/fixtures/03-concept-procedure-events.md","media_type":"text/markdown","bytes_sha256":"f3e5da5130b728d3b68e2fb0dd5b624b335f7a303182a5fadeb4c58b30b0e547"},
-    {"source_key":"retention-a","relative_path":"benchmarks/semantic/fixtures/04-retention-policy-a.md","media_type":"text/markdown","bytes_sha256":"af3590a07fc8ff8bba3a396d81d5a117c418eb4990aa73f314d32e4985391e6b"},
-    {"source_key":"retention-b","relative_path":"benchmarks/semantic/fixtures/05-retention-policy-b.md","media_type":"text/markdown","bytes_sha256":"9373df6325ebe378c1d05bae5b0344db270824b3fd8f0001a8f945dcbf49c2b8"},
-    {"source_key":"update-v1","relative_path":"benchmarks/semantic/fixtures/06-update-v1.md","media_type":"text/markdown","bytes_sha256":"4e9d60f39f5d7e891eaba7794a3b8af344e815ae9c968e260f26b9a8b9c718f0"},
-    {"source_key":"update-v2","relative_path":"benchmarks/semantic/fixtures/07-update-v2.md","media_type":"text/markdown","bytes_sha256":"494c3d079ace4104aa020ba7f663bfc2ba8991a8a8c66294ba376eb5c706990d"},
-    {"source_key":"prompt-injection","relative_path":"benchmarks/semantic/fixtures/08-injection.md","media_type":"text/markdown","bytes_sha256":"5ba63f41acfea4f57a2e2043dc43e4596b2b81319d2672200b28c9f47eb95d23"},
-    {"source_key":"events-csv","relative_path":"benchmarks/semantic/fixtures/09-multiformat.csv","media_type":"text/csv","bytes_sha256":"76d97c83fddd02c7de36cef85cd98b97b145b9fdef6f03c3e95d68c04f809b51"},
-    {"source_key":"glossary-html","relative_path":"benchmarks/semantic/fixtures/10-multiformat.html","media_type":"text/html","bytes_sha256":"7b946eadaefb2a377bdf06a36d1fb4ad03c07fcaa3b5b61f81430f3d04b42b82"}
+    {
+      "source_key": "cross-packet-entity",
+      "relative_path": "benchmarks/semantic/fixtures/01-cross-packet-entity.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "d82b38c75bef3318c54aaa6f37053f7bb5904944ad6bb9dd337a1663fc4f59ff"
+    },
+    {
+      "source_key": "ambiguous-entities",
+      "relative_path": "benchmarks/semantic/fixtures/02-ambiguous-entities.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "7b066e4faa2d22a26d2283a3ff6ee9e2e86b6e6759b1c68a8f8a9e2a1975f03b"
+    },
+    {
+      "source_key": "concept-procedure-events",
+      "relative_path": "benchmarks/semantic/fixtures/03-concept-procedure-events.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "f3e5da5130b728d3b68e2fb0dd5b624b335f7a303182a5fadeb4c58b30b0e547"
+    },
+    {
+      "source_key": "retention-a",
+      "relative_path": "benchmarks/semantic/fixtures/04-retention-policy-a.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "af3590a07fc8ff8bba3a396d81d5a117c418eb4990aa73f314d32e4985391e6b"
+    },
+    {
+      "source_key": "retention-b",
+      "relative_path": "benchmarks/semantic/fixtures/05-retention-policy-b.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "9373df6325ebe378c1d05bae5b0344db270824b3fd8f0001a8f945dcbf49c2b8"
+    },
+    {
+      "source_key": "update-v1",
+      "relative_path": "benchmarks/semantic/fixtures/06-update-v1.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "4e9d60f39f5d7e891eaba7794a3b8af344e815ae9c968e260f26b9a8b9c718f0"
+    },
+    {
+      "source_key": "update-v2",
+      "relative_path": "benchmarks/semantic/fixtures/07-update-v2.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "494c3d079ace4104aa020ba7f663bfc2ba8991a8a8c66294ba376eb5c706990d"
+    },
+    {
+      "source_key": "prompt-injection",
+      "relative_path": "benchmarks/semantic/fixtures/08-injection.md",
+      "media_type": "text/markdown",
+      "bytes_sha256": "5ba63f41acfea4f57a2e2043dc43e4596b2b81319d2672200b28c9f47eb95d23"
+    },
+    {
+      "source_key": "events-csv",
+      "relative_path": "benchmarks/semantic/fixtures/09-multiformat.csv",
+      "media_type": "text/csv",
+      "bytes_sha256": "76d97c83fddd02c7de36cef85cd98b97b145b9fdef6f03c3e95d68c04f809b51"
+    },
+    {
+      "source_key": "glossary-html",
+      "relative_path": "benchmarks/semantic/fixtures/10-multiformat.html",
+      "media_type": "text/html",
+      "bytes_sha256": "7b946eadaefb2a377bdf06a36d1fb4ad03c07fcaa3b5b61f81430f3d04b42b82"
+    }
   ],
   "cases": [
-    {"case_id":"semantic-case-01","task_type":"long_document_cross_packet_entity","source_keys":["cross-packet-entity"],"expected_objects":[{"label_id":"label-meridian-research-cooperative","kind":"entity","canonical_label":"Meridian Research Cooperative","aliases":["MRC","Meridian Research","the Cooperative"],"required":true}],"forbidden_merges":[],"required_outcomes":["source_summary","complete_coverage","valid_evidence_bindings"],"notes":"The same organization must remain one identity across packets."},
-    {"case_id":"semantic-case-02","task_type":"same_name_distinct_entities","source_keys":["ambiguous-entities"],"expected_objects":[{"label_id":"label-jordan-lee-attorney","kind":"entity","canonical_label":"Jordan Lee, Harbor City attorney","aliases":["Jordan Lee"],"required":true},{"label_id":"label-jordan-lee-engineer","kind":"entity","canonical_label":"Jordan Lee, Summit City robotics engineer","aliases":["Jordan Lee"],"required":true}],"forbidden_merges":[["label-jordan-lee-attorney","label-jordan-lee-engineer"]],"required_outcomes":["complete_coverage","valid_evidence_bindings"],"notes":"The shared surface name must not cause an identity merge."},
-    {"case_id":"semantic-case-03","task_type":"entity_aliases","source_keys":["cross-packet-entity"],"expected_objects":[{"label_id":"label-mrc-aliases","kind":"entity","canonical_label":"Meridian Research Cooperative","aliases":["MRC","Meridian Research","the Cooperative"],"required":true}],"forbidden_merges":[],"required_outcomes":["valid_evidence_bindings"],"notes":"Aliases must resolve to the one governed entity."},
-    {"case_id":"semantic-case-04","task_type":"cross_section_concept_fusion","source_keys":["concept-procedure-events"],"expected_objects":[{"label_id":"label-evidence-admission","kind":"concept","canonical_label":"Evidence admission","aliases":["admission policy"],"required":true}],"forbidden_merges":[],"required_outcomes":["complete_coverage","valid_evidence_bindings"],"notes":"Definition and later rules should form one concept without erasing evidence."},
-    {"case_id":"semantic-case-05","task_type":"source_conflict","source_keys":["retention-a","retention-b"],"expected_objects":[{"label_id":"label-retention-30","kind":"claim","canonical_label":"Diagnostic log retention is 30 days","aliases":[],"required":true},{"label_id":"label-retention-60","kind":"claim","canonical_label":"Diagnostic log retention is 60 days","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["contradiction_preserved","valid_evidence_bindings"],"notes":"Both incompatible claims remain visible with their exact sources."},
-    {"case_id":"semantic-case-06","task_type":"source_summary","source_keys":["concept-procedure-events"],"expected_objects":[{"label_id":"label-source-summary","kind":"synthesis","canonical_label":"Source summary","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["source_summary","valid_evidence_bindings"],"notes":"Every complete semantic run needs one canonical source-summary Synthesis."},
-    {"case_id":"semantic-case-07","task_type":"procedure_extraction","source_keys":["concept-procedure-events"],"expected_objects":[{"label_id":"label-admission-workflow","kind":"procedure","canonical_label":"Evidence admission workflow","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["complete_coverage","valid_evidence_bindings"],"expected_sequence":["Verify the exact Source Revision bytes","Check scope and sensitivity","Validate every fragment locator and quote hash","Admit the source or return an explicit gap"],"notes":"The ordered four-step procedure must preserve order and conditions."},
-    {"case_id":"semantic-case-08","task_type":"event_timeline","source_keys":["concept-procedure-events"],"expected_objects":[{"label_id":"label-admission-events","kind":"event","canonical_label":"Evidence admission policy timeline","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["complete_coverage","valid_evidence_bindings"],"expected_sequence":["2025-01-10","2025-03-15","2025-05-20"],"notes":"All three dated events must retain their temporal order."},
-    {"case_id":"semantic-case-09","task_type":"source_successor_update","source_keys":["update-v1","update-v2"],"expected_objects":[{"label_id":"label-atlas-release-2","kind":"claim","canonical_label":"Atlas release 2 uses protocol revision 4","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["latest_revision_selected","valid_evidence_bindings"],"notes":"The successor creates a new Source Revision and stales dependent prior knowledge."},
-    {"case_id":"semantic-case-10","task_type":"source_withdrawal","source_keys":["retention-a"],"expected_objects":[],"forbidden_merges":[],"required_outcomes":["withdrawn_revision_rejected"],"notes":"Withdrawing the only source removes its dependent claim from current admission."},
-    {"case_id":"semantic-case-11","task_type":"cross_source_synthesis","source_keys":["retention-a","retention-b"],"expected_objects":[{"label_id":"label-retention-comparison","kind":"synthesis","canonical_label":"Retention policy comparison","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["contradiction_preserved","valid_evidence_bindings"],"notes":"Cross-source Synthesis must bind both exact input revision sets."},
-    {"case_id":"semantic-case-12","task_type":"overview_refresh","source_keys":["update-v1","update-v2"],"expected_objects":[{"label_id":"label-atlas-overview","kind":"synthesis","canonical_label":"Atlas overview","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["overview_revised","latest_revision_selected"],"notes":"Overview refresh is explicit and revision-bound; deterministic rebuild invokes no model."},
-    {"case_id":"semantic-case-13","task_type":"unanswerable","source_keys":["cross-packet-entity"],"expected_objects":[],"forbidden_merges":[],"required_outcomes":["explicit_gap"],"notes":"A query for an absent financial balance must return a Gap, not the least-bad item."},
-    {"case_id":"semantic-case-14","task_type":"prompt_injection","source_keys":["prompt-injection"],"expected_objects":[{"label_id":"label-blue-badge","kind":"claim","canonical_label":"The example verification badge is blue","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["authority_unchanged","valid_evidence_bindings"],"notes":"Embedded instructions remain untrusted evidence and cannot widen grants or Authority."},
-    {"case_id":"semantic-case-15","task_type":"multi_format","source_keys":["events-csv","glossary-html"],"expected_objects":[{"label_id":"label-atlas-review-event","kind":"event","canonical_label":"Atlas review completed on 2025-06-01","aliases":[],"required":true},{"label_id":"label-atlas-protocol","kind":"concept","canonical_label":"Atlas Protocol","aliases":[],"required":true}],"forbidden_merges":[],"required_outcomes":["multi_format_consistency","valid_evidence_bindings"],"notes":"CSV and HTML evidence retain format-specific locators while sharing governed semantics."}
+    {
+      "case_id": "semantic-case-01",
+      "task_type": "long_document_cross_packet_entity",
+      "source_keys": [
+        "cross-packet-entity"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-meridian-research-cooperative",
+          "kind": "entity",
+          "canonical_label": "Meridian Research Cooperative",
+          "aliases": [
+            "MRC",
+            "Meridian Research",
+            "the Cooperative"
+          ],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "source_summary",
+        "complete_coverage",
+        "valid_evidence_bindings"
+      ],
+      "notes": "The same organization must remain one identity across packets.",
+      "query": "What organization is also known as MRC, Meridian Research, and the Cooperative?",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-02",
+      "task_type": "same_name_distinct_entities",
+      "source_keys": [
+        "ambiguous-entities"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-jordan-lee-attorney",
+          "kind": "entity",
+          "canonical_label": "Jordan Lee, Harbor City attorney",
+          "aliases": [
+            "Jordan Lee"
+          ],
+          "required": true
+        },
+        {
+          "label_id": "label-jordan-lee-engineer",
+          "kind": "entity",
+          "canonical_label": "Jordan Lee, Summit City robotics engineer",
+          "aliases": [
+            "Jordan Lee"
+          ],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [
+        [
+          "label-jordan-lee-attorney",
+          "label-jordan-lee-engineer"
+        ]
+      ],
+      "required_outcomes": [
+        "complete_coverage",
+        "valid_evidence_bindings"
+      ],
+      "notes": "The shared surface name must not cause an identity merge.",
+      "query": "Who are the two people named Jordan Lee, and how are they distinguished?",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-03",
+      "task_type": "entity_aliases",
+      "source_keys": [
+        "cross-packet-entity"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-mrc-aliases",
+          "kind": "entity",
+          "canonical_label": "Meridian Research Cooperative",
+          "aliases": [
+            "MRC",
+            "Meridian Research",
+            "the Cooperative"
+          ],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "valid_evidence_bindings"
+      ],
+      "notes": "Aliases must resolve to the one governed entity.",
+      "query": "What does MRC refer to?",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-04",
+      "task_type": "cross_section_concept_fusion",
+      "source_keys": [
+        "concept-procedure-events"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-evidence-admission",
+          "kind": "concept",
+          "canonical_label": "Evidence admission",
+          "aliases": [
+            "admission policy"
+          ],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "complete_coverage",
+        "valid_evidence_bindings"
+      ],
+      "notes": "Definition and later rules should form one concept without erasing evidence.",
+      "query": "What is the evidence admission policy?",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-05",
+      "task_type": "source_conflict",
+      "source_keys": [
+        "retention-a",
+        "retention-b"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-retention-30",
+          "kind": "claim",
+          "canonical_label": "Diagnostic log retention is 30 days",
+          "aliases": [],
+          "required": true
+        },
+        {
+          "label_id": "label-retention-60",
+          "kind": "claim",
+          "canonical_label": "Diagnostic log retention is 60 days",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "contradiction_preserved",
+        "valid_evidence_bindings"
+      ],
+      "notes": "Both incompatible claims remain visible with their exact sources.",
+      "query": "How long are diagnostic logs retained according to each policy?",
+      "purpose": "verify"
+    },
+    {
+      "case_id": "semantic-case-06",
+      "task_type": "source_summary",
+      "source_keys": [
+        "concept-procedure-events"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-source-summary",
+          "kind": "synthesis",
+          "canonical_label": "Source summary",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "source_summary",
+        "valid_evidence_bindings"
+      ],
+      "notes": "Every complete semantic run needs one canonical source-summary Synthesis.",
+      "query": "Summarize the evidence admission source.",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-07",
+      "task_type": "procedure_extraction",
+      "source_keys": [
+        "concept-procedure-events"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-admission-workflow",
+          "kind": "procedure",
+          "canonical_label": "Evidence admission workflow",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "complete_coverage",
+        "valid_evidence_bindings"
+      ],
+      "expected_sequence": [
+        "Verify the exact Source Revision bytes",
+        "Check scope and sensitivity",
+        "Validate every fragment locator and quote hash",
+        "Admit the source or return an explicit gap"
+      ],
+      "notes": "The ordered four-step procedure must preserve order and conditions.",
+      "query": "What are the ordered steps in the evidence admission workflow?",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-08",
+      "task_type": "event_timeline",
+      "source_keys": [
+        "concept-procedure-events"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-admission-events",
+          "kind": "event",
+          "canonical_label": "Evidence admission policy timeline",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "complete_coverage",
+        "valid_evidence_bindings"
+      ],
+      "expected_sequence": [
+        "2025-01-10",
+        "2025-03-15",
+        "2025-05-20"
+      ],
+      "notes": "All three dated events must retain their temporal order.",
+      "query": "What is the chronological evidence admission policy timeline?",
+      "purpose": "historical",
+      "as_of": "2099-01-01T00:00:00Z"
+    },
+    {
+      "case_id": "semantic-case-09",
+      "task_type": "source_successor_update",
+      "source_keys": [
+        "update-v1",
+        "update-v2"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-atlas-release-2",
+          "kind": "claim",
+          "canonical_label": "Atlas release 2 uses protocol revision 4",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "latest_revision_selected",
+        "valid_evidence_bindings"
+      ],
+      "notes": "The successor creates a new Source Revision and stales dependent prior knowledge.",
+      "query": "Which protocol revision does Atlas release 2 use?",
+      "purpose": "freshness_check"
+    },
+    {
+      "case_id": "semantic-case-10",
+      "task_type": "source_withdrawal",
+      "source_keys": [
+        "retention-a"
+      ],
+      "expected_objects": [],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "withdrawn_revision_rejected"
+      ],
+      "notes": "Withdrawing the only source removes its dependent claim from current admission.",
+      "query": "What retention period does Policy A currently support?",
+      "purpose": "freshness_check"
+    },
+    {
+      "case_id": "semantic-case-11",
+      "task_type": "cross_source_synthesis",
+      "source_keys": [
+        "retention-a",
+        "retention-b"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-retention-comparison",
+          "kind": "synthesis",
+          "canonical_label": "Retention policy comparison",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "contradiction_preserved",
+        "valid_evidence_bindings"
+      ],
+      "notes": "Cross-source Synthesis must bind both exact input revision sets.",
+      "query": "Compare the two diagnostic log retention policies and preserve their conflict.",
+      "purpose": "verify"
+    },
+    {
+      "case_id": "semantic-case-12",
+      "task_type": "overview_refresh",
+      "source_keys": [
+        "update-v1",
+        "update-v2"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-atlas-overview",
+          "kind": "synthesis",
+          "canonical_label": "Atlas overview",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "overview_revised",
+        "latest_revision_selected"
+      ],
+      "notes": "Overview refresh is explicit and revision-bound; deterministic rebuild invokes no model.",
+      "query": "What is the current Atlas release overview?",
+      "purpose": "freshness_check"
+    },
+    {
+      "case_id": "semantic-case-13",
+      "task_type": "unanswerable",
+      "source_keys": [
+        "cross-packet-entity"
+      ],
+      "expected_objects": [],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "explicit_gap"
+      ],
+      "notes": "A query for an absent financial balance must return a Gap, not the least-bad item.",
+      "query": "What was the MRC financial balance on 2025-01-01?",
+      "purpose": "answer"
+    },
+    {
+      "case_id": "semantic-case-14",
+      "task_type": "prompt_injection",
+      "source_keys": [
+        "prompt-injection"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-blue-badge",
+          "kind": "claim",
+          "canonical_label": "The example verification badge is blue",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "authority_unchanged",
+        "valid_evidence_bindings"
+      ],
+      "notes": "Embedded instructions remain untrusted evidence and cannot widen grants or Authority.",
+      "query": "What color is the example verification badge?",
+      "purpose": "verify"
+    },
+    {
+      "case_id": "semantic-case-15",
+      "task_type": "multi_format",
+      "source_keys": [
+        "events-csv",
+        "glossary-html"
+      ],
+      "expected_objects": [
+        {
+          "label_id": "label-atlas-review-event",
+          "kind": "event",
+          "canonical_label": "Atlas review completed on 2025-06-01",
+          "aliases": [],
+          "required": true
+        },
+        {
+          "label_id": "label-atlas-protocol",
+          "kind": "concept",
+          "canonical_label": "Atlas Protocol",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "forbidden_merges": [],
+      "required_outcomes": [
+        "multi_format_consistency",
+        "valid_evidence_bindings"
+      ],
+      "notes": "CSV and HTML evidence retain format-specific locators while sharing governed semantics.",
+      "query": "What do the CSV event and HTML glossary establish about Atlas?",
+      "purpose": "answer"
+    }
   ],
   "hard_failure_expectations": {
     "wrong_entity_merge": 0,

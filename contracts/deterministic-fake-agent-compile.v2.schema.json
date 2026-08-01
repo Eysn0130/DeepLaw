@@ -28,7 +28,7 @@
     "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "projection_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "compiled_result_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "compiled_result_count": {"type": "integer", "minimum": 0, "maximum": 64},
     "status": {"const": "succeeded"},
     "verification_valid": {"const": true},
     "network_used": {"const": false},

@@ -7,6 +7,7 @@ import pytest
 
 from benchmarks.hosts.run_semantic_host_harness import not_executed_report
 from benchmarks.semantic.review_gold import confirm_candidate, validate_candidate
+from benchmarks.semantic.run_query_suite import _case_result
 from benchmarks.semantic.score_semantic_run import _query_cost, score
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -83,6 +84,95 @@ def test_real_semantic_host_unavailable_is_schema_valid_not_executed() -> None:
     assert report["formal_release_evidence_ready"] is False
 
 
+def _phased_corpus(gold: dict) -> dict:
+    sources = []
+    atlas_key = "sourcekey_" + "a" * 24
+    for index, source in enumerate(gold["sources"], start=1):
+        canonical_source_key = (
+            atlas_key
+            if source["source_key"] in {"update-v1", "update-v2"}
+            else f"sourcekey_{index:024x}"
+        )
+        sources.append(
+            {
+                "source_key": source["source_key"],
+                "canonical_source_key": canonical_source_key,
+                "source_id": f"source_{index:024x}",
+                "source_revision_id": f"sourcerev_{index:024x}",
+                "phase": (
+                    "successor" if source["source_key"] == "update-v2" else "baseline"
+                ),
+                "initial_lifecycle_status": (
+                    "pending" if source["source_key"] == "update-v2" else "active"
+                ),
+                "review_manifest_sha256": f"{index:064x}",
+            }
+        )
+    return {
+        "schema_version": "deeplaw.semantic-host-corpus/v2",
+        "corpus_id": "semanticcorpus_0123456789abcdef01234567",
+        "gold_id": gold["gold_id"],
+        "fixture_manifest_sha256": gold["fixture_manifest_sha256"],
+        "vault_id": "vault_0123456789abcdef01234567",
+        "snapshot_sha256": "a" * 64,
+        "grant_id": "grant_0123456789abcdef01234567",
+        "sources": sources,
+        "transitions": [
+            {
+                "operation": "activate_successor",
+                "predecessor_source_key": "update-v1",
+                "successor_source_key": "update-v2",
+            },
+            {"operation": "withdraw_source", "source_key": "retention-a"},
+        ],
+    }
+
+
+def test_phased_semantic_host_unavailable_binds_lifecycle() -> None:
+    gold = _candidate()
+    corpus = _phased_corpus(gold)
+    report = not_executed_report(
+        host="opencode",
+        host_version="unavailable",
+        model_identity="unavailable",
+        network_policy="offline",
+        grant_id=corpus["grant_id"],
+        gold=gold,
+        corpus=corpus,
+        reason="The external host is not installed in core CI.",
+    )
+    assert report["schema_version"] == "deeplaw.real-semantic-host-report/v2"
+    assert [item["phase"] for item in report["phases"]] == [
+        "baseline",
+        "successor",
+    ]
+    assert [item["status"] for item in report["transitions"]] == [
+        "not_executed",
+        "not_executed",
+    ]
+    assert report["formal_release_evidence_ready"] is False
+
+
+def test_phased_semantic_host_rejects_false_successor_identity() -> None:
+    gold = _candidate()
+    corpus = _phased_corpus(gold)
+    successor = next(
+        item for item in corpus["sources"] if item["source_key"] == "update-v2"
+    )
+    successor["canonical_source_key"] = "sourcekey_" + "b" * 24
+    with pytest.raises(ValueError, match="preserve its canonical Source identity"):
+        not_executed_report(
+            host="opencode",
+            host_version="unavailable",
+            model_identity="unavailable",
+            network_policy="offline",
+            grant_id=corpus["grant_id"],
+            gold=gold,
+            corpus=corpus,
+            reason="unavailable",
+        )
+
+
 def test_semantic_scorer_refuses_pending_gold(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="maintainer-confirmed"):
         score(
@@ -125,3 +215,71 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
             gold_id=value["gold_id"],
             host_report_id="semantichostrun_aaaaaaaaaaaaaaaaaaaaaaaa",
         )
+
+
+def _query_output(
+    *,
+    compiled: list[dict] | None = None,
+    gaps: list[dict] | None = None,
+) -> dict:
+    return {
+        "compiled": compiled or [],
+        "evidence": [],
+        "gaps": gaps or [],
+        "contradictions": [],
+        "query_plan": {"fallback": {"used": False}},
+        "metrics": {
+            "provider_payload_bytes": 1024,
+            "repeated_query_reused_compilation": True,
+        },
+        "write_performed": False,
+        "authority_changed_by_ranking": False,
+    }
+
+
+def test_query_suite_requires_only_an_explicit_gap_for_unanswerable() -> None:
+    case = next(case for case in _candidate()["cases"] if case["task_type"] == "unanswerable")
+    output = _query_output(gaps=[{"code": "retrieval_gap"}])
+    result = _case_result(
+        case=case,
+        cold=output,
+        warm=output,
+        cold_latency_ms=5,
+        warm_latency_ms=3,
+        source_ids={
+            "retention-a": "sourcerev_" + "a" * 24,
+            "update-v1": "sourcerev_" + "b" * 24,
+            "update-v2": "sourcerev_" + "c" * 24,
+        },
+    )
+    assert result["status"] == "passed"
+    assert result["explicit_gap"] is True
+
+
+def test_query_suite_rejects_withdrawn_source_selection() -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["task_type"] == "source_withdrawal"
+    )
+    withdrawn = "sourcerev_" + "a" * 24
+    output = _query_output(
+        compiled=[
+            {
+                "revision_id": "knowledgerev_" + "d" * 24,
+                "source_refs": [{"source_revision_id": withdrawn}],
+            }
+        ]
+    )
+    result = _case_result(
+        case=case,
+        cold=output,
+        warm=output,
+        cold_latency_ms=5,
+        warm_latency_ms=3,
+        source_ids={
+            "retention-a": withdrawn,
+            "update-v1": "sourcerev_" + "b" * 24,
+            "update-v2": "sourcerev_" + "c" * 24,
+        },
+    )
+    assert result["status"] == "failed"
+    assert result["failure_reason"] == "withdrawn Source Revision was selected"

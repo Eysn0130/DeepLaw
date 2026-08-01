@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "report_id", "gold_id", "gold_sha256", "host_report_id",
-    "host_report_sha256", "host", "host_version", "model_identity", "evaluated_at",
+    "host_report_sha256", "query_report_id", "query_report_sha256", "host", "host_version", "model_identity", "evaluated_at",
     "metrics", "thresholds", "hard_failures", "case_results", "failure_cases",
     "manual_review", "passed", "formal_release_eligible", "competitive_claim_eligible",
     "limitations"
@@ -18,6 +18,8 @@
     "gold_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "host_report_id": {"type": "string", "pattern": "^semantichostrun_[0-9a-f]{24}$"},
     "host_report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "query_report_id": {"type": ["string", "null"], "pattern": "^semanticqueryrun_[0-9a-f]{24}$"},
+    "query_report_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "host": {"enum": ["codex", "claude_code", "opencode"]},
     "host_version": {"type": "string", "minLength": 1, "maxLength": 500},
     "model_identity": {"type": "string", "minLength": 1, "maxLength": 500},
