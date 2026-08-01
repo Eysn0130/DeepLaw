@@ -358,6 +358,7 @@ def _citation_checks(
                 "personal",
                 "--max-sensitivity",
                 "public",
+                expect_success=False,
             )
             fragment_record = fragment.get("fragment", {}) if fragment is not None else {}
             valid = bool(
@@ -425,6 +426,7 @@ def _citation_checks(
                 "personal",
                 "--max-sensitivity",
                 "public",
+                expect_success=False,
             )
             fragment_record = fragment.get("fragment", {}) if fragment is not None else {}
             valid = bool(
