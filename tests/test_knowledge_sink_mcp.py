@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from deeplaw.compilation import compiler_profile
 from deeplaw.knowledge_autonomy import (
     SINK_OPERATIONS,
     AutonomousKnowledgeStore,
@@ -1273,6 +1274,22 @@ def test_autonomous_snapshot_round_trip_restores_canonical_planes(tmp_path: Path
 
 def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> None:
     root, grant_id = _ready(tmp_path)
+    source = tmp_path / "stdio-semantic-source.md"
+    source.write_text(
+        "# Stdio semantic source\nA real stdio call starts the governed compiler.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+    source_revision_id = compiled["identity"]["source_revision_id"]
+    profile = compiler_profile("living-wiki-agent", "2")
+    with AutonomousKnowledgeStore(root, read_only=False):
+        pass
 
     async def exercise() -> None:
         parameters = StdioServerParameters(
@@ -1310,8 +1327,42 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
                 _remember_request("stdio-write"),
             )
             assert result.isError is False
+            semantic = await session.call_tool(
+                "knowledge_sink",
+                {
+                    "operation": "begin_compilation",
+                    "idempotency_key": "stdio-begin-semantic-v2",
+                    "confirm_no_case_data": True,
+                    "source_revision_id": source_revision_id,
+                    "compiler_profile": "living-wiki-agent",
+                    "compiler_profile_version": "2",
+                    "host_identity": "pytest-stdio-agent",
+                    "model_identity": "deterministic-test-model",
+                    "prompt_template_id": profile["prompt_template_id"],
+                    "prompt_config_sha256": profile["prompt_config_sha256"],
+                    "plan_configuration_sha256": profile[
+                        "plan_configuration_sha256"
+                    ],
+                    "packet_max_fragments": 8,
+                },
+            )
+            assert semantic.isError is False
 
     asyncio.run(exercise())
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        run = store.connection.execute(
+            """
+            SELECT compiler_profile_version, host_identity, status
+            FROM source_compilation_runs_v1
+            WHERE source_revision_id = ?
+            """,
+            (source_revision_id,),
+        ).fetchone()
+        assert dict(run) == {
+            "compiler_profile_version": "2",
+            "host_identity": "pytest-stdio-agent",
+            "status": "planned",
+        }
 
 
 def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> None:

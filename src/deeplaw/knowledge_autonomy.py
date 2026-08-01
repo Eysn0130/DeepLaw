@@ -3121,9 +3121,50 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 for reference in references
             )
         )
-        return source_admitted and self._revision_dependencies_admitted(
-            consumer_kind="knowledge_revision",
-            consumer_revision_id=cast(str, revision.get("revision_id")),
+        revision_id = cast(str, revision.get("revision_id"))
+        revision_bound_sources_admitted = (
+            revision.get("verification") != "revision_bound"
+            or self._revision_bound_sources_admitted(
+                revision_id,
+                scope=cast(str | None, revision.get("scope")),
+                max_sensitivity=cast(str | None, revision.get("sensitivity")),
+            )
+        )
+        return (
+            source_admitted
+            and revision_bound_sources_admitted
+            and self._revision_dependencies_admitted(
+                consumer_kind="knowledge_revision",
+                consumer_revision_id=revision_id,
+            )
+        )
+
+    def _revision_bound_sources_admitted(
+        self,
+        revision_id: str,
+        *,
+        scope: str | None,
+        max_sensitivity: str | None,
+    ) -> bool:
+        rows = self.connection.execute(
+            """
+            SELECT source_revision_id, freshness
+            FROM knowledge_dependencies_v1
+            WHERE consumer_kind = 'knowledge_revision'
+              AND consumer_revision_id = ?
+              AND dependency_kind = 'direct'
+            ORDER BY source_revision_id
+            """,
+            (revision_id,),
+        ).fetchall()
+        return bool(rows) and all(
+            row["freshness"] == "fresh"
+            and self._source_reference_is_bound(
+                {"source_revision_id": row["source_revision_id"]},
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+            )
+            for row in rows
         )
 
     def relation_provenance_admitted(self, relation: dict[str, Any]) -> bool:

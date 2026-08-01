@@ -7,7 +7,7 @@ import pytest
 
 from benchmarks.hosts.run_semantic_host_harness import not_executed_report
 from benchmarks.semantic.review_gold import confirm_candidate, validate_candidate
-from benchmarks.semantic.score_semantic_run import score
+from benchmarks.semantic.score_semantic_run import _query_cost, score
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 CANDIDATE = REPOSITORY / "benchmarks/semantic/semantic-gold-candidate-v1.json"
@@ -89,4 +89,39 @@ def test_semantic_scorer_refuses_pending_gold(tmp_path: Path) -> None:
             gold=_candidate(),
             host_report={},
             vault=tmp_path,
+        )
+
+
+def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
+    value = {
+        "schema_version": "deeplaw.semantic-query-cost/v1",
+        "gold_id": "semanticgold_0123456789abcdef01234567",
+        "host_report_id": "semantichostrun_0123456789abcdef01234567",
+        "query_set_sha256": "0" * 64,
+        "first_party_command": "deeplaw knowledge query",
+        "query_count": 15,
+        "total_query_tokens": 1200,
+        "total_context_bytes": 4800,
+        "raw_fragment_baseline_bytes": 22000,
+        "measurement_method": "provider_reported",
+        "budget": {
+            "max_items": 8,
+            "max_sources": 12,
+            "max_chars": 8000,
+            "max_tokens": 6000,
+            "max_sensitivity": "private",
+            "cold_or_warm": "warm",
+        },
+        "measured_at": "2026-08-01T01:02:03Z",
+    }
+    assert _query_cost(
+        value,
+        gold_id=value["gold_id"],
+        host_report_id=value["host_report_id"],
+    ) == value
+    with pytest.raises(ValueError, match="does not bind"):
+        _query_cost(
+            value,
+            gold_id=value["gold_id"],
+            host_report_id="semantichostrun_aaaaaaaaaaaaaaaaaaaaaaaa",
         )

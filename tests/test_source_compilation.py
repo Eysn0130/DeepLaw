@@ -1174,7 +1174,39 @@ def test_source_removal_invalidates_dependencies_and_recall(tmp_path: Path) -> N
         confirm_no_case_data=True,
         packet_max_fragments=3,
     )
-    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        overview_semantic_key = f"overview:{store.vault_id}"
+    synthesis_inputs = {
+        "source_revision_ids": [compiled["identity"]["source_revision_id"]],
+        "knowledge_revision_ids": [],
+        "relation_revision_ids": [],
+        "compilation_run_ids": [begun["compilation_run_id"]],
+    }
+    plan["object_actions"].append(
+        {
+            **plan["object_actions"][0],
+            "semantic_key": overview_semantic_key,
+            "title": "Removal-aware Overview",
+            "body": "This synthesis is invalidated when its only source is withdrawn.",
+            "kind": "synthesis",
+            "synthesis_inputs": {
+                **synthesis_inputs,
+                "input_set_sha256": sha256_bytes(
+                    canonical_json(synthesis_inputs).encode("utf-8")
+                ),
+            },
+            "reason": "Exercise source-withdrawal synthesis refresh triggering.",
+        }
+    )
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
     coordinator.validate(
         grant_id=grant_id,
         compilation_run_id=begun["compilation_run_id"],
@@ -1202,8 +1234,11 @@ def test_source_removal_invalidates_dependencies_and_recall(tmp_path: Path) -> N
         confirm_no_case_data=True,
     )
     assert report["source_status"] == "removed"
-    assert len(report["affected_knowledge_revision_ids"]) == 3
+    assert len(report["affected_knowledge_revision_ids"]) == 4
     assert len(report["missing_fragment_ids"]) == 3
+    assert len(report["synthesis_refresh_task_ids"]) == 1
+    task = SynthesisRefreshService(root).tasks(status="planned")[0]
+    assert task["refresh_task_id"] == report["synthesis_refresh_task_ids"][0]
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         store.rebuild_derived()
         states = {
@@ -3399,6 +3434,88 @@ def test_relation_freshness_propagates_from_changed_endpoint_revision(
         }
         assert subject_revision_id in endpoint_dependencies
 
+    synthesis_source = tmp_path / "relation-synthesis.md"
+    synthesis_source.write_text(
+        "# Relation synthesis\nThe Overview binds the exact relation revision.",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled_synthesis_source = compile_source(
+            vault,
+            synthesis_source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+    synthesis_run = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled_synthesis_source["identity"]["source_revision_id"],
+        compiler_profile="living-wiki-relation-synthesis",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+        packet_max_fragments=8,
+    )
+    synthesis_packet = coordinator.next_packet(synthesis_run["compilation_run_id"])
+    assert synthesis_packet is not None
+    synthesis_plan = _plan(
+        synthesis_packet,
+        expected_audit_head=synthesis_run["input_audit_head"],
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        synthesis_key = f"overview:{store.vault_id}"
+    synthesis_input_set = {
+        "source_revision_ids": [
+            compiled_synthesis_source["identity"]["source_revision_id"]
+        ],
+        "knowledge_revision_ids": [],
+        "relation_revision_ids": [relation_revision_id],
+        "compilation_run_ids": sorted(
+            (begun["compilation_run_id"], synthesis_run["compilation_run_id"])
+        ),
+    }
+    synthesis_plan["object_actions"].append(
+        {
+            **synthesis_plan["object_actions"][0],
+            "semantic_key": synthesis_key,
+            "title": "Relation-aware Overview",
+            "body": "This Overview depends on one exact governed relation revision.",
+            "kind": "synthesis",
+            "synthesis_inputs": {
+                **synthesis_input_set,
+                "input_set_sha256": sha256_bytes(
+                    canonical_json(synthesis_input_set).encode("utf-8")
+                ),
+            },
+            "reason": "Exercise relation-to-Synthesis freshness propagation.",
+        }
+    )
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=synthesis_run["compilation_run_id"],
+        plan=synthesis_plan,
+        confirm_no_case_data=True,
+    )
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=synthesis_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    synthesis_receipt = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=synthesis_run["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        synthesis_revision_id = store.connection.execute(
+            "SELECT revision_id FROM knowledge_revisions_v3 WHERE semantic_key = ?",
+            (synthesis_key,),
+        ).fetchone()["revision_id"]
+    assert synthesis_revision_id in synthesis_receipt["knowledge_revision_ids"]
+
     source = tmp_path / "source.md"
     source.write_text(
         "# Section 1\nChanged durable source statement 1.\n\n"
@@ -3427,6 +3544,11 @@ def test_relation_freshness_propagates_from_changed_endpoint_revision(
         confirm_no_case_data=True,
     )
     assert relation_revision_id in report["affected_relation_revision_ids"]
+    assert synthesis_revision_id in report["affected_knowledge_revision_ids"]
+    assert len(report["synthesis_refresh_task_ids"]) == 1
+    assert SynthesisRefreshService(root).tasks(status="planned")[0][
+        "target_revision_id"
+    ] == synthesis_revision_id
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         endpoint_dependency = store.connection.execute(
             """
@@ -3443,6 +3565,52 @@ def test_relation_freshness_propagates_from_changed_endpoint_revision(
         assert all(
             relation["relation_revision_id"] != relation_revision_id
             for relation in store.graph(limit=100)["relations"]
+        )
+
+    refresh_service = SynthesisRefreshService(root)
+    refresh_task = refresh_service.tasks(status="planned")[0]
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        synthesis_grant_id = store.enable_grant(
+            writer_id="deterministic-synthesis-recovery-agent",
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    refresh_digest = sha256_bytes(b"relation-synthesis-recovery/v1")
+    refresh_run = refresh_service.begin(
+        grant_id=synthesis_grant_id,
+        refresh_task_id=refresh_task["refresh_task_id"],
+        source_revision_ids=[successor["identity"]["source_revision_id"]],
+        knowledge_revision_ids=[],
+        relation_revision_ids=[],
+        host_identity="deterministic-synthesis-recovery-agent",
+        model_identity=None,
+        profile_id="deeplaw.synthesis-recovery.test/v1",
+        prompt_sha256=refresh_digest,
+        config_sha256=refresh_digest,
+        confirm_no_case_data=True,
+    )
+    resumed = refresh_service.resume(
+        grant_id=synthesis_grant_id,
+        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
+        project=False,
+        confirm_no_case_data=True,
+    )
+    assert resumed["transaction"]["status"] == "planned"
+    aborted = refresh_service.abort(
+        grant_id=synthesis_grant_id,
+        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
+        reason="Exercise recoverable pre-commit synthesis abort.",
+        confirm_no_case_data=True,
+    )
+    assert aborted["transaction"]["status"] == "aborted"
+    assert refresh_service.tasks(status="blocked")[0]["refresh_task_id"] == (
+        refresh_task["refresh_task_id"]
+    )
+    with pytest.raises(RuntimeError, match="cannot be resumed"):
+        refresh_service.resume(
+            grant_id=synthesis_grant_id,
+            synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
+            project=False,
+            confirm_no_case_data=True,
         )
 
 

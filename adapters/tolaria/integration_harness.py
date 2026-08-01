@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -11,15 +13,30 @@ from deeplaw.editor_bridge import (
     tolaria_mcp_servers,
     tolaria_open_note_request,
 )
-from deeplaw.knowledge_autonomy import initialize_autonomous_core
-from deeplaw.knowledge_store import initialize_knowledge_vault
 
 
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="deeplaw-tolaria-harness-") as temporary:
         vault = Path(temporary) / "vault"
-        initialized = initialize_knowledge_vault(vault, name="tolaria-harness", scope="project")
-        initialize_autonomous_core(vault)
+        initialization = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "deeplaw",
+                "knowledge",
+                "init",
+                "--vault",
+                str(vault),
+                "--name",
+                "tolaria-harness",
+                "--scope",
+                "project",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        initialized = json.loads(initialization.stdout)
         snapshot = {
             "activeNote": {"path": "notes/active.md", "body": "# Source-free fixture"},
             "openTabs": [{"path": "notes/related.md"}],

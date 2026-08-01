@@ -226,12 +226,27 @@ def _manual_review(value: dict[str, Any] | None) -> dict[str, Any]:
     return value
 
 
+def _query_cost(
+    value: dict[str, Any] | None,
+    *,
+    gold_id: str,
+    host_report_id: str,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    _validate("semantic-query-cost.v1.schema.json", value)
+    if value["gold_id"] != gold_id or value["host_report_id"] != host_report_id:
+        raise ValueError("semantic query cost does not bind the selected Gold and host run")
+    return value
+
+
 def score(
     *,
     gold: dict[str, Any],
     host_report: dict[str, Any],
     vault: Path,
     manual_review: dict[str, Any] | None = None,
+    query_cost: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     gold_sha256 = validate_candidate(gold, repository=_repository())
     if gold["status"] != "maintainer_confirmed":
@@ -242,6 +257,11 @@ def score(
     if host_report["gold_status"] != "maintainer_confirmed":
         raise ValueError("host report was not executed against confirmed Semantic Gold")
     reviewed = _manual_review(manual_review)
+    measured_query_cost = _query_cost(
+        query_cost,
+        gold_id=gold["gold_id"],
+        host_report_id=host_report["report_id"],
+    )
     host_report_sha256 = hashlib.sha256(
         canonical_json(host_report).encode("utf-8")
     ).hexdigest()
@@ -574,7 +594,11 @@ def score(
                 len(host_report["runs"]),
             ),
             "build_tokens": token_total if token_measured else None,
-            "query_tokens": None,
+            "query_tokens": (
+                measured_query_cost["total_query_tokens"]
+                if measured_query_cost is not None
+                else None
+            ),
         }
         verification = store.verify()
         if not verification["valid"]:
@@ -638,7 +662,12 @@ def score(
         "limitations": [
             "The scorer uses maintainer-confirmed labels and deterministic governed-state "
             "checks; it does not ask the producing model to score itself.",
-            "Query token cost remains null until a separately frozen query run is attached.",
+            (
+                "Query token cost is bound to a frozen first-party CLI query run."
+                if measured_query_cost is not None
+                else "Query token cost remains null until a separately frozen first-party "
+                "CLI query run is attached."
+            ),
             "A passed report is not a comparative claim and does not generalize to unknown "
             "hosts or models.",
         ],
@@ -655,6 +684,7 @@ def main() -> int:
     parser.add_argument("--host-report", required=True, type=Path)
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--manual-review", type=Path)
+    parser.add_argument("--query-cost", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
     manual = _load(arguments.manual_review) if arguments.manual_review else None
@@ -663,6 +693,7 @@ def main() -> int:
         host_report=_load(arguments.host_report),
         vault=arguments.vault,
         manual_review=manual,
+        query_cost=_load(arguments.query_cost) if arguments.query_cost else None,
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(canonical_json(result) + "\n", encoding="utf-8")
