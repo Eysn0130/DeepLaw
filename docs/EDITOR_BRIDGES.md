@@ -1,7 +1,8 @@
 # DeepLaw editor bridge contracts
 
-Status: **Current v0.11.0 contracts and mock integration**, 2026-07-30. This release deliberately
-does not ship a full Obsidian product, fork Tolaria, or make either editor authoritative.
+Status: **vNext implementation candidate**, 2026-08-01. DeepLaw now includes an installable thin
+Obsidian plugin and an executable Tolaria adapter. It still does not fork either editor or make an
+editor authoritative.
 
 ## Shared Editor Context Envelope
 
@@ -44,10 +45,12 @@ sources/inbox/
 ```
 
 `knowledge/` and `memory/` require Sink/reconcile. `wiki/` and `canvas/` are derived read-only
-views. `.deeplaw/` is forbidden. The mock waits for `workspace.onLayoutReady` before registering
-file events, preventing startup enumeration from being mistaken for new uploads. The official
-Obsidian CLI can support smoke automation, search and opening notes; active selection and deep UI
-state still require the plugin API.
+views. `.deeplaw/` is forbidden. The production bridge under `adapters/obsidian/plugin/` waits for
+`workspace.onLayoutReady` before registering file events, preventing startup enumeration from being
+mistaken for new uploads. It uses argument-array process spawning with hard output/time limits,
+exposes explicit commands only, and never performs background compilation or network access. Its
+release bundle consists of `main.js`, `manifest.json` and `styles.css`; the mock remains a contract
+fixture.
 
 This design follows Obsidian's public plugin lifecycle and API boundary rather than treating an
 ordinary Vault file as a trusted database. References:
@@ -70,10 +73,18 @@ knowledge_sink       → owner-granted canonical mutation
 law_support          → isolated authoritative legal evidence
 ```
 
+The executable adapter under `adapters/tolaria/` merges namespaced MCP entries into a separate
+output file without overwriting existing settings, maps Tolaria's documented active-note snapshot
+to the closed Editor Context Envelope, and emits UI-only `open_note` intents. Its Agent guide keeps
+ordinary note creation in `drafts/` or `notes/`; explicit promotion uses the independently enabled
+DeepLaw Sink. A source-free temporary-Vault harness proves the mapping remains ephemeral and does
+not mutate the Ledger.
+
 The flow is: Tolaria supplies explicit context → DeepLaw retrieves or compiles → an authorized Sink
-commits canonical state → Tolaria refreshes/opens the result. Tolaria's note tools never write
-canonical roots. This preserves its workspace/Agent abstractions without importing DeepLaw's
-governance into the frontend. References:
+commits canonical state → Tolaria refreshes/opens the exact projected path. Tolaria's note tools
+never write canonical roots. This preserves its workspace/Agent abstractions without importing
+DeepLaw's governance into the frontend. The compatibility target is Tolaria `v2026-06-23`, commit
+`b00fefef3fd503f2853445e085a44a8a371c3437`. References:
 [Tolaria repository](https://github.com/refactoringhq/tolaria),
 [Tolaria abstractions](https://github.com/refactoringhq/tolaria/blob/main/docs/ABSTRACTIONS.md) and
 [Tolaria releases](https://tolaria.md/releases/).
@@ -89,6 +100,6 @@ governance into the frontend. References:
   revision/CAS checks; conflicts are preserved rather than overwritten.
 - Bridge context does not append a Ledger event.
 
-Contract and negative-path tests live in
-[`tests/test_editor_bridges.py`](../tests/test_editor_bridges.py). The mock is not represented as a
-production GUI or a real-host task result.
+Contract, setup, path-boundary and temporary-Vault tests live in
+[`tests/test_editor_bridges.py`](../tests/test_editor_bridges.py). These deterministic tests are not
+represented as a signed-editor-binary or real-model task result.

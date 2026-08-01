@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
+import sys
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -10,6 +13,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 from deeplaw.editor_bridge import (
     bridge_contract,
     context_for_editor,
+    merge_standard_mcp_config,
+    tolaria_context_envelope,
+    tolaria_mcp_servers,
+    tolaria_open_note_request,
     validate_editor_context,
     validate_editor_write_target,
 )
@@ -166,3 +173,139 @@ def test_editor_context_is_ephemeral_and_does_not_mutate_the_ledger(
     mismatched = _envelope("vault_" + "0" * 24)
     with pytest.raises(PermissionError, match="another Vault"):
         context_for_editor(root, mismatched)
+
+
+def test_tolaria_mcp_merge_preserves_settings_and_fails_on_collision(
+    tmp_path: Path,
+) -> None:
+    existing = {
+        "theme": "system",
+        "mcpServers": {
+            "tolaria": {"command": "node", "args": ["index.js"]},
+            "unrelated": {"command": "example", "args": []},
+        },
+    }
+    servers = tolaria_mcp_servers(
+        deeplaw_executable="deeplaw",
+        vault_path=tmp_path / "vault",
+        compiler_grant_id="grant_" + "a" * 24,
+        include_law_support=True,
+    )
+    merged = merge_standard_mcp_config(existing, servers)
+    assert merged["theme"] == "system"
+    assert merged["mcpServers"]["tolaria"] == existing["mcpServers"]["tolaria"]
+    assert merged["mcpServers"]["unrelated"] == existing["mcpServers"]["unrelated"]
+    assert set(servers) == {
+        "deeplaw_knowledge",
+        "deeplaw_knowledge_sink",
+        "deeplaw_law",
+    }
+    assert existing["mcpServers"].keys() == {"tolaria", "unrelated"}
+    with pytest.raises(FileExistsError, match="different settings"):
+        merge_standard_mcp_config(
+            {"mcpServers": {"deeplaw_knowledge": {"command": "other"}}},
+            servers,
+        )
+
+
+def test_tolaria_context_mapping_and_open_note_intent_are_bounded() -> None:
+    body = "# Active\nBounded Tolaria fixture"
+    envelope = tolaria_context_envelope(
+        {
+            "activeNote": {"path": "notes/active.md", "body": body},
+            "openTabs": [
+                {"path": "notes/active.md"},
+                {"path": "notes/related.md"},
+            ],
+            "referencedNotes": [{"path": "notes/evidence.md"}],
+        },
+        vault_identity="vault_" + "a" * 24,
+        user_intent="Find the current governed answer.",
+        frontend_version="v2026-06-23",
+    )
+    assert envelope["frontend"] == "tolaria"
+    assert envelope["active_note"]["note_id"] == "notes/active.md"
+    assert envelope["active_note"]["content_sha256"] == sha256(body.encode()).hexdigest()
+    assert envelope["open_tabs"] == ["notes/related.md"]
+    assert envelope["explicit_note_references"] == ["notes/evidence.md"]
+    assert envelope["selected_text"] is None
+    assert envelope["persistence_allowed"] is False
+
+    request = tolaria_open_note_request("wiki/index.md", vault_path="/tmp/vault")
+    assert request["tool"] == "open_note"
+    assert request["mutation"] == "ui_only"
+    with pytest.raises(PermissionError):
+        tolaria_open_note_request(".deeplaw/ledger.sqlite3", vault_path="/tmp/vault")
+    with pytest.raises(ValueError):
+        tolaria_open_note_request("../wiki/index.md", vault_path="/tmp/vault")
+
+
+def test_tolaria_temporary_vault_harness_is_source_free_and_ephemeral() -> None:
+    harness = REPOSITORY / "adapters" / "tolaria" / "integration_harness.py"
+    source = harness.read_text(encoding="utf-8")
+    assert "TemporaryDirectory" in source
+    assert "public_synthetic" in source
+    assert "context_for_editor" in source
+    assert "persistence_performed" in source
+
+
+def test_tolaria_setup_cli_writes_new_private_config_without_echoing_contents(
+    tmp_path: Path,
+) -> None:
+    existing = tmp_path / "existing.json"
+    output = tmp_path / "merged.json"
+    existing.write_text(
+        json.dumps(
+            {
+                "private_setting": "must-not-be-echoed",
+                "mcpServers": {"tolaria": {"command": "node", "args": ["index.js"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY / "adapters" / "tolaria" / "setup.py"),
+            "merge-mcp",
+            "--existing",
+            str(existing),
+            "--output",
+            str(output),
+            "--vault",
+            str(tmp_path / "vault"),
+        ],
+        cwd=REPOSITORY,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    receipt = json.loads(completed.stdout)
+    assert receipt["existing_settings_preserved"] is True
+    assert "must-not-be-echoed" not in completed.stdout
+    assert output.stat().st_mode & 0o777 == 0o600
+    merged = json.loads(output.read_text(encoding="utf-8"))
+    assert merged["private_setting"] == "must-not-be-echoed"
+    assert "tolaria" in merged["mcpServers"]
+    assert "deeplaw_knowledge" in merged["mcpServers"]
+
+    repeated = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY / "adapters" / "tolaria" / "setup.py"),
+            "merge-mcp",
+            "--existing",
+            str(existing),
+            "--output",
+            str(output),
+            "--vault",
+            str(tmp_path / "vault"),
+        ],
+        cwd=REPOSITORY,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert repeated.returncode != 0
+    assert "already exists" in repeated.stderr
