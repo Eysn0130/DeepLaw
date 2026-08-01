@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/synthesis-refresh-task.v1.schema.json",
+  "title": "DeepLaw Synthesis Refresh Task v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "refresh_task_id", "target_knowledge_id",
+    "target_revision_id", "input_set_sha256", "triggering_freshness_event_ids",
+    "source_revision_ids", "knowledge_revision_ids", "relation_revision_ids",
+    "compilation_run_ids", "status", "created_at", "updated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.synthesis-refresh-task/v1"},
+    "refresh_task_id": {"type": "string", "pattern": "^synthesisrefreshtask_[0-9a-f]{24}$"},
+    "target_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "target_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "input_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "triggering_freshness_event_ids": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string"}},
+    "source_revision_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string"}},
+    "knowledge_revision_ids": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string"}},
+    "relation_revision_ids": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string"}},
+    "compilation_run_ids": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string"}},
+    "status": {"enum": ["planned", "started", "completed", "superseded", "blocked"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

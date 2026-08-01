@@ -20,6 +20,7 @@ from deeplaw.compilation.models import (
 )
 from deeplaw.compilation.profiles import REQUIRED_SEMANTIC_DUTIES, SEMANTIC_DUTIES
 from deeplaw.compilation.semantic import SemanticCompilationService
+from deeplaw.compilation.synthesis_refresh import SynthesisRefreshService
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     autonomous_core_installed,
@@ -1303,6 +1304,7 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
         confirm_no_case_data=True,
     )
     assert synthesis_revision_id in report["affected_knowledge_revision_ids"]
+    assert len(report["synthesis_refresh_task_ids"]) == 1
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         revision_dependency = store.connection.execute(
             """
@@ -1321,6 +1323,98 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
             item["revision_id"] != synthesis_revision_id
             for item in store.recall("governed Synthesis", limit=20)["results"]
         )
+
+    refresh_service = SynthesisRefreshService(root)
+    task = refresh_service.tasks(status="planned")[0]
+    assert task["refresh_task_id"] == report["synthesis_refresh_task_ids"][0]
+    prompt_sha256 = sha256_bytes(b"synthesis-refresh-prompt/v1")
+    refresh_run = refresh_service.begin(
+        grant_id=grant_id,
+        refresh_task_id=task["refresh_task_id"],
+        source_revision_ids=sorted(
+            (
+                successor["identity"]["source_revision_id"],
+                second["identity"]["source_revision_id"],
+            )
+        ),
+        knowledge_revision_ids=[],
+        relation_revision_ids=[],
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        profile_id="deeplaw.synthesis-refresh.fake/v1",
+        prompt_sha256=prompt_sha256,
+        config_sha256=prompt_sha256,
+        confirm_no_case_data=True,
+    )
+    refresh_packet = refresh_service.packet(
+        refresh_run["synthesis_refresh_run_id"]
+    )
+    assert refresh_packet is not None
+    refresh_input_set = refresh_packet["synthesis_refresh"]["input_set"]
+    refresh_plan = _plan(
+        refresh_packet,
+        expected_audit_head=refresh_packet["input_audit_head"],
+    )
+    refresh_plan["object_actions"] = [
+        {
+            **refresh_plan["object_actions"][0],
+            "action": "revise",
+            "kind": "synthesis",
+            "semantic_key": "living-wiki-overview",
+            "knowledge_id": synthesis["knowledge_id"],
+            "expected_revision_id": synthesis_revision_id,
+            "title": "Living Wiki Overview",
+            "body": "A refreshed governed Synthesis over the successor inputs.",
+            "synthesis_inputs": refresh_input_set,
+            "reason": "Refresh the stale Overview from the exact successor input set.",
+        }
+    ]
+    staged_refresh = refresh_service.stage(
+        grant_id=grant_id,
+        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
+        plan={
+            "schema_version": "deeplaw.synthesis-refresh-plan/v1",
+            "synthesis_refresh_run_id": refresh_run["synthesis_refresh_run_id"],
+            "compilation_run_id": refresh_run["transaction"]["compilation_run_id"],
+            "target_knowledge_id": synthesis["knowledge_id"],
+            "expected_revision_id": synthesis_revision_id,
+            "input_set_sha256": refresh_input_set["input_set_sha256"],
+            "packet_plans": [refresh_plan],
+            "reason": "Deterministic governed Overview refresh.",
+            "warnings": [],
+        },
+        confirm_no_case_data=True,
+    )
+    assert staged_refresh["staged_packet_count"] == 1
+    assert refresh_service.validate(
+        grant_id=grant_id,
+        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
+        confirm_no_case_data=True,
+    )["valid"] is True
+    refresh_receipt = refresh_service.commit(
+        grant_id=grant_id,
+        synthesis_refresh_run_id=refresh_run["synthesis_refresh_run_id"],
+        confirm_no_case_data=True,
+    )
+    assert refresh_receipt["previous_revision_id"] == synthesis_revision_id
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        current = store.connection.execute(
+            "SELECT current_revision_id FROM knowledge_objects_v3 WHERE knowledge_id = ?",
+            (synthesis["knowledge_id"],),
+        ).fetchone()["current_revision_id"]
+        assert current != synthesis_revision_id
+        assert store.revision_provenance_admitted(
+            store._revision_row(
+                store.connection.execute(
+                    "SELECT * FROM knowledge_revisions_v3 WHERE revision_id = ?",
+                    (current,),
+                ).fetchone(),
+                include_body=False,
+            )
+        ) is True
+    assert refresh_service.tasks(status="completed")[0]["refresh_task_id"] == task[
+        "refresh_task_id"
+    ]
 
 
 def test_compilation_recovers_before_and_after_atomic_commit(

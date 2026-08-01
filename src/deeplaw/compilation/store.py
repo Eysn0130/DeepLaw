@@ -455,6 +455,53 @@ def compilation_tables_sql() -> str:
                 REFERENCES semantic_compilation_runs_v2(compilation_run_id),
             recorded_at TEXT NOT NULL
         ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS synthesis_refresh_tasks_v1 (
+            refresh_task_id TEXT PRIMARY KEY,
+            target_knowledge_id TEXT NOT NULL
+                REFERENCES knowledge_objects_v3(knowledge_id),
+            target_revision_id TEXT NOT NULL
+                REFERENCES knowledge_revisions_v3(revision_id),
+            input_set_sha256 TEXT NOT NULL,
+            triggering_freshness_event_ids_json TEXT NOT NULL,
+            source_revision_ids_json TEXT NOT NULL,
+            knowledge_revision_ids_json TEXT NOT NULL,
+            relation_revision_ids_json TEXT NOT NULL,
+            compilation_run_ids_json TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN (
+                'planned', 'started', 'completed', 'superseded', 'blocked'
+            )),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(target_revision_id, input_set_sha256)
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS synthesis_refresh_tasks_v1_status
+            ON synthesis_refresh_tasks_v1(status, created_at);
+
+        CREATE TABLE IF NOT EXISTS synthesis_refresh_runs_v1 (
+            synthesis_refresh_run_id TEXT PRIMARY KEY,
+            refresh_task_id TEXT NOT NULL UNIQUE
+                REFERENCES synthesis_refresh_tasks_v1(refresh_task_id),
+            compilation_run_id TEXT NOT NULL UNIQUE
+                REFERENCES source_compilation_runs_v1(compilation_run_id),
+            target_semantic_key TEXT NOT NULL,
+            target_knowledge_id TEXT NOT NULL
+                REFERENCES knowledge_objects_v3(knowledge_id),
+            expected_revision_id TEXT NOT NULL
+                REFERENCES knowledge_revisions_v3(revision_id),
+            input_set_sha256 TEXT NOT NULL,
+            source_revision_ids_json TEXT NOT NULL,
+            knowledge_revision_ids_json TEXT NOT NULL,
+            relation_revision_ids_json TEXT NOT NULL,
+            compilation_run_ids_json TEXT NOT NULL,
+            host_identity TEXT NOT NULL,
+            model_identity TEXT,
+            profile_id TEXT NOT NULL,
+            prompt_sha256 TEXT NOT NULL,
+            config_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        ) STRICT;
     """
 
 

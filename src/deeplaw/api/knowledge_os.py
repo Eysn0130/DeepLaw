@@ -9,6 +9,7 @@ from ..backfill import BackfillService
 from ..compilation import (
     CompilationCoordinator,
     SemanticCompilationService,
+    SynthesisRefreshService,
 )
 from ..compilation import (
     compiler_profile as get_compiler_profile,
@@ -437,6 +438,38 @@ class _BackfillAPI:
 
 
 @dataclass(frozen=True)
+class _SynthesesAPI:
+    _root: Path
+
+    def refresh_tasks(self, *, status: str | None = None) -> list[dict[str, Any]]:
+        return _invoke(SynthesisRefreshService(self._root).tasks, status=status)
+
+    def begin_refresh(self, **request: Any) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).begin, **request)
+
+    def refresh_packet(self, synthesis_refresh_run_id: str) -> dict[str, Any] | None:
+        return _invoke(
+            SynthesisRefreshService(self._root).packet,
+            synthesis_refresh_run_id,
+        )
+
+    def stage_refresh(self, **request: Any) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).stage, **request)
+
+    def validate_refresh(self, **request: Any) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).validate, **request)
+
+    def commit_refresh(self, **request: Any) -> dict[str, Any]:
+        return _invoke(SynthesisRefreshService(self._root).commit, **request)
+
+    def refresh_status(self, synthesis_refresh_run_id: str) -> dict[str, Any]:
+        return _invoke(
+            SynthesisRefreshService(self._root).status,
+            synthesis_refresh_run_id,
+        )
+
+
+@dataclass(frozen=True)
 class KnowledgeOS:
     """Stable public facade; persistence internals are intentionally hidden."""
 
@@ -482,6 +515,10 @@ class KnowledgeOS:
     @property
     def backfill(self) -> _BackfillAPI:
         return _BackfillAPI(self._root)
+
+    @property
+    def syntheses(self) -> _SynthesesAPI:
+        return _SynthesesAPI(self._root)
 
     def verify(self) -> dict[str, Any]:
         """Return the bounded canonical and derived integrity receipt."""

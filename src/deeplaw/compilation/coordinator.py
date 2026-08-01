@@ -1026,7 +1026,10 @@ class CompilationCoordinator:
             packet = _decoded_artifact(store, packet_row["artifact_sha256"], role="packet")
             run_fragments: dict[str, dict[str, Any]] | None = None
             if _allow_run_wide_source_refs:
-                if run["compiler_profile_version"] != "2":
+                if not (
+                    run["compiler_profile_version"] == "2"
+                    or run["compiler_profile"] == "synthesis-refresh-agent"
+                ):
                     raise PermissionError(
                         "run-wide evidence binding requires compiler profile v2"
                     )

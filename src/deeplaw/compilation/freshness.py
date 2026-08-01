@@ -172,6 +172,7 @@ class FreshnessService:
                 replacement_id or "none",
                 report_sha256,
             )
+            synthesis_refresh_task_ids: list[str] = []
             with store._file_lease("canonical-mutation"):
                 try:
                     store.connection.execute("BEGIN IMMEDIATE")
@@ -270,6 +271,68 @@ class FreshnessService:
                                 recorded_at,
                             ),
                         )
+                    for synthesis_revision_id in sorted(affected_knowledge):
+                        synthesis = store.connection.execute(
+                            """
+                            SELECT revisions.knowledge_id,
+                                   inputs.source_revision_ids_json,
+                                   inputs.knowledge_revision_ids_json,
+                                   inputs.relation_revision_ids_json,
+                                   inputs.compilation_run_ids_json,
+                                   inputs.input_set_sha256
+                            FROM knowledge_revisions_v3 AS revisions
+                            JOIN synthesis_input_sets_v1 AS inputs
+                              ON inputs.synthesis_revision_id = revisions.revision_id
+                            WHERE revisions.revision_id = ?
+                              AND revisions.kind = 'synthesis'
+                            """,
+                            (synthesis_revision_id,),
+                        ).fetchone()
+                        if synthesis is None:
+                            continue
+                        triggering_event_ids = sorted(
+                            event_id
+                            for event_id, transition in zip(
+                                event_ids, transitions, strict=True
+                            )
+                            if transition["target_kind"] == "knowledge_revision"
+                            and transition["target_id"] == synthesis_revision_id
+                        )
+                        if not triggering_event_ids:
+                            continue
+                        refresh_task_id = stable_id(
+                            "synthesisrefreshtask",
+                            synthesis_revision_id,
+                            synthesis["input_set_sha256"],
+                        )
+                        store.connection.execute(
+                            """
+                            INSERT OR IGNORE INTO synthesis_refresh_tasks_v1(
+                                refresh_task_id, target_knowledge_id,
+                                target_revision_id, input_set_sha256,
+                                triggering_freshness_event_ids_json,
+                                source_revision_ids_json,
+                                knowledge_revision_ids_json,
+                                relation_revision_ids_json,
+                                compilation_run_ids_json, status,
+                                created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?)
+                            """,
+                            (
+                                refresh_task_id,
+                                synthesis["knowledge_id"],
+                                synthesis_revision_id,
+                                synthesis["input_set_sha256"],
+                                canonical_json(triggering_event_ids),
+                                synthesis["source_revision_ids_json"],
+                                synthesis["knowledge_revision_ids_json"],
+                                synthesis["relation_revision_ids_json"],
+                                synthesis["compilation_run_ids_json"],
+                                recorded_at,
+                                recorded_at,
+                            ),
+                        )
+                        synthesis_refresh_task_ids.append(refresh_task_id)
                     store._append_event(
                         event_type="source_freshness_changed",
                         object_id=report_id,
@@ -324,6 +387,7 @@ class FreshnessService:
                 "report_sha256": report_sha256,
                 "report_id": report_id,
                 "audit_head": store.audit_head,
+                "synthesis_refresh_task_ids": synthesis_refresh_task_ids,
             }
 
     @staticmethod

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/synthesis-refresh-plan.v1.schema.json",
+  "title": "DeepLaw Synthesis Refresh Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "synthesis_refresh_run_id", "compilation_run_id",
+    "target_knowledge_id", "expected_revision_id", "input_set_sha256",
+    "packet_plans", "reason", "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.synthesis-refresh-plan/v1"},
+    "synthesis_refresh_run_id": {"type": "string", "pattern": "^synthesisrefresh_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "target_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "expected_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "input_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "packet_plans": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object"}},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "warnings": {
+      "type": "array", "maxItems": 128, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  }
+}

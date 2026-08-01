@@ -9,6 +9,7 @@ from .profiles import (
     compiler_profile,
 )
 from .semantic import SemanticCompilationService
+from .synthesis_refresh import SynthesisRefreshService
 
 __all__ = [
     "COMPILER_GRANT_OPERATIONS",
@@ -17,5 +18,6 @@ __all__ = [
     "SEMANTIC_DUTIES",
     "CompilationCoordinator",
     "SemanticCompilationService",
+    "SynthesisRefreshService",
     "compiler_profile",
 ]
