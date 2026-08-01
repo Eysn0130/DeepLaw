@@ -52,8 +52,8 @@ def _run_cli(prefix: list[str], *arguments: str) -> dict[str, Any]:
     return value
 
 
-def _binding() -> dict[str, Any]:
-    value = repository_binding(_repository())
+def _binding(repository: Path) -> dict[str, Any]:
+    value = repository_binding(repository)
     return {
         "commit": value["commit"],
         "tree": value["tree"],
@@ -73,6 +73,7 @@ def run(
     vault: Path,
     baseline_vault: Path,
     command: dict[str, Any],
+    binding_repository: Path | None = None,
 ) -> dict[str, Any]:
     validate_candidate(gold, repository=_repository())
     if corpus.get("schema_version") != "deeplaw.semantic-host-corpus/v2":
@@ -224,7 +225,7 @@ def run(
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
         verification_valid = bool(store.verify()["valid"])
     recorded_at = _timestamp()
-    binding = _binding()
+    binding = _binding(binding_repository or _repository())
     body = {
         "binding": binding,
         "gold_id": gold["gold_id"],
@@ -315,6 +316,11 @@ def main() -> int:
     parser.add_argument("--vault", type=Path, required=True)
     parser.add_argument("--baseline-vault", type=Path, required=True)
     parser.add_argument("--deeplaw-command", type=Path, required=True)
+    parser.add_argument(
+        "--binding-repository",
+        type=Path,
+        help="Clean repository whose exact runtime commit produced this compiler wheel.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     if arguments.output.exists() or arguments.output.is_symlink():
@@ -325,6 +331,7 @@ def main() -> int:
         vault=arguments.vault,
         baseline_vault=arguments.baseline_vault,
         command=_load(arguments.deeplaw_command),
+        binding_repository=arguments.binding_repository,
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(canonical_json(report) + "\n", encoding="utf-8")
