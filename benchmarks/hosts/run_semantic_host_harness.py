@@ -13,6 +13,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_living_wiki_host_harness import _run_bounded, _safe_command
+from benchmarks.release.evidence import repository_binding
 from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.util import canonical_json, sha256_bytes, stable_id
@@ -29,6 +30,20 @@ def _repository() -> Path:
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _release_binding() -> dict[str, Any]:
+    binding = repository_binding(_repository())
+    return {
+        "commit": binding["commit"],
+        "tree": binding["tree"],
+        "package_version": binding["package_version"],
+        "lock_sha256": binding["lock_sha256"],
+        "pyproject_sha256": binding["pyproject_sha256"],
+        "contracts_inventory_sha256": binding["contracts"]["inventory_sha256"],
+        "migrations_inventory_sha256": binding["migrations"]["inventory_sha256"],
+        "worktree_clean": binding["worktree_clean"],
+    }
 
 
 def _schema(name: str) -> dict[str, Any]:
@@ -51,9 +66,7 @@ def _load_object(path: Path) -> dict[str, Any]:
     return value
 
 
-def _validate_inputs(
-    *, gold: dict[str, Any], corpus: dict[str, Any]
-) -> None:
+def _validate_inputs(*, gold: dict[str, Any], corpus: dict[str, Any]) -> None:
     validate_candidate(gold, repository=_repository())
     corpus_schema = corpus.get("schema_version")
     if corpus_schema == "deeplaw.semantic-host-corpus/v1":
@@ -208,8 +221,54 @@ def _phase_execution(
         "stdout_bytes": len(stdout),
         "stderr_sha256": sha256_bytes(stderr),
         "stderr_bytes": len(stderr),
+        "token_usage": _provider_token_usage(stdout),
         "elapsed_ms": round((time.monotonic() - started) * 1000),
         "failure_class": failure,
+    }
+
+
+def _provider_token_usage(stdout: bytes) -> dict[str, Any]:
+    input_tokens = 0
+    output_tokens = 0
+    completed_turns = 0
+    try:
+        lines = stdout.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        lines = []
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        usage = event.get("usage") if isinstance(event, dict) else None
+        if event.get("type") != "turn.completed" or not isinstance(usage, dict):
+            continue
+        observed_input = usage.get("input_tokens")
+        observed_output = usage.get("output_tokens")
+        if (
+            not isinstance(observed_input, int)
+            or isinstance(observed_input, bool)
+            or observed_input < 0
+            or not isinstance(observed_output, int)
+            or isinstance(observed_output, bool)
+            or observed_output < 0
+        ):
+            continue
+        input_tokens += observed_input
+        output_tokens += observed_output
+        completed_turns += 1
+    if completed_turns == 0:
+        return {
+            "status": "unreported",
+            "input_tokens": None,
+            "output_tokens": None,
+            "total_tokens": None,
+        }
+    return {
+        "status": "provider_reported",
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
     }
 
 
@@ -295,12 +354,8 @@ def not_executed_report(
 ) -> dict[str, Any]:
     _validate_inputs(gold=gold, corpus=corpus)
     if corpus.get("schema_version") == "deeplaw.semantic-host-corpus/v2":
-        baseline_sources = [
-            item for item in corpus["sources"] if item["phase"] == "baseline"
-        ]
-        successor_sources = [
-            item for item in corpus["sources"] if item["phase"] == "successor"
-        ]
+        baseline_sources = [item for item in corpus["sources"] if item["phase"] == "baseline"]
+        successor_sources = [item for item in corpus["sources"] if item["phase"] == "successor"]
         prompts = [
             _phased_prompt(
                 phase=phase,
@@ -314,18 +369,13 @@ def not_executed_report(
                 ("successor", successor_sources),
             )
         ]
-        predecessor = next(
-            item for item in corpus["sources"] if item["source_key"] == "update-v1"
-        )
-        successor = next(
-            item for item in corpus["sources"] if item["source_key"] == "update-v2"
-        )
-        withdrawn = next(
-            item for item in corpus["sources"] if item["source_key"] == "retention-a"
-        )
+        predecessor = next(item for item in corpus["sources"] if item["source_key"] == "update-v1")
+        successor = next(item for item in corpus["sources"] if item["source_key"] == "update-v2")
+        withdrawn = next(item for item in corpus["sources"] if item["source_key"] == "retention-a")
         recorded_at = _timestamp()
         report = {
             "schema_version": PHASED_REPORT_SCHEMA_VERSION,
+            "binding": _release_binding(),
             "report_id": stable_id(
                 "semantichostrun",
                 host,
@@ -353,21 +403,23 @@ def not_executed_report(
                     "stdout_bytes": 0,
                     "stderr_sha256": None,
                     "stderr_bytes": 0,
+                    "token_usage": {
+                        "status": "unreported",
+                        "input_tokens": None,
+                        "output_tokens": None,
+                        "total_tokens": None,
+                    },
                     "elapsed_ms": 0,
                     "failure_class": "external_prerequisite_unavailable",
                 }
-                for phase, prompt in zip(
-                    ("baseline", "successor"), prompts, strict=True
-                )
+                for phase, prompt in zip(("baseline", "successor"), prompts, strict=True)
             ],
             "runs": _empty_runs(corpus),
             "transitions": [
                 {
                     "operation": "activate_successor",
                     "status": "not_executed",
-                    "predecessor_source_revision_id": predecessor[
-                        "source_revision_id"
-                    ],
+                    "predecessor_source_revision_id": predecessor["source_revision_id"],
                     "successor_source_revision_id": successor["source_revision_id"],
                     "review_receipt_sha256": None,
                     "freshness_report_sha256": None,
@@ -483,12 +535,8 @@ def execute_phased(
             or row["status"] != source["initial_lifecycle_status"]
         ):
             raise RuntimeError("phased semantic corpus lifecycle precondition changed")
-    baseline_sources = [
-        source for source in corpus["sources"] if source["phase"] == "baseline"
-    ]
-    successor_sources = [
-        source for source in corpus["sources"] if source["phase"] == "successor"
-    ]
+    baseline_sources = [source for source in corpus["sources"] if source["phase"] == "baseline"]
+    successor_sources = [source for source in corpus["sources"] if source["phase"] == "successor"]
     if len(successor_sources) != 1:
         raise ValueError("phased semantic corpus requires exactly one successor source")
     environment = os.environ.copy()
@@ -565,13 +613,9 @@ def execute_phased(
                 {
                     "operation": "activate_successor",
                     "status": "passed",
-                    "predecessor_source_revision_id": predecessor[
-                        "source_revision_id"
-                    ],
+                    "predecessor_source_revision_id": predecessor["source_revision_id"],
                     "successor_source_revision_id": successor["source_revision_id"],
-                    "review_receipt_sha256": approval["review_receipt"][
-                        "receipt_sha256"
-                    ],
+                    "review_receipt_sha256": approval["review_receipt"]["receipt_sha256"],
                     "freshness_report_sha256": freshness["report_sha256"],
                 }
             )
@@ -581,9 +625,7 @@ def execute_phased(
                 {
                     "operation": "activate_successor",
                     "status": "failed",
-                    "predecessor_source_revision_id": predecessor[
-                        "source_revision_id"
-                    ],
+                    "predecessor_source_revision_id": predecessor["source_revision_id"],
                     "successor_source_revision_id": successor["source_revision_id"],
                     "review_receipt_sha256": None,
                     "freshness_report_sha256": None,
@@ -624,6 +666,12 @@ def execute_phased(
             "stdout_bytes": 0,
             "stderr_sha256": None,
             "stderr_bytes": 0,
+            "token_usage": {
+                "status": "unreported",
+                "input_tokens": None,
+                "output_tokens": None,
+                "total_tokens": None,
+            },
             "elapsed_ms": 0,
             "failure_class": "lifecycle_precondition_failed",
         }
@@ -731,9 +779,7 @@ def execute_phased(
                 "semantic_status": row["semantic_status"] if row else None,
                 "quality_receipt_sha256": row["quality_receipt_sha256"] if row else None,
                 "source_summary_revision_id": row["source_summary_revision_id"] if row else None,
-                "projection_manifest_sha256": (
-                    row["projection_manifest_sha256"] if row else None
-                ),
+                "projection_manifest_sha256": (row["projection_manifest_sha256"] if row else None),
             }
         )
     try:
@@ -749,22 +795,27 @@ def execute_phased(
         and all_complete
         and verification_valid
     )
-    failure_class = None if passed else next(
-        (
-            item["failure_class"]
-            for item in phases
-            if item["failure_class"] is not None
-        ),
-        "semantic_lifecycle_incomplete",
+    failure_class = (
+        None
+        if passed
+        else next(
+            (item["failure_class"] for item in phases if item["failure_class"] is not None),
+            "semantic_lifecycle_incomplete",
+        )
     )
-    failure_summary = None if passed else (
-        "The real host did not complete both semantic phases and exact owner-governed "
-        "successor/withdrawal transitions with verified complete runs."
+    failure_summary = (
+        None
+        if passed
+        else (
+            "The real host did not complete both semantic phases and exact owner-governed "
+            "successor/withdrawal transitions with verified complete runs."
+        )
     )
     command_sha256 = sha256_bytes(canonical_json(command).encode("utf-8"))
     recorded_at = _timestamp()
     report = {
         "schema_version": PHASED_REPORT_SCHEMA_VERSION,
+        "binding": _release_binding(),
         "report_id": stable_id(
             "semantichostrun", host, gold["gold_id"], command_sha256, recorded_at
         ),
@@ -788,7 +839,9 @@ def execute_phased(
         "failure_summary": failure_summary,
         "recorded_at": recorded_at,
         "formal_release_evidence_ready": bool(
-            passed and gold["status"] == "maintainer_confirmed"
+            passed
+            and gold["status"] == "maintainer_confirmed"
+            and _release_binding()["worktree_clean"]
         ),
         "competitive_claim_eligible": False,
     }
@@ -886,18 +939,23 @@ def execute(
     except (OSError, RuntimeError, ValueError):
         verification_valid = False
     passed = bool(
-        process_failure is None
-        and exit_code == 0
-        and all_complete
-        and verification_valid
+        process_failure is None and exit_code == 0 and all_complete and verification_valid
     )
-    failure_class = None if passed else (
-        process_failure
-        or ("host_command_failed" if exit_code != 0 else "semantic_compilation_incomplete")
+    failure_class = (
+        None
+        if passed
+        else (
+            process_failure
+            or ("host_command_failed" if exit_code != 0 else "semantic_compilation_incomplete")
+        )
     )
-    failure_summary = None if passed else (
-        "The host did not produce one new, host/model-bound, succeeded, semantically complete, "
-        "15-duty, source-summary-backed and verified Compilation Run for every frozen source."
+    failure_summary = (
+        None
+        if passed
+        else (
+            "The host did not produce one new, host/model-bound, succeeded, semantically complete, "
+            "15-duty, source-summary-backed and verified Compilation Run for every frozen source."
+        )
     )
     recorded_at = _timestamp()
     report = {

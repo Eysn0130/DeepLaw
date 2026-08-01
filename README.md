@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/Eysn0130/DeepLaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Eysn0130/DeepLaw/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
-  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.11.0"><img src="https://img.shields.io/badge/latest-v0.11.0-17202A?style=flat-square" alt="Latest release v0.11.0" /></a>
+  <a href="https://github.com/Eysn0130/DeepLaw/releases/tag/v0.12.0"><img src="https://img.shields.io/badge/latest-v0.12.0-17202A?style=flat-square" alt="Latest release v0.12.0" /></a>
   <img src="https://img.shields.io/badge/Evaluation%20Protocol-v1-36CDBB?style=flat-square" alt="DeepLaw Evaluation Protocol v1" />
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 through 3.13" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D3748?style=flat-square" alt="Apache 2.0" /></a>
@@ -50,9 +50,9 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 
 > [!NOTE]
 > **DeepLaw 2.0 是产品品牌，不是软件版本号。** **本地单用户 Agent Knowledge OS** 是当前交付边界。
-> 当前软件版本 `v0.11.0` 在 0.10 的可验证质量闭环之上，正式交付宿主中立
-> Source-to-Knowledge Compilation Run、Rich Living Wiki Projection、compiled-first /
-> evidence-first 查询、受控 backfill 和 28-source Authoritative Pack 质量门禁。旧版
+> 当前软件版本 `v0.12.0` 在 v0.11 的受治理编译事务之上，正式交付 Semantic
+> Compilation v2、跨 Packet identity 融合、revision-bound Synthesis Refresh、Query Plan v5、
+> 生产级 Obsidian/Tolaria Bridge，以及真实 Agent 语义质量门禁。旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
@@ -95,7 +95,7 @@ flowchart LR
 
 ```bash
 uv tool install \
-  https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/deeplaw-0.11.0-py3-none-any.whl
+  https://github.com/Eysn0130/DeepLaw/releases/download/v0.12.0/deeplaw-0.12.0-py3-none-any.whl
 deeplaw --version
 ```
 
@@ -251,8 +251,8 @@ vault/
 
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | v4：recall/get/lineage/graph/identity/gaps/Wiki/verify/Capsule、compilation 状态和 purpose-aware query |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | v3：受控 mutation、独立 allowlist 的 Compilation Run 与 backfill；默认插件仍不注册 |
+| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | v5：recall/get/lineage/graph/identity/gaps/Wiki/verify/Capsule、Semantic/Compilation 状态和 Query Plan v5 |
+| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
 | `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主
@@ -262,10 +262,10 @@ vault/
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current** | v0.11.0：Source-to-Knowledge Compilation Run、closed Plan/Receipt、依赖/新鲜度、Rich Living Wiki、compiled-first/evidence-first 查询、受控 backfill、稳定 API/CLI/MCP、编辑器 Bridge，以及 Living Wiki/28-source/fresh-wheel/release-bound 质量门禁 |
+| **Current** | v0.12.0：Semantic Compilation v2、run-wide identity/completeness、Synthesis Refresh、Query Plan v5、稳定 API/CLI/MCP、生产级 Obsidian/Tolaria Bridge，以及真实 Agent/Living Wiki/Authoritative Pack/fresh-wheel 发布门禁 |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
 | **Quality closure** | DeepLaw Evaluation Protocol v1 以公开、维护者可见、时间冻结的 holdout 评估仓库检索、自治安全和 Typed Compiler；发布报告绑定 exact wheel、commit、freeze 和逐项结果。无需外部机构认证 |
-| **Comparative closure pending** | 未执行真实 Codex / Claude Code / OpenCode 模型任务与具名基线的同条件比较；没有配对置信区间和完整成本/失败清单，因此 `competitive_claim_eligible=false` |
+| **Comparative closure pending** | 仅 Codex 的真实语义任务属于 v0.12 发布门禁；Claude Code/OpenCode 真实模型任务和全部具名基线同条件比较未执行，没有配对置信区间和完整成本/失败清单，因此 `competitive_claim_eligible=false` |
 | **Not claimed** | 没有远程 SaaS、多人控制平面、自动法律适用/裁判或模型自授予权限；公开 holdout 不被描述为 secret、unseen 或 contamination-free，也不宣称全面领先或 SOTA |
 
 ## 安全与验证
@@ -316,10 +316,10 @@ git diff --check
 | [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) | Codex、Claude Code、OpenCode 的薄适配与隔离 |
 | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | 可复现评测与领先性证据边界 |
 | [`docs/EVALUATION_PROTOCOL.md`](docs/EVALUATION_PROTOCOL.md) | Evaluation Protocol 固定评分、冻结规则、报告和宣称边界 |
-| [`docs/V0_11_ACCEPTANCE_MATRIX.md`](docs/V0_11_ACCEPTANCE_MATRIX.md) | v0.11 的 48 项验收、28 项交付物与 28-source 质量门禁 |
-| [`docs/RELEASE_NOTES_v0.11.0.md`](docs/RELEASE_NOTES_v0.11.0.md) | v0.11.0 发布说明、限制与升级边界 |
-| [`commercial-release-manifest.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/commercial-release-manifest.json) | v0.11.0 exact-tag、制品、Schema、迁移和平台绑定 |
-| [`post-release-verification.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/post-release-verification.json) | 从公开 Release 下载后的 Hash、签名、provenance 与安装复验 |
+| [`docs/V0_12_ACCEPTANCE_MATRIX.md`](docs/V0_12_ACCEPTANCE_MATRIX.md) | v0.12 的 64 项验收、38 项交付物与真实语义质量门禁 |
+| [`docs/RELEASE_NOTES_v0.12.0.md`](docs/RELEASE_NOTES_v0.12.0.md) | v0.12.0 发布说明、限制与升级边界 |
+| [`commercial-release-manifest.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.12.0/commercial-release-manifest.json) | v0.12.0 exact-tag、制品、Schema、迁移和平台绑定 |
+| [`post-release-verification.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.12.0/post-release-verification.json) | 从公开 Release 下载后的 Hash、签名、provenance 与安装复验 |
 | [`SECURITY.md`](SECURITY.md) | 威胁模型和安全报告渠道 |
 
 DeepLaw 以 [Apache License 2.0](LICENSE) 开源。请勿提交法律原件、生成 release database、凭据、

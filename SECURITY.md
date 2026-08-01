@@ -9,7 +9,7 @@ documents, generated vault/release databases, or OCR corpora.
 
 ## Supported versions
 
-Security fixes are evaluated for the current software release, `v0.11.0`, and the `main` branch.
+Security fixes are evaluated for the current software release, `v0.12.0`, and the `main` branch.
 The release manifest records `commercial_release_eligible=true` and
 `quality_protocol_eligible=true`; comparative leadership remains separate with
 `competitive_claim_eligible=false`. The quality decision is produced by the public, time-frozen

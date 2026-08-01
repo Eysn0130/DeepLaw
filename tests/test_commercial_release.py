@@ -51,7 +51,7 @@ def _junit(path: Path, *, skipped: int = 0) -> None:
 
 
 def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
-    assert set(_unified_versions(REPOSITORY).values()) == {"0.11.0"}
+    assert set(_unified_versions(REPOSITORY).values()) == {"0.12.0"}
     assert all(_docs(REPOSITORY).values())
     assert "商业" not in (REPOSITORY / "README.md").read_text(encoding="utf-8")
     english_homepage = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
@@ -59,7 +59,6 @@ def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
         "commercial-release-manifest.json", "release-manifest.json"
     )
     assert COMPETITIVE_EVIDENCE_MISSING == [
-        "real_model_task_e2e",
         "named_baseline_results_17",
         "paired_confidence_intervals",
         "comparative_failure_and_cost_inventory",
@@ -74,8 +73,8 @@ def test_homepages_distinguish_historical_and_formal_release_evidence() -> None:
 
     for homepage_name in ("README.md", "README_EN.md"):
         homepage = (REPOSITORY / homepage_name).read_text(encoding="utf-8")
-        assert "V0_11_ACCEPTANCE_MATRIX.md" in homepage
-        assert "RELEASE_NOTES_v0.11.0.md" in homepage
+        assert "V0_12_ACCEPTANCE_MATRIX.md" in homepage
+        assert "RELEASE_NOTES_v0.12.0.md" in homepage
         assert "commercial-release-manifest.json" in homepage
         assert "post-release-verification.json" in homepage
         if historical_name in homepage:
@@ -87,9 +86,9 @@ def test_homepages_distinguish_historical_and_formal_release_evidence() -> None:
 
 def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
     schema = json.loads(
-        (
-            REPOSITORY / "contracts/commercial-release-manifest.v4.schema.json"
-        ).read_text(encoding="utf-8")
+        (REPOSITORY / "contracts/commercial-release-manifest.v5.schema.json").read_text(
+            encoding="utf-8"
+        )
     )
     Draft202012Validator.check_schema(schema)
     properties = schema["properties"]
@@ -99,15 +98,17 @@ def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
     assert set(properties["competitive_evidence_missing"]["items"]["enum"]) == set(
         COMPETITIVE_EVIDENCE_MISSING
     )
+    assert {
+        "semantic_living_wiki_quality",
+        "authoritative_evidence_quality",
+        "editor_integrations",
+    } <= set(schema["required"])
 
 
 def test_authoritative_source_matrix_binds_exact_signed_catalog(
     tmp_path: Path,
 ) -> None:
-    matrix_path = (
-        REPOSITORY
-        / "benchmarks/quality/v0.11-28-source-decision-matrix.json"
-    )
+    matrix_path = REPOSITORY / "benchmarks/quality/v0.11-28-source-decision-matrix.json"
     matrix = _source_quality_matrix(REPOSITORY, matrix_path)
     assert len(matrix["sources"]) == 28
 
@@ -144,29 +145,29 @@ def test_platform_gate_accepts_no_skip_suite_and_rejects_a_skip(tmp_path: Path) 
 
 
 def test_platform_gate_uses_utf8_for_cross_platform_subprocess_output() -> None:
-    workflow = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(encoding="utf-8")
 
     assert 'PYTHONUTF8: "1"' in workflow
 
 
 def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() -> None:
-    gate = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
-        encoding="utf-8"
-    )
-    release = (REPOSITORY / ".github/workflows/release.yml").read_text(
-        encoding="utf-8"
-    )
+    gate = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(encoding="utf-8")
+    release = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
     assert "evaluation-protocol:" in gate
     assert "--candidate-wheel" in gate
     assert gate.count("--require-eligible") >= 2
     assert "--verify-report-dir" in gate
-    assert "test -z \"$(git status --porcelain=v1 --untracked-files=all)\"" in gate
+    assert 'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in gate
     assert "--evaluation" in gate
     assert "evaluation/EVALUATION_SHA256SUMS" in release
-    assert "deeplaw.commercial-release-manifest/v4" in release
+    assert "deeplaw.commercial-release-manifest/v5" in release
+    assert "semantic_evidence_run_id" in release
+    assert "semantic-release-evidence" in gate
+    assert "--semantic-quality" in gate
+    assert "benchmarks.legal.run_authoritative_evidence_gate" in gate
+    assert "--authoritative-evidence-quality" in gate
+    assert "quality/authoritative-evidence-quality.json" in gate
     assert "living-wiki-quality:" in gate
     assert "--living-wiki-quality" in gate
     assert "--living-wiki-baseline" in gate
@@ -182,13 +183,32 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert 'manifest.get("quality_protocol_eligible") is not True' in release
 
 
+def test_real_semantic_release_evidence_requires_execute_then_maintainer_finalize() -> None:
+    workflow = (REPOSITORY / ".github/workflows/semantic-evidence.yml").read_text(encoding="utf-8")
+    release = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    assert "if: ${{ inputs.mode == 'execute' }}" in workflow
+    assert "if: ${{ inputs.mode == 'finalize' }}" in workflow
+    assert "secrets.OPENAI_API_KEY" in workflow
+    assert "semantic-evidence-candidate" in workflow
+    assert "semantic-release-evidence" in workflow
+    assert "benchmarks.semantic.export_review_bundle" in workflow
+    assert "semantic-review-vault.tar.gz" in workflow
+    assert "-name '*.token'" in workflow
+    assert 'rm "${evidence}/semantic-review-vault.tar.gz"' in workflow
+    assert "--manual-review" in workflow
+    assert "formal_release_eligible" in workflow
+    assert "semantic_evidence_run_id" in release
+    assert "semantic-release-evidence" in release
+
+
 def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
     dockerfile = (REPOSITORY / "packaging/oci/Dockerfile").read_text(encoding="utf-8")
     assert "USER 65532:65532" in dockerfile
     assert 'ENTRYPOINT ["deeplaw"]' in dockerfile
     assert 'CMD ["--version"]' in dockerfile
     assert "COPY deeplaw-*.whl /tmp/" in dockerfile
-    assert 'set -- /tmp/deeplaw-*.whl' in dockerfile
+    assert "set -- /tmp/deeplaw-*.whl" in dockerfile
     assert '--no-deps "$1"' in dockerfile
     assert "EXPOSE " not in dockerfile
 
@@ -201,9 +221,9 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
     )[0]
     assert 'for path in sorted(assets_root.rglob("*")):' in validation
     assert 'raise SystemExit(f"duplicate release asset basename: {path.name}")' in validation
-    assert 'files_by_name.get(name)' in validation
-    assert 'hashlib.sha256(path.read_bytes()).hexdigest()' in validation
-    assert 'expected_names = set(files_by_name) - {checksum_path.name}' in validation
+    assert "files_by_name.get(name)" in validation
+    assert "hashlib.sha256(path.read_bytes()).hexdigest()" in validation
+    assert "expected_names = set(files_by_name) - {checksum_path.name}" in validation
     assert 'raise SystemExit("release checksum inventory is incomplete")' in validation
     assert "sha256sum --check SHA256SUMS" not in validation
     assert "Create or resume the release without overwriting assets" in workflow
@@ -219,26 +239,20 @@ def test_release_workflow_resumes_without_overwriting_published_assets() -> None
         "https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/"
         in workflow
     )
-    assert 'required_signed_assets=(' in workflow
+    assert "required_signed_assets=(" in workflow
     assert '"commercial-release-manifest.json"' in workflow
     assert '"SHA256SUMS"' in workflow
     assert "-name '*.sigstore.json' -print0 | sort -z" in workflow
     assert 'artifact="${bundle%.sigstore.json}"' in workflow
-    assert 'verified_bundle_count=$((verified_bundle_count + 1))' in workflow
-    assert 'releases?per_page=100' in workflow
+    assert "verified_bundle_count=$((verified_bundle_count + 1))" in workflow
+    assert "releases?per_page=100" in workflow
     assert "for attempt in 1 2 3 4 5; do" in workflow
     assert 'if [[ "${attempt}" -eq 5 ]]; then' in workflow
     assert "draft release was not observable after bounded retries" in workflow
     assert "release_id=$(jq -r '.id'" in workflow
-    assert (
-        "uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets"
-        in workflow
-    )
-    assert 'repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}' in workflow
-    assert (
-        "{tag_name, target_commitish, name, body, draft, prerelease, make_latest}"
-        in workflow
-    )
+    assert "uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" in workflow
+    assert "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" in workflow
+    assert "{tag_name, target_commitish, name, body, draft, prerelease, make_latest}" in workflow
     assert workflow.count('remote_digest=$(jq -r --arg name "${name}"') == 2
     assert '[[ "${remote_digest}" == "${local_digest}" ]]' in workflow
     assert workflow.count('gh release upload "${RELEASE_TAG}" "${asset}"') == 1

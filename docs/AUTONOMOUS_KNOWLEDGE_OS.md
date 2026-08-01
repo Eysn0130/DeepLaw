@@ -1,6 +1,6 @@
 # DeepLaw Autonomous Knowledge OS
 
-Status: **Current v0.11.0 contract**, 2026-07-30. This document defines the released Autonomous
+Status: **Current v0.12.0 contract**, 2026-07-30. This document defines the released Autonomous
 Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence implementation. Historical v0.7
 proposal/review documents remain source-governance and migration evidence, not the default policy
 for new Agent-derived knowledge.
@@ -485,7 +485,7 @@ retrieval and controlled query backfill described in
 identity, grant, admission, reconciliation and verification primitives; it is not a parallel
 knowledge engine.
 
-The package version is `0.11.0`. Current implementation,
+The package version is `0.12.0`. Current implementation,
 compatibility and exact gate status are separated in:
 
 - [`LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md`](LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md);

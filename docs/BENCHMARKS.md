@@ -1,6 +1,6 @@
 # DeepLaw benchmarks and evidence
 
-Status: **v0.11.0 current evaluation map**, 2026-07-30.
+Status: **v0.12.0 current evaluation map**, 2026-07-30.
 
 ## One quality source of truth
 

@@ -1,6 +1,6 @@
 # DeepLaw roadmap
 
-Status: v0.11.0 delivery line, updated 2026-07-30. DeepLaw 2.0 is the product brand, not the
+Status: v0.12.0 delivery line, updated 2026-07-30. DeepLaw 2.0 is the product brand, not the
 software version. Runtime truth is `src/deeplaw`, contracts,
 migrations, tests, and `uv.lock`. A roadmap item never becomes a delivery claim without those
 artifacts.
@@ -18,7 +18,7 @@ permissions, and audit destruction remain owner/maintainer-only.
 
 ## v0.8 — Autonomous Knowledge Core
 
-**Implemented in v0.9.0 and retained in v0.11.0.** The milestone is an additive migration from the published v0.7
+**Implemented in v0.9.0 and retained in v0.12.0.** The milestone is an additive migration from the published v0.7
 foundation:
 
 - additive migration with a verified v0.7 rollback point;
@@ -48,7 +48,7 @@ evidence.
 
 ## v0.9 — Living Wiki and Knowledge Intelligence
 
-**Implemented in v0.9.0 and retained in v0.11.0; cross-system comparison remains separate.**
+**Implemented in v0.9.0 and retained in v0.12.0; cross-system comparison remains separate.**
 
 - deterministic offline multilingual dense index and evidence-duty reranker, both bound to model
   identity, audit heads, revision inventory, exact index bytes, offline policy, and hard limits;
@@ -73,7 +73,7 @@ evidence.
 
 ## DeepLaw 1.0 milestone — Quality and Superiority Closure
 
-**Core quality engineering is retained in software v0.11.0; comparative execution remains
+**Core quality engineering is retained in software v0.12.0; comparative execution remains
 open.** Evaluation Protocol v1 provides a public Benchmark, fixed scoring, a maintainer-visible
 time-frozen holdout, actual autonomy/security and Typed Compiler suites, complete automatic
 reports, independent verification, and an exact-wheel release gate. No external institution

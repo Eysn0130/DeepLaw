@@ -1,0 +1,586 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-release-manifest.v5.schema.json",
+  "title": "DeepLaw release manifest v5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "environment",
+    "release",
+    "bindings",
+    "artifacts",
+    "platform_gates",
+    "host_acceptance",
+    "supply_chain",
+    "commercial_gates",
+    "evaluation_protocol",
+    "living_wiki_quality",
+    "semantic_living_wiki_quality",
+    "authoritative_source_quality",
+    "authoritative_evidence_quality",
+    "editor_integrations",
+    "release_documentation",
+    "commercial_release_eligible",
+    "quality_protocol_eligible",
+    "competitive_claim_eligible",
+    "competitive_evidence_missing",
+    "claim_policy",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.commercial-release-manifest/v5"
+    },
+    "environment": {
+      "type": "object"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "version",
+        "tag",
+        "commit",
+        "tree",
+        "source_date_epoch"
+      ],
+      "properties": {
+        "repository": {
+          "const": "Eysn0130/DeepLaw"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "commit": {
+          "$ref": "#/$defs/git"
+        },
+        "tree": {
+          "$ref": "#/$defs/git"
+        },
+        "source_date_epoch": {
+          "type": "integer",
+          "minimum": 315532800
+        }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "required": [
+        "lock_sha256",
+        "pyproject_sha256",
+        "contracts_inventory_sha256",
+        "contracts_count",
+        "migrations_inventory_sha256",
+        "migration_identities",
+        "versions"
+      ],
+      "properties": {
+        "lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pyproject_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contracts_inventory_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contracts_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "migrations_inventory_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "migration_identities": {
+          "type": "array",
+          "minItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "versions": {
+          "type": "object"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 28,
+      "maxItems": 160,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "byte_size"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "platform_gates": {
+      "type": "object",
+      "required": [
+        "systems",
+        "python_versions",
+        "matrix",
+        "mandatory_tests",
+        "mandatory_skips",
+        "passed"
+      ],
+      "properties": {
+        "systems": {
+          "const": [
+            "Darwin",
+            "Linux",
+            "Windows"
+          ]
+        },
+        "python_versions": {
+          "const": [
+            "3.11",
+            "3.12",
+            "3.13"
+          ]
+        },
+        "matrix": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "system",
+              "python_version"
+            ],
+            "properties": {
+              "system": {
+                "enum": [
+                  "Darwin",
+                  "Linux",
+                  "Windows"
+                ]
+              },
+              "python_version": {
+                "enum": [
+                  "3.11",
+                  "3.12",
+                  "3.13"
+                ]
+              }
+            }
+          }
+        },
+        "mandatory_tests": {
+          "type": "integer",
+          "minimum": 5220
+        },
+        "mandatory_skips": {
+          "const": 0
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    },
+    "host_acceptance": {
+      "type": "object"
+    },
+    "supply_chain": {
+      "type": "object"
+    },
+    "commercial_gates": {
+      "type": "object"
+    },
+    "evaluation_protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_id",
+        "protocol_version",
+        "report_path",
+        "report_artifact_sha256",
+        "report_sha256",
+        "scoring_digest",
+        "overall_score",
+        "freeze_commit",
+        "freeze_valid",
+        "quality_gate_passed",
+        "candidate_wheel_sha256"
+      ],
+      "properties": {
+        "protocol_id": {
+          "const": "deeplaw-evaluation-v1"
+        },
+        "protocol_version": {
+          "const": 1
+        },
+        "report_path": {
+          "const": "evaluation/evaluation-report.json"
+        },
+        "report_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scoring_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "overall_score": {
+          "type": "number",
+          "minimum": 0.85,
+          "maximum": 1
+        },
+        "freeze_commit": {
+          "$ref": "#/$defs/git"
+        },
+        "freeze_valid": {
+          "const": true
+        },
+        "quality_gate_passed": {
+          "const": true
+        },
+        "candidate_wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "living_wiki_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "report_path",
+        "report_sha256",
+        "baseline_report_path",
+        "baseline_report_sha256",
+        "baseline_record_sha256",
+        "baseline_commit",
+        "baseline_version",
+        "baseline_wheel_sha256",
+        "baseline_passed",
+        "baseline_failure_codes",
+        "comparison_path",
+        "comparison_sha256",
+        "comparison_record_sha256",
+        "candidate_wheel_sha256",
+        "recall_at_k",
+        "precision_at_k",
+        "mrr",
+        "citation_validity",
+        "security_failures",
+        "quality_regression",
+        "performance_regression",
+        "passed"
+      ],
+      "properties": {
+        "suite_id": {
+          "const": "deeplaw-living-wiki-cli-quality-v1"
+        },
+        "report_path": {
+          "const": "quality/living-wiki-quality-report.json"
+        },
+        "report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "baseline_report_path": {
+          "const": "quality/living-wiki-quality-baseline.json"
+        },
+        "baseline_report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "baseline_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "baseline_commit": {
+          "const": "42382b264f4297965c25aaac6e85619e9e0d49b7"
+        },
+        "baseline_version": {
+          "const": "0.10.0"
+        },
+        "baseline_wheel_sha256": {
+          "const": "9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0"
+        },
+        "baseline_passed": {
+          "type": "boolean"
+        },
+        "baseline_failure_codes": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "comparison_path": {
+          "const": "quality/living-wiki-quality-comparison.json"
+        },
+        "comparison_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "comparison_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidate_wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "recall_at_k": {
+          "type": "number",
+          "minimum": 0.9,
+          "maximum": 1
+        },
+        "precision_at_k": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 1
+        },
+        "mrr": {
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 1
+        },
+        "citation_validity": {
+          "const": 1
+        },
+        "security_failures": {
+          "const": 0
+        },
+        "quality_regression": {
+          "const": false
+        },
+        "performance_regression": {
+          "const": false
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    },
+    "authoritative_source_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "matrix_path",
+        "matrix_sha256",
+        "record_sha256",
+        "catalog_sha256",
+        "active_release_id",
+        "active_database_sha256",
+        "source_count",
+        "decision_summary",
+        "quality_regression",
+        "passed"
+      ],
+      "properties": {
+        "matrix_path": {
+          "const": "quality/v0.11-28-source-decision-matrix.json"
+        },
+        "matrix_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "catalog_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "active_release_id": {
+          "type": "string",
+          "pattern": "^lawrel_[0-9a-f]{32}$"
+        },
+        "active_database_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_count": {
+          "const": 28
+        },
+        "decision_summary": {
+          "type": "object"
+        },
+        "quality_regression": {
+          "const": false
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    },
+    "semantic_living_wiki_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gold_path", "gold_sha256", "host_report_path", "host_report_sha256",
+        "query_report_path", "query_report_sha256", "query_cost_path",
+        "query_cost_sha256", "quality_report_path", "quality_report_sha256",
+        "host", "host_version", "model_identity", "build_tokens", "query_tokens",
+        "hard_failures", "formal_release_eligible", "passed"
+      ],
+      "properties": {
+        "gold_path": {"const": "semantic/semantic-gold.json"},
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "host_report_path": {"const": "semantic/real-semantic-host-report.json"},
+        "host_report_sha256": {"$ref": "#/$defs/sha256"},
+        "query_report_path": {"const": "semantic/semantic-query-report.json"},
+        "query_report_sha256": {"$ref": "#/$defs/sha256"},
+        "query_cost_path": {"const": "semantic/semantic-query-cost.json"},
+        "query_cost_sha256": {"$ref": "#/$defs/sha256"},
+        "quality_report_path": {"const": "semantic/semantic-quality-report.json"},
+        "quality_report_sha256": {"$ref": "#/$defs/sha256"},
+        "host": {"enum": ["codex", "claude_code", "opencode"]},
+        "host_version": {"type": "string", "minLength": 1},
+        "model_identity": {"type": "string", "minLength": 1},
+        "build_tokens": {"type": "integer", "minimum": 1},
+        "query_tokens": {"type": "integer", "minimum": 1},
+        "hard_failures": {"const": 0},
+        "formal_release_eligible": {"const": true},
+        "passed": {"const": true}
+      }
+    },
+    "authoritative_evidence_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_path", "report_sha256", "record_sha256",
+        "challenge_trace_schema_sha256", "challenge_replay_schema_sha256",
+        "capability_schema_sha256", "citation_audit_schema_sha256",
+        "expert_gold_status", "expert_quality_claimed",
+        "authority_elevation_failures", "passed"
+      ],
+      "properties": {
+        "report_path": {"const": "quality/authoritative-evidence-quality.json"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "challenge_trace_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "challenge_replay_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "capability_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "citation_audit_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "expert_gold_status": {"enum": ["expert_review_pending", "expert_reviewed"]},
+        "expert_quality_claimed": {"type": "boolean"},
+        "authority_elevation_failures": {"const": 0},
+        "passed": {"const": true}
+      }
+    },
+    "editor_integrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obsidian_artifact", "tolaria_report", "canonical_writes", "passed"],
+      "properties": {
+        "obsidian_artifact": {
+          "type": "object",
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"const": "editors/deeplaw-obsidian-plugin.zip"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "tolaria_report": {
+          "type": "object",
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"const": "editors/tolaria-integration-report.json"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "canonical_writes": {"const": 0},
+        "passed": {"const": true}
+      }
+    },
+    "release_documentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_notes_path",
+        "release_notes_sha256",
+        "acceptance_matrix_path",
+        "acceptance_matrix_sha256",
+        "known_limitations_declared",
+        "unclaimed_capabilities_declared"
+      ],
+      "properties": {
+        "release_notes_path": {
+          "type": "string",
+          "pattern": "^documentation/RELEASE_NOTES_v[0-9]+\\.[0-9]+\\.[0-9]+\\.md$"
+        },
+        "release_notes_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "acceptance_matrix_path": {
+          "type": "string",
+          "pattern": "^documentation/V[0-9]+_[0-9]+_ACCEPTANCE_MATRIX\\.md$"
+        },
+        "acceptance_matrix_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "known_limitations_declared": {
+          "const": true
+        },
+        "unclaimed_capabilities_declared": {
+          "const": true
+        }
+      }
+    },
+    "commercial_release_eligible": {
+      "const": true
+    },
+    "quality_protocol_eligible": {
+      "const": true
+    },
+    "competitive_claim_eligible": {
+      "const": false
+    },
+    "competitive_evidence_missing": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "named_baseline_results_17",
+          "paired_confidence_intervals",
+          "comparative_failure_and_cost_inventory"
+        ]
+      }
+    },
+    "claim_policy": {
+      "type": "object"
+    },
+    "record_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

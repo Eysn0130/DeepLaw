@@ -20,7 +20,7 @@ governance, and retrieval internals are separate concerns.
 | MCP protocol and closed tool schemas | **Supported** | contract and subprocess tests |
 | Codex/Claude/OpenCode manifests and static configuration | **Supported local-only** | repository validators/tests |
 | Generic read-only Skill bundle | **Supported local-only** | source/hash/budget/test manifest verification |
-| Autonomous Knowledge Sink domain/MCP contract | **Supported in v0.11.0, explicit opt-in** | contract, capability, idempotency, scope, rate, integrity, and stdio tests |
+| Autonomous Knowledge Sink domain/MCP contract | **Supported in v0.12.0, explicit opt-in** | contract, capability, idempotency, scope, rate, integrity, and stdio tests |
 | Living Wiki Compile Skill and compiler Sink operations | **Current working-tree implementation, explicit opt-in** | shared coordinator, closed Plan, fake-Agent E2E and least-privilege host examples |
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |

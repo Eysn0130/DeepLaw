@@ -1,10 +1,10 @@
 # Living Wiki Compiler compatibility
 
-Status: v0.11.0 compatibility note, 2026-07-30.
+Status: v0.12.0 compatibility note, 2026-07-30.
 
 ## Version discipline
 
-The package is `0.11.0`. The compiler is released only after the full release gate binds exact
+The package is `0.12.0`. The compiler is released only after the full release gate binds exact
 candidate artifacts, migration identities, three-host evidence and three-OS results.
 
 ## Vault and migration behavior
@@ -30,8 +30,8 @@ and JSON contracts remain present.
 - Existing CLI commands remain unchanged; `knowledge compile`, `knowledge query` and
   `knowledge backfill` are additive.
 - `KnowledgeOS` is an additive Python facade. Direct internal store calls remain unsupported.
-- `knowledge_support` advances to v4 and `knowledge_sink` to v3 for new operations. v1-v3/v1-v2
-  contract files remain frozen for older consumers.
+- `knowledge_support` advances to v5 and `knowledge_sink` to v4 for Semantic, Editor, Wiki, and
+  Synthesis operations. Earlier contract files remain frozen for older consumers.
 - Default Knowledge OS plugin behavior stays read-only. A compilation sink is a separate owner
   configuration with a narrower grant.
 - `law_support` and official/user-private Legal Pack storage and trust roots are unchanged.
@@ -48,8 +48,10 @@ Codex, Claude Code and OpenCode share the same compile Skill. Existing host mani
 silently enable mutation. The OpenCode file is an explicit example overlay and contains a
 placeholder for an owner-created grant.
 
-Obsidian and Tolaria contracts are mock/reference integrations only. Existing Markdown editing and
-reconcile behavior remains available; the new root policies document where a bridge may write.
+The Obsidian plugin and Tolaria integration harness are production adapter surfaces over the same
+CLI/MCP domain services. They do not become canonical stores or permission systems. Existing
+Markdown editing and reconcile behavior remains available; root policies determine where an editor
+may write.
 
 ## Rollback
 
@@ -73,9 +75,9 @@ snapshot/backup.
 
 ## Known compatibility limits
 
-- Exact changed-tree Linux and Windows evidence is pending.
-- Real model-task host CLI/auth compatibility is external and pending.
-- No released artifact currently binds this implementation's commit, wheel and migration
-  inventory.
+- Exact-tag Linux/macOS/Windows and real-model evidence are supplied only by formal release
+  artifacts; a source checkout alone does not prove them.
+- Only the reviewed Codex semantic task is a release gate. Unknown hosts/models and real
+  Claude Code/OpenCode model tasks are not claimed.
 - A future contract change to an existing compiler table requires an explicit migration rather
   than `CREATE TABLE IF NOT EXISTS`.

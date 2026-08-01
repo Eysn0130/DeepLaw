@@ -1,6 +1,6 @@
 # Semantic Living Wiki evaluation
 
-Status: **vNext release gate**, 2026-08-01. This protocol is not evidence for v0.11.0 and is not a
+Status: **v0.12.0 release gate**, 2026-08-01. This protocol is not evidence for v0.11.0 and is not a
 comparative benchmark claim.
 
 The frozen public corpus in `benchmarks/semantic/fixtures/` covers 15 named semantic cases. The
@@ -26,8 +26,10 @@ receipt contains stable labels and governed IDs but no source text or private pa
 3. the same host/model compiles the exact successor and refreshes admissible Synthesis work;
 4. deterministic owner CLI operations withdraw `retention-a` and refresh its dependants.
 
-The v2 host report binds both prompts, the pinned command, every complete 15-duty Compilation Run,
-the review/freshness receipts, final Vault verification, Gold status, and corpus identity. A failed
+The v2 host report binds the exact clean repository commit/tree/version/lock/contract/migration
+inventory, both prompts, the pinned command, provider-reported `turn.completed` build tokens, every
+complete 15-duty Compilation Run, the review/freshness receipts, final Vault verification, Gold
+status, and corpus identity. A failed
 or skipped phase cannot be reported as passed. A deterministic fake-Agent exercises the protocol in
 CI but never constitutes real-host/model evidence.
 
@@ -45,6 +47,13 @@ byte proxy rather than a provider-token measurement.
 real-host report, a passed first-party query report, zero hard failures, all deterministic quality
 thresholds, and an explicitly recorded maintainer correction review. Formal release eligibility is
 false if any one of these inputs is absent. `competitive_claim_eligible` remains false.
+
+`.github/workflows/semantic-evidence.yml` deliberately uses two workflow runs. `execute` uses the
+externally managed `OPENAI_API_KEY` secret without printing or packaging it, uploads a private
+review candidate, and cannot produce formal evidence. After the maintainer reviews that exact
+report and derived Wiki, `finalize` binds correction count/time and reviewer identity to the same
+Vault/report and emits `semantic-release-evidence`. The existing release workflow accepts only that
+artifact for the exact release commit; the artifact never contains the review Vault or credentials.
 
 This protocol supports only the bounded product statement: any Agent that implements DeepLaw's
 versioned CLI/MCP/Python contract and receives an explicit owner grant can use the same governed

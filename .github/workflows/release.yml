@@ -10,14 +10,20 @@ on:
         description: Existing immutable tag to publish or resume.
         required: true
         type: string
-        default: "v0.11.0"
+        default: "v0.12.0"
       post_release_only:
         description: Verify an already published release without rebuilding or resigning it.
         required: true
         type: boolean
         default: false
+      semantic_evidence_run_id:
+        description: Successful finalize-mode Semantic evidence run; auto-resolved for the exact commit when empty.
+        required: false
+        type: string
+        default: ""
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -28,6 +34,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       commit: ${{ steps.release.outputs.commit }}
       version: ${{ steps.release.outputs.version }}
+      semantic_evidence_run_id: ${{ steps.release.outputs.semantic_evidence_run_id }}
 
     steps:
       - name: Check out the requested tag
@@ -40,6 +47,8 @@ jobs:
       - name: Validate exact tag, version, and commit
         id: release
         env:
+          GH_TOKEN: ${{ github.token }}
+          SEMANTIC_EVIDENCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.semantic_evidence_run_id || '' }}
           TARGET_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         shell: bash
         run: |
@@ -66,9 +75,21 @@ jobs:
           )
           git diff --check
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          semantic_run_id="${SEMANTIC_EVIDENCE_RUN_ID}"
+          if [[ -z "${semantic_run_id}" ]]; then
+            semantic_run_id=$(gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/semantic-evidence.yml/runs?status=success&event=workflow_dispatch&per_page=100" \
+              --jq "[.workflow_runs[] | select(.head_sha == \"${commit}\")] | first | .id")
+          fi
+          [[ "${semantic_run_id}" =~ ^[0-9]+$ ]]
+          semantic_artifact_count=$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${semantic_run_id}/artifacts" \
+            --jq '[.artifacts[] | select(.name == "semantic-release-evidence" and .expired == false)] | length')
+          [[ "${semantic_artifact_count}" -eq 1 ]]
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
           echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "semantic_evidence_run_id=${semantic_run_id}" >> "${GITHUB_OUTPUT}"
 
   commercial-gates:
     name: Reuse exact commercial GA evidence
@@ -77,7 +98,9 @@ jobs:
     uses: ./.github/workflows/commercial-gates.yml
     with:
       release_ref: ${{ needs.release-context.outputs.tag }}
+      semantic_evidence_run_id: ${{ needs.release-context.outputs.semantic_evidence_run_id }}
     permissions:
+      actions: read
       contents: read
 
   publish:
@@ -128,7 +151,7 @@ jobs:
           release = manifest.get("release", {})
           if (
               manifest.get("schema_version")
-              != "deeplaw.commercial-release-manifest/v4"
+              != "deeplaw.commercial-release-manifest/v5"
               or manifest.get("commercial_release_eligible") is not True
               or manifest.get("quality_protocol_eligible") is not True
               or manifest.get("competitive_claim_eligible") is not False
@@ -154,6 +177,15 @@ jobs:
                   "source_count"
               )
               != 28
+              or manifest.get("semantic_living_wiki_quality", {}).get("passed")
+              is not True
+              or manifest.get("semantic_living_wiki_quality", {}).get(
+                  "formal_release_eligible"
+              )
+              is not True
+              or manifest.get("editor_integrations", {}).get("passed") is not True
+              or manifest.get("authoritative_evidence_quality", {}).get("passed")
+              is not True
               or release.get("tag") != os.environ["RELEASE_TAG"]
               or release.get("commit") != os.environ["RELEASE_COMMIT"]
           ):

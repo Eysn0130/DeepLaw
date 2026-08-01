@@ -2,14 +2,14 @@
 
 ## 状态和边界
 
-Status: reviewed against DeepLaw `v0.11.0`, 2026-07-30.
+Status: reviewed against DeepLaw `v0.12.0`, 2026-07-30.
 
 本文描述 DeepLaw 2.0 与 Analytix 的未来集成契约，不证明 Analytix 当前已经具备这些能力，
 也不授权修改 Analytix。实施前必须在 Analytix 建立独立 OpenSpec change，并以当时的代码、
 已接受规范和测试为准重新复核。
 
 目标不是把 DeepLaw 写进 Analytix 核心，而是让 Analytix 的唯一生产 Go Runtime 安全消费
-一个外部、只读、版本化的官方法律能力。DeepLaw 2.0 当前软件版本 `v0.11.0` 另有用户私有法律参考资料范围，
+一个外部、只读、版本化的官方法律能力。DeepLaw 2.0 当前软件版本 `v0.12.0` 另有用户私有法律参考资料范围，
 但它不是 Analytix 案件项目库，首期 Analytix 集成不开放 `private_*` operation：
 
 ```text
@@ -58,7 +58,7 @@ DeepLaw 当前只暴露一个紧凑工具：`law_support`。公开 contract 位�
 operation（官方四种、私有四种、authority-aware `federated_context` 一种）。宿主必须按 operation 验证对应分支，
 拒绝未知字段，不能只验证 MCP transport success。
 
-DeepLaw 2.0 当前软件版本 `v0.11.0` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transport；它不是 HTTP
+DeepLaw 2.0 当前软件版本 `v0.12.0` 使用 MCP SDK 的低层 `Server`，只支持本地 stdio transport；它不是 HTTP
 服务。握手时发布的是已内联本地 `$ref` 的 closed output schema，宿主不应在运行时依赖网络
 解析 GitHub schema URL。
 

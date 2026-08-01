@@ -50,7 +50,7 @@ def verify(
     verify_record_digest(manifest, field="commercial release manifest")
     release = manifest.get("release", {})
     if (
-        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v4"
+        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v5"
         or manifest.get("commercial_release_eligible") is not True
         or manifest.get("quality_protocol_eligible") is not True
         or manifest.get("competitive_claim_eligible") is not False
@@ -63,15 +63,15 @@ def verify(
         or manifest.get("bindings", {}).get("migrations_inventory_sha256")
         != binding["migrations"]["inventory_sha256"]
         or manifest.get("living_wiki_quality", {}).get("passed") is not True
-        or manifest.get("living_wiki_quality", {}).get("quality_regression")
-        is not False
-        or manifest.get("living_wiki_quality", {}).get(
-            "performance_regression"
-        )
-        is not False
-        or manifest.get("authoritative_source_quality", {}).get("passed")
-        is not True
+        or manifest.get("living_wiki_quality", {}).get("quality_regression") is not False
+        or manifest.get("living_wiki_quality", {}).get("performance_regression") is not False
+        or manifest.get("authoritative_source_quality", {}).get("passed") is not True
         or manifest.get("authoritative_source_quality", {}).get("source_count") != 28
+        or manifest.get("semantic_living_wiki_quality", {}).get("passed") is not True
+        or manifest.get("semantic_living_wiki_quality", {}).get("formal_release_eligible")
+        is not True
+        or manifest.get("authoritative_evidence_quality", {}).get("passed") is not True
+        or manifest.get("editor_integrations", {}).get("passed") is not True
     ):
         raise PostReleaseError("downloaded commercial manifest does not bind the tag checkout")
 
@@ -86,9 +86,8 @@ def verify(
             raise PostReleaseError("commercial manifest uses duplicate release asset names")
         basenames.add(basename)
         selected = _downloaded(downloads, logical_path)
-        if (
-            sha256_file(selected) != record.get("sha256")
-            or selected.stat().st_size != record.get("byte_size")
+        if sha256_file(selected) != record.get("sha256") or selected.stat().st_size != record.get(
+            "byte_size"
         ):
             raise PostReleaseError(f"downloaded release bytes differ: {logical_path}")
         verified_assets.append(
@@ -98,6 +97,23 @@ def verify(
                 "byte_size": record["byte_size"],
             }
         )
+
+    authoritative_manifest = manifest["authoritative_evidence_quality"]
+    authoritative_path = _downloaded(downloads, authoritative_manifest["report_path"])
+    authoritative_report = load_json(authoritative_path)
+    verify_record_digest(
+        authoritative_report,
+        field="downloaded Authoritative evidence quality report",
+    )
+    if (
+        sha256_file(authoritative_path) != authoritative_manifest["report_sha256"]
+        or authoritative_report.get("record_sha256") != authoritative_manifest["record_sha256"]
+        or authoritative_report.get("binding", {}).get("commit") != binding["commit"]
+        or authoritative_report.get("passed") is not True
+        or not all(authoritative_report.get("checks", {}).values())
+        or any(authoritative_report.get("security_failures", {}).values())
+    ):
+        raise PostReleaseError("downloaded Authoritative evidence quality report is invalid")
 
     lifecycle = load_json(lifecycle_path)
     verify_record_digest(lifecycle, field="post-release distribution lifecycle")
@@ -120,23 +136,17 @@ def verify(
     verify_record_digest(formal_quality, field="formal-release Living Wiki quality")
     formal_candidate = formal_quality.get("candidate", {})
     if (
-        formal_quality.get("schema_version")
-        != "deeplaw.living-wiki-quality-report/v1"
+        formal_quality.get("schema_version") != "deeplaw.living-wiki-quality-report/v1"
         or formal_quality.get("passed") is not True
         or formal_quality.get("competitive_claim_eligible") is not False
         or formal_candidate.get("role") != "formal_release"
         or formal_candidate.get("commit") != binding["commit"]
         or formal_candidate.get("version") != version
-        or formal_candidate.get("artifact_sha256")
-        != lifecycle["artifacts"]["wheel"]["sha256"]
+        or formal_candidate.get("artifact_sha256") != lifecycle["artifacts"]["wheel"]["sha256"]
         or formal_quality.get("suite", {}).get("suite_sha256")
-        != file_record(
-            repository / "benchmarks/living_wiki/quality-suite-v1.json"
-        )["sha256"]
+        != file_record(repository / "benchmarks/living_wiki/quality-suite-v1.json")["sha256"]
         or formal_quality.get("suite", {}).get("runner_sha256")
-        != file_record(
-            repository / "benchmarks/living_wiki/run_quality_gate.py"
-        )["sha256"]
+        != file_record(repository / "benchmarks/living_wiki/run_quality_gate.py")["sha256"]
         or any(
             value != 0
             for key, value in formal_quality["security"].items()
@@ -162,17 +172,13 @@ def verify(
             "commit": binding["commit"],
             "lock_sha256": binding["lock_sha256"],
             "contracts_inventory_sha256": binding["contracts"]["inventory_sha256"],
-            "migrations_inventory_sha256": binding["migrations"][
-                "inventory_sha256"
-            ],
+            "migrations_inventory_sha256": binding["migrations"]["inventory_sha256"],
         },
         "downloaded_asset_count": len(verified_assets),
         "verified_assets": verified_assets,
         "verification_evidence": {
             "checksums": file_record(checksum_log, logical_name="checksum-verification.log"),
-            "sigstore_oidc": file_record(
-                signature_log, logical_name="sigstore-verification.log"
-            ),
+            "sigstore_oidc": file_record(signature_log, logical_name="sigstore-verification.log"),
             "github_provenance": file_record(
                 provenance_log, logical_name="provenance-verification.log"
             ),
@@ -197,6 +203,9 @@ def verify(
             "living_wiki_quality_artifact": True,
             "living_wiki_baseline_comparison_artifact": True,
             "authoritative_source_quality_artifact": True,
+            "semantic_real_host_quality_artifact": True,
+            "authoritative_evidence_quality_artifact": True,
+            "editor_integration_artifacts": True,
         },
         "commercial_release_eligible": True,
         "quality_protocol_eligible": True,

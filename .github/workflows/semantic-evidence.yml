@@ -1,0 +1,267 @@
+name: Semantic Living Wiki evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Execute a real Codex task, or finalize an already reviewed candidate run.
+        required: true
+        type: choice
+        options:
+          - execute
+          - finalize
+        default: execute
+      release_ref:
+        description: Exact commit to evaluate.
+        required: true
+        type: string
+      evidence_run_id:
+        description: Execute-mode workflow run ID to finalize.
+        required: false
+        type: string
+        default: ""
+      model_identity:
+        description: Exact Codex model identity.
+        required: true
+        type: string
+        default: gpt-5.6-sol
+      reviewer_id:
+        description: Maintainer identity that reviewed the execute-mode report and Wiki output.
+        required: false
+        type: string
+        default: ""
+      correction_count:
+        description: Corrections required during maintainer review.
+        required: false
+        type: number
+        default: 0
+      correction_time_seconds:
+        description: Maintainer correction time in seconds.
+        required: false
+        type: number
+        default: 0
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  execute:
+    name: Execute real Codex semantic lifecycle
+    if: ${{ inputs.mode == 'execute' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Require the externally managed model credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${OPENAI_API_KEY}"
+          echo "CODEX_HOME=${RUNNER_TEMP}/codex-home" >> "${GITHUB_ENV}"
+
+      - name: Check out the exact clean candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref }}
+
+      - name: Install uv and Node.js
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Install exact candidate and official Codex CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse '${{ inputs.release_ref }}^{commit}')"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv sync --frozen --extra dev
+          uv build --wheel --out-dir "${RUNNER_TEMP}/dist"
+          uv venv --python 3.12 --no-project "${RUNNER_TEMP}/semantic-runtime"
+          wheels=("${RUNNER_TEMP}"/dist/deeplaw-*.whl)
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python "${RUNNER_TEMP}/semantic-runtime/bin/python" "${wheels[0]}"
+          npm install --global --prefix "${RUNNER_TEMP}/host-cli" @openai/codex@0.145.0
+          mkdir -p "${CODEX_HOME}" "${RUNNER_TEMP}/semantic-evidence"
+
+      - name: Prepare frozen public corpus and isolated host surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="${RUNNER_TEMP}/semantic-runtime/bin/deeplaw"
+          codex="${RUNNER_TEMP}/host-cli/bin/codex"
+          vault="${RUNNER_TEMP}/semantic-vault"
+          snapshot="${RUNNER_TEMP}/semantic-snapshot"
+          printf '{"schema_version":"deeplaw.real-host-compile-command/v1","argv":["%s"],"prompt_transport":"stdin_utf8","timeout_seconds":7200,"max_output_bytes":16777216}\n' \
+            "${runtime}" > "${RUNNER_TEMP}/deeplaw-command.json"
+          uv run --frozen python -m benchmarks.semantic.prepare_host_corpus \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --vault "${vault}" \
+            --snapshot "${snapshot}" \
+            --command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --output "${RUNNER_TEMP}/corpus.json"
+          grant_id=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["grant_id"])' "${RUNNER_TEMP}/corpus.json")
+          "${codex}" mcp add deeplaw-knowledge -- "${runtime}" knowledge mcp --stdio
+          "${codex}" mcp add deeplaw-knowledge-sink -- "${runtime}" knowledge sink mcp \
+            --grant-id "${grant_id}" --stdio
+          mkdir -p "${CODEX_HOME}/skills"
+          cp -R plugins/deeplaw-knowledge-os/skills/compile-living-wiki \
+            "${CODEX_HOME}/skills/compile-living-wiki"
+          printf '{"schema_version":"deeplaw.real-host-compile-command/v1","argv":["%s","exec","--json","--ephemeral","--sandbox","read-only","--skip-git-repo-check","--model","%s","-C","%s","-"],"prompt_transport":"stdin_utf8","timeout_seconds":7200,"max_output_bytes":16777216}\n' \
+            "${codex}" "${{ inputs.model_identity }}" "${GITHUB_WORKSPACE}" \
+            > "${RUNNER_TEMP}/host-command.json"
+          echo "SEMANTIC_GRANT_ID=${grant_id}" >> "${GITHUB_ENV}"
+
+      - name: Run phased real-host compilation and first-party query suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="${RUNNER_TEMP}/semantic-evidence"
+          uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
+            --host codex \
+            --host-version 0.145.0 \
+            --model-identity "${{ inputs.model_identity }}" \
+            --grant-id "${SEMANTIC_GRANT_ID}" \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --corpus "${RUNNER_TEMP}/corpus.json" \
+            --network-policy explicit_bounded \
+            --execute \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --command "${RUNNER_TEMP}/host-command.json" \
+            --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --output "${evidence}/real-semantic-host-report.json"
+          uv run --frozen python -m benchmarks.semantic.run_query_suite \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --host-report "${evidence}/real-semantic-host-report.json" \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --deeplaw "${RUNNER_TEMP}/semantic-runtime/bin/deeplaw" \
+            --output "${evidence}/semantic-query-report.json" \
+            --cost-output "${evidence}/semantic-query-cost.json"
+          uv run --frozen python -m benchmarks.semantic.score_semantic_run \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --host-report "${evidence}/real-semantic-host-report.json" \
+            --query-report "${evidence}/semantic-query-report.json" \
+            --query-cost "${evidence}/semantic-query-cost.json" \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --output "${evidence}/semantic-quality-preliminary.json"
+          cp "${RUNNER_TEMP}/corpus.json" "${evidence}/semantic-host-corpus.json"
+          cp benchmarks/semantic/semantic-gold-candidate-v1.json "${evidence}/semantic-gold.json"
+          uv run --frozen python -m benchmarks.semantic.export_review_bundle \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --output "${evidence}/semantic-review-vault"
+          test -z "$(find "${evidence}/semantic-review-vault" -type f \
+            \( -name '*.token' -o -name '*.key' -o -name '*.pem' \) -print)"
+          tar -C "${evidence}" -czf "${evidence}/semantic-review-vault.tar.gz" \
+            semantic-review-vault
+          rm -rf "${evidence}/semantic-review-vault"
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Upload maintainer-review candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: semantic-evidence-candidate
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/semantic-evidence/
+
+  finalize:
+    name: Bind maintainer review to exact executed evidence
+    if: ${{ inputs.mode == 'finalize' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate finalization inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.evidence_run_id }}" =~ ^[0-9]+$ ]]
+          test -n "${{ inputs.reviewer_id }}"
+
+      - name: Check out the exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download the exact execute-mode artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: semantic-evidence-candidate
+          path: ${{ runner.temp }}/candidate
+          run-id: ${{ inputs.evidence_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Finalize reviewed semantic quality evidence
+        shell: bash
+        env:
+          REVIEWER_ID: ${{ inputs.reviewer_id }}
+          CORRECTION_COUNT: ${{ inputs.correction_count }}
+          CORRECTION_TIME_SECONDS: ${{ inputs.correction_time_seconds }}
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+          evidence="${RUNNER_TEMP}/candidate"
+          mkdir -p "${RUNNER_TEMP}/vault"
+          test -z "$(tar -tzf "${evidence}/semantic-review-vault.tar.gz" | \
+            grep -E '(^/|(^|/)\.\.(/|$)|(^|/)capabilities(/|$)|\.(token|key|pem)$)' || true)"
+          tar -xzf "${evidence}/semantic-review-vault.tar.gz" -C "${RUNNER_TEMP}/vault" \
+            --strip-components=1
+          python - <<'PY' > "${RUNNER_TEMP}/manual-review.json"
+          import json
+          import os
+          print(json.dumps({
+              "status": "recorded",
+              "correction_count": int(os.environ["CORRECTION_COUNT"]),
+              "correction_time_seconds": float(os.environ["CORRECTION_TIME_SECONDS"]),
+              "reviewer_id": os.environ["REVIEWER_ID"],
+          }, sort_keys=True))
+          PY
+          uv run --frozen python -m benchmarks.semantic.score_semantic_run \
+            --gold "${evidence}/semantic-gold.json" \
+            --host-report "${evidence}/real-semantic-host-report.json" \
+            --query-report "${evidence}/semantic-query-report.json" \
+            --query-cost "${evidence}/semantic-query-cost.json" \
+            --manual-review "${RUNNER_TEMP}/manual-review.json" \
+            --vault "${RUNNER_TEMP}/vault" \
+            --output "${evidence}/semantic-quality-report.json"
+          python - "${evidence}/semantic-quality-report.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+          report = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          if not report.get("formal_release_eligible") or not report.get("passed"):
+              raise SystemExit("reviewed semantic evidence is not formal-release eligible")
+          PY
+          rm "${evidence}/semantic-review-vault.tar.gz"
+          rm "${evidence}/semantic-quality-preliminary.json"
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Upload formal semantic release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: semantic-release-evidence
+          if-no-files-found: error
+          retention-days: 30
+          path: ${{ runner.temp }}/candidate/

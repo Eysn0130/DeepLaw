@@ -59,6 +59,8 @@ _REQUIRED_SDIST_PATHS = (
     "benchmarks/hosts/codex-plugin-smoke-2026-07-28.json",
     "benchmarks/hosts/run_codex_plugin_smoke.py",
     "benchmarks/hosts/run_no_model_host_acceptance.py",
+    "benchmarks/hosts/run_semantic_host_harness.py",
+    "benchmarks/legal/run_authoritative_evidence_gate.py",
     "benchmarks/evaluation/protocol-v1.json",
     "benchmarks/evaluation/autonomy-safety-v1.json",
     "benchmarks/evaluation/repository-temporal-holdout-v1.json",
@@ -70,6 +72,12 @@ _REQUIRED_SDIST_PATHS = (
     "benchmarks/quality/run_repository_gold.py",
     "benchmarks/quality/build_authoritative_source_matrix.py",
     "benchmarks/quality/v0.11-28-source-decision-matrix.json",
+    "benchmarks/semantic/prepare_host_corpus.py",
+    "benchmarks/semantic/export_review_bundle.py",
+    "benchmarks/semantic/review_gold.py",
+    "benchmarks/semantic/run_query_suite.py",
+    "benchmarks/semantic/score_semantic_run.py",
+    "benchmarks/semantic/semantic-gold-candidate-v1.json",
     "benchmarks/living_wiki/compare_quality.py",
     "benchmarks/living_wiki/quality-suite-v1.json",
     "benchmarks/living_wiki/run_quality_gate.py",
@@ -90,10 +98,12 @@ _REQUIRED_SDIST_PATHS = (
     "docs/RELEASE_NOTES_v0.9.0.md",
     "docs/RELEASE_NOTES_v0.10.0.md",
     "docs/RELEASE_NOTES_v0.11.0.md",
+    "docs/RELEASE_NOTES_v0.12.0.md",
     "docs/V0_7_ACCEPTANCE_MATRIX.md",
     "docs/V0_9_ACCEPTANCE_MATRIX.md",
     "docs/V0_10_ACCEPTANCE_MATRIX.md",
     "docs/V0_11_ACCEPTANCE_MATRIX.md",
+    "docs/V0_12_ACCEPTANCE_MATRIX.md",
     "packaging/oci/Dockerfile",
     "pyproject.toml",
     "uv.lock",
@@ -131,9 +141,7 @@ def archive_inventory(path: Path) -> dict[str, Any]:
         raise RuntimeError(f"distribution contains duplicate paths: {path.name}")
     if any(name.endswith((".pyc", ".pyo")) or "/__pycache__/" in name for name in names):
         raise RuntimeError(f"distribution contains generated Python bytecode: {path.name}")
-    inventory_sha256 = hashlib.sha256(
-        ("\n".join(names) + "\n").encode("utf-8")
-    ).hexdigest()
+    inventory_sha256 = hashlib.sha256(("\n".join(names) + "\n").encode("utf-8")).hexdigest()
     return {
         "path_count": len(names),
         "inventory_sha256": inventory_sha256,
@@ -169,8 +177,7 @@ def _build(repository: Path, output: Path, *, source_date_epoch: int) -> list[Pa
         (
             path
             for path in output.iterdir()
-            if path.is_file()
-            and (path.suffix == ".whl" or path.name.endswith(".tar.gz"))
+            if path.is_file() and (path.suffix == ".whl" or path.name.endswith(".tar.gz"))
         ),
         key=lambda path: path.name,
     )
@@ -315,9 +322,7 @@ def verify(
     required_wheel_paths = _required_wheel_paths(repository)
     build_inputs = _verify_build_inputs(repository)
     publish_to = (
-        _prepare_artifact_directory(artifact_directory)
-        if artifact_directory is not None
-        else None
+        _prepare_artifact_directory(artifact_directory) if artifact_directory is not None else None
     )
     with tempfile.TemporaryDirectory(prefix="deeplaw-reproducible-build-") as temporary:
         temporary_root = Path(temporary)
@@ -337,9 +342,7 @@ def verify(
                 raise RuntimeError(f"artifact is not byte-for-byte reproducible: {name}")
             inventory = archive_inventory(first_path)
             if name.endswith(".whl"):
-                missing = [
-                    item for item in required_wheel_paths if item not in inventory["paths"]
-                ]
+                missing = [item for item in required_wheel_paths if item not in inventory["paths"]]
                 if missing:
                     raise RuntimeError(
                         "wheel package inventory is missing required files: " + ", ".join(missing)
@@ -356,8 +359,7 @@ def verify(
                 ]
                 if missing:
                     raise RuntimeError(
-                        "sdist package inventory is missing required files: "
-                        + ", ".join(missing)
+                        "sdist package inventory is missing required files: " + ", ".join(missing)
                     )
             artifacts.append(
                 {
@@ -413,9 +415,7 @@ def main() -> int:
             args.repository.resolve(),
             source_date_epoch=args.source_date_epoch,
             artifact_directory=(
-                args.artifact_dir.expanduser().absolute()
-                if args.artifact_dir is not None
-                else None
+                args.artifact_dir.expanduser().absolute() if args.artifact_dir is not None else None
             ),
         )
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:

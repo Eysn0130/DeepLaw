@@ -1,6 +1,6 @@
 # DeepLaw Living Wiki Compiler
 
-Status: **Current v0.11.0 implementation**, 2026-07-30. Release eligibility and exact evidence are
+Status: **Current v0.12.0 implementation**, 2026-07-30. Release eligibility and exact evidence are
 tracked in [`V0_11_ACCEPTANCE_MATRIX.md`](V0_11_ACCEPTANCE_MATRIX.md) and the formal release
 manifest.
 

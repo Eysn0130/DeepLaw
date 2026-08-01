@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-evidence-quality.v1.schema.json",
+  "title": "DeepLaw Authoritative Evidence Quality Gate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "binding", "synthetic_release", "frozen_evaluation",
+    "schemas", "checks", "expert_gold", "security_failures", "passed",
+    "competitive_claim_eligible", "limitations", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.authoritative-evidence-quality/v1"},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit", "tree", "package_version", "lock_sha256", "pyproject_sha256",
+        "contracts_inventory_sha256", "migrations_inventory_sha256", "worktree_clean"
+      ],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "package_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "pyproject_sha256": {"$ref": "#/$defs/sha256"},
+        "contracts_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "migrations_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "worktree_clean": {"type": "boolean"}
+      }
+    },
+    "synthetic_release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_id", "database_sha256", "segment_count", "source_free", "isolated"],
+      "properties": {
+        "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+        "database_sha256": {"$ref": "#/$defs/sha256"},
+        "segment_count": {"type": "integer", "minimum": 2},
+        "source_free": {"const": true},
+        "isolated": {"const": true}
+      }
+    },
+    "frozen_evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "quality_gate_passed", "hard_failure_count"],
+      "properties": {
+        "path": {"const": "evaluation/evaluation-report.json"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "quality_gate_passed": {"const": true},
+        "hard_failure_count": {"const": 0}
+      }
+    },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/sha256"},
+      "required": [
+        "authoritative_challenge_trace", "authoritative_challenge_replay",
+        "evidence_capabilities", "citation_audit"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_integrity", "read_only_store", "temporal_future_excluded",
+        "evidence_capabilities_valid", "challenge_trace_valid", "challenge_replay_valid",
+        "challenge_tamper_rejected", "citation_audit_valid", "citation_tamper_rejected",
+        "official_private_store_isolation", "agent_interpretation_legal_authority_false"
+      ],
+      "properties": {
+        "release_integrity": {"const": true},
+        "read_only_store": {"const": true},
+        "temporal_future_excluded": {"const": true},
+        "evidence_capabilities_valid": {"const": true},
+        "challenge_trace_valid": {"const": true},
+        "challenge_replay_valid": {"const": true},
+        "challenge_tamper_rejected": {"const": true},
+        "citation_audit_valid": {"const": true},
+        "citation_tamper_rejected": {"const": true},
+        "official_private_store_isolation": {"const": true},
+        "agent_interpretation_legal_authority_false": {"const": true}
+      }
+    },
+    "expert_gold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "expert_quality_claimed"],
+      "properties": {
+        "status": {"enum": ["expert_review_pending", "expert_reviewed"]},
+        "expert_quality_claimed": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "expert_review_pending"}}},
+          "then": {"properties": {"expert_quality_claimed": {"const": false}}}
+        }
+      ]
+    },
+    "security_failures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_elevation", "false_authority_admission", "invalid_official_citation",
+        "temporal_false_inclusion", "unauthorized_mutation"
+      ],
+      "properties": {
+        "authority_elevation": {"const": 0},
+        "false_authority_admission": {"const": 0},
+        "invalid_official_citation": {"const": 0},
+        "temporal_false_inclusion": {"const": 0},
+        "unauthorized_mutation": {"const": 0}
+      }
+    },
+    "passed": {"type": "boolean"},
+    "competitive_claim_eligible": {"const": false},
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+  }
+}

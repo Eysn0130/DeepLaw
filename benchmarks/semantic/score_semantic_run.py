@@ -12,6 +12,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.release.evidence import repository_binding
 from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.util import canonical_json, sha256_bytes, stable_id, strict_json_loads
@@ -176,9 +177,7 @@ def _outputs(
     return by_source, by_revision
 
 
-def _relation_pairs(
-    store: AutonomousKnowledgeStore, report: dict[str, Any]
-) -> set[frozenset[str]]:
+def _relation_pairs(store: AutonomousKnowledgeStore, report: dict[str, Any]) -> set[frozenset[str]]:
     pairs: set[frozenset[str]] = set()
     for run in report["runs"]:
         if run["compilation_run_id"] is None:
@@ -197,9 +196,7 @@ def _relation_pairs(
         ).fetchall()
         for row in rows:
             if row["predicate"] in {"contradicts", "conflicts_with", "inconsistent_with"}:
-                pairs.add(
-                    frozenset((row["subject_knowledge_id"], row["object_knowledge_id"]))
-                )
+                pairs.add(frozenset((row["subject_knowledge_id"], row["object_knowledge_id"])))
     return pairs
 
 
@@ -277,6 +274,20 @@ def score(
         raise ValueError("host report does not bind the selected Semantic Gold")
     if host_report["gold_status"] != "maintainer_confirmed":
         raise ValueError("host report was not executed against confirmed Semantic Gold")
+    if host_schema == "deeplaw.real-semantic-host-report/v2":
+        current = repository_binding(_repository())
+        expected_binding = {
+            "commit": current["commit"],
+            "tree": current["tree"],
+            "package_version": current["package_version"],
+            "lock_sha256": current["lock_sha256"],
+            "pyproject_sha256": current["pyproject_sha256"],
+            "contracts_inventory_sha256": current["contracts"]["inventory_sha256"],
+            "migrations_inventory_sha256": current["migrations"]["inventory_sha256"],
+            "worktree_clean": current["worktree_clean"],
+        }
+        if host_report["binding"] != expected_binding:
+            raise ValueError("host report does not bind the exact repository candidate")
     reviewed = _manual_review(manual_review)
     measured_query_cost = _query_cost(
         query_cost,
@@ -288,13 +299,8 @@ def score(
         gold_id=gold["gold_id"],
         host_report_id=host_report["report_id"],
     )
-    query_cases = {
-        item["case_id"]: item
-        for item in (measured_query_report or {}).get("cases", [])
-    }
-    host_report_sha256 = hashlib.sha256(
-        canonical_json(host_report).encode("utf-8")
-    ).hexdigest()
+    query_cases = {item["case_id"]: item for item in (measured_query_report or {}).get("cases", [])}
+    host_report_sha256 = hashlib.sha256(canonical_json(host_report).encode("utf-8")).hexdigest()
     hard_failures = dict.fromkeys(HARD_FAILURE_KEYS, 0)
     failure_cases: list[str] = []
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
@@ -304,9 +310,9 @@ def score(
         matched_by_label: dict[str, set[str]] = defaultdict(set)
         label_knowledge_ids: dict[str, set[str]] = defaultdict(set)
         case_results: list[dict[str, Any]] = []
-        expected_by_kind: dict[
-            str, list[tuple[dict[str, Any], list[dict[str, Any]]]]
-        ] = defaultdict(list)
+        expected_by_kind: dict[str, list[tuple[dict[str, Any], list[dict[str, Any]]]]] = (
+            defaultdict(list)
+        )
         procedure_scores: list[float] = []
         event_scores: list[float] = []
         for case in gold["cases"]:
@@ -322,8 +328,7 @@ def score(
                 matches = [
                     revision
                     for revision in pool
-                    if revision["kind"] == expected["kind"]
-                    and _matches_label(revision, expected)
+                    if revision["kind"] == expected["kind"] and _matches_label(revision, expected)
                 ]
                 expected_by_kind[expected["kind"]].append((expected, matches))
                 if matches:
@@ -372,9 +377,7 @@ def score(
             query_case = query_cases.get(case["case_id"])
             if query_case is not None:
                 if case["expected_objects"] or case["task_type"] == "source_withdrawal":
-                    outcome_pass = bool(
-                        outcome_pass and query_case["status"] == "passed"
-                    )
+                    outcome_pass = bool(outcome_pass and query_case["status"] == "passed")
                 else:
                     outcome_pass = query_case["status"] == "passed"
             status = "passed" if outcome_pass else "failed"
@@ -399,8 +402,7 @@ def score(
                 if label_knowledge_ids[left] & label_knowledge_ids[right]:
                     wrong_merges += 1
         duplicate_identities = sum(
-            max(0, len(knowledge_ids) - 1)
-            for knowledge_ids in label_knowledge_ids.values()
+            max(0, len(knowledge_ids) - 1) for knowledge_ids in label_knowledge_ids.values()
         )
         hard_failures["wrong_entity_merge"] = wrong_merges
 
@@ -411,9 +413,7 @@ def score(
             for reference in revision["source_refs"]:
                 state = _source_ref_state(store, reference)
                 ref_states.append(state)
-                if state in {
-                    "invented_source_revision", "invalid_locator", "invalid_quote_hash"
-                }:
+                if state in {"invented_source_revision", "invalid_locator", "invalid_quote_hash"}:
                     hard_failures[state] += 1
         claims = [item for item in all_outputs if item["kind"] == "claim"]
         unsupported_claims = [
@@ -465,9 +465,7 @@ def score(
             for knowledge_id in [match["knowledge_id"]]
         }
         expected_concept_ids = {
-            match["knowledge_id"]
-            for _expected, matches in expected_concepts
-            for match in matches
+            match["knowledge_id"] for _expected, matches in expected_concepts for match in matches
         }
 
         conflict_case = next(
@@ -488,9 +486,7 @@ def score(
                        json_array_length(omitted_fragments_json)) AS total
             FROM semantic_observation_batches_v2
             WHERE compilation_run_id IN ({})
-            """.format(
-                ",".join("?" for _ in host_report["runs"])
-            ),
+            """.format(",".join("?" for _ in host_report["runs"])),
             tuple(item["compilation_run_id"] for item in host_report["runs"]),
         ).fetchone()
         source_coverage = _ratio(batches["covered"] or 0, batches["total"] or 0)
@@ -501,9 +497,7 @@ def score(
             if case["task_type"] == "long_document_cross_packet_entity"
         )
         cross_label = cross_packet_case["expected_objects"][0]["label_id"]
-        cross_packet_consistency = (
-            1.0 if len(label_knowledge_ids[cross_label]) == 1 else 0.0
-        )
+        cross_packet_consistency = 1.0 if len(label_knowledge_ids[cross_label]) == 1 else 0.0
 
         update_case = next(
             case for case in gold["cases"] if case["task_type"] == "source_successor_update"
@@ -551,9 +545,7 @@ def score(
             (withdrawn_source_id,),
         ).fetchall()
         withdrawn_current = sum(
-            store.revision_provenance_admitted(
-                store._revision_row(row, include_body=False)
-            )
+            store.revision_provenance_admitted(store._revision_row(row, include_body=False))
             for row in withdrawn_current_rows
         )
         stale_withdrawal_prevention = (
@@ -563,12 +555,8 @@ def score(
         hard_failures["stale_prohibited_selection"] = withdrawn_current
         if measured_query_report is not None:
             query_metrics = measured_query_report["metrics"]
-            hard_failures["unauthorized_mutation"] += query_metrics[
-                "unauthorized_writes"
-            ]
-            hard_failures["authority_elevation"] += query_metrics[
-                "authority_elevations"
-            ]
+            hard_failures["unauthorized_mutation"] += query_metrics["unauthorized_writes"]
+            hard_failures["authority_elevation"] += query_metrics["authority_elevations"]
             hard_failures["silent_fallback"] += query_metrics["silent_fallbacks"]
             hard_failures["stale_prohibited_selection"] += query_metrics[
                 "stale_prohibited_selections"
@@ -577,14 +565,11 @@ def score(
         partial_complete = sum(
             1
             for run in host_report["runs"]
-            if run["transaction_status"] == "succeeded"
-            and run["semantic_status"] != "complete"
+            if run["transaction_status"] == "succeeded" and run["semantic_status"] != "complete"
         )
         hard_failures["partial_publication_reported_complete"] = partial_complete
         hard_failures["unrecoverable_run"] = sum(
-            1
-            for run in host_report["runs"]
-            if run["transaction_status"] in {"failed", "aborted"}
+            1 for run in host_report["runs"] if run["transaction_status"] in {"failed", "aborted"}
         )
 
         token_total = 0
@@ -605,6 +590,14 @@ def score(
                     if "token" in key and isinstance(value, int) and value >= 0:
                         token_total += value
                         token_measured = True
+        if not token_measured and host_schema == "deeplaw.real-semantic-host-report/v2":
+            phase_usage = [item["token_usage"] for item in host_report["phases"]]
+            if phase_usage and all(
+                item["status"] == "provider_reported" and isinstance(item["total_tokens"], int)
+                for item in phase_usage
+            ):
+                token_total = sum(item["total_tokens"] for item in phase_usage)
+                token_measured = True
 
         metrics = {
             "entity_canonicalization_precision": _ratio(
@@ -617,32 +610,20 @@ def score(
                 len(expected_concept_ids & predicted_concept_ids), len(predicted_concept_ids)
             ),
             "concept_fusion_recall": _ratio(matched_concepts, len(expected_concepts)),
-            "source_summary_supported_claim_rate": _ratio(
-                len(supported_summaries), len(summaries)
-            ),
+            "source_summary_supported_claim_rate": _ratio(len(supported_summaries), len(summaries)),
             "unsupported_claim_rate": _ratio(len(unsupported_claims), len(claims)),
-            "claim_evidence_binding_accuracy": _ratio(
-                len(claim_bindings_valid), len(claims)
-            ),
-            "contradiction_precision": _ratio(
-                len(correct_conflicts), len(relation_pairs)
-            ),
-            "contradiction_recall": _ratio(
-                len(correct_conflicts), len(expected_conflict_pairs)
-            ),
+            "claim_evidence_binding_accuracy": _ratio(len(claim_bindings_valid), len(claims)),
+            "contradiction_precision": _ratio(len(correct_conflicts), len(relation_pairs)),
+            "contradiction_recall": _ratio(len(correct_conflicts), len(expected_conflict_pairs)),
             "procedure_step_fidelity": (
-                round(sum(procedure_scores) / len(procedure_scores), 6)
-                if procedure_scores
-                else 0.0
+                round(sum(procedure_scores) / len(procedure_scores), 6) if procedure_scores else 0.0
             ),
             "event_temporal_fidelity": (
                 round(sum(event_scores) / len(event_scores), 6) if event_scores else 0.0
             ),
             "source_coverage": source_coverage,
             "cross_packet_consistency": cross_packet_consistency,
-            "synthesis_groundedness": _ratio(
-                len(grounded_syntheses), len(syntheses)
-            ),
+            "synthesis_groundedness": _ratio(len(grounded_syntheses), len(syntheses)),
             "update_propagation_correctness": update_propagation,
             "stale_withdrawal_prevention": stale_withdrawal_prevention,
             "failure_recovery_rate": _ratio(
@@ -664,21 +645,17 @@ def score(
         metrics["entity_canonicalization_precision"]
         >= THRESHOLDS["entity_canonicalization_precision"]
         and metrics["entity_recall"] >= THRESHOLDS["entity_recall"]
-        and metrics["concept_fusion_precision"]
-        >= THRESHOLDS["concept_fusion_precision"]
+        and metrics["concept_fusion_precision"] >= THRESHOLDS["concept_fusion_precision"]
         and metrics["concept_fusion_recall"] >= THRESHOLDS["concept_fusion_recall"]
         and metrics["source_summary_supported_claim_rate"]
         >= THRESHOLDS["source_summary_supported_claim_rate"]
-        and metrics["unsupported_claim_rate"]
-        <= THRESHOLDS["unsupported_claim_rate_max"]
+        and metrics["unsupported_claim_rate"] <= THRESHOLDS["unsupported_claim_rate_max"]
         and metrics["claim_evidence_binding_accuracy"]
         >= THRESHOLDS["claim_evidence_binding_accuracy"]
-        and metrics["contradiction_precision"]
-        >= THRESHOLDS["contradiction_precision"]
+        and metrics["contradiction_precision"] >= THRESHOLDS["contradiction_precision"]
         and metrics["contradiction_recall"] >= THRESHOLDS["contradiction_recall"]
         and metrics["source_coverage"] >= THRESHOLDS["source_coverage"]
-        and metrics["stale_withdrawal_prevention"]
-        >= THRESHOLDS["stale_withdrawal_prevention"]
+        and metrics["stale_withdrawal_prevention"] >= THRESHOLDS["stale_withdrawal_prevention"]
     )
     passed = bool(
         host_report["status"] == "passed"
@@ -690,9 +667,9 @@ def score(
     )
     formal_release_eligible = bool(
         passed
+        and host_report.get("formal_release_evidence_ready") is True
         and measured_query_report is not None
         and measured_query_report["status"] == "passed"
-        and reviewed["status"] == "recorded"
         and metrics["build_tokens"] is not None
         and metrics["query_tokens"] is not None
     )
@@ -707,9 +684,7 @@ def score(
         "host_report_id": host_report["report_id"],
         "host_report_sha256": host_report_sha256,
         "query_report_id": (
-            measured_query_report["report_id"]
-            if measured_query_report is not None
-            else None
+            measured_query_report["report_id"] if measured_query_report is not None else None
         ),
         "query_report_sha256": (
             sha256_bytes(canonical_json(measured_query_report).encode("utf-8"))

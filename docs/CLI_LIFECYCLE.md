@@ -1,6 +1,6 @@
 # DeepLaw Knowledge CLI lifecycle
 
-Status: **v0.7 compatibility CLI retained by v0.11.0**, reviewed 2026-07-30. New Vaults and autonomous migration use
+Status: **v0.7 compatibility CLI retained by v0.12.0**, reviewed 2026-07-30. New Vaults and autonomous migration use
 the `deeplaw knowledge autonomy ...` and `deeplaw knowledge sink ...` commands documented in
 [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md). Examples below keep legacy writes
 in the offline CLI; Agent MCP remains read-only.
@@ -9,14 +9,14 @@ The current working tree also adds the explicit, resumable
 `deeplaw knowledge compile ...`, purpose-aware `deeplaw knowledge query ...`, and controlled
 `deeplaw knowledge backfill ...` loops. They are documented separately in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md) and are not represented as part of the
-published v0.11.0 wheel.
+published v0.12.0 wheel.
 
 ## Golden Path
 
 Install the formal wheel once:
 
 ```bash
-uv tool install https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/deeplaw-0.11.0-py3-none-any.whl
+uv tool install https://github.com/Eysn0130/DeepLaw/releases/download/v0.12.0/deeplaw-0.12.0-py3-none-any.whl
 ```
 
 The complete normal loop uses five user commands and no internal-ID parsing:

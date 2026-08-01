@@ -3,6 +3,34 @@
 All notable product changes are recorded here. DeepLaw 2.0 is the product name; Python package
 versions follow semantic versioning independently.
 
+## 0.12.0 — 2026-08-01
+
+This release closes Semantic Living Wiki compilation and production editor integration.
+`commercial_release_eligible=true` and `quality_protocol_eligible=true` are exact-manifest facts;
+`competitive_claim_eligible=false` remains unconditional.
+
+### Added
+
+- Semantic Compilation Profile v2 with packet-local observations, bounded run inventory, 15-duty
+  completeness, run-wide identity resolution, closed finalization, and atomic publication.
+- Recoverable revision-bound Synthesis Refresh for source successor, withdrawal, Overview, and
+  community dependencies; Query Plan v5 with explicit provenance partitions and visible fallback.
+- Production Obsidian and Tolaria bridges that reuse first-party CLI/MCP services while retaining
+  ephemeral context and canonical write boundaries.
+- Authoritative Pack capability types, Challenge Trace/replay, citation audit, expert-held-out
+  review state, and a reusable Pack Core contract.
+- Two-phase real Codex/model release evidence on maintainer-confirmed Semantic Gold, provider token
+  accounting, first-party query scoring, and release manifest v5 bindings.
+
+### Verified boundaries
+
+- Deterministic fake-Agent tests remain transaction evidence only. The formal manifest separately
+  binds the exact reviewed real-host report.
+- The Legal Pack stays in the read-only `law_support` process/store. Agent interpretations remain
+  `legal_authority=false`; unconfirmed expert data remains pending.
+- Real Claude Code/OpenCode model tasks and named competitor runs are not claimed. No best,
+  strongest, leading, superiority, or SOTA claim is made.
+
 ## 0.11.0 — 2026-07-30
 
 This release formalizes the Living Wiki Compiler and its release-bound quality closure.

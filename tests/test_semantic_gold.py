@@ -5,10 +5,20 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.hosts.run_semantic_host_harness import not_executed_report
+from benchmarks.hosts.run_semantic_host_harness import (
+    _provider_token_usage,
+    not_executed_report,
+)
+from benchmarks.semantic.export_review_bundle import export_review_bundle
 from benchmarks.semantic.review_gold import confirm_candidate, validate_candidate
 from benchmarks.semantic.run_query_suite import _case_result
 from benchmarks.semantic.score_semantic_run import _query_cost, score
+from deeplaw.knowledge_autonomy import (
+    SINK_OPERATIONS,
+    AutonomousKnowledgeStore,
+    initialize_autonomous_core,
+)
+from deeplaw.knowledge_store import initialize_knowledge_vault
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 CANDIDATE = REPOSITORY / "benchmarks/semantic/semantic-gold-candidate-v1.json"
@@ -52,6 +62,29 @@ def test_semantic_gold_rejects_changed_fixture_bytes(tmp_path: Path) -> None:
     fixture["relative_path"] = "benchmarks/semantic/fixtures/missing.md"
     with pytest.raises(FileNotFoundError):
         validate_candidate(value, repository=REPOSITORY)
+
+
+def test_semantic_review_bundle_excludes_capability_material(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    initialize_knowledge_vault(vault, name="semantic review", scope="personal")
+    initialize_autonomous_core(vault)
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        grant = store.enable_grant(
+            writer_id="semantic-review-test",
+            operations=tuple(sorted(SINK_OPERATIONS)),
+        )
+        assert Path(grant["token_path"]).is_file()
+
+    output = tmp_path / "review-bundle"
+    manifest = export_review_bundle(vault, output)
+
+    assert manifest["capability_tokens_included"] is False
+    assert manifest["source_vault_verified_before_export"] is True
+    assert not (output / ".deeplaw" / "capabilities").exists()
+    assert not list(output.rglob("*.token"))
+    with AutonomousKnowledgeStore(output, read_only=True) as store:
+        assert store.vault_id == manifest["vault_id"]
+        assert store.audit_head == manifest["audit_head"]
 
 
 def test_real_semantic_host_unavailable_is_schema_valid_not_executed() -> None:
@@ -99,9 +132,7 @@ def _phased_corpus(gold: dict) -> dict:
                 "canonical_source_key": canonical_source_key,
                 "source_id": f"source_{index:024x}",
                 "source_revision_id": f"sourcerev_{index:024x}",
-                "phase": (
-                    "successor" if source["source_key"] == "update-v2" else "baseline"
-                ),
+                "phase": ("successor" if source["source_key"] == "update-v2" else "baseline"),
                 "initial_lifecycle_status": (
                     "pending" if source["source_key"] == "update-v2" else "active"
                 ),
@@ -142,6 +173,8 @@ def test_phased_semantic_host_unavailable_binds_lifecycle() -> None:
         reason="The external host is not installed in core CI.",
     )
     assert report["schema_version"] == "deeplaw.real-semantic-host-report/v2"
+    assert len(report["binding"]["commit"]) == 40
+    assert report["binding"]["package_version"] == "0.12.0"
     assert [item["phase"] for item in report["phases"]] == [
         "baseline",
         "successor",
@@ -153,12 +186,32 @@ def test_phased_semantic_host_unavailable_binds_lifecycle() -> None:
     assert report["formal_release_evidence_ready"] is False
 
 
+def test_real_host_usage_accepts_only_provider_reported_turn_events() -> None:
+    stdout = b"\n".join(
+        (
+            b'{"type":"turn.completed","usage":{"input_tokens":12,"output_tokens":3}}',
+            b'{"type":"item.completed","usage":{"input_tokens":999,"output_tokens":999}}',
+            b'{"type":"turn.completed","usage":{"input_tokens":5,"output_tokens":2}}',
+        )
+    )
+    assert _provider_token_usage(stdout) == {
+        "status": "provider_reported",
+        "input_tokens": 17,
+        "output_tokens": 5,
+        "total_tokens": 22,
+    }
+    assert _provider_token_usage(b"not-json") == {
+        "status": "unreported",
+        "input_tokens": None,
+        "output_tokens": None,
+        "total_tokens": None,
+    }
+
+
 def test_phased_semantic_host_rejects_false_successor_identity() -> None:
     gold = _candidate()
     corpus = _phased_corpus(gold)
-    successor = next(
-        item for item in corpus["sources"] if item["source_key"] == "update-v2"
-    )
+    successor = next(item for item in corpus["sources"] if item["source_key"] == "update-v2")
     successor["canonical_source_key"] = "sourcekey_" + "b" * 24
     with pytest.raises(ValueError, match="preserve its canonical Source identity"):
         not_executed_report(
@@ -204,11 +257,14 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
         },
         "measured_at": "2026-08-01T01:02:03Z",
     }
-    assert _query_cost(
-        value,
-        gold_id=value["gold_id"],
-        host_report_id=value["host_report_id"],
-    ) == value
+    assert (
+        _query_cost(
+            value,
+            gold_id=value["gold_id"],
+            host_report_id=value["host_report_id"],
+        )
+        == value
+    )
     with pytest.raises(ValueError, match="does not bind"):
         _query_cost(
             value,
@@ -257,9 +313,7 @@ def test_query_suite_requires_only_an_explicit_gap_for_unanswerable() -> None:
 
 
 def test_query_suite_rejects_withdrawn_source_selection() -> None:
-    case = next(
-        case for case in _candidate()["cases"] if case["task_type"] == "source_withdrawal"
-    )
+    case = next(case for case in _candidate()["cases"] if case["task_type"] == "source_withdrawal")
     withdrawn = "sourcerev_" + "a" * 24
     output = _query_output(
         compiled=[

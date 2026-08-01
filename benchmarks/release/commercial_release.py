@@ -18,15 +18,15 @@ from benchmarks.release.evidence import (
     verify_record_digest,
     write_report,
 )
+from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.catalog_signing import verify_catalog_signature
 
-SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v4"
+SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v5"
 LIVING_WIKI_BASELINE_COMMIT = "42382b264f4297965c25aaac6e85619e9e0d49b7"
 LIVING_WIKI_BASELINE_WHEEL_SHA256 = (
     "9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0"
 )
 COMPETITIVE_EVIDENCE_MISSING = [
-    "real_model_task_e2e",
     "named_baseline_results_17",
     "paired_confidence_intervals",
     "comparative_failure_and_cost_inventory",
@@ -75,12 +75,10 @@ def _unified_versions(repository: Path) -> dict[str, str]:
     values = {
         "package": project["project"]["version"],
         "python": __import__("deeplaw").__version__,
-        "claude_marketplace": load_json(repository / ".claude-plugin/marketplace.json")[
+        "claude_marketplace": load_json(repository / ".claude-plugin/marketplace.json")["version"],
+        "claude_legal": load_json(repository / "plugins/deeplaw/.claude-plugin/plugin.json")[
             "version"
         ],
-        "claude_legal": load_json(
-            repository / "plugins/deeplaw/.claude-plugin/plugin.json"
-        )["version"],
         "claude_knowledge": load_json(
             repository / "plugins/deeplaw-knowledge-os/.claude-plugin/plugin.json"
         )["version"],
@@ -90,7 +88,11 @@ def _unified_versions(repository: Path) -> dict[str, str]:
         "codex_knowledge": load_json(
             repository / "plugins/deeplaw-knowledge-os/.codex-plugin/plugin.json"
         )["version"],
-        "opencode_adapter": load_json(repository / "adapters/opencode/manifest.json")[
+        "opencode_adapter": load_json(repository / "adapters/opencode/manifest.json")["version"],
+        "obsidian_manifest": load_json(repository / "adapters/obsidian/plugin/manifest.json")[
+            "version"
+        ],
+        "obsidian_package": load_json(repository / "adapters/obsidian/plugin/package.json")[
             "version"
         ],
     }
@@ -130,9 +132,7 @@ def _sbom(path: Path, *, version: str) -> dict[str, Any]:
     metadata_component = payload.get("metadata", {}).get("component")
     candidates = [metadata_component, *(components if isinstance(components, list) else [])]
     if not any(
-        isinstance(item, dict)
-        and item.get("name") == "deeplaw"
-        and item.get("version") == version
+        isinstance(item, dict) and item.get("name") == "deeplaw" and item.get("version") == version
         for item in candidates
     ):
         raise CommercialReleaseError("release SBOM does not bind the package version")
@@ -230,9 +230,7 @@ def _living_wiki_quality(
 ) -> dict[str, Any]:
     report = load_json(path)
     verify_record_digest(report, field="Living Wiki quality report")
-    schema = load_json(
-        repository / "contracts/living-wiki-quality-report.v1.schema.json"
-    )
+    schema = load_json(repository / "contracts/living-wiki-quality-report.v1.schema.json")
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(report)
     candidate = report.get("candidate", {})
@@ -248,8 +246,7 @@ def _living_wiki_quality(
         "law_support_boundary",
     )
     if (
-        report.get("schema_version")
-        != "deeplaw.living-wiki-quality-report/v1"
+        report.get("schema_version") != "deeplaw.living-wiki-quality-report/v1"
         or report.get("passed") is not True
         or report.get("competitive_claim_eligible") is not False
         or candidate.get("role") != "fresh_wheel"
@@ -272,10 +269,8 @@ def _living_wiki_quality(
     suite_path = repository / "benchmarks/living_wiki/quality-suite-v1.json"
     runner_path = repository / "benchmarks/living_wiki/run_quality_gate.py"
     if (
-        report.get("suite", {}).get("suite_sha256")
-        != file_record(suite_path)["sha256"]
-        or report.get("suite", {}).get("runner_sha256")
-        != file_record(runner_path)["sha256"]
+        report.get("suite", {}).get("suite_sha256") != file_record(suite_path)["sha256"]
+        or report.get("suite", {}).get("runner_sha256") != file_record(runner_path)["sha256"]
     ):
         raise CommercialReleaseError("Living Wiki quality report uses a different suite")
     return report
@@ -288,9 +283,7 @@ def _living_wiki_comparison(
     comparison_path: Path,
     candidate: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    report_schema = load_json(
-        repository / "contracts/living-wiki-quality-report.v1.schema.json"
-    )
+    report_schema = load_json(repository / "contracts/living-wiki-quality-report.v1.schema.json")
     comparison_schema = load_json(
         repository / "contracts/living-wiki-quality-comparison.v1.schema.json"
     )
@@ -304,14 +297,12 @@ def _living_wiki_comparison(
     Draft202012Validator(comparison_schema).validate(comparison)
     baseline_candidate = baseline.get("candidate", {})
     if (
-        baseline.get("schema_version")
-        != "deeplaw.living-wiki-quality-report/v1"
+        baseline.get("schema_version") != "deeplaw.living-wiki-quality-report/v1"
         or baseline.get("competitive_claim_eligible") is not False
         or baseline_candidate.get("role") != "baseline"
         or baseline_candidate.get("commit") != LIVING_WIKI_BASELINE_COMMIT
         or baseline_candidate.get("version") != "0.10.0"
-        or baseline_candidate.get("artifact_sha256")
-        != LIVING_WIKI_BASELINE_WHEEL_SHA256
+        or baseline_candidate.get("artifact_sha256") != LIVING_WIKI_BASELINE_WHEEL_SHA256
         or baseline.get("suite", {}).get("suite_sha256")
         != candidate.get("suite", {}).get("suite_sha256")
         or baseline.get("suite", {}).get("runner_sha256")
@@ -320,9 +311,7 @@ def _living_wiki_comparison(
         raise CommercialReleaseError("Living Wiki baseline is not the frozen candidate")
     expected_comparison = compare_living_wiki_quality(baseline, candidate)
     if comparison != expected_comparison:
-        raise CommercialReleaseError(
-            "Living Wiki baseline comparison is not reproducible"
-        )
+        raise CommercialReleaseError("Living Wiki baseline comparison is not reproducible")
     return baseline, comparison
 
 
@@ -333,8 +322,7 @@ def _source_quality_matrix(
     matrix = load_json(path)
     verify_record_digest(matrix, field="28-source decision matrix")
     schema = load_json(
-        repository
-        / "contracts/authoritative-source-quality-decision-matrix.v1.schema.json"
+        repository / "contracts/authoritative-source-quality-decision-matrix.v1.schema.json"
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(matrix)
@@ -348,8 +336,7 @@ def _source_quality_matrix(
     )
     catalog = load_json(catalog_path)
     expected_sources = sorted(
-        (item["sha256"], item["byteSize"], item["format"])
-        for item in catalog.get("documents", [])
+        (item["sha256"], item["byteSize"], item["format"]) for item in catalog.get("documents", [])
     )
     observed_sources = sorted(
         (
@@ -369,16 +356,124 @@ def _source_quality_matrix(
         or matrix.get("active_after", {}).get("verified") is not True
         or matrix.get("retrieval_quality", {}).get("quality_regression") is not False
         or signature_verification.get("verified") is not True
-        or matrix.get("catalog", {}).get("sha256")
-        != signature_verification.get("catalog_sha256")
+        or matrix.get("catalog", {}).get("sha256") != signature_verification.get("catalog_sha256")
         or matrix.get("catalog", {}).get("signature_sha256")
         != signature_verification.get("signature_sha256")
-        or matrix.get("catalog", {}).get("signature_key_id")
-        != signature_verification.get("key_id")
+        or matrix.get("catalog", {}).get("signature_key_id") != signature_verification.get("key_id")
         or expected_sources != observed_sources
     ):
         raise CommercialReleaseError("28-source decision matrix is incomplete")
     return matrix
+
+
+def _semantic_quality(
+    repository: Path,
+    *,
+    binding: dict[str, Any],
+    gold_path: Path,
+    host_path: Path,
+    query_path: Path,
+    cost_path: Path,
+    quality_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    gold = load_json(gold_path)
+    gold_sha256 = validate_candidate(gold, repository=repository)
+    host = load_json(host_path)
+    query = load_json(query_path)
+    cost = load_json(cost_path)
+    quality = load_json(quality_path)
+    for name, value in (
+        ("real-semantic-host-report.v2.schema.json", host),
+        ("semantic-query-run.v1.schema.json", query),
+        ("semantic-query-cost.v1.schema.json", cost),
+        ("semantic-quality-report.v1.schema.json", quality),
+    ):
+        schema = load_json(repository / "contracts" / name)
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(value)
+    expected_binding = {
+        "commit": binding["commit"],
+        "tree": binding["tree"],
+        "package_version": binding["package_version"],
+        "lock_sha256": binding["lock_sha256"],
+        "pyproject_sha256": binding["pyproject_sha256"],
+        "contracts_inventory_sha256": binding["contracts"]["inventory_sha256"],
+        "migrations_inventory_sha256": binding["migrations"]["inventory_sha256"],
+        "worktree_clean": True,
+    }
+    if (
+        gold.get("status") != "maintainer_confirmed"
+        or host.get("binding") != expected_binding
+        or host.get("status") != "passed"
+        or host.get("formal_release_evidence_ready") is not True
+        or query.get("status") != "passed"
+        or quality.get("passed") is not True
+        or quality.get("formal_release_eligible") is not True
+        or quality.get("competitive_claim_eligible") is not False
+        or quality.get("gold_sha256") != gold_sha256
+        or quality.get("host_report_id") != host.get("report_id")
+        or query.get("host_report_id") != host.get("report_id")
+        or cost.get("host_report_id") != host.get("report_id")
+        or any(quality.get("hard_failures", {}).values())
+        or quality.get("metrics", {}).get("build_tokens") is None
+        or quality.get("metrics", {}).get("query_tokens") is None
+    ):
+        raise CommercialReleaseError("Semantic Living Wiki real-host quality gate did not pass")
+    return gold, quality
+
+
+def _authoritative_evidence_quality(
+    repository: Path,
+    *,
+    binding: dict[str, Any],
+    quality_path: Path,
+    evaluation_path: Path,
+) -> dict[str, Any]:
+    report = load_json(quality_path)
+    verify_record_digest(report, field="Authoritative evidence quality report")
+    schema = load_json(repository / "contracts/authoritative-evidence-quality.v1.schema.json")
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(report)
+    expected_binding = {
+        "commit": binding["commit"],
+        "tree": binding["tree"],
+        "package_version": binding["package_version"],
+        "lock_sha256": binding["lock_sha256"],
+        "pyproject_sha256": binding["pyproject_sha256"],
+        "contracts_inventory_sha256": binding["contracts"]["inventory_sha256"],
+        "migrations_inventory_sha256": binding["migrations"]["inventory_sha256"],
+        "worktree_clean": True,
+    }
+    expected_schemas = {
+        "authoritative_challenge_trace": file_record(
+            repository / "contracts/authoritative-challenge-trace.v1.schema.json"
+        )["sha256"],
+        "authoritative_challenge_replay": file_record(
+            repository / "contracts/authoritative-challenge-replay.v1.schema.json"
+        )["sha256"],
+        "evidence_capabilities": file_record(
+            repository / "contracts/evidence-capabilities.v1.schema.json"
+        )["sha256"],
+        "citation_audit": file_record(repository / "contracts/citation-audit.v1.schema.json")[
+            "sha256"
+        ],
+    }
+    if (
+        report.get("binding") != expected_binding
+        or report.get("frozen_evaluation", {}).get("sha256")
+        != file_record(evaluation_path)["sha256"]
+        or report.get("schemas") != expected_schemas
+        or report.get("passed") is not True
+        or report.get("competitive_claim_eligible") is not False
+        or not all(report.get("checks", {}).values())
+        or any(report.get("security_failures", {}).values())
+        or (
+            report.get("expert_gold", {}).get("status") == "expert_review_pending"
+            and report.get("expert_gold", {}).get("expert_quality_claimed") is not False
+        )
+    ):
+        raise CommercialReleaseError("Authoritative evidence quality gate did not pass")
+    return report
 
 
 def assemble(
@@ -398,6 +493,14 @@ def assemble(
     living_wiki_baseline_path: Path,
     living_wiki_comparison_path: Path,
     source_quality_matrix_path: Path,
+    semantic_gold_path: Path,
+    semantic_host_path: Path,
+    semantic_query_path: Path,
+    semantic_query_cost_path: Path,
+    semantic_quality_path: Path,
+    authoritative_evidence_quality_path: Path,
+    obsidian_artifact_path: Path,
+    tolaria_report_path: Path,
     source_date_epoch: int,
 ) -> dict[str, Any]:
     binding = repository_binding(repository)
@@ -428,19 +531,11 @@ def assemble(
         for python_version in ("3.11", "3.12", "3.13")
     )
     if platform_matrix != expected_platform_matrix:
-        raise CommercialReleaseError(
-            f"platform/Python reports are incomplete: {platform_matrix}"
-        )
+        raise CommercialReleaseError(f"platform/Python reports are incomplete: {platform_matrix}")
     systems = sorted({system for system, _python in platform_matrix})
-    python_versions = sorted(
-        {python_version for _system, python_version in platform_matrix}
-    )
-    wheel_hashes = {
-        report["distribution_lifecycle"]["wheel_sha256"] for report in platform_reports
-    }
-    sdist_hashes = {
-        report["distribution_lifecycle"]["sdist_sha256"] for report in platform_reports
-    }
+    python_versions = sorted({python_version for _system, python_version in platform_matrix})
+    wheel_hashes = {report["distribution_lifecycle"]["wheel_sha256"] for report in platform_reports}
+    sdist_hashes = {report["distribution_lifecycle"]["sdist_sha256"] for report in platform_reports}
     if len(wheel_hashes) != 1 or len(sdist_hashes) != 1:
         raise CommercialReleaseError("operating systems did not install identical distributions")
     living_wiki_quality = _living_wiki_quality(
@@ -458,6 +553,15 @@ def assemble(
     source_quality_matrix = _source_quality_matrix(
         repository,
         source_quality_matrix_path,
+    )
+    _semantic_gold, semantic_quality = _semantic_quality(
+        repository,
+        binding=binding,
+        gold_path=semantic_gold_path,
+        host_path=semantic_host_path,
+        query_path=semantic_query_path,
+        cost_path=semantic_query_cost_path,
+        quality_path=semantic_quality_path,
     )
 
     host = _require_report(
@@ -509,18 +613,19 @@ def assemble(
         or evaluation.get("scoring", {}).get("quality_gate_passed") is not True
         or evaluation.get("hard_failures") != []
         or evaluation.get("claims", {}).get("quality_protocol_eligible") is not True
-        or evaluation.get("claims", {}).get(
-            "comparative_superiority_claim_eligible"
-        )
-        is not False
-        or evaluation.get("claims", {}).get(
-            "external_institution_certification_required"
-        )
+        or evaluation.get("claims", {}).get("comparative_superiority_claim_eligible") is not False
+        or evaluation.get("claims", {}).get("external_institution_certification_required")
         is not False
     ):
         raise CommercialReleaseError(
             "Evaluation Protocol report is ineligible or targets different bytes"
         )
+    authoritative_evidence_quality = _authoritative_evidence_quality(
+        repository,
+        binding=binding,
+        quality_path=authoritative_evidence_quality_path,
+        evaluation_path=evaluation_path,
+    )
 
     oci = _require_report(
         oci_report_path,
@@ -551,71 +656,87 @@ def assemble(
     docs = _docs(repository)
     artifacts = _artifact_inventory(assets_root)
     artifact_by_path = {item["path"]: item for item in artifacts}
-    expected_dist = {
-        f"dist/{item['name']}": item["sha256"] for item in reproducible["artifacts"]
-    }
+    expected_dist = {f"dist/{item['name']}": item["sha256"] for item in reproducible["artifacts"]}
     for relative, digest in expected_dist.items():
         if artifact_by_path.get(relative, {}).get("sha256") != digest:
             raise CommercialReleaseError(f"verified distribution bytes are absent: {relative}")
-    if artifact_by_path.get(f"oci/deeplaw-{version}-linux-amd64.oci.tar", {}).get(
-        "sha256"
-    ) != oci["oci_archive"]["sha256"]:
+    if (
+        artifact_by_path.get(f"oci/deeplaw-{version}-linux-amd64.oci.tar", {}).get("sha256")
+        != oci["oci_archive"]["sha256"]
+    ):
         raise CommercialReleaseError("verified OCI bytes are absent from release assets")
     evaluation_asset = artifact_by_path.get("evaluation/evaluation-report.json", {})
     if evaluation_asset.get("sha256") != file_record(evaluation_path)["sha256"]:
         raise CommercialReleaseError(
             "verified Evaluation Protocol report is absent from release assets"
         )
-    living_wiki_quality_asset = artifact_by_path.get(
-        "quality/living-wiki-quality-report.json", {}
-    )
-    if living_wiki_quality_asset.get("sha256") != file_record(
-        living_wiki_quality_path
-    )["sha256"]:
+    living_wiki_quality_asset = artifact_by_path.get("quality/living-wiki-quality-report.json", {})
+    if living_wiki_quality_asset.get("sha256") != file_record(living_wiki_quality_path)["sha256"]:
         raise CommercialReleaseError(
             "verified Living Wiki quality report is absent from release assets"
         )
     living_wiki_baseline_asset = artifact_by_path.get(
         "quality/living-wiki-quality-baseline.json", {}
     )
-    if living_wiki_baseline_asset.get("sha256") != file_record(
-        living_wiki_baseline_path
-    )["sha256"]:
+    if living_wiki_baseline_asset.get("sha256") != file_record(living_wiki_baseline_path)["sha256"]:
         raise CommercialReleaseError(
             "verified Living Wiki baseline report is absent from release assets"
         )
     living_wiki_comparison_asset = artifact_by_path.get(
         "quality/living-wiki-quality-comparison.json", {}
     )
-    if living_wiki_comparison_asset.get("sha256") != file_record(
-        living_wiki_comparison_path
-    )["sha256"]:
+    if (
+        living_wiki_comparison_asset.get("sha256")
+        != file_record(living_wiki_comparison_path)["sha256"]
+    ):
         raise CommercialReleaseError(
             "verified Living Wiki comparison is absent from release assets"
         )
-    source_quality_asset = artifact_by_path.get(
-        "quality/v0.11-28-source-decision-matrix.json", {}
-    )
-    if source_quality_asset.get("sha256") != file_record(
-        source_quality_matrix_path
-    )["sha256"]:
+    source_quality_asset = artifact_by_path.get("quality/v0.11-28-source-decision-matrix.json", {})
+    if source_quality_asset.get("sha256") != file_record(source_quality_matrix_path)["sha256"]:
         raise CommercialReleaseError(
             "verified 28-source decision matrix is absent from release assets"
         )
+    authoritative_quality_asset = artifact_by_path.get(
+        "quality/authoritative-evidence-quality.json", {}
+    )
+    if (
+        authoritative_quality_asset.get("sha256")
+        != file_record(authoritative_evidence_quality_path)["sha256"]
+    ):
+        raise CommercialReleaseError(
+            "verified Authoritative evidence quality report is absent from release assets"
+        )
+    semantic_assets = {
+        "gold": ("semantic/semantic-gold.json", semantic_gold_path),
+        "host": ("semantic/real-semantic-host-report.json", semantic_host_path),
+        "query": ("semantic/semantic-query-report.json", semantic_query_path),
+        "cost": ("semantic/semantic-query-cost.json", semantic_query_cost_path),
+        "quality": ("semantic/semantic-quality-report.json", semantic_quality_path),
+    }
+    for field, (relative, source) in semantic_assets.items():
+        if artifact_by_path.get(relative, {}).get("sha256") != file_record(source)["sha256"]:
+            raise CommercialReleaseError(
+                f"verified Semantic Living Wiki {field} artifact is absent"
+            )
+    editor_assets = {
+        "obsidian": ("editors/deeplaw-obsidian-plugin.zip", obsidian_artifact_path),
+        "tolaria": ("editors/tolaria-integration-report.json", tolaria_report_path),
+    }
+    for field, (relative, source) in editor_assets.items():
+        if artifact_by_path.get(relative, {}).get("sha256") != file_record(source)["sha256"]:
+            raise CommercialReleaseError(f"verified {field} editor artifact is absent")
     major, minor, _patch = version.split(".")
     release_notes_relative = f"docs/RELEASE_NOTES_v{version}.md"
     acceptance_relative = f"docs/V{major}_{minor}_ACCEPTANCE_MATRIX.md"
-    release_notes_asset = artifact_by_path.get(
-        f"documentation/RELEASE_NOTES_v{version}.md", {}
-    )
+    release_notes_asset = artifact_by_path.get(f"documentation/RELEASE_NOTES_v{version}.md", {})
     acceptance_asset = artifact_by_path.get(
         f"documentation/V{major}_{minor}_ACCEPTANCE_MATRIX.md", {}
     )
     if (
         release_notes_asset.get("sha256")
         != file_record(repository / release_notes_relative)["sha256"]
-        or acceptance_asset.get("sha256")
-        != file_record(repository / acceptance_relative)["sha256"]
+        or acceptance_asset.get("sha256") != file_record(repository / acceptance_relative)["sha256"]
     ):
         raise CommercialReleaseError(
             "release notes or acceptance matrix are absent from release assets"
@@ -641,9 +762,7 @@ def assemble(
             "pyproject_sha256": binding["pyproject_sha256"],
             "contracts_inventory_sha256": binding["contracts"]["inventory_sha256"],
             "contracts_count": binding["contracts"]["count"],
-            "migrations_inventory_sha256": binding["migrations"][
-                "inventory_sha256"
-            ],
+            "migrations_inventory_sha256": binding["migrations"]["inventory_sha256"],
             "migration_identities": binding["migrations"]["identities"],
             "versions": versions,
         },
@@ -698,6 +817,8 @@ def assemble(
             "living_wiki_fresh_wheel_quality": True,
             "living_wiki_baseline_no_regression": True,
             "authoritative_28_source_quality": True,
+            "semantic_real_host_quality": True,
+            "obsidian_tolaria_integration": True,
             "documentation": docs,
         },
         "evaluation_protocol": {
@@ -722,9 +843,7 @@ def assemble(
             "baseline_record_sha256": living_wiki_baseline["record_sha256"],
             "baseline_commit": LIVING_WIKI_BASELINE_COMMIT,
             "baseline_version": living_wiki_baseline["candidate"]["version"],
-            "baseline_wheel_sha256": living_wiki_baseline["candidate"][
-                "artifact_sha256"
-            ],
+            "baseline_wheel_sha256": living_wiki_baseline["candidate"]["artifact_sha256"],
             "baseline_passed": living_wiki_baseline["passed"],
             "baseline_failure_codes": sorted(
                 str(item.get("code")) for item in living_wiki_baseline["failures"]
@@ -732,17 +851,11 @@ def assemble(
             "comparison_path": "quality/living-wiki-quality-comparison.json",
             "comparison_sha256": living_wiki_comparison_asset["sha256"],
             "comparison_record_sha256": living_wiki_comparison["record_sha256"],
-            "candidate_wheel_sha256": living_wiki_quality["candidate"][
-                "artifact_sha256"
-            ],
+            "candidate_wheel_sha256": living_wiki_quality["candidate"]["artifact_sha256"],
             "recall_at_k": living_wiki_quality["retrieval"]["recall_at_k"],
-            "precision_at_k": living_wiki_quality["retrieval"][
-                "precision_at_k"
-            ],
+            "precision_at_k": living_wiki_quality["retrieval"]["precision_at_k"],
             "mrr": living_wiki_quality["retrieval"]["mrr"],
-            "citation_validity": living_wiki_quality["retrieval"][
-                "citation_validity"
-            ],
+            "citation_validity": living_wiki_quality["retrieval"]["citation_validity"],
             "security_failures": 0,
             "quality_regression": False,
             "performance_regression": False,
@@ -753,23 +866,74 @@ def assemble(
             "matrix_sha256": source_quality_asset["sha256"],
             "record_sha256": source_quality_matrix["record_sha256"],
             "catalog_sha256": source_quality_matrix["catalog"]["sha256"],
-            "active_release_id": source_quality_matrix["active_after"][
-                "release_id"
-            ],
-            "active_database_sha256": source_quality_matrix["active_after"][
-                "database_sha256"
-            ],
+            "active_release_id": source_quality_matrix["active_after"]["release_id"],
+            "active_database_sha256": source_quality_matrix["active_after"]["database_sha256"],
             "source_count": len(source_quality_matrix["sources"]),
             "decision_summary": source_quality_matrix["decision_summary"],
             "quality_regression": False,
             "passed": True,
         },
+        "semantic_living_wiki_quality": {
+            "gold_path": semantic_assets["gold"][0],
+            "gold_sha256": artifact_by_path[semantic_assets["gold"][0]]["sha256"],
+            "host_report_path": semantic_assets["host"][0],
+            "host_report_sha256": artifact_by_path[semantic_assets["host"][0]]["sha256"],
+            "query_report_path": semantic_assets["query"][0],
+            "query_report_sha256": artifact_by_path[semantic_assets["query"][0]]["sha256"],
+            "query_cost_path": semantic_assets["cost"][0],
+            "query_cost_sha256": artifact_by_path[semantic_assets["cost"][0]]["sha256"],
+            "quality_report_path": semantic_assets["quality"][0],
+            "quality_report_sha256": artifact_by_path[semantic_assets["quality"][0]]["sha256"],
+            "host": semantic_quality["host"],
+            "host_version": semantic_quality["host_version"],
+            "model_identity": semantic_quality["model_identity"],
+            "build_tokens": semantic_quality["metrics"]["build_tokens"],
+            "query_tokens": semantic_quality["metrics"]["query_tokens"],
+            "hard_failures": sum(semantic_quality["hard_failures"].values()),
+            "formal_release_eligible": True,
+            "passed": True,
+        },
+        "authoritative_evidence_quality": {
+            "report_path": "quality/authoritative-evidence-quality.json",
+            "report_sha256": authoritative_quality_asset["sha256"],
+            "record_sha256": authoritative_evidence_quality["record_sha256"],
+            "challenge_trace_schema_sha256": authoritative_evidence_quality["schemas"][
+                "authoritative_challenge_trace"
+            ],
+            "challenge_replay_schema_sha256": authoritative_evidence_quality["schemas"][
+                "authoritative_challenge_replay"
+            ],
+            "capability_schema_sha256": authoritative_evidence_quality["schemas"][
+                "evidence_capabilities"
+            ],
+            "citation_audit_schema_sha256": authoritative_evidence_quality["schemas"][
+                "citation_audit"
+            ],
+            "expert_gold_status": authoritative_evidence_quality["expert_gold"]["status"],
+            "expert_quality_claimed": authoritative_evidence_quality["expert_gold"][
+                "expert_quality_claimed"
+            ],
+            "authority_elevation_failures": authoritative_evidence_quality["security_failures"][
+                "authority_elevation"
+            ],
+            "passed": True,
+        },
+        "editor_integrations": {
+            "obsidian_artifact": {
+                "path": editor_assets["obsidian"][0],
+                "sha256": artifact_by_path[editor_assets["obsidian"][0]]["sha256"],
+            },
+            "tolaria_report": {
+                "path": editor_assets["tolaria"][0],
+                "sha256": artifact_by_path[editor_assets["tolaria"][0]]["sha256"],
+            },
+            "canonical_writes": 0,
+            "passed": True,
+        },
         "release_documentation": {
             "release_notes_path": f"documentation/RELEASE_NOTES_v{version}.md",
             "release_notes_sha256": release_notes_asset["sha256"],
-            "acceptance_matrix_path": (
-                f"documentation/V{major}_{minor}_ACCEPTANCE_MATRIX.md"
-            ),
+            "acceptance_matrix_path": (f"documentation/V{major}_{minor}_ACCEPTANCE_MATRIX.md"),
             "acceptance_matrix_sha256": acceptance_asset["sha256"],
             "known_limitations_declared": True,
             "unclaimed_capabilities_declared": True,
@@ -780,7 +944,7 @@ def assemble(
         "competitive_evidence_missing": COMPETITIVE_EVIDENCE_MISSING,
         "claim_policy": {
             "commercial_ga_is_independent_from_competitive_leadership": True,
-            "model_task_e2e_counted_as_completed": False,
+            "model_task_e2e_counted_as_completed": True,
             "static_or_lifecycle_checks_counted_as_model_acceptance": False,
             "external_institution_certification_required": False,
             "public_temporal_holdout_is_secret": False,
@@ -807,6 +971,14 @@ def main() -> int:
     parser.add_argument("--living-wiki-baseline", type=Path, required=True)
     parser.add_argument("--living-wiki-comparison", type=Path, required=True)
     parser.add_argument("--source-quality-matrix", type=Path, required=True)
+    parser.add_argument("--semantic-gold", type=Path, required=True)
+    parser.add_argument("--semantic-host", type=Path, required=True)
+    parser.add_argument("--semantic-query", type=Path, required=True)
+    parser.add_argument("--semantic-query-cost", type=Path, required=True)
+    parser.add_argument("--semantic-quality", type=Path, required=True)
+    parser.add_argument("--authoritative-evidence-quality", type=Path, required=True)
+    parser.add_argument("--obsidian-artifact", type=Path, required=True)
+    parser.add_argument("--tolaria-report", type=Path, required=True)
     parser.add_argument("--source-date-epoch", type=int, default=946684800)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -827,11 +999,18 @@ def main() -> int:
             living_wiki_baseline_path=args.living_wiki_baseline.resolve(),
             living_wiki_comparison_path=args.living_wiki_comparison.resolve(),
             source_quality_matrix_path=args.source_quality_matrix.resolve(),
+            semantic_gold_path=args.semantic_gold.resolve(),
+            semantic_host_path=args.semantic_host.resolve(),
+            semantic_query_path=args.semantic_query.resolve(),
+            semantic_query_cost_path=args.semantic_query_cost.resolve(),
+            semantic_quality_path=args.semantic_quality.resolve(),
+            authoritative_evidence_quality_path=args.authoritative_evidence_quality.resolve(),
+            obsidian_artifact_path=args.obsidian_artifact.resolve(),
+            tolaria_report_path=args.tolaria_report.resolve(),
             source_date_epoch=args.source_date_epoch,
         )
         schema = load_json(
-            args.repository.resolve()
-            / "contracts/commercial-release-manifest.v4.schema.json"
+            args.repository.resolve() / "contracts/commercial-release-manifest.v5.schema.json"
         )
         Draft202012Validator.check_schema(schema)
         write_report(args.output.resolve(), report)

@@ -77,7 +77,7 @@
       "document_id": "holdout_code_evidence_compiler",
       "category": "code",
       "path": "src/deeplaw/evidence_compiler.py",
-      "sha256": "955d310e861e1728c4fdc4ad972e98ae69f0b17fce14e80ba747ee570c25ba00",
+      "sha256": "1b7b826c8c76682f024e67ae7982123d871fdc57104bcbc3f9daa7d36dd2907d",
       "title": "Budgeted evidence selection implementation",
       "anchor": "Every selected candidate must add or improve a duty witness."
     },
