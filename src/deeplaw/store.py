@@ -601,6 +601,36 @@ def create_release_database(
                 ),
             )
         by_segment = {segment.segment_id: segment for segment in segments}
+        for relation in relations:
+            provenance = by_segment.get(relation.provenance_segment_id)
+            if (
+                not _RELATION_ID.fullmatch(relation.relation_id)
+                or relation.subject_document_id not in by_document
+                or relation.object_document_id not in by_document
+                or relation.subject_document_id == relation.object_document_id
+                or relation.predicate not in RELATION_TYPES
+                or provenance is None
+                or provenance.document_id != relation.subject_document_id
+                or relation.evidence_sha256 != provenance.text_sha256
+                or relation.review_status != "deterministic_exact"
+                or not relation.derivation
+                or len(relation.derivation) > 200
+            ):
+                raise ValueError(
+                    "legal relation violates the deterministic provenance contract"
+                )
+            for field_name, value in (
+                ("valid_from", relation.valid_from),
+                ("valid_to", relation.valid_to),
+            ):
+                if value is not None:
+                    canonical_date(value, field=f"relation {field_name}")
+            if (
+                relation.valid_from
+                and relation.valid_to
+                and relation.valid_to <= relation.valid_from
+            ):
+                raise ValueError("legal relation valid_to must be after valid_from")
         capability_records = evidence_capability_records(
             documents=documents,
             segments=segments,
@@ -629,33 +659,6 @@ def create_release_database(
             ],
         )
         for relation in relations:
-            provenance = by_segment.get(relation.provenance_segment_id)
-            if (
-                not _RELATION_ID.fullmatch(relation.relation_id)
-                or relation.subject_document_id not in by_document
-                or relation.object_document_id not in by_document
-                or relation.subject_document_id == relation.object_document_id
-                or relation.predicate not in RELATION_TYPES
-                or provenance is None
-                or provenance.document_id != relation.subject_document_id
-                or relation.evidence_sha256 != provenance.text_sha256
-                or relation.review_status != "deterministic_exact"
-                or not relation.derivation
-                or len(relation.derivation) > 200
-            ):
-                raise ValueError("legal relation violates the deterministic provenance contract")
-            for field_name, value in (
-                ("valid_from", relation.valid_from),
-                ("valid_to", relation.valid_to),
-            ):
-                if value is not None:
-                    canonical_date(value, field=f"relation {field_name}")
-            if (
-                relation.valid_from
-                and relation.valid_to
-                and relation.valid_to <= relation.valid_from
-            ):
-                raise ValueError("legal relation valid_to must be after valid_from")
             connection.execute(
                 """
                 INSERT INTO legal_edges VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

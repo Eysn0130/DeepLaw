@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:deeplaw:schema:law-support-output:v4",
   "title": "DeepLawSupportOutputV4",
+  "type": "object",
   "oneOf": [
     {"$ref": "urn:deeplaw:schema:law-support-output:v3"},
     {"$ref": "urn:deeplaw:schema:law-release-info:v3"},
