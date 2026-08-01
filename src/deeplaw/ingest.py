@@ -23,6 +23,8 @@ from .store import (
     activate_release,
     create_release_database,
     database_sha256,
+    evidence_capability_inventory_sha256,
+    evidence_capability_records,
     verify_release_artifact,
 )
 from .util import canonical_date, canonical_json, sha256_bytes, sha256_file, stable_id
@@ -576,6 +578,14 @@ def build_release(
 
     relations = derive_relations(documents, all_segments)
     report.relation_count = len(relations)
+    capability_records = evidence_capability_records(
+        documents=documents,
+        segments=all_segments,
+        collection_scope=source_scope,
+    )
+    capability_inventory_sha256 = evidence_capability_inventory_sha256(
+        capability_records
+    )
     derivation_payload = {
         "ingestion_schema": "deeplaw.ingestion/v1",
         "release_schema": SCHEMA_VERSION,
@@ -609,6 +619,7 @@ def build_release(
             for segment in all_segments
         ],
         "relations": [relation.to_dict() for relation in relations],
+        "evidence_capability_inventory_sha256": capability_inventory_sha256,
         "extractors": [
             {
                 "path": item["path"],
@@ -669,6 +680,10 @@ def build_release(
         ),
         "vector_index": False,
         "derived_wiki": False,
+        "capability_schema": "deeplaw.evidence-capability-record/v1",
+        "capability_inventory_sha256": capability_inventory_sha256,
+        "previous_release_id": None,
+        "migration_identity": "native-build/v1",
     }
     if source_scope == "user_private":
         release_metadata.update(

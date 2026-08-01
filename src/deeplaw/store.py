@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sqlite3
+import tempfile
 from pathlib import Path
 from typing import Any
 
+from .evidence_capabilities import capabilities_for_segment
 from .evidence_graph import RELATION_TYPES, EvidenceRelation
 from .models import DocumentBlock, Segment, SourceDocument
 from .util import (
@@ -16,10 +19,13 @@ from .util import (
     search_terms,
     sha256_bytes,
     sha256_file,
+    stable_id,
 )
 
-SCHEMA_VERSION = "deeplaw.release/v2"
-STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v5"
+SCHEMA_VERSION = "deeplaw.release/v3"
+STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v6"
+LEGACY_SCHEMA_VERSION = "deeplaw.release/v2"
+LEGACY_STORAGE_SCHEMA_VERSION = "deeplaw.sqlite/v5"
 _RELEASE_ID = re.compile(r"^lawrel_[0-9a-f]{32}$")
 _RELATION_ID = re.compile(r"^lawedge_[0-9a-f]{24}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -42,6 +48,12 @@ _RELEASE_REQUIRED_FIELDS = {
     "vector_index",
     "derived_wiki",
 }
+_RELEASE_V3_FIELDS = {
+    "capability_schema",
+    "capability_inventory_sha256",
+    "previous_release_id",
+    "migration_identity",
+}
 _RELEASE_OPTIONAL_FIELDS = {
     "retrieved_on",
     "reviewed_on",
@@ -59,12 +71,17 @@ _RELEASE_OPTIONAL_FIELDS = {
 def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[str, Any]:
     if not isinstance(manifest, dict):
         raise RuntimeError("release manifest must be an object")
+    schema_version = manifest.get("schema_version")
+    required = _RELEASE_REQUIRED_FIELDS | (
+        _RELEASE_V3_FIELDS if schema_version == SCHEMA_VERSION else set()
+    )
+    allowed = required | _RELEASE_OPTIONAL_FIELDS
     fields = set(manifest)
-    missing = _RELEASE_REQUIRED_FIELDS - fields
-    unknown = fields - _RELEASE_REQUIRED_FIELDS - _RELEASE_OPTIONAL_FIELDS
+    missing = required - fields
+    unknown = fields - allowed
     if missing or unknown:
         raise RuntimeError(
-            "release manifest fields do not match the closed v2 contract: "
+            "release manifest fields do not match the selected closed contract: "
             f"missing={sorted(missing)}, unknown={sorted(unknown)}"
         )
     release_id = manifest.get("release_id")
@@ -74,12 +91,37 @@ def _validate_release_manifest(manifest: Any, *, directory_name: str) -> dict[st
         or release_id != directory_name
     ):
         raise RuntimeError("release manifest ID does not match its directory")
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    if schema_version not in {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}:
         raise RuntimeError("unsupported release manifest schema")
     if manifest.get("ingestion_schema") != "deeplaw.ingestion/v1":
         raise RuntimeError("unsupported release ingestion schema")
-    if manifest.get("storage_schema") != STORAGE_SCHEMA_VERSION:
+    expected_storage = (
+        STORAGE_SCHEMA_VERSION
+        if schema_version == SCHEMA_VERSION
+        else LEGACY_STORAGE_SCHEMA_VERSION
+    )
+    if manifest.get("storage_schema") != expected_storage:
         raise RuntimeError("unsupported release storage schema")
+    if schema_version == SCHEMA_VERSION:
+        if manifest.get("capability_schema") != "deeplaw.evidence-capability-record/v1":
+            raise RuntimeError("release capability schema is invalid")
+        capability_digest = manifest.get("capability_inventory_sha256")
+        if not isinstance(capability_digest, str) or not _SHA256.fullmatch(
+            capability_digest
+        ):
+            raise RuntimeError("release capability inventory digest is invalid")
+        previous_release_id = manifest.get("previous_release_id")
+        if previous_release_id is not None and (
+            not isinstance(previous_release_id, str)
+            or not _RELEASE_ID.fullmatch(previous_release_id)
+        ):
+            raise RuntimeError("release previous_release_id is invalid")
+        migration_identity = manifest.get("migration_identity")
+        if migration_identity not in {
+            "native-build/v1",
+            "evidence-capabilities-v1-from-v5",
+        }:
+            raise RuntimeError("release migration_identity is invalid")
     package_name = manifest.get("package_name")
     if package_name is not None and (
         not isinstance(package_name, str) or len(package_name) > 500
@@ -202,6 +244,86 @@ def _token_string(text: str) -> str:
     return " ".join(search_terms(text))
 
 
+def evidence_capability_records(
+    *,
+    documents: list[SourceDocument],
+    segments: list[Segment],
+    collection_scope: str,
+) -> list[dict[str, Any]]:
+    """Materialize the intrinsic, score-independent capability state for a release."""
+    by_document = {document.document_id: document for document in documents}
+    records: list[dict[str, Any]] = []
+    for segment in sorted(segments, key=lambda item: item.segment_id):
+        document = by_document[segment.document_id]
+        capability = capabilities_for_segment(
+            collection_scope=collection_scope,
+            signed_catalog_verified=False,
+            temporal_classification="not_evaluated",
+            as_of=None,
+            extraction_method=document.extraction_method,
+            extraction_review_required=segment.extraction_review_required,
+            extraction_warnings=segment.extraction_risk_flags,
+        )
+        body = {
+            "schema_version": "deeplaw.evidence-capability-record/v1",
+            "segment_id": segment.segment_id,
+            "integrity": capability.integrity,
+            "source_identity_base": capability.source_identity,
+            "authority_metadata_base": capability.authority_metadata,
+            "extraction": capability.extraction,
+            "provenance": capability.provenance,
+        }
+        body["record_sha256"] = sha256_bytes(
+            canonical_json(body).encode("utf-8")
+        )
+        records.append(body)
+    return records
+
+
+def evidence_capability_inventory_sha256(records: list[dict[str, Any]]) -> str:
+    return sha256_bytes(canonical_json(records).encode("utf-8"))
+
+
+def _capability_records_from_connection(
+    connection: sqlite3.Connection,
+    *,
+    collection_scope: str,
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """
+        SELECT segments.segment_id, segments.extraction_review_required,
+               segments.extraction_risk_flags_json, documents.extraction_method
+        FROM segments JOIN documents USING(document_id)
+        ORDER BY segments.segment_id
+        """
+    ).fetchall()
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        capability = capabilities_for_segment(
+            collection_scope=collection_scope,
+            signed_catalog_verified=False,
+            temporal_classification="not_evaluated",
+            as_of=None,
+            extraction_method=row["extraction_method"],
+            extraction_review_required=bool(row["extraction_review_required"]),
+            extraction_warnings=tuple(json.loads(row["extraction_risk_flags_json"])),
+        )
+        body = {
+            "schema_version": "deeplaw.evidence-capability-record/v1",
+            "segment_id": row["segment_id"],
+            "integrity": capability.integrity,
+            "source_identity_base": capability.source_identity,
+            "authority_metadata_base": capability.authority_metadata,
+            "extraction": capability.extraction,
+            "provenance": capability.provenance,
+        }
+        body["record_sha256"] = sha256_bytes(
+            canonical_json(body).encode("utf-8")
+        )
+        records.append(body)
+    return records
+
+
 def create_release_database(
     path: Path,
     *,
@@ -320,6 +442,17 @@ def create_release_database(
                 ON legal_edges(subject_document_id, predicate, object_document_id);
             CREATE INDEX legal_edges_object
                 ON legal_edges(object_document_id, predicate, subject_document_id);
+
+            CREATE TABLE evidence_capabilities (
+                segment_id TEXT PRIMARY KEY REFERENCES segments(segment_id),
+                schema_version TEXT NOT NULL,
+                integrity TEXT NOT NULL,
+                source_identity_base TEXT NOT NULL,
+                authority_metadata_base TEXT NOT NULL,
+                extraction TEXT NOT NULL,
+                provenance TEXT NOT NULL,
+                record_sha256 TEXT NOT NULL
+            ) WITHOUT ROWID;
 
             CREATE VIRTUAL TABLE segment_search USING fts5(
                 segment_id UNINDEXED,
@@ -468,6 +601,33 @@ def create_release_database(
                 ),
             )
         by_segment = {segment.segment_id: segment for segment in segments}
+        capability_records = evidence_capability_records(
+            documents=documents,
+            segments=segments,
+            collection_scope=str(release_metadata.get("collection_scope", "official")),
+        )
+        if evidence_capability_inventory_sha256(capability_records) != release_metadata.get(
+            "capability_inventory_sha256"
+        ):
+            raise ValueError("release capability inventory digest does not match records")
+        connection.executemany(
+            """
+            INSERT INTO evidence_capabilities VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    record["segment_id"],
+                    record["schema_version"],
+                    record["integrity"],
+                    record["source_identity_base"],
+                    record["authority_metadata_base"],
+                    record["extraction"],
+                    record["provenance"],
+                    record["record_sha256"],
+                )
+                for record in capability_records
+            ],
+        )
         for relation in relations:
             provenance = by_segment.get(relation.provenance_segment_id)
             if (
@@ -563,6 +723,25 @@ def verify_release_artifact(path: Path) -> dict[str, Any]:
     expected_report_hash = manifest.get("build_report_sha256")
     if sha256_file(report_path) != expected_report_hash:
         raise RuntimeError("release build report SHA-256 does not match release.json")
+    if manifest["schema_version"] == SCHEMA_VERSION:
+        with connect_readonly(database) as connection:
+            rows = connection.execute(
+                """
+                SELECT segment_id, schema_version, integrity, source_identity_base,
+                       authority_metadata_base, extraction, provenance, record_sha256
+                FROM evidence_capabilities ORDER BY segment_id
+                """
+            ).fetchall()
+            records = [dict(row) for row in rows]
+        for record in records:
+            body = dict(record)
+            digest = body.pop("record_sha256")
+            if digest != sha256_bytes(canonical_json(body).encode("utf-8")):
+                raise RuntimeError("release capability record digest mismatch")
+        if evidence_capability_inventory_sha256(records) != manifest.get(
+            "capability_inventory_sha256"
+        ):
+            raise RuntimeError("release capability inventory digest mismatch")
     return manifest
 
 
@@ -646,6 +825,172 @@ def activate_release(output_root: Path, release_id: str) -> Path:
         raise
     os.replace(temporary, active)
     return active
+
+
+def migrate_release_capabilities_v5_to_v6(
+    database: Path,
+    *,
+    output_root: Path,
+    activate: bool = False,
+) -> dict[str, Any]:
+    """Create a side-by-side v6 release; the immutable v5 release is the snapshot."""
+    source_manifest = verify_release_artifact(database)
+    if source_manifest["schema_version"] != LEGACY_SCHEMA_VERSION:
+        raise ValueError("capability migration requires an exact v2/v5 release")
+    with connect_readonly(database) as source:
+        records = _capability_records_from_connection(
+            source,
+            collection_scope=str(source_manifest.get("collection_scope", "official")),
+        )
+    inventory_sha256 = evidence_capability_inventory_sha256(records)
+    migration_payload = {
+        "schema_version": "deeplaw.release-capability-migration/v1",
+        "migration_identity": "evidence-capabilities-v1-from-v5",
+        "previous_release_id": source_manifest["release_id"],
+        "previous_database_sha256": source_manifest["database_sha256"],
+        "capability_inventory_sha256": inventory_sha256,
+        "target_release_schema": SCHEMA_VERSION,
+        "target_storage_schema": STORAGE_SCHEMA_VERSION,
+    }
+    derivation_sha256 = sha256_bytes(
+        canonical_json(migration_payload).encode("utf-8")
+    )
+    release_id = stable_id("lawrel", derivation_sha256, length=32)
+    report = {
+        **migration_payload,
+        "release_id": release_id,
+        "rollback_release_id": source_manifest["release_id"],
+        "snapshot_verified": True,
+    }
+    report_bytes = (
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    metadata = {
+        key: value
+        for key, value in source_manifest.items()
+        if key not in {"database_sha256", "build_report_sha256"}
+    }
+    metadata.update(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "release_id": release_id,
+            "derivation_sha256": derivation_sha256,
+            "storage_schema": STORAGE_SCHEMA_VERSION,
+            "build_report_sha256": sha256_bytes(report_bytes),
+            "capability_schema": "deeplaw.evidence-capability-record/v1",
+            "capability_inventory_sha256": inventory_sha256,
+            "previous_release_id": source_manifest["release_id"],
+            "migration_identity": "evidence-capabilities-v1-from-v5",
+        }
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".deeplaw-capability-migration-", dir=output_root))
+    release_dir = output_root / release_id
+    try:
+        staged_database = staging / "deeplaw.sqlite3"
+        shutil.copyfile(database, staged_database)
+        os.chmod(staged_database, 0o600)
+        connection = sqlite3.connect(staged_database)
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                CREATE TABLE evidence_capabilities (
+                    segment_id TEXT PRIMARY KEY REFERENCES segments(segment_id),
+                    schema_version TEXT NOT NULL,
+                    integrity TEXT NOT NULL,
+                    source_identity_base TEXT NOT NULL,
+                    authority_metadata_base TEXT NOT NULL,
+                    extraction TEXT NOT NULL,
+                    provenance TEXT NOT NULL,
+                    record_sha256 TEXT NOT NULL
+                ) WITHOUT ROWID
+                """
+            )
+            connection.executemany(
+                "INSERT INTO evidence_capabilities VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        item["segment_id"],
+                        item["schema_version"],
+                        item["integrity"],
+                        item["source_identity_base"],
+                        item["authority_metadata_base"],
+                        item["extraction"],
+                        item["provenance"],
+                        item["record_sha256"],
+                    )
+                    for item in records
+                ],
+            )
+            stored_metadata = {
+                "schema_version": SCHEMA_VERSION,
+                "release_id": release_id,
+                "release_metadata": canonical_json(metadata),
+            }
+            connection.executemany(
+                "UPDATE metadata SET value = ? WHERE key = ?",
+                [(value, key) for key, value in stored_metadata.items()],
+            )
+            if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise RuntimeError("capability migration broke a foreign key")
+            connection.commit()
+            connection.execute("VACUUM")
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        metadata["database_sha256"] = database_sha256(staged_database)
+        (staging / "release.json").write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (staging / "build-report.json").write_bytes(report_bytes)
+        for artifact in (
+            staged_database,
+            staging / "release.json",
+            staging / "build-report.json",
+        ):
+            os.chmod(artifact, 0o444 if os.name == "posix" else 0o600)
+        if release_dir.exists():
+            existing = verify_release_artifact(release_dir / "deeplaw.sqlite3")
+            if existing != metadata:
+                raise RuntimeError("existing capability migration release differs")
+        else:
+            os.replace(staging, release_dir)
+        verify_release_artifact(release_dir / "deeplaw.sqlite3")
+        if activate:
+            activate_release(output_root, release_id)
+        return report
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
+def rollback_release_capability_migration(
+    *,
+    output_root: Path,
+    migrated_release_id: str,
+) -> dict[str, Any]:
+    migrated = verify_release_artifact(
+        output_root / migrated_release_id / "deeplaw.sqlite3"
+    )
+    if migrated.get("migration_identity") != "evidence-capabilities-v1-from-v5":
+        raise ValueError("selected release is not a capability migration")
+    previous = migrated.get("previous_release_id")
+    if not isinstance(previous, str):
+        raise RuntimeError("capability migration has no rollback release")
+    verify_release_artifact(output_root / previous / "deeplaw.sqlite3")
+    activate_release(output_root, previous)
+    return {
+        "schema_version": "deeplaw.release-capability-rollback/v1",
+        "migrated_release_id": migrated_release_id,
+        "active_release_id": previous,
+        "migrated_release_preserved": True,
+    }
 
 
 def release_info(connection: sqlite3.Connection) -> dict[str, Any]:

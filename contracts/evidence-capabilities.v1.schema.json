@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/evidence-capabilities.v1.schema.json",
+  "title": "DeepLaw Evidence Capabilities v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "integrity", "source_identity", "authority_metadata",
+    "temporal", "extraction", "provenance", "temporal_as_of", "capability_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.evidence-capabilities/v1"},
+    "integrity": {"enum": ["verified", "failed"]},
+    "source_identity": {"enum": ["signed_official", "reviewed", "declared", "unknown"]},
+    "authority_metadata": {"enum": ["verified", "declared", "unknown"]},
+    "temporal": {"enum": ["verified_at", "outside", "unknown", "not_evaluated"]},
+    "extraction": {"enum": ["native_reviewed", "native_unreviewed", "ocr_human_reviewed", "ocr_unreviewed", "warned"]},
+    "provenance": {"enum": ["exact_segment", "derived"]},
+    "temporal_as_of": {"type": ["string", "null"], "format": "date"},
+    "capability_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"temporal": {"const": "verified_at"}}},
+      "then": {"properties": {"temporal_as_of": {"type": "string"}}},
+      "else": {"properties": {"temporal_as_of": {"const": null}}}
+    }
+  ]
+}

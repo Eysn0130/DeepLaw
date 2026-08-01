@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/segment-evidence-capabilities.v1.schema.json",
+  "title": "DeepLaw Segment Evidence Capabilities v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_id", "segment_id", "capabilities"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.segment-evidence-capabilities/v1"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "segment_id": {"type": "string", "pattern": "^seg_[0-9a-f]{24}$"},
+    "capabilities": {"$ref": "evidence-capabilities.v1.schema.json"}
+  }
+}

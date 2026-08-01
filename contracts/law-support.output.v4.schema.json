@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-support-output:v4",
+  "title": "DeepLawSupportOutputV4",
+  "oneOf": [
+    {"$ref": "urn:deeplaw:schema:law-support-output:v3"},
+    {"$ref": "urn:deeplaw:schema:law-release-info:v3"},
+    {"$ref": "https://deeplaw.dev/contracts/segment-evidence-capabilities.v1.schema.json"},
+    {"$ref": "https://deeplaw.dev/contracts/authoritative-challenge-trace.v1.schema.json"},
+    {"$ref": "https://deeplaw.dev/contracts/authoritative-challenge-replay.v1.schema.json"}
+  ]
+}

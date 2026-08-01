@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/citation-audit.v1.schema.json",
+  "title": "DeepLaw Deterministic Citation Audit v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_id", "segment_id", "claim_id", "checks", "deterministic_pass", "semantic_entailment"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.citation-audit/v1"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "segment_id": {"type": "string", "pattern": "^seg_[0-9a-f]{24}$"},
+    "claim_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_id", "segment_id", "quote_exact", "quote_sha256", "locator", "source_sha256", "segment_sha256", "receipt", "date_version", "claim_evidence_mapping"],
+      "properties": {
+        "release_id": {"$ref": "#/$defs/check"},
+        "segment_id": {"$ref": "#/$defs/check"},
+        "quote_exact": {"$ref": "#/$defs/check"},
+        "quote_sha256": {"$ref": "#/$defs/check"},
+        "locator": {"$ref": "#/$defs/check"},
+        "source_sha256": {"$ref": "#/$defs/check"},
+        "segment_sha256": {"$ref": "#/$defs/check"},
+        "receipt": {"$ref": "#/$defs/check"},
+        "date_version": {"$ref": "#/$defs/check"},
+        "claim_evidence_mapping": {"$ref": "#/$defs/check"}
+      }
+    },
+    "deterministic_pass": {"type": "boolean"},
+    "semantic_entailment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "assessor", "assessment"],
+      "properties": {
+        "status": {"enum": ["not_assessed", "model_assessed"]},
+        "assessor": {"type": ["string", "null"], "maxLength": 300},
+        "assessment": {"enum": ["supports", "does_not_support", "uncertain", "not_assessed"]}
+      }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["passed", "reason"],
+      "properties": {
+        "passed": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    }
+  }
+}

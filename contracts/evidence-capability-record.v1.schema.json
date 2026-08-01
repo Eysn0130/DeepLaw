@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/evidence-capability-record.v1.schema.json",
+  "title": "DeepLaw Persisted Evidence Capability Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "segment_id", "integrity", "source_identity_base", "authority_metadata_base", "extraction", "provenance", "record_sha256"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.evidence-capability-record/v1"},
+    "segment_id": {"type": "string", "pattern": "^seg_[0-9a-f]{24}$"},
+    "integrity": {"enum": ["verified", "failed"]},
+    "source_identity_base": {"enum": ["signed_official", "reviewed", "declared", "unknown"]},
+    "authority_metadata_base": {"enum": ["verified", "declared", "unknown"]},
+    "extraction": {"enum": ["native_reviewed", "native_unreviewed", "ocr_human_reviewed", "ocr_unreviewed", "warned"]},
+    "provenance": {"enum": ["exact_segment", "derived"]},
+    "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": "deeplaw.authoritative-pack-core/v1",
+  "pack": {"pack_id": "authpack_de8c43dc218be75fdef1576c", "domain": "synthetic_policy", "authority_namespace": "synthetic.test.policy", "issuer_id": "synthetic-maintainer", "not_public_authority": true},
+  "trust": {"trust_root_id": "synthetic-trust-root-v1", "catalog_id": "synthetic-policy-catalog-v1", "catalog_sha256": "8d17f34c1e634ad85d18ad7c53d1d52b41a171ab83e8759ce7f451de2067b92b", "signature_verified": true, "sequence": 1, "revocations_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e04adcae0d5f1c5b24f5d67"},
+  "release": {"release_id": "synthetic-policy-release-v1", "release_sha256": "c6d77008b41f7ed359b88b44d0e61327468884a70d006782e7d5b56db471084f", "previous_release_id": null, "immutable": true, "active": true, "activation_sha256": "365ebb97ad01c41cec4b9c4e55c02c1f47c91833252386d807c7f47e0d2ebd0d"},
+  "inventory": {"document_count": 1, "source_count": 1, "segment_count": 2, "locator_schema": "deeplaw.authoritative-locator/v1", "extraction_provenance_schema": "deeplaw.document-ir-extraction/v1", "capability_schema": "deeplaw.evidence-capability-record/v1", "inventory_sha256": "91ec0bf8881e0dc6e71b4fe43131284d55d4bea6f078a63797b784c5ef3afc40"},
+  "storage": {"store_identity": "synthetic-policy-store-v1", "physical_partition": "synthetic-test-only", "read_only": true},
+  "historical_pinning": "supported",
+  "public_mcp_leaf": false,
+  "core_sha256": "2f4515b05a82eace3f943ecc502b68aa5946e4eda9ae8213f472c6eb7d8548e9"
+}

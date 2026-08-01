@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-pack-core.v1.schema.json",
+  "title": "DeepLaw Internal Authoritative Pack Core v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack", "trust", "release", "inventory", "storage", "historical_pinning", "core_sha256", "public_mcp_leaf"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.authoritative-pack-core/v1"},
+    "pack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pack_id", "domain", "authority_namespace", "issuer_id", "not_public_authority"],
+      "properties": {
+        "pack_id": {"type": "string", "pattern": "^authpack_[0-9a-f]{24}$"},
+        "domain": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,99}$"},
+        "authority_namespace": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,199}$"},
+        "issuer_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "not_public_authority": {"type": "boolean"}
+      }
+    },
+    "trust": {
+      "type": "object", "additionalProperties": false,
+      "required": ["trust_root_id", "catalog_id", "catalog_sha256", "signature_verified", "sequence", "revocations_sha256"],
+      "properties": {
+        "trust_root_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "catalog_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "catalog_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "signature_verified": {"type": "boolean"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "revocations_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "release": {
+      "type": "object", "additionalProperties": false,
+      "required": ["release_id", "release_sha256", "previous_release_id", "immutable", "active", "activation_sha256"],
+      "properties": {
+        "release_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "release_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "previous_release_id": {"type": ["string", "null"], "maxLength": 200},
+        "immutable": {"const": true},
+        "active": {"type": "boolean"},
+        "activation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "inventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["document_count", "source_count", "segment_count", "locator_schema", "extraction_provenance_schema", "capability_schema", "inventory_sha256"],
+      "properties": {
+        "document_count": {"type": "integer", "minimum": 1},
+        "source_count": {"type": "integer", "minimum": 1},
+        "segment_count": {"type": "integer", "minimum": 1},
+        "locator_schema": {"type": "string", "minLength": 1, "maxLength": 200},
+        "extraction_provenance_schema": {"type": "string", "minLength": 1, "maxLength": 200},
+        "capability_schema": {"const": "deeplaw.evidence-capability-record/v1"},
+        "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["store_identity", "physical_partition", "read_only"],
+      "properties": {
+        "store_identity": {"type": "string", "minLength": 1, "maxLength": 200},
+        "physical_partition": {"type": "string", "minLength": 1, "maxLength": 200},
+        "read_only": {"const": true}
+      }
+    },
+    "historical_pinning": {"enum": ["supported", "not_supported"]},
+    "core_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "public_mcp_leaf": {"const": false}
+  }
+}

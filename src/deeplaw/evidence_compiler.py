@@ -55,6 +55,7 @@ class EvidenceDuty:
     duty_id: str
     role: str
     required: bool
+    required_capabilities: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_identifier(self.duty_id, field="duty_id")
@@ -64,6 +65,14 @@ class EvidenceDuty:
             raise ValueError(f"duty role exceeds {_MAX_ROLE_CHARS} characters")
         if not isinstance(self.required, bool):
             raise ValueError("duty required must be a boolean")
+        if (
+            not isinstance(self.required_capabilities, tuple)
+            or len(self.required_capabilities) > 16
+            or len(self.required_capabilities) != len(set(self.required_capabilities))
+        ):
+            raise ValueError("duty required capabilities must be a bounded unique tuple")
+        for capability in self.required_capabilities:
+            _validate_identifier(capability, field="required capability")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -78,6 +87,7 @@ class EvidenceCandidate:
     is_uncertain: bool
     duty_ids: tuple[str, ...]
     authority_rank: int = 0
+    capability_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_identifier(self.candidate_id, field="candidate_id")
@@ -102,6 +112,14 @@ class EvidenceCandidate:
             raise ValueError("candidate authority_rank must be an integer")
         if not 0 <= self.authority_rank <= 100:
             raise ValueError("candidate authority_rank must be between 0 and 100")
+        if (
+            not isinstance(self.capability_ids, tuple)
+            or len(self.capability_ids) > 16
+            or len(self.capability_ids) != len(set(self.capability_ids))
+        ):
+            raise ValueError("candidate capabilities must be a bounded unique tuple")
+        for capability in self.capability_ids:
+            _validate_identifier(capability, field="candidate capability")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -112,6 +130,7 @@ class EvidenceCandidate:
             "is_uncertain": self.is_uncertain,
             "duty_ids": list(self.duty_ids),
             "authority_rank": self.authority_rank,
+            "capability_ids": list(self.capability_ids),
         }
 
 
@@ -210,6 +229,11 @@ def _candidate_digest(candidates: tuple[EvidenceCandidate, ...]) -> str:
             "is_uncertain": candidate.is_uncertain,
             "duty_ids": sorted(candidate.duty_ids),
             "authority_rank": candidate.authority_rank,
+            **(
+                {"capability_ids": sorted(candidate.capability_ids)}
+                if candidate.capability_ids
+                else {}
+            ),
         }
         for candidate in sorted(candidates, key=lambda item: item.candidate_id)
     ]
@@ -232,6 +256,8 @@ def _incremental_duties(
     optional: list[str] = []
     for duty in duties:
         if duty.duty_id not in covered:
+            continue
+        if not set(duty.required_capabilities).issubset(candidate.capability_ids):
             continue
         if candidate_quality <= coverage_quality[duty.duty_id]:
             continue

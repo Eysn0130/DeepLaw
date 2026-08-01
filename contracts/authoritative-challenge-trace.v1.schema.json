@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-challenge-trace.v1.schema.json",
+  "title": "DeepLaw Authoritative Challenge Trace v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trace_id", "release_id", "query_plan_sha256", "evidence_compilation_sha256", "challenges", "trace_hash"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.authoritative-challenge-trace/v1"},
+    "trace_id": {"type": "string", "pattern": "^lawtrace_[0-9a-f]{24}$"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "query_plan_sha256": {"$ref": "#/$defs/sha256"},
+    "evidence_compilation_sha256": {"$ref": "#/$defs/sha256"},
+    "challenges": {
+      "type": "array", "minItems": 7, "maxItems": 7,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["challenge_type", "duty_id", "required", "candidate_segment_id", "required_capabilities", "capabilities", "evidence", "reason", "result", "gap", "witness_sha256"],
+        "properties": {
+          "challenge_type": {"enum": ["temporal_challenge", "exception_challenge", "definition_challenge", "scope_challenge", "cross_reference_challenge", "extraction_challenge", "conflict_challenge"]},
+          "duty_id": {"type": "string", "minLength": 1, "maxLength": 100},
+          "required": {"type": "boolean"},
+          "candidate_segment_id": {"type": ["string", "null"], "pattern": "^seg_[0-9a-f]{24}$"},
+          "required_capabilities": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+          "capabilities": {"oneOf": [{"$ref": "evidence-capabilities.v1.schema.json"}, {"type": "null"}]},
+          "evidence": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object", "additionalProperties": false,
+                "required": ["release_id", "segment_id", "receipt_id", "source_sha256", "segment_sha256", "article_label", "page_start", "page_end", "retrieval_channel"],
+                "properties": {
+                  "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+                  "segment_id": {"type": "string", "pattern": "^seg_[0-9a-f]{24}$"},
+                  "receipt_id": {"type": "string", "pattern": "^lawrcpt_[0-9a-f]{32}$"},
+                  "source_sha256": {"$ref": "#/$defs/sha256"},
+                  "segment_sha256": {"$ref": "#/$defs/sha256"},
+                  "article_label": {"type": ["string", "null"], "maxLength": 100},
+                  "page_start": {"type": ["integer", "null"], "minimum": 1},
+                  "page_end": {"type": ["integer", "null"], "minimum": 1},
+                  "retrieval_channel": {"type": ["string", "null"], "maxLength": 100}
+                }
+              }
+            ]
+          },
+          "reason": {"enum": ["duty_not_requested", "duty_evidence_unavailable", "capability_predicate_failed", "deterministic_witness_verified"]},
+          "result": {"enum": ["satisfied", "unresolved", "not_applicable"]},
+          "gap": {"type": ["string", "null"], "maxLength": 500},
+          "witness_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "trace_hash": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

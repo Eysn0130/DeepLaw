@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-support-input:v4",
+  "title": "DeepLawSupportInputV4",
+  "oneOf": [
+    {"$ref": "law-support.input.v3.schema.json"},
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "segment_id"],
+      "properties": {
+        "operation": {"const": "capabilities"},
+        "segment_id": {"type": "string", "pattern": "^seg_[0-9a-f]{24}$"},
+        "as_of": {"type": ["string", "null"], "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "query"],
+      "properties": {
+        "operation": {"const": "challenge_trace"},
+        "query": {"type": "string", "minLength": 1, "maxLength": 8000},
+        "purpose": {"enum": ["auto", "exact_citation", "as_of_version", "elements", "legal_issue_screen", "citation_verify", "broad_topic"]},
+        "as_of": {"type": ["string", "null"], "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 5},
+        "max_chars": {"type": "integer", "minimum": 500, "maximum": 6000},
+        "document_types": {"type": ["array", "null"], "uniqueItems": true, "maxItems": 7, "items": {"type": "string", "maxLength": 64}}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "trace_id"],
+      "properties": {
+        "operation": {"const": "challenge_get"},
+        "trace_id": {"type": "string", "pattern": "^lawtrace_[0-9a-f]{24}$"}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "trace"],
+      "properties": {
+        "operation": {"const": "challenge_replay"},
+        "trace": {"$ref": "authoritative-challenge-trace.v1.schema.json"}
+      }
+    }
+  ]
+}

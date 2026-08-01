@@ -19,9 +19,12 @@ from deeplaw.search import DeepLaw
 from deeplaw.store import (
     connect_readonly,
     database_sha256,
+    migrate_release_capabilities_v5_to_v6,
     resolve_active_database,
+    rollback_release_capability_migration,
     verify_release_artifact,
 )
+from deeplaw.util import canonical_json, sha256_bytes
 
 from .helpers import manifest_document, sha256, write_docx, write_manifest
 
@@ -78,7 +81,7 @@ def test_release_is_content_addressed_readonly_and_idempotent(tmp_path: Path) ->
     assert release["build_report_sha256"] == sha256(release_dir / "build-report.json")
     release_schema = json.loads(
         (
-            Path(__file__).resolve().parents[1] / "contracts/corpus-release-manifest.v2.schema.json"
+            Path(__file__).resolve().parents[1] / "contracts/corpus-release-manifest.v3.schema.json"
         ).read_text()
     )
     Draft202012Validator(release_schema).validate(release)
@@ -164,6 +167,201 @@ def test_search_is_bounded_temporal_and_receipted(tmp_path: Path) -> None:
         card = exact.evidence[0]
         assert law.verify(card.segment_id, card.receipt_id)["valid"] is True
         assert law.verify(card.segment_id, "lawrcpt_" + "0" * 32)["valid"] is False
+
+
+def test_evidence_capabilities_and_challenge_trace_are_deterministic(
+    tmp_path: Path,
+) -> None:
+    release_dir, _, _ = _build_fixture(tmp_path)
+    repository = Path(__file__).resolve().parents[1]
+    capability_schema = json.loads(
+        (repository / "contracts/evidence-capabilities.v1.schema.json").read_text()
+    )
+    segment_capability_schema = json.loads(
+        (
+            repository / "contracts/segment-evidence-capabilities.v1.schema.json"
+        ).read_text()
+    )
+    trace_schema = json.loads(
+        (repository / "contracts/authoritative-challenge-trace.v1.schema.json").read_text()
+    )
+    registry = Registry().with_resource(
+        capability_schema["$id"], Resource.from_contents(capability_schema)
+    )
+
+    with DeepLaw(release_dir / "deeplaw.sqlite3") as law:
+        response = law.search(
+            SearchRequest(
+                query="中华人民共和国测试法 第一条",
+                purpose="exact_citation",
+            )
+        )
+        segment_id = response.evidence[0].segment_id
+        capabilities = law.evidence_capabilities(segment_id)
+        Draft202012Validator(
+            segment_capability_schema,
+            registry=registry,
+        ).validate(capabilities)
+        assert capabilities["capabilities"]["integrity"] == "verified"
+        assert capabilities["capabilities"]["source_identity"] == "declared"
+        assert capabilities["capabilities"]["provenance"] == "exact_segment"
+
+        trace = law.challenge_trace(
+            SearchRequest(
+                query="中华人民共和国测试法 第一条",
+                purpose="exact_citation",
+            )
+        )
+        Draft202012Validator(trace_schema, registry=registry).validate(trace)
+        assert len(trace["challenges"]) == 7
+        assert {item["result"] for item in trace["challenges"]} <= {
+            "satisfied",
+            "unresolved",
+            "not_applicable",
+        }
+        assert law.get_challenge_trace(trace["trace_id"]) == trace
+        assert law.replay_challenge_trace(trace)["valid"] is True
+
+        tampered = json.loads(json.dumps(trace))
+        tampered["challenges"][0]["result"] = "satisfied"
+        assert law.replay_challenge_trace(tampered) == {
+            "schema_version": "deeplaw.authoritative-challenge-replay/v1",
+            "trace_id": trace["trace_id"],
+            "valid": False,
+            "reason": "trace_digest_mismatch",
+        }
+
+
+def test_citation_audit_detects_quote_locator_receipt_and_mapping_mutation(
+    tmp_path: Path,
+) -> None:
+    release_dir, _, _ = _build_fixture(tmp_path)
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/citation-audit.v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    with DeepLaw(release_dir / "deeplaw.sqlite3") as law:
+        card = law.search(
+            SearchRequest(
+                query="中华人民共和国测试法 第一条", purpose="exact_citation"
+            )
+        ).evidence[0]
+        segment = law.get(card.segment_id)
+        quote = "为了规范测试活动"
+        citation = {
+            "release_id": law.release_id,
+            "segment_id": card.segment_id,
+            "receipt_id": card.receipt_id,
+            "claim_id": "claim:test-citation",
+            "quote": quote,
+            "quote_sha256": sha256_bytes(quote.encode("utf-8")),
+            "locator": {
+                "article_label": segment["article_label"],
+                "page_start": segment["page_start"],
+                "page_end": segment["page_end"],
+                "paragraph_start": segment["paragraph_start"],
+                "paragraph_end": segment["paragraph_end"],
+            },
+            "source_sha256": segment["source_sha256"],
+            "segment_sha256": segment["segment_sha256"],
+            "date_version_statement": None,
+            "evidence_segment_ids": [card.segment_id],
+            "semantic_entailment": {
+                "status": "model_assessed",
+                "assessor": "synthetic-test-model",
+                "assessment": "supports",
+            },
+        }
+        audit = law.audit_citation(citation)
+        Draft202012Validator(schema).validate(audit)
+        assert audit["deterministic_pass"] is True
+        assert audit["semantic_entailment"]["status"] == "model_assessed"
+
+        citation["quote_sha256"] = "0" * 64
+        citation["evidence_segment_ids"] = []
+        tampered = law.audit_citation(citation)
+        assert tampered["deterministic_pass"] is False
+        assert tampered["checks"]["quote_sha256"]["passed"] is False
+        assert tampered["checks"]["claim_evidence_mapping"]["passed"] is False
+
+
+def test_v5_capability_migration_is_side_by_side_and_rollback_reactivates_snapshot(
+    tmp_path: Path,
+) -> None:
+    release_dir, _, output_root = _build_fixture(tmp_path)
+    database = release_dir / "deeplaw.sqlite3"
+    manifest_path = release_dir / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    legacy = {
+        key: value
+        for key, value in manifest.items()
+        if key
+        not in {
+            "capability_schema",
+            "capability_inventory_sha256",
+            "previous_release_id",
+            "migration_identity",
+        }
+    }
+    legacy["schema_version"] = "deeplaw.release/v2"
+    legacy["storage_schema"] = "deeplaw.sqlite/v5"
+    os.chmod(database, 0o600)
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("DROP TABLE evidence_capabilities")
+        stored = {key: value for key, value in legacy.items() if key != "database_sha256"}
+        connection.execute(
+            "UPDATE metadata SET value = ? WHERE key = 'schema_version'",
+            ("deeplaw.release/v2",),
+        )
+        connection.execute(
+            "UPDATE metadata SET value = ? WHERE key = 'release_metadata'",
+            (canonical_json(stored),),
+        )
+        connection.commit()
+        connection.execute("VACUUM")
+    finally:
+        connection.close()
+    legacy["database_sha256"] = sha256(database)
+    os.chmod(manifest_path, 0o600)
+    manifest_path.write_text(
+        json.dumps(legacy, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with DeepLaw(database) as old:
+        card = old.search(
+            SearchRequest(
+                query="中华人民共和国测试法 第一条", purpose="exact_citation"
+            )
+        ).evidence[0]
+        old_capabilities = old.evidence_capabilities(card.segment_id)
+
+    report = migrate_release_capabilities_v5_to_v6(
+        database,
+        output_root=output_root,
+        activate=True,
+    )
+    migrated_id = report["release_id"]
+    migrated_database = output_root / migrated_id / "deeplaw.sqlite3"
+    with DeepLaw(migrated_database) as migrated:
+        new_capabilities = migrated.evidence_capabilities(card.segment_id)
+        assert new_capabilities["segment_id"] == old_capabilities["segment_id"]
+        assert new_capabilities["capabilities"] == old_capabilities["capabilities"]
+        assert migrated.release_info()["release"]["previous_release_id"] == release_dir.name
+        assert migrated.connection.execute(
+            "SELECT COUNT(*) FROM evidence_capabilities"
+        ).fetchone()[0] == migrated.release_info()["segment_count"]
+
+    rollback = rollback_release_capability_migration(
+        output_root=output_root,
+        migrated_release_id=migrated_id,
+    )
+    assert rollback["active_release_id"] == release_dir.name
+    assert (output_root.parent / "ACTIVE").read_text(encoding="utf-8").strip() == release_dir.name
+    assert migrated_database.is_file()
 
 
 def test_exact_partial_title_does_not_mix_unrelated_documents(tmp_path: Path) -> None:
@@ -372,7 +570,7 @@ def test_runtime_rejects_unbounded_or_unknown_release_manifest_fields(tmp_path: 
     manifest["unexpected"] = "value"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="closed v2 contract"):
+    with pytest.raises(RuntimeError, match="selected closed contract"):
         DeepLaw(release_dir / "deeplaw.sqlite3")
 
     manifest["unexpected"] = "X" * (64 * 1024)

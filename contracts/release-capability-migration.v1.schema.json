@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/release-capability-migration.v1.schema.json",
+  "title": "DeepLaw Release Capability Migration Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "migration_identity", "previous_release_id", "previous_database_sha256", "capability_inventory_sha256", "target_release_schema", "target_storage_schema", "release_id", "rollback_release_id", "snapshot_verified"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.release-capability-migration/v1"},
+    "migration_identity": {"const": "evidence-capabilities-v1-from-v5"},
+    "previous_release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "previous_database_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "capability_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "target_release_schema": {"const": "deeplaw.release/v3"},
+    "target_storage_schema": {"const": "deeplaw.sqlite/v6"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "rollback_release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "snapshot_verified": {"const": true}
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-challenge-replay.v1.schema.json",
+  "title": "DeepLaw Authoritative Challenge Replay v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trace_id", "valid", "reason"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.authoritative-challenge-replay/v1"},
+    "trace_id": {"type": ["string", "null"], "pattern": "^lawtrace_[0-9a-f]{24}$"},
+    "valid": {"type": "boolean"},
+    "reason": {"enum": ["verified", "unsupported_trace_schema", "release_mismatch", "trace_digest_mismatch", "capability_witness_changed", "unknown_trace"]}
+  }
+}

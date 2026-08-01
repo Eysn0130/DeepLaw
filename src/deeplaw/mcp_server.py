@@ -40,6 +40,10 @@ Operation = Literal[
     "private_verify",
     "private_info",
     "federated_context",
+    "capabilities",
+    "challenge_trace",
+    "challenge_get",
+    "challenge_replay",
 ]
 
 _DESCRIPTION = (
@@ -50,7 +54,8 @@ _DESCRIPTION = (
     "release. Explicit private_* operations search a separate local user-private legal-reference "
     "library; they never blend its ranking or authority with the official catalog. "
     "federated_context compiles explicitly partitioned official, private, and optionally "
-    "Agent-derived context without treating ranking as authority."
+    "Agent-derived context without treating ranking as authority. capabilities and the "
+    "challenge_* operations expose deterministic evidence predicates and replayable traces."
 )
 _INSTRUCTIONS = (
     "Read-only, version-aware Chinese legal research. Use only for explicit legal questions. "
@@ -63,10 +68,22 @@ _OUTPUT_CONTRACTS = {
     "search": "law-search-response.v2.schema.json",
     "segment": "law-segment.v2.schema.json",
     "verification": "law-verification.v1.schema.json",
-    "release_info": "law-release-info.v2.schema.json",
+    "release_info": "law-release-info.v3.schema.json",
     "evidence": "legal-evidence-card.v2.schema.json",
-    "release_manifest": "corpus-release-manifest.v2.schema.json",
+    "release_manifest": "corpus-release-manifest.v3.schema.json",
+    "legacy_release_info": "law-release-info.v2.schema.json",
+    "legacy_release_manifest": "corpus-release-manifest.v2.schema.json",
     "federated_context": "law-federated-context.v1.schema.json",
+    "legacy_output": "law-support.output.v3.schema.json",
+    "evidence_capabilities": "evidence-capabilities.v1.schema.json",
+    "segment_capabilities": "segment-evidence-capabilities.v1.schema.json",
+    "challenge_trace": "authoritative-challenge-trace.v1.schema.json",
+    "challenge_replay": "authoritative-challenge-replay.v1.schema.json",
+}
+_INPUT_CONTRACTS = {
+    "legacy_input": "law-support.input.v3.schema.json",
+    "evidence_capabilities": "evidence-capabilities.v1.schema.json",
+    "challenge_trace": "authoritative-challenge-trace.v1.schema.json",
 }
 
 
@@ -129,7 +146,7 @@ def _rebase_local_refs(value: Any, *, base: str) -> Any:
 
 @lru_cache(maxsize=1)
 def bundled_output_schema() -> dict[str, Any]:
-    schema = deepcopy(_load_contract("law-support.output.v3.schema.json"))
+    schema = deepcopy(_load_contract("law-support.output.v4.schema.json"))
     references: dict[str, str] = {}
     for name, filename in _OUTPUT_CONTRACTS.items():
         target = f"#/$defs/{name}"
@@ -149,11 +166,34 @@ def bundled_output_schema() -> dict[str, Any]:
     return _rewrite_refs(schema, references)
 
 
+@lru_cache(maxsize=1)
+def bundled_input_schema() -> dict[str, Any]:
+    schema = deepcopy(_load_contract("law-support.input.v4.schema.json"))
+    references: dict[str, str] = {}
+    for name, filename in _INPUT_CONTRACTS.items():
+        target = f"#/$defs/{name}"
+        references[filename] = target
+        schema_id = _load_contract(filename).get("$id")
+        if isinstance(schema_id, str):
+            references[schema_id] = target
+    definitions: dict[str, Any] = {}
+    for name, filename in _INPUT_CONTRACTS.items():
+        definition = deepcopy(_load_contract(filename))
+        definition.pop("$schema", None)
+        definition.pop("$id", None)
+        definition = _rebase_local_refs(definition, base=f"#/$defs/{name}")
+        definitions[name] = _rewrite_refs(definition, references)
+    legacy_branches = definitions["legacy_input"]["oneOf"]
+    schema["oneOf"] = [*legacy_branches, *schema["oneOf"][1:]]
+    schema["$defs"] = definitions
+    return _rewrite_refs(schema, references)
+
+
 def tool_definition() -> types.Tool:
     return types.Tool(
         name="law_support",
         description=_DESCRIPTION,
-        inputSchema=deepcopy(_load_contract("law-support.input.v3.schema.json")),
+        inputSchema=deepcopy(bundled_input_schema()),
         outputSchema=deepcopy(bundled_output_schema()),
         annotations=types.ToolAnnotations(
             readOnlyHint=True,
@@ -438,6 +478,8 @@ def _execute_support(
     include_private: bool = True,
     include_agent_interpretation: bool = False,
     confirm_no_case_data: bool = False,
+    trace_id: str | None = None,
+    trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if operation == "federated_context":
         _guard_runtime_epoch(runtime, private=False)
@@ -463,6 +505,37 @@ def _execute_support(
         scope = "user-private" if private_operation else "official"
         raise FileNotFoundError(f"DeepLaw has no active {scope} release")
     _guard_runtime_epoch(runtime, private=private_operation)
+    if operation == "capabilities":
+        if not segment_id:
+            raise ValueError("segment_id is required for operation=capabilities")
+        result = law.evidence_capabilities(segment_id, as_of=as_of)
+        assert_provider_output_safe(result, interface="law_support")
+        return result
+    if operation == "challenge_trace":
+        result = law.challenge_trace(
+            SearchRequest(
+                query=query,
+                purpose=purpose,
+                as_of=as_of,
+                limit=limit,
+                max_chars=max_chars,
+                document_types=tuple(document_types or ()),
+            )
+        )
+        assert_provider_output_safe(result, interface="law_support")
+        return result
+    if operation == "challenge_get":
+        if not trace_id:
+            raise ValueError("trace_id is required for operation=challenge_get")
+        result = law.get_challenge_trace(trace_id)
+        assert_provider_output_safe(result, interface="law_support")
+        return result
+    if operation == "challenge_replay":
+        if not isinstance(trace, dict):
+            raise ValueError("trace is required for operation=challenge_replay")
+        result = law.replay_challenge_trace(trace)
+        assert_provider_output_safe(result, interface="law_support")
+        return result
     normalized_operation = operation.removeprefix("private_")
     if normalized_operation == "info":
         normalized_operation = "release_info"
@@ -501,6 +574,8 @@ def handle_support(
     include_private: bool = True,
     include_agent_interpretation: bool = False,
     confirm_no_case_data: bool = False,
+    trace_id: str | None = None,
+    trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one read-only DeepLaw operation outside the MCP transport."""
 
@@ -584,6 +659,8 @@ def handle_support(
             document_types=document_types,
             segment_id=segment_id,
             receipt_id=receipt_id,
+            trace_id=trace_id,
+            trace=trace,
         )
 
 
@@ -597,7 +674,14 @@ def create_mcp_server() -> Server[_RuntimeContext]:
         knowledge_vault: Path | None = None
         try:
             try:
+                active_release_id = (
+                    None if official_explicit else active_official_release_id()
+                )
                 official = DeepLaw(expected_scope="official")
+                official.signed_catalog_verified = bool(
+                    active_release_id is not None
+                    and active_release_id == official.release_id
+                )
             except FileNotFoundError:
                 if os.environ.get("DEEPLAW_DB") is not None:
                     raise
@@ -674,6 +758,8 @@ def create_mcp_server() -> Server[_RuntimeContext]:
                     confirm_no_case_data=bool(
                         arguments.get("confirm_no_case_data", False)
                     ),
+                    trace_id=cast(str | None, arguments.get("trace_id")),
+                    trace=cast(dict[str, Any] | None, arguments.get("trace")),
                 )
             except Exception as error:
                 raise provider_safe_exception(error, interface="law_support") from None

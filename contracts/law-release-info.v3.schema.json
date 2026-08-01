@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deeplaw:schema:law-release-info:v3",
+  "title": "DeepLawReleaseInfoV3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_id", "release", "document_count", "segment_count", "database_sha256"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.release/v3"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "release": {"$ref": "urn:deeplaw:schema:corpus-release-manifest:v3"},
+    "document_count": {"type": "integer", "minimum": 1},
+    "segment_count": {"type": "integer", "minimum": 1},
+    "database_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/legal-quality-report.v1.schema.json",
+  "title": "DeepLaw Answerability-aware Legal Quality Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_id", "gold_id", "gold_sha256", "release_id", "run_sha256", "status", "formal_release_eligible", "metrics", "thresholds", "failures", "limitations"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.legal-quality-report/v1"},
+    "report_id": {"type": "string", "pattern": "^legalreport_[0-9a-f]{24}$"},
+    "gold_id": {"type": "string", "pattern": "^legalgold_[0-9a-f]{24}$"},
+    "gold_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "run_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["passed", "failed"]},
+    "formal_release_eligible": {"type": "boolean"},
+    "metrics": {
+      "type": "object", "additionalProperties": {"type": "number", "minimum": 0},
+      "required": ["available_duty_recall", "false_covered_duty_rate", "correct_gap_precision", "correct_gap_recall", "exception_recall", "definition_recall", "temporal_challenge_recall", "cross_reference_recall", "exact_citation_pass_rate", "receipt_verification_rate", "false_authority_admission_rate", "temporal_false_inclusion_rate", "temporal_false_exclusion_rate", "relevant_chars_per_context_chars", "hit_at_1", "mrr", "latency_p95_ms"]
+    },
+    "thresholds": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+    "failures": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+    "limitations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}}
+  }
+}

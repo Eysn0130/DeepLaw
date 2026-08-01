@@ -51,7 +51,13 @@ from .private_library import (
 )
 from .search import DeepLaw, response_json
 from .shell_completion import shell_completion
-from .store import database_sha256, default_home, resolve_active_database
+from .store import (
+    database_sha256,
+    default_home,
+    migrate_release_capabilities_v5_to_v6,
+    resolve_active_database,
+    rollback_release_capability_migration,
+)
 from .vision import (
     EXTRACTION_EVIDENCE_SCHEMA,
     PIPELINE_NAME,
@@ -86,6 +92,25 @@ def _parser() -> argparse.ArgumentParser:
     )
     build.add_argument("--allow-needs-ocr", action="store_true")
 
+    capability_migration = commands.add_parser(
+        "migrate-capabilities",
+        help="Create a side-by-side v6 Evidence Capability release from an exact v5 release",
+    )
+    capability_migration.add_argument("--db", type=Path, required=True)
+    capability_migration.add_argument(
+        "--output-root", type=Path, default=default_home() / "releases"
+    )
+    capability_migration.add_argument("--activate", action="store_true")
+
+    capability_rollback = commands.add_parser(
+        "rollback-capabilities",
+        help="Atomically reactivate the preserved v5 release for a capability migration",
+    )
+    capability_rollback.add_argument("--release-id", required=True)
+    capability_rollback.add_argument(
+        "--output-root", type=Path, default=default_home() / "releases"
+    )
+
     evidence = commands.add_parser(
         "pdf-evidence",
         help="Extract one PDF with native-first page evidence and fail-closed OCR review",
@@ -107,6 +132,33 @@ def _parser() -> argparse.ArgumentParser:
     get.add_argument("--segment-id", required=True)
     get.add_argument("--max-chars", type=int, default=6000)
     get.add_argument("--db", type=Path)
+
+    capabilities = commands.add_parser(
+        "capabilities",
+        help="Read deterministic Evidence Capabilities for one exact legal segment",
+    )
+    capabilities.add_argument("--segment-id", required=True)
+    capabilities.add_argument("--as-of")
+    capabilities.add_argument("--db", type=Path)
+
+    challenge = commands.add_parser(
+        "challenge-trace",
+        help="Build a deterministic Authoritative Pack Challenge Trace",
+    )
+    challenge.add_argument("--query", required=True)
+    challenge.add_argument("--purpose", default="auto")
+    challenge.add_argument("--as-of")
+    challenge.add_argument("--limit", type=int, default=5)
+    challenge.add_argument("--max-chars", type=int, default=3500)
+    challenge.add_argument("--document-type", action="append", default=[])
+    challenge.add_argument("--db", type=Path)
+
+    replay = commands.add_parser(
+        "challenge-replay",
+        help="Replay and verify a recorded Authoritative Pack Challenge Trace",
+    )
+    replay.add_argument("--trace", type=Path, required=True)
+    replay.add_argument("--db", type=Path)
 
     verify = commands.add_parser("verify", help="Verify an evidence receipt or release database")
     verify.add_argument("--segment-id")
@@ -411,6 +463,23 @@ def main(argv: list[str] | None = None) -> None:
             )
             _print_json({"release_dir": str(release_dir), "report": report.to_dict()})
             return
+        if args.command == "migrate-capabilities":
+            _print_json(
+                migrate_release_capabilities_v5_to_v6(
+                    args.db,
+                    output_root=args.output_root,
+                    activate=args.activate,
+                )
+            )
+            return
+        if args.command == "rollback-capabilities":
+            _print_json(
+                rollback_release_capability_migration(
+                    output_root=args.output_root,
+                    migrated_release_id=args.release_id,
+                )
+            )
+            return
         if args.command == "mcp":
             run_mcp(transport="stdio" if args.stdio else args.transport)
             return
@@ -581,6 +650,31 @@ def main(argv: list[str] | None = None) -> None:
                 return
             if args.command == "get":
                 _print_json(law.get(args.segment_id, max_chars=args.max_chars))
+                return
+            if args.command == "capabilities":
+                _print_json(
+                    law.evidence_capabilities(args.segment_id, as_of=args.as_of)
+                )
+                return
+            if args.command == "challenge-trace":
+                _print_json(
+                    law.challenge_trace(
+                        SearchRequest(
+                            query=args.query,
+                            purpose=args.purpose,
+                            as_of=args.as_of,
+                            limit=args.limit,
+                            max_chars=args.max_chars,
+                            document_types=tuple(args.document_type),
+                        )
+                    )
+                )
+                return
+            if args.command == "challenge-replay":
+                trace = json.loads(args.trace.read_text(encoding="utf-8"))
+                if not isinstance(trace, dict):
+                    raise ValueError("--trace must contain one JSON object")
+                _print_json(law.replay_challenge_trace(trace))
                 return
             if args.command == "verify":
                 if args.segment_id or args.receipt_id:

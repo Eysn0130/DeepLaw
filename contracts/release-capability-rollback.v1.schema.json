@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/release-capability-rollback.v1.schema.json",
+  "title": "DeepLaw Release Capability Rollback Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "migrated_release_id", "active_release_id", "migrated_release_preserved"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.release-capability-rollback/v1"},
+    "migrated_release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "active_release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "migrated_release_preserved": {"const": true}
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/legal-quality-run.v1.schema.json",
+  "title": "DeepLaw Legal Quality Run v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "gold_id", "release_id", "cases", "environment"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.legal-quality-run/v1"},
+    "gold_id": {"type": "string", "pattern": "^legalgold_[0-9a-f]{24}$"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "cases": {
+      "type": "array", "minItems": 1, "maxItems": 500,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["case_id", "actual_answerability", "covered_duties", "gaps", "citation_audits", "authority_admitted", "temporal_included", "temporal_excluded", "relevant_chars", "context_chars", "latency_ms", "hit_rank", "challenge_results"],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^legal-case-[0-9]{2,3}$"},
+          "actual_answerability": {"enum": ["duty_evidence_available", "duty_evidence_uncertain", "duty_not_in_corpus", "duty_not_applicable"]},
+          "covered_duties": {"type": "array", "uniqueItems": true, "maxItems": 20, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+          "gaps": {"type": "array", "uniqueItems": true, "maxItems": 20, "items": {"type": "string", "minLength": 1, "maxLength": 200}},
+          "citation_audits": {"type": "array", "maxItems": 20, "items": {"$ref": "citation-audit.v1.schema.json"}},
+          "authority_admitted": {"type": "boolean"},
+          "temporal_included": {"type": "boolean"},
+          "temporal_excluded": {"type": "boolean"},
+          "relevant_chars": {"type": "integer", "minimum": 0},
+          "context_chars": {"type": "integer", "minimum": 0},
+          "latency_ms": {"type": "number", "minimum": 0},
+          "hit_rank": {"type": ["integer", "null"], "minimum": 1},
+          "challenge_results": {
+            "type": "array", "uniqueItems": true, "maxItems": 7,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["challenge_type", "result"],
+              "properties": {
+                "challenge_type": {"enum": ["temporal_challenge", "exception_challenge", "definition_challenge", "scope_challenge", "cross_reference_challenge", "extraction_challenge", "conflict_challenge"]},
+                "result": {"enum": ["satisfied", "unresolved", "not_applicable"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["commit", "version", "python", "os", "sqlite", "cold_or_warm", "network_policy"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python": {"type": "string", "minLength": 1, "maxLength": 100},
+        "os": {"type": "string", "minLength": 1, "maxLength": 200},
+        "sqlite": {"type": "string", "minLength": 1, "maxLength": 100},
+        "cold_or_warm": {"enum": ["cold", "warm"]},
+        "network_policy": {"enum": ["offline", "explicit_bounded"]}
+      }
+    }
+  }
+}

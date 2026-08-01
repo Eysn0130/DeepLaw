@@ -7,6 +7,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from .evidence_capabilities import (
+    EvidenceCapabilities,
+    capabilities_for_segment,
+    required_capabilities_for_duty,
+)
 from .evidence_compiler import (
     EvidenceCandidate,
     EvidenceDuty,
@@ -23,6 +28,7 @@ from .models import (
 )
 from .query_plan import ObligationId, QueryObligation, QueryPlan, compile_query_plan
 from .store import (
+    LEGACY_SCHEMA_VERSION,
     SCHEMA_VERSION,
     connect_readonly,
     release_info,
@@ -509,12 +515,16 @@ class DeepLaw:
         *,
         home: str | Path | None = None,
         expected_scope: Literal["official", "user_private"] | None = None,
+        signed_catalog_verified: bool = False,
     ):
         self.database = resolve_active_database(explicit_db=database, home=home)
         self.artifact = verify_release_artifact(self.database)
         self.connection = connect_readonly(self.database)
         self.info = release_info(self.connection)
-        if self.info.get("schema_version") != SCHEMA_VERSION:
+        if self.info.get("schema_version") not in {
+            SCHEMA_VERSION,
+            LEGACY_SCHEMA_VERSION,
+        }:
             raise RuntimeError(
                 f"unsupported DeepLaw release schema: {self.info.get('schema_version')}"
             )
@@ -526,6 +536,9 @@ class DeepLaw:
         if expected_scope is not None and self.collection_scope != expected_scope:
             self.connection.close()
             raise RuntimeError(f"expected {expected_scope} release, got {self.collection_scope}")
+        self.signed_catalog_verified = bool(
+            signed_catalog_verified and self.collection_scope == "official"
+        )
         release = self.info.get("release", {})
         artifact_release = {
             key: value for key, value in self.artifact.items() if key != "database_sha256"
@@ -541,6 +554,7 @@ class DeepLaw:
         self.temporal_metadata_verified = release.get("temporal_status") == "verified"
         self.temporal_reviewed_on = release.get("reviewed_on")
         self.document_identifiers = self._load_document_identifiers()
+        self._challenge_traces: dict[str, dict[str, Any]] = {}
 
     def close(self) -> None:
         self.connection.close()
@@ -765,6 +779,19 @@ class DeepLaw:
                     is_uncertain=is_uncertain,
                     duty_ids=duty_ids,
                     authority_rank=card.authority_rank,
+                    capability_ids=capabilities_for_segment(
+                        collection_scope=self.collection_scope,
+                        signed_catalog_verified=self.signed_catalog_verified,
+                        temporal_classification=card.temporal_classification,
+                        as_of=(
+                            request.as_of or self.temporal_reviewed_on
+                            if card.temporal_classification == "verified_in_scope"
+                            else None
+                        ),
+                        extraction_method=card.extraction_method,
+                        extraction_review_required=card.extraction_review_required,
+                        extraction_warnings=card.extraction_warnings,
+                    ).ids(),
                 )
             )
 
@@ -775,6 +802,10 @@ class DeepLaw:
                         duty_id="query_focus",
                         role="identity",
                         required=True,
+                        required_capabilities=required_capabilities_for_duty(
+                            "query_focus",
+                            temporal_evaluated=temporal_intent,
+                        ),
                     ),
                 )
                 if has_focus_duty
@@ -785,6 +816,10 @@ class DeepLaw:
                     duty_id=obligation.id.value,
                     role=obligation.role.value,
                     required=obligation.required,
+                    required_capabilities=required_capabilities_for_duty(
+                        obligation.id.value,
+                        temporal_evaluated=temporal_intent,
+                    ),
                 )
                 for obligation in compiled_plan.obligations
             )
@@ -793,6 +828,7 @@ class DeepLaw:
                     duty_id="discovery_lead",
                     role="navigation",
                     required=False,
+                    required_capabilities=(),
                 ),
             ),
             tuple(compiler_candidates),
@@ -1007,6 +1043,124 @@ class DeepLaw:
             "extraction_review_required": bool(row["extraction_review_required"]),
             "extraction_warnings": json.loads(row["extraction_risk_flags_json"]),
         }
+
+    def evidence_capabilities(
+        self,
+        segment_id: str,
+        *,
+        as_of: str | None = None,
+    ) -> dict[str, Any]:
+        if as_of is not None:
+            canonical_date(as_of, field="as_of")
+        row = self.connection.execute(
+            """
+            SELECT segments.segment_id, segments.extraction_review_required,
+                   segments.extraction_risk_flags_json,
+                   documents.extraction_method, documents.effective_from,
+                   documents.effective_to, documents.status
+            FROM segments JOIN documents USING(document_id)
+            WHERE segments.segment_id = ?
+            """,
+            (segment_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown segment_id: {segment_id}")
+        if as_of is None:
+            temporal_classification = "not_evaluated"
+        elif not self.temporal_metadata_verified:
+            temporal_classification = "unverified_metadata"
+        else:
+            in_scope = (
+                (row["effective_from"] is None or row["effective_from"] <= as_of)
+                and (row["effective_to"] is None or as_of < row["effective_to"])
+                and row["status"] not in {"repealed", "superseded"}
+            )
+            temporal_classification = "verified_in_scope" if in_scope else "outside"
+        if self.info.get("schema_version") == SCHEMA_VERSION:
+            persisted = self.connection.execute(
+                "SELECT * FROM evidence_capabilities WHERE segment_id = ?",
+                (segment_id,),
+            ).fetchone()
+            if persisted is None:
+                raise RuntimeError("release is missing a persisted capability record")
+            source_identity = persisted["source_identity_base"]
+            authority_metadata = persisted["authority_metadata_base"]
+            if self.signed_catalog_verified and self.collection_scope == "official":
+                source_identity = "signed_official"
+                authority_metadata = "verified"
+            capabilities = EvidenceCapabilities(
+                integrity=persisted["integrity"],
+                source_identity=source_identity,
+                authority_metadata=authority_metadata,
+                temporal={
+                    "verified_in_scope": "verified_at",
+                    "outside": "outside",
+                    "unverified_metadata": "unknown",
+                    "not_evaluated": "not_evaluated",
+                }[temporal_classification],
+                extraction=persisted["extraction"],
+                provenance=persisted["provenance"],
+                temporal_as_of=(
+                    as_of if temporal_classification == "verified_in_scope" else None
+                ),
+            ).to_dict()
+        else:
+            capabilities = capabilities_for_segment(
+                collection_scope=self.collection_scope,
+                signed_catalog_verified=self.signed_catalog_verified,
+                temporal_classification=temporal_classification,
+                as_of=as_of if temporal_classification == "verified_in_scope" else None,
+                extraction_method=row["extraction_method"],
+                extraction_review_required=bool(row["extraction_review_required"]),
+                extraction_warnings=tuple(json.loads(row["extraction_risk_flags_json"])),
+            ).to_dict()
+        return {
+            "schema_version": "deeplaw.segment-evidence-capabilities/v1",
+            "release_id": self.release_id,
+            "segment_id": segment_id,
+            "capabilities": capabilities,
+        }
+
+    def challenge_trace(self, request: SearchRequest) -> dict[str, Any]:
+        from .authoritative_challenges import build_challenge_trace
+
+        result = self.search(request).to_dict()
+        trace = build_challenge_trace(
+            release_id=self.release_id,
+            search_result=result,
+            capability_lookup=lambda segment_id, as_of: self.evidence_capabilities(
+                segment_id,
+                as_of=as_of,
+            ),
+            segment_lookup=lambda segment_id: self.get(segment_id, max_chars=500),
+        )
+        if len(self._challenge_traces) >= 256:
+            self._challenge_traces.pop(next(iter(self._challenge_traces)))
+        self._challenge_traces[trace["trace_id"]] = trace
+        return trace
+
+    def get_challenge_trace(self, trace_id: str) -> dict[str, Any]:
+        try:
+            return self._challenge_traces[trace_id]
+        except KeyError as error:
+            raise KeyError(f"unknown trace_id: {trace_id}") from error
+
+    def replay_challenge_trace(self, trace: dict[str, Any]) -> dict[str, Any]:
+        from .authoritative_challenges import replay_challenge_trace
+
+        return replay_challenge_trace(
+            trace,
+            expected_release_id=self.release_id,
+            capability_lookup=lambda segment_id, as_of: self.evidence_capabilities(
+                segment_id,
+                as_of=as_of,
+            ),
+        )
+
+    def audit_citation(self, citation: dict[str, Any]) -> dict[str, Any]:
+        from .citation_audit import audit_citation
+
+        return audit_citation(self, citation)
 
     def verify(self, segment_id: str, receipt_id: str) -> dict[str, Any]:
         row = self.connection.execute(

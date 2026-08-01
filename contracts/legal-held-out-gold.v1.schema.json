@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/legal-held-out-gold.v1.schema.json",
+  "title": "DeepLaw Legal Expert Held-out Gold v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "gold_id", "status", "created_at", "review", "split", "cases", "limitations"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.legal-held-out-gold/v1"},
+    "gold_id": {"type": "string", "pattern": "^legalgold_[0-9a-f]{24}$"},
+    "status": {"enum": ["expert_review_pending", "expert_confirmed", "rejected"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "review": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["reviewer_id", "reviewer_role", "reviewed_at", "reason", "gold_sha256"],
+          "properties": {
+            "reviewer_id": {"type": "string", "minLength": 1, "maxLength": 200},
+            "reviewer_role": {"enum": ["legal_expert", "maintainer_with_legal_review"]},
+            "reviewed_at": {"type": "string", "format": "date-time"},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+            "gold_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "split": {
+      "type": "object", "additionalProperties": false,
+      "required": ["strategy", "development_case_ids", "held_out_case_ids"],
+      "properties": {
+        "strategy": {"const": "document-family-and-temporal-holdout/v1"},
+        "development_case_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/case_id"}},
+        "held_out_case_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/case_id"}}
+      }
+    },
+    "cases": {
+      "type": "array", "minItems": 16, "maxItems": 200,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["case_id", "category", "query", "purpose", "as_of", "answerability", "expected", "notes"],
+        "properties": {
+          "case_id": {"$ref": "#/$defs/case_id"},
+          "category": {"enum": ["exact_article", "document_number", "historical_version", "effective_date", "amendment", "repeal", "definition", "exception", "proviso", "cross_reference", "procedure", "amount_threshold", "ocr_critical_character", "adjacent_offence_rejection", "unanswerable", "private_not_official"]},
+          "query": {"type": "string", "minLength": 1, "maxLength": 8000},
+          "purpose": {"enum": ["auto", "exact_citation", "as_of_version", "elements", "legal_issue_screen", "citation_verify", "broad_topic"]},
+          "as_of": {"type": ["string", "null"], "format": "date"},
+          "answerability": {"enum": ["duty_evidence_available", "duty_evidence_uncertain", "duty_not_in_corpus", "duty_not_applicable"]},
+          "expected": {
+            "type": "object", "additionalProperties": false,
+            "required": ["document_title", "document_number", "article_label", "release_id", "segment_id", "source_sha256", "segment_sha256", "required_duties", "blocking_gap"],
+            "properties": {
+              "document_title": {"type": ["string", "null"], "maxLength": 500},
+              "document_number": {"type": ["string", "null"], "maxLength": 200},
+              "article_label": {"type": ["string", "null"], "maxLength": 100},
+              "release_id": {"type": ["string", "null"], "pattern": "^lawrel_[0-9a-f]{32}$"},
+              "segment_id": {"type": ["string", "null"], "pattern": "^seg_[0-9a-f]{24}$"},
+              "source_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+              "segment_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+              "required_duties": {"type": "array", "maxItems": 9, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+              "blocking_gap": {"type": ["string", "null"], "maxLength": 200}
+            }
+          },
+          "notes": {"type": "string", "minLength": 1, "maxLength": 4000}
+        }
+      }
+    },
+    "limitations": {"type": "array", "minItems": 2, "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}}
+  },
+  "$defs": {"case_id": {"type": "string", "pattern": "^legal-case-[0-9]{2,3}$"}}
+}

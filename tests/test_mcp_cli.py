@@ -64,13 +64,16 @@ def test_mcp_exposes_one_bounded_leaf_tool() -> None:
     assert tools[0].outputSchema["oneOf"]
 
 
-def test_law_support_v3_adds_federation_without_mutating_frozen_v2() -> None:
+def test_law_support_v4_adds_challenges_without_mutating_frozen_v3() -> None:
     repository = Path(__file__).resolve().parents[1]
     v2 = json.loads(
         (repository / "contracts/law-support.input.v2.schema.json").read_text()
     )
     v3 = json.loads(
         (repository / "contracts/law-support.input.v3.schema.json").read_text()
+    )
+    v4 = json.loads(
+        (repository / "contracts/law-support.input.v4.schema.json").read_text()
     )
 
     v2_operations = {
@@ -83,7 +86,17 @@ def test_law_support_v3_adds_federation_without_mutating_frozen_v2() -> None:
     }
     assert "federated_context" not in v2_operations
     assert v3_operations == v2_operations | {"federated_context"}
-    assert tool_definition().inputSchema["$id"] == "urn:deeplaw:schema:law-support-input:v3"
+    v4_operations = {
+        branch["properties"]["operation"]["const"]
+        for branch in v4["oneOf"][1:]
+    }
+    assert v4_operations == {
+        "capabilities",
+        "challenge_trace",
+        "challenge_get",
+        "challenge_replay",
+    }
+    assert tool_definition().inputSchema["$id"] == "urn:deeplaw:schema:law-support-input:v4"
 
 
 def test_cli_accepts_explicit_stdio_alias() -> None:
@@ -169,6 +182,14 @@ def test_single_tool_routes_search_get_and_verify(tmp_path: Path) -> None:
         "law-verification.v1.schema.json",
         "law-release-info.v2.schema.json",
         "corpus-release-manifest.v2.schema.json",
+        "law-release-info.v3.schema.json",
+        "corpus-release-manifest.v3.schema.json",
+        "law-support.output.v3.schema.json",
+        "law-support.output.v4.schema.json",
+        "evidence-capabilities.v1.schema.json",
+        "segment-evidence-capabilities.v1.schema.json",
+        "authoritative-challenge-trace.v1.schema.json",
+        "authoritative-challenge-replay.v1.schema.json",
         "law-federated-context.v1.schema.json",
     )
     registry = Registry()
@@ -176,7 +197,7 @@ def test_single_tool_routes_search_get_and_verify(tmp_path: Path) -> None:
         schema = json.loads((repository / "contracts" / name).read_text())
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
     output_schema = json.loads(
-        (repository / "contracts/law-support.output.v3.schema.json").read_text()
+        (repository / "contracts/law-support.output.v4.schema.json").read_text()
     )
     validator = Draft202012Validator(output_schema, registry=registry)
     validator.validate(search)
@@ -414,10 +435,37 @@ def test_stdio_mcp_rejects_unknown_and_operation_irrelevant_arguments(tmp_path: 
                     "purpose": "exact_citation",
                 },
             )
+            segment_id = valid.structuredContent["evidence"][0]["segment_id"]
+            capabilities = await session.call_tool(
+                "law_support",
+                {"operation": "capabilities", "segment_id": segment_id},
+            )
+            challenge = await session.call_tool(
+                "law_support",
+                {
+                    "operation": "challenge_trace",
+                    "query": "中华人民共和国测试法 第一条",
+                    "purpose": "exact_citation",
+                },
+            )
+            trace = challenge.structuredContent
+            challenge_get = await session.call_tool(
+                "law_support",
+                {"operation": "challenge_get", "trace_id": trace["trace_id"]},
+            )
+            replay = await session.call_tool(
+                "law_support",
+                {"operation": "challenge_replay", "trace": trace},
+            )
 
             assert unknown.isError is True
             assert irrelevant.isError is True
             assert valid.isError is False
             assert valid.structuredContent["evidence"][0]["article_label"] == "第一条"
+            assert capabilities.isError is False
+            assert capabilities.structuredContent["capabilities"]["integrity"] == "verified"
+            assert challenge.isError is False
+            assert challenge_get.structuredContent == trace
+            assert replay.structuredContent["valid"] is True
 
     asyncio.run(exercise())
