@@ -1,4 +1,13 @@
-# Living Wiki Compiler acceptance report
+# Living Wiki Compiler historical pre-release implementation report
+
+> **Status: Historical pre-release implementation report.** This document freezes local evidence
+> from the `codex/living-wiki-compiler` working tree before v0.11.0 was released. It is not the
+> v0.11.0 release decision and must not be used as exact-tag or public-download evidence. The final
+> release evidence is [`V0_11_ACCEPTANCE_MATRIX.md`](V0_11_ACCEPTANCE_MATRIX.md),
+> [`RELEASE_NOTES_v0.11.0.md`](RELEASE_NOTES_v0.11.0.md), the published
+> [`commercial-release-manifest.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/commercial-release-manifest.json),
+> and
+> [`post-release-verification.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/post-release-verification.json).
 
 Report date: 2026-07-30
 Candidate scope: current `codex/living-wiki-compiler` working tree

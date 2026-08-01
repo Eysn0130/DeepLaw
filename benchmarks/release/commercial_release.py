@@ -208,8 +208,11 @@ def _docs(repository: Path) -> dict[str, bool]:
         text = (repository / relative).read_text(encoding="utf-8")
         if any(marker not in text for marker in markers):
             raise CommercialReleaseError(f"release documentation is incomplete: {relative}")
+        positioning_text = text.casefold().replace(
+            "commercial-release-manifest.json", "release-manifest.json"
+        )
         if relative in {"README.md", "README_EN.md"} and (
-            "商业" in text or "commercial" in text.casefold()
+            "商业" in text or "commercial" in positioning_text
         ):
             raise CommercialReleaseError(
                 f"public repository homepage contains release-positioning copy: {relative}"

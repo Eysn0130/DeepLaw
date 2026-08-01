@@ -309,7 +309,7 @@ git diff --check
 | [`docs/LIVING_WIKI_COMPILER.md`](docs/LIVING_WIKI_COMPILER.md) | 工作树 Compiler 协议、CLI/API/MCP、恢复与真实示例 |
 | [`docs/EDITOR_BRIDGES.md`](docs/EDITOR_BRIDGES.md) | Obsidian/Tolaria Bridge、Editor Context Envelope 与安全边界 |
 | [`docs/LIVING_WIKI_BENCHMARK_PROTOCOL.md`](docs/LIVING_WIKI_BENCHMARK_PROTOCOL.md) | 具名比较协议与 `not_executed` 证据状态 |
-| [`docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md) | 48 项验收与发布门禁 |
+| [`docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md) | 历史 pre-release 工作树实现报告；不是正式发布证据 |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 当前系统架构、事务边界与派生层 |
 | [`docs/KNOWLEDGE_OS.md`](docs/KNOWLEDGE_OS.md) | v0.7 兼容面和当前覆盖说明 |
 | [`docs/DEEPLAW_2.md`](docs/DEEPLAW_2.md) | 双层 Legal Pack 与法律检索边界 |
@@ -318,6 +318,8 @@ git diff --check
 | [`docs/EVALUATION_PROTOCOL.md`](docs/EVALUATION_PROTOCOL.md) | Evaluation Protocol 固定评分、冻结规则、报告和宣称边界 |
 | [`docs/V0_11_ACCEPTANCE_MATRIX.md`](docs/V0_11_ACCEPTANCE_MATRIX.md) | v0.11 的 48 项验收、28 项交付物与 28-source 质量门禁 |
 | [`docs/RELEASE_NOTES_v0.11.0.md`](docs/RELEASE_NOTES_v0.11.0.md) | v0.11.0 发布说明、限制与升级边界 |
+| [`commercial-release-manifest.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/commercial-release-manifest.json) | v0.11.0 exact-tag、制品、Schema、迁移和平台绑定 |
+| [`post-release-verification.json`](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/post-release-verification.json) | 从公开 Release 下载后的 Hash、签名、provenance 与安装复验 |
 | [`SECURITY.md`](SECURITY.md) | 威胁模型和安全报告渠道 |
 
 DeepLaw 以 [Apache License 2.0](LICENSE) 开源。请勿提交法律原件、生成 release database、凭据、

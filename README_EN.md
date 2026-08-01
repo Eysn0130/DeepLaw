@@ -249,7 +249,8 @@ git diff --check
 | Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Agent and MCP adapters | [`docs/AGENT_ADAPTERS.md`](docs/AGENT_ADAPTERS.md) |
 | Installation, upgrade, rollback | [`docs/INSTALL_UPGRADE_ROLLBACK.md`](docs/INSTALL_UPGRADE_ROLLBACK.md) |
-| v0.11 acceptance and release notes | [`docs/V0_11_ACCEPTANCE_MATRIX.md`](docs/V0_11_ACCEPTANCE_MATRIX.md) · [`docs/RELEASE_NOTES_v0.11.0.md`](docs/RELEASE_NOTES_v0.11.0.md) |
+| v0.11 formal release evidence | [`docs/V0_11_ACCEPTANCE_MATRIX.md`](docs/V0_11_ACCEPTANCE_MATRIX.md) · [`docs/RELEASE_NOTES_v0.11.0.md`](docs/RELEASE_NOTES_v0.11.0.md) · [release manifest](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/commercial-release-manifest.json) · [post-release verification](https://github.com/Eysn0130/DeepLaw/releases/download/v0.11.0/post-release-verification.json) |
+| Historical implementation evidence | [`docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md`](docs/LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md) is a pre-release working-tree report, not formal release evidence |
 | Evaluation and comparative proof | [`docs/EVALUATION_PROTOCOL.md`](docs/EVALUATION_PROTOCOL.md) · [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) · [`docs/EXTERNAL_BENCHMARK_PROTOCOL.md`](docs/EXTERNAL_BENCHMARK_PROTOCOL.md) |
 | Security policy | [`SECURITY.md`](SECURITY.md) |
 

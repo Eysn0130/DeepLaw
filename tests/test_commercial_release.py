@@ -54,15 +54,35 @@ def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
     assert set(_unified_versions(REPOSITORY).values()) == {"0.11.0"}
     assert all(_docs(REPOSITORY).values())
     assert "商业" not in (REPOSITORY / "README.md").read_text(encoding="utf-8")
-    assert "commercial" not in (
-        REPOSITORY / "README_EN.md"
-    ).read_text(encoding="utf-8").casefold()
+    english_homepage = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
+    assert "commercial" not in english_homepage.casefold().replace(
+        "commercial-release-manifest.json", "release-manifest.json"
+    )
     assert COMPETITIVE_EVIDENCE_MISSING == [
         "real_model_task_e2e",
         "named_baseline_results_17",
         "paired_confidence_intervals",
         "comparative_failure_and_cost_inventory",
     ]
+
+
+def test_homepages_distinguish_historical_and_formal_release_evidence() -> None:
+    historical_name = "LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md"
+    historical = (REPOSITORY / "docs" / historical_name).read_text(encoding="utf-8")
+    assert "Historical pre-release implementation report" in historical
+    assert "not the\n> v0.11.0 release decision" in historical
+
+    for homepage_name in ("README.md", "README_EN.md"):
+        homepage = (REPOSITORY / homepage_name).read_text(encoding="utf-8")
+        assert "V0_11_ACCEPTANCE_MATRIX.md" in homepage
+        assert "RELEASE_NOTES_v0.11.0.md" in homepage
+        assert "commercial-release-manifest.json" in homepage
+        assert "post-release-verification.json" in homepage
+        if historical_name in homepage:
+            historical_line = next(
+                line for line in homepage.splitlines() if historical_name in line
+            ).casefold()
+            assert "histor" in historical_line or "pre-release" in historical_line
 
 
 def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
