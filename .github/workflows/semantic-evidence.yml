@@ -1,6 +1,20 @@
 name: Semantic Living Wiki evidence
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/semantic-evidence.yml
+      - benchmarks/hosts/run_semantic_host_harness.py
+      - benchmarks/semantic/**
+      - contracts/deterministic-semantic-*.schema.json
+      - contracts/knowledge-capsule-verification.v2.schema.json
+      - contracts/real-semantic-host-report.v2.schema.json
+      - contracts/semantic-*.schema.json
+      - src/deeplaw/context_compiler.py
+      - src/deeplaw/read_services.py
+      - src/deeplaw/retrieval/purpose.py
   workflow_dispatch:
     inputs:
       mode:
@@ -49,9 +63,11 @@ permissions:
 jobs:
   deterministic-review:
     name: Deterministic Semantic Gold review evidence
-    if: ${{ inputs.mode == 'deterministic_review' }}
+    if: ${{ github.event_name == 'pull_request' || inputs.mode == 'deterministic_review' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      SEMANTIC_RELEASE_REF: ${{ github.event.pull_request.head.sha || inputs.release_ref }}
 
     steps:
       - name: Check out the exact clean candidate
@@ -59,7 +75,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.release_ref }}
+          ref: ${{ env.SEMANTIC_RELEASE_REF }}
 
       - name: Install uv and Node.js
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
@@ -76,7 +92,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$(git rev-parse '${{ inputs.release_ref }}^{commit}')"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "${SEMANTIC_RELEASE_REF}^{commit}")"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           uv sync --frozen --extra dev
           uv build --wheel --out-dir "${RUNNER_TEMP}/dist"
