@@ -16,15 +16,29 @@ until an independent retrieval audit has completed and the owner explicitly conf
 Gold. The producing Agent and the audit Agent cannot confirm, sign, or score their own Gold as
 human-reviewed evidence.
 
-Entity and Concept labels use a **target-scoped** protocol, not a closed-world claim. One stable
-Knowledge ID matched to a labelled target is a true positive; duplicate identities matched to that
-same target are false positives; correct additional objects outside the labelled targets are not
-false positives and are excluded from the denominator. Extraction completeness and Source IR
-fragment coverage are reported separately. This definition is frozen in the Gold and Schema.
+Entity and Concept labels use a **target-scoped** protocol, not a closed-world claim. Query-side
+target precision applies the same rule to every labelled target: matching is constrained by the
+frozen case Source Revision set and any claim-level content assertions. One stable Knowledge ID
+matched inside that scope is a true positive; duplicate identities matched to the same target are
+false positives; correct objects outside the source and claim scope are excluded from the
+denominator. Extraction completeness and Source IR fragment coverage are reported separately. This
+definition is frozen in the Gold and Schema.
+
+`compiled_hit_ratio` is defined only across cases with at least one required compiled Gold target.
+Explicit-gap-only withdrawal and unanswerable cases are excluded, and a hit requires a labelled
+target match; an inadmissible or unrelated compiled object cannot improve the ratio.
+
+Same-condition comparisons preserve the exact observed values. Deterministic quality, evidence,
+safety, and provider-byte metrics use zero tolerance. One-shot CLI latency percentiles and peak RSS
+use a frozen 5% measurement-noise bound; the comparison records both the exact delta and allowed
+bound, and a change beyond that bound fails the gate.
 
 Source Summary, cross-source Synthesis, and Overview labels include claim-level required content,
 expected entailment, and exact source-key sets. Deterministic required-term/source checks are only a
-precheck; the Human Review Packet retains the full claims for independent and owner review.
+precheck; structural citation validity is scored separately. Query Plan v5 exposes a hash-bound
+Synthesis evidence receipt, and the precheck resolves every required term against its exact
+provider-visible Source Revision, fragment, locator, and quote hash. The Human Review Packet
+retains the full claims and claim-to-evidence checks for independent and owner review.
 
 ## Deterministic pre-review lifecycle
 

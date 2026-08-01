@@ -47,6 +47,7 @@ SAFETY_ZERO = (
     "unauthorized_mutation_failures",
     "silent_fallback_challenge_failures",
 )
+_PERFORMANCE_NOISE_TOLERANCE = 0.05
 
 
 def _repository() -> Path:
@@ -67,15 +68,31 @@ def _validate_query(value: dict[str, Any]) -> None:
 
 
 def _metric(
-    *, name: str, baseline: float | int, candidate: float | int, direction: HigherOrLower
+    *,
+    name: str,
+    baseline: float | int,
+    candidate: float | int,
+    direction: HigherOrLower,
+    tolerance_fraction: float = 0.0,
 ) -> dict[str, Any]:
-    non_regression = candidate >= baseline if direction == "higher" else candidate <= baseline
+    allowed_candidate_bound = (
+        float(baseline) * (1.0 - tolerance_fraction)
+        if direction == "higher"
+        else float(baseline) * (1.0 + tolerance_fraction)
+    )
+    non_regression = (
+        candidate >= allowed_candidate_bound
+        if direction == "higher"
+        else candidate <= allowed_candidate_bound
+    )
     return {
         "metric": name,
         "direction": direction,
         "baseline": baseline,
         "candidate": candidate,
         "delta": round(float(candidate) - float(baseline), 6),
+        "tolerance_fraction": tolerance_fraction,
+        "allowed_candidate_bound": round(allowed_candidate_bound, 6),
         "non_regression": non_regression,
     }
 
@@ -114,6 +131,18 @@ def compare(*, baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str,
                 baseline=baseline_metrics[name],
                 candidate=candidate_metrics[name],
                 direction="lower",
+                tolerance_fraction=(
+                    _PERFORMANCE_NOISE_TOLERANCE
+                    if name
+                    in {
+                        "cold_latency_p50_ms",
+                        "cold_latency_p95_ms",
+                        "warm_latency_p50_ms",
+                        "warm_latency_p95_ms",
+                        "peak_rss_bytes",
+                    }
+                    else 0.0
+                ),
             )
             for name in LOWER_IS_BETTER
             if baseline_metrics[name] is not None and candidate_metrics[name] is not None

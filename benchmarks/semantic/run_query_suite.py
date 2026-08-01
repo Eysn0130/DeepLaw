@@ -76,6 +76,22 @@ def _peak_rss_bytes() -> int | None:
     return round(peak if sys.platform == "darwin" else peak * 1024)
 
 
+def _compiled_hit_ratio(
+    cases: list[dict[str, Any]], gold_cases: list[dict[str, Any]]
+) -> float:
+    eligible = [
+        item
+        for item, gold_case in zip(cases, gold_cases, strict=True)
+        if any(expected["required"] for expected in gold_case["expected_objects"])
+    ]
+    if not eligible:
+        return 1.0
+    return round(
+        sum(bool(item["matched_label_ids"]) for item in eligible) / len(eligible),
+        6,
+    )
+
+
 def _execution_environment(*, network_policy: str) -> dict[str, Any]:
     return {
         "os": {
@@ -134,6 +150,40 @@ def _matches_expected(item: dict[str, Any], expected: dict[str, Any]) -> bool:
     expected_tokens = set(normalized.split())
     return len(expected_tokens) >= 2 and any(
         expected_tokens.issubset(set(candidate.split())) for candidate in candidate_norms
+    )
+
+
+def _item_source_revision_ids(item: dict[str, Any]) -> set[str]:
+    return {
+        source_revision_id
+        for reference in item.get("source_refs", [])
+        if isinstance(reference, dict)
+        and isinstance(
+            source_revision_id := reference.get("source_revision_id"), str
+        )
+    }
+
+
+def _target_matches(
+    *,
+    case: dict[str, Any],
+    item: dict[str, Any],
+    expected: dict[str, Any],
+    source_ids: dict[str, str],
+) -> bool:
+    if not _matches_expected(item, expected):
+        return False
+    expected_sources = {
+        source_ids[source_key]
+        for source_key in case["source_keys"]
+        if source_key in source_ids
+    }
+    if expected_sources and not (_item_source_revision_ids(item) & expected_sources):
+        return False
+    content = _normalize(str(item.get("content") or item.get("body") or ""))
+    return all(
+        all(_normalize(term) in content for term in assertion["required_terms"])
+        for assertion in expected.get("content_assertions", [])
     )
 
 
@@ -250,6 +300,7 @@ def _rank_metrics(
     *,
     case: dict[str, Any],
     value: dict[str, Any],
+    source_ids: dict[str, str],
 ) -> dict[str, Any]:
     required = [item for item in case["expected_objects"] if item["required"]]
     ranked = [item for item in value.get("compiled", []) if isinstance(item, dict)]
@@ -258,7 +309,16 @@ def _rank_metrics(
     first_rank: int | None = None
     gains: list[int] = []
     for rank, item in enumerate(ranked, start=1):
-        labels = [expected for expected in required if _matches_expected(item, expected)]
+        labels = [
+            expected
+            for expected in required
+            if _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+        ]
         new_labels = [
             expected
             for expected in labels
@@ -456,6 +516,179 @@ def _citation_checks(
                 }
             )
     return checks, sum(item["valid"] for item in checks), len(checks), exact_get_valid
+
+
+def _claim_evidence_checks(
+    prefix: list[str],
+    *,
+    vault: Path,
+    case: dict[str, Any],
+    value: dict[str, Any],
+    source_ids: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Bind explicit Gold claims to provider-visible exact fixture fragments."""
+
+    compiled = [item for item in value.get("compiled", []) if isinstance(item, dict)]
+    fragment_cache: dict[str, dict[str, Any] | None] = {}
+    checks: list[dict[str, Any]] = []
+    for expected in case["expected_objects"]:
+        if not expected["required"]:
+            continue
+        targets = [
+            item
+            for item in compiled
+            if _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+        ]
+        for assertion in expected.get("content_assertions", []):
+            expected_sources = {
+                source_ids[source_key] for source_key in assertion["source_keys"]
+            }
+            outcomes: list[dict[str, Any]] = []
+            for item in targets:
+                receipt_valid = True
+                references = [
+                    reference
+                    for reference in item.get("source_refs", [])
+                    if isinstance(reference, dict)
+                ]
+                if item.get("kind") == "synthesis":
+                    receipt = item.get("synthesis_evidence_receipt", {})
+                    receipt_body = dict(receipt) if isinstance(receipt, dict) else {}
+                    receipt_sha256 = receipt_body.pop("receipt_sha256", None)
+                    receipt_valid = bool(
+                        receipt_body
+                        and receipt.get("complete") is True
+                        and receipt_sha256
+                        == sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
+                    )
+                    references = [
+                        reference
+                        for reference in receipt.get("source_refs", [])
+                        if isinstance(reference, dict)
+                    ]
+                unique_references: dict[tuple[str, str], dict[str, Any]] = {}
+                for reference in references:
+                    source_revision_id = reference.get("source_revision_id")
+                    fragment_identity = reference.get("fragment_id") or reference.get(
+                        "fragment_revision_id"
+                    )
+                    if not isinstance(source_revision_id, str) or not isinstance(
+                        fragment_identity, str
+                    ):
+                        continue
+                    unique_references[(source_revision_id, fragment_identity)] = reference
+                valid_fragments: list[dict[str, Any]] = []
+                valid_references: list[dict[str, Any]] = []
+                for reference in unique_references.values():
+                    fragment_identity = str(
+                        reference.get("fragment_id")
+                        or reference.get("fragment_revision_id")
+                    )
+                    if fragment_identity not in fragment_cache:
+                        fragment, _, _, _ = _run_json(
+                            prefix,
+                            "source",
+                            "fragment",
+                            "--vault",
+                            str(vault),
+                            "--fragment-id",
+                            fragment_identity,
+                            "--scope",
+                            "personal",
+                            "--max-sensitivity",
+                            "public",
+                            expect_success=False,
+                        )
+                        record = fragment.get("fragment", {}) if fragment is not None else {}
+                        fragment_cache[fragment_identity] = (
+                            record if isinstance(record, dict) else None
+                        )
+                    record = fragment_cache[fragment_identity]
+                    if record is None:
+                        continue
+                    if (
+                        record.get("source_revision_id")
+                        != reference.get("source_revision_id")
+                        or record.get("locator") != reference.get("locator")
+                        or record.get("text_sha256") != reference.get("quote_sha256")
+                    ):
+                        continue
+                    valid_fragments.append(record)
+                    valid_references.append(
+                        {
+                            "source_revision_id": reference.get("source_revision_id"),
+                            "fragment_id": reference.get("fragment_id"),
+                            "fragment_revision_id": reference.get("fragment_revision_id"),
+                            "locator": reference.get("locator"),
+                            "quote_sha256": reference.get("quote_sha256"),
+                        }
+                    )
+                actual_sources = {
+                    str(fragment["source_revision_id"])
+                    for fragment in valid_fragments
+                    if isinstance(fragment.get("source_revision_id"), str)
+                }
+                content = _normalize(str(item.get("content") or item.get("body") or ""))
+                evidence = _normalize(
+                    " ".join(
+                        str(fragment.get("text") or "") for fragment in valid_fragments
+                    )
+                )
+                content_terms_valid = all(
+                    _normalize(term) in content for term in assertion["required_terms"]
+                )
+                evidence_terms_valid = all(
+                    _normalize(term) in evidence for term in assertion["required_terms"]
+                )
+                source_coverage_valid = expected_sources.issubset(actual_sources)
+                outcomes.append(
+                    {
+                        "knowledge_id": item.get("knowledge_id"),
+                        "revision_id": item.get("revision_id"),
+                        "actual_source_revision_ids": sorted(actual_sources),
+                        "evidence_refs": valid_references,
+                        "content_terms_valid": content_terms_valid,
+                        "evidence_terms_valid": evidence_terms_valid,
+                        "source_coverage_valid": source_coverage_valid,
+                        "receipt_valid": receipt_valid,
+                        "valid": bool(
+                            content_terms_valid
+                            and evidence_terms_valid
+                            and source_coverage_valid
+                            and receipt_valid
+                        ),
+                    }
+                )
+            selected = next(
+                (outcome for outcome in outcomes if outcome["valid"]),
+                outcomes[0]
+                if outcomes
+                else {
+                    "knowledge_id": None,
+                    "revision_id": None,
+                    "actual_source_revision_ids": [],
+                    "evidence_refs": [],
+                    "content_terms_valid": False,
+                    "evidence_terms_valid": False,
+                    "source_coverage_valid": False,
+                    "receipt_valid": False,
+                    "valid": False,
+                },
+            )
+            checks.append(
+                {
+                    "label_id": expected["label_id"],
+                    "claim_id": assertion["claim_id"],
+                    "expected_source_revision_ids": sorted(expected_sources),
+                    **selected,
+                }
+            )
+    return checks
 
 
 def _context_verification(
@@ -673,7 +906,7 @@ def _case_result(
         )
     )
     task_type = case["task_type"]
-    ranking = _rank_metrics(case=case, value=warm)
+    ranking = _rank_metrics(case=case, value=warm, source_ids=source_ids)
     required_label_ids = {
         item["label_id"] for item in case["expected_objects"] if item["required"]
     }
@@ -683,6 +916,13 @@ def _case_result(
         vault=vault,
         value=warm,
     )
+    claim_evidence_checks = _claim_evidence_checks(
+        prefix,
+        vault=vault,
+        case=case,
+        value=warm,
+        source_ids=source_ids,
+    )
     context = _context_verification(prefix, vault=vault, query=case["query"])
     citation_validity = (
         round(valid_citations / citation_count, 6)
@@ -690,7 +930,9 @@ def _case_result(
         else (1.0 if not required_label_ids else 0.0)
     )
     evidence_binding_valid = bool(
-        citation_validity == 1.0 and (citation_count > 0 or not required_label_ids)
+        citation_validity == 1.0
+        and (citation_count > 0 or not required_label_ids)
+        and all(check["valid"] for check in claim_evidence_checks)
     )
     failure_reason: str | None = None
     if task_type == "unanswerable":
@@ -704,9 +946,16 @@ def _case_result(
             source_ids["retention-a"] not in selected_sources
             and explicit_gap
             and "stale_knowledge" in gap_codes
+            and not compiled_ids
+            and not warm.get("evidence")
+            and not fallback_used
         )
         if not semantic_pass:
-            failure_reason = "withdrawn Source Revision was selected"
+            failure_reason = (
+                "withdrawn Source Revision was selected"
+                if source_ids["retention-a"] in selected_sources
+                else "withdrawn policy query returned a substitute answer"
+            )
     elif task_type in {"source_successor_update", "overview_refresh"}:
         semantic_pass = bool(
             source_ids["update-v2"] in selected_sources
@@ -765,6 +1014,9 @@ def _case_result(
                     for reference in item.get("source_refs", [])
                     if isinstance(reference, dict)
                 ],
+                "synthesis_evidence_receipt": item.get(
+                    "synthesis_evidence_receipt"
+                ),
             }
         )
     return {
@@ -798,6 +1050,7 @@ def _case_result(
         "provider_hard_limit_valid": hard_limit_valid,
         "continuation_valid": continuation_valid,
         "citation_checks": citation_checks,
+        "claim_evidence_checks": claim_evidence_checks,
         "citation_validity": citation_validity,
         "claim_evidence_binding_accuracy": 1.0 if evidence_binding_valid else 0.0,
         **ranking,
@@ -998,9 +1251,7 @@ def run(
         "repeated_query_reuse_rate": round(
             sum(item["repeat_reused"] for item in cases) / len(cases), 6
         ),
-        "compiled_hit_ratio": round(
-            sum(bool(item["compiled_revision_ids"]) for item in cases) / len(cases), 6
-        ),
+        "compiled_hit_ratio": _compiled_hit_ratio(cases, gold["cases"]),
         "source_fallback_ratio": round(
             sum(bool(item["query_plan"].get("fallback", {}).get("used")) for item in cases)
             / len(cases),

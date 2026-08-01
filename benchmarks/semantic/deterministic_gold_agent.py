@@ -70,6 +70,7 @@ OBJECT_SPECS: dict[str, list[dict[str, Any]]] = {
                 "4. Admit the source or return an explicit gap."
             ),
             "aliases": [],
+            "fragment_contains": "Verify the exact Source Revision bytes",
         },
         {
             "kind": "event",
@@ -78,6 +79,7 @@ OBJECT_SPECS: dict[str, list[dict[str, Any]]] = {
             "body": "The evidence admission policy was drafted on 2025-01-10.",
             "aliases": ["Admission policy drafted"],
             "valid_from": "2025-01-10T00:00:00Z",
+            "fragment_contains": "2025-01-10",
         },
         {
             "kind": "event",
@@ -86,6 +88,7 @@ OBJECT_SPECS: dict[str, list[dict[str, Any]]] = {
             "body": "Locator validation became mandatory on 2025-03-15.",
             "aliases": ["Locator validation became mandatory"],
             "valid_from": "2025-03-15T00:00:00Z",
+            "fragment_contains": "2025-03-15",
         },
         {
             "kind": "event",
@@ -94,6 +97,7 @@ OBJECT_SPECS: dict[str, list[dict[str, Any]]] = {
             "body": "Silent fallback was prohibited on 2025-05-20.",
             "aliases": ["Silent fallback was prohibited"],
             "valid_from": "2025-05-20T00:00:00Z",
+            "fragment_contains": "2025-05-20",
         },
     ],
     "retention-a": [

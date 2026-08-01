@@ -141,7 +141,10 @@
         "warm_latency_p50_ms": {"type": "integer", "minimum": 0},
         "warm_latency_p95_ms": {"type": "integer", "minimum": 0},
         "repeated_query_reuse_rate": {"$ref": "#/$defs/ratio"},
-        "compiled_hit_ratio": {"$ref": "#/$defs/ratio"},
+        "compiled_hit_ratio": {
+          "$ref": "#/$defs/ratio",
+          "description": "Fraction of cases with at least one required compiled Gold target that retrieved at least one matching labelled target; explicit-gap-only cases are excluded."
+        },
         "source_fallback_ratio": {"$ref": "#/$defs/ratio"},
         "uncompiled_source_count": {"type": "integer", "minimum": 0},
         "extraction_completeness": {"$ref": "#/$defs/ratio"},
@@ -194,7 +197,8 @@
         "selected_source_revision_ids", "gap_codes", "explicit_gap", "repeat_reused",
         "write_performed", "authority_changed_by_ranking", "source_fallback_visible",
         "provider_hard_limit_valid", "continuation_valid", "citation_checks",
-        "citation_validity", "claim_evidence_binding_accuracy", "matched_label_ids",
+        "claim_evidence_checks", "citation_validity", "claim_evidence_binding_accuracy",
+        "matched_label_ids",
         "recall_at_k", "target_scoped_precision_at_k", "reciprocal_rank", "ndcg_at_k",
         "failure_reason"
       ],
@@ -231,6 +235,7 @@
         "provider_hard_limit_valid": {"type": "boolean"},
         "continuation_valid": {"type": "boolean"},
         "citation_checks": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/citation_check"}},
+        "claim_evidence_checks": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/claim_evidence_check"}},
         "citation_validity": {"$ref": "#/$defs/ratio"},
         "claim_evidence_binding_accuracy": {"$ref": "#/$defs/ratio"},
         "matched_label_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^label-[a-z0-9-]+$"}},
@@ -260,6 +265,29 @@
         {"properties": {"fragment_revision_id": {"type": "string"}}}
       ]
     },
+    "claim_evidence_check": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "label_id", "claim_id", "knowledge_id", "revision_id",
+        "expected_source_revision_ids", "actual_source_revision_ids",
+        "evidence_refs", "content_terms_valid", "evidence_terms_valid",
+        "source_coverage_valid", "receipt_valid", "valid"
+      ],
+      "properties": {
+        "label_id": {"type": "string", "pattern": "^label-[a-z0-9-]+$"},
+        "claim_id": {"type": "string", "pattern": "^claim-gold-[a-z0-9-]+$"},
+        "knowledge_id": {"type": ["string", "null"], "pattern": "^knowledge_[0-9a-f]{24}$"},
+        "revision_id": {"type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+        "expected_source_revision_ids": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}},
+        "actual_source_revision_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}},
+        "evidence_refs": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/source_ref"}},
+        "content_terms_valid": {"type": "boolean"},
+        "evidence_terms_valid": {"type": "boolean"},
+        "source_coverage_valid": {"type": "boolean"},
+        "receipt_valid": {"type": "boolean"},
+        "valid": {"type": "boolean"}
+      }
+    },
     "expected_target": {
       "type": "object", "additionalProperties": false,
       "required": ["label_id", "kind", "canonical_label", "required"],
@@ -274,7 +302,7 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "knowledge_id", "revision_id", "kind", "title", "semantic_key",
-        "content_excerpt", "source_refs"
+        "content_excerpt", "source_refs", "synthesis_evidence_receipt"
       ],
       "properties": {
         "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
@@ -283,7 +311,8 @@
         "title": {"type": "string", "minLength": 1, "maxLength": 500},
         "semantic_key": {"type": "string", "minLength": 1, "maxLength": 300},
         "content_excerpt": {"type": "string", "maxLength": 2000},
-        "source_refs": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/source_ref"}}
+        "source_refs": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/source_ref"}},
+        "synthesis_evidence_receipt": {"type": ["object", "null"]}
       }
     },
     "source_ref": {

@@ -43,7 +43,7 @@
         "entity_concept_annotation_scope": {"const": "target_scoped"},
         "extra_valid_objects_are_false_positive": {"const": false},
         "precision_definition": {
-          "const": "For each labelled Entity or Concept target, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside the labelled targets are excluded from the denominator."
+          "const": "For each labelled target within its frozen case source and claim scope, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside that source and claim scope are excluded from the denominator."
         },
         "extraction_completeness_definition": {
           "const": "Required labelled targets retrieved or compiled divided by all required labelled targets."

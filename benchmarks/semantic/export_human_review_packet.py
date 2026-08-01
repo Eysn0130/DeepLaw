@@ -86,6 +86,7 @@ def build_packet(
                     item["knowledge_id"] for item in actual["actual_objects"]
                 ],
                 "citations": actual["citation_checks"],
+                "claim_evidence_checks": actual["claim_evidence_checks"],
                 "query_plan": actual["query_plan"],
                 "query_plan_sha256": actual["query_plan_sha256"],
                 "metrics": metrics,

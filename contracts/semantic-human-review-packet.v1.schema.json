@@ -50,7 +50,7 @@
       "required": [
         "case_id", "review_purpose", "frozen_query", "expected_result",
         "actual_retrieved_result", "expected_object_stable_ids",
-        "actual_object_stable_ids", "citations", "query_plan",
+        "actual_object_stable_ids", "citations", "claim_evidence_checks", "query_plan",
         "query_plan_sha256", "metrics", "discrepancy",
         "machine_precheck_recommendation", "independent_auditor_recommendation",
         "human_final_decision"
@@ -64,6 +64,7 @@
         "expected_object_stable_ids": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
         "actual_object_stable_ids": {"type": "array", "maxItems": 100, "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}},
         "citations": {"type": "array", "maxItems": 500},
+        "claim_evidence_checks": {"type": "array", "maxItems": 500},
         "query_plan": {"type": "object"},
         "query_plan_sha256": {"$ref": "#/$defs/sha256"},
         "metrics": {"type": "object"},

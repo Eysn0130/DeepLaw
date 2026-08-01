@@ -225,6 +225,10 @@ a universal hard-coded ranking by object kind:
 - exact citation, source verification, incomplete coverage, and authoritative or legal evidence
   duties may require evidence-first selection or direct source drill-down;
 - raw fragments remain bounded verification and fallback material;
+- Query Plan v5 projects a hash-bound `synthesis-query-evidence-receipt/v1` for each selected
+  Synthesis. The receipt binds its frozen input set to the exact provider-visible Source Revision,
+  fragment, locator, and quote hash set; incomplete cross-source coverage remains an explicit
+  `evidence_gap`;
 - every fallback from compiled knowledge to source fragments must be observable in the plan,
   explanation, gap, or receipt;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.

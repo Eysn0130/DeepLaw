@@ -8,7 +8,7 @@
   "scoring_policy": {
     "entity_concept_annotation_scope": "target_scoped",
     "extra_valid_objects_are_false_positive": false,
-    "precision_definition": "For each labelled Entity or Concept target, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside the labelled targets are excluded from the denominator.",
+    "precision_definition": "For each labelled target within its frozen case source and claim scope, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside that source and claim scope are excluded from the denominator.",
     "extraction_completeness_definition": "Required labelled targets retrieved or compiled divided by all required labelled targets.",
     "source_coverage_definition": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources."
   },
@@ -317,7 +317,22 @@
           "kind": "procedure",
           "canonical_label": "Evidence admission workflow",
           "aliases": [],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-admission-procedure",
+              "statement": "The evidence admission workflow preserves all four ordered steps.",
+              "required_terms": [
+                "Verify the exact Source Revision bytes",
+                "Check scope and sensitivity",
+                "Validate every fragment locator and quote hash",
+                "Admit the source or return an explicit gap"
+              ],
+              "source_keys": ["concept-procedure-events"],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
         }
       ],
       "forbidden_merges": [],
@@ -348,21 +363,51 @@
           "kind": "event",
           "canonical_label": "Evidence admission policy drafted on 2025-01-10",
           "aliases": ["Admission policy drafted"],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-admission-drafted-event",
+              "statement": "The admission policy was drafted on 2025-01-10.",
+              "required_terms": ["2025-01-10", "admission policy", "drafted"],
+              "source_keys": ["concept-procedure-events"],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
         },
         {
           "label_id": "label-locator-mandatory-event",
           "kind": "event",
           "canonical_label": "Locator validation became mandatory on 2025-03-15",
           "aliases": ["Locator validation became mandatory"],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-locator-mandatory-event",
+              "statement": "Locator validation became mandatory on 2025-03-15.",
+              "required_terms": ["2025-03-15", "locator validation", "mandatory"],
+              "source_keys": ["concept-procedure-events"],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
         },
         {
           "label_id": "label-silent-fallback-prohibited-event",
           "kind": "event",
           "canonical_label": "Silent fallback was prohibited on 2025-05-20",
           "aliases": ["Silent fallback was prohibited"],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-silent-fallback-event",
+              "statement": "Silent fallback was prohibited on 2025-05-20.",
+              "required_terms": ["2025-05-20", "silent fallback", "prohibited"],
+              "source_keys": ["concept-procedure-events"],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
         }
       ],
       "forbidden_merges": [],

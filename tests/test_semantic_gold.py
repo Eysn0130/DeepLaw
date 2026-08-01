@@ -11,6 +11,7 @@ from benchmarks.hosts.run_semantic_host_harness import (
     _provider_token_usage,
     not_executed_report,
 )
+from benchmarks.semantic.compare_query_runs import _metric
 from benchmarks.semantic.deterministic_gold_agent import compile_source as compile_gold_source
 from benchmarks.semantic.export_review_bundle import export_review_bundle
 from benchmarks.semantic.prepare_host_corpus import _run_cli
@@ -21,6 +22,8 @@ from benchmarks.semantic.review_gold import (
 )
 from benchmarks.semantic.run_query_suite import (
     _case_result,
+    _claim_evidence_checks,
+    _compiled_hit_ratio,
     _evaluate_read_challenge,
     _rank_metrics,
 )
@@ -37,6 +40,7 @@ from deeplaw.knowledge_autonomy import (
     initialize_autonomous_core,
 )
 from deeplaw.knowledge_store import initialize_knowledge_vault
+from deeplaw.util import canonical_json, sha256_bytes
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 CANDIDATE = REPOSITORY / "benchmarks/semantic/semantic-gold-candidate-v1.json"
@@ -181,6 +185,8 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
     case = next(
         case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-04"
     )
+    target_source = "sourcerev_" + "c" * 24
+    extra_source = "sourcerev_" + "d" * 24
     value = {
         "compiled": [
             {
@@ -189,6 +195,7 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
                 "title": "Evidence admission",
                 "semantic_key": "concept:evidence-admission",
                 "aliases": ["admission policy"],
+                "source_refs": [{"source_revision_id": target_source}],
             },
             {
                 "knowledge_id": "knowledge_" + "b" * 24,
@@ -196,12 +203,99 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
                 "title": "A valid extra concept",
                 "semantic_key": "concept:valid-extra",
                 "aliases": [],
+                "source_refs": [{"source_revision_id": extra_source}],
             },
         ]
     }
-    metrics = _rank_metrics(case=case, value=value)
+    metrics = _rank_metrics(
+        case=case,
+        value=value,
+        source_ids={"concept-procedure-events": target_source},
+    )
     assert metrics["recall_at_k"] == 1.0
     assert metrics["target_scoped_precision_at_k"] == 1.0
+
+
+def test_target_scoped_precision_excludes_other_generic_source_summaries() -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-06"
+    )
+    target_source = "sourcerev_" + "e" * 24
+    other_source = "sourcerev_" + "f" * 24
+    target_content = (
+        "Evidence admission requires identity, lifecycle, scope, sensitivity, and provenance "
+        "checks. Evidence ranking never establishes Authority."
+    )
+    value = {
+        "compiled": [
+            {
+                "knowledge_id": "knowledge_" + "a" * 24,
+                "kind": "synthesis",
+                "title": "Source summary",
+                "semantic_key": f"source-summary:{target_source}",
+                "content": target_content,
+                "source_refs": [{"source_revision_id": target_source}],
+            },
+            {
+                "knowledge_id": "knowledge_" + "b" * 24,
+                "kind": "synthesis",
+                "title": "Source summary",
+                "semantic_key": f"source-summary:{other_source}",
+                "content": "A valid summary for another source.",
+                "source_refs": [{"source_revision_id": other_source}],
+            },
+        ]
+    }
+    metrics = _rank_metrics(
+        case=case,
+        value=value,
+        source_ids={"concept-procedure-events": target_source},
+    )
+    assert metrics["matched_label_ids"] == ["label-source-summary"]
+    assert metrics["target_scoped_precision_at_k"] == 1.0
+
+
+def test_compiled_hit_ratio_excludes_explicit_gap_only_cases() -> None:
+    cases = [
+        {"matched_label_ids": ["label-compiled"]},
+        {"matched_label_ids": []},
+        {"matched_label_ids": []},
+    ]
+    gold_cases = [
+        {"expected_objects": [{"required": True}]},
+        {"expected_objects": []},
+        {"expected_objects": []},
+    ]
+    assert _compiled_hit_ratio(cases, gold_cases) == 1.0
+
+
+def test_same_condition_performance_tolerance_is_explicit_and_bounded() -> None:
+    within = _metric(
+        name="warm_latency_p95_ms",
+        baseline=100,
+        candidate=105,
+        direction="lower",
+        tolerance_fraction=0.05,
+    )
+    beyond = _metric(
+        name="warm_latency_p95_ms",
+        baseline=100,
+        candidate=106,
+        direction="lower",
+        tolerance_fraction=0.05,
+    )
+    strict_quality = _metric(
+        name="recall_at_k",
+        baseline=1.0,
+        candidate=0.999,
+        direction="higher",
+    )
+
+    assert within["allowed_candidate_bound"] == 105.0
+    assert within["non_regression"] is True
+    assert beyond["non_regression"] is False
+    assert strict_quality["tolerance_fraction"] == 0.0
+    assert strict_quality["non_regression"] is False
 
 
 def test_temporal_and_retention_gold_are_unambiguous() -> None:
@@ -276,6 +370,218 @@ def test_claim_level_gold_rejects_missing_required_content() -> None:
         store=store,
         source_ids=source_ids,
     )
+
+
+def test_query_claim_binding_rejects_structurally_valid_wrong_fragment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-07"
+    )
+    source_revision_id = "sourcerev_" + "a" * 24
+    fragment_id = "fragment_" + "b" * 24
+    locator = "section:1;paragraphs:3-5"
+    quote_sha256 = "c" * 64
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_run_json",
+        lambda *args, **kwargs: (
+            {
+                "fragment": {
+                    "source_revision_id": source_revision_id,
+                    "fragment_id": fragment_id,
+                    "locator": locator,
+                    "text_sha256": quote_sha256,
+                    "text": "Evidence admission requires identity and provenance checks.",
+                }
+            },
+            0,
+            b"",
+            b"",
+        ),
+    )
+    procedure = next(
+        item
+        for item in case["expected_objects"]
+        if item["label_id"] == "label-admission-workflow"
+    )
+    checks = _claim_evidence_checks(
+        ["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        value={
+            "compiled": [
+                {
+                    "knowledge_id": "knowledge_" + "d" * 24,
+                    "revision_id": "knowledgerev_" + "e" * 24,
+                    "kind": procedure["kind"],
+                    "title": procedure["canonical_label"],
+                    "semantic_key": "procedure:evidence-admission-workflow",
+                    "content": "\n".join(case["expected_sequence"]),
+                    "source_refs": [
+                        {
+                            "source_revision_id": source_revision_id,
+                            "fragment_id": fragment_id,
+                            "locator": locator,
+                            "quote_sha256": quote_sha256,
+                        }
+                    ],
+                }
+            ],
+            "evidence": [],
+        },
+        source_ids={"concept-procedure-events": source_revision_id},
+    )
+    assert len(checks) == 1
+    assert checks[0]["content_terms_valid"] is True
+    assert checks[0]["evidence_terms_valid"] is False
+    assert checks[0]["valid"] is False
+
+
+def test_query_claim_binding_requires_every_synthesis_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-11"
+    )
+    source_a = "sourcerev_" + "a" * 24
+    source_b = "sourcerev_" + "b" * 24
+    fragment_b = "fragment_" + "c" * 24
+    locator = "section:1;paragraphs:3-6"
+    quote_sha256 = "d" * 64
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_run_json",
+        lambda *args, **kwargs: (
+            {
+                "fragment": {
+                    "source_revision_id": source_b,
+                    "fragment_id": fragment_b,
+                    "locator": locator,
+                    "text_sha256": quote_sha256,
+                    "text": (
+                        "Policy B requires Atlas public API diagnostic logs worldwide "
+                        "during 2026 to be retained for 60 days."
+                    ),
+                }
+            },
+            0,
+            b"",
+            b"",
+        ),
+    )
+    content = (
+        "Both policies apply to Atlas public API diagnostic logs worldwide during 2026. "
+        "Policy A requires 30 days while Policy B requires 60 days."
+    )
+    checks = _claim_evidence_checks(
+        ["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        value={
+            "compiled": [
+                {
+                    "knowledge_id": "knowledge_" + "e" * 24,
+                    "revision_id": "knowledgerev_" + "f" * 24,
+                    "kind": "synthesis",
+                    "title": "Retention policy comparison",
+                    "semantic_key": "synthesis:atlas-retention-policy-comparison:2026",
+                    "content": content,
+                    "source_refs": [
+                        {
+                            "source_revision_id": source_b,
+                            "fragment_id": fragment_b,
+                            "locator": locator,
+                            "quote_sha256": quote_sha256,
+                        }
+                    ],
+                }
+            ],
+            "evidence": [],
+        },
+        source_ids={"retention-a": source_a, "retention-b": source_b},
+    )
+    assert len(checks) == 2
+    assert all(check["source_coverage_valid"] is False for check in checks)
+    assert all(check["valid"] is False for check in checks)
+
+
+def test_query_claim_binding_rejects_tampered_synthesis_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-12"
+    )
+    source_revision_id = "sourcerev_" + "a" * 24
+    fragment_id = "fragment_" + "b" * 24
+    locator = "section:1;paragraphs:3-4"
+    quote_sha256 = "c" * 64
+    reference = {
+        "source_revision_id": source_revision_id,
+        "fragment_id": fragment_id,
+        "locator": locator,
+        "quote_sha256": quote_sha256,
+    }
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_run_json",
+        lambda *args, **kwargs: (
+            {
+                "fragment": {
+                    **reference,
+                    "text_sha256": quote_sha256,
+                    "text": "Atlas release 2 uses protocol revision 4 and supersedes release 1.",
+                }
+            },
+            0,
+            b"",
+            b"",
+        ),
+    )
+    receipt = {
+        "schema_version": "deeplaw.synthesis-query-evidence-receipt/v1",
+        "synthesis_revision_id": "knowledgerev_" + "d" * 24,
+        "input_set_sha256": "e" * 64,
+        "source_revision_ids": [source_revision_id],
+        "source_refs": [reference],
+        "complete": True,
+    }
+    receipt["receipt_sha256"] = sha256_bytes(canonical_json(receipt).encode("utf-8"))
+    item = {
+        "knowledge_id": "knowledge_" + "f" * 24,
+        "revision_id": receipt["synthesis_revision_id"],
+        "kind": "synthesis",
+        "title": "Atlas overview",
+        "semantic_key": "synthesis:atlas-overview",
+        "content": "Atlas release 2 uses protocol revision 4 and supersedes release 1.",
+        "source_refs": [reference],
+        "synthesis_evidence_receipt": receipt,
+    }
+    source_ids = {
+        "update-v1": "sourcerev_" + "0" * 24,
+        "update-v2": source_revision_id,
+    }
+    valid = _claim_evidence_checks(
+        ["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        value={"compiled": [item], "evidence": []},
+        source_ids=source_ids,
+    )
+    assert valid[0]["valid"] is True
+    item["synthesis_evidence_receipt"]["receipt_sha256"] = "0" * 64
+    tampered = _claim_evidence_checks(
+        ["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        value={"compiled": [item], "evidence": []},
+        source_ids=source_ids,
+    )
+    assert tampered[0]["receipt_valid"] is False
+    assert tampered[0]["valid"] is False
 
 
 def test_security_challenge_tampering_is_counted_as_failure() -> None:
@@ -636,6 +942,11 @@ def _stub_cli_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         semantic_query_suite,
+        "_claim_evidence_checks",
+        lambda *args, **kwargs: [],
+    )
+    monkeypatch.setattr(
+        semantic_query_suite,
         "_context_verification",
         lambda *args, **kwargs: {
             "capsule_id": "capsule_0123456789abcdef01234567",
@@ -703,3 +1014,42 @@ def test_query_suite_rejects_withdrawn_source_selection(
     )
     assert result["status"] == "failed"
     assert result["failure_reason"] == "withdrawn Source Revision was selected"
+
+
+def test_query_suite_rejects_substitute_answer_for_withdrawn_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_cli_audit(monkeypatch)
+    case = next(case for case in _candidate()["cases"] if case["task_type"] == "source_withdrawal")
+    withdrawn = "sourcerev_" + "a" * 24
+    substitute = "sourcerev_" + "b" * 24
+    output = _query_output(
+        compiled=[
+            {
+                "knowledge_id": "knowledge_" + "c" * 24,
+                "revision_id": "knowledgerev_" + "d" * 24,
+                "kind": "claim",
+                "title": "Diagnostic log retention is 60 days",
+                "semantic_key": "claim:retention:policy-b",
+                "source_refs": [{"source_revision_id": substitute}],
+            }
+        ],
+        gaps=[{"code": "stale_knowledge"}, {"code": "retrieval_gap"}],
+    )
+    result = _case_result(
+        prefix=["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        cold=output,
+        warm=output,
+        cold_latency_ms=5,
+        warm_latency_ms=3,
+        source_ids={
+            "retention-a": withdrawn,
+            "update-v1": "sourcerev_" + "e" * 24,
+            "update-v2": "sourcerev_" + "f" * 24,
+        },
+    )
+    assert result["status"] == "failed"
+    assert result["failure_reason"] == "withdrawn policy query returned a substitute answer"

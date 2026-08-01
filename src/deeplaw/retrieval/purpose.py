@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal, cast
@@ -17,7 +18,7 @@ from ..knowledge_intelligence import (
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
 from ..retrieval_fabric import retrieve
-from ..util import canonical_json, sha256_bytes
+from ..util import canonical_json, sha256_bytes, strict_json_loads
 
 QueryPurpose = Literal[
     "answer",
@@ -104,7 +105,12 @@ _KIND_PRIORITY: Final = {
 }
 _MAX_PROVIDER_CHARS: Final = 65_536
 _MIN_COMPILED_RERANKER_SCORE: Final = 0.20
+_MIN_GENERIC_SUMMARY_RERANKER_SCORE: Final = 0.25
 _MIN_EVIDENCE_RERANKER_SCORE: Final = 0.10
+_POLICY_DESIGNATOR: Final = re.compile(
+    r"\bpolicy[\s:_-]+([a-z](?![a-z0-9])|[0-9][a-z0-9._-]*)",
+    re.IGNORECASE,
+)
 _KNOWLEDGE_DUTIES: Final = (
     "primary_answer",
     "definition",
@@ -115,6 +121,27 @@ _KNOWLEDGE_DUTIES: Final = (
     "applicability",
     "unresolved_gap",
 )
+
+
+def _policy_designator_conflicts(query: str, item: dict[str, Any]) -> bool:
+    """Reject a different named policy as an answer to an exact policy query."""
+
+    query_designators = {
+        match.group(1).casefold() for match in _POLICY_DESIGNATOR.finditer(query)
+    }
+    if not query_designators:
+        return False
+    aliases = item.get("metadata", {}).get("aliases", [])
+    values = [item.get("title"), item.get("semantic_key"), item.get("content")]
+    if isinstance(aliases, list):
+        values.extend(aliases)
+    candidate_designators = {
+        match.group(1).casefold()
+        for value in values
+        if isinstance(value, str)
+        for match in _POLICY_DESIGNATOR.finditer(value)
+    }
+    return bool(candidate_designators and query_designators.isdisjoint(candidate_designators))
 
 
 @dataclass(frozen=True)
@@ -561,6 +588,9 @@ class PurposeAwareRetrievalService:
         )
         normalized_query = normalize_identity_text(query)
         for item in raw["results"]:
+            if _policy_designator_conflicts(query, item):
+                low_relevance_prevented += 1
+                continue
             channels = set(item.get("channels", []))
             reranker = item.get("reranker")
             reranker_score = (
@@ -580,13 +610,18 @@ class PurposeAwareRetrievalService:
                 and normalized in normalized_query
                 for value in identity_values
             )
+            minimum_reranker_score = (
+                _MIN_GENERIC_SUMMARY_RERANKER_SCORE
+                if str(item.get("semantic_key", "")).startswith("source-summary:")
+                else _MIN_COMPILED_RERANKER_SCORE
+            )
             if (
                 not exact_identity_discovery
                 and "exact" not in channels
                 and not exact_identity_phrase
                 and (
                     reranker_score is None
-                    or reranker_score < _MIN_COMPILED_RERANKER_SCORE
+                    or reranker_score < minimum_reranker_score
                 )
             ):
                 low_relevance_prevented += 1
@@ -794,6 +829,86 @@ class PurposeAwareRetrievalService:
         return {key: list(dict.fromkeys(values))[:20] for key, values in partitions.items()}
 
     @staticmethod
+    def _synthesis_evidence_receipts(
+        store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        evidence_references = [
+            reference
+            for item in evidence
+            for reference in item.get("source_refs", [])
+            if isinstance(reference, dict)
+        ]
+        projected: list[dict[str, Any]] = []
+        for item in compiled:
+            current = dict(item)
+            if item.get("kind") != "synthesis":
+                projected.append(current)
+                continue
+            row = store.connection.execute(
+                """
+                SELECT input_set_sha256, source_revision_ids_json
+                FROM synthesis_input_sets_v1
+                WHERE synthesis_revision_id = ?
+                """,
+                (item["revision_id"],),
+            ).fetchone()
+            if row is None:
+                projected.append(current)
+                continue
+            loaded_sources = strict_json_loads(row["source_revision_ids_json"])
+            if not isinstance(loaded_sources, list):
+                raise RuntimeError("Synthesis input Source Revision set is invalid")
+            expected_sources = sorted(
+                source_revision_id
+                for source_revision_id in loaded_sources
+                if isinstance(source_revision_id, str)
+            )
+            available_references = [
+                reference
+                for reference in [*evidence_references, *item.get("source_refs", [])]
+                if isinstance(reference, dict)
+                and reference.get("source_revision_id") in expected_sources
+            ]
+            references: list[dict[str, Any]] = []
+            seen_sources: set[str] = set()
+            for reference in available_references:
+                source_revision_id = reference.get("source_revision_id")
+                fragment_identity = reference.get("fragment_id") or reference.get(
+                    "fragment_revision_id"
+                )
+                if not isinstance(source_revision_id, str) or not isinstance(
+                    fragment_identity, str
+                ):
+                    continue
+                if source_revision_id in seen_sources:
+                    continue
+                seen_sources.add(source_revision_id)
+                references.append(reference)
+                if len(references) >= 8:
+                    break
+            actual_sources = {
+                str(reference["source_revision_id"]) for reference in references
+            }
+            receipt = {
+                "schema_version": "deeplaw.synthesis-query-evidence-receipt/v1",
+                "synthesis_revision_id": item["revision_id"],
+                "input_set_sha256": row["input_set_sha256"],
+                "source_revision_ids": expected_sources,
+                "source_refs": references,
+                "complete": set(expected_sources).issubset(actual_sources),
+            }
+            receipt["receipt_sha256"] = sha256_bytes(
+                canonical_json(receipt).encode("utf-8")
+            )
+            _validate_contract("synthesis-query-evidence-receipt.v1.schema.json", receipt)
+            current["synthesis_evidence_receipt"] = receipt
+            projected.append(current)
+        return projected
+
+    @staticmethod
     def _knowledge_duty_reports(
         *,
         purpose: str,
@@ -909,17 +1024,44 @@ class PurposeAwareRetrievalService:
         store: AutonomousKnowledgeStore,
         result: dict[str, Any],
     ) -> dict[str, Any]:
-        partitions = cls._knowledge_partitions(
+        compiled = cls._synthesis_evidence_receipts(
             store,
             compiled=result["compiled"],
             evidence=result["evidence"],
         )
+        incomplete_syntheses = [
+            item["revision_id"]
+            for item in compiled
+            if isinstance(item.get("synthesis_evidence_receipt"), dict)
+            and not item["synthesis_evidence_receipt"]["complete"]
+        ]
+        gaps = cls._bounded_gaps(
+            [
+                *result["gaps"],
+                *(
+                    {
+                        "code": "evidence_gap",
+                        "message": (
+                            "A selected Synthesis lacks a complete provider-visible "
+                            "evidence receipt for its input Source Revisions."
+                        ),
+                        "knowledge_revision_id": revision_id,
+                    }
+                    for revision_id in incomplete_syntheses
+                ),
+            ]
+        )
+        partitions = cls._knowledge_partitions(
+            store,
+            compiled=compiled,
+            evidence=result["evidence"],
+        )
         duties, duty_coverage = cls._knowledge_duty_reports(
             purpose=result["purpose"],
-            compiled=result["compiled"],
+            compiled=compiled,
             evidence=result["evidence"],
             contradictions=result["contradictions"],
-            gaps=result["gaps"],
+            gaps=gaps,
             partitions=partitions,
         )
         plan = dict(result["query_plan"])
@@ -930,6 +1072,8 @@ class PurposeAwareRetrievalService:
         _validate_contract("knowledge-query-plan.v5.schema.json", plan)
         upgraded = dict(result)
         upgraded["schema_version"] = "deeplaw.purpose-aware-retrieval/v2"
+        upgraded["compiled"] = compiled
+        upgraded["gaps"] = gaps
         upgraded["query_plan"] = plan
         upgraded["query_plan_sha256"] = sha256_bytes(
             canonical_json(plan).encode("utf-8")
