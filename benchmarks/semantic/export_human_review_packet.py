@@ -118,6 +118,7 @@ def build_packet(
         "query_report_sha256": sha256_bytes(
             canonical_json(query_report).encode("utf-8")
         ),
+        "source_ir_coverage": query_report["source_ir_coverage"],
         "scoring_definitions": gold["scoring_policy"],
         "aggregate_metrics": query_report["metrics"],
         "security_challenges": query_report["challenges"],
@@ -156,6 +157,13 @@ def _render_markdown(packet: dict[str, Any]) -> str:
         f"- Gold: `{packet['gold_id']}` / `{packet['gold_sha256']}`",
         f"- Fixture manifest: `{packet['fixture_manifest_sha256']}`",
         f"- Status: `{packet['status']}`",
+        (
+            "- Source IR fragment coverage: "
+            f"`{packet['source_ir_coverage']['ratio']}` "
+            f"({packet['source_ir_coverage']['covered_fragment_count']} covered / "
+            f"{packet['source_ir_coverage']['omitted_fragment_count']} omitted; receipt "
+            f"`{packet['source_ir_coverage']['receipt_sha256']}`)"
+        ),
         "- Human final decision: **UNSET**",
         "- Competitive claim eligible: `false`",
         "",

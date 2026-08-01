@@ -21,8 +21,14 @@ target precision applies the same rule to every labelled target: matching is con
 frozen case Source Revision set and any claim-level content assertions. One stable Knowledge ID
 matched inside that scope is a true positive; duplicate identities matched to the same target are
 false positives; correct objects outside the source and claim scope are excluded from the
-denominator. Extraction completeness and Source IR fragment coverage are reported separately. This
-definition is frozen in the Gold and Schema.
+denominator. Extraction completeness and Source IR fragment coverage are reported separately. The
+formal `source_coverage_definition` is bound to `source_ir_fragment_coverage`: covered Source IR
+fragments divided by covered plus explicitly omitted fragments across every exact Compilation Run
+in the compiler report. The query runner reads those counts from the real Ledger, binds the run-ID
+set and Ledger audit head, and emits a hash-verified coverage receipt. The independent
+`retrieval_source_coverage` metric instead measures distinct relevant Source Revisions selected by
+at least one frozen query divided by all relevant Source Revisions referenced by the query set. The
+two metrics are not interchangeable. These definitions are frozen in the Gold and Schema.
 
 `compiled_hit_ratio` is defined only across cases with at least one required compiled Gold target.
 Explicit-gap-only withdrawal and unanswerable cases are excluded, and a hit requires a labelled
@@ -71,7 +77,8 @@ FTS/dense/reranker/graph identities, OS, hardware, first-party command runtime P
 dependency-inventory digest, network policy, and the precise cold/warm definitions. Environment
 identity comes from the measured CLI runtime, not the benchmark orchestrator. It reports
 compiled-hit/fallback ratios, uncompiled-source count, extraction completeness, retrieval source
-coverage, evidence attachment, peak RSS, and bytes per matched target.
+coverage, Ledger-derived Source IR fragment coverage and counts, evidence attachment, peak RSS,
+and bytes per matched target.
 `benchmarks/semantic/compare_query_runs.py` provides an exact single-run diagnostic.
 `benchmarks/semantic/compare_query_replicates.py` is the release gate: it rejects changed
 conditions, a candidate report failure, any deterministic quality or efficiency regression, any

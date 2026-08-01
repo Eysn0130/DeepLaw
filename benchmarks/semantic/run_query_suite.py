@@ -19,8 +19,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_living_wiki_host_harness import _safe_command
 from benchmarks.semantic.review_gold import validate_candidate
+from deeplaw.compilation.coordinator import _decoded_artifact
+from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.knowledge_intelligence import LOCAL_DENSE_MODEL, LOCAL_RERANKER_MODEL
-from deeplaw.util import canonical_json, sha256_bytes, stable_id
+from deeplaw.util import canonical_json, sha256_bytes, stable_id, strict_json_loads
 
 BUDGET = {
     "max_items": 8,
@@ -122,6 +124,114 @@ def _compiled_hit_ratio(
         sum(bool(item["matched_label_ids"]) for item in eligible) / len(eligible),
         6,
     )
+
+
+def _source_ir_coverage_counts(
+    rows: list[dict[str, Any]],
+    *,
+    expected_run_ids: set[str],
+) -> dict[str, int | float]:
+    actual_run_ids = {str(row["compilation_run_id"]) for row in rows}
+    if actual_run_ids != expected_run_ids:
+        raise ValueError("Source IR coverage does not bind every compiler run")
+    covered = 0
+    omitted = 0
+    for row in rows:
+        covered_fragments = strict_json_loads(row["covered_fragment_ids_json"])
+        omitted_fragments = strict_json_loads(row["omitted_fragments_json"])
+        if not isinstance(covered_fragments, list) or not isinstance(
+            omitted_fragments, list
+        ):
+            raise ValueError("Source IR coverage rows must contain JSON arrays")
+        covered += len(covered_fragments)
+        omitted += len(omitted_fragments)
+    total = covered + omitted
+    if total == 0:
+        raise ValueError("Source IR coverage cannot be established from empty batches")
+    return {
+        "covered_fragment_count": covered,
+        "omitted_fragment_count": omitted,
+        "total_fragment_count": total,
+        "ratio": round(covered / total, 6),
+    }
+
+
+def _source_ir_coverage(
+    *, vault: Path, compiler_report: dict[str, Any]
+) -> dict[str, Any]:
+    run_ids = {
+        str(item["compilation_run_id"])
+        for item in compiler_report["runs"]
+        if isinstance(item.get("compilation_run_id"), str)
+    }
+    if not run_ids or len(run_ids) != len(compiler_report["runs"]):
+        raise ValueError("compiler evidence has missing or duplicate compilation run IDs")
+    placeholders = ",".join("?" for _ in run_ids)
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        rows = [
+            dict(row)
+            for row in store.connection.execute(
+                f"""
+                SELECT batches.compilation_run_id, batches.packet_id,
+                       batches.observation_plan_sha256,
+                       batches.covered_fragment_ids_json,
+                       batches.omitted_fragments_json,
+                       batches.coverage_ratio, packets.fragment_count
+                FROM semantic_observation_batches_v2 AS batches
+                JOIN source_compilation_packets_v1 AS packets
+                  ON packets.compilation_run_id = batches.compilation_run_id
+                 AND packets.packet_id = batches.packet_id
+                WHERE batches.compilation_run_id IN ({placeholders})
+                ORDER BY batches.compilation_run_id, batches.packet_id
+                """,
+                tuple(sorted(run_ids)),
+            )
+        ]
+        for row in rows:
+            plan = _decoded_artifact(
+                store,
+                row["observation_plan_sha256"],
+                role="observation_plan",
+            )
+            coverage = plan.get("coverage")
+            if (
+                plan.get("compilation_run_id") != row["compilation_run_id"]
+                or plan.get("packet_id") != row["packet_id"]
+                or not isinstance(coverage, dict)
+                or canonical_json(coverage.get("covered_fragment_ids"))
+                != row["covered_fragment_ids_json"]
+                or canonical_json(coverage.get("omitted_fragments"))
+                != row["omitted_fragments_json"]
+                or coverage.get("packet_fragment_count") != row["fragment_count"]
+                or not math.isclose(
+                    float(coverage.get("ratio", -1)),
+                    float(row["coverage_ratio"]),
+                    abs_tol=1e-9,
+                )
+            ):
+                raise ValueError("Source IR coverage row does not match its immutable plan")
+        audit_head = store.audit_head
+    counts = _source_ir_coverage_counts(rows, expected_run_ids=run_ids)
+    body = {
+        "schema_version": "deeplaw.semantic-source-ir-coverage/v1",
+        "compiler_report_id": compiler_report["report_id"],
+        "compilation_run_count": len(run_ids),
+        "compilation_run_ids_sha256": sha256_bytes(
+            canonical_json(sorted(run_ids)).encode("utf-8")
+        ),
+        "observation_plan_set_sha256": sha256_bytes(
+            canonical_json(
+                sorted(str(row["observation_plan_sha256"]) for row in rows)
+            ).encode("utf-8")
+        ),
+        "batch_count": len(rows),
+        **counts,
+        "ledger_audit_head": audit_head,
+    }
+    return {
+        **body,
+        "receipt_sha256": sha256_bytes(canonical_json(body).encode("utf-8")),
+    }
 
 
 def _runtime_python(prefix: list[str]) -> Path:
@@ -1178,6 +1288,10 @@ def run(
     if corpus.get("gold_id") != gold["gold_id"]:
         raise ValueError("semantic query suite corpus does not bind Gold")
     prefix = _safe_command(command)
+    source_ir_coverage = _source_ir_coverage(
+        vault=vault,
+        compiler_report=compiler_report,
+    )
     source_ids = {
         item["source_key"]: item["source_revision_id"] for item in corpus["sources"]
     }
@@ -1365,6 +1479,13 @@ def run(
         "retrieval_source_coverage": round(
             len(selected_source_revision_ids) / len(relevant_source_revision_ids), 6
         ) if relevant_source_revision_ids else 1.0,
+        "source_ir_fragment_coverage": source_ir_coverage["ratio"],
+        "source_ir_covered_fragment_count": source_ir_coverage[
+            "covered_fragment_count"
+        ],
+        "source_ir_omitted_fragment_count": source_ir_coverage[
+            "omitted_fragment_count"
+        ],
         "evidence_attachment_rate": round(
             min(evidence_attachment_count, compiled_selected_count)
             / compiled_selected_count,
@@ -1513,6 +1634,7 @@ def run(
             prefix=prefix,
             network_policy=str(compiler_report.get("network_policy", "not_recorded"))
         ),
+        "source_ir_coverage": source_ir_coverage,
         "cases": cases,
         "challenges": challenges,
         "metrics": metrics,

@@ -37,7 +37,8 @@
       "required": [
         "entity_concept_annotation_scope", "extra_valid_objects_are_false_positive",
         "precision_definition", "extraction_completeness_definition",
-        "source_coverage_definition", "performance_comparison_definition",
+        "source_coverage_definition", "source_coverage_metric",
+        "retrieval_source_coverage_definition", "performance_comparison_definition",
         "performance_repetition_count", "performance_execution_order",
         "performance_pairing_definition", "performance_aggregation_definition",
         "performance_confidence_definition", "latency_definition",
@@ -54,6 +55,12 @@
         },
         "source_coverage_definition": {
           "const": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources."
+        },
+        "source_coverage_metric": {
+          "const": "source_ir_fragment_coverage"
+        },
+        "retrieval_source_coverage_definition": {
+          "const": "Distinct relevant Source Revisions selected by at least one frozen query divided by all distinct relevant Source Revisions referenced by the frozen query set."
         },
         "performance_comparison_definition": {
           "const": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance."

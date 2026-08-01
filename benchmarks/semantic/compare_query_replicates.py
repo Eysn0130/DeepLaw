@@ -72,11 +72,13 @@ def _same_condition(runs: Sequence[dict[str, Any]]) -> dict[str, bool]:
         for key in (
             "gold_sha256",
             "fixture_manifest_sha256",
+            "compiler_report_id",
             "source_revision_set_sha256",
             "query_set_sha256",
             "budget",
             "retrieval_configuration",
             "execution_environment",
+            "source_ir_coverage",
         )
     }
     return {**comparisons, "all_equal": all(comparisons.values())}

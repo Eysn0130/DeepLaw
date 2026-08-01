@@ -22,18 +22,21 @@
     "same_condition": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "gold_sha256", "fixture_manifest_sha256", "source_revision_set_sha256",
+        "gold_sha256", "fixture_manifest_sha256", "compiler_report_id",
+        "source_revision_set_sha256",
         "query_set_sha256", "budget", "retrieval_configuration",
-        "execution_environment", "all_equal"
+        "execution_environment", "source_ir_coverage", "all_equal"
       ],
       "properties": {
         "gold_sha256": {"type": "boolean"},
         "fixture_manifest_sha256": {"type": "boolean"},
+        "compiler_report_id": {"type": "boolean"},
         "source_revision_set_sha256": {"type": "boolean"},
         "query_set_sha256": {"type": "boolean"},
         "budget": {"type": "boolean"},
         "retrieval_configuration": {"type": "boolean"},
         "execution_environment": {"type": "boolean"},
+        "source_ir_coverage": {"type": "boolean"},
         "all_equal": {"type": "boolean"}
       }
     },

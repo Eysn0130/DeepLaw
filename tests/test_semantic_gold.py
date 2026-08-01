@@ -18,7 +18,7 @@ from benchmarks.semantic.compare_query_replicates import (
     _bootstrap_metric,
     _median_metric,
 )
-from benchmarks.semantic.compare_query_runs import _metric
+from benchmarks.semantic.compare_query_runs import HIGHER_IS_BETTER, _metric
 from benchmarks.semantic.deterministic_gold_agent import compile_source as compile_gold_source
 from benchmarks.semantic.export_review_bundle import export_review_bundle
 from benchmarks.semantic.prepare_host_corpus import _run_cli
@@ -35,6 +35,7 @@ from benchmarks.semantic.run_query_suite import (
     _execution_environment,
     _rank_metrics,
     _runtime_python,
+    _source_ir_coverage_counts,
 )
 from benchmarks.semantic.score_semantic_run import (
     _content_assertion_valid,
@@ -276,6 +277,54 @@ def test_compiled_hit_ratio_excludes_explicit_gap_only_cases() -> None:
         {"expected_objects": []},
     ]
     assert _compiled_hit_ratio(cases, gold_cases) == 1.0
+
+
+def test_source_ir_fragment_coverage_uses_ledger_batch_counts() -> None:
+    rows = [
+        {
+            "compilation_run_id": "run-a",
+            "covered_fragment_ids_json": '["fragment-a","fragment-b"]',
+            "omitted_fragments_json": '[{"fragment_id":"fragment-c","reason":"risk"}]',
+        },
+        {
+            "compilation_run_id": "run-b",
+            "covered_fragment_ids_json": '["fragment-d"]',
+            "omitted_fragments_json": "[]",
+        },
+    ]
+
+    counts = _source_ir_coverage_counts(rows, expected_run_ids={"run-a", "run-b"})
+
+    assert counts == {
+        "covered_fragment_count": 3,
+        "omitted_fragment_count": 1,
+        "total_fragment_count": 4,
+        "ratio": 0.75,
+    }
+    assert "source_ir_fragment_coverage" in HIGHER_IS_BETTER
+
+
+def test_source_ir_fragment_coverage_rejects_missing_compiler_run() -> None:
+    rows = [
+        {
+            "compilation_run_id": "run-a",
+            "covered_fragment_ids_json": '["fragment-a"]',
+            "omitted_fragments_json": "[]",
+        }
+    ]
+
+    with pytest.raises(ValueError, match="does not bind every compiler run"):
+        _source_ir_coverage_counts(rows, expected_run_ids={"run-a", "run-b"})
+
+
+def test_gold_distinguishes_source_ir_and_retrieval_coverage() -> None:
+    policy = _candidate()["scoring_policy"]
+
+    assert policy["source_coverage_metric"] == "source_ir_fragment_coverage"
+    assert "Source IR fragments" in policy["source_coverage_definition"]
+    assert "Source Revisions selected" in policy[
+        "retrieval_source_coverage_definition"
+    ]
 
 
 def test_same_condition_comparison_has_zero_tolerance() -> None:

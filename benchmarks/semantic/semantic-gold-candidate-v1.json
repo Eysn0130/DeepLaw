@@ -11,6 +11,8 @@
     "precision_definition": "For each labelled target within its frozen case source and claim scope, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside that source and claim scope are excluded from the denominator.",
     "extraction_completeness_definition": "Required labelled targets retrieved or compiled divided by all required labelled targets.",
     "source_coverage_definition": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources.",
+    "source_coverage_metric": "source_ir_fragment_coverage",
+    "retrieval_source_coverage_definition": "Distinct relevant Source Revisions selected by at least one frozen query divided by all distinct relevant Source Revisions referenced by the frozen query set.",
     "performance_comparison_definition": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance.",
     "performance_repetition_count": 3,
     "performance_execution_order": ["baseline", "candidate", "candidate", "baseline", "baseline", "candidate"],

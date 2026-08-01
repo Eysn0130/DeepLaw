@@ -8,8 +8,8 @@
     "schema_version", "report_id", "status", "gold_id", "gold_sha256",
     "fixture_manifest_sha256", "compiler_report_id", "source_revision_set_sha256",
     "query_set_sha256", "first_party_command_sha256", "budget",
-    "retrieval_configuration", "execution_environment", "cases", "challenges",
-    "metrics", "recorded_at", "competitive_claim_eligible"
+    "retrieval_configuration", "execution_environment", "source_ir_coverage",
+    "cases", "challenges", "metrics", "recorded_at", "competitive_claim_eligible"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.semantic-query-run/v1"},
@@ -25,6 +25,7 @@
     "budget": {"$ref": "#/$defs/budget"},
     "retrieval_configuration": {"$ref": "#/$defs/retrieval_configuration"},
     "execution_environment": {"$ref": "#/$defs/execution_environment"},
+    "source_ir_coverage": {"$ref": "#/$defs/source_ir_coverage"},
     "cases": {
       "type": "array", "minItems": 15, "maxItems": 100,
       "items": {"$ref": "#/$defs/case"}
@@ -101,6 +102,33 @@
         "warm_state_definition": {"type": "string", "minLength": 1, "maxLength": 1000}
       }
     },
+    "source_ir_coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "compiler_report_id", "compilation_run_count",
+        "compilation_run_ids_sha256", "observation_plan_set_sha256",
+        "batch_count", "covered_fragment_count",
+        "omitted_fragment_count", "total_fragment_count", "ratio",
+        "ledger_audit_head", "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.semantic-source-ir-coverage/v1"},
+        "compiler_report_id": {
+          "type": "string",
+          "pattern": "^(semantichostrun|semanticdeterministic)_[0-9a-f]{24}$"
+        },
+        "compilation_run_count": {"type": "integer", "minimum": 1, "maximum": 100},
+        "compilation_run_ids_sha256": {"$ref": "#/$defs/sha256"},
+        "observation_plan_set_sha256": {"$ref": "#/$defs/sha256"},
+        "batch_count": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "covered_fragment_count": {"type": "integer", "minimum": 0},
+        "omitted_fragment_count": {"type": "integer", "minimum": 0},
+        "total_fragment_count": {"type": "integer", "minimum": 1},
+        "ratio": {"$ref": "#/$defs/ratio"},
+        "ledger_audit_head": {"$ref": "#/$defs/sha256"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "budget": {
       "type": "object", "additionalProperties": false,
       "required": ["max_items", "max_sources", "max_chars", "max_tokens", "max_sensitivity"],
@@ -119,7 +147,9 @@
         "cold_latency_p95_ms", "warm_latency_p50_ms", "warm_latency_p95_ms",
         "repeated_query_reuse_rate", "compiled_hit_ratio", "source_fallback_ratio",
         "uncompiled_source_count", "extraction_completeness",
-        "retrieval_source_coverage", "evidence_attachment_rate", "peak_rss_bytes",
+        "retrieval_source_coverage", "source_ir_fragment_coverage",
+        "source_ir_covered_fragment_count", "source_ir_omitted_fragment_count",
+        "evidence_attachment_rate", "peak_rss_bytes",
         "provider_hard_limit_violations",
         "unauthorized_writes", "authority_elevations", "invalid_official_citations",
         "silent_fallbacks",
@@ -151,6 +181,9 @@
         "uncompiled_source_count": {"type": "integer", "minimum": 0},
         "extraction_completeness": {"$ref": "#/$defs/ratio"},
         "retrieval_source_coverage": {"$ref": "#/$defs/ratio"},
+        "source_ir_fragment_coverage": {"$ref": "#/$defs/ratio"},
+        "source_ir_covered_fragment_count": {"type": "integer", "minimum": 0},
+        "source_ir_omitted_fragment_count": {"type": "integer", "minimum": 0},
         "evidence_attachment_rate": {"$ref": "#/$defs/ratio"},
         "peak_rss_bytes": {
           "type": ["integer", "null"],

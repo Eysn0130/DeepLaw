@@ -24,6 +24,7 @@ HIGHER_IS_BETTER = (
     "compiled_hit_ratio",
     "extraction_completeness",
     "retrieval_source_coverage",
+    "source_ir_fragment_coverage",
     "evidence_attachment_rate",
 )
 LOWER_IS_BETTER = (
@@ -90,11 +91,13 @@ def compare(*, baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str,
         for key in (
             "gold_sha256",
             "fixture_manifest_sha256",
+            "compiler_report_id",
             "source_revision_set_sha256",
             "query_set_sha256",
             "budget",
             "retrieval_configuration",
             "execution_environment",
+            "source_ir_coverage",
         )
     }
     environment = {**comparisons, "all_equal": all(comparisons.values())}

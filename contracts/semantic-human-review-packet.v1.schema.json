@@ -8,7 +8,7 @@
     "packet_id", "schema_version", "status", "gold_id", "gold_status",
     "gold_sha256", "fixture_manifest_sha256", "compiler_report_id",
     "compiler_report_sha256", "query_report_id", "query_report_sha256",
-    "scoring_definitions", "aggregate_metrics", "security_challenges",
+    "source_ir_coverage", "scoring_definitions", "aggregate_metrics", "security_challenges",
     "challenge_failure_ids", "cases", "independent_auditor_identity",
     "independent_auditor_overall_recommendation", "human_reviewer_id",
     "human_final_decision", "competitive_claim_eligible", "packet_sha256"
@@ -25,6 +25,7 @@
     "compiler_report_sha256": {"$ref": "#/$defs/sha256"},
     "query_report_id": {"type": "string", "pattern": "^semanticqueryrun_[0-9a-f]{24}$"},
     "query_report_sha256": {"$ref": "#/$defs/sha256"},
+    "source_ir_coverage": {"$ref": "#/$defs/source_ir_coverage"},
     "scoring_definitions": {"type": "object"},
     "aggregate_metrics": {"type": "object"},
     "security_challenges": {"type": "array", "minItems": 5, "maxItems": 20},
@@ -45,6 +46,33 @@
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_ir_coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "compiler_report_id", "compilation_run_count",
+        "compilation_run_ids_sha256", "observation_plan_set_sha256",
+        "batch_count", "covered_fragment_count",
+        "omitted_fragment_count", "total_fragment_count", "ratio",
+        "ledger_audit_head", "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.semantic-source-ir-coverage/v1"},
+        "compiler_report_id": {
+          "type": "string",
+          "pattern": "^(semantichostrun|semanticdeterministic)_[0-9a-f]{24}$"
+        },
+        "compilation_run_count": {"type": "integer", "minimum": 1, "maximum": 100},
+        "compilation_run_ids_sha256": {"$ref": "#/$defs/sha256"},
+        "observation_plan_set_sha256": {"$ref": "#/$defs/sha256"},
+        "batch_count": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "covered_fragment_count": {"type": "integer", "minimum": 0},
+        "omitted_fragment_count": {"type": "integer", "minimum": 0},
+        "total_fragment_count": {"type": "integer", "minimum": 1},
+        "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "ledger_audit_head": {"$ref": "#/$defs/sha256"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "case": {
       "type": "object", "additionalProperties": false,
       "required": [
