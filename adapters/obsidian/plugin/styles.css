@@ -1,0 +1,11 @@
+.deeplaw-result {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+
+.deeplaw-readonly {
+  border-inline-start: 3px solid var(--color-accent);
+  padding-inline-start: var(--size-4-3);
+}

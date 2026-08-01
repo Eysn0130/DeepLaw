@@ -79,6 +79,15 @@ Source IR and records an explicit bounded lexical fallback when the closed parse
 rejects input or an input/tree limit is exceeded. SQL text and parser output remain
 untrusted data and are never executed by the Source Adapter.
 
+## Obsidian Bridge Build Dependencies
+
+The optional desktop plugin under `adapters/obsidian/plugin` uses pinned
+development-only packages: `obsidian==1.13.1` (MIT), `esbuild==0.28.1` (MIT),
+`typescript==5.9.3` (Apache-2.0), `tsx==4.23.1` (MIT), and
+`@types/node==22.20.1` (MIT). Obsidian is external at bundle/runtime; DeepLaw
+does not redistribute the Obsidian application. The plugin bundle contains
+DeepLaw bridge code and excludes the Obsidian API module.
+
 ## Optional External OCR Tools: Tesseract And Poppler
 
 - OCR project: [tesseract-ocr/tesseract](https://github.com/tesseract-ocr/tesseract)
@@ -245,6 +254,9 @@ and have not contributed copied source code:
 | [topoteretes/cognee](https://github.com/topoteretes/cognee) | `325acf356a81` | Apache-2.0 | Agent-hook and memory-pipeline reference |
 | [MemTensor/MemOS](https://github.com/MemTensor/MemOS) | `344cab73c2d0` | Apache-2.0 | Unified memory, correction, and asynchronous-ingest reference |
 | [obsidianmd/jsoncanvas](https://github.com/obsidianmd/jsoncanvas) | `456f843cb293` | MIT | Public JSON Canvas format |
+| [obsidianmd/obsidian-api](https://github.com/obsidianmd/obsidian-api) | `cc1744324150` | MIT | Plugin lifecycle, command, workspace, and event API reference |
+| [obsidianmd/obsidian-sample-plugin](https://github.com/obsidianmd/obsidian-sample-plugin) | `23c165fd362d` | 0BSD | Official build layout and external API bundling reference |
+| [refactoringhq/tolaria](https://github.com/refactoringhq/tolaria) | `b00fefef3fd5` (`v2026-06-23`) | AGPL-3.0-or-later | MCP configuration, active-vault resolution, editor context, and open-note boundary research only; no code copied |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Character-span retrieval metric reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External legal retrieval benchmark reference |
 
