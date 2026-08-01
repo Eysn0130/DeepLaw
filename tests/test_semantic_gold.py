@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import sys
 from pathlib import Path
 from statistics import median
@@ -30,6 +31,7 @@ from benchmarks.semantic.run_query_suite import (
     _claim_evidence_checks,
     _compiled_hit_ratio,
     _evaluate_read_challenge,
+    _execution_environment,
     _rank_metrics,
 )
 from benchmarks.semantic.score_semantic_run import (
@@ -324,6 +326,17 @@ def test_paired_bootstrap_detects_only_interval_bound_regression() -> None:
     assert identical["regression_detected"] is False
     assert slower["bootstrap_confidence_interval"]["lower_delta"] == 1
     assert slower["regression_detected"] is True
+
+
+def test_query_environment_is_probed_from_first_party_runtime() -> None:
+    environment = _execution_environment(
+        prefix=[sys.executable, "-m", "deeplaw"],
+        network_policy="offline",
+    )
+
+    assert environment["python"]["version"] == platform.python_version()
+    assert len(environment["dependency_inventory_sha256"]) == 64
+    assert environment["network_policy"] == "offline"
 
 
 def test_temporal_and_retention_gold_are_unambiguous() -> None:

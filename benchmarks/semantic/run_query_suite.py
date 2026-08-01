@@ -3,10 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
-import platform
 import re
-import sqlite3
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -52,16 +50,6 @@ def _validate(name: str, value: dict[str, Any]) -> None:
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-
-
-def _total_memory_bytes() -> int | None:
-    try:
-        pages = int(os.sysconf("SC_PHYS_PAGES"))
-        page_size = int(os.sysconf("SC_PAGE_SIZE"))
-    except (AttributeError, OSError, TypeError, ValueError):
-        return None
-    total = pages * page_size
-    return total if total > 0 else None
 
 
 def _process_rss_bytes(process_id: int) -> int | None:
@@ -136,23 +124,90 @@ def _compiled_hit_ratio(
     )
 
 
-def _execution_environment(*, network_policy: str) -> dict[str, Any]:
+def _runtime_python(prefix: list[str]) -> Path:
+    executable_value = prefix[0]
+    executable = (
+        Path(executable_value)
+        if Path(executable_value).is_absolute()
+        else Path(shutil.which(executable_value) or "")
+    )
+    if not executable.is_file():
+        raise ValueError("first-party query executable cannot be resolved")
+    executable = executable.resolve(strict=True)
+    if executable.stem.startswith("python"):
+        return executable
+    if executable.stem != "deeplaw":
+        raise ValueError("query runtime probe requires a deeplaw or Python executable")
+    for name in ("python", "python.exe"):
+        python = executable.parent / name
+        if python.is_file():
+            return python.resolve(strict=True)
+    raise ValueError("first-party deeplaw runtime has no sibling Python executable")
+
+
+def _runtime_environment(prefix: list[str]) -> dict[str, Any]:
+    probe = """
+import hashlib
+import importlib.metadata
+import json
+import os
+import platform
+import sqlite3
+
+packages = sorted({
+    (str(distribution.metadata.get("Name") or "").casefold(), distribution.version)
+    for distribution in importlib.metadata.distributions()
+    if distribution.metadata.get("Name")
+})
+try:
+    total_memory_bytes = int(os.sysconf("SC_PHYS_PAGES")) * int(os.sysconf("SC_PAGE_SIZE"))
+except (AttributeError, OSError, TypeError, ValueError):
+    total_memory_bytes = None
+value = {
+    "os": {
+        "system": platform.system() or "unknown",
+        "release": platform.release() or "unknown",
+        "machine": platform.machine() or "unknown",
+    },
+    "python": {
+        "implementation": platform.python_implementation(),
+        "version": platform.python_version(),
+    },
+    "sqlite_version": sqlite3.sqlite_version,
+    "dependency_inventory_sha256": hashlib.sha256(
+        json.dumps(packages, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest(),
+    "hardware": {
+        "logical_cpu_count": os.cpu_count(),
+        "processor": platform.processor() or "unknown",
+        "total_memory_bytes": (
+            total_memory_bytes if total_memory_bytes and total_memory_bytes > 0 else None
+        ),
+    },
+}
+print(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+"""
+    completed = subprocess.run(
+        [str(_runtime_python(prefix)), "-c", probe],
+        cwd=_repository(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("first-party query runtime environment probe failed")
+    value = json.loads(completed.stdout)
+    if not isinstance(value, dict):
+        raise RuntimeError("first-party query runtime environment probe returned a non-object")
+    return value
+
+
+def _execution_environment(
+    *, prefix: list[str], network_policy: str
+) -> dict[str, Any]:
     return {
-        "os": {
-            "system": platform.system() or "unknown",
-            "release": platform.release() or "unknown",
-            "machine": platform.machine() or "unknown",
-        },
-        "python": {
-            "implementation": platform.python_implementation(),
-            "version": platform.python_version(),
-        },
-        "sqlite_version": sqlite3.sqlite_version,
-        "hardware": {
-            "logical_cpu_count": os.cpu_count(),
-            "processor": platform.processor() or "unknown",
-            "total_memory_bytes": _total_memory_bytes(),
-        },
+        **_runtime_environment(prefix),
         "network_policy": network_policy,
         "cold_state_definition": (
             "first fresh CLI process after deterministic compilation; DeepLaw query cache empty; "
@@ -1455,6 +1510,7 @@ def run(
             ),
         },
         "execution_environment": _execution_environment(
+            prefix=prefix,
             network_policy=str(compiler_report.get("network_policy", "not_recorded"))
         ),
         "cases": cases,

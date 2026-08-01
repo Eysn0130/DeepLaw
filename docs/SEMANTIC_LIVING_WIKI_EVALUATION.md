@@ -67,9 +67,11 @@ silent-fallback challenges. A challenge that did not execute cannot contribute a
 count. Exact Source Revision, fragment, locator, hash, evidence receipt, Query Plan, UTF-8 budget,
 pagination, cold/warm latency, and repeated-query reuse are retained in schema-valid reports.
 The report also freezes the exact Gold/fixture/Source Revision/query digests, budgets, Query Plan,
-FTS/dense/reranker/graph identities, OS, hardware, Python, SQLite, network policy, and the precise
-cold/warm definitions. It reports compiled-hit/fallback ratios, uncompiled-source count, extraction
-completeness, retrieval source coverage, evidence attachment, peak RSS, and bytes per matched target.
+FTS/dense/reranker/graph identities, OS, hardware, first-party command runtime Python, SQLite,
+dependency-inventory digest, network policy, and the precise cold/warm definitions. Environment
+identity comes from the measured CLI runtime, not the benchmark orchestrator. It reports
+compiled-hit/fallback ratios, uncompiled-source count, extraction completeness, retrieval source
+coverage, evidence attachment, peak RSS, and bytes per matched target.
 `benchmarks/semantic/compare_query_runs.py` provides an exact single-run diagnostic.
 `benchmarks/semantic/compare_query_replicates.py` is the release gate: it rejects changed
 conditions, a candidate report failure, any deterministic quality or efficiency regression, any

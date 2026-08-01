@@ -63,7 +63,8 @@
     "execution_environment": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "os", "python", "sqlite_version", "hardware", "network_policy",
+        "os", "python", "sqlite_version", "dependency_inventory_sha256",
+        "hardware", "network_policy",
         "cold_state_definition", "warm_state_definition"
       ],
       "properties": {
@@ -85,6 +86,7 @@
           }
         },
         "sqlite_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "dependency_inventory_sha256": {"$ref": "#/$defs/sha256"},
         "hardware": {
           "type": "object", "additionalProperties": false,
           "required": ["logical_cpu_count", "processor", "total_memory_bytes"],
