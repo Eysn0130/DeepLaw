@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-human-review-packet.v1.schema.json",
+  "title": "DeepLaw Semantic Human Review Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packet_id", "schema_version", "status", "gold_id", "gold_status",
+    "gold_sha256", "fixture_manifest_sha256", "compiler_report_id",
+    "compiler_report_sha256", "query_report_id", "query_report_sha256",
+    "scoring_definitions", "aggregate_metrics", "security_challenges",
+    "challenge_failure_ids", "cases", "independent_auditor_identity",
+    "independent_auditor_overall_recommendation", "human_reviewer_id",
+    "human_final_decision", "competitive_claim_eligible", "packet_sha256"
+  ],
+  "properties": {
+    "packet_id": {"type": "string", "pattern": "^semantichumanreview_[0-9a-f]{24}$"},
+    "schema_version": {"const": "deeplaw.semantic-human-review-packet/v1"},
+    "status": {"const": "awaiting_independent_audit_and_owner_decision"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "gold_status": {"const": "maintainer_review_pending"},
+    "gold_sha256": {"$ref": "#/$defs/sha256"},
+    "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "compiler_report_id": {"type": "string", "pattern": "^(semantichostrun|semanticdeterministic)_[0-9a-f]{24}$"},
+    "compiler_report_sha256": {"$ref": "#/$defs/sha256"},
+    "query_report_id": {"type": "string", "pattern": "^semanticqueryrun_[0-9a-f]{24}$"},
+    "query_report_sha256": {"$ref": "#/$defs/sha256"},
+    "scoring_definitions": {"type": "object"},
+    "aggregate_metrics": {"type": "object"},
+    "security_challenges": {"type": "array", "minItems": 5, "maxItems": 20},
+    "challenge_failure_ids": {
+      "type": "array", "maxItems": 20, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^security-challenge-[0-9]{2}$"}
+    },
+    "cases": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "independent_auditor_identity": {"const": null},
+    "independent_auditor_overall_recommendation": {"const": null},
+    "human_reviewer_id": {"const": null},
+    "human_final_decision": {"const": null},
+    "competitive_claim_eligible": {"const": false},
+    "packet_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "case_id", "review_purpose", "frozen_query", "expected_result",
+        "actual_retrieved_result", "expected_object_stable_ids",
+        "actual_object_stable_ids", "citations", "query_plan",
+        "query_plan_sha256", "metrics", "discrepancy",
+        "machine_precheck_recommendation", "independent_auditor_recommendation",
+        "human_final_decision"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^semantic-case-[0-9]{2}$"},
+        "review_purpose": {"type": "string", "minLength": 1, "maxLength": 100},
+        "frozen_query": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "expected_result": {"type": "object"},
+        "actual_retrieved_result": {"type": "object"},
+        "expected_object_stable_ids": {"type": "array", "maxItems": 100, "items": {"type": "string"}},
+        "actual_object_stable_ids": {"type": "array", "maxItems": 100, "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}},
+        "citations": {"type": "array", "maxItems": 500},
+        "query_plan": {"type": "object"},
+        "query_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "metrics": {"type": "object"},
+        "discrepancy": {"type": ["string", "null"], "maxLength": 1000},
+        "machine_precheck_recommendation": {"enum": ["CONFIRM", "RETURN_FOR_FIX"]},
+        "independent_auditor_recommendation": {"const": null},
+        "human_final_decision": {"const": null}
+      }
+    }
+  }
+}

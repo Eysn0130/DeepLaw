@@ -9,7 +9,11 @@ from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
 )
-from ..knowledge_intelligence import estimate_tokens, rerank_candidates
+from ..knowledge_intelligence import (
+    estimate_tokens,
+    normalize_identity_text,
+    rerank_candidates,
+)
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
 from ..retrieval_fabric import retrieve
@@ -555,6 +559,7 @@ class PurposeAwareRetrievalService:
         exact_identity_discovery = any(
             "exact" in item.get("channels", []) for item in raw["results"]
         )
+        normalized_query = normalize_identity_text(query)
         for item in raw["results"]:
             channels = set(item.get("channels", []))
             reranker = item.get("reranker")
@@ -565,9 +570,20 @@ class PurposeAwareRetrievalService:
                 and not isinstance(reranker.get("score"), bool)
                 else None
             )
+            aliases = item.get("metadata", {}).get("aliases", [])
+            identity_values = [item.get("title"), item.get("semantic_key")]
+            if isinstance(aliases, list):
+                identity_values.extend(aliases)
+            exact_identity_phrase = any(
+                isinstance(value, str)
+                and len(normalized := normalize_identity_text(value)) >= 3
+                and normalized in normalized_query
+                for value in identity_values
+            )
             if (
                 not exact_identity_discovery
                 and "exact" not in channels
+                and not exact_identity_phrase
                 and (
                     reranker_score is None
                     or reranker_score < _MIN_COMPILED_RERANKER_SCORE
@@ -1356,11 +1372,11 @@ class PurposeAwareRetrievalService:
             return None
         references = evidence_store.connection.execute(
             """
-            SELECT source_revision_id, fragment_revision_id,
-                   locator, quote_sha256
-            FROM proposal_source_refs_v2
-            WHERE asset_revision_id = ?
-            ORDER BY ref_ordinal
+            SELECT refs.source_revision_id, refs.fragment_revision_id,
+                   refs.locator, refs.quote_sha256
+            FROM proposal_source_refs_v2 AS refs
+            WHERE refs.asset_revision_id = ?
+            ORDER BY refs.ref_ordinal
             """,
             (identity["asset_revision_id"],),
         ).fetchall()

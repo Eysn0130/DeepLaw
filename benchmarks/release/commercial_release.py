@@ -412,8 +412,8 @@ def _semantic_quality(
         or quality.get("competitive_claim_eligible") is not False
         or quality.get("gold_sha256") != gold_sha256
         or quality.get("host_report_id") != host.get("report_id")
-        or query.get("host_report_id") != host.get("report_id")
-        or cost.get("host_report_id") != host.get("report_id")
+        or query.get("compiler_report_id") != host.get("report_id")
+        or cost.get("compiler_report_id") != host.get("report_id")
         or any(quality.get("hard_failures", {}).values())
         or quality.get("metrics", {}).get("build_tokens") is None
         or quality.get("metrics", {}).get("query_tokens") is None

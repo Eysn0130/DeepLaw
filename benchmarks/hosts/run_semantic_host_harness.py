@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -91,6 +92,14 @@ def _validate_inputs(*, gold: dict[str, Any], corpus: dict[str, Any]) -> None:
             raise ValueError("semantic successor must preserve its canonical Source identity")
         if corpus["grant_id"] is None:
             raise ValueError("phased semantic corpus must bind its owner grant")
+        gold_sensitivity = {
+            item["source_key"]: item["sensitivity"] for item in gold["sources"]
+        }
+        if any(
+            item["sensitivity"] != gold_sensitivity[item["source_key"]]
+            for item in corpus["sources"]
+        ):
+            raise ValueError("semantic corpus sensitivity does not match frozen Gold")
 
 
 def _prompt(
@@ -351,6 +360,15 @@ def not_executed_report(
     gold: dict[str, Any],
     corpus: dict[str, Any],
     reason: str,
+    host_discovery_status: str = "not_found",
+    version_command: str = "host --version",
+    observed_version: str | None = None,
+    authentication_status: str = "not_checked",
+    authentication_reason_code: str = "not_checked",
+    authentication_reason: str = "Authentication was not checked.",
+    model_access_status: str = "not_checked",
+    model_access_reason_code: str = "not_checked",
+    model_access_reason: str = "Model access was not checked.",
 ) -> dict[str, Any]:
     _validate_inputs(gold=gold, corpus=corpus)
     if corpus.get("schema_version") == "deeplaw.semantic-host-corpus/v2":
@@ -393,6 +411,29 @@ def not_executed_report(
             "gold_status": gold["status"],
             "corpus_id": corpus["corpus_id"],
             "fixture_manifest_sha256": gold["fixture_manifest_sha256"],
+            "execution_prerequisites": {
+                "host_discovery": {
+                    "status": host_discovery_status,
+                    "version_command": version_command,
+                    "observed_version": observed_version,
+                },
+                "authentication": {
+                    "status": authentication_status,
+                    "reason_code": authentication_reason_code,
+                    "reason": authentication_reason,
+                },
+                "model_access": {
+                    "status": model_access_status,
+                    "reason_code": model_access_reason_code,
+                    "reason": model_access_reason,
+                },
+                "external_model_execution": "not_executed",
+            },
+            "baseline_query_state": {
+                "snapshot_sha256": None,
+                "audit_head": None,
+                "verified": None,
+            },
             "command_sha256": None,
             "phases": [
                 {
@@ -495,6 +536,7 @@ def execute_phased(
     vault: Path,
     command: dict[str, Any],
     deeplaw_command: dict[str, Any],
+    baseline_query_vault: Path,
 ) -> dict[str, Any]:
     _validate_inputs(gold=gold, corpus=corpus)
     if corpus["schema_version"] != "deeplaw.semantic-host-corpus/v2":
@@ -546,6 +588,11 @@ def execute_phased(
     total_started = time.monotonic()
     phases: list[dict[str, Any]] = []
     transitions: list[dict[str, Any]] = []
+    baseline_query_state = {
+        "snapshot_sha256": None,
+        "audit_head": None,
+        "verified": False,
+    }
     baseline_prompt = _phased_prompt(
         phase="baseline",
         host=host,
@@ -579,6 +626,43 @@ def execute_phased(
     transition_failed = False
     if baseline_complete:
         try:
+            if baseline_query_vault.exists() or baseline_query_vault.is_symlink():
+                raise FileExistsError("baseline query Vault must be a new non-symlink path")
+            baseline_snapshot = baseline_query_vault.with_name(
+                f".{baseline_query_vault.name}-snapshot"
+            )
+            if baseline_snapshot.exists() or baseline_snapshot.is_symlink():
+                raise FileExistsError("baseline query snapshot path already exists")
+            with AutonomousKnowledgeStore(vault, read_only=True) as baseline_store:
+                baseline_query_state["audit_head"] = baseline_store.audit_head
+            snapshot = _run_owner_cli(
+                owner_argv,
+                "snapshot",
+                "create",
+                "--vault",
+                str(vault),
+                "--output",
+                str(baseline_snapshot),
+            )
+            _run_owner_cli(
+                owner_argv,
+                "snapshot",
+                "restore",
+                "--vault",
+                str(baseline_query_vault),
+                "--snapshot",
+                str(baseline_snapshot),
+                "--confirm",
+            )
+            with AutonomousKnowledgeStore(baseline_query_vault, read_only=True) as baseline_store:
+                baseline_query_state["verified"] = bool(
+                    baseline_store.verify()["valid"]
+                    and baseline_store.audit_head == baseline_query_state["audit_head"]
+                )
+            baseline_query_state["snapshot_sha256"] = snapshot["snapshot_sha256"]
+            shutil.rmtree(baseline_snapshot)
+            if baseline_query_state["verified"] is not True:
+                raise RuntimeError("baseline query Vault verification failed")
             approval = _run_owner_cli(
                 owner_argv,
                 "review",
@@ -829,6 +913,25 @@ def execute_phased(
         "gold_status": gold["status"],
         "corpus_id": corpus["corpus_id"],
         "fixture_manifest_sha256": gold["fixture_manifest_sha256"],
+        "execution_prerequisites": {
+            "host_discovery": {
+                "status": "discovered",
+                "version_command": f"{host} --version",
+                "observed_version": host_version,
+            },
+            "authentication": {
+                "status": "available",
+                "reason_code": "authenticated_execution",
+                "reason": "The bounded external host process executed authenticated model turns.",
+            },
+            "model_access": {
+                "status": "available",
+                "reason_code": "model_executed",
+                "reason": "The exact model identity produced the recorded host phase output.",
+            },
+            "external_model_execution": "executed",
+        },
+        "baseline_query_state": baseline_query_state,
         "command_sha256": command_sha256,
         "phases": phases,
         "runs": runs,
@@ -1017,12 +1120,34 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--vault", type=Path)
+    parser.add_argument("--baseline-query-vault", type=Path)
     parser.add_argument("--command", type=Path)
     parser.add_argument(
         "--deeplaw-command",
         type=Path,
         help="Pinned first-party CLI command used only for owner lifecycle transitions",
     )
+    parser.add_argument(
+        "--host-discovery-status", choices=("discovered", "not_found"), default="not_found"
+    )
+    parser.add_argument("--version-command", default="host --version")
+    parser.add_argument("--observed-version")
+    parser.add_argument(
+        "--authentication-status",
+        choices=("available", "unavailable", "not_checked"),
+        default="not_checked",
+    )
+    parser.add_argument("--authentication-reason-code", default="not_checked")
+    parser.add_argument(
+        "--authentication-reason", default="Authentication was not checked."
+    )
+    parser.add_argument(
+        "--model-access-status",
+        choices=("available", "unavailable", "not_checked"),
+        default="not_checked",
+    )
+    parser.add_argument("--model-access-reason-code", default="not_checked")
+    parser.add_argument("--model-access-reason", default="Model access was not checked.")
     parser.add_argument(
         "--not-executed-reason",
         default="The exact real host CLI, authentication, or model was unavailable.",
@@ -1035,8 +1160,11 @@ def main() -> int:
             parser.error("--execute requires --vault and --command")
         command = _load_object(arguments.command)
         if corpus.get("schema_version") == "deeplaw.semantic-host-corpus/v2":
-            if arguments.deeplaw_command is None:
-                parser.error("phased corpus execution requires --deeplaw-command")
+            if arguments.deeplaw_command is None or arguments.baseline_query_vault is None:
+                parser.error(
+                    "phased corpus execution requires --deeplaw-command and "
+                    "--baseline-query-vault"
+                )
             report = execute_phased(
                 host=arguments.host,
                 host_version=arguments.host_version,
@@ -1048,6 +1176,7 @@ def main() -> int:
                 vault=arguments.vault,
                 command=command,
                 deeplaw_command=_load_object(arguments.deeplaw_command),
+                baseline_query_vault=arguments.baseline_query_vault,
             )
         else:
             report = execute(
@@ -1071,6 +1200,15 @@ def main() -> int:
             gold=gold,
             corpus=corpus,
             reason=arguments.not_executed_reason,
+            host_discovery_status=arguments.host_discovery_status,
+            version_command=arguments.version_command,
+            observed_version=arguments.observed_version,
+            authentication_status=arguments.authentication_status,
+            authentication_reason_code=arguments.authentication_reason_code,
+            authentication_reason=arguments.authentication_reason,
+            model_access_status=arguments.model_access_status,
+            model_access_reason_code=arguments.model_access_reason_code,
+            model_access_reason=arguments.model_access_reason,
         )
     _write_report(report, arguments.output)
     return 0 if report["status"] != "failed" else 1

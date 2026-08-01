@@ -114,7 +114,17 @@ class SourceReadService:
             if action == "fragment":
                 if fragment_id is None:
                     raise ValueError("fragment ID is required")
-                fragment = vault.get_fragment(fragment_id)
+                binding = vault.connection.execute(
+                    """
+                    SELECT fragment_revision_id, fragment_id
+                    FROM legacy_fragment_bindings_v2
+                    WHERE fragment_revision_id = ? OR fragment_id = ?
+                    """,
+                    (fragment_id, fragment_id),
+                ).fetchone()
+                if binding is None:
+                    raise KeyError(f"unknown fragment identity: {fragment_id}")
+                fragment = vault.get_fragment(binding["fragment_id"])
                 source = vault.source_info(fragment["source_id"])
                 self._require_admitted(vault, source, scope, max_sensitivity)
                 text = fragment["text"]
@@ -133,6 +143,7 @@ class SourceReadService:
                         )
                     }
                     | {
+                        "fragment_revision_id": binding["fragment_revision_id"],
                         "source_revision_id": source.get("source_revision_id"),
                         "text": selected,
                         "content_truncated": len(selected) != len(text),

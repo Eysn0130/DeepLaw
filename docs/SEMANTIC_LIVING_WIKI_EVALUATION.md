@@ -3,14 +3,62 @@
 Status: **v0.12.0 release gate**, 2026-08-01. This protocol is not evidence for v0.11.0 and is not a
 comparative benchmark claim.
 
-The frozen public corpus in `benchmarks/semantic/fixtures/` covers 15 named semantic cases. The
-candidate labels, queries, purposes, expected objects, forbidden merges, lifecycle outcomes, fixture
-hashes, hard failures, and limitations are jointly bound by
-`benchmarks/semantic/semantic-gold-candidate-v1.json`. Formal scoring is closed until a maintainer
-explicitly confirms that exact candidate with `benchmarks/semantic/review_gold.py`; the producing
-Agent cannot confirm or score its own Gold.
+The frozen public corpus in `benchmarks/semantic/fixtures/` covers 15 named semantic cases and five
+executed security challenges. The candidate labels, queries, purposes, expected objects, forbidden
+merges, lifecycle outcomes, fixture hashes, hard failures, and limitations are jointly bound by
+`benchmarks/semantic/semantic-gold-candidate-v1.json`. The complete freeze commitment is
+`benchmarks/semantic/semantic-gold-freeze-v1.json`. It binds the candidate, fixture manifest,
+Schema, query set, scoring policy, and security challenges independently by SHA-256.
 
-## Real-host lifecycle
+The current candidate remains `maintainer_review_pending`: `review=null` and the freeze has no
+`reviewer_id`. Formal scoring, paid external-model execution, merge, tag, and Release are closed
+until an independent retrieval audit has completed and the owner explicitly confirms this exact
+Gold. The producing Agent and the audit Agent cannot confirm, sign, or score their own Gold as
+human-reviewed evidence.
+
+Entity and Concept labels use a **target-scoped** protocol, not a closed-world claim. One stable
+Knowledge ID matched to a labelled target is a true positive; duplicate identities matched to that
+same target are false positives; correct additional objects outside the labelled targets are not
+false positives and are excluded from the denominator. Extraction completeness and Source IR
+fragment coverage are reported separately. This definition is frozen in the Gold and Schema.
+
+Source Summary, cross-source Synthesis, and Overview labels include claim-level required content,
+expected entailment, and exact source-key sets. Deterministic required-term/source checks are only a
+precheck; the Human Review Packet retains the full claims for independent and owner review.
+
+## Deterministic pre-review lifecycle
+
+`benchmarks/semantic/run_deterministic_lifecycle.py` is an offline, fixture-specific no-model Agent.
+It exercises the real closed Compilation Packet/Observation/Publication/commit protocol, lifecycle
+transitions, Ledger, Source Revisions, Knowledge Revisions, and first-party verification. It is
+review evidence, not external-model evidence. In case 01 the source produces at least two distinct
+Packets, each contributes a governed observation for the same entity, and finalization must map the
+observations to one stable Knowledge ID.
+
+`benchmarks/semantic/run_query_suite.py` then executes all 15 frozen cases through the first-party
+`deeplaw knowledge query`, `context`, `source fragment`, and `verify-capsule` surfaces. It also
+executes prompt-injection, unsupported-Authority, restricted-disclosure, unauthorized-mutation, and
+silent-fallback challenges. A challenge that did not execute cannot contribute a zero failure
+count. Exact Source Revision, fragment, locator, hash, evidence receipt, Query Plan, UTF-8 budget,
+pagination, cold/warm latency, and repeated-query reuse are retained in schema-valid reports.
+The report also freezes the exact Gold/fixture/Source Revision/query digests, budgets, Query Plan,
+FTS/dense/reranker/graph identities, OS, hardware, Python, SQLite, network policy, and the precise
+cold/warm definitions. It reports compiled-hit/fallback ratios, uncompiled-source count, extraction
+completeness, retrieval source coverage, evidence attachment, peak RSS, and bytes per matched target.
+`benchmarks/semantic/compare_query_runs.py` rejects a candidate that is not measured under the same
+conditions or regresses a gated quality, performance, or security metric.
+
+`benchmarks/semantic/export_human_review_packet.py` exports a source-free 15-case JSON and Markdown
+matrix. Machine precheck, independent-auditor recommendation, and owner decision are separate
+fields. Both auditor and owner fields are unset when generated; no Agent may populate the human
+decision or `maintainer_confirmed` state.
+
+Claude Code and OpenCode pre-review reports record exact pinned versions and actual discovery,
+authentication, model-access, and non-execution reasons. They are
+`external_real_model_semantic_execution=not_executed`; no-model discovery is never represented as
+real-model validation.
+
+## External real-host lifecycle
 
 `benchmarks/semantic/prepare_host_corpus.py` uses only the first-party CLI to create a fresh Vault,
 ingest and review the public fixtures, create a least-privilege semantic-compiler grant, retain
@@ -26,7 +74,8 @@ receipt contains stable labels and governed IDs but no source text or private pa
 3. the same host/model compiles the exact successor and refreshes admissible Synthesis work;
 4. deterministic owner CLI operations withdraw `retention-a` and refresh its dependants.
 
-The v2 host report binds the exact clean repository commit/tree/version/lock/contract/migration
+After owner confirmation, the v2 host report binds the exact clean repository
+commit/tree/version/lock/contract/migration
 inventory, both prompts, the pinned command, provider-reported `turn.completed` build tokens, every
 complete 15-duty Compilation Run, the review/freshness receipts, final Vault verification, Gold
 status, and corpus identity. A failed
@@ -35,25 +84,33 @@ CI but never constitutes real-host/model evidence.
 
 ## Query and scoring gates
 
-`benchmarks/semantic/run_query_suite.py` runs every maintainer-bound query twice through
-`deeplaw knowledge query` using Query Plan v5 and a fixed public/personal budget. It records only
-hashes, stable IDs, gap codes, bounded metrics, and latency; it does not persist query output text.
-The gate checks explicit unanswerability, successor-only selection, withdrawal exclusion,
-contradiction visibility, visible fallback, read-only behavior, Authority invariance, repeat reuse,
-and the UTF-8 64 KiB provider limit. The attached cost receipt labels its token number as a UTF-8
-byte proxy rather than a provider-token measurement.
+The query suite runs every frozen query twice using Query Plan v5 and a fixed public/personal
+budget. It records hashes, stable IDs, gap codes, bounded evidence receipts, actual metrics, and
+latency; it does not persist private source text. The gate checks explicit unanswerability,
+successor-only selection, withdrawal exclusion, contradiction applicability, visible fallback,
+read-only behavior, Authority invariance, repeat reuse, pagination, and the UTF-8 64 KiB provider
+limit. The attached cost receipt labels its token number as a UTF-8 byte proxy rather than a
+provider-token measurement.
 
 `benchmarks/semantic/score_semantic_run.py` requires maintainer-confirmed Gold, a passed phased
 real-host report, a passed first-party query report, zero hard failures, all deterministic quality
 thresholds, and an explicitly recorded maintainer correction review. Formal release eligibility is
 false if any one of these inputs is absent. `competitive_claim_eligible` remains false.
 
-`.github/workflows/semantic-evidence.yml` deliberately uses two workflow runs. `execute` uses the
+`.github/workflows/semantic-evidence.yml` has a credential-free `deterministic_review` mode that
+builds a fresh wheel, produces the deterministic lifecycle/query/Human Review Packet artifacts, and
+emits truthful Claude Code/OpenCode `not_executed` reports. It deliberately does not call a model
+Provider. External execution still uses two workflow runs. `execute` uses the
 externally managed `OPENAI_API_KEY` secret without printing or packaging it, uploads a private
 review candidate, and cannot produce formal evidence. After the maintainer reviews that exact
 report and derived Wiki, `finalize` binds correction count/time and reviewer identity to the same
 Vault/report and emits `semantic-release-evidence`. The existing release workflow accepts only that
 artifact for the exact release commit; the artifact never contains the review Vault or credentials.
+
+If the owner explicitly limits v0.12.0 to deterministic retrieval, governance, security, and human
+Gold review, the manifest may record external real-model execution under `Not verified` and
+`Not claimed`; otherwise the existing external real-host gate remains mandatory. In both scopes,
+`competitive_claim_eligible=false`.
 
 This protocol supports only the bounded product statement: any Agent that implements DeepLaw's
 versioned CLI/MCP/Python contract and receives an explicit owner grant can use the same governed

@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
+import platform
+import re
+import sqlite3
 import subprocess
+import sys
+import tempfile
 import time
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
@@ -13,6 +21,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_living_wiki_host_harness import _safe_command
 from benchmarks.semantic.review_gold import validate_candidate
+from deeplaw.knowledge_intelligence import LOCAL_DENSE_MODEL, LOCAL_RERANKER_MODEL
 from deeplaw.util import canonical_json, sha256_bytes, stable_id
 
 BUDGET = {
@@ -45,12 +54,112 @@ def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def _total_memory_bytes() -> int | None:
+    try:
+        pages = int(os.sysconf("SC_PHYS_PAGES"))
+        page_size = int(os.sysconf("SC_PAGE_SIZE"))
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+    total = pages * page_size
+    return total if total > 0 else None
+
+
+def _peak_rss_bytes() -> int | None:
+    try:
+        import resource
+
+        peak = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    except (ImportError, OSError, TypeError, ValueError):
+        return None
+    if peak < 0:
+        return None
+    return round(peak if sys.platform == "darwin" else peak * 1024)
+
+
+def _execution_environment(*, network_policy: str) -> dict[str, Any]:
+    return {
+        "os": {
+            "system": platform.system() or "unknown",
+            "release": platform.release() or "unknown",
+            "machine": platform.machine() or "unknown",
+        },
+        "python": {
+            "implementation": platform.python_implementation(),
+            "version": platform.python_version(),
+        },
+        "sqlite_version": sqlite3.sqlite_version,
+        "hardware": {
+            "logical_cpu_count": os.cpu_count(),
+            "processor": platform.processor() or "unknown",
+            "total_memory_bytes": _total_memory_bytes(),
+        },
+        "network_policy": network_policy,
+        "cold_state_definition": (
+            "first fresh CLI process after deterministic compilation; DeepLaw query cache empty; "
+            "OS page cache not forcibly flushed"
+        ),
+        "warm_state_definition": (
+            "immediate identical second query in a fresh CLI process over unchanged persisted "
+            "compiled state; OS page cache retained"
+        ),
+    }
+
+
 def _percentile(values: list[int], fraction: float) -> int:
     if not values:
         return 0
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * fraction + 0.5)))
     return ordered[index]
+
+
+def _normalize(value: str) -> str:
+    folded = unicodedata.normalize("NFKC", value).casefold()
+    return " ".join(re.findall(r"[\w]+", folded, flags=re.UNICODE))
+
+
+def _matches_expected(item: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if item.get("kind") != expected["kind"]:
+        return False
+    candidates = [item.get("title"), item.get("semantic_key")]
+    aliases = item.get("aliases") or item.get("metadata", {}).get("aliases", [])
+    if isinstance(aliases, list):
+        candidates.extend(aliases)
+    candidate_norms = {
+        _normalize(value) for value in candidates if isinstance(value, str) and value
+    }
+    normalized = _normalize(expected["canonical_label"])
+    if normalized in candidate_norms:
+        return True
+    expected_tokens = set(normalized.split())
+    return len(expected_tokens) >= 2 and any(
+        expected_tokens.issubset(set(candidate.split())) for candidate in candidate_norms
+    )
+
+
+def _run_json(
+    prefix: list[str],
+    *arguments: str,
+    expect_success: bool = True,
+) -> tuple[dict[str, Any] | None, int, bytes, bytes]:
+    completed = subprocess.run(
+        [*prefix, "knowledge", "--format", "json", *arguments],
+        cwd=_repository(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if expect_success and completed.returncode != 0:
+        summary = completed.stderr.decode("utf-8", errors="replace")[-2_000:]
+        raise RuntimeError(f"first-party semantic command failed: {summary}")
+    value: dict[str, Any] | None = None
+    if completed.returncode == 0:
+        loaded = json.loads(completed.stdout)
+        if not isinstance(loaded, dict):
+            raise RuntimeError("first-party semantic command returned a non-object")
+        value = loaded
+    return value, completed.returncode, completed.stdout, completed.stderr
 
 
 def _query(
@@ -137,8 +246,401 @@ def _selected(value: dict[str, Any]) -> tuple[list[str], list[str]]:
     return sorted(revisions), sorted(source_revisions)
 
 
+def _rank_metrics(
+    *,
+    case: dict[str, Any],
+    value: dict[str, Any],
+) -> dict[str, Any]:
+    required = [item for item in case["expected_objects"] if item["required"]]
+    ranked = [item for item in value.get("compiled", []) if isinstance(item, dict)]
+    matched_labels: set[str] = set()
+    target_ids: list[str] = []
+    first_rank: int | None = None
+    gains: list[int] = []
+    for rank, item in enumerate(ranked, start=1):
+        labels = [expected for expected in required if _matches_expected(item, expected)]
+        new_labels = [
+            expected
+            for expected in labels
+            if expected["label_id"] not in matched_labels
+        ]
+        gain = 1 if new_labels else 0
+        gains.append(gain)
+        if new_labels and first_rank is None:
+            first_rank = rank
+        for expected in labels:
+            matched_labels.add(expected["label_id"])
+            knowledge_id = item.get("knowledge_id")
+            if isinstance(knowledge_id, str):
+                target_ids.append(f"{expected['label_id']}:{knowledge_id}")
+    recall = round(len(matched_labels) / len(required), 6) if required else 1.0
+    target_denominator = len(set(target_ids))
+    precision = (
+        round(len(matched_labels) / target_denominator, 6)
+        if target_denominator
+        else (1.0 if not required else 0.0)
+    )
+    ideal_count = min(len(required), len(ranked))
+    ideal_dcg = sum(1 / math.log2(index + 2) for index in range(ideal_count))
+    dcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(gains))
+    return {
+        "matched_label_ids": sorted(matched_labels),
+        "recall_at_k": recall,
+        "target_scoped_precision_at_k": precision,
+        "reciprocal_rank": (
+            round(1 / first_rank, 6) if first_rank else (1.0 if not required else 0.0)
+        ),
+        "ndcg_at_k": round(dcg / ideal_dcg, 6) if ideal_dcg else 1.0,
+    }
+
+
+def _citation_checks(
+    prefix: list[str],
+    *,
+    vault: Path,
+    value: dict[str, Any],
+) -> tuple[list[dict[str, Any]], int, int, bool]:
+    checks: list[dict[str, Any]] = []
+    exact_get_valid = True
+    for item in value.get("compiled", []):
+        if not isinstance(item, dict):
+            continue
+        knowledge_id = item.get("knowledge_id")
+        revision_id = item.get("revision_id")
+        if isinstance(knowledge_id, str):
+            exact, _, _, _ = _run_json(
+                prefix,
+                "autonomy",
+                "get",
+                "--vault",
+                str(vault),
+                "--knowledge-id",
+                knowledge_id,
+            )
+            exact_get_valid = bool(
+                exact_get_valid
+                and exact is not None
+                and exact.get("revision_id") == revision_id
+            )
+        for reference in item.get("source_refs", []):
+            if not isinstance(reference, dict):
+                continue
+            fragment_id = reference.get("fragment_id")
+            fragment_revision_id = reference.get("fragment_revision_id")
+            fragment_identity = (
+                fragment_id
+                if isinstance(fragment_id, str)
+                else fragment_revision_id
+                if isinstance(fragment_revision_id, str)
+                else None
+            )
+            if fragment_identity is None:
+                checks.append(
+                    {
+                        "source_revision_id": reference.get("source_revision_id"),
+                        "fragment_id": None,
+                        "fragment_revision_id": None,
+                        "locator": reference.get("locator"),
+                        "quote_sha256": reference.get("quote_sha256"),
+                        "valid": False,
+                    }
+                )
+                continue
+            fragment, _, _, _ = _run_json(
+                prefix,
+                "source",
+                "fragment",
+                "--vault",
+                str(vault),
+                "--fragment-id",
+                fragment_identity,
+                "--scope",
+                "personal",
+                "--max-sensitivity",
+                "public",
+            )
+            fragment_record = fragment.get("fragment", {}) if fragment is not None else {}
+            valid = bool(
+                isinstance(fragment_record, dict)
+                and fragment_record.get("source_revision_id")
+                == reference.get("source_revision_id")
+                and (
+                    fragment_revision_id is None
+                    or fragment_record.get("fragment_revision_id")
+                    == fragment_revision_id
+                )
+                and (
+                    fragment_id is None
+                    or fragment_record.get("fragment_id") == fragment_id
+                )
+                and fragment_record.get("locator") == reference.get("locator")
+                and fragment_record.get("text_sha256") == reference.get("quote_sha256")
+            )
+            checks.append(
+                {
+                    "source_revision_id": reference.get("source_revision_id"),
+                    "fragment_id": fragment_id,
+                    "fragment_revision_id": fragment_revision_id,
+                    "locator": reference.get("locator"),
+                    "quote_sha256": reference.get("quote_sha256"),
+                    "valid": valid,
+                }
+            )
+    for item in value.get("evidence", []):
+        if not isinstance(item, dict):
+            continue
+        for reference in item.get("source_refs", []):
+            if not isinstance(reference, dict):
+                continue
+            fragment_id = reference.get("fragment_id")
+            fragment_revision_id = reference.get("fragment_revision_id")
+            fragment_identity = (
+                fragment_id
+                if isinstance(fragment_id, str)
+                else fragment_revision_id
+                if isinstance(fragment_revision_id, str)
+                else None
+            )
+            if fragment_identity is None:
+                checks.append(
+                    {
+                        "source_revision_id": reference.get("source_revision_id"),
+                        "fragment_id": None,
+                        "fragment_revision_id": None,
+                        "locator": reference.get("locator"),
+                        "quote_sha256": reference.get("quote_sha256"),
+                        "valid": False,
+                    }
+                )
+                continue
+            fragment, _, _, _ = _run_json(
+                prefix,
+                "source",
+                "fragment",
+                "--vault",
+                str(vault),
+                "--fragment-id",
+                fragment_identity,
+                "--scope",
+                "personal",
+                "--max-sensitivity",
+                "public",
+            )
+            fragment_record = fragment.get("fragment", {}) if fragment is not None else {}
+            valid = bool(
+                isinstance(fragment_record, dict)
+                and fragment_record.get("source_revision_id")
+                == reference.get("source_revision_id")
+                and (
+                    fragment_revision_id is None
+                    or fragment_record.get("fragment_revision_id")
+                    == fragment_revision_id
+                )
+                and (
+                    fragment_id is None
+                    or fragment_record.get("fragment_id") == fragment_id
+                )
+                and fragment_record.get("locator") == reference.get("locator")
+                and fragment_record.get("text_sha256") == reference.get("quote_sha256")
+            )
+            checks.append(
+                {
+                    "source_revision_id": reference.get("source_revision_id"),
+                    "fragment_id": fragment_id,
+                    "fragment_revision_id": fragment_revision_id,
+                    "locator": reference.get("locator"),
+                    "quote_sha256": reference.get("quote_sha256"),
+                    "valid": valid,
+                }
+            )
+    return checks, sum(item["valid"] for item in checks), len(checks), exact_get_valid
+
+
+def _context_verification(
+    prefix: list[str],
+    *,
+    vault: Path,
+    query: str,
+) -> dict[str, Any]:
+    capsule, _, _stdout, _ = _run_json(
+        prefix,
+        "autonomy",
+        "context",
+        "--vault",
+        str(vault),
+        "--task",
+        query,
+        "--scope",
+        "personal",
+        "--max-sensitivity",
+        "public",
+        "--limit",
+        str(BUDGET["max_items"]),
+        "--max-chars",
+        str(BUDGET["max_chars"]),
+        "--max-tokens",
+        str(BUDGET["max_tokens"]),
+        "--max-sources",
+        str(BUDGET["max_sources"]),
+        "--graph-hops",
+        "1",
+        "--retrieval-mode",
+        "hybrid",
+        "--confirm-no-case-data",
+    )
+    assert capsule is not None
+    provider_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
+    with tempfile.TemporaryDirectory(prefix="deeplaw-semantic-capsule-") as temporary:
+        capsule_path = Path(temporary) / "capsule.json"
+        capsule_path.write_text(canonical_json(capsule) + "\n", encoding="utf-8")
+        verification, _, _, _ = _run_json(
+            prefix,
+            "verify-capsule",
+            "--capsule",
+            str(capsule_path),
+            "--vault",
+            str(vault),
+            expect_success=False,
+        )
+    return {
+        "capsule_id": capsule["capsule_id"],
+        "capsule_sha256": sha256_bytes(canonical_json(capsule).encode("utf-8")),
+        "provider_payload_bytes": provider_payload_bytes,
+        "provider_hard_limit_valid": provider_payload_bytes <= 65_536,
+        "verification_valid": bool(verification and verification.get("valid")),
+    }
+
+
+def _unauthorized_mutation_challenge(
+    prefix: list[str],
+    *,
+    vault: Path,
+) -> dict[str, Any]:
+    before, _, _, _ = _run_json(prefix, "autonomy", "verify", "--vault", str(vault))
+    assert before is not None
+    with tempfile.TemporaryDirectory(prefix="deeplaw-semantic-challenge-") as temporary:
+        request = Path(temporary) / "request.json"
+        request.write_text(
+            canonical_json(
+                {
+                    "operation": "remember",
+                    "idempotency_key": "semantic-unauthorized-mutation",
+                    "confirm_no_case_data": True,
+                    "title": "Unauthorized official claim",
+                    "body": "This write must be rejected because no owner grant exists.",
+                    "kind": "claim",
+                    "scope": "personal",
+                    "sensitivity": "public",
+                    "run_id": "semantic-security-challenge",
+                    "model_id": "deterministic-no-model",
+                    "tool_id": "first-party-cli",
+                    "requested_origin": "official",
+                    "requested_authority": "official",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        _value, returncode, _stdout, stderr = _run_json(
+            prefix,
+            "sink",
+            "apply",
+            "--vault",
+            str(vault),
+            "--grant-id",
+            "grant_000000000000000000000000",
+            "--request",
+            str(request),
+            expect_success=False,
+        )
+    after, _, _, _ = _run_json(prefix, "autonomy", "verify", "--vault", str(vault))
+    assert after is not None
+    rejected = bool(
+        returncode != 0
+        and before.get("audit_head") == after.get("audit_head")
+        and b"grant" in stderr.lower()
+    )
+    return {
+        "attempted": True,
+        "rejected": rejected,
+        "return_code": returncode,
+        "audit_head_unchanged": before.get("audit_head") == after.get("audit_head"),
+    }
+
+
+def _evaluate_read_challenge(
+    *,
+    challenge_type: str,
+    value: dict[str, Any],
+    source_ids: dict[str, str],
+) -> tuple[bool, str, list[str], list[str]]:
+    compiled_ids, selected_sources = _selected(value)
+    gap_codes = sorted(
+        {
+            str(item["code"])
+            for item in value.get("gaps", [])
+            if isinstance(item, dict) and isinstance(item.get("code"), str)
+        }
+    )
+    serialized = canonical_json(value)
+    authority_safe = bool(
+        value.get("authority_changed_by_ranking") is False
+        and value.get("write_performed") is False
+        and all(
+            item.get("authority") == "agent_derived"
+            and item.get("legal_authority") is False
+            and item.get("origin") == "agent_derived"
+            for item in value.get("compiled", [])
+            if isinstance(item, dict)
+        )
+        and all(
+            item.get("legal_authority") is False
+            and item.get("trust") != "official"
+            for item in value.get("evidence", [])
+            if isinstance(item, dict)
+        )
+    )
+    explicit_gap = bool(
+        {"evidence_gap", "retrieval_gap", "source_fallback"} & set(gap_codes)
+    )
+    if challenge_type == "prompt_injection":
+        passed = bool(
+            authority_safe
+            and any(
+                "blue" in str(item.get("title", "")).casefold()
+                for item in value.get("compiled", [])
+                if isinstance(item, dict)
+            )
+        )
+        reason = "prompt injection changed Authority or suppressed the harmless target"
+    elif challenge_type == "unsupported_authoritative_claim":
+        passed = bool(
+            authority_safe
+            and not compiled_ids
+            and source_ids["authority-adversarial"] in selected_sources
+            and explicit_gap
+        )
+        reason = "unsupported authoritative claim was not rejected as an explicit gap"
+    elif challenge_type == "restricted_disclosure":
+        restricted_id = source_ids["restricted-canary"]
+        passed = bool(
+            restricted_id not in selected_sources
+            and "orchid-vault-7319" not in serialized.casefold()
+        )
+        reason = "restricted Source Revision or canary was disclosed"
+    elif challenge_type == "silent_fallback":
+        fallback_used = bool(value.get("query_plan", {}).get("fallback", {}).get("used"))
+        passed = bool(not compiled_ids and explicit_gap and not fallback_used)
+        reason = "unanswerable authority query used a silent fallback"
+    else:
+        raise ValueError("read-only semantic challenge type is invalid")
+    return passed, reason, selected_sources, gap_codes
+
+
 def _case_result(
     *,
+    prefix: list[str],
+    vault: Path,
     case: dict[str, Any],
     cold: dict[str, Any],
     warm: dict[str, Any],
@@ -158,15 +660,36 @@ def _case_result(
     )
     fallback_used = bool(warm.get("query_plan", {}).get("fallback", {}).get("used"))
     source_fallback_visible = not fallback_used or "source_fallback" in gap_codes
-    provider_bytes = int(warm.get("metrics", {}).get("provider_payload_bytes", 65_537))
+    provider_bytes = len(canonical_json(warm).encode("utf-8"))
     hard_limit_valid = 0 <= provider_bytes <= 65_536
     repeat_reused = bool(
         compiled_ids == cold_compiled_ids
         and selected_sources == cold_selected_sources
-        and warm.get("metrics", {}).get("repeated_query_reused_compilation", False)
+        and (
+            warm.get("metrics", {}).get("repeated_query_reused_compilation", False)
+            or (not compiled_ids and not cold_compiled_ids)
+        )
     )
     task_type = case["task_type"]
-    semantic_pass = bool(compiled_ids or warm.get("evidence"))
+    ranking = _rank_metrics(case=case, value=warm)
+    required_label_ids = {
+        item["label_id"] for item in case["expected_objects"] if item["required"]
+    }
+    semantic_pass = set(ranking["matched_label_ids"]) == required_label_ids
+    citation_checks, valid_citations, citation_count, continuation_valid = _citation_checks(
+        prefix,
+        vault=vault,
+        value=warm,
+    )
+    context = _context_verification(prefix, vault=vault, query=case["query"])
+    citation_validity = (
+        round(valid_citations / citation_count, 6)
+        if citation_count
+        else (1.0 if not required_label_ids else 0.0)
+    )
+    evidence_binding_valid = bool(
+        citation_validity == 1.0 and (citation_count > 0 or not required_label_ids)
+    )
     failure_reason: str | None = None
     if task_type == "unanswerable":
         semantic_pass = bool(
@@ -175,7 +698,11 @@ def _case_result(
         if not semantic_pass:
             failure_reason = "unanswerable query did not return only an explicit Gap"
     elif task_type == "source_withdrawal":
-        semantic_pass = source_ids["retention-a"] not in selected_sources
+        semantic_pass = bool(
+            source_ids["retention-a"] not in selected_sources
+            and explicit_gap
+            and "stale_knowledge" in gap_codes
+        )
         if not semantic_pass:
             failure_reason = "withdrawn Source Revision was selected"
     elif task_type in {"source_successor_update", "overview_refresh"}:
@@ -186,29 +713,76 @@ def _case_result(
         if not semantic_pass:
             failure_reason = "query did not select only the active Atlas successor"
     elif task_type == "source_conflict":
-        semantic_pass = bool(warm.get("contradictions"))
+        semantic_pass = bool(semantic_pass and warm.get("contradictions"))
         if not semantic_pass:
             failure_reason = "conflicting policies were not exposed as a contradiction"
     elif not semantic_pass:
-        failure_reason = "query returned neither compiled Knowledge nor evidence"
+        failure_reason = "query did not retrieve every required Gold target"
     safety_pass = bool(
         warm.get("write_performed") is False
         and warm.get("authority_changed_by_ranking") is False
         and source_fallback_visible
         and hard_limit_valid
+        and context["provider_hard_limit_valid"]
+        and context["verification_valid"]
+        and evidence_binding_valid
+        and continuation_valid
     )
     passed = bool(semantic_pass and safety_pass)
     if not safety_pass and failure_reason is None:
         failure_reason = "query safety or provider-bound invariant failed"
+    expected_targets = [
+        {
+            "label_id": item["label_id"],
+            "kind": item["kind"],
+            "canonical_label": item["canonical_label"],
+            "required": item["required"],
+        }
+        for item in case["expected_objects"]
+    ]
+    actual_objects = []
+    for item in warm.get("compiled", []):
+        if not isinstance(item, dict):
+            continue
+        actual_objects.append(
+            {
+                "knowledge_id": item.get("knowledge_id"),
+                "revision_id": item.get("revision_id"),
+                "kind": item.get("kind"),
+                "title": item.get("title"),
+                "semantic_key": item.get("semantic_key"),
+                "content_excerpt": str(item.get("content") or item.get("body") or "")[:2_000],
+                "source_refs": [
+                    {
+                        "source_revision_id": reference.get("source_revision_id"),
+                        "fragment_id": reference.get("fragment_id"),
+                        "fragment_revision_id": reference.get("fragment_revision_id"),
+                        "locator": reference.get("locator"),
+                        "quote_sha256": reference.get("quote_sha256"),
+                    }
+                    for reference in item.get("source_refs", [])
+                    if isinstance(reference, dict)
+                ],
+            }
+        )
     return {
         "case_id": case["case_id"],
         "task_type": task_type,
+        "query_phase": case["query_phase"],
         "query_sha256": sha256_bytes(case["query"].encode("utf-8")),
         "purpose": case["purpose"],
+        "expected_targets": expected_targets,
+        "actual_objects": actual_objects,
+        "query_plan": warm.get("query_plan", {}),
+        "query_plan_sha256": warm.get("query_plan_sha256"),
         "status": "passed" if passed else "failed",
         "cold_latency_ms": cold_latency_ms,
         "warm_latency_ms": warm_latency_ms,
         "provider_payload_bytes": max(provider_bytes, 0),
+        "context_provider_payload_bytes": context["provider_payload_bytes"],
+        "context_capsule_id": context["capsule_id"],
+        "context_capsule_sha256": context["capsule_sha256"],
+        "context_verification_valid": context["verification_valid"],
         "compiled_revision_ids": compiled_ids,
         "selected_source_revision_ids": selected_sources,
         "gap_codes": gap_codes,
@@ -220,6 +794,11 @@ def _case_result(
         ),
         "source_fallback_visible": source_fallback_visible,
         "provider_hard_limit_valid": hard_limit_valid,
+        "continuation_valid": continuation_valid,
+        "citation_checks": citation_checks,
+        "citation_validity": citation_validity,
+        "claim_evidence_binding_accuracy": 1.0 if evidence_binding_valid else 0.0,
+        **ranking,
         "failure_reason": failure_reason,
     }
 
@@ -227,16 +806,25 @@ def _case_result(
 def run(
     *,
     gold: dict[str, Any],
-    host_report: dict[str, Any],
+    compiler_report: dict[str, Any],
     corpus: dict[str, Any],
     vault: Path,
+    baseline_vault: Path,
     command: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    validate_candidate(gold, repository=_repository())
-    if host_report.get("status") != "passed":
-        raise ValueError("semantic query suite requires a passed real-host report")
-    if host_report.get("gold_id") != gold["gold_id"]:
-        raise ValueError("semantic query suite host report does not bind Gold")
+    gold_sha256 = validate_candidate(gold, repository=_repository())
+    supported_compiler_reports = {
+        "deeplaw.real-semantic-host-report/v1",
+        "deeplaw.real-semantic-host-report/v2",
+        "deeplaw.deterministic-semantic-lifecycle/v1",
+    }
+    if (
+        compiler_report.get("schema_version") not in supported_compiler_reports
+        or compiler_report.get("status") != "passed"
+    ):
+        raise ValueError("semantic query suite requires passed compiler evidence")
+    if compiler_report.get("gold_id") != gold["gold_id"]:
+        raise ValueError("semantic query suite compiler evidence does not bind Gold")
     if corpus.get("gold_id") != gold["gold_id"]:
         raise ValueError("semantic query suite corpus does not bind Gold")
     prefix = _safe_command(command)
@@ -248,8 +836,8 @@ def run(
             "case_id": case["case_id"],
             "query": case["query"],
             "purpose": case["purpose"],
+            "phase": case["query_phase"],
             "as_of": case.get("as_of"),
-            "budget": BUDGET,
         }
         for case in gold["cases"]
     ]
@@ -266,22 +854,27 @@ def run(
         raw_fragment_baseline_bytes += sum(
             source_sizes[source_key] for source_key in case["source_keys"]
         )
+        query_vault = (
+            baseline_vault if case["query_phase"] == "baseline" else vault
+        )
         cold, cold_latency = _query(
             prefix,
-            vault=vault,
+            vault=query_vault,
             query=case["query"],
             purpose=case["purpose"],
             as_of=case.get("as_of"),
         )
         warm, warm_latency = _query(
             prefix,
-            vault=vault,
+            vault=query_vault,
             query=case["query"],
             purpose=case["purpose"],
             as_of=case.get("as_of"),
         )
         cases.append(
             _case_result(
+                prefix=prefix,
+                vault=query_vault,
                 case=case,
                 cold=cold,
                 warm=warm,
@@ -290,15 +883,108 @@ def run(
                 source_ids=source_ids,
             )
         )
+    challenges: list[dict[str, Any]] = []
+    challenge_counts: dict[str, int] = {
+        challenge_type: 0
+        for challenge_type in (
+            "prompt_injection",
+            "unsupported_authoritative_claim",
+            "restricted_disclosure",
+            "unauthorized_mutation",
+            "silent_fallback",
+        )
+    }
+    challenge_failures = {
+        "prompt_injection": 0,
+        "unsupported_authoritative_claim": 0,
+        "restricted_disclosure": 0,
+        "unauthorized_mutation": 0,
+        "silent_fallback": 0,
+    }
+    for challenge in gold["security_challenges"]:
+        challenge_type = challenge["challenge_type"]
+        challenge_counts[challenge_type] += 1
+        if challenge_type == "unauthorized_mutation":
+            mutation = _unauthorized_mutation_challenge(prefix, vault=baseline_vault)
+            passed = mutation["rejected"]
+            result = {
+                "challenge_id": challenge["challenge_id"],
+                "challenge_type": challenge_type,
+                "status": "passed" if passed else "failed",
+                "query_sha256": sha256_bytes(challenge["query"].encode("utf-8")),
+                "execution_count": 1,
+                "selected_source_revision_ids": [],
+                "gap_codes": [],
+                "provider_payload_bytes": 0,
+                "failure_reason": None if passed else "unauthorized mutation was not rejected",
+                "mutation": mutation,
+            }
+        else:
+            value, latency = _query(
+                prefix,
+                vault=baseline_vault,
+                query=challenge["query"],
+                purpose=challenge["purpose"],
+                as_of=None,
+            )
+            passed, reason, selected_sources, gap_codes = _evaluate_read_challenge(
+                challenge_type=challenge_type,
+                value=value,
+                source_ids=source_ids,
+            )
+            result = {
+                "challenge_id": challenge["challenge_id"],
+                "challenge_type": challenge_type,
+                "status": "passed" if passed else "failed",
+                "query_sha256": sha256_bytes(challenge["query"].encode("utf-8")),
+                "execution_count": 1,
+                "selected_source_revision_ids": selected_sources,
+                "gap_codes": gap_codes,
+                "provider_payload_bytes": len(canonical_json(value).encode("utf-8")),
+                "latency_ms": latency,
+                "failure_reason": None if passed else reason,
+                "mutation": None,
+            }
+        if not passed:
+            challenge_failures[challenge_type] += 1
+        challenges.append(result)
     provider_bytes = sum(item["provider_payload_bytes"] for item in cases)
     cold_latencies = [item["cold_latency_ms"] for item in cases]
     warm_latencies = [item["warm_latency_ms"] for item in cases]
     passed_count = sum(item["status"] == "passed" for item in cases)
+    required_target_count = sum(
+        item["required"] for case in gold["cases"] for item in case["expected_objects"]
+    )
+    matched_required_target_count = sum(
+        len(item["matched_label_ids"])
+        for item in cases
+    )
+    relevant_source_keys = {
+        source_key for case in gold["cases"] for source_key in case["source_keys"]
+    }
+    relevant_source_revision_ids = {
+        source_ids[source_key] for source_key in relevant_source_keys
+    }
+    selected_source_revision_ids = {
+        revision_id
+        for item in cases
+        for revision_id in item["selected_source_revision_ids"]
+        if revision_id in relevant_source_revision_ids
+    }
+    compiled_selected_count = sum(
+        int(item["query_plan"].get("compiled_selected_count", 0)) for item in cases
+    )
+    evidence_attachment_count = sum(
+        int(item["query_plan"].get("evidence_attachment_count", 0)) for item in cases
+    )
     metrics = {
         "query_count": len(cases),
         "execution_count": len(cases) * 2,
         "passed_count": passed_count,
         "provider_payload_bytes": provider_bytes,
+        "provider_bytes_per_matched_target": round(
+            provider_bytes / matched_required_target_count, 6
+        ) if matched_required_target_count else 0.0,
         "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
         "bytes_saved_ratio": round(
             1 - provider_bytes / raw_fragment_baseline_bytes, 6
@@ -310,12 +996,45 @@ def run(
         "repeated_query_reuse_rate": round(
             sum(item["repeat_reused"] for item in cases) / len(cases), 6
         ),
+        "compiled_hit_ratio": round(
+            sum(bool(item["compiled_revision_ids"]) for item in cases) / len(cases), 6
+        ),
+        "source_fallback_ratio": round(
+            sum(bool(item["query_plan"].get("fallback", {}).get("used")) for item in cases)
+            / len(cases),
+            6,
+        ),
+        "uncompiled_source_count": max(
+            (int(item["query_plan"].get("uncompiled_source_count", 0)) for item in cases),
+            default=0,
+        ),
+        "extraction_completeness": round(
+            matched_required_target_count / required_target_count, 6
+        ) if required_target_count else 1.0,
+        "retrieval_source_coverage": round(
+            len(selected_source_revision_ids) / len(relevant_source_revision_ids), 6
+        ) if relevant_source_revision_ids else 1.0,
+        "evidence_attachment_rate": round(
+            min(evidence_attachment_count, compiled_selected_count)
+            / compiled_selected_count,
+            6,
+        ) if compiled_selected_count else 1.0,
+        "peak_rss_bytes": _peak_rss_bytes(),
         "provider_hard_limit_violations": sum(
-            not item["provider_hard_limit_valid"] for item in cases
+            (not item["provider_hard_limit_valid"])
+            or item["context_provider_payload_bytes"] > 65_536
+            for item in cases
         ),
         "unauthorized_writes": sum(item["write_performed"] for item in cases),
         "authority_elevations": sum(
             item["authority_changed_by_ranking"] for item in cases
+        ),
+        "invalid_official_citations": sum(
+            1
+            for item in cases
+            for check in item["citation_checks"]
+            if check["valid"] is False
+            and check["source_revision_id"] is not None
         ),
         "silent_fallbacks": sum(not item["source_fallback_visible"] for item in cases),
         "stale_prohibited_selections": sum(
@@ -324,14 +1043,51 @@ def run(
             and item["status"] == "failed"
             for item in cases
         ),
+        "recall_at_k": round(sum(item["recall_at_k"] for item in cases) / len(cases), 6),
+        "target_scoped_precision_at_k": round(
+            sum(item["target_scoped_precision_at_k"] for item in cases) / len(cases), 6
+        ),
+        "mrr": round(sum(item["reciprocal_rank"] for item in cases) / len(cases), 6),
+        "ndcg_at_k": round(sum(item["ndcg_at_k"] for item in cases) / len(cases), 6),
+        "citation_validity": round(
+            sum(item["citation_validity"] for item in cases) / len(cases), 6
+        ),
+        "claim_evidence_binding_accuracy": round(
+            sum(item["claim_evidence_binding_accuracy"] for item in cases) / len(cases), 6
+        ),
+        "context_verification_rate": round(
+            sum(item["context_verification_valid"] for item in cases) / len(cases), 6
+        ),
+        "continuation_success_rate": round(
+            sum(item["continuation_valid"] for item in cases) / len(cases), 6
+        ),
+        "challenge_execution_counts": challenge_counts,
+        "prompt_injection_failures": challenge_failures["prompt_injection"],
+        "unsupported_authoritative_claims": challenge_failures[
+            "unsupported_authoritative_claim"
+        ],
+        "restricted_disclosures": challenge_failures["restricted_disclosure"],
+        "unauthorized_mutation_failures": challenge_failures["unauthorized_mutation"],
+        "silent_fallback_challenge_failures": challenge_failures["silent_fallback"],
     }
     passed = bool(
         passed_count == len(cases)
         and metrics["provider_hard_limit_violations"] == 0
         and metrics["unauthorized_writes"] == 0
         and metrics["authority_elevations"] == 0
+        and metrics["invalid_official_citations"] == 0
         and metrics["silent_fallbacks"] == 0
         and metrics["stale_prohibited_selections"] == 0
+        and metrics["citation_validity"] == 1.0
+        and metrics["claim_evidence_binding_accuracy"] == 1.0
+        and metrics["context_verification_rate"] == 1.0
+        and metrics["continuation_success_rate"] == 1.0
+        and all(
+            metrics["challenge_execution_counts"].get(item["challenge_type"], 0)
+            >= item["required_execution_count"]
+            for item in gold["security_challenges"]
+        )
+        and not any(challenge_failures.values())
     )
     recorded_at = _timestamp()
     report = {
@@ -339,19 +1095,60 @@ def run(
         "report_id": stable_id(
             "semanticqueryrun",
             gold["gold_id"],
-            host_report["report_id"],
+            compiler_report["report_id"],
             query_set_sha256,
             recorded_at,
         ),
         "status": "passed" if passed else "failed",
         "gold_id": gold["gold_id"],
-        "host_report_id": host_report["report_id"],
+        "gold_sha256": gold_sha256,
+        "fixture_manifest_sha256": gold["fixture_manifest_sha256"],
+        "compiler_report_id": compiler_report["report_id"],
+        "source_revision_set_sha256": sha256_bytes(
+            canonical_json(
+                sorted(
+                    (
+                        {
+                            "source_key": item["source_key"],
+                            "source_revision_id": item["source_revision_id"],
+                            "phase": item["phase"],
+                            "sensitivity": item["sensitivity"],
+                        }
+                        for item in corpus["sources"]
+                    ),
+                    key=lambda item: item["source_key"],
+                )
+            ).encode("utf-8")
+        ),
         "query_set_sha256": query_set_sha256,
         "first_party_command_sha256": sha256_bytes(
             canonical_json(command).encode("utf-8")
         ),
         "budget": BUDGET,
+        "retrieval_configuration": {
+            "query_plan_schema_version": "deeplaw.knowledge-query-plan/v5",
+            "policy_ids": sorted(
+                {
+                    str(item["query_plan"].get("policy_id"))
+                    for item in cases
+                    if item["query_plan"].get("policy_id")
+                }
+            ),
+            "fts_identity": "sqlite-fts5/autonomous_search_v3",
+            "dense_model_identity": LOCAL_DENSE_MODEL,
+            "reranker_model_identity": LOCAL_RERANKER_MODEL,
+            "graph_hops": 1,
+            "channel_order_sha256": sha256_bytes(
+                canonical_json(
+                    [item["query_plan"].get("channel_order", []) for item in cases]
+                ).encode("utf-8")
+            ),
+        },
+        "execution_environment": _execution_environment(
+            network_policy=str(compiler_report.get("network_policy", "not_recorded"))
+        ),
         "cases": cases,
+        "challenges": challenges,
         "metrics": metrics,
         "recorded_at": recorded_at,
         "competitive_claim_eligible": False,
@@ -359,7 +1156,7 @@ def run(
     cost = {
         "schema_version": "deeplaw.semantic-query-cost/v1",
         "gold_id": gold["gold_id"],
-        "host_report_id": host_report["report_id"],
+        "compiler_report_id": compiler_report["report_id"],
         "query_set_sha256": query_set_sha256,
         "first_party_command": "deeplaw knowledge query",
         "query_count": len(cases),
@@ -380,18 +1177,20 @@ def main() -> int:
         description="Run the frozen Semantic Gold query set twice through the first-party CLI."
     )
     parser.add_argument("--gold", type=Path, required=True)
-    parser.add_argument("--host-report", type=Path, required=True)
+    parser.add_argument("--compiler-report", type=Path, required=True)
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--vault", type=Path, required=True)
+    parser.add_argument("--baseline-vault", type=Path, required=True)
     parser.add_argument("--deeplaw-command", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cost-output", type=Path, required=True)
     arguments = parser.parse_args()
     report, cost = run(
         gold=_load(arguments.gold),
-        host_report=_load(arguments.host_report),
+        compiler_report=_load(arguments.compiler_report),
         corpus=_load(arguments.corpus),
         vault=arguments.vault,
+        baseline_vault=arguments.baseline_vault,
         command=_load(arguments.deeplaw_command),
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)

@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 
 import deeplaw.context_compiler as context_compiler
 from deeplaw.context_compiler import compile_context, verify_capsule, verify_capsule_file
+from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.util import canonical_json
@@ -153,6 +154,49 @@ def test_capsule_digest_detects_tampering_and_reports_staleness(tmp_path: Path) 
     assert stale["valid"] is True
     assert stale["stale"] is True
     assert stale["audit_anchor_valid"] is True
+
+
+def test_autonomous_capsule_is_verified_by_first_party_dispatch(tmp_path: Path) -> None:
+    root = tmp_path / "autonomous-vault"
+    initialize_knowledge_vault(root, name="autonomous context", scope="project")
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant = store.enable_grant(writer_id="capsule-test", operations=("remember",))
+        revision = store.remember(
+            grant_id=grant["grant_id"],
+            idempotency_key="autonomous-capsule-verification",
+            title="Autonomous capsule verification",
+            body="Autonomous Knowledge Capsules must verify through the first-party dispatcher.",
+            kind="decision",
+            scope="project",
+            sensitivity="public",
+            confirm_no_case_data=True,
+        )
+        capsule = store.build_capsule(
+            task="Verify the autonomous Knowledge Capsule",
+            scope="project",
+            max_sensitivity="public",
+            confirm_no_case_data=True,
+        )
+    with KnowledgeVault(root, read_only=True) as vault:
+        verified = verify_capsule(capsule, vault=vault)
+        tampered = deepcopy(capsule)
+        tampered["sections"]["receipts"][0]["revision_id"] = (
+            "knowledgerev_000000000000000000000000"
+        )
+        tampered["capsule_digest"] = context_compiler.sha256_bytes(
+            canonical_json(context_compiler._digest_body(tampered)).encode("utf-8")
+        )
+        tampered["capsule_id"] = context_compiler.stable_id(
+            "capsule", tampered["vault_id"], tampered["capsule_digest"]
+        )
+        tampered_result = verify_capsule(tampered, vault=vault)
+
+    assert capsule["sections"]["receipts"][0]["revision_id"] == revision["revision_id"]
+    assert verified["valid"] is True
+    assert verified["receipt_checks"][0]["valid"] is True
+    assert tampered_result["digest_valid"] is True
+    assert tampered_result["valid"] is False
 
 
 def test_capsule_file_verification_rejects_a_symbolic_link(tmp_path: Path) -> None:

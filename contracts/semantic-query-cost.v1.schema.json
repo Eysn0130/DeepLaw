@@ -4,11 +4,11 @@
   "title": "DeepLaw Frozen Semantic Query Cost v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "gold_id", "host_report_id", "query_set_sha256", "first_party_command", "query_count", "total_query_tokens", "total_context_bytes", "raw_fragment_baseline_bytes", "measurement_method", "budget", "measured_at"],
+  "required": ["schema_version", "gold_id", "compiler_report_id", "query_set_sha256", "first_party_command", "query_count", "total_query_tokens", "total_context_bytes", "raw_fragment_baseline_bytes", "measurement_method", "budget", "measured_at"],
   "properties": {
     "schema_version": {"const": "deeplaw.semantic-query-cost/v1"},
     "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
-    "host_report_id": {"type": "string", "pattern": "^semantichostrun_[0-9a-f]{24}$"},
+    "compiler_report_id": {"type": "string", "pattern": "^(semantichostrun|semanticdeterministic)_[0-9a-f]{24}$"},
     "query_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "first_party_command": {"const": "deeplaw knowledge query"},
     "query_count": {"type": "integer", "minimum": 1, "maximum": 10000},

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/deterministic-semantic-source-run.v1.schema.json",
+  "title": "DeepLaw Deterministic Semantic Source Run v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_key", "source_revision_id", "compilation_run_id", "packet_count",
+    "packet_ids", "observation_count", "semantic_status", "transaction_status",
+    "quality_receipt_sha256", "source_summary_revision_id", "validation_sha256",
+    "receipt_sha256", "projection_manifest_sha256", "verification_valid"
+  ],
+  "properties": {
+    "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "packet_ids": {
+      "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"}
+    },
+    "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "semantic_status": {"const": "complete"},
+    "transaction_status": {"const": "succeeded"},
+    "quality_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_summary_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "projection_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "verification_valid": {"const": true}
+  }
+}

@@ -100,6 +100,109 @@ def _validate_capsule_contract(capsule: dict[str, Any]) -> None:
         raise ValueError("knowledge capsule does not match its closed JSON contract")
 
 
+@cache
+def _autonomous_capsule_contract_validator() -> Draft202012Validator:
+    packaged = (
+        Path(__file__).resolve().parent
+        / "contracts"
+        / "knowledge-capsule.v2.schema.json"
+    )
+    repository = (
+        Path(__file__).resolve().parents[2]
+        / "contracts"
+        / "knowledge-capsule.v2.schema.json"
+    )
+    contract = packaged if packaged.is_file() else repository
+    if not contract.is_file():
+        raise RuntimeError("DeepLaw autonomous Knowledge Capsule contract is missing")
+    schema = strict_json_loads(contract.read_bytes())
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+def _verify_autonomous_capsule(
+    capsule: dict[str, Any],
+    *,
+    vault: KnowledgeVault | None,
+) -> dict[str, Any]:
+    if next(_autonomous_capsule_contract_validator().iter_errors(capsule), None) is not None:
+        raise ValueError("knowledge capsule does not match its closed JSON contract")
+    expected_digest = sha256_bytes(
+        canonical_json(_digest_body(capsule)).encode("utf-8")
+    )
+    expected_id = stable_id("capsule", capsule["vault_id"], expected_digest)
+    digest_valid = capsule["capsule_digest"] == expected_digest
+    id_valid = capsule["capsule_id"] == expected_id
+    query_plan_valid = capsule["query_plan_sha256"] == sha256_bytes(
+        canonical_json(capsule["query_plan"]).encode("utf-8")
+    )
+    provider_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
+    provider_hard_limit_valid = provider_payload_bytes <= 65_536
+    vault_matches: bool | None = None
+    audit_anchor_valid: bool | None = None
+    receipt_checks: list[dict[str, Any]] = []
+    if vault is not None:
+        from .knowledge_autonomy import AutonomousKnowledgeStore
+
+        with AutonomousKnowledgeStore(vault.root, read_only=True) as store:
+            vault_matches = store.vault_id == capsule["vault_id"]
+            audit_anchor_valid = store.connection.execute(
+                "SELECT 1 FROM autonomous_events_v3 WHERE event_hash = ?",
+                (capsule["audit_head"],),
+            ).fetchone() is not None
+            for receipt in capsule["sections"]["receipts"]:
+                knowledge_id = receipt.get("knowledge_id")
+                revision_id = receipt.get("revision_id")
+                markdown_sha256 = receipt.get("markdown_sha256")
+                row = store.connection.execute(
+                    """
+                    SELECT knowledge_id, revision_id, markdown_sha256
+                    FROM knowledge_revisions_v3
+                    WHERE revision_id = ?
+                    """,
+                    (revision_id,),
+                ).fetchone()
+                valid = bool(
+                    row is not None
+                    and row["knowledge_id"] == knowledge_id
+                    and row["markdown_sha256"] == markdown_sha256
+                )
+                receipt_checks.append(
+                    {
+                        "knowledge_id": knowledge_id,
+                        "revision_id": revision_id,
+                        "valid": valid,
+                    }
+                )
+    valid = bool(
+        digest_valid
+        and id_valid
+        and query_plan_valid
+        and provider_hard_limit_valid
+        and (vault_matches is not False)
+        and (audit_anchor_valid is not False)
+        and all(item["valid"] for item in receipt_checks)
+    )
+    result = {
+        "schema_version": "deeplaw.knowledge-capsule-verification/v2",
+        "capsule_id": capsule["capsule_id"],
+        "expected_capsule_id": expected_id,
+        "digest_valid": digest_valid,
+        "id_valid": id_valid,
+        "query_plan_valid": query_plan_valid,
+        "provider_payload_bytes": provider_payload_bytes,
+        "provider_hard_limit_valid": provider_hard_limit_valid,
+        "vault_matches": vault_matches,
+        "audit_anchor_valid": audit_anchor_valid,
+        "receipt_checks": receipt_checks,
+        "valid": valid,
+    }
+    from .knowledge_autonomy import _validate_contract
+
+    _validate_contract("knowledge-capsule-verification.v2.schema.json", result)
+    return result
+
+
 def _capsule_item(
     asset: KnowledgeAsset,
     *,
@@ -717,6 +820,8 @@ def verify_capsule(
 ) -> dict[str, Any]:
     if not isinstance(capsule, dict):
         raise ValueError("knowledge capsule must be an object")
+    if capsule.get("schema_version") == "deeplaw.knowledge-capsule/v2":
+        return _verify_autonomous_capsule(capsule, vault=vault)
     _validate_capsule_contract(capsule)
     expected_fields = {
         "schema_version",

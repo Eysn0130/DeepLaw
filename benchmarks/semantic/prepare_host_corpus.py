@@ -151,7 +151,7 @@ def prepare(
                 "--trust",
                 "user_provided",
                 "--sensitivity",
-                "public",
+                fixture["sensitivity"],
                 "--confirm-no-case-data",
             )
             source = ingest["source"]
@@ -169,6 +169,7 @@ def prepare(
                 "phase": "baseline",
                 "initial_lifecycle_status": "active",
                 "review_manifest_sha256": manifest["review_manifest_sha256"],
+                "sensitivity": fixture["sensitivity"],
             }
             sources.append(binding)
             if fixture["source_key"] == "update-v1":
@@ -200,7 +201,7 @@ def prepare(
             "--trust",
             "user_provided",
             "--sensitivity",
-            "public",
+            successor_fixture["sensitivity"],
             "--confirm-no-case-data",
         )
         successor = successor_ingest["source"]
@@ -224,6 +225,7 @@ def prepare(
                 "review_manifest_sha256": successor_manifest[
                     "review_manifest_sha256"
                 ],
+                "sensitivity": successor_fixture["sensitivity"],
             }
         )
         grant = _run_cli(
@@ -239,7 +241,7 @@ def prepare(
             "--scope",
             "personal",
             "--max-sensitivity",
-            "public",
+            "restricted",
             "--max-mutations-per-minute",
             "120",
             "--max-objects",

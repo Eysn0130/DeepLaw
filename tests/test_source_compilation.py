@@ -2303,6 +2303,7 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
         "locator",
         "quote_sha256",
     }
+    assert reference["fragment_revision_id"].startswith("irfragment_")
     assert reference["source_revision_id"] == compiled["identity"]["source_revision_id"]
     source_id = compiled["source"]["source_id"]
     with KnowledgeVault(root, read_only=True) as vault:
@@ -2338,6 +2339,14 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
         fragment_id,
     )
     assert api_fragment == cli_fragment
+    revision_fragment = KnowledgeOS.open(root).sources.fragment(
+        reference["fragment_revision_id"]
+    )
+    assert revision_fragment == api_fragment
+    assert (
+        api_fragment["fragment"]["fragment_revision_id"]
+        == reference["fragment_revision_id"]
+    )
     assert api_fragment["fragment"]["source_revision_id"] == reference["source_revision_id"]
 
     unanswerable = PurposeAwareRetrievalService(root).query(

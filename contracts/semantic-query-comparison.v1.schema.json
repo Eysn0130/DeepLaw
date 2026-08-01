@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-query-comparison.v1.schema.json",
+  "title": "DeepLaw same-condition Semantic query comparison v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "comparison_id", "schema_version", "status", "baseline_report_id",
+    "baseline_report_sha256", "candidate_report_id", "candidate_report_sha256",
+    "same_condition", "metric_comparisons", "safety_comparisons",
+    "quality_non_regression", "safety_passed", "bytes_saved_ratio_observed",
+    "competitive_claim_eligible"
+  ],
+  "properties": {
+    "comparison_id": {"type": "string", "pattern": "^semanticcomparison_[0-9a-f]{24}$"},
+    "schema_version": {"const": "deeplaw.semantic-query-comparison/v1"},
+    "status": {"enum": ["passed", "failed"]},
+    "baseline_report_id": {"type": "string", "pattern": "^semanticqueryrun_[0-9a-f]{24}$"},
+    "baseline_report_sha256": {"$ref": "#/$defs/sha256"},
+    "candidate_report_id": {"type": "string", "pattern": "^semanticqueryrun_[0-9a-f]{24}$"},
+    "candidate_report_sha256": {"$ref": "#/$defs/sha256"},
+    "same_condition": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "gold_sha256", "fixture_manifest_sha256", "source_revision_set_sha256",
+        "query_set_sha256", "budget", "retrieval_configuration",
+        "execution_environment", "all_equal"
+      ],
+      "properties": {
+        "gold_sha256": {"type": "boolean"},
+        "fixture_manifest_sha256": {"type": "boolean"},
+        "source_revision_set_sha256": {"type": "boolean"},
+        "query_set_sha256": {"type": "boolean"},
+        "budget": {"type": "boolean"},
+        "retrieval_configuration": {"type": "boolean"},
+        "execution_environment": {"type": "boolean"},
+        "all_equal": {"type": "boolean"}
+      }
+    },
+    "metric_comparisons": {
+      "type": "array", "minItems": 15, "maxItems": 30,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["metric", "direction", "baseline", "candidate", "delta", "non_regression"],
+        "properties": {
+          "metric": {"type": "string", "minLength": 1, "maxLength": 100},
+          "direction": {"enum": ["higher", "lower"]},
+          "baseline": {"type": "number"},
+          "candidate": {"type": "number"},
+          "delta": {"type": "number"},
+          "non_regression": {"type": "boolean"}
+        }
+      }
+    },
+    "safety_comparisons": {"type": "object", "minProperties": 11},
+    "quality_non_regression": {"type": "boolean"},
+    "safety_passed": {"type": "boolean"},
+    "bytes_saved_ratio_observed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["baseline", "candidate", "interpretation"],
+      "properties": {
+        "baseline": {"type": "number"},
+        "candidate": {"type": "number"},
+        "interpretation": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "competitive_claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

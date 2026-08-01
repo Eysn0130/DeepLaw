@@ -39,7 +39,7 @@
       "additionalProperties": false,
       "required": [
         "source_key", "canonical_source_key", "source_id", "source_revision_id",
-        "phase", "initial_lifecycle_status", "review_manifest_sha256"
+        "phase", "initial_lifecycle_status", "review_manifest_sha256", "sensitivity"
       ],
       "properties": {
         "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
@@ -49,6 +49,7 @@
         "phase": {"enum": ["baseline", "successor"]},
         "initial_lifecycle_status": {"enum": ["active", "pending"]},
         "review_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        ,"sensitivity": {"enum": ["public", "restricted"]}
       }
     },
     "successor": {

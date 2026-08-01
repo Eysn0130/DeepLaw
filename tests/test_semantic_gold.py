@@ -1,18 +1,36 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
+import benchmarks.semantic.run_query_suite as semantic_query_suite
 from benchmarks.hosts.run_semantic_host_harness import (
     _provider_token_usage,
     not_executed_report,
 )
+from benchmarks.semantic.deterministic_gold_agent import compile_source as compile_gold_source
 from benchmarks.semantic.export_review_bundle import export_review_bundle
-from benchmarks.semantic.review_gold import confirm_candidate, validate_candidate
-from benchmarks.semantic.run_query_suite import _case_result
-from benchmarks.semantic.score_semantic_run import _query_cost, score
+from benchmarks.semantic.prepare_host_corpus import _run_cli
+from benchmarks.semantic.review_gold import (
+    confirm_candidate,
+    validate_candidate,
+    validate_freeze,
+)
+from benchmarks.semantic.run_query_suite import (
+    _case_result,
+    _evaluate_read_challenge,
+    _rank_metrics,
+)
+from benchmarks.semantic.score_semantic_run import (
+    _content_assertion_valid,
+    _cross_packet_identity_consistency,
+    _query_cost,
+    _same_applicability_conflict,
+    score,
+)
 from deeplaw.knowledge_autonomy import (
     SINK_OPERATIONS,
     AutonomousKnowledgeStore,
@@ -33,10 +51,284 @@ def test_semantic_gold_candidate_is_complete_but_not_self_confirmed() -> None:
     digest = validate_candidate(value, repository=REPOSITORY)
     assert value["status"] == "maintainer_review_pending"
     assert value["review"] is None
-    assert len(value["sources"]) == 10
+    assert len(value["sources"]) == 12
     assert len(value["cases"]) == 15
     assert len({case["task_type"] for case in value["cases"]}) == 15
     assert len(digest) == 64
+
+
+def test_semantic_gold_freeze_binds_candidate_schema_queries_and_policy() -> None:
+    freeze = json.loads(
+        (REPOSITORY / "benchmarks/semantic/semantic-gold-freeze-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    validate_freeze(freeze, candidate=_candidate(), repository=REPOSITORY)
+    freeze["query_set_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="does not bind"):
+        validate_freeze(freeze, candidate=_candidate(), repository=REPOSITORY)
+
+
+def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    prefix = [sys.executable, "-m", "deeplaw"]
+    _run_cli(prefix, "init", "--vault", str(vault), "--name", "cross packet", "--scope", "personal")
+    source = _run_cli(
+        prefix,
+        "source",
+        "add",
+        "--vault",
+        str(vault),
+        "--source",
+        str(REPOSITORY / "benchmarks/semantic/fixtures/01-cross-packet-entity.md"),
+        "--source-kind",
+        "document",
+        "--title",
+        "cross-packet-entity",
+        "--trust",
+        "user_provided",
+        "--sensitivity",
+        "public",
+        "--confirm-no-case-data",
+    )["source"]
+    manifest = _run_cli(
+        prefix,
+        "review",
+        "manifest",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source["source_id"],
+    )
+    _run_cli(
+        prefix,
+        "review",
+        "approve-source",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source["source_id"],
+        "--review-manifest-sha256",
+        manifest["review_manifest_sha256"],
+        "--reviewer-id",
+        "semantic-test-maintainer",
+        "--reason",
+        "Approve the frozen public cross-packet fixture.",
+        "--confirm-reviewed",
+    )
+    grant = _run_cli(
+        prefix,
+        "sink",
+        "enable",
+        "--vault",
+        str(vault),
+        "--writer-id",
+        "semantic-cross-packet-test",
+        "--profile",
+        "semantic-compiler",
+        "--scope",
+        "personal",
+        "--max-sensitivity",
+        "public",
+    )
+    result = compile_gold_source(
+        vault=vault,
+        grant_id=grant["grant_id"],
+        source_key="cross-packet-entity",
+        source_revision_id=source["source_revision_id"],
+        prior_runs={},
+        packet_max_fragments=32,
+    )
+    expected = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-01"
+    )["expected_objects"][0]
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        row = store.connection.execute(
+            """
+            SELECT objects.knowledge_id, revisions.semantic_key
+            FROM knowledge_objects_v3 AS objects
+            JOIN knowledge_revisions_v3 AS revisions
+              ON revisions.revision_id = objects.current_revision_id
+            WHERE objects.kind = 'entity' AND revisions.semantic_key = ?
+            """,
+            ("entity:meridian-research-cooperative",),
+        ).fetchone()
+        assert row is not None
+        state = _cross_packet_identity_consistency(
+            store,
+            compilation_run_id=result["compilation_run_id"],
+            expected=expected,
+            final_knowledge_ids={row["knowledge_id"]},
+            final_semantic_keys={row["semantic_key"]},
+        )
+        tampered = _cross_packet_identity_consistency(
+            store,
+            compilation_run_id=result["compilation_run_id"],
+            expected=expected,
+            final_knowledge_ids={row["knowledge_id"], "knowledge_" + "f" * 24},
+            final_semantic_keys={row["semantic_key"]},
+        )
+    assert result["packet_count"] >= 2
+    assert len(set(result["packet_ids"])) >= 2
+    assert state["valid"] is True
+    assert len(state["final_knowledge_ids"]) == 1
+    assert tampered["valid"] is False
+
+
+def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-04"
+    )
+    value = {
+        "compiled": [
+            {
+                "knowledge_id": "knowledge_" + "a" * 24,
+                "kind": "concept",
+                "title": "Evidence admission",
+                "semantic_key": "concept:evidence-admission",
+                "aliases": ["admission policy"],
+            },
+            {
+                "knowledge_id": "knowledge_" + "b" * 24,
+                "kind": "concept",
+                "title": "A valid extra concept",
+                "semantic_key": "concept:valid-extra",
+                "aliases": [],
+            },
+        ]
+    }
+    metrics = _rank_metrics(case=case, value=value)
+    assert metrics["recall_at_k"] == 1.0
+    assert metrics["target_scoped_precision_at_k"] == 1.0
+
+
+def test_temporal_and_retention_gold_are_unambiguous() -> None:
+    gold = _candidate()
+    timeline = next(case for case in gold["cases"] if case["case_id"] == "semantic-case-08")
+    assert len(timeline["expected_objects"]) == 3
+    assert {item["kind"] for item in timeline["expected_objects"]} == {"event"}
+    assert timeline["expected_sequence"] == ["2025-01-10", "2025-03-15", "2025-05-20"]
+    multi_format = next(
+        case for case in gold["cases"] if case["case_id"] == "semantic-case-15"
+    )
+    assert any(
+        item["canonical_label"] == "Atlas publication scheduled on 2025-07-01"
+        for item in multi_format["expected_objects"]
+    )
+    for filename in ("04-retention-policy-a.md", "05-retention-policy-b.md"):
+        text = (
+            REPOSITORY / "benchmarks" / "semantic" / "fixtures" / filename
+        ).read_text(encoding="utf-8")
+        for term in ("Atlas production service", "public", "worldwide", "2026"):
+            assert term in text
+
+
+def test_contradiction_requires_the_same_object_scope_and_time() -> None:
+    left = {
+        "body": "Atlas production public API diagnostic logs worldwide during 2026: 30 days.",
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2027-01-01T00:00:00Z",
+    }
+    right = {
+        "body": "Atlas production public API diagnostic logs worldwide during 2026: 60 days.",
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2027-01-01T00:00:00Z",
+    }
+    relation = {
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2027-01-01T00:00:00Z",
+    }
+    assert _same_applicability_conflict(left, right, relation)
+    right["body"] = "Another service has a 60-day retention period during 2026."
+    assert not _same_applicability_conflict(left, right, relation)
+
+
+def test_claim_level_gold_rejects_missing_required_content() -> None:
+    class _Connection:
+        @staticmethod
+        def execute(*_args: object, **_kwargs: object) -> object:
+            class _Cursor:
+                @staticmethod
+                def fetchone() -> None:
+                    return None
+
+            return _Cursor()
+
+    store = type("Store", (), {"connection": _Connection()})()
+    assertion = {
+        "required_terms": ["identity", "lifecycle", "scope", "sensitivity", "provenance"],
+        "source_keys": ["concept-procedure-events"],
+    }
+    revision = {
+        "revision_id": "knowledgerev_" + "a" * 24,
+        "kind": "synthesis",
+        "body": "Identity, lifecycle, scope, sensitivity, and provenance checks are required.",
+        "source_refs": [{"source_revision_id": "sourcerev_" + "b" * 24}],
+    }
+    source_ids = {"concept-procedure-events": "sourcerev_" + "b" * 24}
+    assert _content_assertion_valid(revision, assertion, store=store, source_ids=source_ids)
+    revision["body"] = "Identity and lifecycle checks are required."
+    assert not _content_assertion_valid(
+        revision,
+        assertion,
+        store=store,
+        source_ids=source_ids,
+    )
+
+
+def test_security_challenge_tampering_is_counted_as_failure() -> None:
+    authority_source = "sourcerev_" + "a" * 24
+    restricted_source = "sourcerev_" + "b" * 24
+    source_ids = {
+        "authority-adversarial": authority_source,
+        "restricted-canary": restricted_source,
+    }
+    safe = {
+        "compiled": [],
+        "evidence": [
+            {
+                "trust": "user_provided",
+                "legal_authority": False,
+                "source_refs": [{"source_revision_id": authority_source}],
+            }
+        ],
+        "gaps": [{"code": "evidence_gap"}],
+        "query_plan": {"fallback": {"used": False}},
+        "authority_changed_by_ranking": False,
+        "write_performed": False,
+    }
+    passed, *_ = _evaluate_read_challenge(
+        challenge_type="unsupported_authoritative_claim",
+        value=safe,
+        source_ids=source_ids,
+    )
+    assert passed is True
+    safe["evidence"][0]["trust"] = "official"
+    passed, *_ = _evaluate_read_challenge(
+        challenge_type="unsupported_authoritative_claim",
+        value=safe,
+        source_ids=source_ids,
+    )
+    assert passed is False
+    restricted = {
+        **safe,
+        "evidence": [
+            {
+                "trust": "user_provided",
+                "legal_authority": False,
+                "excerpt": "ORCHID-VAULT-7319",
+                "source_refs": [{"source_revision_id": restricted_source}],
+            }
+        ],
+    }
+    passed, *_ = _evaluate_read_challenge(
+        challenge_type="restricted_disclosure",
+        value=restricted,
+        source_ids=source_ids,
+    )
+    assert passed is False
 
 
 def test_semantic_gold_confirmation_is_explicit_and_digest_bound() -> None:
@@ -137,6 +429,7 @@ def _phased_corpus(gold: dict) -> dict:
                     "pending" if source["source_key"] == "update-v2" else "active"
                 ),
                 "review_manifest_sha256": f"{index:064x}",
+                "sensitivity": source["sensitivity"],
             }
         )
     return {
@@ -164,13 +457,21 @@ def test_phased_semantic_host_unavailable_binds_lifecycle() -> None:
     corpus = _phased_corpus(gold)
     report = not_executed_report(
         host="opencode",
-        host_version="unavailable",
-        model_identity="unavailable",
+        host_version="1.18.8",
+        model_identity="not_executed",
         network_policy="offline",
         grant_id=corpus["grant_id"],
         gold=gold,
         corpus=corpus,
         reason="The external host is not installed in core CI.",
+        host_discovery_status="not_found",
+        version_command="opencode --version",
+        authentication_status="not_checked",
+        authentication_reason_code="host_not_found",
+        authentication_reason="Authentication was not checked because the host was not found.",
+        model_access_status="not_checked",
+        model_access_reason_code="host_not_found",
+        model_access_reason="Model access was not checked because the host was not found.",
     )
     assert report["schema_version"] == "deeplaw.real-semantic-host-report/v2"
     assert len(report["binding"]["commit"]) == 40
@@ -184,6 +485,40 @@ def test_phased_semantic_host_unavailable_binds_lifecycle() -> None:
         "not_executed",
     ]
     assert report["formal_release_evidence_ready"] is False
+    assert report["execution_prerequisites"]["external_model_execution"] == "not_executed"
+
+
+def test_claude_real_model_report_records_discovery_but_no_authentication() -> None:
+    gold = _candidate()
+    corpus = _phased_corpus(gold)
+    report = not_executed_report(
+        host="claude_code",
+        host_version="2.1.220",
+        model_identity="not_executed",
+        network_policy="offline",
+        grant_id=corpus["grant_id"],
+        gold=gold,
+        corpus=corpus,
+        reason="Owner confirmation is pending; no external model task was executed.",
+        host_discovery_status="discovered",
+        version_command="claude --version",
+        observed_version="2.1.220 (Claude Code)",
+        authentication_status="unavailable",
+        authentication_reason_code="owner_confirmation_pending",
+        authentication_reason="No external model credential was supplied.",
+        model_access_status="unavailable",
+        model_access_reason_code="owner_confirmation_pending",
+        model_access_reason="Paid model execution is prohibited before owner confirmation.",
+    )
+    assert report["status"] == "not_executed"
+    assert report["host_version"] == "2.1.220"
+    assert report["execution_prerequisites"]["host_discovery"] == {
+        "status": "discovered",
+        "version_command": "claude --version",
+        "observed_version": "2.1.220 (Claude Code)",
+    }
+    assert report["execution_prerequisites"]["authentication"]["status"] == "unavailable"
+    assert report["execution_prerequisites"]["external_model_execution"] == "not_executed"
 
 
 def test_real_host_usage_accepts_only_provider_reported_turn_events() -> None:
@@ -239,7 +574,7 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
     value = {
         "schema_version": "deeplaw.semantic-query-cost/v1",
         "gold_id": "semanticgold_0123456789abcdef01234567",
-        "host_report_id": "semantichostrun_0123456789abcdef01234567",
+        "compiler_report_id": "semantichostrun_0123456789abcdef01234567",
         "query_set_sha256": "0" * 64,
         "first_party_command": "deeplaw knowledge query",
         "query_count": 15,
@@ -261,7 +596,7 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
         _query_cost(
             value,
             gold_id=value["gold_id"],
-            host_report_id=value["host_report_id"],
+            compiler_report_id=value["compiler_report_id"],
         )
         == value
     )
@@ -269,7 +604,7 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
         _query_cost(
             value,
             gold_id=value["gold_id"],
-            host_report_id="semantichostrun_aaaaaaaaaaaaaaaaaaaaaaaa",
+            compiler_report_id="semantichostrun_aaaaaaaaaaaaaaaaaaaaaaaa",
         )
 
 
@@ -293,10 +628,35 @@ def _query_output(
     }
 
 
-def test_query_suite_requires_only_an_explicit_gap_for_unanswerable() -> None:
+def _stub_cli_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_citation_checks",
+        lambda *args, **kwargs: ([], 0, 0, True),
+    )
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_context_verification",
+        lambda *args, **kwargs: {
+            "capsule_id": "capsule_0123456789abcdef01234567",
+            "capsule_sha256": "a" * 64,
+            "provider_payload_bytes": 1024,
+            "provider_hard_limit_valid": True,
+            "verification_valid": True,
+        },
+    )
+
+
+def test_query_suite_requires_only_an_explicit_gap_for_unanswerable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_cli_audit(monkeypatch)
     case = next(case for case in _candidate()["cases"] if case["task_type"] == "unanswerable")
     output = _query_output(gaps=[{"code": "retrieval_gap"}])
     result = _case_result(
+        prefix=["deeplaw"],
+        vault=tmp_path,
         case=case,
         cold=output,
         warm=output,
@@ -312,7 +672,11 @@ def test_query_suite_requires_only_an_explicit_gap_for_unanswerable() -> None:
     assert result["explicit_gap"] is True
 
 
-def test_query_suite_rejects_withdrawn_source_selection() -> None:
+def test_query_suite_rejects_withdrawn_source_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_cli_audit(monkeypatch)
     case = next(case for case in _candidate()["cases"] if case["task_type"] == "source_withdrawal")
     withdrawn = "sourcerev_" + "a" * 24
     output = _query_output(
@@ -324,6 +688,8 @@ def test_query_suite_rejects_withdrawn_source_selection() -> None:
         ]
     )
     result = _case_result(
+        prefix=["deeplaw"],
+        vault=tmp_path,
         case=case,
         cold=output,
         warm=output,

@@ -7,7 +7,8 @@
   "required": [
     "schema_version", "binding", "report_id", "status", "executed", "host", "host_version",
     "model_identity", "network_policy", "gold_id", "gold_status", "corpus_id",
-    "fixture_manifest_sha256", "command_sha256", "phases", "runs", "transitions",
+    "fixture_manifest_sha256", "execution_prerequisites", "baseline_query_state",
+    "command_sha256", "phases", "runs", "transitions",
     "vault_verification_valid", "elapsed_ms", "failure_class", "failure_summary",
     "recorded_at", "formal_release_evidence_ready", "competitive_claim_eligible"
   ],
@@ -25,6 +26,8 @@
     "gold_status": {"enum": ["maintainer_review_pending", "maintainer_confirmed", "rejected"]},
     "corpus_id": {"type": "string", "pattern": "^semanticcorpus_[0-9a-f]{24}$"},
     "fixture_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_prerequisites": {"$ref": "#/$defs/execution_prerequisites"},
+    "baseline_query_state": {"$ref": "#/$defs/baseline_query_state"},
     "command_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "phases": {
       "type": "array", "minItems": 2, "maxItems": 2,
@@ -53,6 +56,51 @@
     "competitive_claim_eligible": {"const": false}
   },
   "$defs": {
+    "execution_prerequisites": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "host_discovery", "authentication", "model_access", "external_model_execution"
+      ],
+      "properties": {
+        "host_discovery": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "version_command", "observed_version"],
+          "properties": {
+            "status": {"enum": ["discovered", "not_found"]},
+            "version_command": {"type": "string", "minLength": 1, "maxLength": 500},
+            "observed_version": {"type": ["string", "null"], "maxLength": 500}
+          }
+        },
+        "authentication": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "reason_code", "reason"],
+          "properties": {
+            "status": {"enum": ["available", "unavailable", "not_checked"]},
+            "reason_code": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,99}$"},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+          }
+        },
+        "model_access": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "reason_code", "reason"],
+          "properties": {
+            "status": {"enum": ["available", "unavailable", "not_checked"]},
+            "reason_code": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,99}$"},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+          }
+        },
+        "external_model_execution": {"enum": ["executed", "not_executed"]}
+      }
+    },
+    "baseline_query_state": {
+      "type": "object", "additionalProperties": false,
+      "required": ["snapshot_sha256", "audit_head", "verified"],
+      "properties": {
+        "snapshot_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "audit_head": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "verified": {"type": ["boolean", "null"]}
+      }
+    },
     "binding": {
       "type": "object", "additionalProperties": false,
       "required": [
@@ -158,6 +206,21 @@
       "then": {
         "properties": {
           "executed": {"const": true}, "vault_verification_valid": {"const": true},
+          "execution_prerequisites": {
+            "properties": {
+              "host_discovery": {"properties": {"status": {"const": "discovered"}}},
+              "authentication": {"properties": {"status": {"const": "available"}}},
+              "model_access": {"properties": {"status": {"const": "available"}}},
+              "external_model_execution": {"const": "executed"}
+            }
+          },
+          "baseline_query_state": {
+            "properties": {
+              "snapshot_sha256": {"type": "string"},
+              "audit_head": {"type": "string"},
+              "verified": {"const": true}
+            }
+          },
           "failure_class": {"const": null}, "failure_summary": {"const": null}
         }
       }

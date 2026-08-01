@@ -1,0 +1,16 @@
+{
+  "schema_version": "deeplaw.semantic-gold-freeze/v1",
+  "gold_id": "semanticgold_89f0b850e3d8469914eadbe2",
+  "gold_status": "maintainer_review_pending",
+  "candidate_sha256": "9217dcd2ecfa31583a0755ba5117cda1132c5db664f528bb2e5bf2dbdeff5dab",
+  "fixture_manifest_sha256": "845a54e9bfc2e76da8e72a2d1ab506e2ac08ec2c94fe268c9913065d4fe51d6d",
+  "semantic_gold_schema_sha256": "008b5d1cea5df6be630b73b9602c420c52c7126ba34620e49ec73ca69c948550",
+  "query_set_sha256": "0c10f7e63da262ce7ed99572a8f251d747ce9494072427c45a293478d4d4ce5d",
+  "scoring_policy_sha256": "6ec7ea74fd23a45b810c68c5ea04156356494a205b7aae57800c2b6f02488851",
+  "security_challenges_sha256": "9ac88f9814ddfb9349725fba7fd6abd3dd64b75fcb2db4de0477256ccdbb7e72",
+  "source_count": 12,
+  "case_count": 15,
+  "security_challenge_count": 5,
+  "maintainer_confirmation_required": true,
+  "reviewer_id": null
+}

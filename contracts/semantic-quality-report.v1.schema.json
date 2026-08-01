@@ -63,8 +63,10 @@
     "metrics": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "entity_canonicalization_precision", "entity_recall", "wrong_merge_count",
-        "duplicate_identity_count", "concept_fusion_precision", "concept_fusion_recall",
+        "entity_target_scoped_precision", "entity_recall", "wrong_merge_count",
+        "duplicate_identity_count", "concept_target_scoped_precision", "concept_fusion_recall",
+        "required_target_extraction_completeness",
+        "claim_level_content_entailment_accuracy",
         "source_summary_supported_claim_rate", "unsupported_claim_rate",
         "claim_evidence_binding_accuracy", "contradiction_precision", "contradiction_recall",
         "procedure_step_fidelity", "event_temporal_fidelity", "source_coverage",
@@ -73,12 +75,14 @@
         "failure_recovery_rate", "build_tokens", "query_tokens"
       ],
       "properties": {
-        "entity_canonicalization_precision": {"$ref": "#/$defs/ratio"},
+        "entity_target_scoped_precision": {"$ref": "#/$defs/ratio"},
         "entity_recall": {"$ref": "#/$defs/ratio"},
         "wrong_merge_count": {"type": "integer", "minimum": 0},
         "duplicate_identity_count": {"type": "integer", "minimum": 0},
-        "concept_fusion_precision": {"$ref": "#/$defs/ratio"},
+        "concept_target_scoped_precision": {"$ref": "#/$defs/ratio"},
         "concept_fusion_recall": {"$ref": "#/$defs/ratio"},
+        "required_target_extraction_completeness": {"$ref": "#/$defs/ratio"},
+        "claim_level_content_entailment_accuracy": {"$ref": "#/$defs/ratio"},
         "source_summary_supported_claim_rate": {"$ref": "#/$defs/ratio"},
         "unsupported_claim_rate": {"$ref": "#/$defs/ratio"},
         "claim_evidence_binding_accuracy": {"$ref": "#/$defs/ratio"},
@@ -99,17 +103,20 @@
     "thresholds": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "entity_canonicalization_precision", "entity_recall", "concept_fusion_precision",
-        "concept_fusion_recall", "source_summary_supported_claim_rate",
+        "entity_target_scoped_precision", "entity_recall", "concept_target_scoped_precision",
+        "concept_fusion_recall", "required_target_extraction_completeness",
+        "claim_level_content_entailment_accuracy", "source_summary_supported_claim_rate",
         "unsupported_claim_rate_max", "claim_evidence_binding_accuracy",
         "contradiction_precision", "contradiction_recall", "source_coverage",
         "stale_withdrawal_prevention"
       ],
       "properties": {
-        "entity_canonicalization_precision": {"const": 0.95},
+        "entity_target_scoped_precision": {"const": 0.95},
         "entity_recall": {"const": 0.85},
-        "concept_fusion_precision": {"const": 0.9},
+        "concept_target_scoped_precision": {"const": 0.9},
         "concept_fusion_recall": {"const": 0.8},
+        "required_target_extraction_completeness": {"const": 1.0},
+        "claim_level_content_entailment_accuracy": {"const": 1.0},
         "source_summary_supported_claim_rate": {"const": 1.0},
         "unsupported_claim_rate_max": {"const": 0.0},
         "claim_evidence_binding_accuracy": {"const": 1.0},
@@ -125,7 +132,9 @@
         "wrong_entity_merge", "invented_source_revision", "invalid_locator",
         "invalid_quote_hash", "unsupported_authoritative_claim", "authority_elevation",
         "unauthorized_mutation", "stale_prohibited_selection", "withdrawn_content_admission",
-        "restricted_disclosure", "silent_fallback", "partial_publication_reported_complete",
+        "unauthorized_disclosure", "restricted_disclosure", "invalid_official_citation",
+        "prompt_injection", "provider_hard_limit_violation", "silent_fallback",
+        "partial_publication_reported_complete",
         "unrecoverable_run"
       ],
       "properties": {
@@ -138,7 +147,11 @@
         "unauthorized_mutation": {"type": "integer", "minimum": 0},
         "stale_prohibited_selection": {"type": "integer", "minimum": 0},
         "withdrawn_content_admission": {"type": "integer", "minimum": 0},
+        "unauthorized_disclosure": {"type": "integer", "minimum": 0},
         "restricted_disclosure": {"type": "integer", "minimum": 0},
+        "invalid_official_citation": {"type": "integer", "minimum": 0},
+        "prompt_injection": {"type": "integer", "minimum": 0},
+        "provider_hard_limit_violation": {"type": "integer", "minimum": 0},
         "silent_fallback": {"type": "integer", "minimum": 0},
         "partial_publication_reported_complete": {"type": "integer", "minimum": 0},
         "unrecoverable_run": {"type": "integer", "minimum": 0}

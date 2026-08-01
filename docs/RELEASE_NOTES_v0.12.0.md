@@ -21,6 +21,9 @@ provenance, and post-release rows remain release gates rather than completed his
 - Query Plan v5 makes purpose duties, compiled-first/evidence-first selection, provenance
   partitions, stale/uncompiled gaps, and raw fallback explicit while retaining provider-visible
   UTF-8 byte limits and read-only query behavior.
+- Exact Source IR fragment revision identities are accepted by the first-party Source fragment
+  read surface, so v2 evidence receipts remain directly verifiable without duplicating a legacy
+  fragment identity in provider-visible fallback cards.
 - CLI, MCP, and Python API use the same compilation/retrieval domain services. Source, Wiki,
   Editor, Synthesis, freshness, contradiction, gap, status, explain, and verify operations use
   closed contracts.
@@ -34,6 +37,14 @@ provenance, and post-release rows remain release gates rather than completed his
 - Release evaluation adds frozen Semantic Gold, phased successor/withdrawal real-host execution,
   first-party CLI query scoring, provider-reported build token capture, deterministic query-cost
   accounting, and explicit maintainer review binding.
+- The corrected Semantic Gold adds real multi-Packet identity fusion, target-scoped Entity/Concept
+  precision with separate extraction completeness and source coverage, claim-level Synthesis
+  assertions, unambiguous contradiction applicability, one-event-per-valid-time timeline labels,
+  and a scheduled-publication multi-format Event.
+- Credential-free pre-review now compiles the entire public corpus through the real governed
+  transaction using a deterministic no-model Agent, executes all 15 first-party CLI retrieval
+  cases and five adversarial challenges, and exports a source-free Human Review Packet. This does
+  not count as external-model evidence or human confirmation.
 
 ## Verified
 
@@ -73,6 +84,12 @@ precomputed prose, are the evidence that these gates actually ran.
 
 ## Not verified
 
+- The corrected Semantic Gold is not maintainer-confirmed until the independent audit and owner
+  decision bind the exact freeze digest. Before that decision, no paid real-model semantic task,
+  merge, tag, or Release is permitted.
+- Claude Code and OpenCode real-model semantic execution is `not_executed`. Their pre-review reports
+  bind exact CLI version, discovery, authentication, model-access, and non-execution reason; host
+  discovery/no-model lifecycle is not real-model verification.
 - Unknown Agent hosts, models, editor versions, and plugins have not been tested. The supported
   interoperability claim is limited to Agents that implement DeepLaw's versioned CLI/MCP/Python
   contracts and receive an explicit owner grant.
@@ -103,6 +120,9 @@ precomputed prose, are the evidence that these gates actually ran.
   substitutes.
 - A deterministic fake Agent proves transaction mechanics only. It is not real semantic quality
   evidence.
+- The fixture corpus is intentionally small. Query cost and bytes-saved measurements must be
+  reported as observed, including negative savings against tiny raw fixtures; they are not a claim
+  about production-corpus compression.
 
 `commercial_release_eligible=true` and `quality_protocol_eligible=true` are valid only in the exact
 formal manifest. `competitive_claim_eligible=false` is unconditional for v0.12.0.

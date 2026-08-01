@@ -10,6 +10,23 @@ The implementation baseline is `33228c99c4161c1730eb0f11e845d0d6011babf4` (`v0.1
 release commit, artifact hashes, nine-cell platform matrix, real-host report, and public-download
 verification are deliberately generated after the final clean commit to avoid self-reference.
 
+## Semantic Gold correction sub-gates
+
+These are mandatory before any paid external-model run and before merge, tag, or Release. The
+current candidate is deliberately not `maintainer_confirmed`.
+
+| Sub-gate | Current implementation evidence | Pass rule |
+|---|---|---|
+| Cross-packet identity | 36-section case-01 fixture; deterministic lifecycle; scorer and tamper tests | At least two distinct Packets and observations converge to exactly one stable Knowledge ID |
+| Entity/Concept scoring | Gold `scoring_policy`; Gold Schema; query runner/scorer tests | Target-scoped precision is named; valid extra objects are excluded; completeness and source coverage are separate |
+| Security challenges | two adversarial fixtures; five frozen challenges; first-party CLI runner; tamper tests | Every challenge executes at least once and all nine security counters are zero |
+| Claim-level Synthesis Gold | case-06, case-11, and case-12 content assertions | Required content and exact input source set pass deterministic precheck and human entailment review |
+| Contradiction applicability | retention A/B fixtures and scorer | Same Atlas service, diagnostic-log class, worldwide scope, and 2026 valid time before contradiction credit |
+| Timeline and multi-format | case-08 three Event labels; case-15 scheduled-publication Event | One formal valid-time interval per Event revision and every frozen date/object retrieved |
+| Host declaration discipline | real-host report v2; deterministic workflow | Claude Code/OpenCode exact version/discovery/auth/model-access reason; external execution is `not_executed` |
+| Independent audit | source-free Human Review Packet and audit-only subagent | All 15 cases, first-party CLI, security challenges, deterministic rebuild; PASS/REJECT/BLOCKED only |
+| Owner confirmation | Gold review tool and digest-bound review object | Owner explicitly confirms the exact freeze; Agent cannot generate reviewer identity |
+
 ## 64 end-to-end acceptance requirements
 
 | # | Status and invariant | Implementation / contract | Executable evidence |
@@ -19,14 +36,14 @@ verification are deliberately generated after the final clean commit to avoid se
 | 3 | Local verified — Observation Plan v2 is closed | `compilation/semantic.py`; `source-compilation-observation-plan.v2.schema.json` | `test_semantic_v2_observes_across_packets_and_publishes_atomically` |
 | 4 | Local verified — observations are staging-only | `compilation/store.py`, `finalization.py` | `test_compilation_batches_remain_invisible_until_one_atomic_commit` |
 | 5 | Local verified — bounded later-packet inventory | `compilation/semantic.py`; `run-semantic-inventory.v1.schema.json` | `test_semantic_v2_observes_across_packets_and_publishes_atomically` |
-| 6 | Local verified — one Entity across three packets | `compilation/finalization.py`, `knowledge_autonomy.py` | `test_semantic_v2_observes_across_packets_and_publishes_atomically` |
+| 6 | Local verified — one Entity across multiple packets | `compilation/finalization.py`, `knowledge_autonomy.py`; deterministic Semantic Gold Agent | semantic v2 atomic test; `test_semantic_case_01_uses_two_real_packets_and_one_stable_identity` and tamper test |
 | 7 | Local verified — ambiguous same-name entities do not merge | semantic identity resolver; Observation/Publication v2 contracts | `test_compiler_reuses_exact_identity_and_preserves_explicit_ambiguity` |
 | 8 | Local verified — aliases retain one canonical identity | same resolver and `knowledge-identity.v2` | `test_compiler_reuses_exact_identity_and_preserves_explicit_ambiguity` |
 | 9 | Local verified — concepts fuse across chapters | run-wide inventory/finalization | semantic v2 cross-packet test and frozen Semantic Gold case |
 | 10 | Local verified — every observation has one disposition | `semantic-publication-plan.v2.schema.json`, `finalization.py` | semantic v2 finalization test |
 | 11 | Local verified — silent observation loss fails closed | inventory digest and exact set comparison | semantic v2 finalization and concurrent replacement tests |
 | 12 | Local verified — Source Summary is a canonical Synthesis | `finalization.py`; semantic finalization/quality receipt contracts | semantic v2 test; real-host Formal gate |
-| 13 | Local verified — summary claims bind exact evidence | source-reference validator and quality receipt | semantic v2 test; frozen scorer citation checks |
+| 13 | Local verified — summary claims bind exact evidence and expected content | source-reference validator, quality receipt, claim-level Gold | semantic v2 test; frozen content/source-set scorer and tamper checks; owner review pending |
 | 14 | Local verified — unsupported summary is rejected | 15-duty completeness validator | `test_empty_semantic_compilation_cannot_report_success` |
 | 15 | Local verified — duty states are distinct | `semantic_duties.py`; `semantic-compilation-duty-report.v1.schema.json` | semantic v2 test and contract validation |
 | 16 | Local verified — transaction success can coexist with semantic partial | separate run and semantic status columns/contracts | semantic partial/status/query tests |
@@ -68,7 +85,7 @@ verification are deliberately generated after the final clean commit to avoid se
 | 52 | Formal gate — Linux/macOS/Windows exact commit | `.github/workflows/commercial-gates.yml` nine-cell matrix | exact-tag platform JSON/JUnit artifacts |
 | 53 | Formal gate — Python 3.11/3.12/3.13 | same matrix | exact-tag platform JSON/JUnit artifacts |
 | 54 | Local verified + Formal wheel gate — Semantic v2 from wheel | `benchmarks/verify_fresh_wheel.py` | fresh-wheel artifact result |
-| 55 | Formal external gate — real Codex/model on maintainer-confirmed Gold | `semantic-evidence.yml`, phased host harness, scorer | `real-semantic-host-report.json` + `semantic-quality-report.json`; no fake substitution |
+| 55 | Formal scope-dependent external gate — real Codex/model only after maintainer-confirmed Gold | `semantic-evidence.yml`, phased host harness, scorer | `real-semantic-host-report.json` + `semantic-quality-report.json`; no fake substitution. May be `Not verified` only if owner explicitly narrows release scope |
 | 56 | Local verified — fake Agent is labelled deterministic only | `deterministic_fake_agent.py`; fake report contract | fake-Agent E2E and Semantic Gold tests |
 | 57 | Local verified + Formal artifact gate — frozen legal set does not regress | repository/Legal quality runners, `run_authoritative_evidence_gate.py`, and v0.11 source matrix | legal quality tests; exact-tag `authoritative-evidence-quality.json` |
 | 58 | Local verified — Challenge Trace replays | `authoritative_challenges.py`; trace/replay contracts | deterministic replay and tamper test |
@@ -104,7 +121,7 @@ verification are deliberately generated after the final clean commit to avoid se
 | 19 | Production Obsidian plugin | adapter source, manifest, bridge schema, npm tests/build/bundle receipt |
 | 20 | Tolaria integration | adapter module/harness, bridge schema, merge/context tests |
 | 21 | Real Agent harness | phased harness and v2 report schema; `semantic-evidence.yml`; Formal gate only |
-| 22 | Semantic Gold | Gold schema/candidate/review tool; explicit maintainer state and digest |
+| 22 | Semantic Gold | Gold schema/candidate/freeze/review tool; target-scoped scoring; explicit maintainer state and digest; 15-case Human Review Packet |
 | 23 | Semantic Quality Report | scorer and report schema; thresholds, hard failures, token/query evidence |
 | 24 | Authoritative Challenge Trace | authoritative challenge module, trace/replay contracts/tests, executable `authoritative-evidence-quality.json` release receipt |
 | 25 | Evidence Capability Types | capability module/contracts and migration/rollback tests |

@@ -8,9 +8,10 @@ on:
         required: true
         type: choice
         options:
+          - deterministic_review
           - execute
           - finalize
-        default: execute
+        default: deterministic_review
       release_ref:
         description: Exact commit to evaluate.
         required: true
@@ -46,6 +47,134 @@ permissions:
   contents: read
 
 jobs:
+  deterministic-review:
+    name: Deterministic Semantic Gold review evidence
+    if: ${{ inputs.mode == 'deterministic_review' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the exact clean candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.release_ref }}
+
+      - name: Install uv and Node.js
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Install exact candidate and pinned official host CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse '${{ inputs.release_ref }}^{commit}')"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv sync --frozen --extra dev
+          uv build --wheel --out-dir "${RUNNER_TEMP}/dist"
+          uv venv --python 3.12 --no-project "${RUNNER_TEMP}/semantic-runtime"
+          wheels=("${RUNNER_TEMP}"/dist/deeplaw-*.whl)
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python "${RUNNER_TEMP}/semantic-runtime/bin/python" "${wheels[0]}"
+          npm install --global --prefix "${RUNNER_TEMP}/host-cli" \
+            @anthropic-ai/claude-code@2.1.220 \
+            opencode-ai@1.18.8
+          mkdir -p "${RUNNER_TEMP}/semantic-evidence"
+
+      - name: Prepare frozen pending Gold corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="${RUNNER_TEMP}/semantic-runtime/bin/deeplaw"
+          printf '{"schema_version":"deeplaw.real-host-compile-command/v1","argv":["%s"],"prompt_transport":"stdin_utf8","timeout_seconds":7200,"max_output_bytes":16777216}\n' \
+            "${runtime}" > "${RUNNER_TEMP}/deeplaw-command.json"
+          uv run --frozen python -m benchmarks.semantic.prepare_host_corpus \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --snapshot "${RUNNER_TEMP}/semantic-initial-snapshot" \
+            --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --allow-review-pending \
+            --output "${RUNNER_TEMP}/corpus.json"
+
+      - name: Run deterministic lifecycle, first-party queries, and host non-execution reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="${RUNNER_TEMP}/semantic-evidence"
+          corpus="${RUNNER_TEMP}/corpus.json"
+          grant_id=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["grant_id"])' "${corpus}")
+          uv run --frozen python -m benchmarks.semantic.run_deterministic_lifecycle \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --corpus "${corpus}" \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
+            --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --output "${evidence}/deterministic-semantic-lifecycle.json"
+          uv run --frozen python -m benchmarks.semantic.run_query_suite \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --compiler-report "${evidence}/deterministic-semantic-lifecycle.json" \
+            --corpus "${corpus}" \
+            --vault "${RUNNER_TEMP}/semantic-vault" \
+            --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
+            --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --output "${evidence}/semantic-query-report.json" \
+            --cost-output "${evidence}/semantic-query-cost.json"
+          uv run --frozen python -m benchmarks.semantic.export_human_review_packet \
+            --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --compiler-report "${evidence}/deterministic-semantic-lifecycle.json" \
+            --query-report "${evidence}/semantic-query-report.json" \
+            --output-directory "${evidence}/human-review-packet"
+          claude_observed=$("${RUNNER_TEMP}/host-cli/bin/claude" --version)
+          opencode_observed=$("${RUNNER_TEMP}/host-cli/bin/opencode" --version)
+          uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
+            --host claude_code --host-version 2.1.220 --model-identity not_executed \
+            --grant-id "${grant_id}" --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --corpus "${corpus}" --network-policy offline \
+            --host-discovery-status discovered --version-command "claude --version" \
+            --observed-version "${claude_observed}" \
+            --authentication-status unavailable \
+            --authentication-reason-code owner_confirmation_pending \
+            --authentication-reason "No external model credential was supplied before owner Gold confirmation." \
+            --model-access-status unavailable \
+            --model-access-reason-code owner_confirmation_pending \
+            --model-access-reason "Paid external model execution is prohibited before owner Gold confirmation." \
+            --not-executed-reason "Owner confirmation is pending; no external model task was executed." \
+            --output "${evidence}/claude-code-real-model-not-executed.json"
+          uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
+            --host opencode --host-version 1.18.8 --model-identity not_executed \
+            --grant-id "${grant_id}" --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
+            --corpus "${corpus}" --network-policy offline \
+            --host-discovery-status discovered --version-command "opencode --version" \
+            --observed-version "${opencode_observed}" \
+            --authentication-status unavailable \
+            --authentication-reason-code owner_confirmation_pending \
+            --authentication-reason "No external model credential was supplied before owner Gold confirmation." \
+            --model-access-status unavailable \
+            --model-access-reason-code owner_confirmation_pending \
+            --model-access-reason "Paid external model execution is prohibited before owner Gold confirmation." \
+            --not-executed-reason "Owner confirmation is pending; no external model task was executed." \
+            --output "${evidence}/opencode-real-model-not-executed.json"
+          cp "${corpus}" "${evidence}/semantic-host-corpus.json"
+          cp benchmarks/semantic/semantic-gold-candidate-v1.json "${evidence}/semantic-gold.json"
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Upload deterministic maintainer-review evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: semantic-deterministic-review-candidate
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/semantic-evidence/
+
   execute:
     name: Execute real Codex semantic lifecycle
     if: ${{ inputs.mode == 'execute' }}
@@ -109,7 +238,7 @@ jobs:
             --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
             --vault "${vault}" \
             --snapshot "${snapshot}" \
-            --command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
             --output "${RUNNER_TEMP}/corpus.json"
           grant_id=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["grant_id"])' "${RUNNER_TEMP}/corpus.json")
           "${codex}" mcp add deeplaw-knowledge -- "${runtime}" knowledge mcp --stdio
@@ -140,12 +269,15 @@ jobs:
             --vault "${RUNNER_TEMP}/semantic-vault" \
             --command "${RUNNER_TEMP}/host-command.json" \
             --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
+            --baseline-query-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
             --output "${evidence}/real-semantic-host-report.json"
           uv run --frozen python -m benchmarks.semantic.run_query_suite \
             --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
-            --host-report "${evidence}/real-semantic-host-report.json" \
+            --compiler-report "${evidence}/real-semantic-host-report.json" \
+            --corpus "${RUNNER_TEMP}/corpus.json" \
             --vault "${RUNNER_TEMP}/semantic-vault" \
-            --deeplaw "${RUNNER_TEMP}/semantic-runtime/bin/deeplaw" \
+            --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
+            --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
             --output "${evidence}/semantic-query-report.json" \
             --cost-output "${evidence}/semantic-query-cost.json"
           uv run --frozen python -m benchmarks.semantic.score_semantic_run \

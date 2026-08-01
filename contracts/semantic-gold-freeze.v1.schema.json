@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-gold-freeze.v1.schema.json",
+  "title": "DeepLaw Semantic Gold Freeze v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "gold_id", "gold_status", "candidate_sha256",
+    "fixture_manifest_sha256", "semantic_gold_schema_sha256", "query_set_sha256",
+    "scoring_policy_sha256", "security_challenges_sha256", "source_count",
+    "case_count", "security_challenge_count", "maintainer_confirmation_required",
+    "reviewer_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-gold-freeze/v1"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "gold_status": {"enum": ["maintainer_review_pending", "maintainer_confirmed"]},
+    "candidate_sha256": {"$ref": "#/$defs/sha256"},
+    "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "semantic_gold_schema_sha256": {"$ref": "#/$defs/sha256"},
+    "query_set_sha256": {"$ref": "#/$defs/sha256"},
+    "scoring_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "security_challenges_sha256": {"$ref": "#/$defs/sha256"},
+    "source_count": {"const": 12},
+    "case_count": {"const": 15},
+    "security_challenge_count": {"const": 5},
+    "maintainer_confirmation_required": {"type": "boolean"},
+    "reviewer_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"gold_status": {"const": "maintainer_review_pending"}}},
+      "then": {
+        "properties": {
+          "maintainer_confirmation_required": {"const": true},
+          "reviewer_id": {"const": null}
+        }
+      }
+    }
+  ]
+}

@@ -55,6 +55,18 @@ def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
     if len(task_types) != len(set(task_types)):
         raise ValueError("Semantic Gold must contain one case per task_type")
     known_sources = set(source_keys)
+    challenge_types = [item["challenge_type"] for item in value["security_challenges"]]
+    if len(challenge_types) != len(set(challenge_types)):
+        raise ValueError("Semantic Gold security challenge types must be unique")
+    required_challenges = {
+        "prompt_injection",
+        "unsupported_authoritative_claim",
+        "restricted_disclosure",
+        "unauthorized_mutation",
+        "silent_fallback",
+    }
+    if set(challenge_types) != required_challenges:
+        raise ValueError("Semantic Gold security challenge inventory is incomplete")
     hashes: list[str] = []
     for source in value["sources"]:
         relative_path = Path(source["relative_path"])
@@ -82,12 +94,84 @@ def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
                 raise ValueError(
                     f"forbidden merge references an unknown label in {case['case_id']}"
                 )
+        for expected in case["expected_objects"]:
+            for assertion in expected.get("content_assertions", []):
+                if not set(assertion["source_keys"]).issubset(set(case["source_keys"])):
+                    raise ValueError(
+                        f"content assertion source is outside case_id={case['case_id']}"
+                    )
+    for challenge in value["security_challenges"]:
+        if not set(challenge["source_keys"]).issubset(known_sources):
+            raise ValueError(
+                f"unknown source_key in challenge_id={challenge['challenge_id']}"
+            )
+    identity_groups: dict[str, int] = {}
+    for case in value["cases"]:
+        for expected in case["expected_objects"]:
+            group = expected.get("stable_identity_group")
+            if group is not None:
+                identity_groups[group] = identity_groups.get(group, 0) + 1
+    if any(count < 2 for count in identity_groups.values()):
+        raise ValueError("Semantic Gold stable identity groups must span at least two labels")
     digest = _candidate_digest(value)
     if value["status"] == "maintainer_confirmed":
         assert value["review"] is not None
         if value["review"]["gold_sha256"] != digest:
             raise ValueError("maintainer review digest does not bind the candidate labels")
     return digest
+
+
+def validate_freeze(
+    freeze: dict[str, Any],
+    *,
+    candidate: dict[str, Any],
+    repository: Path,
+) -> None:
+    schema = json.loads(
+        (repository / "contracts" / "semantic-gold-freeze.v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(freeze)
+    candidate_sha256 = validate_candidate(candidate, repository=repository)
+    query_set = [
+        {
+            "case_id": item["case_id"],
+            "query": item["query"],
+            "purpose": item["purpose"],
+            "phase": item["query_phase"],
+            "as_of": item.get("as_of"),
+        }
+        for item in candidate["cases"]
+    ]
+    expected = {
+        "gold_id": candidate["gold_id"],
+        "gold_status": candidate["status"],
+        "candidate_sha256": candidate_sha256,
+        "fixture_manifest_sha256": candidate["fixture_manifest_sha256"],
+        "semantic_gold_schema_sha256": hashlib.sha256(
+            (repository / "contracts" / "semantic-gold.v1.schema.json").read_bytes()
+        ).hexdigest(),
+        "query_set_sha256": hashlib.sha256(
+            canonical_json(query_set).encode("utf-8")
+        ).hexdigest(),
+        "scoring_policy_sha256": hashlib.sha256(
+            canonical_json(candidate["scoring_policy"]).encode("utf-8")
+        ).hexdigest(),
+        "security_challenges_sha256": hashlib.sha256(
+            canonical_json(candidate["security_challenges"]).encode("utf-8")
+        ).hexdigest(),
+        "source_count": len(candidate["sources"]),
+        "case_count": len(candidate["cases"]),
+        "security_challenge_count": len(candidate["security_challenges"]),
+        "maintainer_confirmation_required": candidate["status"] != "maintainer_confirmed",
+        "reviewer_id": (
+            candidate["review"]["reviewer_id"] if candidate["review"] is not None else None
+        ),
+    }
+    if freeze != {"schema_version": freeze["schema_version"], **expected}:
+        raise ValueError("Semantic Gold freeze manifest does not bind the exact candidate")
 
 
 def confirm_candidate(

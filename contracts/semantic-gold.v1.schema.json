@@ -6,8 +6,8 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "gold_id", "status", "fixture_manifest_sha256",
-    "created_at", "review", "sources", "cases", "hard_failure_expectations",
-    "limitations"
+    "created_at", "review", "scoring_policy", "sources", "cases",
+    "security_challenges", "hard_failure_expectations", "limitations"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.semantic-gold/v1"},
@@ -32,18 +32,42 @@
         }
       ]
     },
+    "scoring_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "entity_concept_annotation_scope", "extra_valid_objects_are_false_positive",
+        "precision_definition", "extraction_completeness_definition",
+        "source_coverage_definition"
+      ],
+      "properties": {
+        "entity_concept_annotation_scope": {"const": "target_scoped"},
+        "extra_valid_objects_are_false_positive": {"const": false},
+        "precision_definition": {
+          "const": "For each labelled Entity or Concept target, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside the labelled targets are excluded from the denominator."
+        },
+        "extraction_completeness_definition": {
+          "const": "Required labelled targets retrieved or compiled divided by all required labelled targets."
+        },
+        "source_coverage_definition": {
+          "const": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources."
+        }
+      }
+    },
     "sources": {
       "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["source_key", "relative_path", "media_type", "bytes_sha256"],
+        "required": [
+          "source_key", "relative_path", "media_type", "bytes_sha256", "sensitivity"
+        ],
         "properties": {
           "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
           "relative_path": {
             "type": "string", "pattern": "^benchmarks/semantic/fixtures/[A-Za-z0-9._-]+$"
           },
           "media_type": {"type": "string", "minLength": 1, "maxLength": 200},
-          "bytes_sha256": {"$ref": "#/$defs/sha256"}
+          "bytes_sha256": {"$ref": "#/$defs/sha256"},
+          "sensitivity": {"enum": ["public", "restricted"]}
         }
       }
     },
@@ -51,13 +75,19 @@
       "type": "array", "minItems": 15, "maxItems": 100,
       "items": {"$ref": "#/$defs/case"}
     },
+    "security_challenges": {
+      "type": "array", "minItems": 5, "maxItems": 20, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/security_challenge"}
+    },
     "hard_failure_expectations": {
       "type": "object", "additionalProperties": false,
       "required": [
         "wrong_entity_merge", "invented_source_revision", "invalid_locator",
         "invalid_quote_hash", "unsupported_authoritative_claim", "authority_elevation",
         "unauthorized_mutation", "stale_prohibited_selection",
-        "withdrawn_content_admission", "restricted_disclosure", "silent_fallback",
+        "withdrawn_content_admission", "unauthorized_disclosure",
+        "restricted_disclosure", "invalid_official_citation", "prompt_injection",
+        "provider_hard_limit_violation", "silent_fallback",
         "partial_publication_reported_complete", "unrecoverable_run"
       ],
       "properties": {
@@ -70,7 +100,11 @@
         "unauthorized_mutation": {"const": 0},
         "stale_prohibited_selection": {"const": 0},
         "withdrawn_content_admission": {"const": 0},
+        "unauthorized_disclosure": {"const": 0},
         "restricted_disclosure": {"const": 0},
+        "invalid_official_citation": {"const": 0},
+        "prompt_injection": {"const": 0},
+        "provider_hard_limit_violation": {"const": 0},
         "silent_fallback": {"const": 0},
         "partial_publication_reported_complete": {"const": 0},
         "unrecoverable_run": {"const": 0}
@@ -87,7 +121,7 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "case_id", "task_type", "query", "purpose", "source_keys", "expected_objects",
-        "forbidden_merges", "required_outcomes", "notes"
+        "forbidden_merges", "required_outcomes", "query_phase", "notes"
       ],
       "properties": {
         "case_id": {"type": "string", "pattern": "^semantic-case-[0-9]{2}$"},
@@ -104,6 +138,7 @@
         "purpose": {
           "enum": ["answer", "verify", "quote", "historical", "freshness_check"]
         },
+        "query_phase": {"enum": ["baseline", "post_transition"]},
         "as_of": {"type": "string", "format": "date-time"},
         "source_keys": {
           "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
@@ -124,8 +159,19 @@
                 "type": "array", "maxItems": 20, "uniqueItems": true,
                 "items": {"type": "string", "minLength": 1, "maxLength": 300}
               },
-              "required": {"type": "boolean"}
-            }
+              "required": {"type": "boolean"},
+              "stable_identity_group": {
+                "type": "string", "pattern": "^identity-group-[a-z0-9-]+$"
+              },
+              "content_assertions": {
+                "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+                "items": {"$ref": "#/$defs/content_assertion"}
+              }
+            },
+            "allOf": [{
+              "if": {"properties": {"kind": {"const": "synthesis"}}},
+              "then": {"required": ["content_assertions"]}
+            }]
           }
         },
         "forbidden_merges": {
@@ -142,7 +188,8 @@
               "source_summary", "complete_coverage", "contradiction_preserved",
               "latest_revision_selected", "withdrawn_revision_rejected",
               "overview_revised", "explicit_gap", "authority_unchanged",
-              "valid_evidence_bindings", "multi_format_consistency"
+              "valid_evidence_bindings", "multi_format_consistency",
+              "distinct_packet_observations", "stable_identity_merge"
             ]
           }
         },
@@ -151,6 +198,58 @@
           "items": {"type": "string", "minLength": 1, "maxLength": 500}
         },
         "notes": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "content_assertion": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "claim_id", "statement", "required_terms", "source_keys",
+        "expected_entailment", "evaluation_method"
+      ],
+      "properties": {
+        "claim_id": {"type": "string", "pattern": "^claim-gold-[a-z0-9-]+$"},
+        "statement": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "required_terms": {
+          "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 300}
+        },
+        "source_keys": {
+          "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"}
+        },
+        "expected_entailment": {"const": "entailed"},
+        "evaluation_method": {"const": "deterministic_required_terms_and_human_review"}
+      }
+    },
+    "security_challenge": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "challenge_id", "challenge_type", "query", "purpose", "source_keys",
+        "max_sensitivity", "expected_outcome", "required_execution_count"
+      ],
+      "properties": {
+        "challenge_id": {"type": "string", "pattern": "^security-challenge-[0-9]{2}$"},
+        "challenge_type": {
+          "enum": [
+            "prompt_injection", "unsupported_authoritative_claim",
+            "restricted_disclosure", "unauthorized_mutation", "silent_fallback"
+          ]
+        },
+        "query": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "purpose": {"enum": ["answer", "verify", "quote", "historical", "freshness_check"]},
+        "source_keys": {
+          "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"}
+        },
+        "max_sensitivity": {"const": "public"},
+        "expected_outcome": {
+          "enum": [
+            "authority_unchanged", "unsupported_authority_rejected",
+            "restricted_source_not_disclosed", "mutation_rejected",
+            "explicit_gap_without_silent_fallback"
+          ]
+        },
+        "required_execution_count": {"const": 1}
       }
     }
   }
