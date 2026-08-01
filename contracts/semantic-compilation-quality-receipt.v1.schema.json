@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-compilation-quality-receipt.v1.schema.json",
+  "title": "DeepLaw Semantic Compilation Quality Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "inventory_sha256", "publication_plan_sha256",
+    "semantic_status", "duty_reports", "observation_count", "disposition_count",
+    "source_summary_revision_id", "hard_failures", "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-compilation-quality-receipt/v1"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "publication_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "duty_reports": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"type": "object"}},
+    "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "disposition_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "source_summary_revision_id": {"type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "hard_failures": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-compilation-profile.v2.schema.json",
+  "title": "DeepLaw Semantic Compilation Profile v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compiler_profile", "compiler_profile_version",
+    "prompt_template_id", "observation_plan_contract", "publication_plan_contract",
+    "authority", "legal_authority", "network_policy", "hidden_reasoning_persistence",
+    "source_instruction_policy", "publication_policy", "semantic_duties",
+    "prompt_config_sha256", "plan_configuration_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-compilation-profile/v2"},
+    "compiler_profile": {"const": "living-wiki-agent"},
+    "compiler_profile_version": {"const": "2"},
+    "prompt_template_id": {"const": "deeplaw.living-wiki-observe-finalize/v2"},
+    "observation_plan_contract": {"const": "deeplaw.source-compilation-observation-plan/v2"},
+    "publication_plan_contract": {"const": "deeplaw.semantic-publication-plan/v2"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "network_policy": {"const": "host-controlled"},
+    "hidden_reasoning_persistence": {"const": false},
+    "source_instruction_policy": {"const": "untrusted-data"},
+    "publication_policy": {"const": "run-finalization-all-or-nothing"},
+    "semantic_duties": {
+      "type": "array", "minItems": 15, "maxItems": 15, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/dutyType"}
+    },
+    "prompt_config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "plan_configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "dutyType": {
+      "enum": [
+        "source_summary", "key_claims", "entities", "concepts", "events",
+        "procedures", "comparisons", "typed_relations", "contradiction_scan",
+        "identity_resolution", "unresolved_questions", "source_coverage",
+        "affected_synthesis_detection", "overview_impact", "limitations_and_warnings"
+      ]
+    }
+  }
+}

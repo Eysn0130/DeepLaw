@@ -154,6 +154,8 @@ SINK_OPERATIONS = frozenset(
         "refresh_compilation",
         "resume_compilation",
         "stage_compilation_batch",
+        "stage_semantic_observations",
+        "finalize_semantic_compilation",
         "validate_compilation",
     }
 )

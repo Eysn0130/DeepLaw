@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-run.v2.schema.json",
+  "title": "DeepLaw Source Compilation Run v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "transaction", "semantic_status",
+    "observation_packet_count", "observed_packet_count", "observation_count",
+    "inventory_sha256", "publication_plan_sha256", "source_summary_revision_id",
+    "quality_receipt_sha256", "duty_reports", "gaps"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-run/v2"},
+    "transaction": {"type": "object"},
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "observation_packet_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "observed_packet_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "inventory_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "publication_plan_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "source_summary_revision_id": {"type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "quality_receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "duty_reports": {"type": "array", "maxItems": 15, "items": {"type": "object"}},
+    "gaps": {
+      "type": "array", "maxItems": 5, "uniqueItems": true,
+      "items": {
+        "enum": [
+          "partial_compilation", "semantic_duty_unresolved", "source_summary_missing",
+          "identity_resolution_pending", "synthesis_refresh_pending"
+        ]
+      }
+    }
+  }
+}

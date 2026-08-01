@@ -8,6 +8,7 @@ from typing import Any, TypeVar, cast
 from ..backfill import BackfillService
 from ..compilation import (
     CompilationCoordinator,
+    SemanticCompilationService,
 )
 from ..compilation import (
     compiler_profile as get_compiler_profile,
@@ -82,6 +83,7 @@ class CompilationRun:
     compilation_run_id: str
     grant_id: str
     _initial_receipt: dict[str, Any] | None = None
+    compiler_profile_version: str = "1"
 
     def begin_receipt(self) -> dict[str, Any]:
         if self._initial_receipt is None:
@@ -89,7 +91,50 @@ class CompilationRun:
         return dict(self._initial_receipt)
 
     def next_packet(self) -> dict[str, Any] | None:
+        if self.compiler_profile_version == "2":
+            return _invoke(
+                SemanticCompilationService(self._coordinator.root).next_observation_packet,
+                self.compilation_run_id,
+            )
         return _invoke(self._coordinator.next_packet, self.compilation_run_id)
+
+    def stage_observations(
+        self,
+        plan: dict[str, Any],
+        *,
+        confirm_no_case_data: bool = False,
+    ) -> dict[str, Any]:
+        service = _invoke(SemanticCompilationService, self._coordinator.root)
+        return _invoke(
+            service.stage_observations,
+            grant_id=self.grant_id,
+            compilation_run_id=self.compilation_run_id,
+            plan=plan,
+            confirm_no_case_data=confirm_no_case_data,
+        )
+
+    def semantic_inventory(self) -> dict[str, Any]:
+        service = _invoke(SemanticCompilationService, self._coordinator.root)
+        return _invoke(service.inventory, self.compilation_run_id)
+
+    def finalization_packet(self) -> dict[str, Any]:
+        service = _invoke(SemanticCompilationService, self._coordinator.root)
+        return _invoke(service.finalization_packet, self.compilation_run_id)
+
+    def stage_publication(
+        self,
+        plan: dict[str, Any],
+        *,
+        confirm_no_case_data: bool = False,
+    ) -> dict[str, Any]:
+        service = _invoke(SemanticCompilationService, self._coordinator.root)
+        return _invoke(
+            service.stage_publication,
+            grant_id=self.grant_id,
+            compilation_run_id=self.compilation_run_id,
+            plan=plan,
+            confirm_no_case_data=confirm_no_case_data,
+        )
 
     def stage(
         self,
@@ -122,8 +167,11 @@ class CompilationRun:
         *,
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
+        target = self._coordinator.commit
+        if self.compiler_profile_version == "2":
+            target = SemanticCompilationService(self._coordinator.root).commit
         return _invoke(
-            self._coordinator.commit,
+            target,
             grant_id=self.grant_id,
             compilation_run_id=self.compilation_run_id,
             confirm_no_case_data=confirm_no_case_data,
@@ -158,9 +206,15 @@ class CompilationRun:
         )
 
     def status(self) -> dict[str, Any]:
+        if self.compiler_profile_version == "2":
+            service = _invoke(SemanticCompilationService, self._coordinator.root)
+            return _invoke(service.status, self.compilation_run_id)
         return _invoke(self._coordinator.status, self.compilation_run_id)
 
     def explain(self) -> dict[str, Any]:
+        if self.compiler_profile_version == "2":
+            service = _invoke(SemanticCompilationService, self._coordinator.root)
+            return _invoke(service.explain, self.compilation_run_id)
         return _invoke(self._coordinator.explain, self.compilation_run_id)
 
 
@@ -225,19 +279,31 @@ class _CompilationsAPI:
             result["compilation_run_id"],
             grant_id,
             result,
+            compiler_profile_version,
         )
 
     def open(self, *, compilation_run_id: str, grant_id: str) -> CompilationRun:
         coordinator = _invoke(CompilationCoordinator, self._root)
-        _invoke(coordinator.status, compilation_run_id)
-        return CompilationRun(coordinator, compilation_run_id, grant_id)
+        status = _invoke(coordinator.status, compilation_run_id)
+        return CompilationRun(
+            coordinator,
+            compilation_run_id,
+            grant_id,
+            compiler_profile_version=status["compiler_profile_version"],
+        )
 
     def status(self, compilation_run_id: str) -> dict[str, Any]:
         coordinator = _invoke(CompilationCoordinator, self._root)
-        return _invoke(coordinator.status, compilation_run_id)
+        status = _invoke(coordinator.status, compilation_run_id)
+        if status["compiler_profile_version"] == "2":
+            return _invoke(SemanticCompilationService(self._root).status, compilation_run_id)
+        return status
 
     def explain(self, compilation_run_id: str) -> dict[str, Any]:
         coordinator = _invoke(CompilationCoordinator, self._root)
+        status = _invoke(coordinator.status, compilation_run_id)
+        if status["compiler_profile_version"] == "2":
+            return _invoke(SemanticCompilationService(self._root).explain, compilation_run_id)
         return _invoke(coordinator.explain, compilation_run_id)
 
     def refresh(

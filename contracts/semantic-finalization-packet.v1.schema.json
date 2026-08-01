@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-finalization-packet.v1.schema.json",
+  "title": "DeepLaw Semantic Finalization Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "finalization_packet_id", "compilation_run_id", "source_revision_id",
+    "expected_audit_head", "inventory", "duties", "existing_canonical_knowledge",
+    "previous_outputs", "affected_syntheses", "budgets", "truncated"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-finalization-packet/v1"},
+    "finalization_packet_id": {"type": "string", "pattern": "^finalization_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "expected_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory": {"type": "object"},
+    "duties": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"type": "object"}},
+    "existing_canonical_knowledge": {"type": "array", "maxItems": 256, "items": {"type": "object"}},
+    "previous_outputs": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+    "affected_syntheses": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+    "budgets": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider_bytes", "max_publications", "max_relations"],
+      "properties": {
+        "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "max_publications": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "max_relations": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    },
+    "truncated": {"type": "boolean"}
+  }
+}

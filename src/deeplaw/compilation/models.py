@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Final
 
 COMPILATION_CORE_SCHEMA: Final = "deeplaw.source-compilation-core/v1"
+SEMANTIC_COMPILATION_CORE_SCHEMA: Final = "deeplaw.semantic-compilation-core/v1"
 COMPILATION_RUN_SCHEMA: Final = "deeplaw.source-compilation-run/v1"
 COMPILATION_PACKET_SCHEMA: Final = "deeplaw.source-compilation-packet/v1"
 COMPILATION_PLAN_SCHEMA: Final = "deeplaw.source-compilation-plan/v1"
@@ -18,6 +19,16 @@ COMPILER_GRANT_OPERATIONS: Final = (
     "resume_compilation",
     "stage_compilation_batch",
     "validate_compilation",
+)
+
+SEMANTIC_COMPILER_GRANT_OPERATIONS: Final = tuple(
+    sorted(
+        (
+            *COMPILER_GRANT_OPERATIONS,
+            "finalize_semantic_compilation",
+            "stage_semantic_observations",
+        )
+    )
 )
 
 BACKFILL_GRANT_OPERATIONS: Final = (

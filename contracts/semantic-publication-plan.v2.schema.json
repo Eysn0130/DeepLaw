@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-publication-plan.v2.schema.json",
+  "title": "DeepLaw Semantic Publication Plan v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "source_revision_id", "expected_audit_head",
+    "inventory_sha256", "observation_dispositions", "packet_plans", "duty_reports",
+    "semantic_status", "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-publication-plan/v2"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "expected_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observation_dispositions": {
+      "type": "array", "maxItems": 100000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["observation_id", "disposition", "target_ref", "reason"],
+        "properties": {
+          "observation_id": {"type": "string", "pattern": "^observation_[0-9a-f]{24}$"},
+          "disposition": {"enum": ["published", "merged_into", "retained_existing", "proposed_only", "omitted_with_reason", "unresolved"]},
+          "target_ref": {"type": ["string", "null"], "maxLength": 300},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+        }
+      }
+    },
+    "packet_plans": {
+      "type": "array", "minItems": 1, "maxItems": 10000,
+      "items": {"type": "object"}
+    },
+    "duty_reports": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": {"type": "object"}
+    },
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "warnings": {
+      "type": "array", "maxItems": 256, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  }
+}

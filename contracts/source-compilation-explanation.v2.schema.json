@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-explanation.v2.schema.json",
+  "title": "DeepLaw Source Compilation Explanation v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "transaction_explanation",
+    "semantic_status", "duty_reports", "gaps"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-explanation/v2"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "transaction_explanation": {"type": "object"},
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "duty_reports": {"type": "array", "maxItems": 15, "items": {"type": "object"}},
+    "gaps": {
+      "type": "array", "maxItems": 5, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    }
+  }
+}

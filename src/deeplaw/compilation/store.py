@@ -7,12 +7,18 @@ from typing import Any
 
 from ..knowledge_models import canonical_timestamp
 from ..util import canonical_json, sha256_file, strict_json_loads
-from .models import COMPILATION_CORE_SCHEMA
+from .models import COMPILATION_CORE_SCHEMA, SEMANTIC_COMPILATION_CORE_SCHEMA
 
 
 def compilation_tables_sql() -> str:
     return """
         CREATE TABLE IF NOT EXISTS source_compilation_core_v1 (
+            schema_version TEXT PRIMARY KEY,
+            installed_at TEXT NOT NULL,
+            migration_source TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_compilation_core_v1 (
             schema_version TEXT PRIMARY KEY,
             installed_at TEXT NOT NULL,
             migration_source TEXT NOT NULL
@@ -83,7 +89,10 @@ def compilation_tables_sql() -> str:
             artifact_sha256 TEXT PRIMARY KEY,
             artifact_role TEXT NOT NULL CHECK(artifact_role IN (
                 'packet', 'plan', 'batch', 'validation', 'receipt',
-                'freshness', 'query_backfill', 'mcp_result'
+                'freshness', 'query_backfill', 'mcp_result',
+                'observation_plan', 'semantic_inventory', 'finalization_packet',
+                'publication_plan', 'semantic_receipt', 'synthesis_packet',
+                'synthesis_plan', 'synthesis_receipt'
             )),
             byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
             media_type TEXT NOT NULL,
@@ -97,7 +106,8 @@ def compilation_tables_sql() -> str:
                 'abort_compilation', 'begin_compilation', 'commit_compilation',
                 'propose_knowledge_backfill',
                 'refresh_compilation', 'resume_compilation',
-                'stage_compilation_batch', 'validate_compilation'
+                'stage_compilation_batch', 'stage_semantic_observations',
+                'finalize_semantic_compilation', 'validate_compilation'
             )),
             request_sha256 TEXT NOT NULL,
             recorded_at TEXT NOT NULL
@@ -112,7 +122,8 @@ def compilation_tables_sql() -> str:
                 'abort_compilation', 'begin_compilation', 'commit_compilation',
                 'promote_knowledge_draft', 'propose_knowledge_backfill',
                 'refresh_compilation', 'resume_compilation',
-                'stage_compilation_batch', 'validate_compilation'
+                'stage_compilation_batch', 'stage_semantic_observations',
+                'finalize_semantic_compilation', 'validate_compilation'
             )),
             request_sha256 TEXT NOT NULL,
             result_sha256 TEXT NOT NULL
@@ -346,6 +357,104 @@ def compilation_tables_sql() -> str:
             updated_at TEXT NOT NULL,
             UNIQUE(grant_id, idempotency_key)
         ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_compilation_runs_v2 (
+            compilation_run_id TEXT PRIMARY KEY
+                REFERENCES source_compilation_runs_v1(compilation_run_id),
+            semantic_status TEXT NOT NULL CHECK(semantic_status IN (
+                'complete', 'partial', 'blocked', 'unknown'
+            )),
+            observation_packet_count INTEGER NOT NULL CHECK(observation_packet_count >= 0),
+            observed_packet_count INTEGER NOT NULL CHECK(observed_packet_count >= 0),
+            observation_count INTEGER NOT NULL CHECK(observation_count >= 0),
+            inventory_sha256 TEXT,
+            publication_plan_sha256 TEXT,
+            quality_receipt_sha256 TEXT,
+            source_summary_revision_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_observation_batches_v2 (
+            compilation_run_id TEXT NOT NULL
+                REFERENCES semantic_compilation_runs_v2(compilation_run_id),
+            packet_id TEXT NOT NULL REFERENCES source_compilation_packets_v1(packet_id),
+            observation_plan_sha256 TEXT NOT NULL
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            observation_count INTEGER NOT NULL CHECK(observation_count >= 0),
+            covered_fragment_ids_json TEXT NOT NULL,
+            omitted_fragments_json TEXT NOT NULL,
+            coverage_ratio REAL NOT NULL CHECK(coverage_ratio BETWEEN 0.0 AND 1.0),
+            warnings_json TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            PRIMARY KEY(compilation_run_id, packet_id)
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_observations_v2 (
+            observation_id TEXT PRIMARY KEY,
+            compilation_run_id TEXT NOT NULL
+                REFERENCES semantic_compilation_runs_v2(compilation_run_id),
+            packet_id TEXT NOT NULL REFERENCES source_compilation_packets_v1(packet_id),
+            semantic_key_candidate TEXT,
+            kind TEXT NOT NULL,
+            normalized_aliases_json TEXT NOT NULL,
+            source_refs_json TEXT NOT NULL,
+            observation_json TEXT NOT NULL,
+            observation_sha256 TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            UNIQUE(compilation_run_id, observation_sha256)
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS semantic_observations_v2_run_key
+            ON semantic_observations_v2(compilation_run_id, kind, semantic_key_candidate);
+
+        CREATE TABLE IF NOT EXISTS semantic_inventories_v1 (
+            artifact_sha256 TEXT PRIMARY KEY
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            inventory_sha256 TEXT NOT NULL UNIQUE,
+            inventory_id TEXT NOT NULL UNIQUE,
+            compilation_run_id TEXT NOT NULL UNIQUE
+                REFERENCES semantic_compilation_runs_v2(compilation_run_id),
+            observation_count INTEGER NOT NULL CHECK(observation_count >= 0),
+            packet_count INTEGER NOT NULL CHECK(packet_count >= 1),
+            truncated INTEGER NOT NULL CHECK(truncated IN (0, 1)),
+            recorded_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_observation_dispositions_v1 (
+            compilation_run_id TEXT NOT NULL
+                REFERENCES semantic_compilation_runs_v2(compilation_run_id),
+            observation_id TEXT NOT NULL REFERENCES semantic_observations_v2(observation_id),
+            disposition TEXT NOT NULL CHECK(disposition IN (
+                'published', 'merged_into', 'retained_existing', 'proposed_only',
+                'omitted_with_reason', 'unresolved'
+            )),
+            target_ref TEXT,
+            reason TEXT NOT NULL,
+            PRIMARY KEY(compilation_run_id, observation_id)
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_duty_reports_v1 (
+            compilation_run_id TEXT NOT NULL
+                REFERENCES semantic_compilation_runs_v2(compilation_run_id),
+            duty_id TEXT NOT NULL,
+            duty_type TEXT NOT NULL,
+            required INTEGER NOT NULL CHECK(required IN (0, 1)),
+            status TEXT NOT NULL CHECK(status IN (
+                'satisfied', 'not_applicable', 'unresolved', 'omitted_with_reason'
+            )),
+            report_json TEXT NOT NULL,
+            PRIMARY KEY(compilation_run_id, duty_type),
+            UNIQUE(compilation_run_id, duty_id)
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS semantic_quality_receipts_v1 (
+            artifact_sha256 TEXT PRIMARY KEY
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            receipt_sha256 TEXT NOT NULL UNIQUE,
+            compilation_run_id TEXT NOT NULL UNIQUE
+                REFERENCES semantic_compilation_runs_v2(compilation_run_id),
+            recorded_at TEXT NOT NULL
+        ) STRICT;
     """
 
 
@@ -365,10 +474,29 @@ def install_compilation_schema(
         """,
         (COMPILATION_CORE_SCHEMA, installed_at, migration_source),
     )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO semantic_compilation_core_v1(
+            schema_version, installed_at, migration_source
+        ) VALUES (?, ?, ?)
+        """,
+        (SEMANTIC_COMPILATION_CORE_SCHEMA, installed_at, migration_source),
+    )
     row = connection.execute("SELECT * FROM source_compilation_core_v1").fetchone()
     if row is None or row["schema_version"] != COMPILATION_CORE_SCHEMA:
         raise RuntimeError("source compilation schema is unavailable")
     canonical_timestamp(row["installed_at"], field="source compilation installed_at")
+    semantic_row = connection.execute(
+        "SELECT * FROM semantic_compilation_core_v1"
+    ).fetchone()
+    if (
+        semantic_row is None
+        or semantic_row["schema_version"] != SEMANTIC_COMPILATION_CORE_SCHEMA
+    ):
+        raise RuntimeError("semantic compilation schema is unavailable")
+    canonical_timestamp(
+        semantic_row["installed_at"], field="semantic compilation installed_at"
+    )
     connection.commit()
 
 
@@ -387,6 +515,24 @@ def verify_compilation_schema(
         canonical_timestamp(row["installed_at"], field="source compilation installed_at")
     except (TypeError, ValueError):
         failures.append({"code": "source_compilation_schema_invalid", "object_id": "core"})
+    semantic_row = connection.execute(
+        "SELECT schema_version, installed_at FROM semantic_compilation_core_v1"
+    ).fetchone()
+    if (
+        semantic_row is None
+        or semantic_row["schema_version"] != SEMANTIC_COMPILATION_CORE_SCHEMA
+    ):
+        failures.append({"code": "semantic_compilation_schema_invalid", "object_id": "core"})
+    else:
+        try:
+            canonical_timestamp(
+                semantic_row["installed_at"],
+                field="semantic compilation installed_at",
+            )
+        except (TypeError, ValueError):
+            failures.append(
+                {"code": "semantic_compilation_schema_invalid", "object_id": "core"}
+            )
     for artifact in connection.execute(
         """
         SELECT artifact_sha256, byte_size

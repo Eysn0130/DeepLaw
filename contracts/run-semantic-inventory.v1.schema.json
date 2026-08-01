@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/run-semantic-inventory.v1.schema.json",
+  "title": "DeepLaw Run Semantic Inventory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "inventory_id", "compilation_run_id", "source_revision_id",
+    "observation_count", "packet_count", "observations", "duplicate_clusters",
+    "alias_collisions", "contradiction_candidates", "unresolved_identities",
+    "previous_outputs", "affected_syntheses", "coverage", "truncated", "inventory_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.run-semantic-inventory/v1"},
+    "inventory_id": {"type": "string", "pattern": "^semanticinventory_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "observations": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "duplicate_clusters": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "alias_collisions": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "contradiction_candidates": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "unresolved_identities": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "previous_outputs": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+    "affected_syntheses": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+    "coverage": {"type": "object"},
+    "truncated": {"type": "boolean"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-observation-plan.v2.schema.json",
+  "title": "DeepLaw Source Compilation Observation Plan v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compilation_run_id", "source_revision_id", "packet_id",
+    "expected_audit_head", "observations", "coverage", "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-observation-plan/v2"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "packet_id": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"},
+    "expected_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observations": {
+      "type": "array", "maxItems": 512,
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "coverage": {"$ref": "#/$defs/coverage"},
+    "warnings": {
+      "type": "array", "maxItems": 128, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  },
+  "$defs": {
+    "kind": {
+      "enum": [
+        "claim", "concept", "entity", "event", "decision", "procedure",
+        "experience", "preference", "synthesis", "comparison", "skill", "memory",
+        "relation", "identity_candidate", "contradiction_candidate", "unresolved_item"
+      ]
+    },
+    "sourceReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "observation_id", "packet_id", "semantic_key_candidate", "kind",
+        "title_candidate", "body_candidate", "aliases", "source_refs", "assertion",
+        "applicability", "tags", "reason"
+      ],
+      "properties": {
+        "observation_id": {"type": "string", "pattern": "^observation_[0-9a-f]{24}$"},
+        "packet_id": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"},
+        "semantic_key_candidate": {"type": ["string", "null"], "minLength": 1, "maxLength": 300},
+        "kind": {"$ref": "#/$defs/kind"},
+        "title_candidate": {"type": ["string", "null"], "minLength": 1, "maxLength": 500},
+        "body_candidate": {"type": ["string", "null"], "minLength": 1, "maxLength": 200000},
+        "aliases": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 300}
+        },
+        "source_refs": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/sourceReference"}},
+        "assertion": {"$ref": "#/$defs/assertion"},
+        "applicability": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/applicability"}]
+        },
+        "tags": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "assertion": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["subject", "predicate", "object", "polarity"],
+          "properties": {
+            "subject": {"type": "string", "minLength": 1, "maxLength": 500},
+            "predicate": {"type": "string", "minLength": 1, "maxLength": 200},
+            "object": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "polarity": {"enum": ["positive", "negative"]}
+          }
+        }
+      ]
+    },
+    "applicability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["description", "scopes", "conditions", "exclusions"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "scopes": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "conditions": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "exclusions": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["packet_fragment_count", "covered_fragment_ids", "omitted_fragments", "ratio"],
+      "properties": {
+        "packet_fragment_count": {"type": "integer", "minimum": 1, "maximum": 128},
+        "covered_fragment_ids": {
+          "type": "array", "maxItems": 128, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"}
+        },
+        "omitted_fragments": {
+          "type": "array", "maxItems": 128,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["fragment_id", "reason"],
+            "properties": {
+              "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+              "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+            }
+          }
+        },
+        "ratio": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

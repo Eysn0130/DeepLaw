@@ -653,6 +653,19 @@ class CompilationCoordinator:
                         ),
                     ),
                 )
+                if compiler_profile_version == "2":
+                    store.connection.execute(
+                        """
+                        INSERT INTO semantic_compilation_runs_v2(
+                            compilation_run_id, semantic_status,
+                            observation_packet_count, observed_packet_count,
+                            observation_count, inventory_sha256,
+                            publication_plan_sha256, quality_receipt_sha256,
+                            source_summary_revision_id, created_at, updated_at
+                        ) VALUES (?, 'unknown', ?, 0, 0, NULL, NULL, NULL, NULL, ?, ?)
+                        """,
+                        (compilation_run_id, packet_count, created_at, created_at),
+                    )
                 for packet, packet_sha256, payload in packet_values:
                     store.connection.execute(
                         """
@@ -939,6 +952,7 @@ class CompilationCoordinator:
         compilation_run_id: str,
         plan: dict[str, Any],
         confirm_no_case_data: bool,
+        _allow_run_wide_source_refs: bool = False,
     ) -> dict[str, Any]:
         if not confirm_no_case_data:
             raise ValueError(
@@ -1010,7 +1024,35 @@ class CompilationCoordinator:
                     response["idempotent_replay"] = True
                     return response
             packet = _decoded_artifact(store, packet_row["artifact_sha256"], role="packet")
-            self._validate_plan_against_packet(plan=plan, packet=packet)
+            run_fragments: dict[str, dict[str, Any]] | None = None
+            if _allow_run_wide_source_refs:
+                if run["compiler_profile_version"] != "2":
+                    raise PermissionError(
+                        "run-wide evidence binding requires compiler profile v2"
+                    )
+                run_fragments = {}
+                rows = store.connection.execute(
+                    """
+                    SELECT artifact_sha256 FROM source_compilation_packets_v1
+                    WHERE compilation_run_id = ? ORDER BY ordinal
+                    """,
+                    (compilation_run_id,),
+                ).fetchall()
+                for item in rows:
+                    run_packet = _decoded_artifact(
+                        store, item["artifact_sha256"], role="packet"
+                    )
+                    run_fragments.update(
+                        {
+                            fragment["fragment_id"]: fragment
+                            for fragment in run_packet["fragments"]
+                        }
+                    )
+            self._validate_plan_against_packet(
+                plan=plan,
+                packet=packet,
+                allowed_source_fragments=run_fragments,
+            )
             total_actions = sum(
                 len(plan[field])
                 for field in ("object_actions", "relation_actions", "identity_actions")
@@ -1268,6 +1310,7 @@ class CompilationCoordinator:
         *,
         plan: dict[str, Any],
         packet: dict[str, Any],
+        allowed_source_fragments: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         if (
             plan["packet_id"] != packet["packet_id"]
@@ -1276,6 +1319,7 @@ class CompilationCoordinator:
         ):
             raise ValueError("source compilation plan does not match its packet")
         fragments = {item["fragment_id"]: item for item in packet["fragments"]}
+        evidence_fragments = allowed_source_fragments or fragments
         coverage = plan["coverage"]
         covered = coverage["covered_fragment_ids"]
         omitted = coverage["omitted_fragment_ids"]
@@ -1303,7 +1347,7 @@ class CompilationCoordinator:
         referenced_groups.extend(action["evidence_refs"] for action in plan["identity_actions"])
         for references in referenced_groups:
             for reference in references:
-                fragment = fragments.get(reference["fragment_id"])
+                fragment = evidence_fragments.get(reference["fragment_id"])
                 if (
                     fragment is None
                     or reference["source_revision_id"] != packet["source_revision_id"]

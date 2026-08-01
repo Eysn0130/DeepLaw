@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any, cast
 
 from .api import KnowledgeOS
-from .compilation.models import COMPILER_GRANT_OPERATIONS
+from .compilation.models import (
+    COMPILER_GRANT_OPERATIONS,
+    SEMANTIC_COMPILER_GRANT_OPERATIONS,
+)
 from .context_compiler import compile_context, verify_capsule_file
 from .knowledge_autonomy import (
     FEEDBACK_EVALUATOR_TYPES,
@@ -1516,7 +1519,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     sink_enable.add_argument(
         "--profile",
-        choices=("compiler",),
+        choices=("compiler", "semantic-compiler"),
         help=(
             "Use the least-privilege built-in operation set for Source Compilation Runs; "
             "cannot be combined with --operation"
@@ -2276,9 +2279,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                         "Knowledge Sink --profile cannot be combined with --operation"
                     )
                 operations = (
-                    COMPILER_GRANT_OPERATIONS
-                    if args.profile == "compiler"
-                    else tuple(args.operation or ("remember",))
+                    SEMANTIC_COMPILER_GRANT_OPERATIONS
+                    if args.profile == "semantic-compiler"
+                    else (
+                        COMPILER_GRANT_OPERATIONS
+                        if args.profile == "compiler"
+                        else tuple(args.operation or ("remember",))
+                    )
                 )
                 return store.enable_grant(
                     writer_id=args.writer_id,

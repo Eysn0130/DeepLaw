@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-compilation-duty-report.v1.schema.json",
+  "title": "DeepLaw Semantic Compilation Duty Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "duty_id", "duty_type", "required", "status", "output_refs", "evidence_refs",
+    "reason", "unresolved_items", "omission_reason"
+  ],
+  "properties": {
+    "duty_id": {"type": "string", "pattern": "^duty_[0-9a-f]{24}$"},
+    "duty_type": {"$ref": "#/$defs/dutyType"},
+    "required": {"type": "boolean"},
+    "status": {"enum": ["satisfied", "not_applicable", "unresolved", "omitted_with_reason"]},
+    "output_refs": {
+      "type": "array", "maxItems": 1000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^(knowledge|relationkey|observation)_[0-9a-f]{24}$"}
+    },
+    "evidence_refs": {
+      "type": "array", "maxItems": 1000,
+      "items": {"$ref": "#/$defs/sourceReference"}
+    },
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "unresolved_items": {
+      "type": "array", "maxItems": 256, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "omission_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 2000}
+  },
+  "$defs": {
+    "dutyType": {
+      "enum": [
+        "source_summary", "key_claims", "entities", "concepts", "events",
+        "procedures", "comparisons", "typed_relations", "contradiction_scan",
+        "identity_resolution", "unresolved_questions", "source_coverage",
+        "affected_synthesis_detection", "overview_impact", "limitations_and_warnings"
+      ]
+    },
+    "sourceReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

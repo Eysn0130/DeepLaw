@@ -16,7 +16,10 @@ from deeplaw.compilation.coordinator import CompilationCoordinator
 from deeplaw.compilation.models import (
     COMPILER_GRANT_OPERATIONS,
     MAX_PACKET_PROVIDER_BYTES,
+    SEMANTIC_COMPILER_GRANT_OPERATIONS,
 )
+from deeplaw.compilation.profiles import REQUIRED_SEMANTIC_DUTIES, SEMANTIC_DUTIES
+from deeplaw.compilation.semantic import SemanticCompilationService
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     autonomous_core_installed,
@@ -39,6 +42,61 @@ from deeplaw.knowledge_sink_mcp_server import (
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.retrieval import PurposeAwareRetrievalService
 from deeplaw.util import canonical_json, sha256_bytes, strict_json_loads
+
+
+def _semantic_observation_plan(
+    service: SemanticCompilationService,
+    packet: dict,
+) -> dict:
+    observations = []
+    for fragment in packet["fragments"]:
+        observation = {
+            "packet_id": packet["packet_id"],
+            "semantic_key_candidate": "entity:deeplaw",
+            "kind": "entity",
+            "title_candidate": "DeepLaw",
+            "body_candidate": "A source-bound entity observation.",
+            "aliases": ["Deep Law"],
+            "source_refs": [
+                {
+                    "source_revision_id": packet["source_revision_id"],
+                    "fragment_id": fragment["fragment_id"],
+                    "locator": fragment["locator"],
+                    "quote_sha256": fragment["text_sha256"],
+                }
+            ],
+            "assertion": None,
+            "applicability": {
+                "description": "This source revision.",
+                "scopes": [],
+                "conditions": [],
+                "exclusions": [],
+            },
+            "tags": ["semantic-v2"],
+            "reason": "Observe one cross-packet entity candidate.",
+        }
+        observation["observation_id"] = service.observation_id(
+            compilation_run_id=packet["compilation_run_id"],
+            packet_id=packet["packet_id"],
+            observation=observation,
+        )
+        observations.append(observation)
+    fragment_ids = [item["fragment_id"] for item in packet["fragments"]]
+    return {
+        "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+        "compilation_run_id": packet["compilation_run_id"],
+        "source_revision_id": packet["source_revision_id"],
+        "packet_id": packet["packet_id"],
+        "expected_audit_head": packet["input_audit_head"],
+        "observations": observations,
+        "coverage": {
+            "packet_fragment_count": len(fragment_ids),
+            "covered_fragment_ids": fragment_ids,
+            "omitted_fragments": [],
+            "ratio": 1.0,
+        },
+        "warnings": [],
+    }
 
 
 def _ready_source(tmp_path: Path, *, section_count: int = 4) -> tuple[Path, dict, str]:
@@ -169,6 +227,174 @@ def test_quality_scoring_does_not_credit_duplicate_channel_hits() -> None:
     assert score["recall_at_k"] == 1.0
     assert score["precision_at_k"] == pytest.approx(1 / 3)
     assert score["ndcg"] == 1.0
+
+
+def test_semantic_v2_observes_across_packets_and_publishes_atomically(
+    tmp_path: Path,
+) -> None:
+    root, compiled, _grant_id = _ready_source(tmp_path, section_count=3)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="deterministic-semantic-agent",
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    profile = KnowledgeOS.open(root).compilations.profile(version="2")
+    run = KnowledgeOS.open(root).compilations.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile=profile["compiler_profile"],
+        compiler_profile_version=profile["compiler_profile_version"],
+        host_identity="deterministic-semantic-agent",
+        model_identity=None,
+        prompt_template_id=profile["prompt_template_id"],
+        prompt_config_sha256=profile["prompt_config_sha256"],
+        plan_configuration_sha256=profile["plan_configuration_sha256"],
+        packet_max_fragments=1,
+        confirm_no_case_data=True,
+    )
+    service = SemanticCompilationService(root)
+    packets = []
+    while packet := run.next_packet():
+        packets.append(packet)
+        run.stage_observations(
+            _semantic_observation_plan(service, packet),
+            confirm_no_case_data=True,
+        )
+        with AutonomousKnowledgeStore(root, read_only=True) as store:
+            assert store.recall("DeepLaw", limit=20)["results"] == []
+    assert len(packets) == 3
+    assert packets[1]["semantic_protocol"]["prior_inventory"]["observation_count"] == 1
+
+    inventory = run.semantic_inventory()
+    assert inventory["observation_count"] == 3
+    assert inventory["duplicate_clusters"][0]["observation_ids"] == sorted(
+        item["observation_id"] for item in inventory["observations"]
+    )
+    finalization_packet = run.finalization_packet()
+    assert len(finalization_packet["duties"]) == 15
+
+    all_source_refs = [
+        reference
+        for observation in inventory["observations"]
+        for reference in observation["source_refs"]
+    ]
+    source_revision_id = compiled["identity"]["source_revision_id"]
+    input_set_body = {
+        "source_revision_ids": [source_revision_id],
+        "knowledge_revision_ids": [],
+        "relation_revision_ids": [],
+        "compilation_run_ids": [run.compilation_run_id],
+    }
+    first_plan = _plan(packets[0], expected_audit_head=packets[0]["input_audit_head"])
+    first_plan["object_actions"] = [
+        {
+            "action": "create",
+            "kind": "entity",
+            "semantic_key": "entity:deeplaw",
+            "knowledge_id": None,
+            "expected_revision_id": None,
+            "title": "DeepLaw",
+            "body": "DeepLaw is observed consistently across this source.",
+            "aliases": ["Deep Law"],
+            "epistemic_state": "supported",
+            "source_refs": all_source_refs,
+            "assertion": None,
+            "tags": ["semantic-v2"],
+            "valid_from": None,
+            "valid_to": None,
+            "applicability": {
+                "description": "This source revision.",
+                "scopes": [],
+                "conditions": [],
+                "exclusions": [],
+            },
+            "synthesis_inputs": None,
+            "reason": "Merge exact duplicate cross-packet observations.",
+        },
+        {
+            "action": "create",
+            "kind": "synthesis",
+            "semantic_key": f"source-summary:{source_revision_id}",
+            "knowledge_id": None,
+            "expected_revision_id": None,
+            "title": "Source summary",
+            "body": "The source contains three evidence-bound statements about DeepLaw.",
+            "aliases": [],
+            "epistemic_state": "supported",
+            "source_refs": all_source_refs,
+            "assertion": None,
+            "tags": ["source-summary"],
+            "valid_from": None,
+            "valid_to": None,
+            "applicability": {
+                "description": "This source revision.",
+                "scopes": [],
+                "conditions": [],
+                "exclusions": [],
+            },
+            "synthesis_inputs": {
+                **input_set_body,
+                "input_set_sha256": sha256_bytes(
+                    canonical_json(input_set_body).encode("utf-8")
+                ),
+            },
+            "reason": "Publish the canonical source-bound summary.",
+        },
+    ]
+    packet_plans = [first_plan]
+    for packet in packets[1:]:
+        packet_plan = _plan(packet, expected_audit_head=packet["input_audit_head"])
+        packet_plan["object_actions"] = []
+        packet_plans.append(packet_plan)
+    duty_reports = []
+    for duty in SEMANTIC_DUTIES:
+        duty_reports.append(
+            {
+                "duty_id": finalization_packet["duties"][
+                    [item["duty_type"] for item in finalization_packet["duties"]].index(duty)
+                ]["duty_id"],
+                "duty_type": duty,
+                "required": duty in REQUIRED_SEMANTIC_DUTIES,
+                "status": "satisfied" if duty == "source_summary" else "not_applicable",
+                "output_refs": [],
+                "evidence_refs": all_source_refs if duty == "source_summary" else [],
+                "reason": "Deterministic fixture duty decision.",
+                "unresolved_items": [],
+                "omission_reason": None,
+            }
+        )
+    publication_plan = {
+        "schema_version": "deeplaw.semantic-publication-plan/v2",
+        "compilation_run_id": run.compilation_run_id,
+        "source_revision_id": source_revision_id,
+        "expected_audit_head": packets[0]["input_audit_head"],
+        "inventory_sha256": inventory["inventory_sha256"],
+        "observation_dispositions": [
+            {
+                "observation_id": observation["observation_id"],
+                "disposition": "published" if index == 0 else "merged_into",
+                "target_ref": "entity:deeplaw",
+                "reason": "Merge the exact semantic identity cluster.",
+            }
+            for index, observation in enumerate(inventory["observations"])
+        ],
+        "packet_plans": packet_plans,
+        "duty_reports": duty_reports,
+        "semantic_status": "complete",
+        "warnings": [],
+    }
+    staged = run.stage_publication(publication_plan, confirm_no_case_data=True)
+    assert staged["semantic_status"] == "complete"
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.recall("DeepLaw", limit=20)["results"] == []
+    assert run.validate(confirm_no_case_data=True)["valid"] is True
+    receipt = run.commit(confirm_no_case_data=True)
+    assert receipt["semantic_status"] == "complete"
+    assert receipt["observation_count"] == receipt["disposition_count"] == 3
+    assert receipt["source_summary_revision_id"].startswith("knowledgerev_")
+    status = run.status()
+    assert status["semantic_status"] == "complete"
+    assert status["gaps"] == []
 
 
 def test_compilation_batches_remain_invisible_until_one_atomic_commit(tmp_path: Path) -> None:
