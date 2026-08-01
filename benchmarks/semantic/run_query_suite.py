@@ -133,7 +133,7 @@ def _runtime_python(prefix: list[str]) -> Path:
     )
     if not executable.is_file():
         raise ValueError("first-party query executable cannot be resolved")
-    executable = executable.resolve(strict=True)
+    executable = executable.absolute()
     if executable.stem.startswith("python"):
         return executable
     if executable.stem != "deeplaw":
@@ -141,7 +141,7 @@ def _runtime_python(prefix: list[str]) -> Path:
     for name in ("python", "python.exe"):
         python = executable.parent / name
         if python.is_file():
-            return python.resolve(strict=True)
+            return python.absolute()
     raise ValueError("first-party deeplaw runtime has no sibling Python executable")
 
 

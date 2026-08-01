@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import platform
 import sys
@@ -33,6 +34,7 @@ from benchmarks.semantic.run_query_suite import (
     _evaluate_read_challenge,
     _execution_environment,
     _rank_metrics,
+    _runtime_python,
 )
 from benchmarks.semantic.score_semantic_run import (
     _content_assertion_valid,
@@ -329,14 +331,47 @@ def test_paired_bootstrap_detects_only_interval_bound_regression() -> None:
 
 
 def test_query_environment_is_probed_from_first_party_runtime() -> None:
+    packages = sorted(
+        {
+            (
+                str(distribution.metadata.get("Name") or "").casefold(),
+                distribution.version,
+            )
+            for distribution in importlib.metadata.distributions()
+            if distribution.metadata.get("Name")
+        }
+    )
+    expected_inventory_sha256 = sha256_bytes(
+        json.dumps(
+            packages,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
     environment = _execution_environment(
         prefix=[sys.executable, "-m", "deeplaw"],
         network_policy="offline",
     )
 
     assert environment["python"]["version"] == platform.python_version()
-    assert len(environment["dependency_inventory_sha256"]) == 64
+    assert environment["dependency_inventory_sha256"] == expected_inventory_sha256
     assert environment["network_policy"] == "offline"
+
+
+def test_runtime_probe_preserves_symlinked_venv_python(tmp_path: Path) -> None:
+    if sys.platform == "win32":
+        pytest.skip("Windows virtual environments use python.exe rather than a Python symlink")
+    executable_directory = tmp_path / "runtime" / "bin"
+    executable_directory.mkdir(parents=True)
+    deeplaw = executable_directory / "deeplaw"
+    deeplaw.write_text("runtime probe fixture\n", encoding="utf-8")
+    python = executable_directory / "python"
+    python.symlink_to(sys.executable)
+
+    selected = _runtime_python([str(deeplaw)])
+
+    assert selected == python.absolute()
+    assert selected != python.resolve(strict=True)
 
 
 def test_temporal_and_retention_gold_are_unambiguous() -> None:
