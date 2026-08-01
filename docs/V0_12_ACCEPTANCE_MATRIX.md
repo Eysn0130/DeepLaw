@@ -53,7 +53,7 @@ verification are deliberately generated after the final clean commit to avoid se
 | 37 | Local verified — canonical/derived roots reject editor writes | `editor_bridge.py` path policy | parametrized editor write-policy tests |
 | 38 | Local verified — Obsidian can begin a governed run | plugin command calls first-party CLI/MCP | plugin tests plus Source stdio tests |
 | 39 | Local verified — status, gaps, and exact locator are visible | plugin commands and read-only context envelope | plugin tests and editor contract tests |
-| 40 | Local verified — Tolaria merge preserves existing settings | `adapters/tolaria/integration.py` | `test_tolaria_mcp_merge_preserves_settings_and_fails_on_collision`, integration harness |
+| 40 | Local verified — Tolaria merge preserves settings and creates owner-only output | `adapters/tolaria/setup.py`; POSIX mode/Windows native ACL | merge/config security tests, integration harness |
 | 41 | Local verified — ordinary Tolaria note tools cannot write owned roots | bounded bridge intent and path policy | Tolaria/editor policy tests |
 | 42 | Local verified — active note receives ephemeral context | Tolaria context mapping | Tolaria temporary-Vault harness |
 | 43 | Local verified — `knowledge_support` remains one read-only leaf | `knowledge_mcp_server.py`; input/output v5 | MCP tool-list and stdio tests |

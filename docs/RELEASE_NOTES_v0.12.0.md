@@ -26,7 +26,8 @@ provenance, and post-release rows remain release gates rather than completed his
   closed contracts.
 - The Obsidian bridge waits for layout readiness, exposes governed commands, and cannot treat paths,
   frontmatter, Wiki links, or Canvas as identity or Authority. The Tolaria bridge merges existing
-  configuration, uses ephemeral active-note context, and keeps canonical roots read-only.
+  configuration into owner-only output (POSIX mode or verified native Windows ACL), uses ephemeral
+  active-note context, and keeps canonical roots read-only.
 - Authoritative Pack evidence now exposes capability types, deterministic Challenge Trace/replay,
   citation audit, held-out expert review state, and a reusable Pack Core contract while preserving
   the physically separate read-only `law_support` boundary.
@@ -47,6 +48,8 @@ provenance, and post-release rows remain release gates rather than completed his
   isolation. No lifecycle result is represented as a real-model result.
 - Fresh-wheel, reproducible wheel/sdist, migration/rollback, derived rebuild, and bounded query
   runners are executable release gates.
+- Read-only release verification now closes SQLite handles deterministically, so official/private
+  update, deletion, uninstall, and temporary authoritative gates do not retain Windows file locks.
 - An isolated source-free Authoritative evidence runner emits a digest-bound release report for
   capability predicates, Challenge Trace/replay, citation tamper rejection, temporal exclusion,
   read-only enforcement, and Authority failures. It explicitly keeps unreviewed legal Gold pending.

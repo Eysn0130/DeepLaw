@@ -6,6 +6,7 @@ import re
 import shutil
 import sqlite3
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -727,7 +728,10 @@ def verify_release_artifact(path: Path) -> dict[str, Any]:
     if sha256_file(report_path) != expected_report_hash:
         raise RuntimeError("release build report SHA-256 does not match release.json")
     if manifest["schema_version"] == SCHEMA_VERSION:
-        with connect_readonly(database) as connection:
+        # sqlite3.Connection.__exit__ commits or rolls back but does not close the
+        # handle.  Keep verification side-effect free and release the immutable
+        # database before an update/uninstall tries to replace it on Windows.
+        with closing(connect_readonly(database)) as connection:
             rows = connection.execute(
                 """
                 SELECT segment_id, schema_version, integrity, source_identity_base,
@@ -840,7 +844,7 @@ def migrate_release_capabilities_v5_to_v6(
     source_manifest = verify_release_artifact(database)
     if source_manifest["schema_version"] != LEGACY_SCHEMA_VERSION:
         raise ValueError("capability migration requires an exact v2/v5 release")
-    with connect_readonly(database) as source:
+    with closing(connect_readonly(database)) as source:
         records = _capability_records_from_connection(
             source,
             collection_scope=str(source_manifest.get("collection_scope", "official")),

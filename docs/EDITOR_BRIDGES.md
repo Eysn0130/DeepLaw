@@ -77,8 +77,9 @@ The executable adapter under `adapters/tolaria/` merges namespaced MCP entries i
 output file without overwriting existing settings, maps Tolaria's documented active-note snapshot
 to the closed Editor Context Envelope, and emits UI-only `open_note` intents. Its Agent guide keeps
 ordinary note creation in `drafts/` or `notes/`; explicit promotion uses the independently enabled
-DeepLaw Sink. A source-free temporary-Vault harness proves the mapping remains ephemeral and does
-not mutate the Ledger.
+DeepLaw Sink. The new configuration is owner-only: POSIX uses mode `0600`, while Windows applies
+and independently verifies a protected native owner ACL. A source-free temporary-Vault harness
+proves the mapping remains ephemeral and does not mutate the Ledger.
 
 The flow is: Tolaria supplies explicit context → DeepLaw retrieves or compiles → an authorized Sink
 commits canonical state → Tolaria refreshes/opens the exact projected path. Tolaria's note tools

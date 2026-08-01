@@ -11,6 +11,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 import deeplaw.ingest as ingest_module
+import deeplaw.store as store_module
 from deeplaw.evaluate import evaluate_file
 from deeplaw.extract import ExtractionError
 from deeplaw.ingest import build_release
@@ -102,6 +103,47 @@ def test_release_is_content_addressed_readonly_and_idempotent(tmp_path: Path) ->
 
     with DeepLaw(database) as law, pytest.raises(sqlite3.OperationalError):
         law.connection.execute("DELETE FROM segments")
+
+
+def test_release_verification_closes_its_readonly_connection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release_dir, _manifest, _output = _build_fixture(tmp_path)
+    database = release_dir / "deeplaw.sqlite3"
+    connect = store_module.connect_readonly
+
+    class TrackedConnection:
+        def __init__(self, connection: sqlite3.Connection) -> None:
+            self.connection = connection
+            self.closed = False
+
+        def __enter__(self) -> TrackedConnection:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            # Match sqlite3.Connection: leaving a transaction does not close it.
+            return None
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self.connection, name)
+
+        def close(self) -> None:
+            self.closed = True
+            self.connection.close()
+
+    observed: list[TrackedConnection] = []
+
+    def tracked_connect(path: Path) -> TrackedConnection:
+        tracked = TrackedConnection(connect(path))
+        observed.append(tracked)
+        return tracked
+
+    monkeypatch.setattr(store_module, "connect_readonly", tracked_connect)
+    verify_release_artifact(database)
+
+    assert observed
+    assert all(connection.closed is True for connection in observed)
 
 
 def test_release_id_binds_exact_manifest_bytes(tmp_path: Path) -> None:

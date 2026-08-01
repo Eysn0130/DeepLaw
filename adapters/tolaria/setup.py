@@ -91,11 +91,23 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             output.unlink(missing_ok=True)
             raise
+        try:
+            if os.name == "nt":
+                from deeplaw.windows_acl import harden_windows_private_file
+
+                harden_windows_private_file(output)
+                output_security = "windows_native_acl_owner_only"
+            else:
+                os.chmod(output, 0o600)
+                output_security = "posix_mode_0600"
+        except Exception:
+            output.unlink(missing_ok=True)
+            raise
         result = {
             "schema_version": "deeplaw.tolaria-mcp-merge-receipt/v1",
             "existing_settings_preserved": True,
             "output_created": True,
-            "output_mode": "0600",
+            "output_security": output_security,
             "mcp_server_names": sorted(
                 name for name in merged["mcpServers"] if name.startswith("deeplaw_")
             ),

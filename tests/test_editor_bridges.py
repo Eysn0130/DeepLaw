@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -180,7 +181,11 @@ def test_editor_context_is_ephemeral_and_does_not_mutate_the_ledger(
     assert result["ephemeral_context"] is True
     assert result["persistence_requested"] is False
     assert result["persistence_performed"] is False
-    assert api_result["retrieval"]["query_plan"] == result["retrieval"]["query_plan"]
+    api_plan = dict(api_result["retrieval"]["query_plan"])
+    direct_plan = dict(result["retrieval"]["query_plan"])
+    assert api_plan.pop("created_at").endswith("Z")
+    assert direct_plan.pop("created_at").endswith("Z")
+    assert api_plan == direct_plan
     assert cli_result["retrieval"]["query_plan"]["query_sha256"] == result[
         "retrieval"
     ]["query_plan"]["query_sha256"]
@@ -302,7 +307,14 @@ def test_tolaria_setup_cli_writes_new_private_config_without_echoing_contents(
     receipt = json.loads(completed.stdout)
     assert receipt["existing_settings_preserved"] is True
     assert "must-not-be-echoed" not in completed.stdout
-    assert output.stat().st_mode & 0o777 == 0o600
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_path_acl_report
+
+        assert receipt["output_security"] == "windows_native_acl_owner_only"
+        assert native_windows_path_acl_report(output)["permissions_verified"] is True
+    else:
+        assert receipt["output_security"] == "posix_mode_0600"
+        assert output.stat().st_mode & 0o777 == 0o600
     merged = json.loads(output.read_text(encoding="utf-8"))
     assert merged["private_setting"] == "must-not-be-echoed"
     assert "tolaria" in merged["mcpServers"]

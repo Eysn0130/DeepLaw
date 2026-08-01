@@ -329,6 +329,72 @@ def native_windows_acl_report(root: str | Path) -> dict[str, Any]:
     }
 
 
+def native_windows_path_acl_report(path: str | Path) -> dict[str, Any]:
+    """Verify the native owner-only ACL of one regular file or directory."""
+    selected = Path(path).expanduser().absolute()
+    if os.name != "nt":
+        return {
+            "schema_version": WINDOWS_ACL_SCHEMA,
+            "platform": os.name,
+            "status": "not_applicable",
+            "permissions_verified": False,
+            "errors": ["windows_acl_not_applicable"],
+            "entries": [],
+        }
+    if selected.is_symlink() or not selected.exists() or not (
+        selected.is_file() or selected.is_dir()
+    ):
+        raise RuntimeError("Windows ACL report requires one regular file or directory")
+    encoded_paths = base64.b64encode(
+        json.dumps([str(selected)], ensure_ascii=False).encode()
+    ).decode("ascii")
+    payload = _run_encoded_script(
+        _ACL_QUERY_SCRIPT,
+        environment={"DEEPLAW_ACL_PATHS_B64": encoded_paths},
+    )
+    entries = payload.get("entries")
+    if isinstance(entries, dict):
+        payload = {**payload, "entries": [entries]}
+    report = evaluate_windows_acl_payload(payload)
+    return {
+        **report,
+        "platform": "nt",
+        "status": "verified" if report["permissions_verified"] else "failed",
+        "scan_complete": True,
+        "files_and_directories_checked": 1,
+    }
+
+
+def harden_windows_private_file(path: str | Path) -> dict[str, Any]:
+    """Apply and verify an owner-only native ACL to one private file."""
+    selected = Path(path).expanduser().absolute()
+    if os.name != "nt":
+        return {
+            "schema_version": "deeplaw.windows-acl-hardening/v1",
+            "platform": os.name,
+            "applied": False,
+            "reason": "not_applicable",
+        }
+    if selected.is_symlink() or not selected.is_file():
+        raise RuntimeError("Windows private-file ACL hardening requires a regular file")
+    encoded_root = base64.b64encode(str(selected).encode()).decode("ascii")
+    result = _run_encoded_script(
+        _ACL_HARDEN_SCRIPT,
+        environment={"DEEPLAW_ACL_ROOT_B64": encoded_root},
+    )
+    verification = native_windows_path_acl_report(selected)
+    if not verification["permissions_verified"]:
+        raise RuntimeError("Windows private-file ACL hardening did not pass native verification")
+    return {
+        "schema_version": "deeplaw.windows-acl-hardening/v1",
+        "platform": "nt",
+        "applied": True,
+        "item_count": result.get("item_count"),
+        "current_user_sid": result.get("current_user_sid"),
+        "verification": verification,
+    }
+
+
 def harden_windows_vault(root: str | Path) -> dict[str, Any]:
     vault_root = Path(root).expanduser().absolute()
     if os.name != "nt":
