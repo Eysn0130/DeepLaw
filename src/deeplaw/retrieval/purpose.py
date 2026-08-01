@@ -25,6 +25,7 @@ QueryPurpose = Literal[
     "freshness_check",
 ]
 QueryPolicy = Literal["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
+QueryPlanVersion = Literal["4", "5"]
 
 QUERY_PURPOSES: Final = frozenset(
     {
@@ -100,6 +101,16 @@ _KIND_PRIORITY: Final = {
 _MAX_PROVIDER_CHARS: Final = 65_536
 _MIN_COMPILED_RERANKER_SCORE: Final = 0.20
 _MIN_EVIDENCE_RERANKER_SCORE: Final = 0.10
+_KNOWLEDGE_DUTIES: Final = (
+    "primary_answer",
+    "definition",
+    "temporal_freshness",
+    "contradiction_or_counterevidence",
+    "limitation",
+    "source_evidence",
+    "applicability",
+    "unresolved_gap",
+)
 
 
 @dataclass(frozen=True)
@@ -133,10 +144,13 @@ class PurposeAwareRetrievalService:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
+        query_plan_version: QueryPlanVersion = "4",
     ) -> dict[str, Any]:
         selected_query = self._bounded_query(query)
         if purpose not in QUERY_PURPOSES:
             raise ValueError("query purpose is invalid")
+        if query_plan_version not in {"4", "5"}:
+            raise ValueError("query plan version is invalid")
         selected_policy = policy or _DEFAULT_POLICY[purpose]
         if selected_policy not in QUERY_POLICIES:
             raise ValueError("query policy is invalid")
@@ -188,7 +202,14 @@ class PurposeAwareRetrievalService:
                     audit_head=knowledge_store.audit_head,
                     legacy_audit_head=knowledge_store.legacy_audit_head,
                 )
-                _validate_contract("purpose-aware-retrieval.v1.schema.json", result)
+                if query_plan_version == "5":
+                    result = self._upgrade_to_v5(
+                        store=knowledge_store,
+                        result=result,
+                    )
+                    _validate_contract("purpose-aware-retrieval.v2.schema.json", result)
+                else:
+                    _validate_contract("purpose-aware-retrieval.v1.schema.json", result)
                 return result
 
             compiled_budget, evidence_budget = self._partition_budget(
@@ -202,7 +223,13 @@ class PurposeAwareRetrievalService:
                 purpose=purpose,
                 scope=selected_scope,
                 max_sensitivity=max_sensitivity,
-                limit=compiled_budget["items"],
+                limit=(
+                    min(20, max(compiled_budget["items"], compiled_budget["items"] * 3))
+                    if query_plan_version == "5"
+                    else compiled_budget["items"]
+                ),
+                selection_limit=compiled_budget["items"],
+                duty_aware=query_plan_version == "5",
                 max_chars=compiled_budget["characters"],
                 max_tokens=max_tokens,
                 max_sources=max_sources,
@@ -286,6 +313,14 @@ class PurposeAwareRetrievalService:
                 {"code": "retrieval_gap", "message": message}
                 for message in compiled["gaps"]
             )
+            if query_plan_version == "5":
+                gaps.extend(
+                    self._partial_compilation_gaps(
+                        knowledge_store,
+                        compiled=compiled["results"],
+                        evidence_source_revision_ids=evidence.selected_source_revision_ids,
+                    )
+                )
             evidence_attachment_count = self._evidence_attachment_count(
                 compiled["results"]
             )
@@ -386,12 +421,21 @@ class PurposeAwareRetrievalService:
                 "authority_changed_by_ranking": False,
                 "write_performed": False,
             }
+            if query_plan_version == "5":
+                result = self._upgrade_to_v5(store=knowledge_store, result=result)
             if (
                 len(canonical_json(result).encode("utf-8"))
                 > _MAX_PROVIDER_CHARS
             ):
                 raise RuntimeError("purpose-aware retrieval exceeds its hard 64 KiB budget")
-            _validate_contract("purpose-aware-retrieval.v1.schema.json", result)
+            _validate_contract(
+                (
+                    "purpose-aware-retrieval.v2.schema.json"
+                    if query_plan_version == "5"
+                    else "purpose-aware-retrieval.v1.schema.json"
+                ),
+                result,
+            )
             return result
 
     @staticmethod
@@ -471,6 +515,8 @@ class PurposeAwareRetrievalService:
         scope: str,
         max_sensitivity: str,
         limit: int,
+        selection_limit: int,
+        duty_aware: bool,
         max_chars: int,
         max_tokens: int,
         max_sources: int,
@@ -559,7 +605,10 @@ class PurposeAwareRetrievalService:
                 str(item.get("knowledge_id")),
             )
         )
-        accepted = accepted[:limit]
+        if duty_aware:
+            accepted = self._duty_aware_selection(accepted, limit=selection_limit)
+        else:
+            accepted = accepted[:selection_limit]
         selected_ids = {item["knowledge_id"] for item in accepted}
         contradictions = [
             item
@@ -589,6 +638,335 @@ class PurposeAwareRetrievalService:
             ),
             "stale_prevented_count": stale_prevented,
         }
+
+    @staticmethod
+    def _duty_aware_selection(
+        candidates: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if limit <= 0:
+            return []
+        selected: list[dict[str, Any]] = []
+        selected_ids: set[str] = set()
+
+        def add_first(predicate: Any) -> None:
+            for item in candidates:
+                revision_id = str(item.get("revision_id", ""))
+                if revision_id not in selected_ids and predicate(item):
+                    selected.append(item)
+                    selected_ids.add(revision_id)
+                    return
+
+        add_first(lambda item: "exact" in item.get("channels", []))
+        add_first(
+            lambda item: item.get("kind") == "synthesis"
+            and item.get("freshness", {}).get("state") == "fresh"
+        )
+        for kinds in (
+            {"concept", "entity"},
+            {"claim", "decision"},
+            {"procedure"},
+            {"comparison", "event"},
+        ):
+            add_first(lambda item, selected_kinds=kinds: item.get("kind") in selected_kinds)
+        for item in candidates:
+            if len(selected) >= limit:
+                break
+            revision_id = str(item.get("revision_id", ""))
+            if revision_id not in selected_ids and not item.get("source_free", False):
+                selected.append(item)
+                selected_ids.add(revision_id)
+        for item in candidates:
+            if len(selected) >= limit:
+                break
+            revision_id = str(item.get("revision_id", ""))
+            if revision_id not in selected_ids:
+                selected.append(item)
+                selected_ids.add(revision_id)
+        return selected[:limit]
+
+    @staticmethod
+    def _partial_compilation_gaps(
+        store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+        evidence_source_revision_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        source_revision_ids = set(evidence_source_revision_ids)
+        for item in compiled:
+            for reference in item.get("source_refs", []):
+                source_revision_id = reference.get("source_revision_id")
+                if isinstance(source_revision_id, str):
+                    source_revision_ids.add(source_revision_id)
+        partial = []
+        for source_revision_id in sorted(source_revision_ids):
+            row = store.connection.execute(
+                """
+                SELECT semantic.semantic_status
+                FROM source_compilation_runs_v1 AS runs
+                JOIN semantic_compilation_runs_v2 AS semantic
+                  ON semantic.compilation_run_id = runs.compilation_run_id
+                WHERE runs.source_revision_id = ?
+                  AND runs.status IN ('committed', 'projection_pending', 'succeeded')
+                ORDER BY runs.created_at DESC, runs.compilation_run_id DESC
+                LIMIT 1
+                """,
+                (source_revision_id,),
+            ).fetchone()
+            if row is not None and row["semantic_status"] in {
+                "partial",
+                "blocked",
+                "unknown",
+            }:
+                partial.append(source_revision_id)
+        if not partial:
+            return []
+        return [
+            {
+                "code": "partial_compilation",
+                "message": (
+                    "Selected evidence depends on a semantically incomplete Compilation Run."
+                ),
+                "count": len(partial),
+                "source_revision_ids": partial[:16],
+            }
+        ]
+
+    @staticmethod
+    def _knowledge_partitions(
+        store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, list[str]]:
+        partitions = {
+            "source_bound_compiled": [],
+            "revision_bound_synthesis": [],
+            "run_bound_knowledge": [],
+            "source_free": [],
+            "exact_evidence": [],
+            "agent_interpretation": [],
+        }
+        for item in compiled:
+            revision_id = str(item.get("revision_id", ""))
+            if not revision_id:
+                continue
+            synthesis = store.connection.execute(
+                """
+                SELECT 1 FROM synthesis_input_sets_v1
+                WHERE synthesis_revision_id = ?
+                """,
+                (revision_id,),
+            ).fetchone()
+            if synthesis is not None:
+                partitions["revision_bound_synthesis"].append(revision_id)
+            elif item.get("verification") == "run_bound":
+                partitions["run_bound_knowledge"].append(revision_id)
+            elif item.get("source_refs"):
+                partitions["source_bound_compiled"].append(revision_id)
+            if item.get("source_free", False):
+                partitions["source_free"].append(revision_id)
+                partitions["agent_interpretation"].append(revision_id)
+        partitions["exact_evidence"] = sorted(
+            {
+                str(item["fragment_id"])
+                for item in evidence
+                if isinstance(item.get("fragment_id"), str)
+            }
+        )
+        return {key: list(dict.fromkeys(values))[:20] for key, values in partitions.items()}
+
+    @staticmethod
+    def _knowledge_duty_reports(
+        *,
+        purpose: str,
+        compiled: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+        contradictions: list[dict[str, Any]],
+        gaps: list[dict[str, Any]],
+        partitions: dict[str, list[str]],
+    ) -> tuple[list[dict[str, Any]], float]:
+        compiled_refs = [str(item["revision_id"]) for item in compiled]
+        evidence_refs = [
+            str(item["fragment_id"])
+            for item in evidence
+            if isinstance(item.get("fragment_id"), str)
+        ]
+        by_kind: dict[str, list[str]] = {}
+        for item in compiled:
+            by_kind.setdefault(str(item.get("kind")), []).append(
+                str(item.get("revision_id"))
+            )
+        definitions = [*by_kind.get("concept", []), *by_kind.get("entity", [])]
+        applicability_refs = [
+            str(item["revision_id"])
+            for item in compiled
+            if item.get("applicability")
+        ]
+        unresolved_refs = [str(item.get("code", "retrieval_gap")) for item in gaps]
+        specifications = {
+            "primary_answer": (
+                purpose == "answer",
+                [
+                    *partitions["revision_bound_synthesis"],
+                    *partitions["source_bound_compiled"],
+                    *partitions["run_bound_knowledge"],
+                ],
+                "Admitted compiled knowledge covers the primary answer duty.",
+            ),
+            "definition": (
+                purpose == "answer",
+                definitions,
+                "Concept or Entity knowledge covers the definition duty.",
+            ),
+            "temporal_freshness": (
+                purpose in {"answer", "historical", "freshness_check"},
+                compiled_refs,
+                "Selected compiled revisions passed deterministic freshness admission.",
+            ),
+            "contradiction_or_counterevidence": (
+                purpose in {"answer", "verify"},
+                [str(item.get("relation_revision_id", "contradiction")) for item in contradictions],
+                "Contradiction discovery was included in the query plan.",
+            ),
+            "limitation": (
+                True,
+                unresolved_refs,
+                "Visible gaps and bounded result limits carry limitations.",
+            ),
+            "source_evidence": (
+                purpose in {"verify", "quote", "historical"}
+                or bool(partitions["source_bound_compiled"])
+                or bool(partitions["revision_bound_synthesis"]),
+                [*evidence_refs, *partitions["source_bound_compiled"]],
+                "Exact evidence or evidence-bound compiled knowledge is visible.",
+            ),
+            "applicability": (
+                purpose == "answer",
+                applicability_refs,
+                "Selected Knowledge applicability metadata is preserved.",
+            ),
+            "unresolved_gap": (
+                True,
+                unresolved_refs,
+                "Unresolved retrieval and compilation gaps remain explicit.",
+            ),
+        }
+        reports = []
+        applicable_count = 0
+        satisfied_count = 0
+        for duty in _KNOWLEDGE_DUTIES:
+            applicable, refs, reason = specifications[duty]
+            if applicable:
+                applicable_count += 1
+            status = (
+                "not_applicable"
+                if not applicable
+                else "satisfied"
+                if refs
+                or duty in {
+                    "contradiction_or_counterevidence",
+                    "limitation",
+                    "unresolved_gap",
+                }
+                else "unresolved"
+            )
+            if applicable and status == "satisfied":
+                satisfied_count += 1
+            reports.append(
+                {
+                    "duty": duty,
+                    "applicable": applicable,
+                    "status": status,
+                    "selected_refs": list(dict.fromkeys(refs))[:20],
+                    "reason": reason,
+                }
+            )
+        coverage = satisfied_count / applicable_count if applicable_count else 1.0
+        return reports, coverage
+
+    @classmethod
+    def _upgrade_to_v5(
+        cls,
+        *,
+        store: AutonomousKnowledgeStore,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        partitions = cls._knowledge_partitions(
+            store,
+            compiled=result["compiled"],
+            evidence=result["evidence"],
+        )
+        duties, duty_coverage = cls._knowledge_duty_reports(
+            purpose=result["purpose"],
+            compiled=result["compiled"],
+            evidence=result["evidence"],
+            contradictions=result["contradictions"],
+            gaps=result["gaps"],
+            partitions=partitions,
+        )
+        plan = dict(result["query_plan"])
+        plan["schema_version"] = "deeplaw.knowledge-query-plan/v5"
+        plan["knowledge_duties"] = duties
+        plan["knowledge_partitions"] = partitions
+        plan["duty_coverage"] = duty_coverage
+        _validate_contract("knowledge-query-plan.v5.schema.json", plan)
+        upgraded = dict(result)
+        upgraded["schema_version"] = "deeplaw.purpose-aware-retrieval/v2"
+        upgraded["query_plan"] = plan
+        upgraded["query_plan_sha256"] = sha256_bytes(
+            canonical_json(plan).encode("utf-8")
+        )
+        selected_count = len(result["compiled"])
+        metrics = dict(result["metrics"])
+        metrics.update(
+            {
+                "compiled_hit_ratio": 1.0 if selected_count else 0.0,
+                "repeated_compiled_reuse_rate": (
+                    1.0 if metrics["repeated_query_reused_compilation"] else 0.0
+                ),
+                "source_fallback_ratio": (
+                    1.0 if metrics["source_fallback_used"] else 0.0
+                ),
+                "source_free_selection_rate": (
+                    len(partitions["source_free"]) / selected_count
+                    if selected_count
+                    else 0.0
+                ),
+                "evidence_attachment_rate": (
+                    metrics["evidence_attachment_count"] / selected_count
+                    if selected_count
+                    else 0.0
+                ),
+                "stale_selection_prevention": metrics[
+                    "stale_selection_prevented_count"
+                ],
+                "partial_compilation_gap_rate": (
+                    1.0
+                    if any(item.get("code") == "partial_compilation" for item in result["gaps"])
+                    else 0.0
+                ),
+                "duty_coverage": duty_coverage,
+                "provider_payload_bytes": 0,
+                "query_token_savings_vs_raw_fallback": max(
+                    0,
+                    estimate_tokens(
+                        " ".join(str(item.get("excerpt", "")) for item in result["evidence"])
+                    )
+                    - estimate_tokens(
+                        " ".join(str(item.get("content", "")) for item in result["compiled"])
+                    ),
+                ),
+            }
+        )
+        upgraded["metrics"] = metrics
+        for _ in range(3):
+            payload_bytes = len(canonical_json(upgraded).encode("utf-8"))
+            if metrics["provider_payload_bytes"] == payload_bytes:
+                break
+            metrics["provider_payload_bytes"] = payload_bytes
+        return upgraded
 
     @staticmethod
     def _revision_freshness(

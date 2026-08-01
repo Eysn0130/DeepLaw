@@ -1449,6 +1449,11 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="hybrid",
     )
     purpose_query.add_argument("--as-of")
+    purpose_query.add_argument(
+        "--query-plan-version",
+        choices=("4", "5"),
+        default="4",
+    )
 
     backfill = subcommands.add_parser(
         "backfill",
@@ -1960,6 +1965,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             retrieval_mode=args.retrieval_mode,
             as_of=args.as_of,
             kinds=tuple(args.kind),
+            query_plan_version=args.query_plan_version,
         )
     if command == "backfill":
         action = args.backfill_command

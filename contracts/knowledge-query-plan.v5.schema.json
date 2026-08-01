@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-query-plan.v5.schema.json",
+  "title": "DeepLaw duty-aware Knowledge Query Plan v5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "intent", "purpose", "policy_id", "query_sha256",
+    "channel_order", "used_channels", "scope", "max_sensitivity", "as_of",
+    "filters", "budget", "input_audit_head", "input_legacy_audit_head",
+    "compiled_candidate_count", "compiled_selected_count", "evidence_selected_count",
+    "uncompiled_source_count", "stale_selection_prevented_count",
+    "evidence_attachment_count", "fallback", "knowledge_duties",
+    "knowledge_partitions", "duty_coverage", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-query-plan/v5"},
+    "intent": {"const": "purpose_aware_knowledge_retrieval"},
+    "purpose": {"enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]},
+    "policy_id": {"enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "channel_order": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string"}},
+    "used_channels": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string"}},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private"]},
+    "as_of": {"type": ["string", "null"], "format": "date-time"},
+    "filters": {
+      "type": "object", "additionalProperties": false, "required": ["kinds"],
+      "properties": {"kinds": {"type": "array", "maxItems": 23, "uniqueItems": true, "items": {"type": "string"}}}
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["items", "characters", "tokens", "sources", "graph_hops", "provider_characters"],
+      "properties": {
+        "items": {"type": "integer", "minimum": 1, "maximum": 20},
+        "characters": {"type": "integer", "minimum": 200, "maximum": 20000},
+        "tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "sources": {"type": "integer", "minimum": 1, "maximum": 32},
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "provider_characters": {"const": 65536}
+      }
+    },
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compiled_candidate_count": {"type": "integer", "minimum": 0},
+    "compiled_selected_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "evidence_selected_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "uncompiled_source_count": {"type": "integer", "minimum": 0, "maximum": 16},
+    "stale_selection_prevented_count": {"type": "integer", "minimum": 0},
+    "evidence_attachment_count": {"type": "integer", "minimum": 0},
+    "fallback": {"type": "object"},
+    "knowledge_duties": {
+      "type": "array", "minItems": 8, "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["duty", "applicable", "status", "selected_refs", "reason"],
+        "properties": {
+          "duty": {"enum": ["primary_answer", "definition", "temporal_freshness", "contradiction_or_counterevidence", "limitation", "source_evidence", "applicability", "unresolved_gap"]},
+          "applicable": {"type": "boolean"},
+          "status": {"enum": ["satisfied", "not_applicable", "unresolved"]},
+          "selected_refs": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "maxLength": 200}},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "knowledge_partitions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_bound_compiled", "revision_bound_synthesis", "run_bound_knowledge", "source_free", "exact_evidence", "agent_interpretation"],
+      "properties": {
+        "source_bound_compiled": {"$ref": "#/$defs/idList"},
+        "revision_bound_synthesis": {"$ref": "#/$defs/idList"},
+        "run_bound_knowledge": {"$ref": "#/$defs/idList"},
+        "source_free": {"$ref": "#/$defs/idList"},
+        "exact_evidence": {"$ref": "#/$defs/idList"},
+        "agent_interpretation": {"$ref": "#/$defs/idList"}
+      }
+    },
+    "duty_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "idList": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 200}}
+  }
+}

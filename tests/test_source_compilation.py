@@ -1780,6 +1780,11 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "Durable source statement",
         purpose="answer",
     )
+    v5_result = KnowledgeOS.open(root).retrieval.query(
+        "Durable source statement",
+        purpose="answer",
+        query_plan_version="5",
+    )
 
     assert result["policy_id"] == "compiled-first-v1"
     assert result["compiled"]
@@ -1791,6 +1796,25 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     assert [item["revision_id"] for item in api_result["compiled"]] == [
         item["revision_id"] for item in result["compiled"]
     ]
+    assert v5_result["schema_version"] == "deeplaw.purpose-aware-retrieval/v2"
+    assert v5_result["query_plan"]["schema_version"] == (
+        "deeplaw.knowledge-query-plan/v5"
+    )
+    assert [item["duty"] for item in v5_result["query_plan"]["knowledge_duties"]] == [
+        "primary_answer",
+        "definition",
+        "temporal_freshness",
+        "contradiction_or_counterevidence",
+        "limitation",
+        "source_evidence",
+        "applicability",
+        "unresolved_gap",
+    ]
+    assert v5_result["query_plan"]["knowledge_partitions"][
+        "source_bound_compiled"
+    ]
+    assert v5_result["metrics"]["source_free_selection_rate"] == 0.0
+    assert v5_result["metrics"]["provider_payload_bytes"] <= 65_536
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (
