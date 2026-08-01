@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-query-replicate-comparison.v1.schema.json",
+  "title": "DeepLaw paired Semantic query replicate comparison v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "comparison_id", "schema_version", "status", "methodology", "runs",
+    "same_condition", "deterministic_metric_comparisons",
+    "performance_metric_comparisons", "safety_comparisons",
+    "candidate_reports_passed", "quality_non_regression",
+    "no_statistically_detected_performance_regression", "safety_passed",
+    "competitive_claim_eligible"
+  ],
+  "properties": {
+    "comparison_id": {
+      "type": "string", "pattern": "^semanticreplicatecomparison_[0-9a-f]{24}$"
+    },
+    "schema_version": {"const": "deeplaw.semantic-query-replicate-comparison/v1"},
+    "status": {"enum": ["passed", "failed"]},
+    "methodology": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "repetition_count_per_role", "execution_order", "pair_positions",
+        "deterministic_metric_aggregation", "performance_metric_aggregation",
+        "confidence_level", "bootstrap_resamples", "performance_tolerance_fraction"
+      ],
+      "properties": {
+        "repetition_count_per_role": {"const": 3},
+        "execution_order": {
+          "const": [
+            "baseline", "candidate", "candidate", "baseline", "baseline", "candidate"
+          ]
+        },
+        "pair_positions": {"const": [[0, 1], [3, 2], [4, 5]]},
+        "deterministic_metric_aggregation": {
+          "const": "median_of_three_run_level_values"
+        },
+        "performance_metric_aggregation": {
+          "const": "paired_case_process_observations_with_two_sided_percentile_bootstrap"
+        },
+        "confidence_level": {"const": 0.95},
+        "bootstrap_resamples": {"const": 10000},
+        "performance_tolerance_fraction": {"const": 0}
+      }
+    },
+    "runs": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "position", "role", "pair_index", "report_id", "report_sha256",
+          "recorded_at", "status"
+        ],
+        "properties": {
+          "position": {"type": "integer", "minimum": 0, "maximum": 5},
+          "role": {"enum": ["baseline", "candidate"]},
+          "pair_index": {"type": "integer", "minimum": 1, "maximum": 3},
+          "report_id": {
+            "type": "string", "pattern": "^semanticqueryrun_[0-9a-f]{24}$"
+          },
+          "report_sha256": {"$ref": "#/$defs/sha256"},
+          "recorded_at": {"type": "string", "format": "date-time"},
+          "status": {"enum": ["passed", "failed"]}
+        }
+      }
+    },
+    "same_condition": {"$ref": "#/$defs/same_condition"},
+    "deterministic_metric_comparisons": {
+      "type": "array", "minItems": 14, "maxItems": 30,
+      "items": {"$ref": "#/$defs/deterministic_metric"}
+    },
+    "performance_metric_comparisons": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {"$ref": "#/$defs/performance_metric"}
+    },
+    "safety_comparisons": {"type": "object", "minProperties": 11},
+    "candidate_reports_passed": {"type": "boolean"},
+    "quality_non_regression": {"type": "boolean"},
+    "no_statistically_detected_performance_regression": {"type": "boolean"},
+    "safety_passed": {"type": "boolean"},
+    "competitive_claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "same_condition": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "gold_sha256", "fixture_manifest_sha256", "source_revision_set_sha256",
+        "query_set_sha256", "budget", "retrieval_configuration",
+        "execution_environment", "all_equal"
+      ],
+      "properties": {
+        "gold_sha256": {"type": "boolean"},
+        "fixture_manifest_sha256": {"type": "boolean"},
+        "source_revision_set_sha256": {"type": "boolean"},
+        "query_set_sha256": {"type": "boolean"},
+        "budget": {"type": "boolean"},
+        "retrieval_configuration": {"type": "boolean"},
+        "execution_environment": {"type": "boolean"},
+        "all_equal": {"type": "boolean"}
+      }
+    },
+    "numeric_values": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {"type": "number"}
+    },
+    "deterministic_metric": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "metric", "direction", "baseline_values", "candidate_values",
+        "baseline_median", "candidate_median", "delta", "non_regression"
+      ],
+      "properties": {
+        "metric": {"type": "string", "minLength": 1, "maxLength": 100},
+        "direction": {"enum": ["higher", "lower"]},
+        "baseline_values": {"$ref": "#/$defs/numeric_values"},
+        "candidate_values": {"$ref": "#/$defs/numeric_values"},
+        "baseline_median": {"type": "number"},
+        "candidate_median": {"type": "number"},
+        "delta": {"type": "number"},
+        "non_regression": {"type": "boolean"}
+      }
+    },
+    "performance_metric": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "metric", "direction", "statistic", "baseline_observed",
+        "candidate_observed", "delta", "paired_observation_count",
+        "bootstrap_confidence_interval", "regression_detected", "non_regression"
+      ],
+      "properties": {
+        "metric": {"type": "string", "minLength": 1, "maxLength": 100},
+        "direction": {"const": "lower"},
+        "statistic": {"type": "string", "minLength": 1, "maxLength": 100},
+        "baseline_observed": {"type": "number"},
+        "candidate_observed": {"type": "number"},
+        "delta": {"type": "number"},
+        "paired_observation_count": {"type": "integer", "minimum": 3},
+        "bootstrap_confidence_interval": {
+          "type": "object", "additionalProperties": false,
+          "required": [
+            "confidence_level", "resamples", "lower_delta", "upper_delta"
+          ],
+          "properties": {
+            "confidence_level": {"const": 0.95},
+            "resamples": {"const": 10000},
+            "lower_delta": {"type": "number"},
+            "upper_delta": {"type": "number"}
+          }
+        },
+        "regression_detected": {"type": "boolean"},
+        "non_regression": {"type": "boolean"}
+      }
+    }
+  }
+}

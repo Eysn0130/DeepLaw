@@ -48,7 +48,7 @@ from deeplaw.knowledge_sink_mcp_server import (
 )
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.retrieval import PurposeAwareRetrievalService
-from deeplaw.retrieval.purpose import _policy_designator_conflicts
+from deeplaw.retrieval.purpose import _policy_designator_conflicts, _policy_designators
 from deeplaw.util import canonical_json, sha256_bytes, strict_json_loads
 
 
@@ -2468,13 +2468,14 @@ def test_exact_policy_query_rejects_different_policy_designator() -> None:
     }
 
     assert _policy_designator_conflicts(
-        "What retention period does Policy A currently support?", policy_b
+        _policy_designators("What retention period does Policy A currently support?"),
+        policy_b,
     )
     assert not _policy_designator_conflicts(
-        "Compare Policy A and Policy B retention.", comparison
+        _policy_designators("Compare Policy A and Policy B retention."), comparison
     )
     assert not _policy_designator_conflicts(
-        "What happened in the policy timeline?", policy_b
+        _policy_designators("What happened in the policy timeline?"), policy_b
     )
 
 
@@ -2574,10 +2575,7 @@ def test_purpose_aware_query_keeps_exact_identity_ahead_of_kind_priority(
     assert result["compiled"][0]["knowledge_id"] == claim_id
     assert "exact" in result["compiled"][0]["channels"]
     synthesis = result["compiled"][1]
-    receipt = synthesis["synthesis_evidence_receipt"]
-    assert receipt["synthesis_revision_id"] == synthesis["revision_id"]
-    assert receipt["complete"] is True
-    assert receipt["source_refs"]
+    assert "synthesis_evidence_receipt" not in synthesis
 
 
 @pytest.mark.parametrize(

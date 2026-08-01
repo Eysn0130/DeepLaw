@@ -28,16 +28,27 @@ definition is frozen in the Gold and Schema.
 Explicit-gap-only withdrawal and unanswerable cases are excluded, and a hit requires a labelled
 target match; an inadmissible or unrelated compiled object cannot improve the ratio.
 
-Same-condition comparisons preserve the exact observed values. Deterministic quality, evidence,
-safety, and provider-byte metrics use zero tolerance. One-shot CLI latency percentiles and peak RSS
-use a frozen 5% measurement-noise bound; the comparison records both the exact delta and allowed
-bound, and a change beyond that bound fails the gate.
+Same-condition comparisons use three baseline and three candidate repetitions in the frozen order
+`baseline,candidate,candidate,baseline,baseline,candidate`. Adjacent alternating runs form three
+ordered pairs. Deterministic quality and normalized provider-byte metrics compare the median of
+three run-level values exactly. Latency p50/p95 use all 45 paired case observations; peak RSS uses
+all supported paired query and challenge-process observations and reports the maximum. For those
+performance statistics, 10,000 SHA-256-report-bound deterministic paired bootstrap resamples
+produce a two-sided percentile 95% interval for candidate-minus-baseline. A regression is detected
+only when the complete interval is worse than zero; there is no effect-size tolerance. Raw run
+values, observed delta, interval, and sample count remain visible, so this is explicitly a
+statistical regression-detection rule rather than a claim that noisy point estimates are identical.
+Peak RSS is sampled directly from each first-party CLI process; audit-helper processes and the
+benchmark orchestrator are excluded. Linux uses `/proc/<pid>/status`, macOS uses `ps`, and an
+unsupported platform records `null` rather than substituting a process-wide proxy.
 
 Source Summary, cross-source Synthesis, and Overview labels include claim-level required content,
 expected entailment, and exact source-key sets. Deterministic required-term/source checks are only a
 precheck; structural citation validity is scored separately. Query Plan v5 exposes a hash-bound
-Synthesis evidence receipt, and the precheck resolves every required term against its exact
-provider-visible Source Revision, fragment, locator, and quote hash. The Human Review Packet
+Synthesis evidence receipt for multi-source Syntheses, and the precheck resolves every required
+term against its exact provider-visible Source Revision, fragment, locator, and quote hash. A
+single-source Source Summary or Overview uses its exact canonical source ref without duplicating a
+receipt. The Human Review Packet
 retains the full claims and claim-to-evidence checks for independent and owner review.
 
 ## Deterministic pre-review lifecycle
@@ -59,8 +70,10 @@ The report also freezes the exact Gold/fixture/Source Revision/query digests, bu
 FTS/dense/reranker/graph identities, OS, hardware, Python, SQLite, network policy, and the precise
 cold/warm definitions. It reports compiled-hit/fallback ratios, uncompiled-source count, extraction
 completeness, retrieval source coverage, evidence attachment, peak RSS, and bytes per matched target.
-`benchmarks/semantic/compare_query_runs.py` rejects a candidate that is not measured under the same
-conditions or regresses a gated quality, performance, or security metric.
+`benchmarks/semantic/compare_query_runs.py` provides an exact single-run diagnostic.
+`benchmarks/semantic/compare_query_replicates.py` is the release gate: it rejects changed
+conditions, a candidate report failure, any deterministic quality or efficiency regression, any
+statistically detected performance regression under the frozen method, or any security failure.
 
 `benchmarks/semantic/export_human_review_packet.py` exports a source-free 15-case JSON and Markdown
 matrix. Machine precheck, independent-auditor recommendation, and owner decision are separate

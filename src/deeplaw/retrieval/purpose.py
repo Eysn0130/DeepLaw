@@ -123,12 +123,15 @@ _KNOWLEDGE_DUTIES: Final = (
 )
 
 
-def _policy_designator_conflicts(query: str, item: dict[str, Any]) -> bool:
+def _policy_designators(value: str) -> set[str]:
+    return {match.group(1).casefold() for match in _POLICY_DESIGNATOR.finditer(value)}
+
+
+def _policy_designator_conflicts(
+    query_designators: set[str], item: dict[str, Any]
+) -> bool:
     """Reject a different named policy as an answer to an exact policy query."""
 
-    query_designators = {
-        match.group(1).casefold() for match in _POLICY_DESIGNATOR.finditer(query)
-    }
     if not query_designators:
         return False
     aliases = item.get("metadata", {}).get("aliases", [])
@@ -136,10 +139,10 @@ def _policy_designator_conflicts(query: str, item: dict[str, Any]) -> bool:
     if isinstance(aliases, list):
         values.extend(aliases)
     candidate_designators = {
-        match.group(1).casefold()
+        designator
         for value in values
         if isinstance(value, str)
-        for match in _POLICY_DESIGNATOR.finditer(value)
+        for designator in _policy_designators(value)
     }
     return bool(candidate_designators and query_designators.isdisjoint(candidate_designators))
 
@@ -587,8 +590,9 @@ class PurposeAwareRetrievalService:
             "exact" in item.get("channels", []) for item in raw["results"]
         )
         normalized_query = normalize_identity_text(query)
+        query_policy_designators = _policy_designators(query)
         for item in raw["results"]:
-            if _policy_designator_conflicts(query, item):
+            if _policy_designator_conflicts(query_policy_designators, item):
                 low_relevance_prevented += 1
                 continue
             channels = set(item.get("channels", []))
@@ -841,20 +845,36 @@ class PurposeAwareRetrievalService:
             for reference in item.get("source_refs", [])
             if isinstance(reference, dict)
         ]
+        synthesis_revision_ids = [
+            item["revision_id"]
+            for item in compiled
+            if item.get("kind") == "synthesis"
+            and not str(item.get("semantic_key", "")).startswith("source-summary:")
+        ]
+        rows = {}
+        if synthesis_revision_ids:
+            placeholders = ",".join("?" for _ in synthesis_revision_ids)
+            rows = {
+                row["synthesis_revision_id"]: row
+                for row in store.connection.execute(
+                    f"""
+                    SELECT synthesis_revision_id, input_set_sha256,
+                           source_revision_ids_json
+                    FROM synthesis_input_sets_v1
+                    WHERE synthesis_revision_id IN ({placeholders})
+                    """,
+                    synthesis_revision_ids,
+                )
+            }
         projected: list[dict[str, Any]] = []
         for item in compiled:
             current = dict(item)
-            if item.get("kind") != "synthesis":
+            if item.get("kind") != "synthesis" or str(
+                item.get("semantic_key", "")
+            ).startswith("source-summary:"):
                 projected.append(current)
                 continue
-            row = store.connection.execute(
-                """
-                SELECT input_set_sha256, source_revision_ids_json
-                FROM synthesis_input_sets_v1
-                WHERE synthesis_revision_id = ?
-                """,
-                (item["revision_id"],),
-            ).fetchone()
+            row = rows.get(item["revision_id"])
             if row is None:
                 projected.append(current)
                 continue
@@ -866,6 +886,9 @@ class PurposeAwareRetrievalService:
                 for source_revision_id in loaded_sources
                 if isinstance(source_revision_id, str)
             )
+            if len(expected_sources) <= 1:
+                projected.append(current)
+                continue
             available_references = [
                 reference
                 for reference in [*evidence_references, *item.get("source_refs", [])]

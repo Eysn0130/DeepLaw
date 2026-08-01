@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from statistics import median
 
 import pytest
 
@@ -10,6 +11,10 @@ import benchmarks.semantic.run_query_suite as semantic_query_suite
 from benchmarks.hosts.run_semantic_host_harness import (
     _provider_token_usage,
     not_executed_report,
+)
+from benchmarks.semantic.compare_query_replicates import (
+    _bootstrap_metric,
+    _median_metric,
 )
 from benchmarks.semantic.compare_query_runs import _metric
 from benchmarks.semantic.deterministic_gold_agent import compile_source as compile_gold_source
@@ -269,33 +274,56 @@ def test_compiled_hit_ratio_excludes_explicit_gap_only_cases() -> None:
     assert _compiled_hit_ratio(cases, gold_cases) == 1.0
 
 
-def test_same_condition_performance_tolerance_is_explicit_and_bounded() -> None:
-    within = _metric(
-        name="warm_latency_p95_ms",
-        baseline=100,
-        candidate=105,
-        direction="lower",
-        tolerance_fraction=0.05,
+def test_same_condition_comparison_has_zero_tolerance() -> None:
+    slower = _metric(
+        name="warm_latency_p95_ms", baseline=100, candidate=101, direction="lower"
     )
-    beyond = _metric(
-        name="warm_latency_p95_ms",
-        baseline=100,
-        candidate=106,
-        direction="lower",
-        tolerance_fraction=0.05,
+    lower_quality = _metric(
+        name="recall_at_k", baseline=1.0, candidate=0.999, direction="higher"
     )
-    strict_quality = _metric(
+
+    assert slower["non_regression"] is False
+    assert lower_quality["non_regression"] is False
+
+
+def test_replicate_deterministic_metrics_have_zero_tolerance() -> None:
+    slower = _median_metric(
+        name="provider_bytes_per_matched_target",
+        baseline=[100, 100, 100],
+        candidate=[101, 101, 101],
+        direction="lower",
+    )
+    lower_quality = _median_metric(
         name="recall_at_k",
-        baseline=1.0,
-        candidate=0.999,
+        baseline=[1.0, 1.0, 1.0],
+        candidate=[0.999, 0.999, 0.999],
         direction="higher",
     )
 
-    assert within["allowed_candidate_bound"] == 105.0
-    assert within["non_regression"] is True
-    assert beyond["non_regression"] is False
-    assert strict_quality["tolerance_fraction"] == 0.0
-    assert strict_quality["non_regression"] is False
+    assert slower["non_regression"] is False
+    assert lower_quality["non_regression"] is False
+
+
+def test_paired_bootstrap_detects_only_interval_bound_regression() -> None:
+    identical = _bootstrap_metric(
+        name="warm_latency_p50_ms",
+        baseline=[100] * 15,
+        candidate=[100] * 15,
+        statistic=lambda values: float(median(values)),
+        seed_material="identical",
+    )
+    slower = _bootstrap_metric(
+        name="warm_latency_p50_ms",
+        baseline=[100] * 15,
+        candidate=[101] * 15,
+        statistic=lambda values: float(median(values)),
+        seed_material="slower",
+    )
+
+    assert identical["bootstrap_confidence_interval"]["lower_delta"] == 0
+    assert identical["regression_detected"] is False
+    assert slower["bootstrap_confidence_interval"]["lower_delta"] == 1
+    assert slower["regression_detected"] is True
 
 
 def test_temporal_and_retention_gold_are_unambiguous() -> None:
@@ -513,29 +541,48 @@ def test_query_claim_binding_rejects_tampered_synthesis_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     case = next(
-        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-12"
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-11"
     )
-    source_revision_id = "sourcerev_" + "a" * 24
-    fragment_id = "fragment_" + "b" * 24
+    source_a = "sourcerev_" + "a" * 24
+    source_b = "sourcerev_" + "b" * 24
+    fragment_a = "fragment_" + "c" * 24
+    fragment_b = "fragment_" + "d" * 24
     locator = "section:1;paragraphs:3-4"
-    quote_sha256 = "c" * 64
-    reference = {
-        "source_revision_id": source_revision_id,
-        "fragment_id": fragment_id,
+    reference_a = {
+        "source_revision_id": source_a,
+        "fragment_id": fragment_a,
         "locator": locator,
-        "quote_sha256": quote_sha256,
+        "quote_sha256": "e" * 64,
+    }
+    reference_b = {
+        "source_revision_id": source_b,
+        "fragment_id": fragment_b,
+        "locator": locator,
+        "quote_sha256": "f" * 64,
+    }
+    fragments = {
+        fragment_a: {
+            **reference_a,
+            "text_sha256": reference_a["quote_sha256"],
+            "text": (
+                "Policy A applies to Atlas public API diagnostic logs worldwide during "
+                "2026 and requires 30 days."
+            ),
+        },
+        fragment_b: {
+            **reference_b,
+            "text_sha256": reference_b["quote_sha256"],
+            "text": (
+                "Policy B applies to Atlas public API diagnostic logs worldwide during "
+                "2026 and requires 60 days."
+            ),
+        },
     }
     monkeypatch.setattr(
         semantic_query_suite,
         "_run_json",
-        lambda *args, **kwargs: (
-            {
-                "fragment": {
-                    **reference,
-                    "text_sha256": quote_sha256,
-                    "text": "Atlas release 2 uses protocol revision 4 and supersedes release 1.",
-                }
-            },
+        lambda prefix, *args, **kwargs: (
+            {"fragment": fragments[args[args.index("--fragment-id") + 1]]},
             0,
             b"",
             b"",
@@ -543,27 +590,27 @@ def test_query_claim_binding_rejects_tampered_synthesis_receipt(
     )
     receipt = {
         "schema_version": "deeplaw.synthesis-query-evidence-receipt/v1",
-        "synthesis_revision_id": "knowledgerev_" + "d" * 24,
-        "input_set_sha256": "e" * 64,
-        "source_revision_ids": [source_revision_id],
-        "source_refs": [reference],
+        "synthesis_revision_id": "knowledgerev_" + "0" * 24,
+        "input_set_sha256": "1" * 64,
+        "source_revision_ids": [source_a, source_b],
+        "source_refs": [reference_a, reference_b],
         "complete": True,
     }
     receipt["receipt_sha256"] = sha256_bytes(canonical_json(receipt).encode("utf-8"))
     item = {
-        "knowledge_id": "knowledge_" + "f" * 24,
+        "knowledge_id": "knowledge_" + "2" * 24,
         "revision_id": receipt["synthesis_revision_id"],
         "kind": "synthesis",
-        "title": "Atlas overview",
-        "semantic_key": "synthesis:atlas-overview",
-        "content": "Atlas release 2 uses protocol revision 4 and supersedes release 1.",
-        "source_refs": [reference],
+        "title": "Retention policy comparison",
+        "semantic_key": "synthesis:atlas-retention-policy-comparison:2026",
+        "content": (
+            "Both policies apply to Atlas public API diagnostic logs worldwide during 2026. "
+            "Policy A requires 30 days while Policy B requires 60 days."
+        ),
+        "source_refs": [reference_b],
         "synthesis_evidence_receipt": receipt,
     }
-    source_ids = {
-        "update-v1": "sourcerev_" + "0" * 24,
-        "update-v2": source_revision_id,
-    }
+    source_ids = {"retention-a": source_a, "retention-b": source_b}
     valid = _claim_evidence_checks(
         ["deeplaw"],
         vault=tmp_path,
@@ -571,7 +618,8 @@ def test_query_claim_binding_rejects_tampered_synthesis_receipt(
         value={"compiled": [item], "evidence": []},
         source_ids=source_ids,
     )
-    assert valid[0]["valid"] is True
+    assert len(valid) == 2
+    assert all(check["valid"] for check in valid)
     item["synthesis_evidence_receipt"]["receipt_sha256"] = "0" * 64
     tampered = _claim_evidence_checks(
         ["deeplaw"],
@@ -580,8 +628,8 @@ def test_query_claim_binding_rejects_tampered_synthesis_receipt(
         value={"compiled": [item], "evidence": []},
         source_ids=source_ids,
     )
-    assert tampered[0]["receipt_valid"] is False
-    assert tampered[0]["valid"] is False
+    assert all(check["receipt_valid"] is False for check in tampered)
+    assert all(check["valid"] is False for check in tampered)
 
 
 def test_security_challenge_tampering_is_counted_as_failure() -> None:

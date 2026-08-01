@@ -150,7 +150,11 @@
         "extraction_completeness": {"$ref": "#/$defs/ratio"},
         "retrieval_source_coverage": {"$ref": "#/$defs/ratio"},
         "evidence_attachment_rate": {"$ref": "#/$defs/ratio"},
-        "peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "peak_rss_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Maximum sampled resident set size of a first-party CLI query or adversarial-challenge process during the run."
+        },
         "provider_hard_limit_violations": {"type": "integer", "minimum": 0},
         "unauthorized_writes": {"type": "integer", "minimum": 0},
         "authority_elevations": {"type": "integer", "minimum": 0},
@@ -191,7 +195,8 @@
       "required": [
         "case_id", "task_type", "query_phase", "query_sha256", "purpose", "status",
         "expected_targets", "actual_objects", "query_plan", "query_plan_sha256",
-        "cold_latency_ms", "warm_latency_ms", "provider_payload_bytes",
+        "cold_latency_ms", "warm_latency_ms", "cold_peak_rss_bytes",
+        "warm_peak_rss_bytes", "provider_payload_bytes",
         "context_provider_payload_bytes", "context_capsule_id", "context_capsule_sha256",
         "context_verification_valid", "compiled_revision_ids",
         "selected_source_revision_ids", "gap_codes", "explicit_gap", "repeat_reused",
@@ -219,6 +224,8 @@
         "status": {"enum": ["passed", "failed"]},
         "cold_latency_ms": {"type": "integer", "minimum": 0},
         "warm_latency_ms": {"type": "integer", "minimum": 0},
+        "cold_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "warm_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
         "provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "context_provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "context_capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
@@ -338,7 +345,7 @@
       "required": [
         "challenge_id", "challenge_type", "status", "query_sha256", "execution_count",
         "selected_source_revision_ids", "gap_codes", "provider_payload_bytes",
-        "failure_reason", "mutation"
+        "peak_rss_bytes", "failure_reason", "mutation"
       ],
       "properties": {
         "challenge_id": {"type": "string", "pattern": "^security-challenge-[0-9]{2}$"},
@@ -350,6 +357,7 @@
         "gap_codes": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
         "provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "latency_ms": {"type": "integer", "minimum": 0},
+        "peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
         "failure_reason": {"type": ["string", "null"], "maxLength": 1000},
         "mutation": {
           "oneOf": [

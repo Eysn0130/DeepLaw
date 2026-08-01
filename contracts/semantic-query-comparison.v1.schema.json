@@ -41,18 +41,13 @@
       "type": "array", "minItems": 15, "maxItems": 30,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": [
-          "metric", "direction", "baseline", "candidate", "delta",
-          "tolerance_fraction", "allowed_candidate_bound", "non_regression"
-        ],
+        "required": ["metric", "direction", "baseline", "candidate", "delta", "non_regression"],
         "properties": {
           "metric": {"type": "string", "minLength": 1, "maxLength": 100},
           "direction": {"enum": ["higher", "lower"]},
           "baseline": {"type": "number"},
           "candidate": {"type": "number"},
           "delta": {"type": "number"},
-          "tolerance_fraction": {"type": "number", "minimum": 0, "maximum": 0.05},
-          "allowed_candidate_bound": {"type": "number"},
           "non_regression": {"type": "boolean"}
         }
       }

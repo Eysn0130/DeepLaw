@@ -10,7 +10,16 @@
     "extra_valid_objects_are_false_positive": false,
     "precision_definition": "For each labelled target within its frozen case source and claim scope, one stable Knowledge ID is a true positive and additional stable IDs matched to that same target are false positives; valid objects outside that source and claim scope are excluded from the denominator.",
     "extraction_completeness_definition": "Required labelled targets retrieved or compiled divided by all required labelled targets.",
-    "source_coverage_definition": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources."
+    "source_coverage_definition": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources.",
+    "performance_comparison_definition": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance.",
+    "performance_repetition_count": 3,
+    "performance_execution_order": ["baseline", "candidate", "candidate", "baseline", "baseline", "candidate"],
+    "performance_pairing_definition": "Adjacent alternating runs form three ordered pairs at zero-based report positions baseline/candidate (0,1), (3,2), and (4,5); every pair contains the same 15 case IDs and security-challenge inventory.",
+    "performance_aggregation_definition": "Deterministic metrics use the median of three run-level values. Latency uses all 45 paired per-case observations for p50 and p95. RSS uses all paired cold, warm, and supported challenge-process observations and reports the maximum.",
+    "performance_confidence_definition": "For each latency statistic and maximum per-process RSS, resample paired observations together 10000 times using a SHA-256 report-bound deterministic seed and a two-sided percentile 95% confidence interval for candidate-minus-baseline. A regression is detected only when the complete interval is greater than zero. The observed values, delta, interval, sample count, and every raw run report remain reviewable.",
+    "latency_definition": "Cold is the first fresh CLI process after deterministic compilation with the DeepLaw query cache empty and OS page cache retained; warm is the immediate identical second query in a fresh CLI process over unchanged persisted state. Each run reports p50 and p95 across all 15 cases; the replicate gate uses all 45 paired observations.",
+    "peak_rss_definition": "Maximum sampled resident set size of a first-party CLI query or adversarial-challenge process. Each process is paired by case and cold/warm phase or challenge ID; the replicate gate reports the maximum and its paired-bootstrap delta interval. Audit-helper and benchmark-orchestrator processes are excluded. Unsupported platforms report null.",
+    "performance_tolerance_fraction": 0
   },
   "sources": [
     {

@@ -64,16 +64,60 @@ def _total_memory_bytes() -> int | None:
     return total if total > 0 else None
 
 
-def _peak_rss_bytes() -> int | None:
-    try:
-        import resource
+def _process_rss_bytes(process_id: int) -> int | None:
+    if sys.platform.startswith("linux"):
+        try:
+            status = Path(f"/proc/{process_id}/status").read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError, UnicodeError):
+            return None
+        match = re.search(r"^VmRSS:\s+(\d+)\s+kB$", status, flags=re.MULTILINE)
+        return int(match.group(1)) * 1024 if match is not None else None
+    if sys.platform == "darwin":
+        completed = subprocess.run(
+            ["ps", "-o", "rss=", "-p", str(process_id)],
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+        try:
+            return int(completed.stdout.strip()) * 1024
+        except ValueError:
+            return None
+    return None
 
-        peak = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-    except (ImportError, OSError, TypeError, ValueError):
-        return None
-    if peak < 0:
-        return None
-    return round(peak if sys.platform == "darwin" else peak * 1024)
+
+def _run_measured_query(
+    arguments: list[str],
+) -> tuple[subprocess.CompletedProcess[bytes], int | None]:
+    deadline = time.monotonic() + 120
+    peak_rss_bytes: int | None = None
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
+            arguments,
+            cwd=_repository(),
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
+        while process.poll() is None:
+            observed = _process_rss_bytes(process.pid)
+            if observed is not None:
+                peak_rss_bytes = max(peak_rss_bytes or 0, observed)
+            if time.monotonic() >= deadline:
+                process.kill()
+                process.wait()
+                raise subprocess.TimeoutExpired(arguments, 120)
+            time.sleep(0.05)
+        return_code = process.wait()
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        completed = subprocess.CompletedProcess(
+            arguments,
+            return_code,
+            stdout_file.read(),
+            stderr_file.read(),
+        )
+    return completed, peak_rss_bytes
 
 
 def _compiled_hit_ratio(
@@ -219,10 +263,10 @@ def _query(
     query: str,
     purpose: str,
     as_of: str | None,
-) -> tuple[dict[str, Any], int]:
+) -> tuple[dict[str, Any], int, int | None]:
     temporal_arguments = ["--as-of", as_of] if as_of is not None else []
     started = time.monotonic()
-    completed = subprocess.run(
+    completed, peak_rss_bytes = _run_measured_query(
         [
             *prefix,
             "knowledge",
@@ -254,12 +298,7 @@ def _query(
             "hybrid",
             "--query-plan-version",
             "5",
-        ],
-        cwd=_repository(),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=False,
-        timeout=120,
+        ]
     )
     elapsed_ms = round((time.monotonic() - started) * 1000)
     if completed.returncode != 0:
@@ -270,7 +309,7 @@ def _query(
     value = json.loads(completed.stdout)
     if not isinstance(value, dict):
         raise RuntimeError("first-party semantic query returned a non-object")
-    return value, elapsed_ms
+    return value, elapsed_ms, peak_rss_bytes
 
 
 def _selected(value: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -558,19 +597,20 @@ def _claim_evidence_checks(
                 ]
                 if item.get("kind") == "synthesis":
                     receipt = item.get("synthesis_evidence_receipt", {})
-                    receipt_body = dict(receipt) if isinstance(receipt, dict) else {}
-                    receipt_sha256 = receipt_body.pop("receipt_sha256", None)
-                    receipt_valid = bool(
-                        receipt_body
-                        and receipt.get("complete") is True
-                        and receipt_sha256
-                        == sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
-                    )
-                    references = [
-                        reference
-                        for reference in receipt.get("source_refs", [])
-                        if isinstance(reference, dict)
-                    ]
+                    if len(expected_sources) > 1:
+                        receipt_body = dict(receipt) if isinstance(receipt, dict) else {}
+                        receipt_sha256 = receipt_body.pop("receipt_sha256", None)
+                        receipt_valid = bool(
+                            receipt_body
+                            and receipt.get("complete") is True
+                            and receipt_sha256
+                            == sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
+                        )
+                        references = [
+                            reference
+                            for reference in receipt.get("source_refs", [])
+                            if isinstance(reference, dict)
+                        ]
                 unique_references: dict[tuple[str, str], dict[str, Any]] = {}
                 for reference in references:
                     source_revision_id = reference.get("source_revision_id")
@@ -1112,32 +1152,33 @@ def run(
         query_vault = (
             baseline_vault if case["query_phase"] == "baseline" else vault
         )
-        cold, cold_latency = _query(
+        cold, cold_latency, cold_peak_rss = _query(
             prefix,
             vault=query_vault,
             query=case["query"],
             purpose=case["purpose"],
             as_of=case.get("as_of"),
         )
-        warm, warm_latency = _query(
+        warm, warm_latency, warm_peak_rss = _query(
             prefix,
             vault=query_vault,
             query=case["query"],
             purpose=case["purpose"],
             as_of=case.get("as_of"),
         )
-        cases.append(
-            _case_result(
-                prefix=prefix,
-                vault=query_vault,
-                case=case,
-                cold=cold,
-                warm=warm,
-                cold_latency_ms=cold_latency,
-                warm_latency_ms=warm_latency,
-                source_ids=source_ids,
-            )
+        result = _case_result(
+            prefix=prefix,
+            vault=query_vault,
+            case=case,
+            cold=cold,
+            warm=warm,
+            cold_latency_ms=cold_latency,
+            warm_latency_ms=warm_latency,
+            source_ids=source_ids,
         )
+        result["cold_peak_rss_bytes"] = cold_peak_rss
+        result["warm_peak_rss_bytes"] = warm_peak_rss
+        cases.append(result)
     challenges: list[dict[str, Any]] = []
     challenge_counts: dict[str, int] = {
         challenge_type: 0
@@ -1171,11 +1212,12 @@ def run(
                 "selected_source_revision_ids": [],
                 "gap_codes": [],
                 "provider_payload_bytes": 0,
+                "peak_rss_bytes": None,
                 "failure_reason": None if passed else "unauthorized mutation was not rejected",
                 "mutation": mutation,
             }
         else:
-            value, latency = _query(
+            value, latency, peak_rss_bytes = _query(
                 prefix,
                 vault=baseline_vault,
                 query=challenge["query"],
@@ -1197,6 +1239,7 @@ def run(
                 "gap_codes": gap_codes,
                 "provider_payload_bytes": len(canonical_json(value).encode("utf-8")),
                 "latency_ms": latency,
+                "peak_rss_bytes": peak_rss_bytes,
                 "failure_reason": None if passed else reason,
                 "mutation": None,
             }
@@ -1272,7 +1315,21 @@ def run(
             / compiled_selected_count,
             6,
         ) if compiled_selected_count else 1.0,
-        "peak_rss_bytes": _peak_rss_bytes(),
+        "peak_rss_bytes": max(
+            (
+                peak
+                for peak in [
+                    *(
+                        item[key]
+                        for item in cases
+                        for key in ("cold_peak_rss_bytes", "warm_peak_rss_bytes")
+                    ),
+                    *(item["peak_rss_bytes"] for item in challenges),
+                ]
+                if peak is not None
+            ),
+            default=None,
+        ),
         "provider_hard_limit_violations": sum(
             (not item["provider_hard_limit_valid"])
             or item["context_provider_payload_bytes"] > 65_536
