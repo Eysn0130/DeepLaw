@@ -40,6 +40,9 @@ provenance, and post-release rows remain release gates rather than completed his
 - Release evaluation adds frozen Semantic Gold, deterministic successor/withdrawal lifecycle,
   first-party CLI query scoring, real cursor continuation, deterministic query-cost accounting,
   six isolated machine-review roles, and unanimous consensus binding.
+- Pull-request CI and Commercial GA jobs explicitly check out the pull-request head SHA. Release
+  and manual invocations continue to prefer their explicit immutable ref, preventing a synthetic
+  merge commit from being recorded as the candidate in reproducible-build or platform evidence.
 - The corrected Semantic Gold adds real multi-Packet identity fusion, target-scoped Entity/Concept
   precision with separate extraction completeness and source coverage, claim-level Concept and
   Synthesis assertions, structured typed-relation endpoints and valid time for contradictions,
@@ -121,6 +124,8 @@ provenance, and post-release rows remain release gates rather than completed his
 - All 15 Semantic Gold cases and five adversarial challenges must be independently confirmed by
   six isolated `gpt-5.6-sol` machine auditors. No majority vote is accepted, and any discrepancy
   invalidates all prior packets for that candidate.
+- Workflow contract coverage requires every pull-request CI checkout and all seven Commercial GA
+  checkouts to select the exact head commit rather than GitHub's synthetic merge ref.
 
 ## Externally verified
 

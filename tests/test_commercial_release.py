@@ -275,6 +275,21 @@ def test_platform_gate_uses_utf8_for_cross_platform_subprocess_output() -> None:
     assert 'PYTHONUTF8: "1"' in workflow
 
 
+def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
+    commercial = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    ci = (REPOSITORY / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    exact_commercial_ref = (
+        "ref: ${{ inputs.release_ref || github.event.pull_request.head.sha || github.sha }}"
+    )
+    exact_ci_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+    assert commercial.count(exact_commercial_ref) == 7
+    assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
+    assert ci.count(exact_ci_ref) == 3
+
+
 def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() -> None:
     gate = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(encoding="utf-8")
     release = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
