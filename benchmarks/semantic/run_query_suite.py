@@ -699,6 +699,8 @@ def _relation_checks(
                     "evidence_checks": evidence_checks,
                     "valid": bool(
                         record["lifecycle"] == "active"
+                        and record["subject_knowledge_id"]
+                        != record["object_knowledge_id"]
                         and record["valid_from"] == expected["valid_from"]
                         and record["valid_to"] == expected["valid_to"]
                         and bool(evidence_source_ids)

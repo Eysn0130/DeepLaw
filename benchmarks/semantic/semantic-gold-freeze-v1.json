@@ -2,7 +2,7 @@
   "schema_version": "deeplaw.semantic-gold-freeze/v1",
   "gold_id": "semanticgold_89f0b850e3d8469914eadbe2",
   "gold_status": "maintainer_review_pending",
-  "candidate_sha256": "a03fd9d1cb94e0e9559e8a6217ee13fb151a0abdd2c83197663ae9339c7f07b0",
+  "candidate_sha256": "97cc02c15562cb5385d315d40052366fcc8cf700672530f481578db988237abb",
   "fixture_manifest_sha256": "845a54e9bfc2e76da8e72a2d1ab506e2ac08ec2c94fe268c9913065d4fe51d6d",
   "semantic_gold_schema_sha256": "d3573934bc962a8221565104883b0d52c9004ffedb70ad5bc8e5fa3dbda1e86c",
   "query_set_sha256": "0c10f7e63da262ce7ed99572a8f251d747ce9494072427c45a293478d4d4ce5d",
@@ -10,6 +10,14 @@
   "security_challenges_sha256": "9ac88f9814ddfb9349725fba7fd6abd3dd64b75fcb2db4de0477256ccdbb7e72",
   "canonical_json_profile": "UTF-8 JSON; object keys sorted recursively; ensure_ascii=false; separators=(',', ':'); no trailing whitespace",
   "query_set_projection": "Map cases in array order to objects {case_id, query, purpose, phase=query_phase, as_of=case.as_of or null}; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
+  "commitment_profiles": {
+    "candidate_sha256": "Deep-copy the complete candidate; set status to maintainer_review_pending and review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
+    "fixture_manifest_sha256": "For each candidate source in array order, verify bytes_sha256 equals SHA-256 of the exact fixture bytes; concatenate the lowercase 64-character bytes_sha256 values without separators as ASCII; SHA-256 those exact ASCII bytes",
+    "semantic_gold_schema_sha256": "SHA-256 the exact bytes of contracts/semantic-gold.v1.schema.json with no text normalization",
+    "query_set_sha256": "Apply query_set_projection to the complete candidate; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
+    "scoring_policy_sha256": "Serialize candidate.scoring_policy with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
+    "security_challenges_sha256": "Serialize candidate.security_challenges in array order with canonical_json_profile; SHA-256 the exact UTF-8 bytes"
+  },
   "source_count": 12,
   "case_count": 15,
   "security_challenge_count": 5,

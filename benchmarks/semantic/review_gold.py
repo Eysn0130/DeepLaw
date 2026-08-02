@@ -21,6 +21,34 @@ QUERY_SET_PROJECTION = (
     "phase=query_phase, as_of=case.as_of or null}; serialize with "
     "canonical_json_profile; SHA-256 the exact UTF-8 bytes"
 )
+COMMITMENT_PROFILES = {
+    "candidate_sha256": (
+        "Deep-copy the complete candidate; set status to maintainer_review_pending and "
+        "review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 "
+        "bytes"
+    ),
+    "fixture_manifest_sha256": (
+        "For each candidate source in array order, verify bytes_sha256 equals SHA-256 of "
+        "the exact fixture bytes; concatenate the lowercase 64-character bytes_sha256 "
+        "values without separators as ASCII; SHA-256 those exact ASCII bytes"
+    ),
+    "semantic_gold_schema_sha256": (
+        "SHA-256 the exact bytes of contracts/semantic-gold.v1.schema.json with no text "
+        "normalization"
+    ),
+    "query_set_sha256": (
+        "Apply query_set_projection to the complete candidate; serialize with "
+        "canonical_json_profile; SHA-256 the exact UTF-8 bytes"
+    ),
+    "scoring_policy_sha256": (
+        "Serialize candidate.scoring_policy with canonical_json_profile; SHA-256 the "
+        "exact UTF-8 bytes"
+    ),
+    "security_challenges_sha256": (
+        "Serialize candidate.security_challenges in array order with "
+        "canonical_json_profile; SHA-256 the exact UTF-8 bytes"
+    ),
+}
 
 
 def _repository() -> Path:
@@ -156,6 +184,15 @@ def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
                 raise ValueError(
                     f"relation expectation interval is invalid in case_id={case['case_id']}"
                 )
+            endpoints = {
+                relation["subject_label_id"],
+                relation["object_label_id"],
+            }
+            if not any(set(pair) == endpoints for pair in case["forbidden_merges"]):
+                raise ValueError(
+                    "relation expectation endpoints require an explicit forbidden merge "
+                    f"in case_id={case['case_id']}"
+                )
         if case.get("expected_relations") and "contradiction_preserved" not in case[
             "required_outcomes"
         ]:
@@ -221,6 +258,7 @@ def validate_freeze(
         ),
         "canonical_json_profile": CANONICAL_JSON_PROFILE,
         "query_set_projection": QUERY_SET_PROJECTION,
+        "commitment_profiles": COMMITMENT_PROFILES,
     }
     if freeze != {"schema_version": freeze["schema_version"], **expected}:
         raise ValueError("Semantic Gold freeze manifest does not bind the exact candidate")
