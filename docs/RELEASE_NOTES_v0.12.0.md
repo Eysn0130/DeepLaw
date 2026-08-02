@@ -86,7 +86,9 @@ provenance, and post-release rows remain release gates rather than completed his
   depress the coverage metric.
 - Purpose-aware selection preserves exact identities in mixed Event/Concept requests, uses exact
   ISO dates as bounded structured anchors without admitting unrelated low-score candidates, and
-  emits timeline Events in chronological valid-time order.
+  emits timeline Events in chronological valid-time order. Explicit bilingual comparison intent
+  admits a relevant comparison Synthesis through a bounded kind-specific floor without admitting
+  generic Source Summaries.
 - A profile-v2 cross-source Synthesis may bind exact admitted evidence only from Source Revisions
   present in its validated input set. The deterministic retention comparison binds both inputs
   directly, making its provider-visible evidence receipt complete even when no companion Claim or

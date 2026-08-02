@@ -68,9 +68,11 @@ from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
 )
+from deeplaw.knowledge_intelligence import normalize_identity_text
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.retrieval.purpose import (
     PurposeAwareRetrievalService,
+    _is_comparison_query,
     _matches_structured_query_anchor,
 )
 from deeplaw.util import canonical_json, sha256_bytes
@@ -699,6 +701,15 @@ def test_structured_date_anchors_bypass_only_matching_relevance_candidates() -> 
             "content": "The Atlas review completed on 2025-06-01.",
         },
     )
+
+
+def test_bilingual_comparison_intent_is_explicit() -> None:
+    query = (
+        "比较两项诊断日志保留政策（Policy A 与 Policy B；"
+        "diagnostic log retention policies），并保留它们之间的冲突（conflict）。"
+    )
+
+    assert _is_comparison_query(normalize_identity_text(query), query)
 
 
 def test_historical_timeline_selection_is_chronological() -> None:

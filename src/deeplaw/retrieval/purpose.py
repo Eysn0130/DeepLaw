@@ -105,6 +105,7 @@ _KIND_PRIORITY: Final = {
 }
 _MAX_PROVIDER_CHARS: Final = 65_536
 _MIN_COMPILED_RERANKER_SCORE: Final = 0.20
+_MIN_TARGET_SYNTHESIS_RERANKER_SCORE: Final = 0.15
 _MIN_GENERIC_SUMMARY_RERANKER_SCORE: Final = 0.25
 _MIN_EVIDENCE_RERANKER_SCORE: Final = 0.10
 _POLICY_DESIGNATOR: Final = re.compile(
@@ -154,6 +155,12 @@ def _matches_structured_query_anchor(
         for anchor in _ISO_DATE_ANCHOR.findall(value)
     }
     return bool(query_anchors.intersection(candidate_anchors))
+
+
+def _is_comparison_query(normalized_query: str, query: str) -> bool:
+    return any(term in normalized_query for term in ("compare", "conflict")) or any(
+        term in query for term in ("比较", "对照", "冲突", "矛盾")
+    )
 
 
 def _policy_designator_conflicts(
@@ -621,6 +628,7 @@ class PurposeAwareRetrievalService:
         )
         normalized_query = normalize_identity_text(query)
         structured_query_anchors = set(_ISO_DATE_ANCHOR.findall(query))
+        comparison_query = _is_comparison_query(normalized_query, query)
         query_policy_designators = _policy_designators(query)
         for item in raw["results"]:
             if _policy_designator_conflicts(query_policy_designators, item):
@@ -654,6 +662,8 @@ class PurposeAwareRetrievalService:
             minimum_reranker_score = (
                 _MIN_GENERIC_SUMMARY_RERANKER_SCORE
                 if str(item.get("semantic_key", "")).startswith("source-summary:")
+                else _MIN_TARGET_SYNTHESIS_RERANKER_SCORE
+                if comparison_query and item.get("kind") == "synthesis"
                 else _MIN_COMPILED_RERANKER_SCORE
             )
             if (
@@ -777,9 +787,7 @@ class PurposeAwareRetrievalService:
             or any(term in query for term in ("时间线", "按时间", "按先后"))
         ):
             target_kinds = {"event"}
-        elif any(term in normalized for term in ("compare", "conflict")) or any(
-            term in query for term in ("比较", "对照", "冲突", "矛盾")
-        ):
+        elif _is_comparison_query(normalized, query):
             target_kinds = {"synthesis", "comparison", "claim"}
         elif any(term in normalized for term in ("accordingtoeachpolicy", "howlong")) or any(
             term in query for term in ("多久", "多少天", "保留期", "留存")

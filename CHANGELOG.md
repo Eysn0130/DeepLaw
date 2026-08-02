@@ -32,7 +32,8 @@ This release closes Semantic Living Wiki compilation and production editor integ
   and withdrawn negative controls as positive retrieval targets.
 - Preserve exact identity matches alongside purpose-selected kinds, admit exact ISO-date anchors
   without disabling the relevance floor for unrelated candidates, and order timeline Events by
-  valid time.
+  valid time. Explicit bilingual comparison intent uses a bounded Synthesis-specific relevance
+  floor while generic Source Summaries retain their stricter floor.
 - Bind profile-v2 cross-source Synthesis output directly to exact evidence from every named Source
   Revision, so its provider-visible evidence receipt is complete without relying on companion
   query results.
