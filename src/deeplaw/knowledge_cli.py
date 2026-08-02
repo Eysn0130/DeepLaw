@@ -3482,23 +3482,34 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             return asset.to_dict()
         if command == "context":
             has_autonomous_core = autonomous_core_installed(args.vault)
+            use_autonomous_context = False
+            if has_autonomous_core:
+                with AutonomousKnowledgeStore(args.vault, read_only=True) as store:
+                    use_autonomous_context = bool(
+                        store.connection.execute(
+                            "SELECT COUNT(*) FROM knowledge_objects_v3"
+                        ).fetchone()[0]
+                        or store.connection.execute(
+                            "SELECT COUNT(*) FROM source_compilation_runs_v1"
+                        ).fetchone()[0]
+                    )
             if (
-                not has_autonomous_core
+                not use_autonomous_context
                 and (
                     args.purpose != "answer"
                     or args.policy is not None
                     or args.as_of is not None
                 )
-            ):
+                ):
                 raise ValueError(
-                    "purpose-aware context requires an initialized autonomous core"
+                    "purpose-aware context requires an autonomous compilation workspace"
                 )
-            if has_autonomous_core and args.include_restricted:
+            if use_autonomous_context and args.include_restricted:
                 raise ValueError("Knowledge Capsules cannot expose restricted content")
-            context_query = f"{args.task} {args.goal or ''}".strip()
-            purpose_result = (
-                KnowledgeOS.open(args.vault).retrieval.query(
-                    context_query,
+            if use_autonomous_context:
+                capsule = KnowledgeOS.open(args.vault).context.compile(
+                    task=args.task,
+                    goal=args.goal,
                     purpose=args.purpose,
                     policy=args.policy,
                     scope=str(vault.manifest.get("scope", "project")),
@@ -3513,24 +3524,21 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     kinds=tuple(
                         kind for kind in args.kind if kind in KNOWLEDGE_KINDS
                     ),
-                    query_plan_version="5",
+                    confirm_no_case_data=args.confirm_no_case_data,
                 )
-                if has_autonomous_core
-                else None
-            )
-            capsule = compile_context(
-                vault,
-                task=args.task,
-                confirm_no_case_data=args.confirm_no_case_data,
-                goal=args.goal,
-                max_items=args.max_items,
-                max_chars=args.max_chars,
-                kinds=tuple(args.kind),
-                memory_tiers=tuple(args.memory_tier),
-                include_restricted=args.include_restricted,
-                max_tokens=args.max_tokens,
-                purpose_result=purpose_result,
-            )
+            else:
+                capsule = compile_context(
+                    vault,
+                    task=args.task,
+                    confirm_no_case_data=args.confirm_no_case_data,
+                    goal=args.goal,
+                    max_items=args.max_items,
+                    max_chars=args.max_chars,
+                    kinds=tuple(args.kind),
+                    memory_tiers=tuple(args.memory_tier),
+                    include_restricted=args.include_restricted,
+                    max_tokens=args.max_tokens,
+                )
             if args.output is not None:
                 _write_capsule(args.output, capsule)
             return capsule

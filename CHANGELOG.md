@@ -26,6 +26,20 @@ This release closes Semantic Living Wiki compilation and production editor integ
 
 ### Fixed
 
+- Route CLI `knowledge context` through the same Query Plan v5/Knowledge Capsule v2 domain service
+  used by Python and MCP once an autonomous compilation workspace contains a compilation run or
+  governed Knowledge Object; retain the v0.7 context compiler only for untouched compatibility
+  Vaults.
+- Suppress unrelated same-kind and graph-neighbor noise for single-target queries while retaining
+  complete comparison and multi-Event/Concept results. An explicit restricted target now returns
+  an empty, non-identifying admission gap instead of a public substitute.
+- Revalidate current immutable source bytes before returning compiled Knowledge or exact Source
+  fragments. A source-byte mismatch excludes dependent Knowledge and raw evidence without exposing
+  the changed bytes or a private path.
+- Preserve the exact typed contradiction Relation Revision, stable endpoints, titles, valid time,
+  and bounded evidence references in provider-visible results. Historical evidence-first queries
+  can project an exact immutable fragment referenced by an admitted historical Knowledge Revision,
+  while unreviewed or inactive historical source state remains unavailable.
 - Align the public Knowledge Revision Detail Schema with the existing `revision_bound` Synthesis
   verification state and cover the exact emitted detail with a contract regression test.
 - Scope retrieval source coverage to admissible target revisions instead of treating predecessor

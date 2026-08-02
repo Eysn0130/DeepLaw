@@ -24,7 +24,7 @@ and `reviewer_id=null` are deliberate owner policy, not missing evidence.
 | Entity/Concept scoring | Gold `scoring_policy`; Gold Schema; query runner/scorer tests | Target-scoped precision is named; valid extra objects are excluded; completeness and source coverage are separate |
 | Security challenges | two adversarial fixtures; five frozen challenges; first-party CLI runner; tamper tests | Every challenge executes at least once and all nine security counters are zero |
 | Claim-level content Gold | case-04, case-06, case-11, and case-12 content assertions | Concept, Source Summary, Synthesis, and Overview required content and exact input source set pass deterministic checks and six independent claim-entailment reviews |
-| Contradiction applicability | retention A/B fixtures; structured `expected_relations`; query runner and scorer | Same Atlas production service, ordinary public-API diagnostic-log class, worldwide scope, restricted-payload exclusion, distinct non-mergeable endpoints, and 2026 valid interval before typed-relation contradiction credit |
+| Contradiction applicability | retention A/B fixtures; structured `expected_relations`; query runner/scorer; provider relation regression | Same Atlas production service, ordinary public-API diagnostic-log class, worldwide scope, restricted-payload exclusion, distinct non-mergeable endpoints, 2026 valid interval, and provider-visible exact Relation Revision/titled endpoints before contradiction credit |
 | Withdrawal gap | case-10 `explicit_gap` plus frozen `stale_knowledge` code | Withdrawn evidence is neither selected nor silently omitted; the current no-answer state remains visible |
 | Reproducible freeze commitments | freeze Schema canonical-JSON profile, query-set projection, and per-field commitment profiles | A reviewer can independently reproduce every candidate, fixture-manifest, Schema, query-set, scoring-policy, and challenge digest without inferring mixed serialization rules |
 | Cross-language retrieval | 14 natural-Chinese query variants; bounded query-only expansion; autonomous plan v1 and Query Plan v5 receipts | Every variant uses the canonical case targets/claims/citations/budget, runs cold and warm through the first-party CLI, and cannot change Authority or stored evidence |
@@ -64,11 +64,11 @@ and `reviewer_id=null` are deliberate owner policy, not missing evidence.
 | 25 | Local verified — refresh restores freshness | synthesis refresh coordinator | synthesis refresh saga tests |
 | 26 | Local verified — withdrawal invalidates or revises Synthesis | source removal and dependency propagation | `test_source_removal_invalidates_dependencies_and_recall` |
 | 27 | Local verified — rebuild never calls a model | deterministic projection/rebuild modules | `test_projection_has_no_model_network_or_subprocess_dependency` |
-| 28 | Local verified — fresh Synthesis is compiled-first | Query Plan v5 admission/selection | `test_purpose_aware_query_is_compiled_first_and_read_only` |
+| 28 | Local verified — fresh Synthesis is compiled-first and single-target noise is suppressed | Query Plan v5 admission/target-scoped selection | `test_purpose_aware_query_is_compiled_first_and_read_only`; frozen 15-case CLI suite |
 | 29 | Local verified — source-free claims never become evidence | provenance partitions in Query Plan v5 | Query Plan and source-reference tests |
-| 30 | Local verified — raw fallback is visible | Query Plan v5 fallback/gap/receipt | raw and dense fallback tests |
+| 30 | Local verified — raw fallback is visible, exact historical evidence is governed, and source-byte tamper fails closed | Query Plan v5 fallback/gap/receipt; historical governance; current source-byte admission | raw/dense fallback, exact historical fragment, direct fragment tamper, and compiled-dependency tamper tests |
 | 31 | Local verified — legal duties route to `law_support` | `query_plan.py`, separate Legal Pack store/process | Query Plan legal-route and MCP boundary tests |
-| 32 | Local verified — query is read-only | shared retrieval service | compiled-first read-only and MCP tests |
+| 32 | Local verified — query is read-only and restricted targets cannot receive public substitutes | shared retrieval service and non-identifying boundary-target admission | compiled-first read-only, restricted-target, and MCP tests |
 | 33 | Local verified — backfill remains Draft→Validate→Promote | `knowledge_backfill.py`; four backfill contracts | `test_query_backfill_requires_draft_validation_and_explicit_promotion` |
 | 34 | Local verified — Editor Context is ephemeral | `editor_bridge.py`; editor context contracts | editor-context tests |
 | 35 | Local verified + Formal artifact gate — Obsidian builds and installs | `adapters/obsidian/plugin`; `obsidian-bridge.v1.schema.json` | `npm test`, `npm run check`, `npm run build`, `npm run bundle:verify` |
@@ -85,7 +85,7 @@ and `reviewer_id=null` are deliberate owner policy, not missing evidence.
 | 46 | Local verified — synthesis grant cannot mutate Legal Pack | separate process/store and operation allowlist | capability and law-process isolation tests |
 | 47 | Local verified — provider-visible UTF-8 stays under 64 KiB | MCP projection hard limiter | provider error/budget tests |
 | 48 | Local verified — Source/Wiki/Editor/Synthesis use real stdio | MCP servers and closed v5 contracts | autonomous support and Sink stdio tests |
-| 49 | Local verified — CLI/API/MCP share one domain result | `knowledge_api.py`, `knowledge_cli.py`, MCP handlers | `test_cli_api_and_mcp_share_one_compilation_domain_result` |
+| 49 | Local verified — autonomous CLI context/API/MCP share one Capsule v2 domain result | `api/knowledge_os.py`, `knowledge_cli.py`, MCP handlers; untouched v0.7 Vaults retain the v1 compatibility compiler | `test_purpose_aware_query_is_compiled_first_and_read_only`; `test_cli_api_and_mcp_share_one_compilation_domain_result`; legacy CLI lifecycle test |
 | 50 | Local verified — v0.11 coordinator behavior remains | shared coordinator and compatibility schemas | full regression suite |
 | 51 | Local verified + Formal gate — forward/snapshot/restore/rollback | additive migration, verified snapshot and rollback | old-Vault, tamper, distribution lifecycle tests |
 | 52 | Formal gate — Linux/macOS/Windows exact commit | `.github/workflows/commercial-gates.yml` nine-cell matrix | exact-tag platform JSON/JUnit artifacts |

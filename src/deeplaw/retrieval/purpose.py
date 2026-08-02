@@ -9,6 +9,7 @@ from ..knowledge_autonomy import (
     SENSITIVITIES,
     AutonomousKnowledgeStore,
     _validate_contract,
+    parse_knowledge_markdown,
 )
 from ..knowledge_intelligence import (
     estimate_tokens,
@@ -349,6 +350,35 @@ class PurposeAwareRetrievalService:
                 kinds=kinds,
                 force_canonical_lexical=force_canonical_lexical,
             )
+            compiled["results"], integrity_gaps = self._admit_compiled_source_bytes(
+                evidence_store,
+                knowledge_store,
+                compiled=compiled["results"],
+            )
+            selected_knowledge_ids = {
+                str(item.get("knowledge_id")) for item in compiled["results"]
+            }
+            compiled["contradictions"] = [
+                item
+                for item in compiled["contradictions"]
+                if (
+                    item.get("knowledge_id") in selected_knowledge_ids
+                    or (
+                        item.get("subject_knowledge_id") in selected_knowledge_ids
+                        and item.get("object_knowledge_id") in selected_knowledge_ids
+                    )
+                )
+            ]
+            boundary_target_blocked = self._query_targets_outside_admission(
+                knowledge_store,
+                query=selected_query,
+                scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+                admitted=compiled["results"],
+            )
+            if boundary_target_blocked:
+                compiled["results"] = []
+                compiled["contradictions"] = []
             fallback_requested = False
             evidence_requested = evidence_budget["items"] > 0
             if (
@@ -373,8 +403,9 @@ class PurposeAwareRetrievalService:
                     max_chars=evidence_budget["characters"],
                     as_of=selected_as_of,
                     kinds=kinds,
+                    compiled=compiled["results"],
                 )
-                if evidence_requested
+                if evidence_requested and not boundary_target_blocked
                 else _EvidenceSelection([], [], 0, [], [])
             )
             fallback_reason = (
@@ -388,6 +419,20 @@ class PurposeAwareRetrievalService:
                 else None
             )
             gaps = [
+                *integrity_gaps,
+                *(
+                    [
+                        {
+                            "code": "retrieval_gap",
+                            "message": (
+                                "No content admitted by the requested scope and "
+                                "sensitivity matched the query."
+                            ),
+                        }
+                    ]
+                    if boundary_target_blocked
+                    else []
+                ),
                 *compiled["freshness_gaps"],
                 *self._stale_knowledge_gaps(
                     knowledge_store,
@@ -449,7 +494,9 @@ class PurposeAwareRetrievalService:
                 1 for gap in gaps if gap.get("code") == "stale_knowledge"
             )
             selected_items = len(compiled["results"]) + len(evidence.cards)
-            selected_chars = compiled["selected_characters"] + evidence.selected_characters
+            selected_chars = sum(
+                len(str(item.get("content", ""))) for item in compiled["results"]
+            ) + evidence.selected_characters
             plan = {
                 "schema_version": "deeplaw.knowledge-query-plan/v4",
                 "intent": "purpose_aware_knowledge_retrieval",
@@ -779,6 +826,10 @@ class PurposeAwareRetrievalService:
             item
             for item in raw["contradictions"]
             if item.get("knowledge_id") in selected_ids
+            or (
+                item.get("subject_knowledge_id") in selected_ids
+                and item.get("object_knowledge_id") in selected_ids
+            )
         ]
         return {
             "results": accepted,
@@ -805,6 +856,174 @@ class PurposeAwareRetrievalService:
         }
 
     @staticmethod
+    def _admit_compiled_source_bytes(
+        evidence_store: KnowledgeVault,
+        knowledge_store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Fail closed when a selected compiled revision depends on changed source bytes."""
+
+        if not compiled:
+            return [], []
+        source_cache: dict[str, dict[str, Any]] = {}
+        admitted: list[dict[str, Any]] = []
+        excluded = 0
+        for item in compiled:
+            revision_id = item.get("revision_id")
+            if not isinstance(revision_id, str):
+                excluded += 1
+                continue
+            row = knowledge_store.connection.execute(
+                "SELECT source_refs_json FROM knowledge_revisions_v3 WHERE revision_id = ?",
+                (revision_id,),
+            ).fetchone()
+            if row is None:
+                excluded += 1
+                continue
+            references = strict_json_loads(row["source_refs_json"])
+            if not isinstance(references, list):
+                excluded += 1
+                continue
+            source_revision_ids = {
+                str(reference["source_revision_id"])
+                for reference in references
+                if isinstance(reference, dict)
+                and isinstance(reference.get("source_revision_id"), str)
+            }
+            source_revision_ids.update(
+                str(dependency["source_revision_id"])
+                for dependency in knowledge_store.connection.execute(
+                    """
+                    SELECT DISTINCT source_revision_id
+                    FROM knowledge_dependencies_v1
+                    WHERE consumer_kind = 'knowledge_revision'
+                      AND consumer_revision_id = ?
+                    """,
+                    (revision_id,),
+                )
+            )
+            legacy_source_ids = {
+                str(reference["source_id"])
+                for reference in references
+                if isinstance(reference, dict)
+                and isinstance(reference.get("source_id"), str)
+            }
+            if source_revision_ids:
+                placeholders = ",".join("?" for _ in source_revision_ids)
+                legacy_source_ids.update(
+                    str(binding["legacy_source_id"])
+                    for binding in knowledge_store.connection.execute(
+                        f"""
+                        SELECT legacy_source_id
+                        FROM source_revision_bindings_v2
+                        WHERE source_revision_id IN ({placeholders})
+                        """,
+                        tuple(sorted(source_revision_ids)),
+                    )
+                )
+            if any(
+                not evidence_store._source_file_check(
+                    source_id,
+                    cache=source_cache,
+                )["valid"]
+                for source_id in sorted(legacy_source_ids)
+            ):
+                excluded += 1
+                continue
+            admitted.append(item)
+        gaps = (
+            [
+                {
+                    "code": "source_integrity",
+                    "message": (
+                        "Compiled knowledge depending on source bytes that failed "
+                        "current integrity verification was excluded."
+                    ),
+                    "count": excluded,
+                }
+            ]
+            if excluded
+            else []
+        )
+        return admitted, gaps
+
+    @staticmethod
+    def _query_targets_outside_admission(
+        store: AutonomousKnowledgeStore,
+        *,
+        query: str,
+        scope: str,
+        max_sensitivity: str,
+        admitted: list[dict[str, Any]],
+    ) -> bool:
+        """Detect a strong target outside the boundary without exposing its identity."""
+
+        if any(
+            {"exact", "identity_alias"}.intersection(item.get("channels", []))
+            for item in admitted
+        ):
+            return False
+
+        ignored = {
+            "reveal",
+            "show",
+            "quote",
+            "exact",
+            "what",
+            "which",
+            "does",
+            "the",
+            "is",
+            "an",
+            "a",
+        }
+        terms = [
+            term.casefold()
+            for term in query_search_terms(query, limit=32, cover_tail=True)
+            if term.casefold() not in ignored
+            and ((term.isascii() and len(term) >= 4) or (not term.isascii() and len(term) >= 2))
+        ]
+        if len(terms) < 2:
+            return False
+        sensitivity_order = ("public", "internal", "private", "restricted")
+        admitted_sensitivities = sensitivity_order[
+            : sensitivity_order.index(max_sensitivity) + 1
+        ]
+        rows = store.connection.execute(
+            """
+            SELECT revisions.title, revisions.semantic_key, revisions.markdown_sha256
+            FROM knowledge_objects_v3 AS objects
+            JOIN knowledge_revisions_v3 AS revisions
+              ON revisions.revision_id = objects.current_revision_id
+            WHERE revisions.lifecycle = 'active'
+              AND (revisions.scope <> ? OR revisions.sensitivity NOT IN (
+                    SELECT value FROM json_each(?)
+                  ))
+            ORDER BY revisions.knowledge_id
+            LIMIT 501
+            """,
+            (scope, canonical_json(list(admitted_sensitivities))),
+        ).fetchall()
+        for row in rows[:500]:
+            parsed = parse_knowledge_markdown(
+                (store.root / ".deeplaw" / "objects" / "sha256" /
+                 row["markdown_sha256"][:2] / row["markdown_sha256"][2:]).read_bytes()
+            )
+            haystack = " ".join(
+                (
+                    str(row["title"]),
+                    str(row["semantic_key"] or ""),
+                    str(parsed["body"]),
+                )
+            ).casefold()
+            matches = {term for term in terms if term in haystack}
+            required = min(3, len(set(terms)))
+            if len(matches) >= required:
+                return True
+        return False
+
+    @staticmethod
     def _duty_aware_selection(
         candidates: list[dict[str, Any]],
         *,
@@ -817,21 +1036,30 @@ class PurposeAwareRetrievalService:
         normalized = normalize_identity_text(query)
         source_summary_only = (
             "summarize" in normalized and "source" in normalized
-        ) or any(term in query for term in ("概述来源", "概括材料", "概述材料", "概括来源"))
+        ) or any(
+            term in query
+            for term in (
+                "概述来源",
+                "概括材料",
+                "概述材料",
+                "概括来源",
+                "摘要说明来源",
+            )
+        ) or ("摘要" in query and "来源" in query)
         if source_summary_only:
             selected = [
                 item
                 for item in candidates
                 if str(item.get("semantic_key", "")).startswith("source-summary:")
             ]
-            return selected[:limit]
+            return selected[:1]
         date_count = len(re.findall(r"20\d{2}(?:[-年]\d{1,2})", query))
         if any(term in normalized for term in ("orderedsteps", "procedure", "workflow")) or any(
             term in query for term in ("有序步骤", "流程", "依次", "怎么做")
         ):
             target_kinds = {"procedure"}
-        elif (";" in query and "protocol" in normalized) or (
-            date_count >= 2 and "协议" in query
+        elif date_count >= 2 and (
+            "protocol" in normalized or "协议" in query
         ):
             target_kinds = {"event", "concept"}
         elif (
@@ -872,13 +1100,23 @@ class PurposeAwareRetrievalService:
                 )
             )
         if scoped:
-            exact_ids = {str(item.get("knowledge_id")) for item in exact}
+            exact_scoped = [
+                item for item in exact if item.get("kind") in target_kinds
+            ]
+            multi_target_query = bool(
+                _is_comparison_query(normalized, query)
+                or target_kinds == {"event"}
+                or (target_kinds == {"event", "concept"} and date_count >= 2)
+            )
+            if exact_scoped and not multi_target_query:
+                return exact_scoped[:limit]
+            exact_ids = {str(item.get("knowledge_id")) for item in exact_scoped}
             target_scoped = [
                 item
                 for item in scoped
                 if str(item.get("knowledge_id")) not in exact_ids
             ]
-            return [*exact, *target_scoped][:limit]
+            return [*exact_scoped, *target_scoped][:limit]
         if exact:
             exact_ids = {str(item.get("knowledge_id")) for item in exact}
             related = [
@@ -1912,16 +2150,29 @@ class PurposeAwareRetrievalService:
         max_chars: int,
         as_of: str | None,
         kinds: tuple[str, ...],
+        compiled: list[dict[str, Any]],
     ) -> _EvidenceSelection:
         if as_of is not None:
+            historical = self._historical_evidence_from_compiled(
+                evidence_store,
+                knowledge_store,
+                compiled=compiled,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                as_of=as_of,
+                limit=limit,
+                max_chars=max_chars,
+            )
+            if historical.cards:
+                return historical
             return _EvidenceSelection(
                 [],
                 [
                     {
                         "code": "historical_evidence_unavailable",
                         "message": (
-                            "The legacy evidence-card plane has no historical snapshot; "
-                            "current evidence was not substituted."
+                            "No exact immutable evidence admitted at the requested "
+                            "transaction time matched the query."
                         ),
                     }
                 ],
@@ -2070,6 +2321,188 @@ class PurposeAwareRetrievalService:
             sum(len(str(item.get("excerpt", ""))) for item in cards),
             source_revision_ids,
             fragment_ids,
+        )
+
+    @staticmethod
+    def _historical_evidence_from_compiled(
+        evidence_store: KnowledgeVault,
+        knowledge_store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+        scope: str,
+        max_sensitivity: str,
+        as_of: str,
+        limit: int,
+        max_chars: int,
+    ) -> _EvidenceSelection:
+        """Project exact immutable fragments referenced by admitted historical revisions."""
+
+        if not compiled or limit <= 0 or max_chars <= 0:
+            return _EvidenceSelection([], [], 0, [], [])
+        sensitivity_order = ("public", "internal", "private", "restricted")
+        cards: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        selected_chars = 0
+        source_cache: dict[str, dict[str, Any]] = {}
+        for item in compiled:
+            revision_id = item.get("revision_id")
+            if not isinstance(revision_id, str):
+                continue
+            revision = knowledge_store.connection.execute(
+                "SELECT source_refs_json FROM knowledge_revisions_v3 WHERE revision_id = ?",
+                (revision_id,),
+            ).fetchone()
+            if revision is None:
+                continue
+            references = strict_json_loads(revision["source_refs_json"])
+            if not isinstance(references, list):
+                continue
+            for reference in references:
+                if not isinstance(reference, dict):
+                    continue
+                source_revision_id = reference.get("source_revision_id")
+                fragment_identity = reference.get("fragment_id") or reference.get(
+                    "fragment_revision_id"
+                )
+                if not isinstance(source_revision_id, str) or not isinstance(
+                    fragment_identity, str
+                ):
+                    continue
+                identity = (source_revision_id, fragment_identity)
+                if identity in seen:
+                    continue
+                binding = knowledge_store.connection.execute(
+                    """
+                    SELECT bindings.legacy_source_id,
+                           sources.imported_at,
+                           source_lifecycle.activated_at,
+                           source_lifecycle.superseded_at,
+                           source_lifecycle.removed_at,
+                           evidence.scope,
+                           evidence.lifecycle AS evidence_lifecycle,
+                           governance.sensitivity,
+                           governance.review_status,
+                           governance.lifecycle_status,
+                           governance.activation_status
+                    FROM source_revision_bindings_v2 AS bindings
+                    JOIN sources ON sources.source_id = bindings.legacy_source_id
+                    JOIN source_lifecycle
+                      ON source_lifecycle.source_id = bindings.legacy_source_id
+                    JOIN evidence_bindings_v3 AS evidence
+                      ON evidence.source_revision_id = bindings.source_revision_id
+                    JOIN governance_revisions_v2 AS governance
+                      ON governance.subject_kind = 'source_revision'
+                     AND governance.subject_id = bindings.source_revision_id
+                    WHERE bindings.source_revision_id = ?
+                      AND sources.imported_at <= ?
+                      AND governance.recorded_at <= ?
+                    ORDER BY governance.recorded_at DESC,
+                             CASE
+                                 WHEN governance.activation_status = 'inactive'
+                                  AND governance.lifecycle_status NOT IN (
+                                      'pending', 'proposed', 'quarantined'
+                                  ) THEN 2
+                                 WHEN governance.activation_status = 'active' THEN 1
+                                 ELSE 0
+                             END DESC,
+                             governance.governance_revision DESC
+                    LIMIT 1
+                    """,
+                    (source_revision_id, as_of, as_of),
+                ).fetchone()
+                if (
+                    binding is None
+                    or binding["activated_at"] is None
+                    or binding["activated_at"] > as_of
+                    or (
+                        binding["superseded_at"] is not None
+                        and binding["superseded_at"] <= as_of
+                    )
+                    or (
+                        binding["removed_at"] is not None
+                        and binding["removed_at"] <= as_of
+                    )
+                    or binding["scope"] != scope
+                    or binding["evidence_lifecycle"] != "active"
+                    or binding["review_status"] != "human_verified"
+                    or binding["lifecycle_status"] != "active"
+                    or binding["activation_status"] != "active"
+                    or binding["sensitivity"] not in sensitivity_order
+                    or binding["sensitivity"] == "restricted"
+                    or sensitivity_order.index(binding["sensitivity"])
+                    > sensitivity_order.index(max_sensitivity)
+                    or not evidence_store._source_file_check(
+                        binding["legacy_source_id"], cache=source_cache
+                    )["valid"]
+                ):
+                    continue
+                fragment_binding = knowledge_store.connection.execute(
+                    """
+                    SELECT bindings.fragment_id, bindings.fragment_revision_id,
+                           fragments.text, fragments.text_sha256, fragments.locator
+                    FROM legacy_fragment_bindings_v2 AS bindings
+                    JOIN source_revision_bindings_v2 AS source_binding
+                      ON source_binding.legacy_source_id = bindings.legacy_source_id
+                    JOIN source_fragments AS fragments
+                      ON fragments.fragment_id = bindings.fragment_id
+                    WHERE source_binding.source_revision_id = ?
+                      AND (bindings.fragment_id = ? OR bindings.fragment_revision_id = ?)
+                    LIMIT 1
+                    """,
+                    (source_revision_id, fragment_identity, fragment_identity),
+                ).fetchone()
+                if fragment_binding is None:
+                    continue
+                if (
+                    reference.get("locator") not in {None, fragment_binding["locator"]}
+                    or reference.get("quote_sha256")
+                    not in {None, fragment_binding["text_sha256"]}
+                ):
+                    continue
+                remaining = max_chars - selected_chars
+                if remaining <= 0 or len(cards) >= limit:
+                    break
+                text = str(fragment_binding["text"])
+                excerpt_value = text[:remaining]
+                source_ref = {
+                    "source_revision_id": source_revision_id,
+                    "fragment_revision_id": fragment_binding["fragment_revision_id"],
+                    "locator": fragment_binding["locator"],
+                    "quote_sha256": fragment_binding["text_sha256"],
+                }
+                cards.append(
+                    {
+                        "title": str(item.get("title", "Historical source evidence")),
+                        "kind": "reference",
+                        "excerpt": excerpt_value,
+                        "content_sha256": fragment_binding["text_sha256"],
+                        "status": "active",
+                        "verification": "verified_source",
+                        "trust": "verified_source",
+                        "sensitivity": binding["sensitivity"],
+                        "legal_authority": False,
+                        "fragment_id": fragment_binding["fragment_revision_id"],
+                        "source_refs": [source_ref],
+                        "source_ref_count": 1,
+                        "source_refs_truncated": False,
+                    }
+                )
+                selected_chars += len(excerpt_value)
+                seen.add(identity)
+            if len(cards) >= limit or selected_chars >= max_chars:
+                break
+        return _EvidenceSelection(
+            cards,
+            [],
+            selected_chars,
+            sorted(
+                {
+                    reference["source_revision_id"]
+                    for card in cards
+                    for reference in card["source_refs"]
+                }
+            ),
+            sorted(str(card["fragment_id"]) for card in cards),
         )
 
     @staticmethod

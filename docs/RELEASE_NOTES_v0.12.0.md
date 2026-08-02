@@ -98,6 +98,19 @@ provenance, and post-release rows remain release gates rather than completed his
   present in its validated input set. The deterministic retention comparison binds both inputs
   directly, making its provider-visible evidence receipt complete even when no companion Claim or
   raw fragment is selected.
+- Autonomous CLI `knowledge context`, MCP context, and the Python Context API return the same
+  Capsule v2 revision set and Query Plan v5. Untouched v0.7 Vaults with no autonomous compilation
+  run or governed Knowledge Object retain their v1 compatibility context rather than losing
+  reviewed legacy assets.
+- Single-target retrieval suppresses unrelated compiled candidates without removing required
+  comparison, timeline, contradiction, fallback, stale, or gap evidence. An explicit target beyond
+  the admitted scope/sensitivity returns an empty non-identifying gap instead of a nearby public
+  substitute.
+- Source-byte tamper checks now cover direct fragment reads and every selected source-bound
+  compiled revision. Provider-visible contradiction entries retain the exact typed Relation
+  Revision and titled stable endpoints. Historical evidence-first retrieval returns an exact
+  immutable referenced fragment only when historical source lifecycle/governance and current byte
+  integrity both pass.
 - All 15 Semantic Gold cases and five adversarial challenges must be independently confirmed by
   six isolated `gpt-5.6-sol` machine auditors. No majority vote is accepted, and any discrepancy
   invalidates all prior packets for that candidate.

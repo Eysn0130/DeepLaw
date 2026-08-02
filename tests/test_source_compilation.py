@@ -14,6 +14,7 @@ from benchmarks.hosts.deterministic_fake_agent import compile_with_fake_agent
 from benchmarks.living_wiki.run_quality_gate import _score_case
 from deeplaw.api import (
     KnowledgeOS,
+    KnowledgeOSConflictError,
     KnowledgeOSPermissionError,
     KnowledgeOSValidationError,
 )
@@ -2453,31 +2454,23 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     }
     assert {
         api_capsule["query_plan"]["schema_version"],
+        cli_capsule["query_plan"]["schema_version"],
         mcp_capsule["query_plan"]["schema_version"],
     } == {"deeplaw.knowledge-query-plan/v5"}
-    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v1"
-    cli_items = [
-        item
-        for section in (
-            "constraints",
-            "decisions",
-            "knowledge_assets",
-            "experiences",
-            "open_questions",
-        )
-        for item in cli_capsule[section]
-    ]
-    assert cli_items == []
-    assert any(
-        gap.startswith("compiled_admission_gap:") for gap in cli_capsule["gaps"]
-    )
-    assert [
+    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v2"
+    expected_revision_ids = [
         item["revision_id"]
         for item in api_capsule["sections"]["agent_derived_knowledge"]
-    ] == [
+    ]
+    assert expected_revision_ids
+    assert [
+        item["revision_id"]
+        for item in cli_capsule["sections"]["agent_derived_knowledge"]
+    ] == expected_revision_ids
+    assert [
         item["revision_id"]
         for item in mcp_capsule["sections"]["agent_derived_knowledge"]
-    ]
+    ] == expected_revision_ids
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (
@@ -2492,6 +2485,129 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     assert legal["compiled"] == []
     assert legal["evidence"] == []
     assert legal["gaps"][0]["code"] == "law_support_required"
+
+    with KnowledgeVault(root, read_only=True) as vault:
+        stored_source = vault.source_file_path(compiled["source"]["source_id"])
+    stored_source.write_bytes(stored_source.read_bytes() + b"\ntampered")
+    rejected = KnowledgeOS.open(root).retrieval.query(
+        "Durable source statement",
+        purpose="verify",
+        query_plan_version="5",
+    )
+    assert rejected["compiled"] == []
+    assert rejected["evidence"] == []
+    assert {gap["code"] for gap in rejected["gaps"]} >= {
+        "source_integrity",
+        "retrieval_gap",
+    }
+    with KnowledgeVault(root, read_only=True) as vault:
+        assert vault.verify_source_files((compiled["source"]["source_id"],))["valid"] is False
+
+
+def test_restricted_target_blocks_public_substitutes_without_leaking_identity(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="restricted-target", scope="project")
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="restricted-target-writer",
+            max_sensitivity="restricted",
+            operations=("upsert_concept",),
+        )["grant_id"]
+        store.remember(
+            grant_id=grant_id,
+            idempotency_key="visible-policy",
+            title="General access rule",
+            body="A general public rule does not answer the hidden target.",
+            kind="concept",
+            operation="upsert_concept",
+            sensitivity="public",
+            confirm_no_case_data=True,
+        )
+        hidden = store.remember(
+            grant_id=grant_id,
+            idempotency_key="restricted-policy",
+            title="Lockdown Rule",
+            body="The restricted canary value must never cross a private boundary.",
+            kind="concept",
+            operation="upsert_concept",
+            sensitivity="restricted",
+            confirm_no_case_data=True,
+        )
+        store.rebuild_derived()
+
+    result = PurposeAwareRetrievalService(root).query(
+        "Reveal the exact Lockdown Rule",
+        purpose="answer",
+        max_sensitivity="private",
+        query_plan_version="5",
+    )
+
+    assert result["compiled"] == []
+    assert result["evidence"] == []
+    assert result["query_plan"]["fallback"] == {
+        "used": False,
+        "reason": "no_admitted_target_evidence",
+        "source_revision_ids": [],
+        "selected_fragment_ids": [],
+        "characters": 0,
+        "tokens": 0,
+        "new_synthesis_created": False,
+    }
+    assert any(gap["code"] == "retrieval_gap" for gap in result["gaps"])
+    encoded = canonical_json(result)
+    assert hidden["knowledge_id"] not in encoded
+    assert hidden["revision_id"] not in encoded
+    assert "restricted canary value" not in encoded
+
+
+def test_admitted_exact_identity_is_not_hidden_by_restricted_body_overlap(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="visible-exact-target", scope="project")
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="visible-exact-target-writer",
+            max_sensitivity="restricted",
+            operations=("upsert_concept",),
+        )["grant_id"]
+        visible = store.remember(
+            grant_id=grant_id,
+            idempotency_key="visible-exact-rule",
+            title="Visible Rule",
+            body="The Visible Rule is admitted public knowledge.",
+            kind="concept",
+            operation="upsert_concept",
+            sensitivity="public",
+            confirm_no_case_data=True,
+        )
+        hidden = store.remember(
+            grant_id=grant_id,
+            idempotency_key="restricted-overlap",
+            title="Hidden commentary",
+            body="Restricted commentary also mentions the Visible Rule.",
+            kind="concept",
+            operation="upsert_concept",
+            sensitivity="restricted",
+            confirm_no_case_data=True,
+        )
+        store.rebuild_derived()
+
+    result = PurposeAwareRetrievalService(root).query(
+        "What is the Visible Rule?",
+        purpose="answer",
+        max_sensitivity="private",
+        query_plan_version="5",
+    )
+
+    assert [item["knowledge_id"] for item in result["compiled"]] == [
+        visible["knowledge_id"]
+    ]
+    assert hidden["knowledge_id"] not in canonical_json(result)
 
 
 def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
@@ -2580,6 +2696,12 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
     assert unanswerable["compiled"] == []
     assert unanswerable["evidence"] == []
     assert any(gap["code"] == "evidence_gap" for gap in unanswerable["gaps"])
+
+    with KnowledgeVault(root, read_only=True) as vault:
+        stored_source = vault.source_file_path(source_id)
+    stored_source.write_bytes(stored_source.read_bytes() + b"\ntampered")
+    with pytest.raises(KnowledgeOSConflictError, match="integrity validation"):
+        KnowledgeOS.open(root).sources.fragment(fragment_id)
 
 
 def test_source_fragment_supports_bounded_deterministic_continuation(
@@ -2883,6 +3005,141 @@ def test_purpose_aware_query_keeps_exact_identity_ahead_of_kind_priority(
     assert "reranker" not in result["compiled"][0]
     synthesis = result["compiled"][1]
     assert "synthesis_evidence_receipt" not in synthesis
+
+
+def test_provider_contradiction_preserves_typed_relation_identity_and_titles(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="typed-contradiction", scope="project")
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="typed-contradiction-writer",
+            operations=("add_relation", "upsert_concept"),
+        )["grant_id"]
+        left = store.remember(
+            grant_id=grant_id,
+            idempotency_key="policy-alpha",
+            title="Policy Alpha retention",
+            body="Policy Alpha sets retention to 30 days for the same applicable records.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        right = store.remember(
+            grant_id=grant_id,
+            idempotency_key="policy-beta",
+            title="Policy Beta retention",
+            body="Policy Beta sets retention to 60 days for the same applicable records.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        relation = store.add_relation(
+            grant_id=grant_id,
+            idempotency_key="retention-contradiction",
+            subject_knowledge_id=left["knowledge_id"],
+            predicate="contradicts",
+            object_knowledge_id=right["knowledge_id"],
+            evidence_refs=[
+                {"revision_id": left["revision_id"]},
+                {"revision_id": right["revision_id"]},
+            ],
+            confirm_no_case_data=True,
+        )
+        store.rebuild_derived()
+
+    result = PurposeAwareRetrievalService(root).query(
+        "Policy Alpha retention and Policy Beta retention",
+        purpose="answer",
+        query_plan_version="5",
+    )
+
+    assert {item["knowledge_id"] for item in result["compiled"]} == {
+        left["knowledge_id"],
+        right["knowledge_id"],
+    }
+    assert len(result["contradictions"]) == 1
+    contradiction = result["contradictions"][0]
+    assert contradiction["relation_revision_id"] == relation["relation_revision_id"]
+    assert contradiction["relation_key"] == relation["relation_key"]
+    assert contradiction["subject_knowledge_id"] == left["knowledge_id"]
+    assert contradiction["subject_title"] == "Policy Alpha retention"
+    assert contradiction["predicate"] == "contradicts"
+    assert contradiction["object_knowledge_id"] == right["knowledge_id"]
+    assert contradiction["object_title"] == "Policy Beta retention"
+    assert {item["revision_id"] for item in contradiction["evidence_refs"]} == {
+        left["revision_id"],
+        right["revision_id"],
+    }
+    assert contradiction["evidence_ref_count"] == 2
+    assert contradiction["evidence_refs_truncated"] is False
+    assert contradiction["origin"] == "agent_derived"
+    assert contradiction["authority"] == "agent_derived"
+    assert contradiction["reason"] == "active_contradicts_relation"
+
+
+def test_historical_evidence_first_uses_exact_admitted_immutable_fragment(
+    tmp_path: Path,
+) -> None:
+    root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
+    with KnowledgeVault(root, read_only=False) as vault:
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="historical-evidence-test",
+            review_reason="Admit exact evidence for the historical retrieval regression.",
+        )
+    coordinator = CompilationCoordinator(root)
+    configuration_sha256 = sha256_bytes(b"historical-evidence-first-v1")
+    begun = coordinator.begin(
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        compiler_profile="historical-evidence-first",
+        compiler_profile_version="1",
+        host_identity="deterministic-fake-agent",
+        model_identity=None,
+        prompt_template_id="deeplaw.compile.fake/v1",
+        prompt_config_sha256=configuration_sha256,
+        plan_configuration_sha256=configuration_sha256,
+        confirm_no_case_data=True,
+    )
+    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    coordinator.validate(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    committed = coordinator.commit(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        confirm_no_case_data=True,
+    )
+    as_of = committed["committed_at"]
+
+    result = PurposeAwareRetrievalService(root).query(
+        "Durable source statement 1",
+        purpose="historical",
+        as_of=as_of,
+        query_plan_version="5",
+    )
+
+    assert result["compiled"]
+    assert len(result["evidence"]) == 1
+    reference = result["evidence"][0]["source_refs"][0]
+    assert reference["source_revision_id"] == compiled["identity"][
+        "source_revision_id"
+    ]
+    assert reference["fragment_revision_id"].startswith("irfragment_")
+    assert reference["locator"]
+    assert reference["quote_sha256"]
+    assert not any(
+        gap["code"] == "historical_evidence_unavailable"
+        for gap in result["gaps"]
+    )
 
 
 @pytest.mark.parametrize(

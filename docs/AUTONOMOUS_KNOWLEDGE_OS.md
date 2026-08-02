@@ -267,9 +267,11 @@ both current audit heads and has no pending rebuild. When it is stale or unavail
 uses a scope-filtered canonical Markdown scan capped at 500 current objects, records the fallback
 channel, and emits an explicit gap if that scan truncates; stale FTS is never silently presented as
 complete.
-The default Capsule path uses the same purpose-aware Query Plan v5 service as CLI `query`, the
-Python API, and MCP. The plan binds both the autonomous audit head and the legacy evidence/Inbox
-audit head, plus the
+Once a Vault contains an autonomous compilation run or governed Knowledge Object, the default
+Capsule path uses the same purpose-aware Query Plan v5 service for CLI `query`, CLI `context`, the
+Python API, and MCP. An untouched v0.7 compatibility Vault with neither remains on the retained v1
+context compiler until it enters the autonomous compilation workflow. The v5 plan binds both the
+autonomous audit head and the legacy evidence/Inbox audit head, plus the
 admitted-candidate state and derived-manifest digests, so lifecycle changes outside the autonomous
 event stream cannot masquerade as the same replay input.
 It also binds autonomous kind/tag filters, retrieval mode, token/source/hop budgets, dense model,
@@ -283,6 +285,18 @@ The retained v0.7 source-derived partition currently has no transaction-time his
 Consequently an `as_of` query does not silently substitute its current assets: that partition is
 empty and the Query Plan records an explicit historical-source gap. Exact historical `asset_id`
 reads fail closed. This prevents current legacy state from being mislabeled as historical evidence.
+An admitted historical autonomous Knowledge Revision is different: evidence-first retrieval may
+project only the exact immutable Source IR fragment already named by that revision when the Source
+Revision existed at `as_of`, its source lifecycle and latest same-time governance state were active
+and human-verified at `as_of`, its scope/sensitivity is admitted, and its current stored bytes still
+match. Otherwise it emits `historical_evidence_unavailable`; current raw evidence is never silently
+substituted.
+
+Before delivery, every selected source-bound Knowledge Revision and direct Source fragment is
+rechecked against current immutable source bytes. Changed or missing bytes fail closed. Typed
+`contradicts` output retains the exact Relation Revision, stable endpoint IDs and titles, valid-time
+interval, and bounded evidence references; an endpoint-only contested marker is used only when no
+admitted typed relation represents the selected object.
 
 Knowledge Capsule v2 partitions:
 

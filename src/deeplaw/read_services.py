@@ -195,6 +195,11 @@ class SourceReadService:
             max_sensitivity=max_sensitivity,
         ):
             raise PermissionError("source is not admitted")
+        source_id = source.get("source_id")
+        if not isinstance(source_id, str) or not vault.verify_source_files(
+            (source_id,)
+        )["valid"]:
+            raise RuntimeError("source bytes failed current integrity verification")
 
 
 _WIKILINK_PATTERN = re.compile(r"\[\[([^\]|#]+)")

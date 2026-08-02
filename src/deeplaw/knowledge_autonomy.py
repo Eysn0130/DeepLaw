@@ -8662,60 +8662,68 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         contradiction_relation_scan_truncated = len(admitted_relations) > _MAX_GRAPH_RELATION_SCAN
         admitted_relations = admitted_relations[:_MAX_GRAPH_RELATION_SCAN]
 
-        def has_admitted_contradiction(item: dict[str, Any]) -> bool:
-            for relation in admitted_relations:
-                if relation["predicate"] != "contradicts":
-                    continue
-                if relation["scope"] != scope or SENSITIVITY_ORDER.index(
-                    relation["sensitivity"]
-                ) > SENSITIVITY_ORDER.index(max_sensitivity):
-                    continue
-                if not self.relation_provenance_admitted(relation):
-                    continue
-                endpoints = {
-                    relation["subject_knowledge_id"],
-                    relation["object_knowledge_id"],
+        selected_id_set = set(selected_knowledge_ids)
+        contradictions: list[dict[str, Any]] = []
+        represented_ids: set[str] = set()
+        for relation in admitted_relations:
+            if (
+                relation["predicate"] != "contradicts"
+                or relation["scope"] != scope
+                or SENSITIVITY_ORDER.index(relation["sensitivity"])
+                > SENSITIVITY_ORDER.index(max_sensitivity)
+                or not self.relation_provenance_admitted(relation)
+                or relation["subject_knowledge_id"] not in selected_id_set
+                or relation["object_knowledge_id"] not in selected_id_set
+                or (
+                    relation["valid_from"] is not None
+                    and relation["valid_from"] > reference_time
+                )
+                or (
+                    relation["valid_to"] is not None
+                    and relation["valid_to"] <= reference_time
+                )
+            ):
+                continue
+            represented_ids.update(
+                (relation["subject_knowledge_id"], relation["object_knowledge_id"])
+            )
+            references = [
+                bounded_source_reference(reference)
+                for reference in relation["evidence_refs"][:4]
+                if isinstance(reference, dict)
+            ]
+            contradictions.append(
+                {
+                    "relation_revision_id": relation["relation_revision_id"],
+                    "relation_key": relation["relation_key"],
+                    "subject_knowledge_id": relation["subject_knowledge_id"],
+                    "subject_title": relation["subject_title"],
+                    "predicate": relation["predicate"],
+                    "object_knowledge_id": relation["object_knowledge_id"],
+                    "object_title": relation["object_title"],
+                    "evidence_refs": references,
+                    "evidence_ref_count": len(relation["evidence_refs"]),
+                    "evidence_refs_truncated": len(references)
+                    < len(relation["evidence_refs"]),
+                    "origin": relation["origin"],
+                    "authority": relation["authority"],
+                    "scope": relation["scope"],
+                    "sensitivity": relation["sensitivity"],
+                    "valid_from": relation["valid_from"],
+                    "valid_to": relation["valid_to"],
+                    "reason": "active_contradicts_relation",
                 }
-                if item["knowledge_id"] not in endpoints:
-                    continue
-                if (
-                    relation["valid_from"] is not None and relation["valid_from"] > reference_time
-                ) or (relation["valid_to"] is not None and relation["valid_to"] <= reference_time):
-                    continue
-                other_id = next(value for value in endpoints if value != item["knowledge_id"])
-                try:
-                    other = (
-                        self.get_at(other_id, recorded_at=as_of)
-                        if as_of is not None
-                        else self.get_current(other_id)
-                    )
-                except KeyError:
-                    continue
-                if (
-                    other["lifecycle"] == "active"
-                    and self.revision_provenance_admitted(other)
-                    and other["scope"] == scope
-                    and SENSITIVITY_ORDER.index(other["sensitivity"])
-                    <= SENSITIVITY_ORDER.index(max_sensitivity)
-                    and (other["expires_at"] is None or other["expires_at"] > reference_time)
-                    and (other["valid_from"] is None or other["valid_from"] <= reference_time)
-                    and (other["valid_to"] is None or other["valid_to"] > reference_time)
-                ):
-                    return True
-            return False
-
-        contradictions = []
+            )
         for item in selected:
-            if item["epistemic_state"] == "contested" or has_admitted_contradiction(item):
+            if (
+                item["epistemic_state"] == "contested"
+                and item["knowledge_id"] not in represented_ids
+            ):
                 contradictions.append(
                     {
                         "knowledge_id": item["knowledge_id"],
                         "revision_id": item["revision_id"],
-                        "reason": (
-                            "epistemic_state:contested"
-                            if item["epistemic_state"] == "contested"
-                            else "active_contradicts_relation"
-                        ),
+                        "reason": "epistemic_state:contested",
                     }
                 )
         planned_channels = sorted(
@@ -9548,7 +9556,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             parameters.append(limit)
         rows = self.connection.execute(
             f"""
-            SELECT knowledge_relation_revisions_v3.*
+            SELECT knowledge_relation_revisions_v3.*,
+                   subject_revision.title AS subject_title,
+                   object_revision.title AS object_title
             FROM knowledge_relations_v3
             JOIN knowledge_relation_revisions_v3
               ON knowledge_relation_revisions_v3.relation_revision_id =
@@ -9670,7 +9680,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 FROM knowledge_revisions_v3
                 WHERE recorded_at <= ?
             )
-            SELECT ranked.* FROM ranked
+            SELECT ranked.*,
+                   subject_revision.title AS subject_title,
+                   object_revision.title AS object_title
+            FROM ranked
             JOIN endpoint_ranked AS subject_revision
               ON subject_revision.knowledge_id = ranked.subject_knowledge_id
             JOIN endpoint_ranked AS object_revision
