@@ -368,7 +368,7 @@ After autonomous migration, `knowledge_support` routes twelve read operations:
 | --- | --- |
 | `search` / `recall` | return bounded source-derived and autonomous partitions without merging Authority |
 | `get` | read one exact active non-restricted `knowledge_id` or legacy `asset_id` |
-| `context` | compile a bounded partitioned Knowledge Capsule v2 |
+| `context` | compile a bounded Query Plan v5 Knowledge Capsule v2 through the shared domain service |
 | `verify` | verify object/source binding, current usability, both event chains, and state reconciliation |
 | `inspect` | inspect sanitized readiness, scoped counts, integrity, and legacy compatibility state |
 | `lineage` | read bounded immutable revision metadata for one Knowledge Object |

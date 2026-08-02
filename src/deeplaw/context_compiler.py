@@ -498,6 +498,7 @@ def compile_context(
     include_restricted: bool = False,
     max_tokens: int = DEFAULT_CAPSULE_TOKENS,
     retrieval_result: dict[str, Any] | None = None,
+    purpose_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
         raise ValueError(
@@ -553,6 +554,78 @@ def compile_context(
         search_results = retrieval_result["results"]
         search_gaps = list(retrieval_result["gaps"])
         retrieval_fabric_selected = True
+    if purpose_result is not None:
+        if (
+            not isinstance(purpose_result, dict)
+            or purpose_result.get("schema_version")
+            != "deeplaw.purpose-aware-retrieval/v2"
+            or purpose_result.get("vault_id") != vault.vault_id
+            or purpose_result.get("query") != context_query
+            or not isinstance(purpose_result.get("compiled"), list)
+            or not isinstance(purpose_result.get("evidence"), list)
+            or not isinstance(purpose_result.get("gaps"), list)
+        ):
+            raise ValueError(
+                "purpose-aware context result does not match this vault and task"
+            )
+        purpose_gaps = [
+            f"{gap.get('code', 'retrieval_gap')}: {gap.get('message', '')}".rstrip()
+            for gap in purpose_result["gaps"]
+            if isinstance(gap, dict)
+        ]
+        search_gaps = [*purpose_gaps, *search_gaps]
+        admitted_evidence = [
+            item
+            for item in purpose_result["evidence"]
+            if isinstance(item, dict) and isinstance(item.get("asset_id"), str)
+        ]
+        if admitted_evidence:
+            search_results = [
+                {
+                    "asset_id": item["asset_id"],
+                    "hit_reason": "retrieval_fabric:lexical",
+                }
+                for item in admitted_evidence
+            ]
+            retrieval_fabric_selected = True
+        elif purpose_result["compiled"]:
+            search_results = []
+            missing_compiled_assets = 0
+            seen_asset_ids: set[str] = set()
+            for item in purpose_result["compiled"]:
+                semantic_key = (
+                    item.get("semantic_key") if isinstance(item, dict) else None
+                )
+                if not isinstance(semantic_key, str):
+                    missing_compiled_assets += 1
+                    continue
+                asset = vault.active_asset_for_semantic_key(semantic_key)
+                if asset is None or asset.asset_id in seen_asset_ids:
+                    missing_compiled_assets += 1
+                    continue
+                seen_asset_ids.add(asset.asset_id)
+                search_results.append(
+                    {
+                        "asset_id": asset.asset_id,
+                        "hit_reason": "retrieval_fabric:compiled_admission",
+                    }
+                )
+            if missing_compiled_assets:
+                search_gaps.append(
+                    "compiled_admission_gap: "
+                    f"{missing_compiled_assets} admitted compiled object(s) had no "
+                    "active Knowledge Capsule v1 projection"
+                )
+            retrieval_fabric_selected = True
+        elif not purpose_result["compiled"] and not any(
+            isinstance(gap, dict)
+            and gap.get("code") == "evidence_gap"
+            and "without exact Source Revision bindings"
+            in str(gap.get("message", ""))
+            for gap in purpose_result["gaps"]
+        ):
+            search_results = []
+            retrieval_fabric_selected = True
     ranked: list[KnowledgeAsset] = []
     selection_reasons: dict[str, str] = {}
     excluded_by_relevance = 0
@@ -561,8 +634,21 @@ def compile_context(
         if search_results and not retrieval_fabric_selected
         else None
     )
+    from .retrieval.purpose import _policy_designator_conflicts, _policy_designators
+
+    query_policy_designators = _policy_designators(context_query)
     for card in search_results:
         asset = vault.get_asset(card["asset_id"])
+        if _policy_designator_conflicts(
+            query_policy_designators,
+            {
+                "title": asset.title,
+                "semantic_key": asset.semantic_key,
+                "content": asset.statement,
+            },
+        ):
+            excluded_by_relevance += 1
+            continue
         if not _context_candidate_admitted(
             asset,
             query=context_query,

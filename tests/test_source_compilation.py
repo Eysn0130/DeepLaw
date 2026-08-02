@@ -2380,6 +2380,29 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         purpose="answer",
         query_plan_version="5",
     )
+    api_capsule = KnowledgeOS.open(root).context.compile(
+        task="Durable source statement",
+        purpose="answer",
+        confirm_no_case_data=True,
+    )
+    cli_capsule = _cli_json(
+        "knowledge",
+        "context",
+        "--vault",
+        str(root),
+        "--task",
+        "Durable source statement",
+        "--purpose",
+        "answer",
+        "--confirm-no-case-data",
+    )
+    mcp_capsule = handle_knowledge_support(
+        operation="context",
+        task="Durable source statement",
+        purpose="answer",
+        confirm_no_case_data=True,
+        vault_path=root,
+    )["result"]
 
     assert result["policy_id"] == "compiled-first-v1"
     assert result["compiled"]
@@ -2428,6 +2451,33 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "authority_changed": False,
         "stored_evidence_changed": False,
     }
+    assert {
+        api_capsule["query_plan"]["schema_version"],
+        mcp_capsule["query_plan"]["schema_version"],
+    } == {"deeplaw.knowledge-query-plan/v5"}
+    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v1"
+    cli_items = [
+        item
+        for section in (
+            "constraints",
+            "decisions",
+            "knowledge_assets",
+            "experiences",
+            "open_questions",
+        )
+        for item in cli_capsule[section]
+    ]
+    assert cli_items == []
+    assert any(
+        gap.startswith("compiled_admission_gap:") for gap in cli_capsule["gaps"]
+    )
+    assert [
+        item["revision_id"]
+        for item in api_capsule["sections"]["agent_derived_knowledge"]
+    ] == [
+        item["revision_id"]
+        for item in mcp_capsule["sections"]["agent_derived_knowledge"]
+    ]
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (
@@ -2602,7 +2652,7 @@ def test_source_fragment_supports_bounded_deterministic_continuation(
     ]
 
 
-def test_dense_only_low_relevance_candidates_trigger_visible_fallback(
+def test_dense_only_low_relevance_candidates_do_not_report_empty_fallback_as_used(
     tmp_path: Path,
 ) -> None:
     root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
@@ -2639,9 +2689,12 @@ def test_dense_only_low_relevance_candidates_trigger_visible_fallback(
     )
 
     assert result["compiled"] == []
-    assert result["metrics"]["source_fallback_used"] is True
-    assert result["query_plan"]["fallback"]["used"] is True
-    assert any(gap["code"] == "source_fallback" for gap in result["gaps"])
+    assert result["evidence"] == []
+    assert result["metrics"]["source_fallback_used"] is False
+    assert result["query_plan"]["fallback"]["used"] is False
+    assert result["query_plan"]["fallback"]["reason"] == (
+        "no_admitted_target_evidence"
+    )
     assert any(gap["code"] == "retrieval_gap" for gap in result["gaps"])
 
 
@@ -2708,10 +2761,20 @@ def test_exact_policy_query_rejects_different_policy_designator() -> None:
         "content": "Policy A requires 30 days and Policy B requires 60 days.",
         "metadata": {"aliases": []},
     }
+    evidence_b = {
+        "title": "Diagnostic log retention",
+        "semantic_key": "retention-policy",
+        "excerpt": "Policy B requires 60-day retention.",
+        "metadata": {"aliases": []},
+    }
 
     assert _policy_designator_conflicts(
         _policy_designators("What retention period does Policy A currently support?"),
         policy_b,
+    )
+    assert _policy_designator_conflicts(
+        _policy_designators("What retention period does Policy A currently support?"),
+        evidence_b,
     )
     assert not _policy_designator_conflicts(
         _policy_designators("Compare Policy A and Policy B retention."), comparison

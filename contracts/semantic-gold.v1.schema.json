@@ -85,6 +85,7 @@
         "source_coverage_definition", "source_coverage_metric",
         "retrieval_source_coverage_definition", "retrieval_sequence_definition",
         "synthesis_direct_evidence_definition", "cross_language_query_definition",
+        "context_semantic_definition",
         "performance_comparison_definition",
         "performance_repetition_count", "performance_execution_order",
         "performance_pairing_definition", "performance_aggregation_definition",
@@ -117,6 +118,9 @@
         },
         "cross_language_query_definition": {
           "const": "Every frozen query variant is scored against the same target-scoped objects, claim entailment, exact citations, source coverage, safety, and provider budget as its canonical case; deterministic query expansion may improve discovery but cannot change Authority or silently translate stored evidence."
+        },
+        "context_semantic_definition": {
+          "const": "Every canonical query and language variant executes first-party context with the frozen purpose; the Capsule must preserve the same required targets and explicit Gap semantics, while withdrawal and unanswerable cases remain empty without fallback."
         },
         "performance_comparison_definition": {
           "const": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance."

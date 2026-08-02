@@ -34,6 +34,7 @@ from .knowledge_models import ASSET_KINDS, MEMORY_TIERS, canonical_timestamp, ut
 from .knowledge_store import KnowledgeVault, default_knowledge_vault
 from .read_services import SourceReadService, WikiReadService
 from .retrieval import PurposeAwareRetrievalService
+from .retrieval.purpose import _policy_designator_conflicts, _policy_designators
 from .retrieval_fabric import retrieve
 from .util import (
     QUERY_EXPANSION_PROFILE,
@@ -154,14 +155,18 @@ def _autonomous_v3_output_validator() -> Draft202012Validator:
 def _autonomous_capsule_validators() -> tuple[
     Draft202012Validator,
     Draft202012Validator,
+    Draft202012Validator,
 ]:
     capsule_schema = _load_contract("knowledge-capsule.v2.schema.json")
     plan_schema = _load_contract("autonomous-query-plan.v1.schema.json")
+    purpose_plan_schema = _load_contract("knowledge-query-plan.v5.schema.json")
     Draft202012Validator.check_schema(capsule_schema)
     Draft202012Validator.check_schema(plan_schema)
+    Draft202012Validator.check_schema(purpose_plan_schema)
     return (
         Draft202012Validator(capsule_schema, format_checker=FormatChecker()),
         Draft202012Validator(plan_schema, format_checker=FormatChecker()),
+        Draft202012Validator(purpose_plan_schema, format_checker=FormatChecker()),
     )
 
 
@@ -187,10 +192,19 @@ def _validate_autonomous_output(value: dict[str, Any]) -> None:
 
 
 def _validate_autonomous_capsule(value: dict[str, Any]) -> None:
-    capsule_validator, plan_validator = _autonomous_capsule_validators()
+    capsule_validator, autonomous_plan_validator, purpose_plan_validator = (
+        _autonomous_capsule_validators()
+    )
+    query_plan = value.get("query_plan")
+    plan_validator = (
+        purpose_plan_validator
+        if isinstance(query_plan, dict)
+        and query_plan.get("schema_version") == "deeplaw.knowledge-query-plan/v5"
+        else autonomous_plan_validator
+    )
     for label, validator, candidate in (
         ("Capsule", capsule_validator, value),
-        ("Query Plan", plan_validator, value.get("query_plan")),
+        ("Query Plan", plan_validator, query_plan),
     ):
         error = next(validator.iter_errors(candidate), None)
         if error is not None:
@@ -787,6 +801,7 @@ def _source_derived_search(
     cards = raw.get("results", [])
     if not isinstance(cards, list):
         raise RuntimeError("source-derived retrieval result is invalid")
+    query_policy_designators = _policy_designators(query)
     admitted = [
         card
         for card in cards
@@ -794,10 +809,12 @@ def _source_derived_search(
         and scope == _legacy_scope(vault)
         and card.get("sensitivity") in order
         and order.index(card["sensitivity"]) <= order.index(max_sensitivity)
+        and not _policy_designator_conflicts(query_policy_designators, card)
     ]
     if len(admitted) != len(cards):
         raw.setdefault("gaps", []).append(
-            "source-derived candidates were rejected by scope or sensitivity admission"
+            "source-derived candidates were rejected by target identity, scope, "
+            "or sensitivity admission"
         )
     raw["results"] = admitted
     raw["total_excerpt_chars"] = sum(
@@ -937,6 +954,11 @@ def _federated_budgets(
             limit=limit,
             max_chars=max_chars,
         )
+    if operation == "context":
+        return {
+            "autonomous": {"items": limit, "characters": max_chars},
+            "source_derived": {"items": 0, "characters": 0},
+        }
     autonomous_priority = operation != "search"
     if limit < 2 or max_chars < 400:
         selected = "autonomous" if autonomous_priority else "source_derived"
@@ -2197,6 +2219,8 @@ def _handle_autonomous_knowledge_support(
                 else store.build_capsule(
                     task=task,
                     goal=goal,
+                    purpose=purpose,
+                    policy=policy,
                     scope=cast(Any, scope),
                     max_sensitivity=cast(Any, max_sensitivity),
                     limit=autonomous_limit,

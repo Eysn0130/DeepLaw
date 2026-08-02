@@ -180,7 +180,12 @@ def _policy_designator_conflicts(
     if not query_designators:
         return False
     aliases = item.get("metadata", {}).get("aliases", [])
-    values = [item.get("title"), item.get("semantic_key"), item.get("content")]
+    values = [
+        item.get("title"),
+        item.get("semantic_key"),
+        item.get("content"),
+        item.get("excerpt"),
+    ]
     if isinstance(aliases, list):
         values.extend(aliases)
     candidate_designators = {
@@ -190,6 +195,31 @@ def _policy_designator_conflicts(
         for designator in _policy_designators(value)
     }
     return bool(candidate_designators and query_designators.isdisjoint(candidate_designators))
+
+
+def _has_exact_identifier_overlap(query: str, item: dict[str, Any]) -> bool:
+    query_identifiers = {
+        term.casefold()
+        for term in search_terms(query, limit=256, cover_tail=True)
+        if len(term) >= 6 and any(character.isdigit() for character in term)
+    }
+    if not query_identifiers:
+        return False
+    candidate_text = " ".join(
+        str(value)
+        for value in (
+            item.get("title"),
+            item.get("semantic_key"),
+            item.get("content"),
+            item.get("excerpt"),
+        )
+        if isinstance(value, str)
+    )
+    candidate_terms = {
+        term.casefold()
+        for term in search_terms(candidate_text, limit=256, cover_tail=True)
+    }
+    return bool(query_identifiers.intersection(candidate_terms))
 
 
 @dataclass(frozen=True)
@@ -224,6 +254,7 @@ class PurposeAwareRetrievalService:
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
         query_plan_version: QueryPlanVersion = "4",
+        force_canonical_lexical: bool = False,
     ) -> dict[str, Any]:
         selected_query = self._bounded_query(query)
         if purpose not in QUERY_PURPOSES:
@@ -316,20 +347,21 @@ class PurposeAwareRetrievalService:
                 retrieval_mode=retrieval_mode,
                 as_of=selected_as_of,
                 kinds=kinds,
+                force_canonical_lexical=force_canonical_lexical,
             )
-            fallback_reason: str | None = None
+            fallback_requested = False
             evidence_requested = evidence_budget["items"] > 0
             if (
                 selected_policy == "compiled-first-v1"
                 and not compiled["results"]
                 and purpose != "freshness_check"
             ):
+                fallback_requested = True
                 evidence_requested = True
                 evidence_budget = {
                     "items": min(5, limit),
                     "characters": min(6_000, max_chars),
                 }
-                fallback_reason = "no_fresh_compiled_match"
             evidence = (
                 self._evidence(
                     evidence_store,
@@ -344,6 +376,16 @@ class PurposeAwareRetrievalService:
                 )
                 if evidence_requested
                 else _EvidenceSelection([], [], 0, [], [])
+            )
+            fallback_reason = (
+                "no_fresh_compiled_match"
+                if fallback_requested and evidence.cards
+                else None
+            )
+            fallback_unavailable_reason = (
+                "no_admitted_target_evidence"
+                if fallback_requested and not evidence.cards
+                else None
             )
             gaps = [
                 *compiled["freshness_gaps"],
@@ -442,7 +484,7 @@ class PurposeAwareRetrievalService:
                 "evidence_attachment_count": evidence_attachment_count,
                 "fallback": {
                     "used": fallback_reason is not None,
-                    "reason": fallback_reason,
+                    "reason": fallback_reason or fallback_unavailable_reason,
                     "source_revision_ids": evidence.selected_source_revision_ids,
                     "selected_fragment_ids": evidence.selected_fragment_ids,
                     "characters": (
@@ -603,6 +645,7 @@ class PurposeAwareRetrievalService:
         retrieval_mode: str,
         as_of: str | None,
         kinds: tuple[str, ...],
+        force_canonical_lexical: bool,
     ) -> dict[str, Any]:
         if limit == 0 or max_chars == 0:
             return {
@@ -626,6 +669,7 @@ class PurposeAwareRetrievalService:
             retrieval_mode=retrieval_mode,
             as_of=as_of,
             kinds=kinds,
+            force_canonical_lexical=force_canonical_lexical,
         )
         accepted: list[dict[str, Any]] = []
         freshness_gaps: list[dict[str, Any]] = []
@@ -1921,6 +1965,7 @@ class PurposeAwareRetrievalService:
             explain=False,
         )
         sensitivity_order = ("public", "internal", "private", "restricted")
+        query_policy_designators = _policy_designators(query)
         boundary_candidates = [
             item
             for item in raw.get("results", [])
@@ -1930,6 +1975,9 @@ class PurposeAwareRetrievalService:
             <= sensitivity_order.index(max_sensitivity)
             and item.get("sensitivity") != "restricted"
             and isinstance(item.get("asset_id"), str)
+            and not _policy_designator_conflicts(
+                query_policy_designators, item
+            )
         ]
         discovery_query = query_discovery_text(query)
         evidence_scores = {
@@ -1956,6 +2004,7 @@ class PurposeAwareRetrievalService:
             if (
                 evidence_scores.get(item["asset_id"], 0.0)
                 < _MIN_EVIDENCE_RERANKER_SCORE
+                and not _has_exact_identifier_overlap(query, item)
             ):
                 low_relevance_evidence_count += 1
                 continue

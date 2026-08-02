@@ -19,6 +19,7 @@ HIGHER_IS_BETTER = (
     "citation_validity",
     "claim_evidence_binding_accuracy",
     "context_verification_rate",
+    "context_semantic_accuracy",
     "continuation_success_rate",
     "repeated_query_reuse_rate",
     "compiled_hit_ratio",

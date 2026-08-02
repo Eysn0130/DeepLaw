@@ -235,6 +235,9 @@ a universal hard-coded ranking by object kind:
   `deeplaw.autonomous-query-plan/v1` receipt;
 - every fallback from compiled knowledge to source fragments must be observable in the plan,
   explanation, gap, or receipt;
+- CLI, MCP, and Python Knowledge Capsule compilation reuse Query Plan v5 admission. An exact
+  policy/entity designator cannot be silently replaced by a different designator when the target
+  revision is stale or withdrawn; the Capsule stays empty and preserves the explicit gap;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.
 
 The closed loop is:

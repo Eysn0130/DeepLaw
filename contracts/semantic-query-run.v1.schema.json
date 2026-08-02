@@ -242,7 +242,8 @@
         "silent_fallbacks",
         "stale_prohibited_selections", "recall_at_k", "target_scoped_precision_at_k",
         "mrr", "ndcg_at_k", "citation_validity", "claim_evidence_binding_accuracy",
-        "context_verification_rate", "exact_get_success_rate",
+        "context_verification_rate", "context_semantic_accuracy",
+        "exact_get_success_rate",
         "continuation_success_rate",
         "challenge_execution_counts", "prompt_injection_failures",
         "unsupported_authoritative_claims", "restricted_disclosures",
@@ -299,6 +300,7 @@
         "citation_validity": {"$ref": "#/$defs/ratio"},
         "claim_evidence_binding_accuracy": {"$ref": "#/$defs/ratio"},
         "context_verification_rate": {"$ref": "#/$defs/ratio"},
+        "context_semantic_accuracy": {"$ref": "#/$defs/ratio"},
         "exact_get_success_rate": {"$ref": "#/$defs/ratio"},
         "continuation_success_rate": {"$ref": "#/$defs/ratio"},
         "challenge_execution_counts": {
@@ -333,7 +335,11 @@
         "cold_latency_ms", "warm_latency_ms", "cold_peak_rss_bytes",
         "warm_peak_rss_bytes", "provider_payload_bytes", "provider_content_bytes",
         "context_provider_payload_bytes", "context_capsule_id", "context_capsule_sha256",
-        "context_verification_valid", "compiled_revision_ids",
+        "context_verification_valid", "context_semantic_valid",
+        "context_knowledge_ids", "context_compiled_revision_ids",
+        "context_selected_source_revision_ids", "context_gap_codes",
+        "context_query_plan", "context_query_plan_sha256",
+        "context_matched_label_ids", "compiled_revision_ids",
         "selected_source_revision_ids", "gap_codes", "explicit_gap", "repeat_reused",
         "write_performed", "authority_changed_by_ranking", "source_fallback_visible",
         "provider_hard_limit_valid", "exact_get_valid", "citation_checks",
@@ -380,6 +386,14 @@
         "context_capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
         "context_capsule_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "context_verification_valid": {"type": "boolean"},
+        "context_semantic_valid": {"type": "boolean"},
+        "context_knowledge_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}},
+        "context_compiled_revision_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}},
+        "context_selected_source_revision_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}},
+        "context_gap_codes": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+        "context_query_plan": {"type": "object"},
+        "context_query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "context_matched_label_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^label-[a-z0-9-]+$"}},
         "compiled_revision_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}},
         "selected_source_revision_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}},
         "gap_codes": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
@@ -410,6 +424,10 @@
         "selected_source_revision_ids", "query_plan", "query_plan_sha256",
         "recall_at_k", "target_scoped_precision_at_k", "citation_validity",
         "claim_evidence_binding_accuracy", "context_verification_valid",
+        "context_semantic_valid", "context_knowledge_ids",
+        "context_compiled_revision_ids", "context_selected_source_revision_ids",
+        "context_gap_codes", "context_query_plan", "context_query_plan_sha256",
+        "context_matched_label_ids",
         "provider_hard_limit_valid", "provider_payload_bytes",
         "context_provider_payload_bytes", "cold_latency_ms", "warm_latency_ms",
         "cold_peak_rss_bytes", "warm_peak_rss_bytes", "failure_reason"
@@ -440,6 +458,29 @@
         "citation_validity": {"$ref": "#/$defs/ratio"},
         "claim_evidence_binding_accuracy": {"$ref": "#/$defs/ratio"},
         "context_verification_valid": {"type": "boolean"},
+        "context_semantic_valid": {"type": "boolean"},
+        "context_knowledge_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+        },
+        "context_compiled_revision_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}
+        },
+        "context_selected_source_revision_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+        },
+        "context_gap_codes": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "context_query_plan": {"type": "object"},
+        "context_query_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "context_matched_label_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^label-[a-z0-9-]+$"}
+        },
         "provider_hard_limit_valid": {"type": "boolean"},
         "provider_payload_bytes": {
           "type": "integer", "minimum": 0, "maximum": 65536

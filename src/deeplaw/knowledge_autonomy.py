@@ -8913,6 +8913,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         task: str,
         goal: str | None = None,
+        purpose: str = "answer",
+        policy: str | None = None,
         scope: Scope = "project",
         max_sensitivity: Sensitivity = "private",
         limit: int = 8,
@@ -8937,8 +8939,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             canonical_timestamp(as_of, field="Capsule as_of") if as_of is not None else None
         )
         query = f"{task} {selected_goal or ''}".strip()
-        recall = self.recall(
+        if required_tags:
+            raise ValueError(
+                "purpose-aware Knowledge Capsules do not support required-tag filters"
+            )
+        from .retrieval.purpose import PurposeAwareRetrievalService
+
+        retrieval = PurposeAwareRetrievalService(self.root).query(
             query,
+            purpose=cast(Any, purpose),
+            policy=cast(Any, policy),
             scope=scope,
             max_sensitivity=max_sensitivity,
             limit=limit,
@@ -8949,31 +8959,73 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             retrieval_mode=retrieval_mode,
             as_of=selected_as_of,
             kinds=kinds,
-            required_tags=required_tags,
+            query_plan_version="5",
             force_canonical_lexical=force_canonical_lexical,
         )
-        memory = [item for item in recall["results"] if item["kind"] == "memory"]
-        derived = [item for item in recall["results"] if item["kind"] != "memory"]
+        if (
+            retrieval.get("audit_head") != self.audit_head
+            or retrieval.get("query_plan", {}).get("input_legacy_audit_head")
+            != self.legacy_audit_head
+        ):
+            raise RuntimeError(
+                "knowledge read planes changed during Capsule compilation"
+            )
+        memory = [
+            item for item in retrieval["compiled"] if item["kind"] == "memory"
+        ]
+        agent_derived = [
+            item
+            for item in retrieval["compiled"]
+            if item["kind"] != "memory"
+        ]
+        revision_ids = [
+            str(item["revision_id"])
+            for item in retrieval["compiled"]
+            if isinstance(item.get("revision_id"), str)
+        ]
+        revision_receipts: dict[str, dict[str, Any]] = {}
+        if revision_ids:
+            placeholders = ",".join("?" for _ in revision_ids)
+            revision_receipts = {
+                row["revision_id"]: {
+                    "knowledge_id": row["knowledge_id"],
+                    "revision_id": row["revision_id"],
+                    "markdown_sha256": row["markdown_sha256"],
+                }
+                for row in self.connection.execute(
+                    f"""
+                    SELECT knowledge_id, revision_id, markdown_sha256
+                    FROM knowledge_revisions_v3
+                    WHERE revision_id IN ({placeholders})
+                    """,
+                    revision_ids,
+                )
+            }
+        receipts = [
+            revision_receipts[revision_id]
+            for revision_id in revision_ids
+            if revision_id in revision_receipts
+        ]
+        if len(receipts) != len(revision_ids):
+            raise RuntimeError(
+                "selected Knowledge Revisions changed during Capsule compilation"
+            )
         sections = {
             "official_evidence": [],
             "user_private_evidence": [],
-            "source_derived_knowledge": [],
-            "agent_derived_knowledge": derived,
+            "source_derived_knowledge": retrieval["evidence"],
+            "agent_derived_knowledge": agent_derived,
             "agent_memory": memory,
-            "contradictions": recall["contradictions"],
+            "contradictions": retrieval["contradictions"],
             "limitations": [
                 "Agent-derived knowledge is not human verification, legal authority, "
                 "or permission.",
             ],
-            "gaps": recall["gaps"],
-            "receipts": [
-                {
-                    "knowledge_id": item["knowledge_id"],
-                    "revision_id": item["revision_id"],
-                    "markdown_sha256": item["markdown_sha256"],
-                }
-                for item in recall["results"]
+            "gaps": [
+                f"{gap.get('code', 'retrieval_gap')}: {gap.get('message', '')}".rstrip()
+                for gap in retrieval["gaps"]
             ],
+            "receipts": receipts,
         }
         capsule = {
             "schema_version": KNOWLEDGE_CAPSULE_SCHEMA,
@@ -8981,11 +9033,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "task": task,
             "goal": selected_goal,
             "as_of": selected_as_of,
-            "query_plan": recall["query_plan"],
-            "query_plan_sha256": recall["query_plan_sha256"],
+            "query_plan": retrieval["query_plan"],
+            "query_plan_sha256": retrieval["query_plan_sha256"],
             "sections": sections,
-            "budget": recall["budget"],
-            "audit_head": self.audit_head,
+            "budget": retrieval["budget"],
+            "audit_head": retrieval["audit_head"],
             "created_at": utc_now(),
             "capsule_id": "",
             "capsule_digest": "",
@@ -8998,7 +9050,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         digest = sha256_bytes(canonical_json(digest_body).encode("utf-8"))
         capsule["capsule_digest"] = digest
         capsule["capsule_id"] = stable_id("capsule", self.vault_id, digest)
-        if len(canonical_json(capsule)) > 65_536:
+        if len(canonical_json(capsule).encode("utf-8")) > 65_536:
             raise RuntimeError("Knowledge Capsule exceeds its hard 64 KiB provider budget")
         _validate_contract("knowledge-capsule.v2.schema.json", capsule)
         return capsule

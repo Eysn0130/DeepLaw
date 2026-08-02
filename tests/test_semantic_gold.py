@@ -1829,6 +1829,14 @@ def _stub_cli_audit(monkeypatch: pytest.MonkeyPatch) -> None:
             "provider_payload_bytes": 1024,
             "provider_hard_limit_valid": True,
             "verification_valid": True,
+            "semantic_valid": True,
+            "knowledge_ids": [],
+            "compiled_revision_ids": [],
+            "selected_source_revision_ids": [],
+            "gap_codes": ["retrieval_gap"],
+            "query_plan": {"fallback": {"used": False}},
+            "query_plan_sha256": "b" * 64,
+            "matched_label_ids": [],
         },
     )
 
@@ -1928,3 +1936,55 @@ def test_query_suite_rejects_substitute_answer_for_withdrawn_policy(
     )
     assert result["status"] == "failed"
     assert result["failure_reason"] == "withdrawn policy query returned a substitute answer"
+
+
+def test_query_suite_rejects_context_substitute_for_withdrawn_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_cli_audit(monkeypatch)
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_context_verification",
+        lambda *args, **kwargs: {
+            "capsule_id": "capsule_0123456789abcdef01234567",
+            "capsule_sha256": "a" * 64,
+            "provider_payload_bytes": 1024,
+            "provider_hard_limit_valid": True,
+            "verification_valid": True,
+            "semantic_valid": False,
+            "knowledge_ids": ["knowledge_" + "c" * 24],
+            "compiled_revision_ids": ["knowledgerev_" + "d" * 24],
+            "selected_source_revision_ids": ["sourcerev_" + "b" * 24],
+            "gap_codes": [],
+            "query_plan": {"fallback": {"used": False}},
+            "query_plan_sha256": "b" * 64,
+            "matched_label_ids": [],
+        },
+    )
+    case = next(
+        case
+        for case in _candidate()["cases"]
+        if case["task_type"] == "source_withdrawal"
+    )
+    output = _query_output(
+        gaps=[{"code": "stale_knowledge"}, {"code": "retrieval_gap"}]
+    )
+    result = _case_result(
+        prefix=["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        cold=output,
+        warm=output,
+        cold_latency_ms=5,
+        warm_latency_ms=3,
+        source_ids={
+            "retention-a": "sourcerev_" + "a" * 24,
+            "update-v1": "sourcerev_" + "e" * 24,
+            "update-v2": "sourcerev_" + "f" * 24,
+        },
+    )
+    assert result["status"] == "failed"
+    assert result["failure_reason"] == (
+        "context Capsule did not preserve the frozen targets and explicit gaps"
+    )

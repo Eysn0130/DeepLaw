@@ -656,7 +656,6 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
     assert autonomous_capsule["sections"]["source_derived_knowledge"] == []
     assert autonomous_capsule["query_plan"]["filters"] == {
         "kinds": ["concept"],
-        "required_tags": [],
     }
 
 

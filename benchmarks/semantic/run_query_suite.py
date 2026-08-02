@@ -1377,8 +1377,10 @@ def _context_verification(
     prefix: list[str],
     *,
     vault: Path,
-    query: str,
+    case: dict[str, Any],
+    source_ids: dict[str, str],
 ) -> dict[str, Any]:
+    query = str(case["query"])
     capsule, _, _stdout, _ = _run_json(
         prefix,
         "autonomy",
@@ -1387,6 +1389,8 @@ def _context_verification(
         str(vault),
         "--task",
         query,
+        "--purpose",
+        str(case["purpose"]),
         "--scope",
         "personal",
         "--max-sensitivity",
@@ -1403,9 +1407,83 @@ def _context_verification(
         "1",
         "--retrieval-mode",
         "hybrid",
+        *(
+            ["--as-of", str(case["as_of"])]
+            if isinstance(case.get("as_of"), str)
+            else []
+        ),
         "--confirm-no-case-data",
     )
     assert capsule is not None
+    sections = capsule.get("sections", {})
+    source_derived = [
+        item
+        for item in sections.get("source_derived_knowledge", [])
+        if isinstance(item, dict)
+    ]
+    compiled = [
+        item
+        for name in (
+            "agent_derived_knowledge",
+            "agent_memory",
+        )
+        for item in sections.get(name, [])
+        if isinstance(item, dict)
+    ]
+    evidence = [
+        item
+        for name in ("official_evidence", "user_private_evidence")
+        for item in sections.get(name, [])
+        if isinstance(item, dict)
+    ] + [item for item in source_derived if "knowledge_id" not in item]
+    compiled = [
+        *[item for item in source_derived if "knowledge_id" in item],
+        *compiled,
+    ]
+    gap_codes = sorted(
+        {
+            gap.split(":", 1)[0]
+            for gap in sections.get("gaps", [])
+            if isinstance(gap, str) and ":" in gap
+        }
+    )
+    retrieval_view = {
+        "compiled": compiled,
+        "evidence": evidence,
+        "gaps": [{"code": code} for code in gap_codes],
+    }
+    compiled_revision_ids, selected_source_revision_ids = _selected(
+        retrieval_view
+    )
+    ranking = _rank_metrics(case=case, value=retrieval_view, source_ids=source_ids)
+    required_label_ids = {
+        item["label_id"] for item in case["expected_objects"] if item["required"]
+    }
+    expected_gap_codes = set(case.get("expected_gap_codes", []))
+    semantic_valid = bool(
+        set(ranking["matched_label_ids"]) == required_label_ids
+        and expected_gap_codes.issubset(set(gap_codes))
+    )
+    explicit_gap = bool(
+        {"evidence_gap", "retrieval_gap", "uncompiled_source", "stale_knowledge"}
+        & set(gap_codes)
+    )
+    fallback_used = bool(
+        capsule.get("query_plan", {}).get("fallback", {}).get("used")
+    )
+    if case["task_type"] == "unanswerable":
+        semantic_valid = bool(
+            semantic_valid and explicit_gap and not compiled and not evidence
+        )
+    elif case["task_type"] == "source_withdrawal":
+        semantic_valid = bool(
+            semantic_valid
+            and "stale_knowledge" in gap_codes
+            and not compiled
+            and not evidence
+            and not fallback_used
+            and source_ids["retention-a"] not in selected_source_revision_ids
+        )
     provider_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
     with tempfile.TemporaryDirectory(prefix="deeplaw-semantic-capsule-") as temporary:
         capsule_path = Path(temporary) / "capsule.json"
@@ -1425,6 +1503,18 @@ def _context_verification(
         "provider_payload_bytes": provider_payload_bytes,
         "provider_hard_limit_valid": provider_payload_bytes <= 65_536,
         "verification_valid": bool(verification and verification.get("valid")),
+        "semantic_valid": semantic_valid,
+        "knowledge_ids": sorted(
+            str(item["knowledge_id"])
+            for item in compiled
+            if isinstance(item.get("knowledge_id"), str)
+        ),
+        "compiled_revision_ids": compiled_revision_ids,
+        "selected_source_revision_ids": selected_source_revision_ids,
+        "gap_codes": gap_codes,
+        "query_plan": capsule.get("query_plan", {}),
+        "query_plan_sha256": capsule.get("query_plan_sha256"),
+        "matched_label_ids": ranking["matched_label_ids"],
     }
 
 
@@ -1633,7 +1723,12 @@ def _case_result(
         value=warm,
         source_ids=source_ids,
     )
-    context = _context_verification(prefix, vault=vault, query=case["query"])
+    context = _context_verification(
+        prefix,
+        vault=vault,
+        case=case,
+        source_ids=source_ids,
+    )
     citation_validity = (
         round(valid_citations / citation_count, 6)
         if citation_count
@@ -1701,12 +1796,17 @@ def _case_result(
         and hard_limit_valid
         and context["provider_hard_limit_valid"]
         and context["verification_valid"]
+        and context["semantic_valid"]
         and evidence_binding_valid
         and exact_get_valid
     )
     passed = bool(semantic_pass and safety_pass)
     if not safety_pass and failure_reason is None:
-        failure_reason = "query safety or provider-bound invariant failed"
+        failure_reason = (
+            "context Capsule did not preserve the frozen targets and explicit gaps"
+            if not context["semantic_valid"]
+            else "query safety or provider-bound invariant failed"
+        )
     expected_targets = [
         {
             "label_id": item["label_id"],
@@ -1770,6 +1870,16 @@ def _case_result(
         "context_capsule_id": context["capsule_id"],
         "context_capsule_sha256": context["capsule_sha256"],
         "context_verification_valid": context["verification_valid"],
+        "context_semantic_valid": context["semantic_valid"],
+        "context_knowledge_ids": context["knowledge_ids"],
+        "context_compiled_revision_ids": context["compiled_revision_ids"],
+        "context_selected_source_revision_ids": context[
+            "selected_source_revision_ids"
+        ],
+        "context_gap_codes": context["gap_codes"],
+        "context_query_plan": context["query_plan"],
+        "context_query_plan_sha256": context["query_plan_sha256"],
+        "context_matched_label_ids": context["matched_label_ids"],
         "compiled_revision_ids": compiled_ids,
         "selected_source_revision_ids": selected_sources,
         "gap_codes": gap_codes,
@@ -1925,6 +2035,26 @@ def run(
                     "context_verification_valid": variant_result[
                         "context_verification_valid"
                     ],
+                    "context_semantic_valid": variant_result[
+                        "context_semantic_valid"
+                    ],
+                    "context_knowledge_ids": variant_result[
+                        "context_knowledge_ids"
+                    ],
+                    "context_compiled_revision_ids": variant_result[
+                        "context_compiled_revision_ids"
+                    ],
+                    "context_selected_source_revision_ids": variant_result[
+                        "context_selected_source_revision_ids"
+                    ],
+                    "context_gap_codes": variant_result["context_gap_codes"],
+                    "context_query_plan": variant_result["context_query_plan"],
+                    "context_query_plan_sha256": variant_result[
+                        "context_query_plan_sha256"
+                    ],
+                    "context_matched_label_ids": variant_result[
+                        "context_matched_label_ids"
+                    ],
                     "provider_hard_limit_valid": variant_result[
                         "provider_hard_limit_valid"
                     ],
@@ -2071,7 +2201,7 @@ def run(
     ]
     metrics = {
         "query_count": len(cases),
-        "execution_count": (len(cases) + len(variant_checks)) * 2,
+        "execution_count": (len(cases) + len(variant_checks)) * 3,
         "query_variant_count": len(variant_checks),
         "query_variant_pass_rate": round(
             sum(item["status"] == "passed" for item in variant_checks)
@@ -2193,6 +2323,9 @@ def run(
         "context_verification_rate": round(
             sum(item["context_verification_valid"] for item in cases) / len(cases), 6
         ),
+        "context_semantic_accuracy": round(
+            sum(item["context_semantic_valid"] for item in cases) / len(cases), 6
+        ),
         "exact_get_success_rate": round(
             sum(item["exact_get_valid"] for item in cases) / len(cases), 6
         ),
@@ -2219,6 +2352,7 @@ def run(
         and metrics["citation_validity"] == 1.0
         and metrics["claim_evidence_binding_accuracy"] == 1.0
         and metrics["context_verification_rate"] == 1.0
+        and metrics["context_semantic_accuracy"] == 1.0
         and metrics["exact_get_success_rate"] == 1.0
         and metrics["continuation_success_rate"] == 1.0
         and cross_packet_identity["valid"]

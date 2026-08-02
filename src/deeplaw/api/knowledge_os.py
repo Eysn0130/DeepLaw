@@ -353,6 +353,8 @@ class _ContextAPI:
         *,
         task: str,
         goal: str | None = None,
+        purpose: str = "answer",
+        policy: str | None = None,
         scope: str = "project",
         max_sensitivity: str = "private",
         limit: int = 8,
@@ -372,6 +374,8 @@ class _ContextAPI:
                 return store.build_capsule(
                     task=task,
                     goal=goal,
+                    purpose=purpose,
+                    policy=policy,
                     scope=cast(Any, scope),
                     max_sensitivity=cast(Any, max_sensitivity),
                     limit=limit,

@@ -754,8 +754,33 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     context.add_argument("--vault", type=Path, default=default_knowledge_vault())
     context.add_argument("--task", required=True)
     context.add_argument("--goal")
+    context.add_argument(
+        "--purpose",
+        choices=(
+            "answer",
+            "verify",
+            "quote",
+            "historical",
+            "debug",
+            "freshness_check",
+        ),
+        default="answer",
+    )
+    context.add_argument(
+        "--policy",
+        choices=("compiled-first-v1", "evidence-first-v1", "balanced-v1"),
+    )
     context.add_argument("--max-items", type=int, default=8)
     context.add_argument("--max-chars", type=int, default=6_000)
+    context.add_argument("--max-tokens", type=int, default=6_000)
+    context.add_argument("--max-sources", type=int, default=12)
+    context.add_argument("--graph-hops", type=int, choices=(0, 1, 2), default=1)
+    context.add_argument(
+        "--retrieval-mode",
+        choices=("exact", "lexical", "dense", "graph", "hybrid"),
+        default="hybrid",
+    )
+    context.add_argument("--as-of")
     context.add_argument("--kind", action="append", default=[])
     context.add_argument("--memory-tier", action="append", default=[])
     context.add_argument("--include-restricted", action="store_true")
@@ -1258,6 +1283,22 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     autonomy_context.add_argument("--vault", type=Path, default=default_knowledge_vault())
     autonomy_context.add_argument("--task", required=True)
     autonomy_context.add_argument("--goal")
+    autonomy_context.add_argument(
+        "--purpose",
+        choices=(
+            "answer",
+            "verify",
+            "quote",
+            "historical",
+            "debug",
+            "freshness_check",
+        ),
+        default="answer",
+    )
+    autonomy_context.add_argument(
+        "--policy",
+        choices=("compiled-first-v1", "evidence-first-v1", "balanced-v1"),
+    )
     autonomy_context.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
     autonomy_context.add_argument(
         "--max-sensitivity",
@@ -2431,6 +2472,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 return store.build_capsule(
                     task=args.task,
                     goal=args.goal,
+                    purpose=args.purpose,
+                    policy=args.policy,
                     scope=selected_scope,
                     max_sensitivity=args.max_sensitivity,
                     limit=args.limit,
@@ -3438,6 +3481,43 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 )
             return asset.to_dict()
         if command == "context":
+            has_autonomous_core = autonomous_core_installed(args.vault)
+            if (
+                not has_autonomous_core
+                and (
+                    args.purpose != "answer"
+                    or args.policy is not None
+                    or args.as_of is not None
+                )
+            ):
+                raise ValueError(
+                    "purpose-aware context requires an initialized autonomous core"
+                )
+            if has_autonomous_core and args.include_restricted:
+                raise ValueError("Knowledge Capsules cannot expose restricted content")
+            context_query = f"{args.task} {args.goal or ''}".strip()
+            purpose_result = (
+                KnowledgeOS.open(args.vault).retrieval.query(
+                    context_query,
+                    purpose=args.purpose,
+                    policy=args.policy,
+                    scope=str(vault.manifest.get("scope", "project")),
+                    max_sensitivity="private",
+                    limit=args.max_items,
+                    max_chars=args.max_chars,
+                    max_tokens=args.max_tokens,
+                    max_sources=args.max_sources,
+                    graph_hops=args.graph_hops,
+                    retrieval_mode=args.retrieval_mode,
+                    as_of=args.as_of,
+                    kinds=tuple(
+                        kind for kind in args.kind if kind in KNOWLEDGE_KINDS
+                    ),
+                    query_plan_version="5",
+                )
+                if has_autonomous_core
+                else None
+            )
             capsule = compile_context(
                 vault,
                 task=args.task,
@@ -3448,6 +3528,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 kinds=tuple(args.kind),
                 memory_tiers=tuple(args.memory_tier),
                 include_restricted=args.include_restricted,
+                max_tokens=args.max_tokens,
+                purpose_result=purpose_result,
             )
             if args.output is not None:
                 _write_capsule(args.output, capsule)

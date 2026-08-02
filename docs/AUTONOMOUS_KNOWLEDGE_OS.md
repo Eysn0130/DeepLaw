@@ -267,14 +267,17 @@ both current audit heads and has no pending rebuild. When it is stale or unavail
 uses a scope-filtered canonical Markdown scan capped at 500 current objects, records the fallback
 channel, and emits an explicit gap if that scan truncates; stale FTS is never silently presented as
 complete.
-The plan binds both the autonomous audit head and the legacy evidence/Inbox audit head, plus the
+The default Capsule path uses the same purpose-aware Query Plan v5 service as CLI `query`, the
+Python API, and MCP. The plan binds both the autonomous audit head and the legacy evidence/Inbox
+audit head, plus the
 admitted-candidate state and derived-manifest digests, so lifecycle changes outside the autonomous
 event stream cannot masquerade as the same replay input.
 It also binds autonomous kind/tag filters, retrieval mode, token/source/hop budgets, dense model,
 reranker profile and dense-manifest digest. The source-derived partition emits its own hashed compact
 plan binding query, compatible kind/memory-tier filters, scope, sensitivity, budget, Vault revision,
-legacy audit head, and historical intent; Capsule v2 embeds that plan rather than reconstructing it
-after selection.
+legacy audit head, and historical intent when that compatibility partition is explicitly selected.
+Target identity admission applies before a raw-evidence fallback, so a stale or withdrawn named
+policy cannot be replaced by another policy merely because it is the nearest remaining hit.
 
 The retained v0.7 source-derived partition currently has no transaction-time history contract.
 Consequently an `as_of` query does not silently substitute its current assets: that partition is
