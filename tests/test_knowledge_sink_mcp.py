@@ -184,6 +184,17 @@ def test_knowledge_support_v5_extends_without_mutating_frozen_v2_to_v4() -> None
     assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
         "knowledge-support.input.v5.schema.json"
     )
+    purpose_context = {
+        "operation": "context",
+        "task": "Quote the exact governed statement.",
+        "confirm_no_case_data": True,
+        "purpose": "quote",
+        "policy": "evidence-first-v1",
+    }
+    Draft202012Validator(
+        knowledge_tool_definition(autonomous=True).inputSchema
+    ).validate(purpose_context)
+    assert list(Draft202012Validator(v4).iter_errors(purpose_context))
 
 
 def test_read_support_fails_closed_on_local_paths_and_secret_like_content(
@@ -1365,7 +1376,12 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
 
 
 def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> None:
-    root, _grant_id = _ready(tmp_path)
+    root, grant_id = _ready(tmp_path)
+    handle_knowledge_sink(
+        _remember_request("stdio-purpose-aware-context"),
+        grant_id=grant_id,
+        vault_path=root,
+    )
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         vault_id = store.vault_id
 
@@ -1406,6 +1422,18 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
                 "knowledge_support",
                 {"operation": "synthesis", "synthesis_action": "coverage"},
             )
+            purpose_context = await session.call_tool(
+                "knowledge_support",
+                {
+                    "operation": "context",
+                    "task": "Quote the admission boundary.",
+                    "confirm_no_case_data": True,
+                    "purpose": "quote",
+                    "policy": "evidence-first-v1",
+                    "limit": 8,
+                    "max_chars": 8_000,
+                },
+            )
             editor = await session.call_tool(
                 "knowledge_support",
                 {
@@ -1441,6 +1469,13 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
             assert semantic.isError is False
             assert sources.isError is False
             assert syntheses.isError is False
+            assert purpose_context.isError is False
+            assert purpose_context.structuredContent["result"]["query_plan"]["purpose"] == (
+                "quote"
+            )
+            assert purpose_context.structuredContent["result"]["query_plan"]["policy_id"] == (
+                "evidence-first-v1"
+            )
             assert editor.isError is False
             assert editor.structuredContent["result"]["ephemeral_context"] is True
             assert editor.structuredContent["result"]["persistence_performed"] is False

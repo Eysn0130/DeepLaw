@@ -2025,11 +2025,7 @@ class PurposeAwareRetrievalService:
         max_sensitivity: str,
         limit: int,
     ) -> list[dict[str, Any]]:
-        terms = tuple(
-            term.casefold()
-            for term in query.replace("/", " ").replace("\\", " ").split()
-            if len(term) >= 2
-        )[:16]
+        terms = tuple(query_search_terms(query, limit=16, cover_tail=True))
         if not terms or scope != store.vault_scope:
             return []
         rows = store.connection.execute(
@@ -2567,11 +2563,7 @@ class PurposeAwareRetrievalService:
         max_sensitivity: str,
         limit: int,
     ) -> list[dict[str, str]]:
-        terms = tuple(
-            term.casefold()
-            for term in query.replace("/", " ").replace("\\", " ").split()
-            if len(term) >= 2
-        )[:16]
+        terms = tuple(query_search_terms(query, limit=16, cover_tail=True))
         if not terms:
             return []
         rows = store.connection.execute(
@@ -2615,18 +2607,34 @@ class PurposeAwareRetrievalService:
                 continue
             haystack = f"{row['logical_path']}".casefold()
             if not any(term in haystack for term in terms):
-                node = store.connection.execute(
+                node_conditions = " OR ".join(
+                    (
+                        "instr(lower(COALESCE(source_ir_nodes_v2.title, '')), ?) > 0 "
+                        "OR instr(lower(source_ir_nodes_v2.text), ?) > 0"
+                    )
+                    for _term in terms
+                )
+                node_parameters = tuple(
+                    parameter
+                    for term in terms
+                    for parameter in (term, term)
+                )
+                node_query = (
                     """
                     SELECT 1 FROM source_ir_nodes_v2
                     JOIN compilations_v2 USING(compilation_id)
                     WHERE compilations_v2.source_revision_id = ?
                       AND (
-                        instr(lower(COALESCE(source_ir_nodes_v2.title, '')), ?) > 0
-                        OR instr(lower(source_ir_nodes_v2.text), ?) > 0
+                    """
+                    + node_conditions
+                    + """
                       )
                     LIMIT 1
-                    """,
-                    (row["source_revision_id"], terms[0], terms[0]),
+                    """
+                )
+                node = store.connection.execute(
+                    node_query,
+                    (row["source_revision_id"], *node_parameters),
                 ).fetchone()
                 if node is None:
                     continue

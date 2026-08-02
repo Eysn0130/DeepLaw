@@ -1513,6 +1513,13 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
     )
     assert any(gap["code"] == "stale_knowledge" for gap in stale_query["gaps"])
     assert stale_query["metrics"]["stale_selection_prevented_count"] == 1
+    unrelated_query = PurposeAwareRetrievalService(root).query(
+        "What is MRC at?",
+        purpose="answer",
+    )
+    assert {
+        gap["code"] for gap in unrelated_query["gaps"]
+    }.isdisjoint({"stale_knowledge", "uncompiled_source"})
     assert verification["valid"] is True, verification["failures"]
 
 
@@ -2321,6 +2328,23 @@ def test_compilation_abort_is_idempotent_before_commit_and_forbidden_after_commi
     assert verification["valid"] is True, verification["failures"]
 
 
+def test_uncompiled_source_gap_uses_all_meaningful_query_terms(tmp_path: Path) -> None:
+    root, compiled, _grant_id = _ready_source(tmp_path, section_count=1)
+
+    unrelated = PurposeAwareRetrievalService(root).query(
+        "What is MRC at?",
+        purpose="answer",
+    )
+    assert "uncompiled_source" not in {gap["code"] for gap in unrelated["gaps"]}
+
+    relevant = PurposeAwareRetrievalService(root).query(
+        "Find details about the durable source statement",
+        purpose="answer",
+    )
+    gap = next(item for item in relevant["gaps"] if item["code"] == "uncompiled_source")
+    assert gap["source_revision_ids"] == [compiled["identity"]["source_revision_id"]]
+
+
 def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> None:
     root, compiled, grant_id = _ready_source(tmp_path, section_count=3)
     coordinator = CompilationCoordinator(root)
@@ -2383,7 +2407,7 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     )
     api_capsule = KnowledgeOS.open(root).context.compile(
         task="Durable source statement",
-        purpose="answer",
+        purpose="quote",
         confirm_no_case_data=True,
     )
     cli_capsule = _cli_json(
@@ -2394,14 +2418,22 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "--task",
         "Durable source statement",
         "--purpose",
-        "answer",
+        "quote",
         "--confirm-no-case-data",
     )
+    mcp_request = {
+        "operation": "context",
+        "task": "Durable source statement",
+        "purpose": "quote",
+        "confirm_no_case_data": True,
+        "limit": 8,
+        "max_chars": 8_000,
+    }
+    Draft202012Validator(
+        knowledge_tool_definition(autonomous=True).inputSchema
+    ).validate(mcp_request)
     mcp_capsule = handle_knowledge_support(
-        operation="context",
-        task="Durable source statement",
-        purpose="answer",
-        confirm_no_case_data=True,
+        **mcp_request,
         vault_path=root,
     )["result"]
 

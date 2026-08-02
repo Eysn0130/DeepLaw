@@ -102,6 +102,10 @@ provenance, and post-release rows remain release gates rather than completed his
   Capsule v2 revision set and Query Plan v5. Untouched v0.7 Vaults with no autonomous compilation
   run or governed Knowledge Object retain their v1 compatibility context rather than losing
   reviewed legacy assets.
+- The advertised MCP v5 Schema accepts explicit purpose-aware context requests and keeps them
+  disjoint from frozen v4 input. Bounded meaningful-term matching prevents unrelated
+  `stale_knowledge` or `uncompiled_source` gaps while still discovering an uncompiled Source IR
+  match on any retained query term.
 - Single-target retrieval suppresses unrelated compiled candidates without removing required
   comparison, timeline, contradiction, fallback, stale, or gap evidence. An explicit target beyond
   the admitted scope/sensitivity returns an empty non-identifying gap instead of a nearby public

@@ -6,6 +6,88 @@
     {"$ref": "knowledge-support.input.v4.schema.json"},
     {
       "type": "object", "additionalProperties": false,
+      "required": [
+        "operation", "task", "confirm_no_case_data", "purpose"
+      ],
+      "properties": {
+        "operation": {"const": "context"},
+        "plane": {"enum": ["all", "source_derived", "autonomous"]},
+        "task": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "goal": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "confirm_no_case_data": {"const": true},
+        "purpose": {
+          "enum": [
+            "answer", "verify", "quote", "historical", "legal", "debug",
+            "freshness_check"
+          ]
+        },
+        "policy": {
+          "enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
+        },
+        "scope": {"$ref": "#/$defs/scope"},
+        "max_sensitivity": {"$ref": "#/$defs/sensitivity"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_chars": {"type": "integer", "minimum": 200, "maximum": 20000},
+        "max_tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "max_sources": {"type": "integer", "minimum": 1, "maximum": 32},
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "retrieval_mode": {
+          "enum": ["exact", "lexical", "dense", "graph", "hybrid"]
+        },
+        "as_of": {"type": "string", "format": "date-time"},
+        "kinds": {
+          "type": "array", "maxItems": 23, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/all_kind"}
+        },
+        "memory_tiers": {
+          "type": "array", "maxItems": 5, "uniqueItems": true,
+          "items": {
+            "enum": ["working", "project", "experience", "wisdom", "domain"]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"plane": {"const": "autonomous"}},
+            "required": ["plane"]
+          },
+          "then": {
+            "not": {"required": ["memory_tiers"]},
+            "properties": {
+              "kinds": {
+                "items": {"$ref": "#/$defs/autonomous_kind"}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"plane": {"const": "source_derived"}},
+            "required": ["plane"]
+          },
+          "then": {
+            "properties": {
+              "kinds": {
+                "items": {"$ref": "#/$defs/source_derived_kind"}
+              }
+            }
+          }
+        },
+        {
+          "if": {"required": ["memory_tiers"]},
+          "then": {
+            "properties": {
+              "kinds": {
+                "items": {"$ref": "#/$defs/source_derived_kind"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "object", "additionalProperties": false,
       "required": ["operation", "query", "query_plan_version"],
       "properties": {
         "operation": {"const": "query"},
@@ -181,6 +263,27 @@
   "$defs": {
     "bounded_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "scope": {"enum": ["personal", "project", "domain"]},
-    "sensitivity": {"enum": ["public", "internal", "private"]}
+    "sensitivity": {"enum": ["public", "internal", "private"]},
+    "autonomous_kind": {
+      "enum": [
+        "claim", "comparison", "concept", "decision", "entity", "event",
+        "experience", "memory", "preference", "procedure", "skill", "synthesis"
+      ]
+    },
+    "source_derived_kind": {
+      "enum": [
+        "assumption", "constraint", "decision", "definition", "exception",
+        "experience", "fact", "lesson", "procedure", "question", "reference",
+        "requirement", "risk", "rule"
+      ]
+    },
+    "all_kind": {
+      "enum": [
+        "assumption", "claim", "comparison", "concept", "constraint",
+        "decision", "definition", "entity", "event", "exception", "experience",
+        "fact", "lesson", "memory", "preference", "procedure", "question",
+        "reference", "requirement", "risk", "rule", "skill", "synthesis"
+      ]
+    }
   }
 }

@@ -51,6 +51,12 @@ This release closes Semantic Living Wiki compilation and production editor integ
 - Bind profile-v2 cross-source Synthesis output directly to exact evidence from every named Source
   Revision, so its provider-visible evidence receipt is complete without relying on companion
   query results.
+- Admit purpose-aware `context` requests through the advertised MCP v5 input Schema while leaving
+  the frozen v4 contract unchanged, so CLI, MCP, and Python apply the same `quote`, `verify`, and
+  other purpose policies.
+- Match `stale_knowledge` and `uncompiled_source` gaps with bounded meaningful query terms instead
+  of stop-word substrings, and inspect every retained term when checking Source IR. This removes
+  unrelated gap noise without hiding a relevant later-term uncompiled source.
 
 ### Verified boundaries
 
