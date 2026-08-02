@@ -535,6 +535,20 @@ def query_search_terms(
     return list(dict.fromkeys((*base, *expansions[:expansion_budget])))[:limit]
 
 
+def query_discovery_text(text: str) -> str:
+    """Build bounded reranker text without dropping mixed-language exact anchors."""
+
+    expansions = query_expansion_terms(text)
+    if not expansions:
+        return text
+    ascii_anchors = [
+        term
+        for term in search_terms(text, limit=64, cover_tail=True)
+        if _ASCII_TOKEN.fullmatch(term)
+    ]
+    return " ".join(dict.fromkeys((*ascii_anchors, *expansions)))
+
+
 def search_terms_v1(text: str) -> list[str]:
     """Reproduce the v0.6 tokenizer solely for additive migration verification."""
     normalized = normalize_text(text).lower()

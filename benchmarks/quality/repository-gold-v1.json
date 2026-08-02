@@ -61,7 +61,7 @@
       "document_id": "doc_code_autonomy",
       "category": "code",
       "path": "src/deeplaw/knowledge_autonomy.py",
-      "sha256": "e8eac08e73fd712b1e05f7944cb6a10eada0c2292da5979104f9ac7a62c4e67b",
+      "sha256": "db36848b37a99893fb04ce1a3bf5234798eb7950acf6d4ed95d75765d629840d",
       "title": "Autonomous Knowledge Store implementation",
       "anchor": "def garbage_collect_content("
     },

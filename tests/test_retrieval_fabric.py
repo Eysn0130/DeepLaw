@@ -9,6 +9,7 @@ from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.retrieval_fabric import build_query_plan, compare_retrieval, recall, retrieve
 from deeplaw.util import (
     QUERY_EXPANSION_PROFILE,
+    query_discovery_text,
     query_expansion_terms,
     query_search_terms,
     search_terms,
@@ -68,6 +69,15 @@ def test_query_only_cross_language_expansion_is_bounded_and_auditable() -> None:
     assert len(terms) <= 16
     assert set(expansions[:16]) & set(plan["search_terms"])
     assert plan["implementation_revision"] == "retrieval-fabric/3"
+    mixed = query_discovery_text(
+        "Atlas 审阅完成 2025-06-01；Atlas 计划发布 2025-07-01；Atlas Protocol"
+    )
+    assert {"atlas", "2025-06-01", "2025-07-01", "protocol"} <= set(
+        mixed.split()
+    )
+    assert {"review", "completed", "publication", "scheduled"} <= set(
+        mixed.split()
+    )
 
 
 def test_bounded_typo_repair_recovers_one_edit_and_rejects_distant_noise(

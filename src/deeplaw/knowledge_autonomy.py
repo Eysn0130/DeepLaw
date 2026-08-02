@@ -46,6 +46,7 @@ from .util import (
     compact_text,
     fts_query,
     has_instruction_risk,
+    query_discovery_text,
     query_expansion_terms,
     query_search_terms,
     search_terms,
@@ -8033,7 +8034,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         terms = query_search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
         expansion_terms = query_expansion_terms(query)
-        discovery_query = " ".join(expansion_terms) if expansion_terms else query
+        discovery_query = query_discovery_text(query)
         exact_id = query if _KNOWLEDGE_ID.fullmatch(query) else None
         candidate_ids: list[str] = []
         channels: dict[str, list[str]] = defaultdict(list)

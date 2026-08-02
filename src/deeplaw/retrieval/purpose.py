@@ -21,6 +21,7 @@ from ..retrieval_fabric import retrieve
 from ..util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
+    query_discovery_text,
     query_expansion_terms,
     sha256_bytes,
     strict_json_loads,
@@ -1851,8 +1852,7 @@ class PurposeAwareRetrievalService:
             and item.get("sensitivity") != "restricted"
             and isinstance(item.get("asset_id"), str)
         ]
-        expansion_terms = query_expansion_terms(query)
-        discovery_query = " ".join(expansion_terms) if expansion_terms else query
+        discovery_query = query_discovery_text(query)
         evidence_scores = {
             item["knowledge_id"]: float(item["reranker_score"])
             for item in rerank_candidates(
