@@ -660,6 +660,52 @@ def _rank_metrics(
     }
 
 
+def _retrieval_sequence_check(
+    *,
+    case: dict[str, Any],
+    value: dict[str, Any],
+    source_ids: dict[str, str],
+) -> dict[str, Any]:
+    expected_sequence = case.get("expected_sequence", [])
+    if case["task_type"] != "event_timeline":
+        return {
+            "applicable": False,
+            "expected": [],
+            "actual": [],
+            "valid": True,
+        }
+    observed: list[str] = []
+    for item in value.get("compiled", []):
+        if not isinstance(item, dict) or not any(
+            expected["kind"] == "event"
+            and _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+            for expected in case["expected_objects"]
+        ):
+            continue
+        valid_from = item.get("valid_from")
+        if isinstance(valid_from, str):
+            date = valid_from[:10]
+        else:
+            match = re.search(
+                r"\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b",
+                str(item.get("content") or item.get("body") or ""),
+            )
+            date = match.group(0) if match is not None else ""
+        if date and date not in observed:
+            observed.append(date)
+    return {
+        "applicable": True,
+        "expected": expected_sequence,
+        "actual": observed,
+        "valid": observed == expected_sequence,
+    }
+
+
 def _current_relation_records(vault: Path) -> list[dict[str, Any]]:
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
         rows = store.connection.execute(
@@ -1173,11 +1219,21 @@ def _claim_evidence_checks(
             outcomes: list[dict[str, Any]] = []
             for item in targets:
                 receipt_valid = True
-                references = [
+                direct_references = [
                     reference
                     for reference in item.get("source_refs", [])
                     if isinstance(reference, dict)
                 ]
+                direct_source_revision_ids = {
+                    str(reference["source_revision_id"])
+                    for reference in direct_references
+                    if isinstance(reference.get("source_revision_id"), str)
+                }
+                direct_source_coverage_valid = bool(
+                    item.get("kind") != "synthesis"
+                    or expected_sources.issubset(direct_source_revision_ids)
+                )
+                references = direct_references
                 if item.get("kind") == "synthesis":
                     receipt = item.get("synthesis_evidence_receipt", {})
                     if len(expected_sources) > 1:
@@ -1278,11 +1334,13 @@ def _claim_evidence_checks(
                         "content_terms_valid": content_terms_valid,
                         "evidence_terms_valid": evidence_terms_valid,
                         "source_coverage_valid": source_coverage_valid,
+                        "direct_source_coverage_valid": direct_source_coverage_valid,
                         "receipt_valid": receipt_valid,
                         "valid": bool(
                             content_terms_valid
                             and evidence_terms_valid
                             and source_coverage_valid
+                            and direct_source_coverage_valid
                             and receipt_valid
                         ),
                     }
@@ -1299,6 +1357,7 @@ def _claim_evidence_checks(
                     "content_terms_valid": False,
                     "evidence_terms_valid": False,
                     "source_coverage_valid": False,
+                    "direct_source_coverage_valid": False,
                     "receipt_valid": False,
                     "valid": False,
                 },
@@ -1535,6 +1594,11 @@ def _case_result(
     )
     task_type = case["task_type"]
     ranking = _rank_metrics(case=case, value=warm, source_ids=source_ids)
+    sequence_check = _retrieval_sequence_check(
+        case=case,
+        value=warm,
+        source_ids=source_ids,
+    )
     required_label_ids = {
         item["label_id"] for item in case["expected_objects"] if item["required"]
     }
@@ -1555,6 +1619,7 @@ def _case_result(
         set(ranking["matched_label_ids"]) == required_label_ids
         and relations_valid
         and expected_gaps_valid
+        and sequence_check["valid"]
     )
     citation_checks, valid_citations, citation_count, exact_get_valid = _citation_checks(
         prefix,
@@ -1625,6 +1690,8 @@ def _case_result(
         )
     elif not expected_gaps_valid:
         failure_reason = "query did not return every frozen explicit Gap category"
+    elif not sequence_check["valid"]:
+        failure_reason = "timeline query did not return frozen Events in chronological order"
     elif not semantic_pass:
         failure_reason = "query did not retrieve every required Gold target"
     safety_pass = bool(
@@ -1687,6 +1754,7 @@ def _case_result(
         "expected_relations": case.get("expected_relations", []),
         "actual_objects": actual_objects,
         "relation_checks": relation_checks,
+        "sequence_check": sequence_check,
         "query_plan": warm.get("query_plan", {}),
         "query_plan_sha256": warm.get("query_plan_sha256"),
         "status": "passed" if passed else "failed",

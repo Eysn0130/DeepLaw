@@ -62,6 +62,12 @@ receipt. The bilingual derived Owner Review Packets retain the full claims and c
 checks for inspection. Their human decision remains `not_required`; they do not alter canonical
 Gold.
 
+Multilingual timeline queries preserve exact ISO-date anchors through the deterministic relevance
+floor and order selected Events by valid time. Mixed Event/Concept queries retain exact identity
+matches alongside the purpose-selected kind set. Exact-identity discovery does not globally admit
+unrelated low-score candidates. These rules keep target extraction complete without counting valid
+out-of-scope objects as false positives.
+
 ## Deterministic pre-review lifecycle
 
 `benchmarks/semantic/run_deterministic_lifecycle.py` is an offline, fixture-specific no-model Agent.

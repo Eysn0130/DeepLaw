@@ -486,12 +486,18 @@ def compile_source(
     all_current_refs = [reference for packet in packets for reference in _refs(packet)]
     publication_source_ids = [source_revision_id]
     publication_run_ids = [run.compilation_run_id]
+    prior_source_refs: list[dict[str, Any]] = []
     if source_key == "retention-b":
         dependency = prior_runs.get("retention-a")
         if dependency is None:
             raise RuntimeError("retention-b requires the completed retention-a run")
         publication_source_ids.append(dependency["source_revision_id"])
         publication_run_ids.append(dependency["compilation_run_id"])
+        prior_source_refs = _current_source_refs(
+            knowledge_os,
+            semantic_key=OBJECT_SPECS["retention-a"][0]["semantic_key"],
+            title=OBJECT_SPECS["retention-a"][0]["title"],
+        )
     actions = []
     for spec in specs:
         refs = all_current_refs
@@ -511,6 +517,8 @@ def compile_source(
         cross_source = spec.get("cross_source")
         source_ids = publication_source_ids if cross_source else [source_revision_id]
         run_ids = publication_run_ids if cross_source else [run.compilation_run_id]
+        if cross_source:
+            refs = [*prior_source_refs, *refs]
         actions.append(
             _object_action(
                 spec=spec,
@@ -536,11 +544,6 @@ def compile_source(
     )
     relation_actions: list[dict[str, Any]] = []
     if source_key == "retention-b":
-        policy_a_refs = _current_source_refs(
-            knowledge_os,
-            semantic_key=OBJECT_SPECS["retention-a"][0]["semantic_key"],
-            title=OBJECT_SPECS["retention-a"][0]["title"],
-        )
         relation_actions.append(
             {
                 "action": "create",
@@ -556,7 +559,7 @@ def compile_source(
                     "kind": "claim",
                 },
                 "expected_relation_revision_id": None,
-                "evidence_refs": [*policy_a_refs, *all_current_refs],
+                "evidence_refs": [*prior_source_refs, *all_current_refs],
                 "valid_from": "2026-01-01T00:00:00Z",
                 "valid_to": "2027-01-01T00:00:00Z",
                 "reason": (

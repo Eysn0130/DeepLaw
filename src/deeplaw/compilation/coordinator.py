@@ -1056,6 +1056,14 @@ class CompilationCoordinator:
                             for fragment in run_packet["fragments"]
                         }
                     )
+                run_fragments.update(
+                    self._admitted_synthesis_input_fragments(
+                        store,
+                        plan=plan,
+                        scope=grant["allowed_scope"],
+                        max_sensitivity=grant["max_sensitivity"],
+                    )
+                )
             relation_evidence_fragments = (
                 self._existing_relation_endpoint_fragments(
                     store,
@@ -1402,6 +1410,53 @@ class CompilationCoordinator:
                     )
 
     @staticmethod
+    def _admitted_synthesis_input_fragments(
+        store: AutonomousKnowledgeStore,
+        *,
+        plan: dict[str, Any],
+        scope: str,
+        max_sensitivity: str,
+    ) -> dict[str, dict[str, Any]]:
+        """Admit exact profile-v2 Synthesis evidence named in its input set."""
+
+        allowed: dict[str, dict[str, Any]] = {}
+        for action in plan["object_actions"]:
+            if action["kind"] != "synthesis":
+                continue
+            inputs = action.get("synthesis_inputs")
+            source_revision_ids = (
+                set(inputs.get("source_revision_ids", []))
+                if isinstance(inputs, dict)
+                else set()
+            )
+            for reference in action["source_refs"]:
+                source_revision_id = reference["source_revision_id"]
+                if source_revision_id == plan["source_revision_id"]:
+                    continue
+                if source_revision_id not in source_revision_ids:
+                    raise ValueError(
+                        "cross-source Synthesis evidence is absent from its input set"
+                    )
+                binding = store._source_reference_binding(reference)
+                if (
+                    binding is None
+                    or binding["active"] is not True
+                    or binding["scope"] != scope
+                    or SENSITIVITY_ORDER.index(binding["sensitivity"])
+                    > SENSITIVITY_ORDER.index(max_sensitivity)
+                ):
+                    raise PermissionError(
+                        "cross-source Synthesis evidence is not admitted"
+                    )
+                allowed[reference["fragment_id"]] = {
+                    "source_revision_id": source_revision_id,
+                    "fragment_id": reference["fragment_id"],
+                    "locator": reference["locator"],
+                    "text_sha256": reference["quote_sha256"],
+                }
+        return allowed
+
+    @staticmethod
     def _existing_relation_endpoint_fragments(
         store: AutonomousKnowledgeStore,
         *,
@@ -1413,8 +1468,9 @@ class CompilationCoordinator:
 
         Semantic compilation may connect a newly staged object to an existing
         object. In that case a relation can bind both sides' immutable evidence,
-        but it cannot introduce an unrelated Source Revision. Object and identity
-        actions remain bound to the current Compilation Run.
+        but it cannot introduce an unrelated Source Revision. Identity actions remain
+        bound to the current Compilation Run; profile-v2 Synthesis objects use their
+        separately validated input set for cross-source evidence.
         """
 
         allowed: dict[str, dict[str, Any]] = {}
@@ -2083,14 +2139,28 @@ class CompilationCoordinator:
         semantic_key = _bounded(action["semantic_key"], field="semantic key", maximum=300)
         if action["epistemic_state"] not in EPISTEMIC_STATES:
             raise ValueError("compiled Knowledge epistemic state is invalid")
+        synthesis_inputs = action["synthesis_inputs"]
+        synthesis_source_revision_ids = (
+            set(synthesis_inputs.get("source_revision_ids", []))
+            if isinstance(synthesis_inputs, dict)
+            else set()
+        )
         source_refs = _canonical_source_references(
             action["source_refs"], field="compiled source references"
         )
         scope = grant["allowed_scope"]
         sensitivity_levels: list[int] = []
         for reference in source_refs:
-            if reference.get("source_revision_id") != run["source_revision_id"]:
-                raise ValueError("compiled Knowledge references another Source Revision")
+            referenced_source_revision_id = reference.get("source_revision_id")
+            if referenced_source_revision_id != run["source_revision_id"] and not (
+                kind == "synthesis"
+                and run["compiler_profile_version"] == "2"
+                and referenced_source_revision_id in synthesis_source_revision_ids
+            ):
+                raise ValueError(
+                    "cross-source Knowledge evidence requires a profile v2 Synthesis "
+                    "input binding"
+                )
             binding = store._source_reference_binding(reference)
             if binding is None or binding["active"] is not True:
                 raise ValueError("compiled Knowledge source reference is not active")
@@ -2117,7 +2187,6 @@ class CompilationCoordinator:
             identity_terms=[semantic_key, title, *aliases],
         )
         requested_action = action["action"]
-        synthesis_inputs = action["synthesis_inputs"]
         if kind != "synthesis" and synthesis_inputs is not None:
             raise ValueError("synthesis inputs are only valid for Synthesis knowledge")
         if (

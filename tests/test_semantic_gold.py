@@ -52,6 +52,7 @@ from benchmarks.semantic.run_query_suite import (
     _rank_metrics,
     _relation_checks,
     _retrieval_coverage_source_keys,
+    _retrieval_sequence_check,
     _runtime_python,
     _source_ir_coverage_counts,
 )
@@ -68,7 +69,10 @@ from deeplaw.knowledge_autonomy import (
     initialize_autonomous_core,
 )
 from deeplaw.knowledge_store import initialize_knowledge_vault
-from deeplaw.retrieval.purpose import PurposeAwareRetrievalService
+from deeplaw.retrieval.purpose import (
+    PurposeAwareRetrievalService,
+    _matches_structured_query_anchor,
+)
 from deeplaw.util import canonical_json, sha256_bytes
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -255,6 +259,130 @@ def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
     assert state["valid"] is True
     assert len(state["final_knowledge_ids"]) == 1
     assert tampered["valid"] is False
+
+
+def test_cross_source_synthesis_binds_every_input_source_in_its_receipt(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    prefix = [sys.executable, "-m", "deeplaw"]
+    _run_cli(
+        prefix,
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "cross source synthesis",
+        "--scope",
+        "personal",
+    )
+    sources = {}
+    for source_key, filename in (
+        ("retention-a", "04-retention-policy-a.md"),
+        ("retention-b", "05-retention-policy-b.md"),
+    ):
+        source = _run_cli(
+            prefix,
+            "source",
+            "add",
+            "--vault",
+            str(vault),
+            "--source",
+            str(REPOSITORY / "benchmarks/semantic/fixtures" / filename),
+            "--source-kind",
+            "document",
+            "--title",
+            source_key,
+            "--trust",
+            "user_provided",
+            "--sensitivity",
+            "public",
+            "--confirm-no-case-data",
+        )["source"]
+        manifest = _run_cli(
+            prefix,
+            "review",
+            "manifest",
+            "--vault",
+            str(vault),
+            "--source-id",
+            source["source_id"],
+        )
+        _run_cli(
+            prefix,
+            "review",
+            "approve-source",
+            "--vault",
+            str(vault),
+            "--source-id",
+            source["source_id"],
+            "--review-manifest-sha256",
+            manifest["review_manifest_sha256"],
+            "--reviewer-id",
+            "semantic-test-maintainer",
+            "--reason",
+            "Approve the frozen public retention fixture.",
+            "--confirm-reviewed",
+        )
+        sources[source_key] = source
+    grant = _run_cli(
+        prefix,
+        "sink",
+        "enable",
+        "--vault",
+        str(vault),
+        "--writer-id",
+        "semantic-cross-source-test",
+        "--profile",
+        "semantic-compiler",
+        "--scope",
+        "personal",
+        "--max-sensitivity",
+        "public",
+    )
+    first_run = compile_gold_source(
+        vault=vault,
+        grant_id=grant["grant_id"],
+        source_key="retention-a",
+        source_revision_id=sources["retention-a"]["source_revision_id"],
+        prior_runs={},
+    )
+    compile_gold_source(
+        vault=vault,
+        grant_id=grant["grant_id"],
+        source_key="retention-b",
+        source_revision_id=sources["retention-b"]["source_revision_id"],
+        prior_runs={
+            "retention-a": {
+                "source_revision_id": sources["retention-a"]["source_revision_id"],
+                "compilation_run_id": first_run["compilation_run_id"],
+            }
+        },
+    )
+
+    result = PurposeAwareRetrievalService(vault).query(
+        "Retention policy comparison",
+        purpose="answer",
+        limit=1,
+        query_plan_version="5",
+    )
+
+    synthesis = result["compiled"][0]
+    expected_sources = {
+        sources["retention-a"]["source_revision_id"],
+        sources["retention-b"]["source_revision_id"],
+    }
+    assert synthesis["semantic_key"] == (
+        "synthesis:atlas-retention-policy-comparison:2026"
+    )
+    assert {item["source_revision_id"] for item in synthesis["source_refs"]} == (
+        expected_sources
+    )
+    assert synthesis["synthesis_evidence_receipt"]["complete"] is True
+    assert {
+        item["source_revision_id"]
+        for item in synthesis["synthesis_evidence_receipt"]["source_refs"]
+    } == expected_sources
 
 
 def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
@@ -542,15 +670,106 @@ def test_multi_format_timeline_selection_retains_named_concept() -> None:
     selected = PurposeAwareRetrievalService._duty_aware_selection(
         candidates,
         query=(
-            "Atlas review completed 2025-06-01; Atlas publication scheduled "
-            "2025-07-01; Atlas Protocol"
+            "Atlas 审查（Atlas review）于 2025-06-01 完成（completed）；"
+            "Atlas 发布（Atlas publication）计划于 2025-07-01 进行（scheduled）；"
+            "Atlas Protocol。"
         ),
         purpose="answer",
         limit=4,
     )
 
     assert {item["kind"] for item in selected} == {"event", "concept"}
-    assert any(item["knowledge_id"] == "concept-a" for item in selected)
+    assert selected[0]["knowledge_id"] == "concept-a"
+
+
+def test_structured_date_anchors_bypass_only_matching_relevance_candidates() -> None:
+    anchors = {"2025-01-10", "2025-03-15", "2025-05-20"}
+
+    assert _matches_structured_query_anchor(
+        anchors,
+        {
+            "title": "Policy drafted",
+            "content": "The policy was drafted on 2025-01-10.",
+        },
+    )
+    assert not _matches_structured_query_anchor(
+        anchors,
+        {
+            "title": "Atlas review completed",
+            "content": "The Atlas review completed on 2025-06-01.",
+        },
+    )
+
+
+def test_historical_timeline_selection_is_chronological() -> None:
+    candidates = [
+        {
+            "knowledge_id": "event-c",
+            "kind": "event",
+            "channels": ["lexical"],
+            "valid_from": "2025-05-20T00:00:00Z",
+        },
+        {
+            "knowledge_id": "event-a",
+            "kind": "event",
+            "channels": ["lexical"],
+            "valid_from": "2025-01-10T00:00:00Z",
+        },
+        {
+            "knowledge_id": "event-b",
+            "kind": "event",
+            "channels": ["lexical"],
+            "valid_from": "2025-03-15T00:00:00Z",
+        },
+    ]
+
+    selected = PurposeAwareRetrievalService._duty_aware_selection(
+        candidates,
+        query=(
+            "2025-01-10、2025-03-15 和 2025-05-20 的时间线上分别发生了什么?"
+        ),
+        purpose="historical",
+        limit=8,
+    )
+
+    assert [item["knowledge_id"] for item in selected] == [
+        "event-a",
+        "event-b",
+        "event-c",
+    ]
+
+
+def test_frozen_retrieval_sequence_rejects_out_of_order_target_events() -> None:
+    case = next(
+        case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-08"
+    )
+    expected = case["expected_objects"]
+    source_revision_id = "sourcerev_" + "a" * 24
+    source_ids = {"concept-procedure-events": source_revision_id}
+    compiled = [
+        {
+            "knowledge_id": f"knowledge_{index:024x}",
+            "kind": item["kind"],
+            "title": item["canonical_label"],
+            "semantic_key": f"event:frozen:{index}",
+            "content": item["content_assertions"][0]["statement"],
+            "valid_from": f"{date}T00:00:00Z",
+            "source_refs": [{"source_revision_id": source_revision_id}],
+        }
+        for index, (item, date) in enumerate(
+            zip(expected, reversed(case["expected_sequence"]), strict=True), start=1
+        )
+    ]
+
+    check = _retrieval_sequence_check(
+        case=case,
+        value={"compiled": compiled},
+        source_ids=source_ids,
+    )
+
+    assert check["applicable"] is True
+    assert check["actual"] == list(reversed(case["expected_sequence"]))
+    assert check["valid"] is False
 
 
 def test_contradiction_requires_the_same_object_scope_and_time() -> None:
@@ -1004,7 +1223,7 @@ def test_query_claim_binding_rejects_tampered_synthesis_receipt(
             "requires 30 days after collection while Policy B requires 60 days after collection. "
             "Restricted payloads are never included in either policy's diagnostic logs."
         ),
-        "source_refs": [reference_b],
+        "source_refs": [reference_a, reference_b],
         "synthesis_evidence_receipt": receipt,
     }
     source_ids = {"retention-a": source_a, "retention-b": source_b}

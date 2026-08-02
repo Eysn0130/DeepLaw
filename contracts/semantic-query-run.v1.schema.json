@@ -318,6 +318,7 @@
       "required": [
         "case_id", "task_type", "query_phase", "query_sha256", "purpose", "status",
         "expected_targets", "expected_relations", "actual_objects", "relation_checks",
+        "sequence_check",
         "query_plan", "query_plan_sha256",
         "cold_latency_ms", "warm_latency_ms", "cold_peak_rss_bytes",
         "warm_peak_rss_bytes", "provider_payload_bytes", "provider_content_bytes",
@@ -351,6 +352,7 @@
           "type": "array", "maxItems": 20,
           "items": {"$ref": "#/$defs/relation_check"}
         },
+        "sequence_check": {"$ref": "#/$defs/sequence_check"},
         "query_plan": {"type": "object"},
         "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "status": {"enum": ["passed", "failed"]},
@@ -384,6 +386,22 @@
         "reciprocal_rank": {"$ref": "#/$defs/ratio"},
         "ndcg_at_k": {"$ref": "#/$defs/ratio"},
         "failure_reason": {"type": ["string", "null"], "maxLength": 1000}
+      }
+    },
+    "sequence_check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["applicable", "expected", "actual", "valid"],
+      "properties": {
+        "applicable": {"type": "boolean"},
+        "expected": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+        },
+        "actual": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+        },
+        "valid": {"type": "boolean"}
       }
     },
     "expected_relation": {
@@ -484,7 +502,8 @@
         "label_id", "claim_id", "knowledge_id", "revision_id",
         "expected_source_revision_ids", "actual_source_revision_ids",
         "evidence_refs", "content_terms_valid", "evidence_terms_valid",
-        "source_coverage_valid", "receipt_valid", "valid"
+        "source_coverage_valid", "direct_source_coverage_valid",
+        "receipt_valid", "valid"
       ],
       "properties": {
         "label_id": {"type": "string", "pattern": "^label-[a-z0-9-]+$"},
@@ -497,6 +516,7 @@
         "content_terms_valid": {"type": "boolean"},
         "evidence_terms_valid": {"type": "boolean"},
         "source_coverage_valid": {"type": "boolean"},
+        "direct_source_coverage_valid": {"type": "boolean"},
         "receipt_valid": {"type": "boolean"},
         "valid": {"type": "boolean"}
       }

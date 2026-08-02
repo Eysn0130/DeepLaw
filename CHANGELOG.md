@@ -30,6 +30,12 @@ This release closes Semantic Living Wiki compilation and production editor integ
   verification state and cover the exact emitted detail with a contract regression test.
 - Scope retrieval source coverage to admissible target revisions instead of treating predecessor
   and withdrawn negative controls as positive retrieval targets.
+- Preserve exact identity matches alongside purpose-selected kinds, admit exact ISO-date anchors
+  without disabling the relevance floor for unrelated candidates, and order timeline Events by
+  valid time.
+- Bind profile-v2 cross-source Synthesis output directly to exact evidence from every named Source
+  Revision, so its provider-visible evidence receipt is complete without relying on companion
+  query results.
 
 ### Verified boundaries
 

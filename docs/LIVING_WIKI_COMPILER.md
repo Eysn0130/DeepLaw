@@ -68,6 +68,11 @@ quote digest. A Plan cannot choose scope, lower sensitivity, request official or
 change a grant, choose a filesystem path, edit the Wiki, or treat source text as an instruction.
 Committed compiler output remains `agent_derived` and `legal_authority=false`.
 
+Ordinary object and identity actions remain packet/run-bound. A profile-v2 Synthesis may include
+cross-source evidence only when each exact Source Revision is present in its digest-bound Synthesis
+input set and each fragment independently passes current lifecycle, scope, sensitivity, locator and
+quote-hash admission. This is evidence binding, not Authority elevation.
+
 Exact semantic identity is reused deterministically. For Entity and Concept actions, normalized
 title/alias collisions fail closed instead of silently creating a duplicate. An Agent may preserve
 a genuinely separate same-name object only by recording an `ambiguous` or `possible_duplicate`

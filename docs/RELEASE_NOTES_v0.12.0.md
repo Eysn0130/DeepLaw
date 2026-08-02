@@ -84,6 +84,13 @@ provenance, and post-release rows remain release gates rather than completed his
 - Retrieval source coverage is target-scoped to revisions that a passing query may admit;
   predecessor and withdrawn revisions retained as negative freshness controls cannot inflate or
   depress the coverage metric.
+- Purpose-aware selection preserves exact identities in mixed Event/Concept requests, uses exact
+  ISO dates as bounded structured anchors without admitting unrelated low-score candidates, and
+  emits timeline Events in chronological valid-time order.
+- A profile-v2 cross-source Synthesis may bind exact admitted evidence only from Source Revisions
+  present in its validated input set. The deterministic retention comparison binds both inputs
+  directly, making its provider-visible evidence receipt complete even when no companion Claim or
+  raw fragment is selected.
 - All 15 Semantic Gold cases and five adversarial challenges must be independently confirmed by
   six isolated `gpt-5.6-sol` machine auditors. No majority vote is accepted, and any discrepancy
   invalidates all prior packets for that candidate.

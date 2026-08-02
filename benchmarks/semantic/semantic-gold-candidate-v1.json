@@ -35,6 +35,8 @@
     "source_coverage_definition": "Covered Source IR fragments divided by covered plus explicitly omitted fragments across the frozen sources.",
     "source_coverage_metric": "source_ir_fragment_coverage",
     "retrieval_source_coverage_definition": "Distinct retrieval-eligible target Source Revisions selected by at least one frozen query divided by all distinct retrieval-eligible target Source Revisions in the frozen query set; predecessor and withdrawn revisions retained only to prove exclusion are not positive coverage targets.",
+    "retrieval_sequence_definition": "For event_timeline cases, target-matched Event revisions must appear in the frozen expected_sequence order after admission; valid non-target objects are excluded before comparison.",
+    "synthesis_direct_evidence_definition": "Every provider-visible Synthesis must directly bind exact evidence from every Source Revision named by each applicable claim-level Gold assertion; a receipt assembled only from companion query results is insufficient.",
     "performance_comparison_definition": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance.",
     "performance_repetition_count": 3,
     "performance_execution_order": ["baseline", "candidate", "candidate", "baseline", "baseline", "candidate"],

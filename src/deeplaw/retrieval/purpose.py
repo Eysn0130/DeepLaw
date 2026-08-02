@@ -113,6 +113,7 @@ _POLICY_DESIGNATOR: Final = re.compile(
 )
 _ZH_POLICY_DESIGNATOR: Final = re.compile(r"政策\s*([甲乙丙丁]|[A-Za-z0-9]+)")
 _ZH_POLICY_KEYS: Final = {"甲": "a", "乙": "b", "丙": "c", "丁": "d"}
+_ISO_DATE_ANCHOR: Final = re.compile(r"\b(?:19|20)\d{2}-\d{2}-\d{2}\b")
 _KNOWLEDGE_DUTIES: Final = (
     "primary_answer",
     "definition",
@@ -132,6 +133,27 @@ def _policy_designators(value: str) -> set[str]:
         for match in _ZH_POLICY_DESIGNATOR.finditer(value)
     )
     return values
+
+
+def _matches_structured_query_anchor(
+    query_anchors: set[str], item: dict[str, Any]
+) -> bool:
+    if not query_anchors:
+        return False
+    values = [
+        item.get("title"),
+        item.get("semantic_key"),
+        item.get("content"),
+        item.get("valid_from"),
+        item.get("valid_to"),
+    ]
+    candidate_anchors = {
+        anchor
+        for value in values
+        if isinstance(value, str)
+        for anchor in _ISO_DATE_ANCHOR.findall(value)
+    }
+    return bool(query_anchors.intersection(candidate_anchors))
 
 
 def _policy_designator_conflicts(
@@ -598,6 +620,7 @@ class PurposeAwareRetrievalService:
             for item in raw["results"]
         )
         normalized_query = normalize_identity_text(query)
+        structured_query_anchors = set(_ISO_DATE_ANCHOR.findall(query))
         query_policy_designators = _policy_designators(query)
         for item in raw["results"]:
             if _policy_designator_conflicts(query_policy_designators, item):
@@ -622,15 +645,22 @@ class PurposeAwareRetrievalService:
                 and normalized in normalized_query
                 for value in identity_values
             )
+            exact_structured_anchor = _matches_structured_query_anchor(
+                structured_query_anchors, item
+            )
+            exact_identity_graph_neighbor = (
+                exact_identity_discovery and "graph" in channels
+            )
             minimum_reranker_score = (
                 _MIN_GENERIC_SUMMARY_RERANKER_SCORE
                 if str(item.get("semantic_key", "")).startswith("source-summary:")
                 else _MIN_COMPILED_RERANKER_SCORE
             )
             if (
-                not exact_identity_discovery
-                and not {"exact", "identity_alias"}.intersection(channels)
+                not {"exact", "identity_alias"}.intersection(channels)
                 and not exact_identity_phrase
+                and not exact_structured_anchor
+                and not exact_identity_graph_neighbor
                 and (
                     reranker_score is None
                     or reranker_score < minimum_reranker_score
@@ -767,14 +797,27 @@ class PurposeAwareRetrievalService:
             target_kinds = {"concept", "entity"}
         else:
             target_kinds = set()
-        scoped = [item for item in candidates if item.get("kind") in target_kinds]
-        if scoped:
-            return scoped[:limit]
         exact = [
             item
             for item in candidates
             if {"exact", "identity_alias"}.intersection(item.get("channels", []))
         ]
+        scoped = [item for item in candidates if item.get("kind") in target_kinds]
+        if target_kinds == {"event"}:
+            scoped.sort(
+                key=lambda item: (
+                    str(item.get("valid_from") or "9999-12-31T23:59:59Z"),
+                    str(item.get("knowledge_id")),
+                )
+            )
+        if scoped:
+            exact_ids = {str(item.get("knowledge_id")) for item in exact}
+            target_scoped = [
+                item
+                for item in scoped
+                if str(item.get("knowledge_id")) not in exact_ids
+            ]
+            return [*exact, *target_scoped][:limit]
         if exact:
             exact_ids = {str(item.get("knowledge_id")) for item in exact}
             related = [
