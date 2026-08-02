@@ -221,6 +221,19 @@
             "items": {"type": "string", "pattern": "^label-[a-z0-9-]+$"}
           }
         },
+        "expected_relations": {
+          "type": "array", "maxItems": 20, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/relation_expectation"}
+        },
+        "expected_gap_codes": {
+          "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
+          "items": {
+            "enum": [
+              "evidence_gap", "retrieval_gap", "uncompiled_source", "stale_knowledge",
+              "source_fallback"
+            ]
+          }
+        },
         "required_outcomes": {
           "type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,
           "items": {
@@ -238,6 +251,42 @@
           "items": {"type": "string", "minLength": 1, "maxLength": 500}
         },
         "notes": {"type": "string", "minLength": 1, "maxLength": 4000}
+      },
+      "allOf": [{
+        "if": {"required": ["expected_gap_codes"]},
+        "then": {
+          "properties": {
+            "required_outcomes": {"contains": {"const": "explicit_gap"}}
+          }
+        }
+      }]
+    },
+    "relation_expectation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "relation_id", "subject_label_id", "predicate", "object_label_id",
+        "directionality", "valid_from", "valid_to", "source_keys"
+      ],
+      "properties": {
+        "relation_id": {
+          "type": "string", "pattern": "^relation-gold-[a-z0-9-]+$"
+        },
+        "subject_label_id": {
+          "type": "string", "pattern": "^label-[a-z0-9-]+$"
+        },
+        "predicate": {"const": "contradicts"},
+        "object_label_id": {
+          "type": "string", "pattern": "^label-[a-z0-9-]+$"
+        },
+        "directionality": {"const": "symmetric"},
+        "valid_from": {"type": "string", "format": "date-time"},
+        "valid_to": {"type": "string", "format": "date-time"},
+        "source_keys": {
+          "type": "array", "minItems": 2, "maxItems": 20, "uniqueItems": true,
+          "items": {
+            "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"
+          }
+        }
       }
     },
     "content_assertion": {

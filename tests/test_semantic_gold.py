@@ -23,7 +23,11 @@ from benchmarks.semantic.deterministic_gold_agent import compile_source as compi
 from benchmarks.semantic.export_review_bundle import export_review_bundle
 from benchmarks.semantic.prepare_host_corpus import _run_cli
 from benchmarks.semantic.review_gold import (
+    CANONICAL_JSON_PROFILE,
+    QUERY_SET_PROJECTION,
     confirm_candidate,
+    query_set_projection,
+    query_set_sha256,
     validate_candidate,
     validate_freeze,
 )
@@ -34,6 +38,7 @@ from benchmarks.semantic.run_query_suite import (
     _evaluate_read_challenge,
     _execution_environment,
     _rank_metrics,
+    _relation_checks,
     _runtime_python,
     _source_ir_coverage_counts,
 )
@@ -78,6 +83,12 @@ def test_semantic_gold_freeze_binds_candidate_schema_queries_and_policy() -> Non
         )
     )
     validate_freeze(freeze, candidate=_candidate(), repository=REPOSITORY)
+    assert freeze["canonical_json_profile"] == CANONICAL_JSON_PROFILE
+    assert freeze["query_set_projection"] == QUERY_SET_PROJECTION
+    assert freeze["query_set_sha256"] == query_set_sha256(_candidate())
+    assert [set(item) for item in query_set_projection(_candidate())] == [
+        {"case_id", "query", "purpose", "phase", "as_of"}
+    ] * 15
     freeze["query_set_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="does not bind"):
         validate_freeze(freeze, candidate=_candidate(), repository=REPOSITORY)
@@ -204,6 +215,10 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
                 "kind": "concept",
                 "title": "Evidence admission",
                 "semantic_key": "concept:evidence-admission",
+                "content": (
+                    "Evidence admission requires identity, lifecycle, scope, sensitivity, "
+                    "and provenance checks. Ranking never establishes Authority."
+                ),
                 "aliases": ["admission policy"],
                 "source_refs": [{"source_revision_id": target_source}],
             },
@@ -472,6 +487,133 @@ def test_contradiction_requires_the_same_object_scope_and_time() -> None:
     assert _same_applicability_conflict(left, right, relation)
     right["body"] = "Another service has a 60-day retention period during 2026."
     assert not _same_applicability_conflict(left, right, relation)
+
+
+def test_query_relation_check_binds_endpoints_time_and_two_source_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = next(
+        item for item in _candidate()["cases"] if item["case_id"] == "semantic-case-05"
+    )
+    source_a = "sourcerev_" + "a" * 24
+    source_b = "sourcerev_" + "b" * 24
+    fragment_a = "fragment_" + "c" * 24
+    fragment_b = "fragment_" + "d" * 24
+    locator = "section:1;paragraphs:3-6"
+    references = [
+        {
+            "source_revision_id": source_a,
+            "fragment_id": fragment_a,
+            "locator": locator,
+            "quote_sha256": "e" * 64,
+        },
+        {
+            "source_revision_id": source_b,
+            "fragment_id": fragment_b,
+            "locator": locator,
+            "quote_sha256": "f" * 64,
+        },
+    ]
+    relation = {
+        "relation_revision_id": "relationrev_" + "1" * 24,
+        "relation_key": "relationkey_" + "2" * 24,
+        "subject_knowledge_id": "knowledge_" + "3" * 24,
+        "predicate": "contradicts",
+        "object_knowledge_id": "knowledge_" + "4" * 24,
+        "lifecycle": "active",
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2027-01-01T00:00:00Z",
+        "evidence_refs": [references[1]],
+    }
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_current_relation_records",
+        lambda _vault: [relation],
+    )
+    fragments = {
+        fragment_a: {
+            **references[0],
+            "text_sha256": references[0]["quote_sha256"],
+        },
+        fragment_b: {
+            **references[1],
+            "text_sha256": references[1]["quote_sha256"],
+        },
+    }
+    monkeypatch.setattr(
+        semantic_query_suite,
+        "_run_json",
+        lambda prefix, *args, **kwargs: (
+            {"fragment": fragments[args[args.index("--fragment-id") + 1]]},
+            0,
+            b"",
+            b"",
+        ),
+    )
+    value = {
+        "compiled": [
+            {
+                "knowledge_id": relation["subject_knowledge_id"],
+                "kind": "claim",
+                "title": "Diagnostic log retention is 30 days",
+                "content": (
+                    "Policy A requires Atlas production public API diagnostic logs for the "
+                    "worldwide tenant population to be retained for 30 days during 2026."
+                ),
+                "source_refs": [references[0]],
+            },
+            {
+                "knowledge_id": relation["object_knowledge_id"],
+                "kind": "claim",
+                "title": "Diagnostic log retention is 60 days",
+                "content": (
+                    "Policy B requires Atlas production public API diagnostic logs for the "
+                    "worldwide tenant population to be retained for 60 days during 2026."
+                ),
+                "source_refs": [references[1]],
+            },
+        ]
+    }
+    checks = _relation_checks(
+        ["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        value=value,
+        source_ids={"retention-a": source_a, "retention-b": source_b},
+    )
+    assert checks[0]["valid"] is True
+    relation["evidence_refs"] = []
+    tampered = _relation_checks(
+        ["deeplaw"],
+        vault=tmp_path,
+        case=case,
+        value=value,
+        source_ids={"retention-a": source_a, "retention-b": source_b},
+    )
+    assert tampered[0]["valid"] is False
+
+
+def test_gold_freezes_concept_content_typed_conflict_and_withdrawal_gap() -> None:
+    cases = {item["case_id"]: item for item in _candidate()["cases"]}
+    assert len(cases["semantic-case-04"]["expected_objects"][0]["content_assertions"]) == 2
+    for case_id in ("semantic-case-05", "semantic-case-11"):
+        relation = cases[case_id]["expected_relations"]
+        assert relation == [
+            {
+                "relation_id": "relation-gold-retention-a-contradicts-retention-b",
+                "subject_label_id": "label-retention-30",
+                "predicate": "contradicts",
+                "object_label_id": "label-retention-60",
+                "directionality": "symmetric",
+                "valid_from": "2026-01-01T00:00:00Z",
+                "valid_to": "2027-01-01T00:00:00Z",
+                "source_keys": ["retention-a", "retention-b"],
+            }
+        ]
+    withdrawal = cases["semantic-case-10"]
+    assert "explicit_gap" in withdrawal["required_outcomes"]
+    assert withdrawal["expected_gap_codes"] == ["stale_knowledge"]
 
 
 def test_claim_level_gold_rejects_missing_required_content() -> None:

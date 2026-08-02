@@ -229,7 +229,8 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "case_id", "task_type", "query_phase", "query_sha256", "purpose", "status",
-        "expected_targets", "actual_objects", "query_plan", "query_plan_sha256",
+        "expected_targets", "expected_relations", "actual_objects", "relation_checks",
+        "query_plan", "query_plan_sha256",
         "cold_latency_ms", "warm_latency_ms", "cold_peak_rss_bytes",
         "warm_peak_rss_bytes", "provider_payload_bytes",
         "context_provider_payload_bytes", "context_capsule_id", "context_capsule_sha256",
@@ -251,8 +252,16 @@
         "expected_targets": {
           "type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/expected_target"}
         },
+        "expected_relations": {
+          "type": "array", "maxItems": 20, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/expected_relation"}
+        },
         "actual_objects": {
           "type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/actual_object"}
+        },
+        "relation_checks": {
+          "type": "array", "maxItems": 20,
+          "items": {"$ref": "#/$defs/relation_check"}
         },
         "query_plan": {"type": "object"},
         "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -286,6 +295,79 @@
         "reciprocal_rank": {"$ref": "#/$defs/ratio"},
         "ndcg_at_k": {"$ref": "#/$defs/ratio"},
         "failure_reason": {"type": ["string", "null"], "maxLength": 1000}
+      }
+    },
+    "expected_relation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "relation_id", "subject_label_id", "predicate", "object_label_id",
+        "directionality", "valid_from", "valid_to", "source_keys"
+      ],
+      "properties": {
+        "relation_id": {"type": "string", "pattern": "^relation-gold-[a-z0-9-]+$"},
+        "subject_label_id": {"type": "string", "pattern": "^label-[a-z0-9-]+$"},
+        "predicate": {"const": "contradicts"},
+        "object_label_id": {"type": "string", "pattern": "^label-[a-z0-9-]+$"},
+        "directionality": {"const": "symmetric"},
+        "valid_from": {"type": "string", "format": "date-time"},
+        "valid_to": {"type": "string", "format": "date-time"},
+        "source_keys": {
+          "type": "array", "minItems": 2, "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"}
+        }
+      }
+    },
+    "relation_check": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "relation_id", "subject_label_id", "predicate", "object_label_id",
+        "directionality", "valid_from", "valid_to", "source_revision_ids",
+        "endpoint_source_revision_ids", "actual_relations", "valid"
+      ],
+      "properties": {
+        "relation_id": {"type": "string", "pattern": "^relation-gold-[a-z0-9-]+$"},
+        "subject_label_id": {"type": "string", "pattern": "^label-[a-z0-9-]+$"},
+        "predicate": {"const": "contradicts"},
+        "object_label_id": {"type": "string", "pattern": "^label-[a-z0-9-]+$"},
+        "directionality": {"const": "symmetric"},
+        "valid_from": {"type": "string", "format": "date-time"},
+        "valid_to": {"type": "string", "format": "date-time"},
+        "source_revision_ids": {
+          "type": "array", "minItems": 2, "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+        },
+        "endpoint_source_revision_ids": {
+          "type": "array", "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+        },
+        "actual_relations": {
+          "type": "array", "maxItems": 20,
+          "items": {"$ref": "#/$defs/actual_relation"}
+        },
+        "valid": {"type": "boolean"}
+      }
+    },
+    "actual_relation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "relation_revision_id", "relation_key", "subject_knowledge_id", "predicate",
+        "object_knowledge_id", "lifecycle", "valid_from", "valid_to",
+        "evidence_checks", "valid"
+      ],
+      "properties": {
+        "relation_revision_id": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"},
+        "relation_key": {"type": "string", "pattern": "^relationkey_[0-9a-f]{24}$"},
+        "subject_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+        "predicate": {"const": "contradicts"},
+        "object_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+        "lifecycle": {"type": "string", "minLength": 1, "maxLength": 100},
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "evidence_checks": {
+          "type": "array", "maxItems": 100,
+          "items": {"$ref": "#/$defs/citation_check"}
+        },
+        "valid": {"type": "boolean"}
       }
     },
     "citation_check": {

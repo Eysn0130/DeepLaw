@@ -18,7 +18,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_living_wiki_host_harness import _safe_command
-from benchmarks.semantic.review_gold import validate_candidate
+from benchmarks.semantic.review_gold import query_set_sha256, validate_candidate
 from deeplaw.compilation.coordinator import _decoded_artifact
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.knowledge_intelligence import LOCAL_DENSE_MODEL, LOCAL_RERANKER_MODEL
@@ -556,6 +556,176 @@ def _rank_metrics(
         ),
         "ndcg_at_k": round(dcg / ideal_dcg, 6) if ideal_dcg else 1.0,
     }
+
+
+def _current_relation_records(vault: Path) -> list[dict[str, Any]]:
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        rows = store.connection.execute(
+            """
+            SELECT relations.relation_revision_id, relations.relation_key,
+                   relations.subject_knowledge_id, relations.predicate,
+                   relations.object_knowledge_id, relations.evidence_refs_json,
+                   relations.lifecycle, relations.valid_from, relations.valid_to
+            FROM knowledge_relations_v3 AS current
+            JOIN knowledge_relation_revisions_v3 AS relations
+              ON relations.relation_revision_id = current.current_revision_id
+            ORDER BY relations.relation_key
+            """
+        ).fetchall()
+    records = []
+    for row in rows:
+        record = dict(row)
+        evidence_refs = strict_json_loads(record.pop("evidence_refs_json"))
+        if not isinstance(evidence_refs, list):
+            raise ValueError("current relation evidence_refs_json must contain a list")
+        record["evidence_refs"] = evidence_refs
+        records.append(record)
+    return records
+
+
+def _relation_checks(
+    prefix: list[str],
+    *,
+    vault: Path,
+    case: dict[str, Any],
+    value: dict[str, Any],
+    source_ids: dict[str, str],
+) -> list[dict[str, Any]]:
+    expectations = case.get("expected_relations", [])
+    if not expectations:
+        return []
+    compiled = [item for item in value.get("compiled", []) if isinstance(item, dict)]
+    label_items: dict[str, list[dict[str, Any]]] = {}
+    label_ids: dict[str, set[str]] = {}
+    for expected in case["expected_objects"]:
+        matched = [
+            item
+            for item in compiled
+            if _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+        ]
+        label_items[expected["label_id"]] = matched
+        label_ids[expected["label_id"]] = {
+            item["knowledge_id"]
+            for item in matched
+            if isinstance(item.get("knowledge_id"), str)
+        }
+    records = _current_relation_records(vault)
+    checks = []
+    for expected in expectations:
+        expected_subject_ids = label_ids.get(expected["subject_label_id"], set())
+        expected_object_ids = label_ids.get(expected["object_label_id"], set())
+        expected_source_ids = {source_ids[item] for item in expected["source_keys"]}
+        endpoint_source_ids = {
+            reference["source_revision_id"]
+            for label_id in (
+                expected["subject_label_id"], expected["object_label_id"]
+            )
+            for item in label_items.get(label_id, [])
+            for reference in item.get("source_refs", [])
+            if isinstance(reference, dict)
+            and isinstance(reference.get("source_revision_id"), str)
+        }
+        candidates = []
+        for record in records:
+            direct = bool(
+                record["subject_knowledge_id"] in expected_subject_ids
+                and record["object_knowledge_id"] in expected_object_ids
+            )
+            reverse = bool(
+                expected["directionality"] == "symmetric"
+                and record["subject_knowledge_id"] in expected_object_ids
+                and record["object_knowledge_id"] in expected_subject_ids
+            )
+            if not (direct or reverse) or record["predicate"] != expected["predicate"]:
+                continue
+            evidence_checks = []
+            for reference in record["evidence_refs"]:
+                fragment_identity = reference.get("fragment_id") or reference.get(
+                    "fragment_revision_id"
+                )
+                fragment, _, _, _ = _run_json(
+                    prefix,
+                    "source",
+                    "fragment",
+                    "--vault",
+                    str(vault),
+                    "--fragment-id",
+                    str(fragment_identity),
+                    "--scope",
+                    "personal",
+                    "--max-sensitivity",
+                    "public",
+                    expect_success=False,
+                )
+                actual = fragment.get("fragment", {}) if fragment is not None else {}
+                valid = bool(
+                    fragment_identity
+                    and isinstance(actual, dict)
+                    and actual.get("source_revision_id")
+                    == reference.get("source_revision_id")
+                    and actual.get("locator") == reference.get("locator")
+                    and actual.get("text_sha256") == reference.get("quote_sha256")
+                )
+                evidence_checks.append(
+                    {
+                        "source_revision_id": reference.get("source_revision_id"),
+                        "fragment_id": reference.get("fragment_id"),
+                        "fragment_revision_id": reference.get("fragment_revision_id"),
+                        "locator": reference.get("locator"),
+                        "quote_sha256": reference.get("quote_sha256"),
+                        "valid": valid,
+                    }
+                )
+            evidence_source_ids = {
+                item["source_revision_id"]
+                for item in evidence_checks
+                if isinstance(item.get("source_revision_id"), str)
+            }
+            candidates.append(
+                {
+                    "relation_revision_id": record["relation_revision_id"],
+                    "relation_key": record["relation_key"],
+                    "subject_knowledge_id": record["subject_knowledge_id"],
+                    "predicate": record["predicate"],
+                    "object_knowledge_id": record["object_knowledge_id"],
+                    "lifecycle": record["lifecycle"],
+                    "valid_from": record["valid_from"],
+                    "valid_to": record["valid_to"],
+                    "evidence_checks": evidence_checks,
+                    "valid": bool(
+                        record["lifecycle"] == "active"
+                        and record["valid_from"] == expected["valid_from"]
+                        and record["valid_to"] == expected["valid_to"]
+                        and bool(evidence_source_ids)
+                        and evidence_source_ids.issubset(expected_source_ids)
+                        and endpoint_source_ids == expected_source_ids
+                        and evidence_checks
+                        and all(item["valid"] for item in evidence_checks)
+                    ),
+                }
+            )
+        valid_candidates = [item for item in candidates if item["valid"]]
+        checks.append(
+            {
+                "relation_id": expected["relation_id"],
+                "subject_label_id": expected["subject_label_id"],
+                "predicate": expected["predicate"],
+                "object_label_id": expected["object_label_id"],
+                "directionality": expected["directionality"],
+                "valid_from": expected["valid_from"],
+                "valid_to": expected["valid_to"],
+                "source_revision_ids": sorted(expected_source_ids),
+                "endpoint_source_revision_ids": sorted(endpoint_source_ids),
+                "actual_relations": candidates,
+                "valid": len(valid_candidates) == 1,
+            }
+        )
+    return checks
 
 
 def _citation_checks(
@@ -1115,7 +1285,24 @@ def _case_result(
     required_label_ids = {
         item["label_id"] for item in case["expected_objects"] if item["required"]
     }
-    semantic_pass = set(ranking["matched_label_ids"]) == required_label_ids
+    relation_checks = _relation_checks(
+        prefix,
+        vault=vault,
+        case=case,
+        value=warm,
+        source_ids=source_ids,
+    )
+    relations_valid = bool(
+        len(relation_checks) == len(case.get("expected_relations", []))
+        and all(item["valid"] for item in relation_checks)
+    )
+    expected_gap_codes = set(case.get("expected_gap_codes", []))
+    expected_gaps_valid = expected_gap_codes.issubset(set(gap_codes))
+    semantic_pass = bool(
+        set(ranking["matched_label_ids"]) == required_label_ids
+        and relations_valid
+        and expected_gaps_valid
+    )
     citation_checks, valid_citations, citation_count, continuation_valid = _citation_checks(
         prefix,
         vault=vault,
@@ -1169,9 +1356,22 @@ def _case_result(
         if not semantic_pass:
             failure_reason = "query did not select only the active Atlas successor"
     elif task_type == "source_conflict":
-        semantic_pass = bool(semantic_pass and warm.get("contradictions"))
+        semantic_pass = bool(
+            semantic_pass and warm.get("contradictions") and relations_valid
+        )
         if not semantic_pass:
-            failure_reason = "conflicting policies were not exposed as a contradiction"
+            failure_reason = (
+                "typed contradiction relation did not match frozen endpoints, interval, "
+                "or endpoint evidence"
+                if not relations_valid
+                else "conflicting policies were not exposed as a contradiction"
+            )
+    elif not relations_valid:
+        failure_reason = (
+            "typed relation did not match frozen endpoints, interval, or endpoint evidence"
+        )
+    elif not expected_gaps_valid:
+        failure_reason = "query did not return every frozen explicit Gap category"
     elif not semantic_pass:
         failure_reason = "query did not retrieve every required Gold target"
     safety_pass = bool(
@@ -1231,7 +1431,9 @@ def _case_result(
         "query_sha256": sha256_bytes(case["query"].encode("utf-8")),
         "purpose": case["purpose"],
         "expected_targets": expected_targets,
+        "expected_relations": case.get("expected_relations", []),
         "actual_objects": actual_objects,
+        "relation_checks": relation_checks,
         "query_plan": warm.get("query_plan", {}),
         "query_plan_sha256": warm.get("query_plan_sha256"),
         "status": "passed" if passed else "failed",
@@ -1295,17 +1497,7 @@ def run(
     source_ids = {
         item["source_key"]: item["source_revision_id"] for item in corpus["sources"]
     }
-    query_set = [
-        {
-            "case_id": case["case_id"],
-            "query": case["query"],
-            "purpose": case["purpose"],
-            "phase": case["query_phase"],
-            "as_of": case.get("as_of"),
-        }
-        for case in gold["cases"]
-    ]
-    query_set_sha256 = sha256_bytes(canonical_json(query_set).encode("utf-8"))
+    frozen_query_set_sha256 = query_set_sha256(gold)
     cases = []
     raw_fragment_baseline_bytes = 0
     source_sizes = {
@@ -1582,7 +1774,7 @@ def run(
             "semanticqueryrun",
             gold["gold_id"],
             compiler_report["report_id"],
-            query_set_sha256,
+            frozen_query_set_sha256,
             recorded_at,
         ),
         "status": "passed" if passed else "failed",
@@ -1606,7 +1798,7 @@ def run(
                 )
             ).encode("utf-8")
         ),
-        "query_set_sha256": query_set_sha256,
+        "query_set_sha256": frozen_query_set_sha256,
         "first_party_command_sha256": sha256_bytes(
             canonical_json(command).encode("utf-8")
         ),
@@ -1645,7 +1837,7 @@ def run(
         "schema_version": "deeplaw.semantic-query-cost/v1",
         "gold_id": gold["gold_id"],
         "compiler_report_id": compiler_report["report_id"],
-        "query_set_sha256": query_set_sha256,
+        "query_set_sha256": frozen_query_set_sha256,
         "first_party_command": "deeplaw knowledge query",
         "query_count": len(cases),
         "total_query_tokens": provider_bytes,

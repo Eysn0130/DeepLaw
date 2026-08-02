@@ -67,13 +67,16 @@ def build_packet(
                 "frozen_query": case["query"],
                 "expected_result": {
                     "objects": case["expected_objects"],
+                    "relations": case.get("expected_relations", []),
                     "required_outcomes": case["required_outcomes"],
+                    "expected_gap_codes": case.get("expected_gap_codes", []),
                     "expected_sequence": case.get("expected_sequence", []),
                     "query_phase": case["query_phase"],
                 },
                 "actual_retrieved_result": {
                     "status": actual["status"],
                     "objects": actual["actual_objects"],
+                    "relation_checks": actual["relation_checks"],
                     "selected_source_revision_ids": actual[
                         "selected_source_revision_ids"
                     ],

@@ -12,6 +12,16 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from deeplaw.util import canonical_json
 
+CANONICAL_JSON_PROFILE = (
+    "UTF-8 JSON; object keys sorted recursively; ensure_ascii=false; "
+    "separators=(',', ':'); no trailing whitespace"
+)
+QUERY_SET_PROJECTION = (
+    "Map cases in array order to objects {case_id, query, purpose, "
+    "phase=query_phase, as_of=case.as_of or null}; serialize with "
+    "canonical_json_profile; SHA-256 the exact UTF-8 bytes"
+)
+
 
 def _repository() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -39,6 +49,27 @@ def _candidate_digest(value: dict[str, Any]) -> str:
     candidate["status"] = "maintainer_review_pending"
     candidate["review"] = None
     return hashlib.sha256(canonical_json(candidate).encode("utf-8")).hexdigest()
+
+
+def query_set_projection(value: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the exact, ordered public projection bound by query_set_sha256."""
+
+    return [
+        {
+            "case_id": item["case_id"],
+            "query": item["query"],
+            "purpose": item["purpose"],
+            "phase": item["query_phase"],
+            "as_of": item.get("as_of"),
+        }
+        for item in value["cases"]
+    ]
+
+
+def query_set_sha256(value: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        canonical_json(query_set_projection(value)).encode("utf-8")
+    ).hexdigest()
 
 
 def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
@@ -100,6 +131,37 @@ def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
                     raise ValueError(
                         f"content assertion source is outside case_id={case['case_id']}"
                     )
+        relation_ids: set[str] = set()
+        for relation in case.get("expected_relations", []):
+            if relation["relation_id"] in relation_ids:
+                raise ValueError(
+                    f"duplicate relation expectation in case_id={case['case_id']}"
+                )
+            relation_ids.add(relation["relation_id"])
+            if relation["subject_label_id"] == relation["object_label_id"]:
+                raise ValueError(
+                    f"relation expectation cannot be a self-edge in case_id={case['case_id']}"
+                )
+            if {
+                relation["subject_label_id"], relation["object_label_id"]
+            } - labels:
+                raise ValueError(
+                    f"relation expectation references an unknown label in {case['case_id']}"
+                )
+            if not set(relation["source_keys"]).issubset(set(case["source_keys"])):
+                raise ValueError(
+                    f"relation expectation source is outside case_id={case['case_id']}"
+                )
+            if relation["valid_from"] >= relation["valid_to"]:
+                raise ValueError(
+                    f"relation expectation interval is invalid in case_id={case['case_id']}"
+                )
+        if case.get("expected_relations") and "contradiction_preserved" not in case[
+            "required_outcomes"
+        ]:
+            raise ValueError(
+                f"relation expectation requires contradiction_preserved in {case['case_id']}"
+            )
     for challenge in value["security_challenges"]:
         if not set(challenge["source_keys"]).issubset(known_sources):
             raise ValueError(
@@ -135,16 +197,6 @@ def validate_freeze(
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(freeze)
     candidate_sha256 = validate_candidate(candidate, repository=repository)
-    query_set = [
-        {
-            "case_id": item["case_id"],
-            "query": item["query"],
-            "purpose": item["purpose"],
-            "phase": item["query_phase"],
-            "as_of": item.get("as_of"),
-        }
-        for item in candidate["cases"]
-    ]
     expected = {
         "gold_id": candidate["gold_id"],
         "gold_status": candidate["status"],
@@ -153,9 +205,7 @@ def validate_freeze(
         "semantic_gold_schema_sha256": hashlib.sha256(
             (repository / "contracts" / "semantic-gold.v1.schema.json").read_bytes()
         ).hexdigest(),
-        "query_set_sha256": hashlib.sha256(
-            canonical_json(query_set).encode("utf-8")
-        ).hexdigest(),
+        "query_set_sha256": query_set_sha256(candidate),
         "scoring_policy_sha256": hashlib.sha256(
             canonical_json(candidate["scoring_policy"]).encode("utf-8")
         ).hexdigest(),
@@ -169,6 +219,8 @@ def validate_freeze(
         "reviewer_id": (
             candidate["review"]["reviewer_id"] if candidate["review"] is not None else None
         ),
+        "canonical_json_profile": CANONICAL_JSON_PROFILE,
+        "query_set_projection": QUERY_SET_PROJECTION,
     }
     if freeze != {"schema_version": freeze["schema_version"], **expected}:
         raise ValueError("Semantic Gold freeze manifest does not bind the exact candidate")

@@ -9,7 +9,7 @@
     "fixture_manifest_sha256", "semantic_gold_schema_sha256", "query_set_sha256",
     "scoring_policy_sha256", "security_challenges_sha256", "source_count",
     "case_count", "security_challenge_count", "maintainer_confirmation_required",
-    "reviewer_id"
+    "reviewer_id", "canonical_json_profile", "query_set_projection"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.semantic-gold-freeze/v1"},
@@ -21,6 +21,12 @@
     "query_set_sha256": {"$ref": "#/$defs/sha256"},
     "scoring_policy_sha256": {"$ref": "#/$defs/sha256"},
     "security_challenges_sha256": {"$ref": "#/$defs/sha256"},
+    "canonical_json_profile": {
+      "const": "UTF-8 JSON; object keys sorted recursively; ensure_ascii=false; separators=(',', ':'); no trailing whitespace"
+    },
+    "query_set_projection": {
+      "const": "Map cases in array order to objects {case_id, query, purpose, phase=query_phase, as_of=case.as_of or null}; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes"
+    },
     "source_count": {"const": 12},
     "case_count": {"const": 15},
     "security_challenge_count": {"const": 5},

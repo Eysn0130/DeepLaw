@@ -20,8 +20,10 @@ current candidate is deliberately not `maintainer_confirmed`.
 | Cross-packet identity | 36-section case-01 fixture; deterministic lifecycle; scorer and tamper tests | At least two distinct Packets and observations converge to exactly one stable Knowledge ID |
 | Entity/Concept scoring | Gold `scoring_policy`; Gold Schema; query runner/scorer tests | Target-scoped precision is named; valid extra objects are excluded; completeness and source coverage are separate |
 | Security challenges | two adversarial fixtures; five frozen challenges; first-party CLI runner; tamper tests | Every challenge executes at least once and all nine security counters are zero |
-| Claim-level Synthesis Gold | case-06, case-11, and case-12 content assertions | Required content and exact input source set pass deterministic precheck and human entailment review |
-| Contradiction applicability | retention A/B fixtures and scorer | Same Atlas service, diagnostic-log class, worldwide scope, and 2026 valid time before contradiction credit |
+| Claim-level content Gold | case-04, case-06, case-11, and case-12 content assertions | Concept, Source Summary, Synthesis, and Overview required content and exact input source set pass deterministic precheck and human entailment review |
+| Contradiction applicability | retention A/B fixtures; structured `expected_relations`; query runner and scorer | Same Atlas service, diagnostic-log class, worldwide scope, exact endpoints, and 2026 valid interval before typed-relation contradiction credit |
+| Withdrawal gap | case-10 `explicit_gap` plus frozen `stale_knowledge` code | Withdrawn evidence is neither selected nor silently omitted; the current no-answer state remains visible |
+| Reproducible freeze commitments | freeze Schema canonical-JSON profile and query-set projection | A reviewer can independently reproduce every candidate, Schema, query-set, scoring-policy, and challenge digest |
 | Timeline and multi-format | case-08 three Event labels; case-15 scheduled-publication Event | One formal valid-time interval per Event revision and every frozen date/object retrieved |
 | Host declaration discipline | real-host report v2; deterministic workflow | Claude Code/OpenCode exact version/discovery/auth/model-access reason; external execution is `not_executed` |
 | Independent audit | source-free Human Review Packet and audit-only subagent | All 15 cases, first-party CLI, security challenges, deterministic rebuild; PASS/REJECT/BLOCKED only |

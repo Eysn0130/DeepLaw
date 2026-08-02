@@ -302,7 +302,8 @@ def _relation_records(
         rows = store.connection.execute(
             """
             SELECT relations.subject_knowledge_id, relations.object_knowledge_id,
-                   relations.predicate, relations.valid_from, relations.valid_to
+                   relations.predicate, relations.valid_from, relations.valid_to,
+                   relations.evidence_refs_json
             FROM source_compilation_outputs_v1 AS outputs
             JOIN knowledge_relation_revisions_v3 AS relations
               ON relations.relation_revision_id = outputs.output_id
@@ -316,7 +317,12 @@ def _relation_records(
                 pair = frozenset(
                     (row["subject_knowledge_id"], row["object_knowledge_id"])
                 )
-                records[pair].append(dict(row))
+                record = dict(row)
+                evidence_refs = strict_json_loads(record.pop("evidence_refs_json"))
+                if not isinstance(evidence_refs, list):
+                    raise ValueError("relation evidence_refs_json must contain a list")
+                record["evidence_refs"] = evidence_refs
+                records[pair].append(record)
     return records
 
 
@@ -671,15 +677,22 @@ def score(
             if expected["required"]
         ]
 
-        conflict_case = next(
-            case for case in gold["cases"] if case["task_type"] == "source_conflict"
-        )
-        conflict_labels = [item["label_id"] for item in conflict_case["expected_objects"]]
-        expected_conflict_pairs = {
-            frozenset((left, right))
-            for left in label_knowledge_ids[conflict_labels[0]]
-            for right in label_knowledge_ids[conflict_labels[1]]
-        }
+        expected_conflict_pairs: set[frozenset[str]] = set()
+        expected_relation_pairs_by_case: dict[str, set[frozenset[str]]] = defaultdict(set)
+        expectations_by_pair: dict[
+            frozenset[str], list[dict[str, Any]]
+        ] = defaultdict(list)
+        for case in gold["cases"]:
+            for expectation in case.get("expected_relations", []):
+                pairs = {
+                    frozenset((left, right))
+                    for left in label_knowledge_ids[expectation["subject_label_id"]]
+                    for right in label_knowledge_ids[expectation["object_label_id"]]
+                }
+                expected_conflict_pairs.update(pairs)
+                expected_relation_pairs_by_case[case["case_id"]].update(pairs)
+                for pair in pairs:
+                    expectations_by_pair[pair].append(expectation)
         current_by_knowledge = {
             revision["knowledge_id"]: revision for revision in all_outputs
         }
@@ -696,9 +709,40 @@ def score(
                     current_by_knowledge[pair_items[1]],
                     relation,
                 )
+                and any(
+                    relation["predicate"] == expectation["predicate"]
+                    and relation["valid_from"] == expectation["valid_from"]
+                    and relation["valid_to"] == expectation["valid_to"]
+                    and bool(relation["evidence_refs"])
+                    and {
+                        reference.get("source_revision_id")
+                        for reference in relation["evidence_refs"]
+                        if isinstance(reference, dict)
+                    }.issubset(
+                        {source_ids[key] for key in expectation["source_keys"]}
+                    )
+                    and {
+                        reference.get("source_revision_id")
+                        for identity in pair_items
+                        for reference in current_by_knowledge[identity]["source_refs"]
+                        if isinstance(reference, dict)
+                    }
+                    == {source_ids[key] for key in expectation["source_keys"]}
+                    for expectation in expectations_by_pair[pair]
+                )
                 for relation in relation_records[pair]
             ):
                 correct_conflicts.add(pair)
+        for case_id, expected_pairs in expected_relation_pairs_by_case.items():
+            if expected_pairs and expected_pairs.issubset(correct_conflicts):
+                continue
+            case_result = next(
+                item for item in case_results if item["case_id"] == case_id
+            )
+            case_result["status"] = "failed"
+            failure = f"{case_id}: frozen typed relation expectation was not demonstrated"
+            if failure not in failure_cases:
+                failure_cases.append(failure)
 
         batches = store.connection.execute(
             """

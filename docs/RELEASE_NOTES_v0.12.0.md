@@ -38,9 +38,10 @@ provenance, and post-release rows remain release gates rather than completed his
   first-party CLI query scoring, provider-reported build token capture, deterministic query-cost
   accounting, and explicit maintainer review binding.
 - The corrected Semantic Gold adds real multi-Packet identity fusion, target-scoped Entity/Concept
-  precision with separate extraction completeness and source coverage, claim-level Synthesis
-  assertions, unambiguous contradiction applicability, one-event-per-valid-time timeline labels,
-  and a scheduled-publication multi-format Event.
+  precision with separate extraction completeness and source coverage, claim-level Concept and
+  Synthesis assertions, structured typed-relation endpoints and valid time for contradictions,
+  an explicit withdrawal Gap, reproducible query-set freeze rules, one-event-per-valid-time
+  timeline labels, and a scheduled-publication multi-format Event.
 - Credential-free pre-review now compiles the entire public corpus through the real governed
   transaction using a deterministic no-model Agent, executes all 15 first-party CLI retrieval
   cases and five adversarial challenges, and exports a source-free Human Review Packet. This does

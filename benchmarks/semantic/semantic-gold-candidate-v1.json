@@ -227,7 +227,38 @@
           "aliases": [
             "admission policy"
           ],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-evidence-admission-definition",
+              "statement": "Evidence admission accepts a source only after identity, lifecycle, scope, sensitivity, and provenance checks succeed.",
+              "required_terms": [
+                "identity",
+                "lifecycle",
+                "scope",
+                "sensitivity",
+                "provenance"
+              ],
+              "source_keys": [
+                "concept-procedure-events"
+              ],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            },
+            {
+              "claim_id": "claim-gold-evidence-admission-authority-limit",
+              "statement": "Evidence ranking never establishes Authority.",
+              "required_terms": [
+                "ranking",
+                "never establishes Authority"
+              ],
+              "source_keys": [
+                "concept-procedure-events"
+              ],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
         }
       ],
       "forbidden_merges": [],
@@ -253,14 +284,71 @@
           "kind": "claim",
           "canonical_label": "Diagnostic log retention is 30 days",
           "aliases": [],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-retention-a-applicability",
+              "statement": "Policy A requires Atlas production public-API diagnostic logs for the worldwide tenant population to be retained for 30 days during 2026.",
+              "required_terms": [
+                "Policy A",
+                "Atlas",
+                "production",
+                "public API",
+                "diagnostic logs",
+                "worldwide",
+                "30 days",
+                "2026"
+              ],
+              "source_keys": [
+                "retention-a"
+              ],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
         },
         {
           "label_id": "label-retention-60",
           "kind": "claim",
           "canonical_label": "Diagnostic log retention is 60 days",
           "aliases": [],
-          "required": true
+          "required": true,
+          "content_assertions": [
+            {
+              "claim_id": "claim-gold-retention-b-applicability",
+              "statement": "Policy B requires Atlas production public-API diagnostic logs for the worldwide tenant population to be retained for 60 days during 2026.",
+              "required_terms": [
+                "Policy B",
+                "Atlas",
+                "production",
+                "public API",
+                "diagnostic logs",
+                "worldwide",
+                "60 days",
+                "2026"
+              ],
+              "source_keys": [
+                "retention-b"
+              ],
+              "expected_entailment": "entailed",
+              "evaluation_method": "deterministic_required_terms_and_human_review"
+            }
+          ]
+        }
+      ],
+      "expected_relations": [
+        {
+          "relation_id": "relation-gold-retention-a-contradicts-retention-b",
+          "subject_label_id": "label-retention-30",
+          "predicate": "contradicts",
+          "object_label_id": "label-retention-60",
+          "directionality": "symmetric",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2027-01-01T00:00:00Z",
+          "source_keys": [
+            "retention-a",
+            "retention-b"
+          ]
         }
       ],
       "forbidden_merges": [],
@@ -472,9 +560,13 @@
       "expected_objects": [],
       "forbidden_merges": [],
       "required_outcomes": [
-        "withdrawn_revision_rejected"
+        "withdrawn_revision_rejected",
+        "explicit_gap"
       ],
-      "notes": "Withdrawing the only source removes its dependent claim from current admission.",
+      "expected_gap_codes": [
+        "stale_knowledge"
+      ],
+      "notes": "Withdrawing the only source removes its dependent claim from current admission and must return a visible stale_knowledge Gap rather than a silent empty result.",
       "query": "What retention period does Policy A currently support?",
       "purpose": "freshness_check",
       "query_phase": "post_transition"
@@ -511,6 +603,35 @@
               "evaluation_method": "deterministic_required_terms_and_human_review"
             }
           ]
+        },
+        {
+          "label_id": "label-retention-30",
+          "kind": "claim",
+          "canonical_label": "Diagnostic log retention is 30 days",
+          "aliases": [],
+          "required": true
+        },
+        {
+          "label_id": "label-retention-60",
+          "kind": "claim",
+          "canonical_label": "Diagnostic log retention is 60 days",
+          "aliases": [],
+          "required": true
+        }
+      ],
+      "expected_relations": [
+        {
+          "relation_id": "relation-gold-retention-a-contradicts-retention-b",
+          "subject_label_id": "label-retention-30",
+          "predicate": "contradicts",
+          "object_label_id": "label-retention-60",
+          "directionality": "symmetric",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2027-01-01T00:00:00Z",
+          "source_keys": [
+            "retention-a",
+            "retention-b"
+          ]
         }
       ],
       "forbidden_merges": [],
@@ -518,7 +639,7 @@
         "contradiction_preserved",
         "valid_evidence_bindings"
       ],
-      "notes": "Cross-source Synthesis must bind both exact input revision sets and is queried against the pre-withdrawal baseline Vault.",
+      "notes": "Cross-source Synthesis must bind both exact input revision sets, must not replace the typed contradiction relation between the two claims, and is queried against the pre-withdrawal baseline Vault.",
       "query": "Compare the two diagnostic log retention policies and preserve their conflict.",
       "purpose": "verify",
       "query_phase": "baseline"
