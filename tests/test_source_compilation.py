@@ -2642,6 +2642,53 @@ def test_admitted_exact_identity_is_not_hidden_by_restricted_body_overlap(
     assert hidden["knowledge_id"] not in canonical_json(result)
 
 
+def test_v5_target_scoped_capsule_suppresses_internal_candidate_noise(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="target-scoped-noise", scope="project")
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="target-scoped-noise-writer",
+            operations=("upsert_concept",),
+        )["grant_id"]
+        target = store.remember(
+            grant_id=grant_id,
+            idempotency_key="target-rule",
+            title="Meridian Target Rule",
+            body="The Meridian Target Rule is the exact requested definition.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        for index in range(30):
+            store.remember(
+                grant_id=grant_id,
+                idempotency_key=f"unrelated-rule-{index}",
+                title=f"Unrelated Rule {index}",
+                body=f"Unrelated Rule {index} concerns a different subject.",
+                kind="concept",
+                operation="upsert_concept",
+                confirm_no_case_data=True,
+            )
+        store.rebuild_derived()
+
+    result = PurposeAwareRetrievalService(root).query(
+        "What is the Meridian Target Rule?",
+        purpose="answer",
+        query_plan_version="5",
+    )
+
+    assert [item["knowledge_id"] for item in result["compiled"]] == [
+        target["knowledge_id"]
+    ]
+    assert result["delivery"]["suppressed_candidate_count"] > 0
+    gap_messages = {item["message"] for item in result["gaps"]}
+    assert not any("below the deterministic relevance floor" in item for item in gap_messages)
+    assert "some candidates were rejected by admission or selection budgets" not in gap_messages
+
+
 def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
     tmp_path: Path,
 ) -> None:

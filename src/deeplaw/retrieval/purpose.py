@@ -831,11 +831,19 @@ class PurposeAwareRetrievalService:
                 and item.get("object_knowledge_id") in selected_ids
             )
         ]
+        discovery_gaps = list(raw["gaps"])
+        if duty_aware:
+            discovery_gaps = [
+                message
+                for message in discovery_gaps
+                if message
+                != "some candidates were rejected by admission or selection budgets"
+            ]
         return {
             "results": accepted,
             "contradictions": contradictions,
             "gaps": [
-                *raw["gaps"],
+                *discovery_gaps,
                 *(
                     [
                         (
@@ -843,7 +851,7 @@ class PurposeAwareRetrievalService:
                             "candidate(s) were below the deterministic relevance floor"
                         )
                     ]
-                    if low_relevance_prevented
+                    if low_relevance_prevented and not duty_aware
                     else []
                 ),
             ],

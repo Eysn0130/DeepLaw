@@ -57,6 +57,9 @@ This release closes Semantic Living Wiki compilation and production editor integ
 - Match `stale_knowledge` and `uncompiled_source` gaps with bounded meaningful query terms instead
   of stop-word substrings, and inspect every retained term when checking Source IR. This removes
   unrelated gap noise without hiding a relevant later-term uncompiled source.
+- Keep v5 relevance-floor and internal overfetch rejections in the suppressed-candidate receipt
+  instead of provider-visible gaps. Genuine stale, fallback, compilation, integrity, contradiction,
+  and evidence gaps remain explicit.
 
 ### Verified boundaries
 
