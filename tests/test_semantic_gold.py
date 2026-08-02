@@ -51,6 +51,7 @@ from benchmarks.semantic.run_query_suite import (
     _execution_environment,
     _rank_metrics,
     _relation_checks,
+    _retrieval_coverage_source_keys,
     _runtime_python,
     _source_ir_coverage_counts,
 )
@@ -130,6 +131,22 @@ def test_semantic_gold_freeze_binds_candidate_schema_queries_and_policy() -> Non
     freeze["query_set_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="does not bind"):
         validate_freeze(freeze, candidate=_candidate(), repository=REPOSITORY)
+
+
+def test_retrieval_source_coverage_excludes_prohibited_predecessors() -> None:
+    cases = {case["task_type"]: case for case in _candidate()["cases"]}
+
+    assert _retrieval_coverage_source_keys(cases["source_successor_update"]) == (
+        "update-v2",
+    )
+    assert _retrieval_coverage_source_keys(cases["overview_refresh"]) == (
+        "update-v2",
+    )
+    assert _retrieval_coverage_source_keys(cases["source_withdrawal"]) == ()
+    assert _retrieval_coverage_source_keys(cases["source_conflict"]) == (
+        "retention-a",
+        "retention-b",
+    )
 
 
 def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(

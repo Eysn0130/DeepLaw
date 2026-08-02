@@ -126,6 +126,17 @@ def _compiled_hit_ratio(
     )
 
 
+def _retrieval_coverage_source_keys(case: dict[str, Any]) -> tuple[str, ...]:
+    """Return Source keys that a passing query is expected to admit."""
+
+    source_keys = tuple(str(item) for item in case["source_keys"])
+    if case["task_type"] == "source_withdrawal":
+        return ()
+    if case["task_type"] in {"source_successor_update", "overview_refresh"}:
+        return source_keys[-1:]
+    return source_keys
+
+
 def _source_ir_coverage_counts(
     rows: list[dict[str, Any]],
     *,
@@ -1891,7 +1902,9 @@ def run(
         for item in cases
     )
     relevant_source_keys = {
-        source_key for case in gold["cases"] for source_key in case["source_keys"]
+        source_key
+        for case in gold["cases"]
+        for source_key in _retrieval_coverage_source_keys(case)
     }
     relevant_source_revision_ids = {
         source_ids[source_key] for source_key in relevant_source_keys

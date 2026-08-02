@@ -105,7 +105,7 @@
           "const": "source_ir_fragment_coverage"
         },
         "retrieval_source_coverage_definition": {
-          "const": "Distinct relevant Source Revisions selected by at least one frozen query divided by all distinct relevant Source Revisions referenced by the frozen query set."
+          "const": "Distinct retrieval-eligible target Source Revisions selected by at least one frozen query divided by all distinct retrieval-eligible target Source Revisions in the frozen query set; predecessor and withdrawn revisions retained only to prove exclusion are not positive coverage targets."
         },
         "performance_comparison_definition": {
           "const": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance."

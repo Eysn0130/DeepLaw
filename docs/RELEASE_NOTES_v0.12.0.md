@@ -81,6 +81,9 @@ provenance, and post-release rows remain release gates rather than completed his
 - The public Knowledge Revision Detail contract admits the existing `revision_bound` verification
   state used by Source Summary and Synthesis revisions, and the synthesis lifecycle regression
   validates the emitted detail against that exact Schema.
+- Retrieval source coverage is target-scoped to revisions that a passing query may admit;
+  predecessor and withdrawn revisions retained as negative freshness controls cannot inflate or
+  depress the coverage metric.
 - All 15 Semantic Gold cases and five adversarial challenges must be independently confirmed by
   six isolated `gpt-5.6-sol` machine auditors. No majority vote is accepted, and any discrepancy
   invalidates all prior packets for that candidate.

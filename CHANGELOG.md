@@ -28,6 +28,8 @@ This release closes Semantic Living Wiki compilation and production editor integ
 
 - Align the public Knowledge Revision Detail Schema with the existing `revision_bound` Synthesis
   verification state and cover the exact emitted detail with a contract regression test.
+- Scope retrieval source coverage to admissible target revisions instead of treating predecessor
+  and withdrawn negative controls as positive retrieval targets.
 
 ### Verified boundaries
 
