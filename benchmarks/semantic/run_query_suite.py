@@ -234,6 +234,97 @@ def _source_ir_coverage(
     }
 
 
+def _cross_packet_identity_check(
+    *,
+    vault: Path,
+    compiler_report: dict[str, Any],
+    gold_case: dict[str, Any],
+    query_case: dict[str, Any],
+) -> dict[str, Any]:
+    run = next(
+        item
+        for item in compiler_report["runs"]
+        if item["source_key"] == gold_case["source_keys"][0]
+    )
+    expected = gold_case["expected_objects"][0]
+    expected_aliases = {_normalize(item) for item in expected.get("aliases", [])}
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        rows = store.connection.execute(
+            """
+            SELECT observations.packet_id, observations.observation_id,
+                   observations.observation_json, dispositions.target_ref
+            FROM semantic_observations_v2 AS observations
+            LEFT JOIN semantic_observation_dispositions_v1 AS dispositions
+              USING(compilation_run_id, observation_id)
+            WHERE observations.compilation_run_id = ?
+              AND observations.kind = 'entity'
+            ORDER BY observations.packet_id, observations.observation_id
+            """,
+            (run["compilation_run_id"],),
+        ).fetchall()
+    matching = []
+    for row in rows:
+        observation = strict_json_loads(row["observation_json"])
+        aliases = {
+            _normalize(item)
+            for item in observation.get("aliases", [])
+            if isinstance(item, str)
+        }
+        candidate = {
+            "kind": observation.get("kind"),
+            "title": observation.get("title_candidate") or "",
+            "metadata": {"aliases": sorted(aliases)},
+        }
+        if _matches_expected(candidate, expected) and expected_aliases.issubset(
+            aliases
+        ):
+            matching.append(row)
+    packet_ids = sorted({str(row["packet_id"]) for row in matching})
+    disposition_targets = sorted(
+        {
+            str(row["target_ref"])
+            for row in matching
+            if isinstance(row["target_ref"], str)
+        }
+    )
+    final_matches = [
+        item
+        for item in query_case["actual_objects"]
+        if _matches_expected(item, expected)
+    ]
+    final_knowledge_ids = sorted(
+        {str(item["knowledge_id"]) for item in final_matches}
+    )
+    final_semantic_keys = sorted(
+        {str(item["semantic_key"]) for item in final_matches}
+    )
+    valid = bool(
+        run["packet_count"] >= 2
+        and len(set(run["packet_ids"])) >= 2
+        and run["observation_count"] >= 2
+        and len(packet_ids) >= 2
+        and len(matching) >= 2
+        and len(disposition_targets) == 1
+        and len(final_knowledge_ids) == 1
+        and set(disposition_targets).issubset(final_semantic_keys)
+    )
+    body = {
+        "valid": valid,
+        "case_id": gold_case["case_id"],
+        "compilation_run_id": run["compilation_run_id"],
+        "run_packet_count": run["packet_count"],
+        "matching_observation_count": len(matching),
+        "distinct_packet_ids": packet_ids,
+        "disposition_targets": disposition_targets,
+        "final_knowledge_ids": final_knowledge_ids,
+        "final_semantic_keys": final_semantic_keys,
+    }
+    return {
+        **body,
+        "receipt_sha256": sha256_bytes(canonical_json(body).encode("utf-8")),
+    }
+
+
 def _runtime_python(prefix: list[str]) -> Path:
     executable_value = prefix[0]
     executable = (
@@ -704,7 +795,7 @@ def _relation_checks(
                         and record["valid_from"] == expected["valid_from"]
                         and record["valid_to"] == expected["valid_to"]
                         and bool(evidence_source_ids)
-                        and evidence_source_ids.issubset(expected_source_ids)
+                        and evidence_source_ids == expected_source_ids
                         and endpoint_source_ids == expected_source_ids
                         and evidence_checks
                         and all(item["valid"] for item in evidence_checks)
@@ -892,6 +983,150 @@ def _citation_checks(
                 }
             )
     return checks, sum(item["valid"] for item in checks), len(checks), exact_get_valid
+
+
+def _fragment_continuation_probe(
+    prefix: list[str],
+    *,
+    vault: Path,
+    source_ids: dict[str, str],
+) -> dict[str, Any]:
+    """Consume a real first-party evidence cursor and bind the reassembled bytes."""
+
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        placeholders = ",".join("?" for _ in source_ids)
+        row = store.connection.execute(
+            f"""
+            SELECT legacy_fragment_bindings_v2.fragment_revision_id,
+                   source_revision_bindings_v2.source_revision_id,
+                   source_fragments.locator, source_fragments.text,
+                   source_fragments.text_sha256
+            FROM source_fragments
+            JOIN legacy_fragment_bindings_v2 USING(fragment_id)
+            JOIN source_revision_bindings_v2
+              ON source_revision_bindings_v2.legacy_source_id =
+                 legacy_fragment_bindings_v2.legacy_source_id
+            WHERE source_revision_bindings_v2.source_revision_id IN ({placeholders})
+              AND LENGTH(source_fragments.text) > 64
+            ORDER BY LENGTH(source_fragments.text) DESC,
+                     legacy_fragment_bindings_v2.fragment_revision_id
+            LIMIT 1
+            """,
+            tuple(sorted(source_ids.values())),
+        ).fetchone()
+    if row is None:
+        raise RuntimeError("semantic continuation probe requires one multi-page fragment")
+    fragment_revision_id = str(row["fragment_revision_id"])
+    expected_text = str(row["text"])
+    expected_sha256 = str(row["text_sha256"])
+    offset = 0
+    page_size = 200
+    pages: list[dict[str, Any]] = []
+    reassembled: list[str] = []
+    command_records: list[dict[str, Any]] = []
+    for _ in range(1_024):
+        value, return_code, stdout, _stderr = _run_json(
+            prefix,
+            "source",
+            "fragment",
+            "--vault",
+            str(vault),
+            "--fragment-id",
+            fragment_revision_id,
+            "--offset",
+            str(offset),
+            "--max-chars",
+            str(page_size),
+            "--scope",
+            "personal",
+            "--max-sensitivity",
+            "public",
+            expect_success=False,
+        )
+        fragment = value.get("fragment", {}) if value is not None else {}
+        if return_code != 0 or not isinstance(fragment, dict):
+            break
+        text = fragment.get("text")
+        content_offset = fragment.get("content_offset")
+        next_offset = fragment.get("next_offset")
+        continuation = fragment.get("continuation")
+        page_valid = bool(
+            isinstance(text, str)
+            and content_offset == offset
+            and fragment.get("fragment_revision_id") == fragment_revision_id
+            and fragment.get("source_revision_id") == row["source_revision_id"]
+            and fragment.get("locator") == row["locator"]
+            and fragment.get("text_sha256") == expected_sha256
+            and fragment.get("content_characters") == len(text)
+            and len(text) <= page_size
+            and len(stdout) <= 65_536
+        )
+        reassembled.append(text if isinstance(text, str) else "")
+        pages.append(
+            {
+                "offset": offset,
+                "content_characters": len(text) if isinstance(text, str) else 0,
+                "response_bytes": len(stdout),
+                "truncated": bool(fragment.get("content_truncated")),
+                "next_offset": next_offset,
+                "valid": page_valid,
+            }
+        )
+        command_records.append(
+            {
+                "action": "source.fragment",
+                "fragment_revision_id": fragment_revision_id,
+                "offset": offset,
+                "max_chars": page_size,
+            }
+        )
+        if continuation is None:
+            break
+        if not (
+            isinstance(continuation, dict)
+            and continuation.get("action") == "fragment"
+            and continuation.get("fragment_id") == fragment_revision_id
+            and continuation.get("offset") == next_offset
+            and continuation.get("max_chars") == page_size
+            and isinstance(next_offset, int)
+            and not isinstance(next_offset, bool)
+            and next_offset > offset
+        ):
+            pages[-1]["valid"] = False
+            break
+        offset = next_offset
+    actual_text = "".join(reassembled)
+    valid = bool(
+        len(pages) >= 2
+        and all(page["valid"] for page in pages)
+        and pages[-1]["truncated"] is False
+        and pages[-1]["next_offset"] is None
+        and actual_text == expected_text
+        and sha256_bytes(actual_text.encode("utf-8")) == expected_sha256
+    )
+    body = {
+        "schema_version": "deeplaw.semantic-continuation-probe/v1",
+        "fragment_revision_id": fragment_revision_id,
+        "source_revision_id": row["source_revision_id"],
+        "locator_sha256": sha256_bytes(str(row["locator"]).encode("utf-8")),
+        "expected_text_sha256": expected_sha256,
+        "actual_text_sha256": sha256_bytes(actual_text.encode("utf-8")),
+        "page_size_characters": page_size,
+        "page_count": len(pages),
+        "pages": pages,
+        "command_sequence_sha256": sha256_bytes(
+            canonical_json(command_records).encode("utf-8")
+        ),
+        "cursor_consumed": len(pages) >= 2,
+        "provider_hard_limit_valid": all(
+            page["response_bytes"] <= 65_536 for page in pages
+        ),
+        "valid": valid,
+    }
+    return {
+        **body,
+        "receipt_sha256": sha256_bytes(canonical_json(body).encode("utf-8")),
+    }
 
 
 def _claim_evidence_checks(
@@ -1272,7 +1507,12 @@ def _case_result(
     )
     fallback_used = bool(warm.get("query_plan", {}).get("fallback", {}).get("used"))
     source_fallback_visible = not fallback_used or "source_fallback" in gap_codes
-    provider_bytes = len(canonical_json(warm).encode("utf-8"))
+    provider_bytes = int(
+        warm.get("delivery", {}).get(
+            "provider_visible_bytes",
+            len(canonical_json(warm).encode("utf-8")),
+        )
+    )
     hard_limit_valid = 0 <= provider_bytes <= 65_536
     repeat_reused = bool(
         compiled_ids == cold_compiled_ids
@@ -1305,7 +1545,7 @@ def _case_result(
         and relations_valid
         and expected_gaps_valid
     )
-    citation_checks, valid_citations, citation_count, continuation_valid = _citation_checks(
+    citation_checks, valid_citations, citation_count, exact_get_valid = _citation_checks(
         prefix,
         vault=vault,
         value=warm,
@@ -1384,7 +1624,7 @@ def _case_result(
         and context["provider_hard_limit_valid"]
         and context["verification_valid"]
         and evidence_binding_valid
-        and continuation_valid
+        and exact_get_valid
     )
     passed = bool(semantic_pass and safety_pass)
     if not safety_pass and failure_reason is None:
@@ -1442,6 +1682,11 @@ def _case_result(
         "cold_latency_ms": cold_latency_ms,
         "warm_latency_ms": warm_latency_ms,
         "provider_payload_bytes": max(provider_bytes, 0),
+        "provider_content_bytes": sum(
+            len(str(item.get("content", item.get("excerpt", ""))).encode("utf-8"))
+            for item in [*warm.get("compiled", []), *warm.get("evidence", [])]
+            if isinstance(item, dict)
+        ),
         "context_provider_payload_bytes": context["provider_payload_bytes"],
         "context_capsule_id": context["capsule_id"],
         "context_capsule_sha256": context["capsule_sha256"],
@@ -1457,7 +1702,7 @@ def _case_result(
         ),
         "source_fallback_visible": source_fallback_visible,
         "provider_hard_limit_valid": hard_limit_valid,
-        "continuation_valid": continuation_valid,
+        "exact_get_valid": exact_get_valid,
         "citation_checks": citation_checks,
         "claim_evidence_checks": claim_evidence_checks,
         "citation_validity": citation_validity,
@@ -1499,6 +1744,11 @@ def run(
     source_ids = {
         item["source_key"]: item["source_revision_id"] for item in corpus["sources"]
     }
+    continuation_probe = _fragment_continuation_probe(
+        prefix,
+        vault=vault,
+        source_ids=source_ids,
+    )
     frozen_query_set_sha256 = query_set_sha256(gold)
     cases = []
     raw_fragment_baseline_bytes = 0
@@ -1542,6 +1792,20 @@ def run(
         result["cold_peak_rss_bytes"] = cold_peak_rss
         result["warm_peak_rss_bytes"] = warm_peak_rss
         cases.append(result)
+    cross_packet_gold_case = next(
+        item
+        for item in gold["cases"]
+        if item["task_type"] == "long_document_cross_packet_entity"
+    )
+    cross_packet_query_case = next(
+        item for item in cases if item["case_id"] == cross_packet_gold_case["case_id"]
+    )
+    cross_packet_identity = _cross_packet_identity_check(
+        vault=baseline_vault,
+        compiler_report=compiler_report,
+        gold_case=cross_packet_gold_case,
+        query_case=cross_packet_query_case,
+    )
     challenges: list[dict[str, Any]] = []
     challenge_counts: dict[str, int] = {
         challenge_type: 0
@@ -1600,7 +1864,12 @@ def run(
                 "execution_count": 1,
                 "selected_source_revision_ids": selected_sources,
                 "gap_codes": gap_codes,
-                "provider_payload_bytes": len(canonical_json(value).encode("utf-8")),
+                "provider_payload_bytes": int(
+                    value.get("delivery", {}).get(
+                        "provider_visible_bytes",
+                        len(canonical_json(value).encode("utf-8")),
+                    )
+                ),
                 "latency_ms": latency,
                 "peak_rss_bytes": peak_rss_bytes,
                 "failure_reason": None if passed else reason,
@@ -1610,6 +1879,7 @@ def run(
             challenge_failures[challenge_type] += 1
         challenges.append(result)
     provider_bytes = sum(item["provider_payload_bytes"] for item in cases)
+    provider_content_bytes = sum(item["provider_content_bytes"] for item in cases)
     cold_latencies = [item["cold_latency_ms"] for item in cases]
     warm_latencies = [item["warm_latency_ms"] for item in cases]
     passed_count = sum(item["status"] == "passed" for item in cases)
@@ -1643,12 +1913,16 @@ def run(
         "execution_count": len(cases) * 2,
         "passed_count": passed_count,
         "provider_payload_bytes": provider_bytes,
+        "provider_content_bytes": provider_content_bytes,
+        "provider_transport_overhead_bytes": max(
+            0, provider_bytes - provider_content_bytes
+        ),
         "provider_bytes_per_matched_target": round(
             provider_bytes / matched_required_target_count, 6
         ) if matched_required_target_count else 0.0,
         "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
         "bytes_saved_ratio": round(
-            1 - provider_bytes / raw_fragment_baseline_bytes, 6
+            1 - provider_content_bytes / raw_fragment_baseline_bytes, 6
         ) if raw_fragment_baseline_bytes else 0.0,
         "cold_latency_p50_ms": round(median(cold_latencies)),
         "cold_latency_p95_ms": _percentile(cold_latencies, 0.95),
@@ -1704,7 +1978,7 @@ def run(
             (not item["provider_hard_limit_valid"])
             or item["context_provider_payload_bytes"] > 65_536
             for item in cases
-        ),
+        ) + int(not continuation_probe["provider_hard_limit_valid"]),
         "unauthorized_writes": sum(item["write_performed"] for item in cases),
         "authority_elevations": sum(
             item["authority_changed_by_ranking"] for item in cases
@@ -1738,9 +2012,10 @@ def run(
         "context_verification_rate": round(
             sum(item["context_verification_valid"] for item in cases) / len(cases), 6
         ),
-        "continuation_success_rate": round(
-            sum(item["continuation_valid"] for item in cases) / len(cases), 6
+        "exact_get_success_rate": round(
+            sum(item["exact_get_valid"] for item in cases) / len(cases), 6
         ),
+        "continuation_success_rate": 1.0 if continuation_probe["valid"] else 0.0,
         "challenge_execution_counts": challenge_counts,
         "prompt_injection_failures": challenge_failures["prompt_injection"],
         "unsupported_authoritative_claims": challenge_failures[
@@ -1761,7 +2036,9 @@ def run(
         and metrics["citation_validity"] == 1.0
         and metrics["claim_evidence_binding_accuracy"] == 1.0
         and metrics["context_verification_rate"] == 1.0
+        and metrics["exact_get_success_rate"] == 1.0
         and metrics["continuation_success_rate"] == 1.0
+        and cross_packet_identity["valid"]
         and all(
             metrics["challenge_execution_counts"].get(item["challenge_type"], 0)
             >= item["required_execution_count"]
@@ -1829,6 +2106,8 @@ def run(
             network_policy=str(compiler_report.get("network_policy", "not_recorded"))
         ),
         "source_ir_coverage": source_ir_coverage,
+        "continuation_probe": continuation_probe,
+        "cross_packet_identity": cross_packet_identity,
         "cases": cases,
         "challenges": challenges,
         "metrics": metrics,

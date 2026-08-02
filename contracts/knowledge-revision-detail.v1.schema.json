@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-revision-detail.v1.schema.json",
+  "title": "DeepLaw Knowledge Revision Detail v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "knowledge_id", "revision_id", "parent_revision_id",
+    "supersedes_revision_id", "markdown_sha256", "title", "kind", "lifecycle",
+    "epistemic_state", "origin", "authority", "legal_authority", "mutability",
+    "writer_scope", "activation_policy", "verification", "scope", "sensitivity",
+    "writer_id", "source_free", "source_refs", "generation", "tags", "metadata",
+    "semantic_key", "valid_from", "valid_to", "observed_at", "recorded_at",
+    "expires_at", "workspace_path"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-revision-detail/v1"},
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+    "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "parent_revision_id": {
+      "type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "supersedes_revision_id": {
+      "type": ["string", "null"], "pattern": "^knowledgerev_[0-9a-f]{24}$"
+    },
+    "markdown_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "kind": {"enum": [
+      "claim", "concept", "entity", "event", "decision", "procedure", "experience",
+      "preference", "synthesis", "comparison", "skill", "memory"
+    ]},
+    "lifecycle": {"enum": [
+      "active", "superseded", "revoked", "expired", "forgotten", "archived",
+      "quarantined"
+    ]},
+    "epistemic_state": {"enum": ["supported", "tentative", "contested", "unknown"]},
+    "origin": {"const": "agent_derived"},
+    "authority": {"const": "agent_derived"},
+    "legal_authority": {"const": false},
+    "mutability": {"const": "revision_only"},
+    "writer_scope": {"enum": ["personal", "project", "domain"]},
+    "activation_policy": {"const": "deeplaw.autonomous-activation/v1"},
+    "verification": {"enum": ["unverified", "source_bound", "run_bound"]},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "writer_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "source_free": {"type": "boolean"},
+    "source_refs": {
+      "type": "array", "maxItems": 256,
+      "items": {"$ref": "#/$defs/sourceReference"}
+    },
+    "generation": {"type": "object"},
+    "tags": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "metadata": {"type": "object"},
+    "semantic_key": {"type": ["string", "null"], "maxLength": 300},
+    "valid_from": {"type": ["string", "null"], "format": "date-time"},
+    "valid_to": {"type": ["string", "null"], "format": "date-time"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": ["string", "null"], "format": "date-time"},
+    "workspace_path": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "body": {"type": ["string", "null"], "maxLength": 200000},
+    "content_purged": {"type": "boolean"},
+    "content_purged_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "sourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {
+          "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+        },
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

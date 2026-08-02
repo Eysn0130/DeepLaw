@@ -22,7 +22,12 @@
     "model_identity": {"type": "string", "minLength": 1, "maxLength": 500},
     "network_policy": {"enum": ["offline", "explicit_bounded"]},
     "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
-    "gold_status": {"enum": ["maintainer_review_pending", "maintainer_confirmed", "rejected"]},
+    "gold_status": {
+      "enum": [
+        "maintainer_review_pending", "machine_review_pending",
+        "maintainer_confirmed", "rejected"
+      ]
+    },
     "fixture_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "command_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},

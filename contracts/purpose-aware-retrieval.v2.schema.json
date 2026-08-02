@@ -7,7 +7,7 @@
   "required": [
     "schema_version", "vault_id", "purpose", "policy_id", "query",
     "query_plan", "query_plan_sha256", "compiled", "evidence", "contradictions",
-    "gaps", "metrics", "budget", "audit_head", "authority_changed_by_ranking",
+    "gaps", "metrics", "budget", "delivery", "audit_head", "authority_changed_by_ranking",
     "write_performed"
   ],
   "properties": {
@@ -24,6 +24,34 @@
     "gaps": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
     "metrics": {"type": "object"},
     "budget": {"type": "object"},
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surface", "provider_visible_bytes", "hard_limit_bytes",
+        "selected_object_count", "deduplicated_object_count",
+        "suppressed_candidate_count", "raw_fragment_baseline_bytes",
+        "provider_content_bytes", "context_bytes_saved", "estimated_tokens_saved", "content_truncated",
+        "continuation_available", "internal_discovery_receipt_sha256"
+      ],
+      "properties": {
+        "surface": {"const": "provider_visible_knowledge_capsule"},
+        "provider_visible_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "hard_limit_bytes": {"const": 65536},
+        "selected_object_count": {"type": "integer", "minimum": 0, "maximum": 40},
+        "deduplicated_object_count": {"type": "integer", "minimum": 0},
+        "suppressed_candidate_count": {"type": "integer", "minimum": 0},
+        "raw_fragment_baseline_bytes": {"type": "integer", "minimum": 0},
+        "provider_content_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "context_bytes_saved": {"type": "integer", "minimum": 0},
+        "estimated_tokens_saved": {"type": "integer", "minimum": 0},
+        "content_truncated": {"type": "boolean"},
+        "continuation_available": {"type": "boolean"},
+        "internal_discovery_receipt_sha256": {
+          "type": "string", "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
     "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "authority_changed_by_ranking": {"const": false},
     "write_performed": {"const": false}

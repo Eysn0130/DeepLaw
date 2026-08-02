@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-owner-review-packet.v1.schema.json",
+  "title": "DeepLaw derived owner semantic review packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "artifact_class", "language", "candidate_binding",
+    "canonical_gold_sha256", "machine_review_consensus_sha256",
+    "counterpart_packet_sha256", "translation_identity_version", "cases",
+    "human_final_decision", "maintainer_confirmed", "reviewer_id", "packet_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-owner-review-packet/v1"},
+    "artifact_class": {"const": "derived_artifact"},
+    "language": {"enum": ["en", "zh-CN"]},
+    "candidate_binding": {"$ref": "#/$defs/candidate_binding"},
+    "canonical_gold_sha256": {"$ref": "#/$defs/sha256"},
+    "machine_review_consensus_sha256": {"$ref": "#/$defs/sha256"},
+    "counterpart_packet_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "translation_identity_version": {"type": "string", "minLength": 1, "maxLength": 200},
+    "cases": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "case_id", "review_purpose", "frozen_query", "expected_result",
+          "actual_result", "citation_summary", "query_plan", "query_plan_sha256",
+          "metric_result",
+          "discrepancy", "machine_consensus"
+        ],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^semantic-case-(0[1-9]|1[0-5])$"},
+          "review_purpose": {"type": "string", "minLength": 1, "maxLength": 500},
+          "frozen_query": {"type": "string", "minLength": 1, "maxLength": 5000},
+          "expected_result": {"type": "object"},
+          "actual_result": {"type": "object"},
+          "citation_summary": {"type": "object"},
+          "query_plan": {"type": "object"},
+          "query_plan_sha256": {"$ref": "#/$defs/sha256"},
+          "metric_result": {"type": "object"},
+          "discrepancy": {"const": null},
+          "machine_consensus": {"const": "CONFIRM"}
+        }
+      }
+    },
+    "human_final_decision": {"const": "not_required"},
+    "maintainer_confirmed": {"const": false},
+    "reviewer_id": {"const": null},
+    "packet_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "commit", "tree", "version", "gold_canonical_sha256",
+        "fixture_manifest_sha256", "semantic_gold_schema_sha256",
+        "semantic_gold_freeze_sha256"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"const": "0.12.0"},
+        "gold_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_gold_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_gold_freeze_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -262,10 +262,10 @@ vault/
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current** | v0.12.0：Semantic Compilation v2、run-wide identity/completeness、Synthesis Refresh、Query Plan v5、稳定 API/CLI/MCP、生产级 Obsidian/Tolaria Bridge，以及真实 Agent/Living Wiki/Authoritative Pack/fresh-wheel 发布门禁 |
+| **Current** | v0.12.0：Semantic Compilation v2、run-wide identity/completeness、Synthesis Refresh、Query Plan v5、稳定 API/CLI/MCP、生产级 Obsidian/Tolaria Bridge，以及确定性 Agent、多代理机器共识、Living Wiki、28-source Authoritative Pack 与 fresh-wheel 发布门禁 |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
 | **Quality closure** | DeepLaw Evaluation Protocol v1 以公开、维护者可见、时间冻结的 holdout 评估仓库检索、自治安全和 Typed Compiler；发布报告绑定 exact wheel、commit、freeze 和逐项结果。无需外部机构认证 |
-| **Comparative closure pending** | 仅 Codex 的真实语义任务属于 v0.12 发布门禁；Claude Code/OpenCode 真实模型任务和全部具名基线同条件比较未执行，没有配对置信区间和完整成本/失败清单，因此 `competitive_claim_eligible=false` |
+| **Comparative closure pending** | Codex、Claude Code、OpenCode 外部真实模型语义执行和全部具名基线同条件比较均未执行；no-model 宿主生命周期与确定性 Agent 不冒充真实模型，因此 `competitive_claim_eligible=false` |
 | **Not claimed** | 没有远程 SaaS、多人控制平面、自动法律适用/裁判或模型自授予权限；公开 holdout 不被描述为 secret、unseen 或 contamination-free，也不宣称全面领先或 SOTA |
 
 ## 安全与验证

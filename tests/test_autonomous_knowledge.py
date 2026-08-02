@@ -119,6 +119,50 @@ def test_additive_migration_creates_strict_core_and_verified_rollback(tmp_path: 
     assert Path(rollback["retained_previous_vault"]).is_dir()
 
 
+def test_installed_core_migration_snapshots_and_restores_autonomous_state(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store, writer="migration-reviewer")
+        revision = store.remember(
+            grant_id=grant_id,
+            idempotency_key="installed-core-migration",
+            title="Installed core migration state",
+            body="Existing autonomous state remains recoverable across reconciliation.",
+            kind="decision",
+            confirm_no_case_data=True,
+        )
+        audit_head = store.audit_head
+
+    backup = tmp_path / "installed-core-backup"
+    result = migrate_autonomous_core(root, backup_output=backup)
+
+    assert result["already_installed"] is True
+    assert result["backup_type"] == "autonomous_snapshot"
+    assert result["backup_path"] == str(backup)
+    assert result["verification"]["valid"] is True
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.get_current(revision["knowledge_id"])["revision_id"] == revision[
+            "revision_id"
+        ]
+
+    rollback = rollback_autonomous_core(
+        root,
+        backup=backup,
+        confirm=True,
+    )
+
+    assert rollback["backup_type"] == "autonomous_snapshot"
+    assert rollback["autonomous_core_present_after_rollback"] is True
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        assert store.audit_head == audit_head
+        assert store.verify()["valid"] is True
+        assert store.get_current(revision["knowledge_id"])["revision_id"] == revision[
+            "revision_id"
+        ]
+
+
 def test_identical_bytes_can_bind_evidence_and_knowledge_roles(tmp_path: Path) -> None:
     root = _vault(tmp_path)
     with AutonomousKnowledgeStore(root, read_only=False) as store:
@@ -351,6 +395,9 @@ def test_agent_revision_activates_without_review_and_binds_markdown_cas_ledger(
         assert revision["writer_scope"] == "project"
         assert revision["activation_policy"] == "deeplaw.autonomous-activation/v1"
         _validate_contract("knowledge-revision.v2.schema.json", revision)
+        detail = store.get_current(revision["knowledge_id"])
+        assert detail["schema_version"] == "deeplaw.knowledge-revision-detail/v1"
+        _validate_contract("knowledge-revision-detail.v1.schema.json", detail)
         workspace = root / revision["workspace_path"]
         object_path = (
             root

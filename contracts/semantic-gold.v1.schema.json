@@ -1,19 +1,22 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deeplaw.dev/contracts/semantic-gold.v1.schema.json",
-  "title": "DeepLaw Maintainer Semantic Gold v1",
+  "title": "DeepLaw Governed Semantic Gold v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version", "gold_id", "status", "fixture_manifest_sha256",
-    "created_at", "review", "scoring_policy", "sources", "cases",
+    "created_at", "review", "release_review_policy", "scoring_policy", "sources", "cases",
     "security_challenges", "hard_failure_expectations", "limitations"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.semantic-gold/v1"},
     "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
     "status": {
-      "enum": ["maintainer_review_pending", "maintainer_confirmed", "rejected"]
+      "enum": [
+        "maintainer_review_pending", "machine_review_pending",
+        "maintainer_confirmed", "rejected"
+      ]
     },
     "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
     "created_at": {"type": "string", "format": "date-time"},
@@ -31,6 +34,48 @@
           }
         }
       ]
+    },
+    "release_review_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "human_gold_review", "maintainer_confirmed", "reviewer_id",
+        "independent_machine_review", "external_real_model_semantic_execution",
+        "competitive_claim_eligible"
+      ],
+      "properties": {
+        "human_gold_review": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": {"const": "not_required"},
+            "reason": {
+              "const": "owner-approved deterministic machine-consensus release scope"
+            }
+          }
+        },
+        "maintainer_confirmed": {"const": false},
+        "reviewer_id": {"const": null},
+        "independent_machine_review": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "required_auditors", "unanimity_required"],
+          "properties": {
+            "status": {"const": "pending"},
+            "required_auditors": {
+              "const": [
+                "semantic_gold_formal_auditor",
+                "claim_entailment_auditor",
+                "retrieval_completeness_auditor",
+                "chinese_adversarial_auditor",
+                "authority_security_auditor",
+                "reproducibility_release_auditor"
+              ]
+            },
+            "unanimity_required": {"const": true}
+          }
+        },
+        "external_real_model_semantic_execution": {"const": "not_executed"},
+        "competitive_claim_eligible": {"const": false}
+      }
     },
     "scoring_policy": {
       "type": "object", "additionalProperties": false,
@@ -307,7 +352,7 @@
           "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"}
         },
         "expected_entailment": {"const": "entailed"},
-        "evaluation_method": {"const": "deterministic_required_terms_and_human_review"}
+        "evaluation_method": {"const": "deterministic_required_terms_and_independent_machine_review"}
       }
     },
     "security_challenge": {

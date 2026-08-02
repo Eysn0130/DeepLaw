@@ -83,6 +83,35 @@ and after the controlled reparse. It does not copy titles, source text, local pa
 payloads into the repository, and it does not merge `law_support` Authority with the Living Wiki
 permission plane.
 
+## v0.12 deterministic semantic and 28-source gates
+
+The v0.12 semantic gate freezes 15 cases, fixture bytes, queries, scoring policy, and five executed
+adversarial challenges. A deterministic no-model Agent uses the real governed Compilation
+Packet/Plan/Receipt transaction; the first-party CLI then executes query, context, source fragment,
+verification, actual cursor continuation, cold/warm reuse, and bounded Capsule checks. Entity and
+Concept precision is target-scoped, with extraction completeness and source coverage reported
+separately so correct extra objects are not scored as false positives.
+
+Six isolated read-only machine-auditor roles must each confirm every applicable case and safety
+gate for the exact commit/tree/Gold/fixture/Schema binding. There is no majority vote. The consensus
+and bilingual Owner packets are derived artifacts and explicitly record
+`human_gold_review.status=not_required`, `maintainer_confirmed=false`, and `reviewer_id=null`.
+External real-model semantic execution remains `not_executed` and
+`competitive_claim_eligible=false`.
+
+The v0.12 28-source runner consumes the exact signed catalog, local immutable bytes, active
+Authoritative Pack, frozen exact-identifier/citation cases, snapshot/restore evidence, and
+first-party CLI/MCP results. It emits a sanitized per-source decision matrix without titles, text,
+local paths, databases, or private identifiers. It measures target-scoped Recall/Precision, MRR,
+nDCG, citation and claim binding, source/extraction coverage, current/historical admission,
+repeated-query reuse, output bytes, latency, resources, and all declared zero-failure safety
+counters. Authoritative evidence remains in the physically separate read-only `law_support` plane;
+Agent interpretation cannot become legal Authority.
+The current frozen set records 23 `no_action` decisions and 5 risk-driven
+`reparse_source_ir` decisions. Those five retain explicit signed-policy parser review warnings;
+fragment/locator completeness is therefore reported separately from the `23/28` parse-risk-free
+rate.
+
 ## What is actually exercised
 
 ### Repository retrieval

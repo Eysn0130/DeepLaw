@@ -17,11 +17,11 @@
     "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "channels": {
       "type": "array",
-      "maxItems": 10,
+      "maxItems": 11,
       "uniqueItems": true,
       "items": {
         "enum": [
-          "exact", "lexical", "lexical_fallback", "temporal_lexical", "dense",
+          "exact", "identity_alias", "lexical", "lexical_fallback", "temporal_lexical", "dense",
           "graph", "wiki", "community", "feedback", "reranker"
         ]
       }

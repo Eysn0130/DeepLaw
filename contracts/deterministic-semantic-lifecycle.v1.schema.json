@@ -18,7 +18,11 @@
     "status": {"enum": ["passed", "failed"]},
     "binding": {"$ref": "#/$defs/binding"},
     "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
-    "gold_status": {"enum": ["maintainer_review_pending", "maintainer_confirmed"]},
+    "gold_status": {
+      "enum": [
+        "maintainer_review_pending", "machine_review_pending", "maintainer_confirmed"
+      ]
+    },
     "corpus_id": {"type": "string", "pattern": "^semanticcorpus_[0-9a-f]{24}$"},
     "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
     "agent_identity": {"const": "deeplaw-deterministic-gold-agent"},

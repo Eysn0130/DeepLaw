@@ -9,6 +9,7 @@
     "fixture_manifest_sha256", "compiler_report_id", "source_revision_set_sha256",
     "query_set_sha256", "first_party_command_sha256", "budget",
     "retrieval_configuration", "execution_environment", "source_ir_coverage",
+    "continuation_probe", "cross_packet_identity",
     "cases", "challenges", "metrics", "recorded_at", "competitive_claim_eligible"
   ],
   "properties": {
@@ -26,6 +27,8 @@
     "retrieval_configuration": {"$ref": "#/$defs/retrieval_configuration"},
     "execution_environment": {"$ref": "#/$defs/execution_environment"},
     "source_ir_coverage": {"$ref": "#/$defs/source_ir_coverage"},
+    "continuation_probe": {"$ref": "#/$defs/continuation_probe"},
+    "cross_packet_identity": {"$ref": "#/$defs/cross_packet_identity"},
     "cases": {
       "type": "array", "minItems": 15, "maxItems": 100,
       "items": {"$ref": "#/$defs/case"}
@@ -129,6 +132,86 @@
         "receipt_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
+    "cross_packet_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "valid", "case_id", "compilation_run_id", "run_packet_count",
+        "matching_observation_count", "distinct_packet_ids",
+        "disposition_targets", "final_knowledge_ids", "final_semantic_keys",
+        "receipt_sha256"
+      ],
+      "properties": {
+        "valid": {"const": true},
+        "case_id": {"const": "semantic-case-01"},
+        "compilation_run_id": {
+          "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+        },
+        "run_packet_count": {"type": "integer", "minimum": 2, "maximum": 10000},
+        "matching_observation_count": {
+          "type": "integer", "minimum": 2, "maximum": 100000
+        },
+        "distinct_packet_ids": {
+          "type": "array", "minItems": 2, "maxItems": 10000, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"}
+        },
+        "disposition_targets": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "final_knowledge_ids": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+        },
+        "final_semantic_keys": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "continuation_probe": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "fragment_revision_id", "source_revision_id",
+        "locator_sha256", "expected_text_sha256", "actual_text_sha256",
+        "page_size_characters", "page_count", "pages",
+        "command_sequence_sha256", "cursor_consumed",
+        "provider_hard_limit_valid", "valid", "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.semantic-continuation-probe/v1"},
+        "fragment_revision_id": {"type": "string", "pattern": "^irfragment_[0-9a-f]{24}$"},
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "locator_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_text_sha256": {"$ref": "#/$defs/sha256"},
+        "actual_text_sha256": {"$ref": "#/$defs/sha256"},
+        "page_size_characters": {"const": 200},
+        "page_count": {"type": "integer", "minimum": 2, "maximum": 1024},
+        "pages": {
+          "type": "array", "minItems": 2, "maxItems": 1024,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": [
+              "offset", "content_characters", "response_bytes", "truncated",
+              "next_offset", "valid"
+            ],
+            "properties": {
+              "offset": {"type": "integer", "minimum": 0},
+              "content_characters": {"type": "integer", "minimum": 0, "maximum": 200},
+              "response_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+              "truncated": {"type": "boolean"},
+              "next_offset": {"type": ["integer", "null"], "minimum": 1},
+              "valid": {"type": "boolean"}
+            }
+          }
+        },
+        "command_sequence_sha256": {"$ref": "#/$defs/sha256"},
+        "cursor_consumed": {"type": "boolean"},
+        "provider_hard_limit_valid": {"type": "boolean"},
+        "valid": {"type": "boolean"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "budget": {
       "type": "object", "additionalProperties": false,
       "required": ["max_items", "max_sources", "max_chars", "max_tokens", "max_sensitivity"],
@@ -142,6 +225,7 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "query_count", "execution_count", "passed_count", "provider_payload_bytes",
+        "provider_content_bytes", "provider_transport_overhead_bytes",
         "provider_bytes_per_matched_target",
         "raw_fragment_baseline_bytes", "bytes_saved_ratio", "cold_latency_p50_ms",
         "cold_latency_p95_ms", "warm_latency_p50_ms", "warm_latency_p95_ms",
@@ -155,7 +239,8 @@
         "silent_fallbacks",
         "stale_prohibited_selections", "recall_at_k", "target_scoped_precision_at_k",
         "mrr", "ndcg_at_k", "citation_validity", "claim_evidence_binding_accuracy",
-        "context_verification_rate", "continuation_success_rate",
+        "context_verification_rate", "exact_get_success_rate",
+        "continuation_success_rate",
         "challenge_execution_counts", "prompt_injection_failures",
         "unsupported_authoritative_claims", "restricted_disclosures",
         "unauthorized_mutation_failures", "silent_fallback_challenge_failures"
@@ -165,6 +250,8 @@
         "execution_count": {"type": "integer", "minimum": 30, "maximum": 200},
         "passed_count": {"type": "integer", "minimum": 0, "maximum": 100},
         "provider_payload_bytes": {"type": "integer", "minimum": 0},
+        "provider_content_bytes": {"type": "integer", "minimum": 0},
+        "provider_transport_overhead_bytes": {"type": "integer", "minimum": 0},
         "provider_bytes_per_matched_target": {"type": "number", "minimum": 0},
         "raw_fragment_baseline_bytes": {"type": "integer", "minimum": 0},
         "bytes_saved_ratio": {"type": "number", "minimum": -1000, "maximum": 1},
@@ -203,6 +290,7 @@
         "citation_validity": {"$ref": "#/$defs/ratio"},
         "claim_evidence_binding_accuracy": {"$ref": "#/$defs/ratio"},
         "context_verification_rate": {"$ref": "#/$defs/ratio"},
+        "exact_get_success_rate": {"$ref": "#/$defs/ratio"},
         "continuation_success_rate": {"$ref": "#/$defs/ratio"},
         "challenge_execution_counts": {
           "type": "object", "additionalProperties": false,
@@ -232,12 +320,12 @@
         "expected_targets", "expected_relations", "actual_objects", "relation_checks",
         "query_plan", "query_plan_sha256",
         "cold_latency_ms", "warm_latency_ms", "cold_peak_rss_bytes",
-        "warm_peak_rss_bytes", "provider_payload_bytes",
+        "warm_peak_rss_bytes", "provider_payload_bytes", "provider_content_bytes",
         "context_provider_payload_bytes", "context_capsule_id", "context_capsule_sha256",
         "context_verification_valid", "compiled_revision_ids",
         "selected_source_revision_ids", "gap_codes", "explicit_gap", "repeat_reused",
         "write_performed", "authority_changed_by_ranking", "source_fallback_visible",
-        "provider_hard_limit_valid", "continuation_valid", "citation_checks",
+        "provider_hard_limit_valid", "exact_get_valid", "citation_checks",
         "claim_evidence_checks", "citation_validity", "claim_evidence_binding_accuracy",
         "matched_label_ids",
         "recall_at_k", "target_scoped_precision_at_k", "reciprocal_rank", "ndcg_at_k",
@@ -271,6 +359,7 @@
         "cold_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
         "warm_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
         "provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "provider_content_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "context_provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "context_capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
         "context_capsule_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -284,7 +373,7 @@
         "authority_changed_by_ranking": {"type": "boolean"},
         "source_fallback_visible": {"type": "boolean"},
         "provider_hard_limit_valid": {"type": "boolean"},
-        "continuation_valid": {"type": "boolean"},
+        "exact_get_valid": {"type": "boolean"},
         "citation_checks": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/citation_check"}},
         "claim_evidence_checks": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/claim_evidence_check"}},
         "citation_validity": {"$ref": "#/$defs/ratio"},

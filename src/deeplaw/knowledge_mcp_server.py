@@ -1119,6 +1119,8 @@ def _handle_source_support(
     scope: str | None,
     max_sensitivity: str,
     limit: int,
+    offset: int,
+    max_chars: int,
     vault_path: Path,
 ) -> dict[str, Any]:
     result = SourceReadService(vault_path).execute(
@@ -1130,6 +1132,8 @@ def _handle_source_support(
         scope=scope,
         max_sensitivity=max_sensitivity,
         limit=limit,
+        offset=offset,
+        max_chars=min(max_chars, 12_000),
     )
     return _autonomous_v5_response(operation="source", result=result)
 
@@ -1314,7 +1318,10 @@ def _handle_purpose_query(
         query_plan_version=query_plan_version,
     )
     if query_plan_version == "5":
-        return _autonomous_v5_response(operation="query", result=result)
+        return _autonomous_v5_response(
+            operation="query",
+            result=PurposeAwareRetrievalService.provider_capsule(result),
+        )
     return _autonomous_v4_response(operation="query", result=result)
 
 
@@ -1683,6 +1690,7 @@ def _handle_autonomous_knowledge_support(
     old_source_id: str | None,
     new_source_id: str | None,
     fragment_id: str | None,
+    offset: int,
     wiki_action: str | None,
     wiki_path: str | None,
     wiki_kind: str | None,
@@ -1718,6 +1726,8 @@ def _handle_autonomous_knowledge_support(
             scope=scope,
             max_sensitivity=max_sensitivity,
             limit=limit,
+            offset=offset,
+            max_chars=max_chars,
             vault_path=vault_path,
         )
     if operation == "wiki":
@@ -2317,6 +2327,7 @@ def handle_knowledge_support(
     old_source_id: str | None = None,
     new_source_id: str | None = None,
     fragment_id: str | None = None,
+    offset: int = 0,
     wiki_action: str | None = None,
     wiki_path: str | None = None,
     wiki_kind: str | None = None,
@@ -2365,6 +2376,7 @@ def handle_knowledge_support(
             old_source_id=old_source_id,
             new_source_id=new_source_id,
             fragment_id=fragment_id,
+            offset=offset,
             wiki_action=wiki_action,
             wiki_path=wiki_path,
             wiki_kind=wiki_kind,
@@ -2552,6 +2564,7 @@ def create_knowledge_mcp_server(
                     old_source_id=cast(str | None, arguments.get("old_source_id")),
                     new_source_id=cast(str | None, arguments.get("new_source_id")),
                     fragment_id=cast(str | None, arguments.get("fragment_id")),
+                    offset=int(arguments.get("offset", 0)),
                     wiki_action=cast(str | None, arguments.get("wiki_action")),
                     wiki_path=cast(str | None, arguments.get("wiki_path")),
                     wiki_kind=cast(str | None, arguments.get("kind")),

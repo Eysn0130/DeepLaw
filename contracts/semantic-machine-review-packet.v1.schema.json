@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-machine-review-packet.v1.schema.json",
+  "title": "DeepLaw independent semantic machine review packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "classification", "auditor_role", "auditor_identity",
+    "isolation", "candidate_binding", "status", "cases", "security_challenges",
+    "commands", "evidence_sha256", "packet_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-machine-review-packet/v1"},
+    "classification": {"const": "independent_machine_review"},
+    "auditor_role": {
+      "enum": [
+        "semantic_gold_formal_auditor", "claim_entailment_auditor",
+        "retrieval_completeness_auditor", "chinese_adversarial_auditor",
+        "authority_security_auditor", "reproducibility_release_auditor"
+      ]
+    },
+    "auditor_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model", "reasoning_effort", "identity_version"],
+      "properties": {
+        "model": {"const": "gpt-5.6-sol"},
+        "reasoning_effort": {"const": "ultra"},
+        "identity_version": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "isolation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "repository_read_only", "isolated_temporary_state",
+        "other_auditor_conclusions_read", "external_model_provider_called"
+      ],
+      "properties": {
+        "repository_read_only": {"const": true},
+        "isolated_temporary_state": {"const": true},
+        "other_auditor_conclusions_read": {"const": false},
+        "external_model_provider_called": {"const": false}
+      }
+    },
+    "candidate_binding": {"$ref": "#/$defs/candidate_binding"},
+    "status": {"enum": ["CONFIRM", "RETURN_FOR_FIX", "BLOCKED"]},
+    "cases": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "security_challenges": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {"$ref": "#/$defs/challenge"}
+    },
+    "commands": {
+      "type": "array", "minItems": 1, "maxItems": 200,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "evidence_sha256": {"$ref": "#/$defs/sha256"},
+    "packet_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "commit", "tree", "version", "gold_canonical_sha256",
+        "fixture_manifest_sha256", "semantic_gold_schema_sha256",
+        "semantic_gold_freeze_sha256"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"const": "0.12.0"},
+        "gold_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_gold_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_gold_freeze_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "case_id", "recommendation", "frozen_query", "query_language",
+        "canonical_query_sha256", "expected_stable_ids",
+        "actual_stable_ids", "expected_claims", "actual_claims", "citations",
+        "query_plan", "query_plan_sha256", "claim_entailment",
+        "extraction_completeness", "source_coverage", "discrepancy",
+        "commands", "evidence_sha256"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^semantic-case-(0[1-9]|1[0-5])$"},
+        "recommendation": {"enum": ["CONFIRM", "RETURN_FOR_FIX", "BLOCKED"]},
+        "frozen_query": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "query_language": {"enum": ["en", "zh-CN"]},
+        "canonical_query_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_stable_ids": {"$ref": "#/$defs/id_list"},
+        "actual_stable_ids": {"$ref": "#/$defs/id_list"},
+        "expected_claims": {"$ref": "#/$defs/claim_list"},
+        "actual_claims": {"$ref": "#/$defs/claim_list"},
+        "citations": {
+          "type": "array", "maxItems": 200,
+          "items": {"$ref": "#/$defs/citation"}
+        },
+        "query_plan": {"type": "object"},
+        "query_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "claim_entailment": {"enum": ["entailed", "not_entailed", "not_applicable"]},
+        "extraction_completeness": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "source_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "discrepancy": {"type": ["string", "null"], "maxLength": 2000},
+        "commands": {
+          "type": "array", "minItems": 3, "maxItems": 50,
+          "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+        },
+        "evidence_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "citation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "source_revision_id", "fragment_id", "locator", "quote_sha256",
+        "valid"
+      ],
+      "properties": {
+        "source_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "fragment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 500},
+        "quote_sha256": {"$ref": "#/$defs/sha256"},
+        "valid": {"type": "boolean"}
+      }
+    },
+    "challenge": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "challenge_id", "challenge_type", "executed", "passed",
+        "failure_count", "command", "evidence_sha256"
+      ],
+      "properties": {
+        "challenge_id": {"type": "string", "pattern": "^security-challenge-0[1-5]$"},
+        "challenge_type": {
+          "enum": [
+            "prompt_injection", "unsupported_authoritative_claim",
+            "restricted_disclosure", "unauthorized_mutation", "silent_fallback"
+          ]
+        },
+        "executed": {"const": true},
+        "passed": {"type": "boolean"},
+        "failure_count": {"type": "integer", "minimum": 0},
+        "command": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "evidence_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "id_list": {
+      "type": "array", "maxItems": 200, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 300}
+    },
+    "claim_list": {
+      "type": "array", "maxItems": 200,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    }
+  }
+}

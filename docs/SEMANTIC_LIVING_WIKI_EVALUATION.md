@@ -1,6 +1,6 @@
 # Semantic Living Wiki evaluation
 
-Status: **v0.12.0 release gate**, 2026-08-01. This protocol is not evidence for v0.11.0 and is not a
+Status: **v0.12.0 release gate**, 2026-08-02. This protocol is not evidence for v0.11.0 and is not a
 comparative benchmark claim.
 
 The frozen public corpus in `benchmarks/semantic/fixtures/` covers 15 named semantic cases and five
@@ -10,11 +10,15 @@ merges, lifecycle outcomes, fixture hashes, hard failures, and limitations are j
 `benchmarks/semantic/semantic-gold-freeze-v1.json`. It binds the candidate, fixture manifest,
 Schema, query set, scoring policy, and security challenges independently by SHA-256.
 
-The current candidate remains `maintainer_review_pending`: `review=null` and the freeze has no
-`reviewer_id`. Formal scoring, paid external-model execution, merge, tag, and Release are closed
-until an independent retrieval audit has completed and the owner explicitly confirms this exact
-Gold. The producing Agent and the audit Agent cannot confirm, sign, or score their own Gold as
-human-reviewed evidence.
+The owner-approved release scope is deterministic machine consensus. The frozen policy records
+`human_gold_review.status=not_required`, reason
+`owner-approved deterministic machine-consensus release scope`, `maintainer_confirmed=false`, and
+`reviewer_id=null`. It also records
+`external_real_model_semantic_execution=not_executed` and
+`competitive_claim_eligible=false`. No machine packet, derived Owner packet, or release artifact
+may be described as human review. Formal release remains closed until all six isolated machine
+auditors independently confirm every applicable gate for the exact candidate and the 28-source and
+other release gates pass.
 
 Entity and Concept labels use a **target-scoped** protocol, not a closed-world claim. Query-side
 target precision applies the same rule to every labelled target: matching is constrained by the
@@ -54,8 +58,9 @@ precheck; structural citation validity is scored separately. Query Plan v5 expos
 Synthesis evidence receipt for multi-source Syntheses, and the precheck resolves every required
 term against its exact provider-visible Source Revision, fragment, locator, and quote hash. A
 single-source Source Summary or Overview uses its exact canonical source ref without duplicating a
-receipt. The Human Review Packet
-retains the full claims and claim-to-evidence checks for independent and owner review.
+receipt. The bilingual derived Owner Review Packets retain the full claims and claim-to-evidence
+checks for inspection. Their human decision remains `not_required`; they do not alter canonical
+Gold.
 
 ## Deterministic pre-review lifecycle
 
@@ -71,7 +76,11 @@ observations to one stable Knowledge ID.
 executes prompt-injection, unsupported-Authority, restricted-disclosure, unauthorized-mutation, and
 silent-fallback challenges. A challenge that did not execute cannot contribute a zero failure
 count. Exact Source Revision, fragment, locator, hash, evidence receipt, Query Plan, UTF-8 budget,
-pagination, cold/warm latency, and repeated-query reuse are retained in schema-valid reports.
+real cursor continuation and exact reassembly, cold/warm latency, and repeated-query reuse are
+retained in schema-valid reports.
+The query scorer also reads the real Observation/Disposition rows for case 01, requires matching
+entity observations from at least two distinct Packet IDs, and binds their single disposition
+target to exactly one final stable Knowledge ID in a hash-verified receipt.
 The report also freezes the exact Gold/fixture/Source Revision/query digests, budgets, Query Plan,
 FTS/dense/reranker/graph identities, OS, hardware, first-party command runtime Python, SQLite,
 dependency-inventory digest, network policy, and the precise cold/warm definitions. Environment
@@ -84,24 +93,29 @@ and bytes per matched target.
 conditions, a candidate report failure, any deterministic quality or efficiency regression, any
 statistically detected performance regression under the frozen method, or any security failure.
 
-`benchmarks/semantic/export_human_review_packet.py` exports a source-free 15-case JSON and Markdown
-matrix. Machine precheck, independent-auditor recommendation, and owner decision are separate
-fields. Both auditor and owner fields are unset when generated; no Agent may populate the human
-decision or `maintainer_confirmed` state.
+`benchmarks/semantic/build_machine_review_consensus.py` validates six source-free, schema-valid
+machine-review packets, rejects duplicate or missing roles and any `RETURN_FOR_FIX`, `BLOCKED`, or
+cross-packet discrepancy, and emits a consensus record plus English and Chinese derived Owner
+Review Packets. Each packet binds exact commit/tree/version, canonical Gold, fixture manifest,
+Schema, frozen query, actual IDs/claims/citations, Query Plan, commands, and evidence digests. The
+Chinese auditor may use an explicitly bound natural-Chinese query; all other roles must reproduce
+the canonical English query. No Agent may populate a human reviewer identity or
+`maintainer_confirmed`.
 
 Claude Code and OpenCode pre-review reports record exact pinned versions and actual discovery,
 authentication, model-access, and non-execution reasons. They are
 `external_real_model_semantic_execution=not_executed`; no-model discovery is never represented as
 real-model validation.
 
-## External real-host lifecycle
+## Optional external real-host lifecycle
 
 `benchmarks/semantic/prepare_host_corpus.py` uses only the first-party CLI to create a fresh Vault,
 ingest and review the public fixtures, create a least-privilege semantic-compiler grant, retain
 `update-v2` as an exact pending successor, and create a verified pre-run snapshot. Its v2 corpus
 receipt contains stable labels and governed IDs but no source text or private path.
 
-`benchmarks/hosts/run_semantic_host_harness.py` then executes two real-host phases:
+`benchmarks/hosts/run_semantic_host_harness.py` can execute the following real-host phases outside
+the formal v0.12 deterministic release scope:
 
 1. the real Agent compiles every active baseline Source Revision through the versioned Skill and MCP
    protocol;
@@ -110,7 +124,7 @@ receipt contains stable labels and governed IDs but no source text or private pa
 3. the same host/model compiles the exact successor and refreshes admissible Synthesis work;
 4. deterministic owner CLI operations withdraw `retention-a` and refresh its dependants.
 
-After owner confirmation, the v2 host report binds the exact clean repository
+When explicitly run, the v2 host report binds the exact clean repository
 commit/tree/version/lock/contract/migration
 inventory, both prompts, the pinned command, provider-reported `turn.completed` build tokens, every
 complete 15-duty Compilation Run, the review/freshness receipts, final Vault verification, Gold
@@ -128,25 +142,21 @@ read-only behavior, Authority invariance, repeat reuse, pagination, and the UTF-
 limit. The attached cost receipt labels its token number as a UTF-8 byte proxy rather than a
 provider-token measurement.
 
-`benchmarks/semantic/score_semantic_run.py` requires maintainer-confirmed Gold, a passed phased
-real-host report, a passed first-party query report, zero hard failures, all deterministic quality
-thresholds, and an explicitly recorded maintainer correction review. Formal release eligibility is
-false if any one of these inputs is absent. `competitive_claim_eligible` remains false.
+`benchmarks/semantic/score_semantic_run.py` remains the contract for an optional external real-host
+experiment; it is not used to imply external-model evidence in this release. Formal v0.12 semantic
+eligibility instead requires a passed deterministic lifecycle, passed first-party query/cost
+reports, six unanimous isolated machine-review packets, a validated consensus record, bilingual
+derived Owner packets with no human reviewer, and the exact owner policy above. Any discrepancy
+invalidates the complete six-packet set for that candidate. `competitive_claim_eligible` remains
+false.
 
-`.github/workflows/semantic-evidence.yml` has a credential-free `deterministic_review` mode that
-builds a fresh wheel, produces the deterministic lifecycle/query/Human Review Packet artifacts, and
-emits truthful Claude Code/OpenCode `not_executed` reports. It deliberately does not call a model
-Provider. External execution still uses two workflow runs. `execute` uses the
-externally managed `OPENAI_API_KEY` secret without printing or packaging it, uploads a private
-review candidate, and cannot produce formal evidence. After the maintainer reviews that exact
-report and derived Wiki, `finalize` binds correction count/time and reviewer identity to the same
-Vault/report and emits `semantic-release-evidence`. The existing release workflow accepts only that
-artifact for the exact release commit; the artifact never contains the review Vault or credentials.
-
-If the owner explicitly limits v0.12.0 to deterministic retrieval, governance, security, and human
-Gold review, the manifest may record external real-model execution under `Not verified` and
-`Not claimed`; otherwise the existing external real-host gate remains mandatory. In both scopes,
-`competitive_claim_eligible=false`.
+`.github/workflows/semantic-evidence.yml` has two credential-free modes. `deterministic_review`
+builds a fresh wheel, produces deterministic lifecycle/query/cost evidence, and emits truthful
+Claude Code/OpenCode `not_executed` reports. `package_consensus` checks out the exact clean
+candidate and a separate sanitized evidence ref, validates the six read-only audit packets and
+28-source matrix, builds the consensus and bilingual Owner packets, scans for private paths and
+secret material, and emits `semantic-release-evidence`. Neither mode calls a model Provider or
+accepts an API key. The release workflow accepts only that exact-candidate artifact.
 
 This protocol supports only the bounded product statement: any Agent that implements DeepLaw's
 versioned CLI/MCP/Python contract and receives an explicit owner grant can use the same governed

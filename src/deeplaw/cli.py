@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .api import KnowledgeOSError
 from .catalog_signing import (
     export_trust_store,
     initialize_signing_key,
@@ -425,6 +426,11 @@ def main(argv: list[str] | None = None) -> None:
                         output_format=args.knowledge_format,
                     )
                 )
+                if (
+                    args.knowledge_command == "verify-capsule"
+                    and result.get("valid") is False
+                ):
+                    raise SystemExit(2)
             return
         if args.command == "pdf-evidence":
             result = extract_pdf_vision_consensus(
@@ -691,6 +697,15 @@ def main(argv: list[str] | None = None) -> None:
                     )
                 return
         raise RuntimeError(f"unhandled command: {args.command}")
-    except (FileNotFoundError, KeyError, OSError, RuntimeError, sqlite3.Error, ValueError) as error:
+    except (
+        FileNotFoundError,
+        KeyError,
+        KnowledgeOSError,
+        OSError,
+        PermissionError,
+        RuntimeError,
+        sqlite3.Error,
+        ValueError,
+    ) as error:
         print(f"deeplaw: {error}", file=sys.stderr)
-        raise SystemExit(2) from error
+        raise SystemExit(2) from None

@@ -373,6 +373,8 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     source_fragment.add_argument("--vault", type=Path, default=default_knowledge_vault())
     source_fragment.add_argument("--fragment-id", required=True)
+    source_fragment.add_argument("--offset", type=int, default=0)
+    source_fragment.add_argument("--max-chars", type=int, default=12_000)
     source_fragment.add_argument("--scope", choices=sorted(AUTONOMOUS_SCOPES))
     source_fragment.add_argument(
         "--max-sensitivity",
@@ -2476,7 +2478,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         }
         if args.source_command == "get":
             return sources.get(args.source_id, **options)
-        return sources.fragment(args.fragment_id, **options)
+        return sources.fragment(
+            args.fragment_id,
+            offset=args.offset,
+            max_chars=args.max_chars,
+            **options,
+        )
     if command == "wiki":
         wiki_api = KnowledgeOS.open(args.vault).wiki
         action = args.wiki_command

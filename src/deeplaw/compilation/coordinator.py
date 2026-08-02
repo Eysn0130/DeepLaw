@@ -1047,14 +1047,30 @@ class CompilationCoordinator:
                     )
                     run_fragments.update(
                         {
-                            fragment["fragment_id"]: fragment
+                            fragment["fragment_id"]: {
+                                **fragment,
+                                "source_revision_id": run_packet[
+                                    "source_revision_id"
+                                ],
+                            }
                             for fragment in run_packet["fragments"]
                         }
                     )
+            relation_evidence_fragments = (
+                self._existing_relation_endpoint_fragments(
+                    store,
+                    plan=plan,
+                    scope=grant["allowed_scope"],
+                    max_sensitivity=grant["max_sensitivity"],
+                )
+                if _allow_run_wide_source_refs
+                else None
+            )
             self._validate_plan_against_packet(
                 plan=plan,
                 packet=packet,
                 allowed_source_fragments=run_fragments,
+                allowed_relation_fragments=relation_evidence_fragments,
             )
             total_actions = sum(
                 len(plan[field])
@@ -1314,6 +1330,7 @@ class CompilationCoordinator:
         plan: dict[str, Any],
         packet: dict[str, Any],
         allowed_source_fragments: dict[str, dict[str, Any]] | None = None,
+        allowed_relation_fragments: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         if (
             plan["packet_id"] != packet["packet_id"]
@@ -1321,8 +1338,16 @@ class CompilationCoordinator:
             or plan["expected_audit_head"] != packet["input_audit_head"]
         ):
             raise ValueError("source compilation plan does not match its packet")
-        fragments = {item["fragment_id"]: item for item in packet["fragments"]}
+        fragments = {
+            item["fragment_id"]: {
+                **item,
+                "source_revision_id": packet["source_revision_id"],
+            }
+            for item in packet["fragments"]
+        }
         evidence_fragments = allowed_source_fragments or fragments
+        relation_fragments = dict(evidence_fragments)
+        relation_fragments.update(allowed_relation_fragments or {})
         coverage = plan["coverage"]
         covered = coverage["covered_fragment_ids"]
         omitted = coverage["omitted_fragment_ids"]
@@ -1345,19 +1370,130 @@ class CompilationCoordinator:
         skipped = {item["fragment_id"] for item in plan["skipped_fragments"]}
         if skipped != set(omitted):
             raise ValueError("source compilation skipped-fragment inventory is inconsistent")
-        referenced_groups = [action["source_refs"] for action in plan["object_actions"]]
-        referenced_groups.extend(action["evidence_refs"] for action in plan["relation_actions"])
-        referenced_groups.extend(action["evidence_refs"] for action in plan["identity_actions"])
-        for references in referenced_groups:
+        packet_bound_groups = [
+            action["source_refs"] for action in plan["object_actions"]
+        ]
+        packet_bound_groups.extend(
+            action["evidence_refs"] for action in plan["identity_actions"]
+        )
+        for references in packet_bound_groups:
             for reference in references:
                 fragment = evidence_fragments.get(reference["fragment_id"])
                 if (
                     fragment is None
-                    or reference["source_revision_id"] != packet["source_revision_id"]
+                    or reference["source_revision_id"]
+                    != fragment["source_revision_id"]
                     or reference["locator"] != fragment["locator"]
                     or reference["quote_sha256"] != fragment["text_sha256"]
                 ):
                     raise ValueError("source compilation action cites evidence outside its packet")
+        for action in plan["relation_actions"]:
+            for reference in action["evidence_refs"]:
+                fragment = relation_fragments.get(reference["fragment_id"])
+                if (
+                    fragment is None
+                    or reference["source_revision_id"]
+                    != fragment["source_revision_id"]
+                    or reference["locator"] != fragment["locator"]
+                    or reference["quote_sha256"] != fragment["text_sha256"]
+                ):
+                    raise ValueError(
+                        "compiled relation cites evidence outside its run or current endpoints"
+                    )
+
+    @staticmethod
+    def _existing_relation_endpoint_fragments(
+        store: AutonomousKnowledgeStore,
+        *,
+        plan: dict[str, Any],
+        scope: str,
+        max_sensitivity: str,
+    ) -> dict[str, dict[str, Any]]:
+        """Admit exact evidence already bound to a current relation endpoint.
+
+        Semantic compilation may connect a newly staged object to an existing
+        object. In that case a relation can bind both sides' immutable evidence,
+        but it cannot introduce an unrelated Source Revision. Object and identity
+        actions remain bound to the current Compilation Run.
+        """
+
+        allowed: dict[str, dict[str, Any]] = {}
+        endpoints = [
+            action[field]
+            for action in plan["relation_actions"]
+            for field in ("subject", "object")
+        ]
+        for endpoint in endpoints:
+            knowledge_id = endpoint["knowledge_id"]
+            semantic_key = endpoint["semantic_key"]
+            kind = endpoint["kind"]
+            if knowledge_id is not None:
+                rows = store.connection.execute(
+                    """
+                    SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                           knowledge_revisions_v3.*
+                    FROM knowledge_objects_v3
+                    JOIN knowledge_revisions_v3
+                      ON knowledge_revisions_v3.revision_id =
+                         knowledge_objects_v3.current_revision_id
+                    WHERE knowledge_objects_v3.knowledge_id = ?
+                      AND knowledge_revisions_v3.scope = ?
+                      AND knowledge_revisions_v3.lifecycle = 'active'
+                    """,
+                    (knowledge_id, scope),
+                ).fetchall()
+            elif semantic_key is not None and kind is not None:
+                rows = store.connection.execute(
+                    """
+                    SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                           knowledge_revisions_v3.*
+                    FROM knowledge_objects_v3
+                    JOIN knowledge_revisions_v3
+                      ON knowledge_revisions_v3.revision_id =
+                         knowledge_objects_v3.current_revision_id
+                    WHERE knowledge_objects_v3.semantic_key = ?
+                      AND knowledge_objects_v3.kind = ?
+                      AND knowledge_revisions_v3.scope = ?
+                      AND knowledge_revisions_v3.lifecycle = 'active'
+                    ORDER BY knowledge_objects_v3.knowledge_id
+                    LIMIT 2
+                    """,
+                    (semantic_key, kind, scope),
+                ).fetchall()
+            else:
+                continue
+            if len(rows) > 1:
+                raise RuntimeError("compiled relation endpoint identity is ambiguous")
+            if not rows:
+                continue
+            revision = store._revision_row(rows[0], include_body=False)
+            if (
+                SENSITIVITY_ORDER.index(revision["sensitivity"])
+                > SENSITIVITY_ORDER.index(max_sensitivity)
+                or not store.revision_provenance_admitted(revision)
+            ):
+                raise PermissionError(
+                    "compiled relation endpoint provenance is not admitted"
+                )
+            for reference in revision["source_refs"]:
+                binding = store._source_reference_binding(reference)
+                if (
+                    binding is None
+                    or binding["active"] is not True
+                    or binding["scope"] != scope
+                    or SENSITIVITY_ORDER.index(binding["sensitivity"])
+                    > SENSITIVITY_ORDER.index(max_sensitivity)
+                ):
+                    raise PermissionError(
+                        "compiled relation endpoint evidence is not admitted"
+                    )
+                allowed[reference["fragment_id"]] = {
+                    "source_revision_id": reference["source_revision_id"],
+                    "fragment_id": reference["fragment_id"],
+                    "locator": reference["locator"],
+                    "text_sha256": reference["quote_sha256"],
+                }
+        return allowed
 
     def validate(
         self,
@@ -2376,8 +2512,13 @@ class CompilationCoordinator:
         )
         levels: list[int] = []
         for reference in refs:
-            if reference.get("source_revision_id") != run["source_revision_id"]:
-                raise ValueError("compiled relation references another Source Revision")
+            if (
+                reference.get("source_revision_id") != run["source_revision_id"]
+                and run["compiler_profile_version"] != "2"
+            ):
+                raise ValueError(
+                    "cross-source relation evidence requires compiler profile v2"
+                )
             binding = store._source_reference_binding(reference)
             if binding is None or binding["active"] is not True:
                 raise ValueError("compiled relation evidence is not active")

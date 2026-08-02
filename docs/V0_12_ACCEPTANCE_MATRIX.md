@@ -4,30 +4,33 @@ Status: **release-gate specification**. A row marked `Local verified` is backed 
 but is not public-release evidence. Rows marked `Formal gate` pass only when the exact-tag
 `commercial-release-manifest.json` and `post-release-verification.json` contain the corresponding
 executed artifact. `partial`, historical evidence, a deterministic fake Agent, and
-`not_executed` are never counted as passed.
+`not_executed` is never counted as passed for an applicable gate. The owner-approved v0.12 scope
+does not make paid external real-model execution or human Gold review applicable release gates;
+both remain explicitly recorded as `not_executed` / `not_required`.
 
 The implementation baseline is `33228c99c4161c1730eb0f11e845d0d6011babf4` (`v0.11.0`). The
-release commit, artifact hashes, nine-cell platform matrix, real-host report, and public-download
+release commit, artifact hashes, nine-cell platform matrix, machine-review consensus, and public-download
 verification are deliberately generated after the final clean commit to avoid self-reference.
 
 ## Semantic Gold correction sub-gates
 
-These are mandatory before any paid external-model run and before merge, tag, or Release. The
-current candidate is deliberately not `maintainer_confirmed`.
+These are mandatory before merge, tag, or Release. The canonical Gold remains
+`machine_review_pending`; `human_gold_review.status=not_required`, `maintainer_confirmed=false`,
+and `reviewer_id=null` are deliberate owner policy, not missing evidence.
 
 | Sub-gate | Current implementation evidence | Pass rule |
 |---|---|---|
 | Cross-packet identity | 36-section case-01 fixture; deterministic lifecycle; scorer and tamper tests | At least two distinct Packets and observations converge to exactly one stable Knowledge ID |
 | Entity/Concept scoring | Gold `scoring_policy`; Gold Schema; query runner/scorer tests | Target-scoped precision is named; valid extra objects are excluded; completeness and source coverage are separate |
 | Security challenges | two adversarial fixtures; five frozen challenges; first-party CLI runner; tamper tests | Every challenge executes at least once and all nine security counters are zero |
-| Claim-level content Gold | case-04, case-06, case-11, and case-12 content assertions | Concept, Source Summary, Synthesis, and Overview required content and exact input source set pass deterministic precheck and human entailment review |
+| Claim-level content Gold | case-04, case-06, case-11, and case-12 content assertions | Concept, Source Summary, Synthesis, and Overview required content and exact input source set pass deterministic checks and six independent claim-entailment reviews |
 | Contradiction applicability | retention A/B fixtures; structured `expected_relations`; query runner and scorer | Same Atlas production service, ordinary public-API diagnostic-log class, worldwide scope, restricted-payload exclusion, distinct non-mergeable endpoints, and 2026 valid interval before typed-relation contradiction credit |
 | Withdrawal gap | case-10 `explicit_gap` plus frozen `stale_knowledge` code | Withdrawn evidence is neither selected nor silently omitted; the current no-answer state remains visible |
 | Reproducible freeze commitments | freeze Schema canonical-JSON profile, query-set projection, and per-field commitment profiles | A reviewer can independently reproduce every candidate, fixture-manifest, Schema, query-set, scoring-policy, and challenge digest without inferring mixed serialization rules |
 | Timeline and multi-format | case-08 three Event labels; case-15 scheduled-publication Event | One formal valid-time interval per Event revision and every frozen date/object retrieved |
 | Host declaration discipline | real-host report v2; deterministic workflow | Claude Code/OpenCode exact version/discovery/auth/model-access reason; external execution is `not_executed` |
-| Independent audit | source-free Human Review Packet and audit-only subagent | All 15 cases, first-party CLI, security challenges, deterministic rebuild; PASS/REJECT/BLOCKED only |
-| Owner confirmation | Gold review tool and digest-bound review object | Owner explicitly confirms the exact freeze; Agent cannot generate reviewer identity |
+| Independent audit | six isolated machine-review packets and bilingual derived Owner packets | Every auditor covers all 15 cases and five challenges; only six-way `CONFIRM` without material divergence passes |
+| Owner release policy | Gold, freeze, consensus, and release manifest contracts | Human Gold review is `not_required`; no Agent creates a reviewer identity or writes `maintainer_confirmed` |
 
 ## 64 end-to-end acceptance requirements
 
@@ -45,7 +48,7 @@ current candidate is deliberately not `maintainer_confirmed`.
 | 10 | Local verified — every observation has one disposition | `semantic-publication-plan.v2.schema.json`, `finalization.py` | semantic v2 finalization test |
 | 11 | Local verified — silent observation loss fails closed | inventory digest and exact set comparison | semantic v2 finalization and concurrent replacement tests |
 | 12 | Local verified — Source Summary is a canonical Synthesis | `finalization.py`; semantic finalization/quality receipt contracts | semantic v2 test; real-host Formal gate |
-| 13 | Local verified — summary claims bind exact evidence and expected content | source-reference validator, quality receipt, claim-level Gold | semantic v2 test; frozen content/source-set scorer and tamper checks; owner review pending |
+| 13 | Local verified — summary claims bind exact evidence and expected content | source-reference validator, quality receipt, claim-level Gold | semantic v2 test; frozen content/source-set scorer, tamper checks, and six-agent machine consensus gate |
 | 14 | Local verified — unsupported summary is rejected | 15-duty completeness validator | `test_empty_semantic_compilation_cannot_report_success` |
 | 15 | Local verified — duty states are distinct | `semantic_duties.py`; `semantic-compilation-duty-report.v1.schema.json` | semantic v2 test and contract validation |
 | 16 | Local verified — transaction success can coexist with semantic partial | separate run and semantic status columns/contracts | semantic partial/status/query tests |
@@ -87,9 +90,9 @@ current candidate is deliberately not `maintainer_confirmed`.
 | 52 | Formal gate — Linux/macOS/Windows exact commit | `.github/workflows/commercial-gates.yml` nine-cell matrix | exact-tag platform JSON/JUnit artifacts |
 | 53 | Formal gate — Python 3.11/3.12/3.13 | same matrix | exact-tag platform JSON/JUnit artifacts |
 | 54 | Local verified + Formal wheel gate — Semantic v2 from wheel | `benchmarks/verify_fresh_wheel.py` | fresh-wheel artifact result |
-| 55 | Formal scope-dependent external gate — real Codex/model only after maintainer-confirmed Gold | `semantic-evidence.yml`, phased host harness, scorer | `real-semantic-host-report.json` + `semantic-quality-report.json`; no fake substitution. May be `Not verified` only if owner explicitly narrows release scope |
+| 55 | Formal deterministic machine-consensus gate | `semantic-evidence.yml`, deterministic lifecycle/query suite, six isolated packet contracts | exact-commit lifecycle/query/cost, six unanimous packets, consensus, and bilingual Owner packet; external real-model execution remains `not_executed` and is not substituted by no-model evidence |
 | 56 | Local verified — fake Agent is labelled deterministic only | `deterministic_fake_agent.py`; fake report contract | fake-Agent E2E and Semantic Gold tests |
-| 57 | Local verified + Formal artifact gate — frozen legal set does not regress | repository/Legal quality runners, `run_authoritative_evidence_gate.py`, and v0.11 source matrix | legal quality tests; exact-tag `authoritative-evidence-quality.json` |
+| 57 | Local verified + Formal artifact gate — frozen legal set does not regress | repository/Legal quality runners, `run_authoritative_28_source_gate.py`, and `run_authoritative_evidence_gate.py` | exact-commit 28-source matrix with 23 `no_action`, 5 risk-driven `reparse_source_ir`, explicit parser-warning rate, plus exact-tag `authoritative-evidence-quality.json` |
 | 58 | Local verified — Challenge Trace replays | `authoritative_challenges.py`; trace/replay contracts | deterministic replay and tamper test |
 | 59 | Local verified — ranking cannot elevate Evidence Capability | `evidence_capabilities.py`, admission logic | evidence-capability tests |
 | 60 | Local verified — unconfirmed expert data stays pending | held-out Gold review tool/schema | legal quality review tests |
@@ -122,9 +125,9 @@ current candidate is deliberately not `maintainer_confirmed`.
 | 18 | Coordinator modularity | `compilation/coordinator.py`, semantic/finalization/synthesis modules; recovery tests |
 | 19 | Production Obsidian plugin | adapter source, manifest, bridge schema, npm tests/build/bundle receipt |
 | 20 | Tolaria integration | adapter module/harness, bridge schema, merge/context tests |
-| 21 | Real Agent harness | phased harness and v2 report schema; `semantic-evidence.yml`; Formal gate only |
-| 22 | Semantic Gold | Gold schema/candidate/freeze/review tool; target-scoped scoring; explicit maintainer state and digest; 15-case Human Review Packet |
-| 23 | Semantic Quality Report | scorer and report schema; thresholds, hard failures, token/query evidence |
+| 21 | Host-neutral Agent evidence | deterministic lifecycle, truthful external-host `not_executed` reports, and `semantic-evidence.yml` packaging gate |
+| 22 | Semantic Gold | Gold schema/candidate/freeze; target-scoped scoring; explicit owner machine-consensus policy; bilingual derived Owner packet |
+| 23 | Semantic machine-review consensus | six packet roles, unanimous consensus contract, claim/safety/coverage metrics, and no human-review impersonation |
 | 24 | Authoritative Challenge Trace | authoritative challenge module, trace/replay contracts/tests, executable `authoritative-evidence-quality.json` release receipt |
 | 25 | Evidence Capability Types | capability module/contracts and migration/rollback tests |
 | 26 | Answerability metrics | Legal/Semantic quality scorers; unanswerable Query Plan checks |
@@ -153,7 +156,8 @@ uv run --frozen python adapters/tolaria/integration_harness.py
 ```
 
 Formal release additionally requires the exact-tag nine-cell matrix, three official CLI no-model
-lifecycle, reviewed two-phase real-model semantic evidence, fresh-wheel quality, reproducible
+lifecycle, six-way deterministic semantic machine consensus, the 28-source authoritative gate,
+fresh-wheel quality, reproducible
 wheel/sdist, OCI/supply-chain gates, Sigstore/GitHub provenance, and public-download reinstall.
 The formal manifest must record `commercial_release_eligible=true`,
 `quality_protocol_eligible=true`, and `competitive_claim_eligible=false` before publication.

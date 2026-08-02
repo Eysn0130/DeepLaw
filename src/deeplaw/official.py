@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import time
 from datetime import UTC, datetime
+from http.client import RemoteDisconnected
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -313,7 +314,7 @@ def _urlopen_with_retry(request: Request, *, timeout: float) -> Any:
             if error.code not in _RETRYABLE_HTTP_STATUS or attempt == attempts - 1:
                 raise
             error.close()
-        except (TimeoutError, URLError):
+        except (RemoteDisconnected, TimeoutError, URLError):
             if attempt == attempts - 1:
                 raise
         time.sleep(0.5 * (2**attempt))

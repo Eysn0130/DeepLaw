@@ -53,7 +53,7 @@ same domain services.
 > **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
 > is the current delivery boundary. Software release `v0.12.0` adds Semantic Compilation v2,
 > run-wide identity fusion, revision-bound Synthesis Refresh, Query Plan v5, production
-> Obsidian/Tolaria bridges, and a real-Agent semantic quality gate. The older
+> Obsidian/Tolaria bridges, and a deterministic multi-agent-consensus semantic quality gate. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
@@ -203,10 +203,10 @@ administration, or permission changes.
 
 | Status | Capability |
 | --- | --- |
-| **Current in v0.12.0** | Semantic Compilation v2, run-wide identity/completeness, Synthesis Refresh, Query Plan v5, stable CLI/MCP/Python surfaces, production Obsidian/Tolaria bridges, and real-Agent/Living Wiki/Authoritative Pack/fresh-wheel release gates |
+| **Current in v0.12.0** | Semantic Compilation v2, run-wide identity/completeness, Synthesis Refresh, Query Plan v5, stable CLI/MCP/Python surfaces, production Obsidian/Tolaria bridges, and deterministic-Agent/machine-consensus/Living Wiki/28-source Authoritative Pack/fresh-wheel release gates |
 | **Compatibility** | v0.7 Source IR, reviewed source-derived Knowledge Assets, Proposal Inbox, Workbench, and Retrieval Fabric remain available in their explicit compatibility partition |
 | **Quality closure** | DeepLaw Evaluation Protocol v1 evaluates repository retrieval, autonomy safety, and Typed Compiler quality on a public, maintainer-visible, time-frozen holdout. Release reports bind exact wheel, commit, freeze, and case-level results. No external institution certification is required |
-| **Comparative closure pending** | Only the real Codex semantic task is a v0.12 release gate. Real Claude Code/OpenCode model tasks and all same-condition named-baseline runs remain unexecuted; paired confidence intervals and complete cost/failure inventories are absent |
+| **Comparative closure pending** | External real-model semantic execution for Codex, Claude Code, and OpenCode and all same-condition named-baseline runs remain unexecuted. No-model host lifecycle and the deterministic Agent are not represented as model evidence; `competitive_claim_eligible=false` |
 | **Not claimed** | Remote SaaS, multi-user control, automatic legal adjudication, model-created permissions, secret/unseen/contamination-free status for the public holdout, or overall superiority/SOTA |
 
 The release decision can set `quality_protocol_eligible=true` only for a clean, frozen, exact wheel.

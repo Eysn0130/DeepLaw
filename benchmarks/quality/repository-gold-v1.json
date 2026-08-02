@@ -29,7 +29,7 @@
       "document_id": "doc_chinese_readme",
       "category": "chinese",
       "path": "README.md",
-      "sha256": "d430cf912d73c01969d32c9bbff6a82160fcbcb0aab2baf08eeeccee36a68375",
+      "sha256": "73215d6c20efe15d50886e89ecd6bfb9e8b302b8bf1b2c88604e2a2cec5aa529",
       "title": "DeepLaw 中文产品说明",
       "anchor": "自主写入不等于权威升级"
     },
@@ -45,7 +45,7 @@
       "document_id": "doc_english_readme",
       "category": "english",
       "path": "README_EN.md",
-      "sha256": "203d828d33a6a743a25cd384ee3aa43aca4bf3d1c977e0f16c0c58b517eaa9cd",
+      "sha256": "e4053fa0632bde81e8654dadf97079d20f2edfeb49e5514085374658b41176ea",
       "title": "DeepLaw English v0.12 product contract",
       "anchor": "Knowledge Duties"
     },
@@ -61,7 +61,7 @@
       "document_id": "doc_code_autonomy",
       "category": "code",
       "path": "src/deeplaw/knowledge_autonomy.py",
-      "sha256": "2987f04871883bf73e5d5c79d0c77df31ef4ddc9e7052608815f11e1fca4ec4e",
+      "sha256": "945acf92d03bb72c242a8d334205a85a203a4d412b64ad86e53c6b45f156f3f1",
       "title": "Autonomous Knowledge Store implementation",
       "anchor": "def garbage_collect_content("
     },
@@ -152,9 +152,9 @@
       "top_k": 2
     },
     {
-      "case_id": "en_v010_status",
+      "case_id": "en_v012_status",
       "category": "english",
-      "query": "v0.10.0 Autonomous Knowledge Core Living Wiki Knowledge Intelligence Evaluation Protocol offline FTS dense reranker graph Skill draft Factory",
+      "query": "v0.12.0 Semantic Compilation v2 Synthesis Refresh Query Plan v5 stable CLI MCP Python Obsidian Tolaria bridges deterministic Agent machine consensus",
       "expected_document_ids": ["doc_english_readme"],
       "forbidden_document_ids": [],
       "top_k": 2

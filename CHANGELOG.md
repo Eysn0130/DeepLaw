@@ -19,17 +19,20 @@ This release closes Semantic Living Wiki compilation and production editor integ
   ephemeral context and canonical write boundaries.
 - Authoritative Pack capability types, Challenge Trace/replay, citation audit, expert-held-out
   review state, and a reusable Pack Core contract.
-- Two-phase real Codex/model release evidence on maintainer-confirmed Semantic Gold, provider token
-  accounting, first-party query scoring, and release manifest v5 bindings.
+- Frozen deterministic Semantic Gold, first-party CLI query/context/verification scoring, six
+  isolated read-only machine-review roles, unanimous consensus, and release manifest v5 bindings.
+- Provider-visible purpose-aware Knowledge Capsules with selected-object deduplication, explicit
+  evidence drill-down/continuation, suppressed-candidate receipts, and UTF-8 byte accounting.
 
 ### Verified boundaries
 
-- Deterministic fake-Agent tests remain transaction evidence only. The formal manifest separately
-  binds the exact reviewed real-host report.
+- Deterministic Agent tests remain governed-transaction evidence only. The formal manifest binds
+  exact deterministic lifecycle/query reports and six-way independent machine consensus; human
+  Gold review is owner-designated `not_required` and no human review is claimed.
 - The Legal Pack stays in the read-only `law_support` process/store. Agent interpretations remain
   `legal_authority=false`; unconfirmed expert data remains pending.
-- Real Claude Code/OpenCode model tasks and named competitor runs are not claimed. No best,
-  strongest, leading, superiority, or SOTA claim is made.
+- Codex, Claude Code, and OpenCode external real-model semantic tasks and named competitor runs are
+  `not_executed`. No best, strongest, leading, superiority, or SOTA claim is made.
 
 ## 0.11.0 — 2026-07-30
 

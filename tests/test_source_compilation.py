@@ -224,6 +224,129 @@ def _cli_json(*arguments: str) -> dict:
     return value
 
 
+def test_knowledge_cli_failure_is_stable_and_does_not_leak_paths(
+    tmp_path: Path,
+) -> None:
+    root, _compiled, _grant_id = _ready_source(tmp_path, section_count=1)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deeplaw",
+            "knowledge",
+            "--format",
+            "json",
+            "query",
+            "--vault",
+            str(root),
+            "--query",
+            "bounded failure",
+            "--purpose",
+            "answer",
+            "--max-chars",
+            "1",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr == (
+        "deeplaw: The Knowledge OS request does not match its public contract.\n"
+    )
+    assert "Traceback" not in result.stderr
+    assert str(root) not in result.stderr
+    assert str(Path(__file__).resolve().parents[1]) not in result.stderr
+
+
+def test_semantic_relation_evidence_may_bind_current_endpoint_sources_only(
+    tmp_path: Path,
+) -> None:
+    root, _compiled, _grant_id = _ready_source(tmp_path, section_count=1)
+    coordinator = CompilationCoordinator(root)
+    profile = KnowledgeOS.open(root).compilations.profile(version="2")
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        semantic_grant = store.enable_grant(
+            writer_id="relation-endpoint-evidence-agent",
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+        source_revision_id = store.connection.execute(
+            "SELECT source_revision_id FROM source_revisions_v2 LIMIT 1"
+        ).fetchone()["source_revision_id"]
+    begun = coordinator.begin(
+        grant_id=semantic_grant,
+        source_revision_id=source_revision_id,
+        compiler_profile=profile["compiler_profile"],
+        compiler_profile_version=profile["compiler_profile_version"],
+        host_identity="relation-endpoint-evidence-agent",
+        model_identity=None,
+        prompt_template_id=profile["prompt_template_id"],
+        prompt_config_sha256=profile["prompt_config_sha256"],
+        plan_configuration_sha256=profile["plan_configuration_sha256"],
+        confirm_no_case_data=True,
+    )
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    current_reference = plan["object_actions"][0]["source_refs"][0]
+    prior_reference = {
+        "source_revision_id": "sourcerev_" + "a" * 24,
+        "fragment_id": "fragment_" + "b" * 24,
+        "locator": "section:prior",
+        "quote_sha256": "c" * 64,
+    }
+    plan["relation_actions"] = [
+        {
+            "action": "create",
+            "subject": {
+                "knowledge_id": None,
+                "semantic_key": plan["object_actions"][0]["semantic_key"],
+                "kind": "claim",
+            },
+            "predicate": "contradicts",
+            "object": {
+                "knowledge_id": None,
+                "semantic_key": "claim:prior-endpoint",
+                "kind": "claim",
+            },
+            "expected_relation_revision_id": None,
+            "evidence_refs": [current_reference, prior_reference],
+            "valid_from": None,
+            "valid_to": None,
+            "reason": "Bind both exact endpoint evidence sets.",
+        }
+    ]
+    allowed_prior = {
+        prior_reference["fragment_id"]: {
+            **prior_reference,
+            "text_sha256": prior_reference["quote_sha256"],
+        }
+    }
+    CompilationCoordinator._validate_plan_against_packet(
+        plan=plan,
+        packet=packet,
+        allowed_relation_fragments=allowed_prior,
+    )
+    plan["relation_actions"][0]["evidence_refs"].append(
+        {
+            "source_revision_id": "sourcerev_" + "d" * 24,
+            "fragment_id": "fragment_" + "e" * 24,
+            "locator": "section:unrelated",
+            "quote_sha256": "f" * 64,
+        }
+    )
+    with pytest.raises(ValueError, match="current endpoints"):
+        CompilationCoordinator._validate_plan_against_packet(
+            plan=plan,
+            packet=packet,
+            allowed_relation_fragments=allowed_prior,
+        )
+
+
 def test_v011_compilation_check_domains_migrate_without_reimport(tmp_path: Path) -> None:
     root = tmp_path / "vault"
     initialize_knowledge_vault(root, name="old-check-domain", scope="project")
@@ -689,9 +812,14 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
     assert api_wiki_browse["items"] == wiki_browse["result"]["items"]
     assert cli_wiki_browse["items"] == wiki_browse["result"]["items"]
     assert semantic_query["schema_version"] == "deeplaw.knowledge-support-output/v5"
-    assert (
-        semantic_query["result"]["query_plan"]["schema_version"]
-        == "deeplaw.knowledge-query-plan/v5"
+    assert semantic_query["result"]["schema_version"] == (
+        "deeplaw.provider-knowledge-capsule/v1"
+    )
+    assert semantic_query["result"]["receipt"]["query_plan_sha256"]
+    assert "query_plan" not in semantic_query["result"]
+    assert all(
+        "channels" not in item
+        for item in semantic_query["result"]["compiled"]
     )
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
@@ -2200,7 +2328,20 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         confirm_no_case_data=True,
         packet_max_fragments=3,
     )
-    _stage_all(coordinator, grant_id=grant_id, begun=begun)
+    packet = coordinator.next_packet(begun["compilation_run_id"])
+    assert packet is not None
+    plan = _plan(packet, expected_audit_head=begun["input_audit_head"])
+    plan["object_actions"][0]["source_refs"] = [
+        reference
+        for action in plan["object_actions"]
+        for reference in action["source_refs"]
+    ]
+    coordinator.stage(
+        grant_id=grant_id,
+        compilation_run_id=begun["compilation_run_id"],
+        plan=plan,
+        confirm_no_case_data=True,
+    )
     coordinator.validate(
         grant_id=grant_id,
         compilation_run_id=begun["compilation_run_id"],
@@ -2256,6 +2397,20 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     assert v5_result["query_plan"]["knowledge_partitions"]["source_bound_compiled"]
     assert v5_result["metrics"]["source_free_selection_rate"] == 0.0
     assert v5_result["metrics"]["provider_payload_bytes"] <= 65_536
+    assert v5_result["delivery"]["provider_visible_bytes"] <= 65_536
+    assert v5_result["delivery"]["hard_limit_bytes"] == 65_536
+    assert v5_result["delivery"]["suppressed_candidate_count"] >= 0
+    assert v5_result["delivery"]["deduplicated_object_count"] == 0
+    assert v5_result["delivery"]["continuation_available"] is True
+    assert v5_result["compiled"][0]["evidence_drill_down"]
+    hydrated = next(
+        item for item in v5_result["compiled"] if item["source_ref_count"] == 3
+    )
+    assert len(hydrated["source_refs"]) == 3
+    assert hydrated["source_refs_truncated"] is False
+    assert "channels" not in v5_result["compiled"][0]
+    assert "reranker" not in v5_result["compiled"][0]
+    assert v5_result["query_plan"]["provider_surface"] == "knowledge_capsule"
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (
@@ -2358,6 +2513,76 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
     assert unanswerable["compiled"] == []
     assert unanswerable["evidence"] == []
     assert any(gap["code"] == "evidence_gap" for gap in unanswerable["gaps"])
+
+
+def test_source_fragment_supports_bounded_deterministic_continuation(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="fragment-pagination", scope="project")
+    source = tmp_path / "long-source.md"
+    source.write_text("# Long evidence\n" + ("bounded-evidence " * 200), encoding="utf-8")
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        fragment_id = vault.connection.execute(
+            "SELECT fragment_id FROM source_fragments ORDER BY ordinal LIMIT 1"
+        ).fetchone()["fragment_id"]
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="fragment-pagination-test",
+            review_reason="Activate exact source evidence for continuation verification.",
+        )
+    initialize_autonomous_core(root)
+
+    first = KnowledgeOS.open(root).sources.fragment(
+        fragment_id,
+        offset=0,
+        max_chars=200,
+    )
+    assert first["fragment"]["content_characters"] == 200
+    assert first["fragment"]["content_truncated"] is True
+    assert first["fragment"]["next_offset"] == 200
+    assert first["fragment"]["continuation"] == {
+        "action": "fragment",
+        "fragment_id": first["fragment"]["fragment_revision_id"],
+        "offset": 200,
+        "max_chars": 200,
+    }
+    second = handle_knowledge_support(
+        operation="source",
+        source_action="fragment",
+        fragment_id=first["fragment"]["fragment_revision_id"],
+        offset=200,
+        max_chars=200,
+        vault_path=root,
+    )["result"]
+    cli_second = _cli_json(
+        "knowledge",
+        "source",
+        "fragment",
+        "--vault",
+        str(root),
+        "--fragment-id",
+        first["fragment"]["fragment_revision_id"],
+        "--offset",
+        "200",
+        "--max-chars",
+        "200",
+    )
+    assert second == cli_second
+    assert second["fragment"]["content_offset"] == 200
+    assert second["fragment"]["text"] != first["fragment"]["text"]
+    assert second["fragment"]["source_revision_id"] == compiled["identity"][
+        "source_revision_id"
+    ]
 
 
 def test_dense_only_low_relevance_candidates_trigger_visible_fallback(
@@ -2573,7 +2798,9 @@ def test_purpose_aware_query_keeps_exact_identity_ahead_of_kind_priority(
 
     assert [item["kind"] for item in result["compiled"]] == ["claim", "synthesis"]
     assert result["compiled"][0]["knowledge_id"] == claim_id
-    assert "exact" in result["compiled"][0]["channels"]
+    assert result["compiled"][0]["selection_reason"] == "exact_identity"
+    assert "channels" not in result["compiled"][0]
+    assert "reranker" not in result["compiled"][0]
     synthesis = result["compiled"][1]
     assert "synthesis_evidence_receipt" not in synthesis
 

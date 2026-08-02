@@ -1,7 +1,7 @@
 # DeepLaw v0.12.0 release notes
 
 Status: **formal release contract**. These notes describe the `v0.12.0` tag only after the public
-Release exists. Before that point, exact-commit, platform, real-model, artifact, signature,
+Release exists. Before that point, exact-commit, platform, machine-consensus, artifact, signature,
 provenance, and post-release rows remain release gates rather than completed historical facts.
 
 ## Implemented
@@ -34,9 +34,9 @@ provenance, and post-release rows remain release gates rather than completed his
 - Authoritative Pack evidence now exposes capability types, deterministic Challenge Trace/replay,
   citation audit, held-out expert review state, and a reusable Pack Core contract while preserving
   the physically separate read-only `law_support` boundary.
-- Release evaluation adds frozen Semantic Gold, phased successor/withdrawal real-host execution,
-  first-party CLI query scoring, provider-reported build token capture, deterministic query-cost
-  accounting, and explicit maintainer review binding.
+- Release evaluation adds frozen Semantic Gold, deterministic successor/withdrawal lifecycle,
+  first-party CLI query scoring, real cursor continuation, deterministic query-cost accounting,
+  six isolated machine-review roles, and unanimous consensus binding.
 - The corrected Semantic Gold adds real multi-Packet identity fusion, target-scoped Entity/Concept
   precision with separate extraction completeness and source coverage, claim-level Concept and
   Synthesis assertions, structured typed-relation endpoints and valid time for contradictions,
@@ -44,10 +44,19 @@ provenance, and post-release rows remain release gates rather than completed his
   claims, explicit non-mergeable contradiction endpoints, an explicit withdrawal Gap, fully
   specified per-field freeze commitment algorithms, one-event-per-valid-time timeline labels,
   and a scheduled-publication multi-format Event.
-- Credential-free pre-review now compiles the entire public corpus through the real governed
+- Credential-free evaluation now compiles the entire public corpus through the real governed
   transaction using a deterministic no-model Agent, executes all 15 first-party CLI retrieval
-  cases and five adversarial challenges, and exports a source-free Human Review Packet. This does
-  not count as external-model evidence or human confirmation.
+  cases and five adversarial challenges, and exports source-free bilingual derived Owner packets.
+  This does not count as external-model evidence or human confirmation.
+- Provider-visible results are purpose-aware and deduplicated into a bounded Knowledge Capsule;
+  discovery scores, duplicate revisions/aliases, unrelated graph/Wiki navigation, rejected or
+  withdrawn bodies, internal paths, and unauthorized metadata remain audit-only. Exact evidence,
+  Authority, lifecycle, temporal applicability, contradictions, gaps, fallback, and continuation
+  receipts remain visible.
+- The signed 28-source Authoritative Pack gate verifies each immutable source hash, parser/segment
+  inventory, locator, lifecycle, active release, exact title/citation retrieval, deterministic
+  rebuild, baseline non-regression, read-only `law_support`, and zero security failures without
+  committing source bytes, titles, paths, or private payloads.
 
 ## Verified
 
@@ -67,6 +76,11 @@ provenance, and post-release rows remain release gates rather than completed his
 - An isolated source-free Authoritative evidence runner emits a digest-bound release report for
   capability predicates, Challenge Trace/replay, citation tamper rejection, temporal exclusion,
   read-only enforcement, and Authority failures. It explicitly keeps unreviewed legal Gold pending.
+- Exact v0.11 autonomous Vaults are accepted by the v0.12 verifier, receive a verified autonomous
+  snapshot before reconciliation, and can be restored without losing compiled Knowledge state.
+- All 15 Semantic Gold cases and five adversarial challenges must be independently confirmed by
+  six isolated `gpt-5.6-sol` machine auditors. No majority vote is accepted, and any discrepancy
+  invalidates all prior packets for that candidate.
 
 ## Externally verified
 
@@ -74,9 +88,11 @@ The formal Release is permitted only after its manifest binds all of the followi
 artifacts:
 
 - Linux, macOS, and Windows on Python 3.11, 3.12, and 3.13 with zero mandatory-suite skips;
-- one real Codex CLI/model execution against maintainer-confirmed Semantic Gold, including both
-  baseline and successor phases, withdrawal, verified Compilation Runs, first-party query results,
-  provider-reported build tokens, and the maintainer correction record;
+- exact-commit deterministic semantic lifecycle/query/cost evidence, six unanimous independent
+  machine-review packets, the consensus digest, and bilingual derived Owner packets with
+  `human_gold_review.status=not_required`, `maintainer_confirmed=false`, and `reviewer_id=null`;
+- the exact 28-source Authoritative Pack matrix with two byte-identical rebuilds, frozen baseline
+  comparison, first-party CLI/MCP evidence, and all safety counters at zero;
 - exact fresh-wheel quality, byte-reproducible wheel/sdist, OCI, dependency audit, SBOM, license,
   OpenVEX, Sigstore, and GitHub provenance evidence;
 - public GitHub Release re-download, digest/signature/provenance verification, isolated install,
@@ -87,10 +103,11 @@ precomputed prose, are the evidence that these gates actually ran.
 
 ## Not verified
 
-- The corrected Semantic Gold is not maintainer-confirmed until the independent audit and owner
-  decision bind the exact freeze digest. Before that decision, no paid real-model semantic task,
-  merge, tag, or Release is permitted.
-- Claude Code and OpenCode real-model semantic execution is `not_executed`. Their pre-review reports
+- Human Gold review is not part of the owner-approved v0.12 release scope:
+  `human_gold_review.status=not_required`, `maintainer_confirmed=false`, and `reviewer_id=null`.
+  No human review is claimed or implied.
+- Codex, Claude Code, and OpenCode external real-model semantic execution is `not_executed`.
+  Claude Code and OpenCode reports
   bind exact CLI version, discovery, authentication, model-access, and non-execution reason; host
   discovery/no-model lifecycle is not real-model verification.
 - Unknown Agent hosts, models, editor versions, and plugins have not been tested. The supported
@@ -99,6 +116,11 @@ precomputed prose, are the evidence that these gates actually ran.
 - The pending legal held-out candidate is not `expert_reviewed` until an independent qualified
   reviewer records a digest-bound decision. Synthetic policy fixtures do not establish legal
   advice quality.
+- Five of the 28 signed Authoritative Pack sources retain explicit parser review warnings under
+  the catalog's signed `allowNeedsOcr` policy. They were re-parsed reproducibly and remain
+  locator/hash-verifiable, but flagged-page quote correctness has not been independently human
+  transcribed; the release matrix reports a parse-risk-free rate of `23/28` rather than hiding
+  those warnings.
 - Real-client/case material is intentionally absent. DeepLaw does not adjudicate facts, determine
   legal applicability, or provide a verdict.
 - No named Guanlan, Traditional RAG, embedding, GraphRAG, Tolaria-Agent, Obsidian-plugin, or other
@@ -121,8 +143,8 @@ precomputed prose, are the evidence that these gates actually ran.
   confidence, and maintainer verification cannot elevate source Authority or capabilities.
 - Obsidian and Tolaria are work surfaces, not canonical stores, permission systems, or DeepLaw
   substitutes.
-- A deterministic fake Agent proves transaction mechanics only. It is not real semantic quality
-  evidence.
+- A deterministic Agent proves governed transaction and deterministic retrieval quality only. It
+  is not external real-model execution or human semantic review.
 - The fixture corpus is intentionally small. Query cost and bytes-saved measurements must be
   reported as observed, including negative savings against tiny raw fixtures; they are not a claim
   about production-corpus compression.

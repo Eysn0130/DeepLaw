@@ -50,6 +50,8 @@
         "old_source_id": {"$ref": "#/$defs/bounded_id"},
         "new_source_id": {"$ref": "#/$defs/bounded_id"},
         "fragment_id": {"$ref": "#/$defs/bounded_id"},
+        "offset": {"type": "integer", "minimum": 0},
+        "max_chars": {"type": "integer", "minimum": 200, "maximum": 12000},
         "scope": {"$ref": "#/$defs/scope"},
         "max_sensitivity": {"$ref": "#/$defs/sensitivity"},
         "limit": {"type": "integer", "minimum": 1, "maximum": 20}

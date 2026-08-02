@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-machine-review-consensus.v1.schema.json",
+  "title": "DeepLaw semantic machine review consensus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "machine_review_consensus", "candidate_binding",
+    "auditor_packets", "cases", "material_divergence", "human_gold_review",
+    "maintainer_confirmed", "reviewer_id", "independent_machine_review",
+    "external_real_model_semantic_execution", "competitive_claim_eligible",
+    "consensus_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-machine-review-consensus/v1"},
+    "machine_review_consensus": {"const": "confirmed"},
+    "candidate_binding": {"$ref": "#/$defs/candidate_binding"},
+    "auditor_packets": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["auditor_role", "packet_sha256", "evidence_sha256", "status"],
+        "properties": {
+          "auditor_role": {
+            "enum": [
+              "semantic_gold_formal_auditor", "claim_entailment_auditor",
+              "retrieval_completeness_auditor", "chinese_adversarial_auditor",
+              "authority_security_auditor", "reproducibility_release_auditor"
+            ]
+          },
+          "packet_sha256": {"$ref": "#/$defs/sha256"},
+          "evidence_sha256": {"$ref": "#/$defs/sha256"},
+          "status": {"const": "CONFIRM"}
+        }
+      }
+    },
+    "cases": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["case_id", "auditor_confirmations", "discrepancy"],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^semantic-case-(0[1-9]|1[0-5])$"},
+          "auditor_confirmations": {"const": 6},
+          "discrepancy": {"const": null}
+        }
+      }
+    },
+    "material_divergence": {"const": false},
+    "human_gold_review": {
+      "const": {
+        "status": "not_required",
+        "reason": "owner-approved deterministic machine-consensus release scope"
+      }
+    },
+    "maintainer_confirmed": {"const": false},
+    "reviewer_id": {"const": null},
+    "independent_machine_review": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "auditor_count", "unanimity_required"],
+      "properties": {
+        "status": {"const": "confirmed"},
+        "auditor_count": {"const": 6},
+        "unanimity_required": {"const": true}
+      }
+    },
+    "external_real_model_semantic_execution": {"const": "not_executed"},
+    "competitive_claim_eligible": {"const": false},
+    "consensus_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "commit", "tree", "version", "gold_canonical_sha256",
+        "fixture_manifest_sha256", "semantic_gold_schema_sha256",
+        "semantic_gold_freeze_sha256"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"const": "0.12.0"},
+        "gold_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_gold_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_gold_freeze_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

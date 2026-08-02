@@ -65,11 +65,17 @@ class SourceReadService:
         scope: str | None = None,
         max_sensitivity: str = "private",
         limit: int = 20,
+        offset: int = 0,
+        max_chars: int = 12_000,
     ) -> dict[str, Any]:
         if action not in {"list", "get", "fragment", "diff"}:
             raise ValueError("source support action is invalid")
         if max_sensitivity not in {"public", "internal", "private"} or not 1 <= limit <= 20:
             raise ValueError("source support policy is invalid")
+        if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+            raise ValueError("source fragment offset is invalid")
+        if not 200 <= max_chars <= 12_000:
+            raise ValueError("source fragment character budget is invalid")
         with KnowledgeVault(self.root, read_only=True) as vault:
             if not vault.verify_integrity()["valid"]:
                 raise RuntimeError("knowledge vault integrity is invalid; source read stopped")
@@ -128,7 +134,9 @@ class SourceReadService:
                 source = vault.source_info(fragment["source_id"])
                 self._require_admitted(vault, source, scope, max_sensitivity)
                 text = fragment["text"]
-                selected = text[:12_000]
+                selected = text[offset : offset + max_chars]
+                next_offset = offset + len(selected)
+                truncated = next_offset < len(text)
                 return {
                     "schema_version": "deeplaw.knowledge-source-fragment/v1",
                     "fragment": {
@@ -146,7 +154,20 @@ class SourceReadService:
                         "fragment_revision_id": binding["fragment_revision_id"],
                         "source_revision_id": source.get("source_revision_id"),
                         "text": selected,
-                        "content_truncated": len(selected) != len(text),
+                        "content_offset": offset,
+                        "content_characters": len(selected),
+                        "content_truncated": truncated,
+                        "next_offset": next_offset if truncated else None,
+                        "continuation": (
+                            {
+                                "action": "fragment",
+                                "fragment_id": binding["fragment_revision_id"],
+                                "offset": next_offset,
+                                "max_chars": max_chars,
+                            }
+                            if truncated
+                            else None
+                        ),
                     },
                     "write_performed": False,
                 }

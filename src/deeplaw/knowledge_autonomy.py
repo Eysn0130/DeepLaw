@@ -64,6 +64,7 @@ KNOWLEDGE_OBJECT_SCHEMAS = frozenset(
     {KNOWLEDGE_OBJECT_SCHEMA_V1, *MODERN_KNOWLEDGE_OBJECT_SCHEMAS}
 )
 KNOWLEDGE_REVISION_SCHEMA = "deeplaw.knowledge-revision/v2"
+KNOWLEDGE_REVISION_DETAIL_SCHEMA = "deeplaw.knowledge-revision-detail/v1"
 KNOWLEDGE_RELATION_SCHEMA = "deeplaw.knowledge-relation/v3"
 KNOWLEDGE_CAPSULE_SCHEMA = "deeplaw.knowledge-capsule/v2"
 KNOWLEDGE_SINK_SCHEMA = "deeplaw.knowledge-sink/v1"
@@ -1630,15 +1631,31 @@ def migrate_autonomous_core(
     """Create a verified v0.7 rollback point, then install the additive v3 core."""
     root = Path(path).expanduser().absolute()
     if autonomous_core_installed(root):
+        if backup_output is None:
+            suffix = utc_now().replace(":", "").replace("-", "")
+            backup_destination = root.with_name(
+                f"{root.name}.autonomous-migration-backup-{suffix}-{secrets.token_hex(4)}"
+            )
+        else:
+            backup_destination = Path(backup_output).expanduser().absolute()
+        backup = create_autonomous_snapshot(
+            root,
+            backup_destination,
+            include_operator_state=True,
+        )
         installed = initialize_autonomous_core(
             root,
             migration_source="autonomous-core-reconcile",
         )
+        if not installed["verification"]["valid"]:
+            raise RuntimeError("autonomous migration failed post-install verification")
         return {
             "schema_version": "deeplaw.autonomous-migration/v1",
             "vault_id": installed["vault_id"],
             "already_installed": True,
-            "backup_path": None,
+            "backup_type": "autonomous_snapshot",
+            "backup_path": backup["path"],
+            "backup_sha256": backup["snapshot_sha256"],
             "installed": installed,
             "verification": installed["verification"],
         }
@@ -1655,6 +1672,7 @@ def migrate_autonomous_core(
         "schema_version": "deeplaw.autonomous-migration/v1",
         "vault_id": installed["vault_id"],
         "already_installed": False,
+        "backup_type": "legacy_migration_backup",
         "backup_path": backup["backup_path"],
         "backup_sha256": backup["backup_sha256"],
         "installed": installed,
@@ -1669,6 +1687,20 @@ def rollback_autonomous_core(
     confirm: bool,
 ) -> dict[str, Any]:
     """Restore the pre-v3 Vault while retaining the replaced Vault beside it."""
+    backup_root = Path(backup).expanduser().absolute()
+    if (backup_root / "snapshot.json").is_file() and not (
+        backup_root / "snapshot.json"
+    ).is_symlink():
+        result = restore_autonomous_snapshot(
+            path,
+            snapshot=backup_root,
+            confirm=confirm,
+        )
+        result["backup_type"] = "autonomous_snapshot"
+        result["autonomous_core_present_after_rollback"] = autonomous_core_installed(path)
+        if not result["autonomous_core_present_after_rollback"]:
+            raise RuntimeError("autonomous rollback did not restore the autonomous schema")
+        return result
     from .knowledge_store import restore_knowledge_migration_backup
 
     result = restore_knowledge_migration_backup(
@@ -5580,7 +5612,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 markdown_schema = frontmatter.get("schema")
                 markdown_contract = (
                     "knowledge-object.v3.schema.json"
-                    if markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
+                    if markdown_schema == KNOWLEDGE_OBJECT_SCHEMA
                     else "knowledge-object.v2.schema.json"
                     if markdown_schema == KNOWLEDGE_OBJECT_SCHEMA_V2
                     else "knowledge-object.v1.schema.json"
@@ -6149,7 +6181,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if not isinstance(metadata, dict):
             raise RuntimeError("Knowledge Revision governance metadata is invalid")
         value = {
-            "schema_version": KNOWLEDGE_REVISION_SCHEMA,
+            "schema_version": KNOWLEDGE_REVISION_DETAIL_SCHEMA,
             "knowledge_id": row["knowledge_id"],
             "revision_id": row["revision_id"],
             "parent_revision_id": row["parent_revision_id"],
@@ -8032,6 +8064,70 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if exact_id is not None:
             candidate_ids.append(exact_id)
             channels[exact_id].append("exact")
+        normalized_query = normalize_identity_text(query)
+        alias_scan_truncated = False
+        if exact_id is None and as_of is None and normalized_query:
+            alias_placeholders = ",".join("?" for _ in admitted_sensitivities)
+            alias_filters = [
+                "knowledge_aliases_v4.retired_at IS NULL",
+                "knowledge_aliases_v4.revision_id = knowledge_revisions_v3.revision_id",
+                "knowledge_revisions_v3.lifecycle = 'active'",
+                "knowledge_revisions_v3.scope = ?",
+                f"knowledge_revisions_v3.sensitivity IN ({alias_placeholders})",
+                "(knowledge_revisions_v3.valid_from IS NULL "
+                "OR knowledge_revisions_v3.valid_from <= ?)",
+                "(knowledge_revisions_v3.valid_to IS NULL "
+                "OR knowledge_revisions_v3.valid_to > ?)",
+                "(knowledge_revisions_v3.expires_at IS NULL "
+                "OR knowledge_revisions_v3.expires_at > ?)",
+            ]
+            alias_parameters: list[Any] = [
+                scope,
+                *admitted_sensitivities,
+                reference_time,
+                reference_time,
+                reference_time,
+            ]
+            if kinds:
+                kind_placeholders = ",".join("?" for _ in kinds)
+                alias_filters.append(
+                    f"knowledge_revisions_v3.kind IN ({kind_placeholders})"
+                )
+                alias_parameters.extend(kinds)
+            for tag in required_tags:
+                alias_filters.append(
+                    "EXISTS (SELECT 1 FROM json_each(knowledge_revisions_v3.tags_json) "
+                    "WHERE json_each.value = ?)"
+                )
+                alias_parameters.append(tag)
+            alias_rows = self.connection.execute(
+                f"""
+                SELECT knowledge_aliases_v4.alias_key,
+                       knowledge_aliases_v4.knowledge_id
+                FROM knowledge_aliases_v4
+                JOIN knowledge_objects_v3 USING(knowledge_id)
+                JOIN knowledge_revisions_v3
+                  ON knowledge_revisions_v3.revision_id =
+                     knowledge_objects_v3.current_revision_id
+                WHERE {" AND ".join(alias_filters)}
+                ORDER BY LENGTH(knowledge_aliases_v4.alias_key) DESC,
+                         knowledge_aliases_v4.alias_key,
+                         knowledge_aliases_v4.knowledge_id
+                LIMIT 2001
+                """,
+                tuple(alias_parameters),
+            ).fetchall()
+            alias_scan_truncated = len(alias_rows) > 2_000
+            for row in alias_rows[:2_000]:
+                alias_key = str(row["alias_key"])
+                if len(alias_key) < 3 or alias_key not in normalized_query:
+                    continue
+                knowledge_id = str(row["knowledge_id"])
+                if knowledge_id not in candidate_ids:
+                    candidate_ids.append(knowledge_id)
+                channels[knowledge_id].append(
+                    "exact" if alias_key == normalized_query else "identity_alias"
+                )
         expression = "" if exact_id is not None else fts_query(terms)
         lexical_query_failed = False
         lexical_enabled = retrieval_mode in {"lexical", "graph", "hybrid"}
@@ -8668,6 +8764,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             gaps.append("derived lexical state was stale; bounded canonical fallback was used")
         if canonical_scan_truncated:
             gaps.append("canonical lexical fallback reached its 500-object resource bound")
+        if alias_scan_truncated:
+            gaps.append("identity alias discovery reached its 2000-alias resource bound")
         if graph_relation_scan_truncated:
             gaps.append(
                 "graph traversal reached its 500-admitted/5000-scanned relation per-hop bound"
@@ -8899,12 +8997,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         scope: Scope | None = None,
         max_sensitivity: Sensitivity = "restricted",
+        reference_time: str | None = None,
     ) -> dict[str, Any]:
         if scope is not None and scope not in SCOPES:
             raise ValueError("semantic Lint scope is invalid")
         if max_sensitivity not in SENSITIVITIES:
             raise ValueError("semantic Lint sensitivity is invalid")
-        reference_time = utc_now()
+        reference_time = (
+            canonical_timestamp(reference_time, field="semantic Lint reference time")
+            if reference_time is not None
+            else utc_now()
+        )
         admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
         current_filters = [
@@ -9260,7 +9363,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 or conflict_scan_truncated
             ),
             "issues": issues,
-            "generated_at": utc_now(),
+            "generated_at": reference_time,
             "derived": True,
             "authority": "none",
         }
@@ -9271,10 +9374,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         scope: Scope | None = None,
         max_sensitivity: Sensitivity = "restricted",
+        reference_time: str | None = None,
     ) -> dict[str, Any]:
         """Project bounded, actionable knowledge gaps from semantic Lint."""
 
-        lint = self.semantic_lint(scope=scope, max_sensitivity=max_sensitivity)
+        lint = self.semantic_lint(
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            reference_time=reference_time,
+        )
         gap_codes = {
             "broken_wikilink",
             "ambiguous_wikilink",
@@ -9724,7 +9832,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         self._require_write()
         for relative in _DERIVED_REBUILD_DIRECTORIES:
             _restore_owner_subdirectory(self.root, relative)
-        reference_time = utc_now()
+        input_audit_head = self.audit_head
+        audit_event = self.connection.execute(
+            "SELECT recorded_at FROM autonomous_events_v3 WHERE event_hash = ?",
+            (input_audit_head,),
+        ).fetchone()
+        if audit_event is None:
+            raise RuntimeError("derived rebuild audit input is not registered")
+        reference_time = audit_event["recorded_at"]
         self.connection.execute("BEGIN IMMEDIATE")
         try:
             candidate_rows = self.connection.execute(
@@ -9763,9 +9878,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     valid_to=relation["valid_to"],
                 )
             ]
-            lint = self.semantic_lint()
-            gaps = self.discover_gaps()
-            input_audit_head = self.audit_head
+            lint = self.semantic_lint(reference_time=reference_time)
+            gaps = self.discover_gaps(reference_time=reference_time)
             pending_queue_ids = [
                 row["queue_id"]
                 for row in self.connection.execute(
@@ -10095,7 +10209,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 canonical_json([item["relation_revision_id"] for item in relations]).encode("utf-8")
             ),
             "files": sorted(generated_files, key=lambda item: item["path"]),
-            "generated_at": utc_now(),
+            "generated_at": reference_time,
         }
         manifest["manifest_sha256"] = sha256_bytes(canonical_json(manifest).encode("utf-8"))
         _atomic_owner_write(
@@ -10881,7 +10995,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 markdown_schema = parsed["frontmatter"]["schema"]
                 expected_metadata_fields = (
                     v2_metadata_fields
-                    if markdown_schema == KNOWLEDGE_OBJECT_SCHEMA
+                    if markdown_schema in MODERN_KNOWLEDGE_OBJECT_SCHEMAS
                     else legacy_metadata_fields
                 )
                 if set(metadata) != expected_metadata_fields:

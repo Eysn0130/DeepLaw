@@ -1,17 +1,17 @@
 {
   "schema_version": "deeplaw.semantic-gold-freeze/v1",
   "gold_id": "semanticgold_89f0b850e3d8469914eadbe2",
-  "gold_status": "maintainer_review_pending",
-  "candidate_sha256": "97cc02c15562cb5385d315d40052366fcc8cf700672530f481578db988237abb",
+  "gold_status": "machine_review_pending",
+  "candidate_sha256": "1446f9641139cde38b9b9daf6bb4e51f2dc12e3437593381701bbf4f3219fb55",
   "fixture_manifest_sha256": "845a54e9bfc2e76da8e72a2d1ab506e2ac08ec2c94fe268c9913065d4fe51d6d",
-  "semantic_gold_schema_sha256": "d3573934bc962a8221565104883b0d52c9004ffedb70ad5bc8e5fa3dbda1e86c",
+  "semantic_gold_schema_sha256": "c4c28fafb5befb9987b91d6f9987e748c019a9c78ed700ce7fc86c793a2f9a08",
   "query_set_sha256": "0c10f7e63da262ce7ed99572a8f251d747ce9494072427c45a293478d4d4ce5d",
   "scoring_policy_sha256": "8fe19e4ec9bd2f2f1b0f8e8628de8a7ac7a25068b71290fe1dad054237d914ea",
   "security_challenges_sha256": "9ac88f9814ddfb9349725fba7fd6abd3dd64b75fcb2db4de0477256ccdbb7e72",
   "canonical_json_profile": "UTF-8 JSON; object keys sorted recursively; ensure_ascii=false; separators=(',', ':'); no trailing whitespace",
   "query_set_projection": "Map cases in array order to objects {case_id, query, purpose, phase=query_phase, as_of=case.as_of or null}; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
   "commitment_profiles": {
-    "candidate_sha256": "Deep-copy the complete candidate; set status to maintainer_review_pending and review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
+    "candidate_sha256": "Deep-copy the complete candidate; set status to machine_review_pending and review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
     "fixture_manifest_sha256": "For each candidate source in array order, verify bytes_sha256 equals SHA-256 of the exact fixture bytes; concatenate the lowercase 64-character bytes_sha256 values without separators as ASCII; SHA-256 those exact ASCII bytes",
     "semantic_gold_schema_sha256": "SHA-256 the exact bytes of contracts/semantic-gold.v1.schema.json with no text normalization",
     "query_set_sha256": "Apply query_set_projection to the complete candidate; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
@@ -21,6 +21,14 @@
   "source_count": 12,
   "case_count": 15,
   "security_challenge_count": 5,
-  "maintainer_confirmation_required": true,
-  "reviewer_id": null
+  "human_gold_review": {
+    "status": "not_required",
+    "reason": "owner-approved deterministic machine-consensus release scope"
+  },
+  "maintainer_confirmation_required": false,
+  "maintainer_confirmed": false,
+  "reviewer_id": null,
+  "machine_review_consensus_required": true,
+  "external_real_model_semantic_execution": "not_executed",
+  "competitive_claim_eligible": false
 }

@@ -23,7 +23,7 @@ QUERY_SET_PROJECTION = (
 )
 COMMITMENT_PROFILES = {
     "candidate_sha256": (
-        "Deep-copy the complete candidate; set status to maintainer_review_pending and "
+        "Deep-copy the complete candidate; set status to machine_review_pending and "
         "review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 "
         "bytes"
     ),
@@ -74,7 +74,7 @@ def _validate_schema(value: dict[str, Any]) -> None:
 
 def _candidate_digest(value: dict[str, Any]) -> str:
     candidate = deepcopy(value)
-    candidate["status"] = "maintainer_review_pending"
+    candidate["status"] = "machine_review_pending"
     candidate["review"] = None
     return hashlib.sha256(canonical_json(candidate).encode("utf-8")).hexdigest()
 
@@ -104,6 +104,19 @@ def validate_candidate(value: dict[str, Any], *, repository: Path) -> str:
     _validate_schema(value)
     if value["status"] == "maintainer_confirmed" and value["review"] is None:
         raise ValueError("maintainer-confirmed Semantic Gold requires review metadata")
+    policy = value["release_review_policy"]
+    if (
+        value["status"] == "machine_review_pending"
+        and (
+            value["review"] is not None
+            or policy["human_gold_review"]["status"] != "not_required"
+            or policy["maintainer_confirmed"] is not False
+            or policy["reviewer_id"] is not None
+            or policy["external_real_model_semantic_execution"] != "not_executed"
+            or policy["competitive_claim_eligible"] is not False
+        )
+    ):
+        raise ValueError("machine-review Semantic Gold policy is inconsistent")
     source_keys = [source["source_key"] for source in value["sources"]]
     if len(source_keys) != len(set(source_keys)):
         raise ValueError("Semantic Gold source_key values must be unique")
@@ -252,10 +265,13 @@ def validate_freeze(
         "source_count": len(candidate["sources"]),
         "case_count": len(candidate["cases"]),
         "security_challenge_count": len(candidate["security_challenges"]),
-        "maintainer_confirmation_required": candidate["status"] != "maintainer_confirmed",
-        "reviewer_id": (
-            candidate["review"]["reviewer_id"] if candidate["review"] is not None else None
-        ),
+        "human_gold_review": candidate["release_review_policy"]["human_gold_review"],
+        "maintainer_confirmation_required": False,
+        "maintainer_confirmed": False,
+        "reviewer_id": None,
+        "machine_review_consensus_required": True,
+        "external_real_model_semantic_execution": "not_executed",
+        "competitive_claim_eligible": False,
         "canonical_json_profile": CANONICAL_JSON_PROFILE,
         "query_set_projection": QUERY_SET_PROJECTION,
         "commitment_profiles": COMMITMENT_PROFILES,
@@ -272,6 +288,10 @@ def confirm_candidate(
     reason: str,
     reviewed_at: str | None = None,
 ) -> dict[str, Any]:
+    if value.get("status") == "machine_review_pending":
+        raise ValueError(
+            "owner-approved machine-consensus scope does not accept maintainer confirmation"
+        )
     if value["status"] != "maintainer_review_pending" or value["review"] is not None:
         raise ValueError("only an unreviewed candidate can be confirmed")
     digest = validate_candidate(value, repository=repository)
@@ -345,7 +365,10 @@ def main() -> int:
                 "source_count": len(value["sources"]),
                 "case_count": len(value["cases"]),
                 "maintainer_confirmation_required": (
-                    value["status"] != "maintainer_confirmed"
+                    value["status"] == "maintainer_review_pending"
+                ),
+                "machine_review_consensus_required": (
+                    value["status"] == "machine_review_pending"
                 ),
             }
         )

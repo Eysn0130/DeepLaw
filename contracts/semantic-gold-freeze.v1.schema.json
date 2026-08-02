@@ -8,14 +8,20 @@
     "schema_version", "gold_id", "gold_status", "candidate_sha256",
     "fixture_manifest_sha256", "semantic_gold_schema_sha256", "query_set_sha256",
     "scoring_policy_sha256", "security_challenges_sha256", "source_count",
-    "case_count", "security_challenge_count", "maintainer_confirmation_required",
-    "reviewer_id", "canonical_json_profile", "query_set_projection",
+    "case_count", "security_challenge_count", "human_gold_review",
+    "maintainer_confirmation_required", "maintainer_confirmed", "reviewer_id",
+    "machine_review_consensus_required", "external_real_model_semantic_execution",
+    "competitive_claim_eligible", "canonical_json_profile", "query_set_projection",
     "commitment_profiles"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.semantic-gold-freeze/v1"},
     "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
-    "gold_status": {"enum": ["maintainer_review_pending", "maintainer_confirmed"]},
+    "gold_status": {
+      "enum": [
+        "maintainer_review_pending", "machine_review_pending", "maintainer_confirmed"
+      ]
+    },
     "candidate_sha256": {"$ref": "#/$defs/sha256"},
     "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
     "semantic_gold_schema_sha256": {"$ref": "#/$defs/sha256"},
@@ -30,7 +36,7 @@
     },
     "commitment_profiles": {
       "const": {
-        "candidate_sha256": "Deep-copy the complete candidate; set status to maintainer_review_pending and review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
+        "candidate_sha256": "Deep-copy the complete candidate; set status to machine_review_pending and review to null; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
         "fixture_manifest_sha256": "For each candidate source in array order, verify bytes_sha256 equals SHA-256 of the exact fixture bytes; concatenate the lowercase 64-character bytes_sha256 values without separators as ASCII; SHA-256 those exact ASCII bytes",
         "semantic_gold_schema_sha256": "SHA-256 the exact bytes of contracts/semantic-gold.v1.schema.json with no text normalization",
         "query_set_sha256": "Apply query_set_projection to the complete candidate; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes",
@@ -41,18 +47,28 @@
     "source_count": {"const": 12},
     "case_count": {"const": 15},
     "security_challenge_count": {"const": 5},
-    "maintainer_confirmation_required": {"type": "boolean"},
-    "reviewer_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
+    "human_gold_review": {
+      "const": {
+        "status": "not_required",
+        "reason": "owner-approved deterministic machine-consensus release scope"
+      }
+    },
+    "maintainer_confirmation_required": {"const": false},
+    "maintainer_confirmed": {"const": false},
+    "reviewer_id": {"const": null},
+    "machine_review_consensus_required": {"const": true},
+    "external_real_model_semantic_execution": {"const": "not_executed"},
+    "competitive_claim_eligible": {"const": false}
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   },
   "allOf": [
     {
-      "if": {"properties": {"gold_status": {"const": "maintainer_review_pending"}}},
+      "if": {"properties": {"gold_status": {"const": "machine_review_pending"}}},
       "then": {
         "properties": {
-          "maintainer_confirmation_required": {"const": true},
+          "maintainer_confirmation_required": {"const": false},
           "reviewer_id": {"const": null}
         }
       }

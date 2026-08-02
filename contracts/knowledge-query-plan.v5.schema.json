@@ -11,7 +11,9 @@
     "compiled_candidate_count", "compiled_selected_count", "evidence_selected_count",
     "uncompiled_source_count", "stale_selection_prevented_count",
     "evidence_attachment_count", "fallback", "knowledge_duties",
-    "knowledge_partitions", "duty_coverage", "created_at"
+    "knowledge_partitions", "duty_coverage", "provider_surface",
+    "suppressed_candidate_count", "deduplicated_object_count",
+    "internal_discovery_receipt_sha256", "created_at"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.knowledge-query-plan/v5"},
@@ -76,6 +78,12 @@
       }
     },
     "duty_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "provider_surface": {"const": "knowledge_capsule"},
+    "suppressed_candidate_count": {"type": "integer", "minimum": 0},
+    "deduplicated_object_count": {"type": "integer", "minimum": 0},
+    "internal_discovery_receipt_sha256": {
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
     "created_at": {"type": "string", "format": "date-time"}
   },
   "$defs": {

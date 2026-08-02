@@ -18,8 +18,15 @@ from benchmarks.release.evidence import (
     verify_record_digest,
     write_report,
 )
+from benchmarks.semantic.build_machine_review_consensus import (
+    candidate_binding as semantic_candidate_binding,
+)
+from benchmarks.semantic.build_machine_review_consensus import (
+    validate_packet as validate_machine_review_packet,
+)
 from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.catalog_signing import verify_catalog_signature
+from deeplaw.util import canonical_json
 
 SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v5"
 LIVING_WIKI_BASELINE_COMMIT = "42382b264f4297965c25aaac6e85619e9e0d49b7"
@@ -318,11 +325,14 @@ def _living_wiki_comparison(
 def _source_quality_matrix(
     repository: Path,
     path: Path,
+    *,
+    binding: dict[str, Any],
+    artifact_sha256: str,
 ) -> dict[str, Any]:
     matrix = load_json(path)
     verify_record_digest(matrix, field="28-source decision matrix")
     schema = load_json(
-        repository / "contracts/authoritative-source-quality-decision-matrix.v1.schema.json"
+        repository / "contracts/authoritative-source-quality-decision-matrix.v2.schema.json"
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(matrix)
@@ -346,15 +356,59 @@ def _source_quality_matrix(
         )
         for item in sources
     )
+    security = matrix.get("security", {})
+    security_failures = (
+        "unauthorized_disclosure",
+        "restricted_disclosure",
+        "unauthorized_mutation",
+        "silent_fallback",
+        "stale_prohibited_selection",
+        "invalid_official_citation",
+        "unsupported_authoritative_claim",
+        "authority_elevation",
+        "provider_hard_limit_violation",
+    )
+    required_challenges = {
+        "unauthorized_disclosure",
+        "restricted_disclosure",
+        "silent_fallback",
+        "unsupported_authoritative_claim",
+        "authority_elevation",
+        "prompt_injection",
+        "tampered_receipt_rejected",
+        "tampered_signature_rejected",
+        "signed_catalog_rollback_rejected",
+        "law_support_mutation_rejected",
+    }
+    challenge_execution = security.get("challenge_execution", {})
+    decision_summary = matrix.get("decision_summary", {})
     if (
         matrix.get("status") != "executed_and_verified"
-        or matrix.get("release_target") != "0.11.0"
+        or matrix.get("release_target") != binding["package_version"]
+        or matrix.get("candidate_binding")
+        != {
+            "commit": binding["commit"],
+            "tree": binding["tree"],
+            "version": binding["package_version"],
+            "artifact_sha256": artifact_sha256,
+        }
         or matrix.get("competitive_claim_eligible") is not False
         or len(sources) != 28
         or len({item.get("stable_source_id") for item in sources}) != 28
         or any(item.get("execution_status") != "verified" for item in sources)
-        or matrix.get("active_after", {}).get("verified") is not True
+        or matrix.get("active_release", {}).get("verified") is not True
         or matrix.get("retrieval_quality", {}).get("quality_regression") is not False
+        or any(security.get(field) != 0 for field in security_failures)
+        or security.get("challenge_attempt_count") != 10
+        or set(challenge_execution) != required_challenges
+        or any(value is not True for value in challenge_execution.values())
+        or sum(decision_summary.values()) != 28
+        or decision_summary.get("blocked_invalid_evidence") != 0
+        or matrix.get("snapshot", {}).get("restore_verified") is not True
+        or matrix.get("reproducibility", {}).get("database_byte_identical") is not True
+        or matrix.get("reproducibility", {}).get("build_report_identical") is not True
+        or matrix.get("reproducibility", {}).get("query_result_semantics_identical")
+        is not True
         or signature_verification.get("verified") is not True
         or matrix.get("catalog", {}).get("sha256") != signature_verification.get("catalog_sha256")
         or matrix.get("catalog", {}).get("signature_sha256")
@@ -371,22 +425,25 @@ def _semantic_quality(
     *,
     binding: dict[str, Any],
     gold_path: Path,
-    host_path: Path,
+    lifecycle_path: Path,
     query_path: Path,
     cost_path: Path,
-    quality_path: Path,
+    consensus_path: Path,
+    machine_review_paths: list[Path],
+    owner_review_english_path: Path,
+    owner_review_chinese_path: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     gold = load_json(gold_path)
     gold_sha256 = validate_candidate(gold, repository=repository)
-    host = load_json(host_path)
+    lifecycle = load_json(lifecycle_path)
     query = load_json(query_path)
     cost = load_json(cost_path)
-    quality = load_json(quality_path)
+    consensus = load_json(consensus_path)
     for name, value in (
-        ("real-semantic-host-report.v2.schema.json", host),
+        ("deterministic-semantic-lifecycle.v1.schema.json", lifecycle),
         ("semantic-query-run.v1.schema.json", query),
         ("semantic-query-cost.v1.schema.json", cost),
-        ("semantic-quality-report.v1.schema.json", quality),
+        ("semantic-machine-review-consensus.v1.schema.json", consensus),
     ):
         schema = load_json(repository / "contracts" / name)
         Draft202012Validator.check_schema(schema)
@@ -401,25 +458,182 @@ def _semantic_quality(
         "migrations_inventory_sha256": binding["migrations"]["inventory_sha256"],
         "worktree_clean": True,
     }
+    human_review_policy = {
+        "status": "not_required",
+        "reason": "owner-approved deterministic machine-consensus release scope",
+    }
+    release_policy = gold.get("release_review_policy", {})
     if (
-        gold.get("status") != "maintainer_confirmed"
-        or host.get("binding") != expected_binding
-        or host.get("status") != "passed"
-        or host.get("formal_release_evidence_ready") is not True
+        gold.get("status") != "machine_review_pending"
+        or release_policy.get("human_gold_review") != human_review_policy
+        or release_policy.get("maintainer_confirmed") is not False
+        or release_policy.get("reviewer_id") is not None
+        or release_policy.get("independent_machine_review", {}).get("status")
+        != "pending"
+        or release_policy.get("external_real_model_semantic_execution")
+        != "not_executed"
+        or release_policy.get("competitive_claim_eligible") is not False
+        or lifecycle.get("binding") != expected_binding
+        or lifecycle.get("status") != "passed"
+        or lifecycle.get("formal_release_evidence_ready") is not True
+        or lifecycle.get("external_model_execution") != "not_executed"
+        or lifecycle.get("model_identity") is not None
+        or lifecycle.get("network_policy") != "offline"
+        or lifecycle.get("vault_verification_valid") is not True
         or query.get("status") != "passed"
-        or quality.get("passed") is not True
-        or quality.get("formal_release_eligible") is not True
-        or quality.get("competitive_claim_eligible") is not False
-        or quality.get("gold_sha256") != gold_sha256
-        or quality.get("host_report_id") != host.get("report_id")
-        or query.get("compiler_report_id") != host.get("report_id")
-        or cost.get("compiler_report_id") != host.get("report_id")
-        or any(quality.get("hard_failures", {}).values())
-        or quality.get("metrics", {}).get("build_tokens") is None
-        or quality.get("metrics", {}).get("query_tokens") is None
+        or query.get("compiler_report_id") != lifecycle.get("report_id")
+        or cost.get("compiler_report_id") != lifecycle.get("report_id")
+        or query.get("gold_id") != gold.get("gold_id")
+        or len(query.get("cases", [])) != 15
+        or query.get("metrics", {}).get("passed_count") != 15
+        or query.get("cross_packet_identity", {}).get("valid") is not True
+        or query.get("cross_packet_identity", {}).get("run_packet_count", 0) < 2
+        or len(query.get("cross_packet_identity", {}).get("distinct_packet_ids", []))
+        < 2
+        or len(query.get("cross_packet_identity", {}).get("final_knowledge_ids", []))
+        != 1
+        or query.get("competitive_claim_eligible") is not False
+        or consensus.get("candidate_binding") != semantic_candidate_binding(repository)
+        or consensus.get("machine_review_consensus") != "confirmed"
+        or consensus.get("independent_machine_review", {}).get("status") != "confirmed"
+        or consensus.get("human_gold_review") != human_review_policy
+        or consensus.get("maintainer_confirmed") is not False
+        or consensus.get("reviewer_id") is not None
+        or consensus.get("external_real_model_semantic_execution") != "not_executed"
+        or consensus.get("competitive_claim_eligible") is not False
+        or consensus.get("candidate_binding", {}).get("gold_canonical_sha256")
+        != gold_sha256
     ):
-        raise CommercialReleaseError("Semantic Living Wiki real-host quality gate did not pass")
-    return gold, quality
+        raise CommercialReleaseError(
+            "Semantic Living Wiki deterministic machine-consensus gate did not pass"
+        )
+    safety_fields = (
+        "provider_hard_limit_violations",
+        "unauthorized_writes",
+        "authority_elevations",
+        "invalid_official_citations",
+        "silent_fallbacks",
+        "stale_prohibited_selections",
+        "prompt_injection_failures",
+        "unsupported_authoritative_claims",
+        "restricted_disclosures",
+        "unauthorized_mutation_failures",
+        "silent_fallback_challenge_failures",
+    )
+    metrics = query.get("metrics", {})
+    if (
+        any(metrics.get(field) != 0 for field in safety_fields)
+        or metrics.get("citation_validity") != 1
+        or metrics.get("claim_evidence_binding_accuracy") != 1
+        or metrics.get("recall_at_k") != 1
+        or metrics.get("target_scoped_precision_at_k") != 1
+        or set(metrics.get("challenge_execution_counts", {}))
+        != {
+            "prompt_injection",
+            "unsupported_authoritative_claim",
+            "restricted_disclosure",
+            "unauthorized_mutation",
+            "silent_fallback",
+        }
+        or any(
+            count < 1
+            for count in metrics.get("challenge_execution_counts", {}).values()
+        )
+    ):
+        raise CommercialReleaseError("Semantic retrieval or safety metrics did not pass")
+    packets = [load_json(path) for path in machine_review_paths]
+    semantic_binding = semantic_candidate_binding(repository)
+    query_cases = {item["case_id"]: item for item in query["cases"]}
+    if len(packets) != 6:
+        raise CommercialReleaseError("Semantic release requires six machine review packets")
+    for packet in packets:
+        validate_machine_review_packet(
+            packet,
+            repository=repository,
+            binding=semantic_binding,
+        )
+        if packet["auditor_role"] == "chinese_adversarial_auditor":
+            continue
+        for review_case in packet["cases"]:
+            query_case = query_cases[review_case["case_id"]]
+            actual_ids = sorted(
+                {
+                    item["knowledge_id"]
+                    for item in query_case["actual_objects"]
+                }
+            )
+            citations = sorted(
+                canonical_json(
+                    {
+                        "source_revision_id": item["source_revision_id"],
+                        "fragment_id": item["fragment_id"],
+                        "locator": item["locator"],
+                        "quote_sha256": item["quote_sha256"],
+                        "valid": item["valid"],
+                    }
+                )
+                for item in query_case["citation_checks"]
+            )
+            if (
+                review_case["actual_stable_ids"] != actual_ids
+                or review_case["query_plan"] != query_case["query_plan"]
+                or sorted(canonical_json(item) for item in review_case["citations"])
+                != citations
+            ):
+                raise CommercialReleaseError(
+                    "Machine review packet does not bind first-party query evidence"
+                )
+    packet_by_role = {packet["auditor_role"]: packet for packet in packets}
+    consensus_records = {
+        item["auditor_role"]: item for item in consensus["auditor_packets"]
+    }
+    if (
+        len(packet_by_role) != 6
+        or set(packet_by_role) != set(consensus_records)
+        or any(
+            consensus_records[role]["packet_sha256"] != packet["packet_sha256"]
+            or consensus_records[role]["evidence_sha256"] != packet["evidence_sha256"]
+            for role, packet in packet_by_role.items()
+        )
+    ):
+        raise CommercialReleaseError("Machine consensus does not bind the six packet bytes")
+    owner_packets = {
+        "en": load_json(owner_review_english_path),
+        "zh-CN": load_json(owner_review_chinese_path),
+    }
+    owner_schema = load_json(
+        repository / "contracts/semantic-owner-review-packet.v1.schema.json"
+    )
+    for language, packet in owner_packets.items():
+        Draft202012Validator(owner_schema).validate(packet)
+        digest = __import__("hashlib").sha256(
+            canonical_json(
+                {key: value for key, value in packet.items() if key != "packet_sha256"}
+            ).encode("utf-8")
+        ).hexdigest()
+        if (
+            packet.get("language") != language
+            or packet.get("packet_sha256") != digest
+            or packet.get("candidate_binding") != semantic_binding
+            or packet.get("machine_review_consensus_sha256")
+            != consensus.get("consensus_sha256")
+            or packet.get("human_final_decision") != "not_required"
+            or packet.get("maintainer_confirmed") is not False
+            or packet.get("reviewer_id") is not None
+        ):
+            raise CommercialReleaseError("Owner review packet binding is invalid")
+    if owner_packets["zh-CN"].get("counterpart_packet_sha256") != owner_packets["en"].get(
+        "packet_sha256"
+    ):
+        raise CommercialReleaseError("Chinese Owner packet does not bind the English packet")
+    return gold, {
+        "lifecycle": lifecycle,
+        "query": query,
+        "cost": cost,
+        "consensus": consensus,
+        "packets": packets,
+        "owner_packets": owner_packets,
+    }
 
 
 def _authoritative_evidence_quality(
@@ -494,10 +708,13 @@ def assemble(
     living_wiki_comparison_path: Path,
     source_quality_matrix_path: Path,
     semantic_gold_path: Path,
-    semantic_host_path: Path,
+    semantic_lifecycle_path: Path,
     semantic_query_path: Path,
     semantic_query_cost_path: Path,
-    semantic_quality_path: Path,
+    semantic_consensus_path: Path,
+    semantic_machine_review_paths: list[Path],
+    semantic_owner_review_english_path: Path,
+    semantic_owner_review_chinese_path: Path,
     authoritative_evidence_quality_path: Path,
     obsidian_artifact_path: Path,
     tolaria_report_path: Path,
@@ -553,15 +770,20 @@ def assemble(
     source_quality_matrix = _source_quality_matrix(
         repository,
         source_quality_matrix_path,
+        binding=binding,
+        artifact_sha256=next(iter(wheel_hashes)),
     )
     _semantic_gold, semantic_quality = _semantic_quality(
         repository,
         binding=binding,
         gold_path=semantic_gold_path,
-        host_path=semantic_host_path,
+        lifecycle_path=semantic_lifecycle_path,
         query_path=semantic_query_path,
         cost_path=semantic_query_cost_path,
-        quality_path=semantic_quality_path,
+        consensus_path=semantic_consensus_path,
+        machine_review_paths=semantic_machine_review_paths,
+        owner_review_english_path=semantic_owner_review_english_path,
+        owner_review_chinese_path=semantic_owner_review_chinese_path,
     )
 
     host = _require_report(
@@ -692,7 +914,7 @@ def assemble(
         raise CommercialReleaseError(
             "verified Living Wiki comparison is absent from release assets"
         )
-    source_quality_asset = artifact_by_path.get("quality/v0.11-28-source-decision-matrix.json", {})
+    source_quality_asset = artifact_by_path.get("quality/v0.12-28-source-decision-matrix.json", {})
     if source_quality_asset.get("sha256") != file_record(source_quality_matrix_path)["sha256"]:
         raise CommercialReleaseError(
             "verified 28-source decision matrix is absent from release assets"
@@ -709,15 +931,41 @@ def assemble(
         )
     semantic_assets = {
         "gold": ("semantic/semantic-gold.json", semantic_gold_path),
-        "host": ("semantic/real-semantic-host-report.json", semantic_host_path),
+        "lifecycle": (
+            "semantic/deterministic-semantic-lifecycle.json",
+            semantic_lifecycle_path,
+        ),
         "query": ("semantic/semantic-query-report.json", semantic_query_path),
         "cost": ("semantic/semantic-query-cost.json", semantic_query_cost_path),
-        "quality": ("semantic/semantic-quality-report.json", semantic_quality_path),
+        "consensus": (
+            "semantic/machine-review-consensus.json",
+            semantic_consensus_path,
+        ),
+        "owner_en": (
+            "semantic/owner-review-packet.en.json",
+            semantic_owner_review_english_path,
+        ),
+        "owner_zh": (
+            "semantic/owner-review-packet.zh-CN.json",
+            semantic_owner_review_chinese_path,
+        ),
     }
     for field, (relative, source) in semantic_assets.items():
         if artifact_by_path.get(relative, {}).get("sha256") != file_record(source)["sha256"]:
             raise CommercialReleaseError(
                 f"verified Semantic Living Wiki {field} artifact is absent"
+            )
+    machine_review_assets: dict[str, tuple[str, Path]] = {}
+    for path in semantic_machine_review_paths:
+        packet = load_json(path)
+        role = packet["auditor_role"]
+        relative = f"semantic/machine-reviews/{role}.json"
+        if role in machine_review_assets:
+            raise CommercialReleaseError("duplicate Semantic machine review role")
+        machine_review_assets[role] = (relative, path)
+        if artifact_by_path.get(relative, {}).get("sha256") != file_record(path)["sha256"]:
+            raise CommercialReleaseError(
+                f"verified Semantic machine review artifact is absent: {role}"
             )
     editor_assets = {
         "obsidian": ("editors/deeplaw-obsidian-plugin.zip", obsidian_artifact_path),
@@ -817,7 +1065,7 @@ def assemble(
             "living_wiki_fresh_wheel_quality": True,
             "living_wiki_baseline_no_regression": True,
             "authoritative_28_source_quality": True,
-            "semantic_real_host_quality": True,
+            "semantic_deterministic_machine_consensus_quality": True,
             "obsidian_tolaria_integration": True,
             "documentation": docs,
         },
@@ -862,12 +1110,12 @@ def assemble(
             "passed": True,
         },
         "authoritative_source_quality": {
-            "matrix_path": "quality/v0.11-28-source-decision-matrix.json",
+            "matrix_path": "quality/v0.12-28-source-decision-matrix.json",
             "matrix_sha256": source_quality_asset["sha256"],
             "record_sha256": source_quality_matrix["record_sha256"],
             "catalog_sha256": source_quality_matrix["catalog"]["sha256"],
-            "active_release_id": source_quality_matrix["active_after"]["release_id"],
-            "active_database_sha256": source_quality_matrix["active_after"]["database_sha256"],
+            "active_release_id": source_quality_matrix["active_release"]["release_id"],
+            "active_database_sha256": source_quality_matrix["active_release"]["database_sha256"],
             "source_count": len(source_quality_matrix["sources"]),
             "decision_summary": source_quality_matrix["decision_summary"],
             "quality_regression": False,
@@ -876,21 +1124,58 @@ def assemble(
         "semantic_living_wiki_quality": {
             "gold_path": semantic_assets["gold"][0],
             "gold_sha256": artifact_by_path[semantic_assets["gold"][0]]["sha256"],
-            "host_report_path": semantic_assets["host"][0],
-            "host_report_sha256": artifact_by_path[semantic_assets["host"][0]]["sha256"],
+            "deterministic_lifecycle_path": semantic_assets["lifecycle"][0],
+            "deterministic_lifecycle_sha256": artifact_by_path[
+                semantic_assets["lifecycle"][0]
+            ]["sha256"],
             "query_report_path": semantic_assets["query"][0],
             "query_report_sha256": artifact_by_path[semantic_assets["query"][0]]["sha256"],
             "query_cost_path": semantic_assets["cost"][0],
             "query_cost_sha256": artifact_by_path[semantic_assets["cost"][0]]["sha256"],
-            "quality_report_path": semantic_assets["quality"][0],
-            "quality_report_sha256": artifact_by_path[semantic_assets["quality"][0]]["sha256"],
-            "host": semantic_quality["host"],
-            "host_version": semantic_quality["host_version"],
-            "model_identity": semantic_quality["model_identity"],
-            "build_tokens": semantic_quality["metrics"]["build_tokens"],
-            "query_tokens": semantic_quality["metrics"]["query_tokens"],
-            "hard_failures": sum(semantic_quality["hard_failures"].values()),
-            "formal_release_eligible": True,
+            "machine_review_consensus_path": semantic_assets["consensus"][0],
+            "machine_review_consensus_sha256": artifact_by_path[
+                semantic_assets["consensus"][0]
+            ]["sha256"],
+            "machine_review_packet_paths": [
+                machine_review_assets[role][0]
+                for role in sorted(machine_review_assets)
+            ],
+            "machine_review_packet_sha256": [
+                artifact_by_path[machine_review_assets[role][0]]["sha256"]
+                for role in sorted(machine_review_assets)
+            ],
+            "owner_review_packet_english_path": semantic_assets["owner_en"][0],
+            "owner_review_packet_english_sha256": artifact_by_path[
+                semantic_assets["owner_en"][0]
+            ]["sha256"],
+            "owner_review_packet_chinese_path": semantic_assets["owner_zh"][0],
+            "owner_review_packet_chinese_sha256": artifact_by_path[
+                semantic_assets["owner_zh"][0]
+            ]["sha256"],
+            "human_gold_review": semantic_quality["consensus"]["human_gold_review"],
+            "maintainer_confirmed": False,
+            "reviewer_id": None,
+            "independent_machine_review": semantic_quality["consensus"][
+                "independent_machine_review"
+            ],
+            "external_real_model_semantic_execution": "not_executed",
+            "recall_at_k": semantic_quality["query"]["metrics"]["recall_at_k"],
+            "target_scoped_precision_at_k": semantic_quality["query"]["metrics"][
+                "target_scoped_precision_at_k"
+            ],
+            "citation_validity": semantic_quality["query"]["metrics"][
+                "citation_validity"
+            ],
+            "claim_evidence_binding_accuracy": semantic_quality["query"]["metrics"][
+                "claim_evidence_binding_accuracy"
+            ],
+            "provider_payload_bytes": semantic_quality["query"]["metrics"][
+                "provider_payload_bytes"
+            ],
+            "provider_content_bytes": semantic_quality["query"]["metrics"][
+                "provider_content_bytes"
+            ],
+            "hard_failures": 0,
             "passed": True,
         },
         "authoritative_evidence_quality": {
@@ -944,7 +1229,7 @@ def assemble(
         "competitive_evidence_missing": COMPETITIVE_EVIDENCE_MISSING,
         "claim_policy": {
             "commercial_ga_is_independent_from_competitive_leadership": True,
-            "model_task_e2e_counted_as_completed": True,
+            "model_task_e2e_counted_as_completed": False,
             "static_or_lifecycle_checks_counted_as_model_acceptance": False,
             "external_institution_certification_required": False,
             "public_temporal_holdout_is_secret": False,
@@ -972,10 +1257,13 @@ def main() -> int:
     parser.add_argument("--living-wiki-comparison", type=Path, required=True)
     parser.add_argument("--source-quality-matrix", type=Path, required=True)
     parser.add_argument("--semantic-gold", type=Path, required=True)
-    parser.add_argument("--semantic-host", type=Path, required=True)
+    parser.add_argument("--semantic-lifecycle", type=Path, required=True)
     parser.add_argument("--semantic-query", type=Path, required=True)
     parser.add_argument("--semantic-query-cost", type=Path, required=True)
-    parser.add_argument("--semantic-quality", type=Path, required=True)
+    parser.add_argument("--semantic-consensus", type=Path, required=True)
+    parser.add_argument("--semantic-machine-review", type=Path, action="append", required=True)
+    parser.add_argument("--semantic-owner-review-english", type=Path, required=True)
+    parser.add_argument("--semantic-owner-review-chinese", type=Path, required=True)
     parser.add_argument("--authoritative-evidence-quality", type=Path, required=True)
     parser.add_argument("--obsidian-artifact", type=Path, required=True)
     parser.add_argument("--tolaria-report", type=Path, required=True)
@@ -1000,10 +1288,19 @@ def main() -> int:
             living_wiki_comparison_path=args.living_wiki_comparison.resolve(),
             source_quality_matrix_path=args.source_quality_matrix.resolve(),
             semantic_gold_path=args.semantic_gold.resolve(),
-            semantic_host_path=args.semantic_host.resolve(),
+            semantic_lifecycle_path=args.semantic_lifecycle.resolve(),
             semantic_query_path=args.semantic_query.resolve(),
             semantic_query_cost_path=args.semantic_query_cost.resolve(),
-            semantic_quality_path=args.semantic_quality.resolve(),
+            semantic_consensus_path=args.semantic_consensus.resolve(),
+            semantic_machine_review_paths=[
+                item.resolve() for item in args.semantic_machine_review
+            ],
+            semantic_owner_review_english_path=(
+                args.semantic_owner_review_english.resolve()
+            ),
+            semantic_owner_review_chinese_path=(
+                args.semantic_owner_review_chinese.resolve()
+            ),
             authoritative_evidence_quality_path=args.authoritative_evidence_quality.resolve(),
             obsidian_artifact_path=args.obsidian_artifact.resolve(),
             tolaria_report_path=args.tolaria_report.resolve(),

@@ -398,7 +398,7 @@
       ],
       "properties": {
         "matrix_path": {
-          "const": "quality/v0.11-28-source-decision-matrix.json"
+          "const": "quality/v0.12-28-source-decision-matrix.json"
         },
         "matrix_sha256": {
           "$ref": "#/$defs/sha256"
@@ -434,30 +434,78 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "gold_path", "gold_sha256", "host_report_path", "host_report_sha256",
-        "query_report_path", "query_report_sha256", "query_cost_path",
-        "query_cost_sha256", "quality_report_path", "quality_report_sha256",
-        "host", "host_version", "model_identity", "build_tokens", "query_tokens",
-        "hard_failures", "formal_release_eligible", "passed"
+        "gold_path", "gold_sha256", "deterministic_lifecycle_path",
+        "deterministic_lifecycle_sha256", "query_report_path",
+        "query_report_sha256", "query_cost_path", "query_cost_sha256",
+        "machine_review_consensus_path", "machine_review_consensus_sha256",
+        "machine_review_packet_paths", "machine_review_packet_sha256",
+        "owner_review_packet_english_path", "owner_review_packet_english_sha256",
+        "owner_review_packet_chinese_path", "owner_review_packet_chinese_sha256",
+        "human_gold_review", "maintainer_confirmed", "reviewer_id",
+        "independent_machine_review", "external_real_model_semantic_execution",
+        "recall_at_k", "target_scoped_precision_at_k", "citation_validity",
+        "claim_evidence_binding_accuracy", "provider_payload_bytes",
+        "provider_content_bytes", "hard_failures", "passed"
       ],
       "properties": {
         "gold_path": {"const": "semantic/semantic-gold.json"},
         "gold_sha256": {"$ref": "#/$defs/sha256"},
-        "host_report_path": {"const": "semantic/real-semantic-host-report.json"},
-        "host_report_sha256": {"$ref": "#/$defs/sha256"},
+        "deterministic_lifecycle_path": {
+          "const": "semantic/deterministic-semantic-lifecycle.json"
+        },
+        "deterministic_lifecycle_sha256": {"$ref": "#/$defs/sha256"},
         "query_report_path": {"const": "semantic/semantic-query-report.json"},
         "query_report_sha256": {"$ref": "#/$defs/sha256"},
         "query_cost_path": {"const": "semantic/semantic-query-cost.json"},
         "query_cost_sha256": {"$ref": "#/$defs/sha256"},
-        "quality_report_path": {"const": "semantic/semantic-quality-report.json"},
-        "quality_report_sha256": {"$ref": "#/$defs/sha256"},
-        "host": {"enum": ["codex", "claude_code", "opencode"]},
-        "host_version": {"type": "string", "minLength": 1},
-        "model_identity": {"type": "string", "minLength": 1},
-        "build_tokens": {"type": "integer", "minimum": 1},
-        "query_tokens": {"type": "integer", "minimum": 1},
+        "machine_review_consensus_path": {
+          "const": "semantic/machine-review-consensus.json"
+        },
+        "machine_review_consensus_sha256": {"$ref": "#/$defs/sha256"},
+        "machine_review_packet_paths": {
+          "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^semantic/machine-reviews/(semantic_gold_formal_auditor|claim_entailment_auditor|retrieval_completeness_auditor|chinese_adversarial_auditor|authority_security_auditor|reproducibility_release_auditor)\\.json$"
+          }
+        },
+        "machine_review_packet_sha256": {
+          "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "owner_review_packet_english_path": {
+          "const": "semantic/owner-review-packet.en.json"
+        },
+        "owner_review_packet_english_sha256": {"$ref": "#/$defs/sha256"},
+        "owner_review_packet_chinese_path": {
+          "const": "semantic/owner-review-packet.zh-CN.json"
+        },
+        "owner_review_packet_chinese_sha256": {"$ref": "#/$defs/sha256"},
+        "human_gold_review": {
+          "const": {
+            "status": "not_required",
+            "reason": "owner-approved deterministic machine-consensus release scope"
+          }
+        },
+        "maintainer_confirmed": {"const": false},
+        "reviewer_id": {"const": null},
+        "independent_machine_review": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "auditor_count", "unanimity_required"],
+          "properties": {
+            "status": {"const": "confirmed"},
+            "auditor_count": {"const": 6},
+            "unanimity_required": {"const": true}
+          }
+        },
+        "external_real_model_semantic_execution": {"const": "not_executed"},
+        "recall_at_k": {"const": 1},
+        "target_scoped_precision_at_k": {"const": 1},
+        "citation_validity": {"const": 1},
+        "claim_evidence_binding_accuracy": {"const": 1},
+        "provider_payload_bytes": {"type": "integer", "minimum": 0},
+        "provider_content_bytes": {"type": "integer", "minimum": 0},
         "hard_failures": {"const": 0},
-        "formal_release_eligible": {"const": true},
         "passed": {"const": true}
       }
     },

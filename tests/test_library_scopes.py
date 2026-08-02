@@ -554,6 +554,36 @@ def test_official_download_retries_only_transient_transport_failures(
     assert delays == [0.5, 1.0]
 
 
+def test_official_download_retries_remote_disconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from http.client import RemoteDisconnected
+
+    attempts = 0
+    delays: list[float] = []
+
+    class Response:
+        pass
+
+    def fake_urlopen(*_args: object, **_kwargs: object) -> Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RemoteDisconnected("remote end closed connection")
+        return Response()
+
+    monkeypatch.setattr(official_module, "urlopen", fake_urlopen)
+    monkeypatch.setattr(official_module.time, "sleep", delays.append)
+    response = official_module._urlopen_with_retry(
+        official_module.Request("https://example.gov.cn/source"),
+        timeout=1.0,
+    )
+
+    assert isinstance(response, Response)
+    assert attempts == 2
+    assert delays == [0.5]
+
+
 def test_private_library_is_physical_separate_explicit_and_deletable(tmp_path: Path) -> None:
     home = tmp_path / "home"
     official_source = tmp_path / "official-source"

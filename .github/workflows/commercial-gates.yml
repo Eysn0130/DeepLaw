@@ -10,7 +10,7 @@ on:
         type: string
         default: ""
       semantic_evidence_run_id:
-        description: Successful finalize-mode Semantic evidence workflow run ID.
+        description: Successful package-consensus Semantic evidence workflow run ID.
         required: false
         type: string
         default: ""
@@ -22,7 +22,7 @@ on:
         type: string
         default: ""
       semantic_evidence_run_id:
-        description: Successful finalize-mode Semantic evidence workflow run ID.
+        description: Successful package-consensus Semantic evidence workflow run ID.
         required: false
         type: string
         default: ""
@@ -593,7 +593,8 @@ jobs:
           mkdir -p "${assets}/dist" "${assets}/evidence" "${assets}/oci" \
             "${assets}/security" "${assets}/sbom" "${assets}/licenses" \
             "${assets}/evaluation" "${assets}/quality" \
-            "${assets}/documentation" "${assets}/semantic" "${assets}/editors"
+            "${assets}/documentation" "${assets}/semantic/machine-reviews" \
+            "${assets}/editors"
           cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}"-*.whl \
             "${assets}/dist/"
           cp "${RUNNER_TEMP}"/gate-evidence/verified-dist/deeplaw-"${version}".tar.gz \
@@ -623,22 +624,28 @@ jobs:
             "${assets}/quality/living-wiki-quality-baseline.json"
           cp "${RUNNER_TEMP}/gate-evidence/living-wiki-quality/living-wiki-quality-comparison.json" \
             "${assets}/quality/living-wiki-quality-comparison.json"
-          cp benchmarks/quality/v0.11-28-source-decision-matrix.json \
-            "${assets}/quality/v0.11-28-source-decision-matrix.json"
+          cp "${RUNNER_TEMP}/semantic-release-evidence/quality/v0.12-28-source-decision-matrix.json" \
+            "${assets}/quality/v0.12-28-source-decision-matrix.json"
           uv run --frozen python -m benchmarks.legal.run_authoritative_evidence_gate \
             --repository . \
             --evaluation-report "${assets}/evaluation/evaluation-report.json" \
             --output "${assets}/quality/authoritative-evidence-quality.json"
           cp "${RUNNER_TEMP}/semantic-release-evidence/semantic-gold.json" \
             "${assets}/semantic/semantic-gold.json"
-          cp "${RUNNER_TEMP}/semantic-release-evidence/real-semantic-host-report.json" \
-            "${assets}/semantic/real-semantic-host-report.json"
+          cp "${RUNNER_TEMP}/semantic-release-evidence/deterministic-semantic-lifecycle.json" \
+            "${assets}/semantic/deterministic-semantic-lifecycle.json"
           cp "${RUNNER_TEMP}/semantic-release-evidence/semantic-query-report.json" \
             "${assets}/semantic/semantic-query-report.json"
           cp "${RUNNER_TEMP}/semantic-release-evidence/semantic-query-cost.json" \
             "${assets}/semantic/semantic-query-cost.json"
-          cp "${RUNNER_TEMP}/semantic-release-evidence/semantic-quality-report.json" \
-            "${assets}/semantic/semantic-quality-report.json"
+          cp "${RUNNER_TEMP}/semantic-release-evidence/machine-review-consensus.json" \
+            "${assets}/semantic/machine-review-consensus.json"
+          cp "${RUNNER_TEMP}/semantic-release-evidence/owner-review-packet.en.json" \
+            "${assets}/semantic/owner-review-packet.en.json"
+          cp "${RUNNER_TEMP}/semantic-release-evidence/owner-review-packet.zh-CN.json" \
+            "${assets}/semantic/owner-review-packet.zh-CN.json"
+          cp "${RUNNER_TEMP}/semantic-release-evidence"/machine-reviews/*.json \
+            "${assets}/semantic/machine-reviews/"
           (
             cd adapters/obsidian/plugin
             npm ci
@@ -718,12 +725,29 @@ jobs:
             --living-wiki-comparison \
               "${assets}/quality/living-wiki-quality-comparison.json" \
             --source-quality-matrix \
-              "${assets}/quality/v0.11-28-source-decision-matrix.json" \
+              "${assets}/quality/v0.12-28-source-decision-matrix.json" \
             --semantic-gold "${assets}/semantic/semantic-gold.json" \
-            --semantic-host "${assets}/semantic/real-semantic-host-report.json" \
+            --semantic-lifecycle \
+              "${assets}/semantic/deterministic-semantic-lifecycle.json" \
             --semantic-query "${assets}/semantic/semantic-query-report.json" \
             --semantic-query-cost "${assets}/semantic/semantic-query-cost.json" \
-            --semantic-quality "${assets}/semantic/semantic-quality-report.json" \
+            --semantic-consensus "${assets}/semantic/machine-review-consensus.json" \
+            --semantic-machine-review \
+              "${assets}/semantic/machine-reviews/semantic_gold_formal_auditor.json" \
+            --semantic-machine-review \
+              "${assets}/semantic/machine-reviews/claim_entailment_auditor.json" \
+            --semantic-machine-review \
+              "${assets}/semantic/machine-reviews/retrieval_completeness_auditor.json" \
+            --semantic-machine-review \
+              "${assets}/semantic/machine-reviews/chinese_adversarial_auditor.json" \
+            --semantic-machine-review \
+              "${assets}/semantic/machine-reviews/authority_security_auditor.json" \
+            --semantic-machine-review \
+              "${assets}/semantic/machine-reviews/reproducibility_release_auditor.json" \
+            --semantic-owner-review-english \
+              "${assets}/semantic/owner-review-packet.en.json" \
+            --semantic-owner-review-chinese \
+              "${assets}/semantic/owner-review-packet.zh-CN.json" \
             --authoritative-evidence-quality \
               "${assets}/quality/authoritative-evidence-quality.json" \
             --obsidian-artifact "${assets}/editors/deeplaw-obsidian-plugin.zip" \

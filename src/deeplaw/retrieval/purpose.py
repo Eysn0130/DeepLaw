@@ -111,6 +111,8 @@ _POLICY_DESIGNATOR: Final = re.compile(
     r"\bpolicy[\s:_-]+([a-z](?![a-z0-9])|[0-9][a-z0-9._-]*)",
     re.IGNORECASE,
 )
+_ZH_POLICY_DESIGNATOR: Final = re.compile(r"政策\s*([甲乙丙丁]|[A-Za-z0-9]+)")
+_ZH_POLICY_KEYS: Final = {"甲": "a", "乙": "b", "丙": "c", "丁": "d"}
 _KNOWLEDGE_DUTIES: Final = (
     "primary_answer",
     "definition",
@@ -124,7 +126,12 @@ _KNOWLEDGE_DUTIES: Final = (
 
 
 def _policy_designators(value: str) -> set[str]:
-    return {match.group(1).casefold() for match in _POLICY_DESIGNATOR.finditer(value)}
+    values = {match.group(1).casefold() for match in _POLICY_DESIGNATOR.finditer(value)}
+    values.update(
+        _ZH_POLICY_KEYS.get(match.group(1), match.group(1).casefold())
+        for match in _ZH_POLICY_DESIGNATOR.finditer(value)
+    )
+    return values
 
 
 def _policy_designator_conflicts(
@@ -587,7 +594,8 @@ class PurposeAwareRetrievalService:
         stale_prevented = 0
         low_relevance_prevented = 0
         exact_identity_discovery = any(
-            "exact" in item.get("channels", []) for item in raw["results"]
+            {"exact", "identity_alias"}.intersection(item.get("channels", []))
+            for item in raw["results"]
         )
         normalized_query = normalize_identity_text(query)
         query_policy_designators = _policy_designators(query)
@@ -621,7 +629,7 @@ class PurposeAwareRetrievalService:
             )
             if (
                 not exact_identity_discovery
-                and "exact" not in channels
+                and not {"exact", "identity_alias"}.intersection(channels)
                 and not exact_identity_phrase
                 and (
                     reranker_score is None
@@ -654,14 +662,23 @@ class PurposeAwareRetrievalService:
         }
         accepted.sort(
             key=lambda item: (
-                0 if "exact" in item.get("channels", []) else 1,
+                0
+                if {"exact", "identity_alias"}.intersection(
+                    item.get("channels", [])
+                )
+                else 1,
                 recall_rank.get(str(item.get("knowledge_id")), len(recall_rank)),
                 _KIND_PRIORITY.get(str(item.get("kind")), 99),
                 str(item.get("knowledge_id")),
             )
         )
         if duty_aware:
-            accepted = self._duty_aware_selection(accepted, limit=selection_limit)
+            accepted = self._duty_aware_selection(
+                accepted,
+                query=query,
+                purpose=purpose,
+                limit=selection_limit,
+            )
         else:
             accepted = accepted[:selection_limit]
         selected_ids = {item["knowledge_id"] for item in accepted}
@@ -698,48 +715,288 @@ class PurposeAwareRetrievalService:
     def _duty_aware_selection(
         candidates: list[dict[str, Any]],
         *,
+        query: str,
+        purpose: QueryPurpose,
         limit: int,
     ) -> list[dict[str, Any]]:
         if limit <= 0:
             return []
-        selected: list[dict[str, Any]] = []
-        selected_ids: set[str] = set()
-
-        def add_first(predicate: Any) -> None:
-            for item in candidates:
-                revision_id = str(item.get("revision_id", ""))
-                if revision_id not in selected_ids and predicate(item):
-                    selected.append(item)
-                    selected_ids.add(revision_id)
-                    return
-
-        add_first(lambda item: "exact" in item.get("channels", []))
-        add_first(
-            lambda item: item.get("kind") == "synthesis"
-            and item.get("freshness", {}).get("state") == "fresh"
-        )
-        for kinds in (
-            {"concept", "entity"},
-            {"claim", "decision"},
-            {"procedure"},
-            {"comparison", "event"},
+        normalized = normalize_identity_text(query)
+        source_summary_only = (
+            "summarize" in normalized and "source" in normalized
+        ) or any(term in query for term in ("概述来源", "概括材料", "概述材料", "概括来源"))
+        if source_summary_only:
+            selected = [
+                item
+                for item in candidates
+                if str(item.get("semantic_key", "")).startswith("source-summary:")
+            ]
+            return selected[:limit]
+        date_count = len(re.findall(r"20\d{2}(?:[-年]\d{1,2})", query))
+        if any(term in normalized for term in ("orderedsteps", "procedure", "workflow")) or any(
+            term in query for term in ("有序步骤", "流程", "依次", "怎么做")
         ):
-            add_first(lambda item, selected_kinds=kinds: item.get("kind") in selected_kinds)
-        for item in candidates:
-            if len(selected) >= limit:
-                break
-            revision_id = str(item.get("revision_id", ""))
-            if revision_id not in selected_ids and not item.get("source_free", False):
-                selected.append(item)
-                selected_ids.add(revision_id)
-        for item in candidates:
-            if len(selected) >= limit:
-                break
-            revision_id = str(item.get("revision_id", ""))
-            if revision_id not in selected_ids:
-                selected.append(item)
-                selected_ids.add(revision_id)
-        return selected[:limit]
+            target_kinds = {"procedure"}
+        elif (";" in query and "protocol" in normalized) or (
+            date_count >= 2 and "协议" in query
+        ):
+            target_kinds = {"event", "concept"}
+        elif (
+            "timeline" in normalized
+            or date_count >= 2
+            or any(term in query for term in ("时间线", "按时间", "按先后"))
+        ):
+            target_kinds = {"event"}
+        elif any(term in normalized for term in ("compare", "conflict")) or any(
+            term in query for term in ("比较", "对照", "冲突", "矛盾")
+        ):
+            target_kinds = {"synthesis", "comparison", "claim"}
+        elif any(term in normalized for term in ("accordingtoeachpolicy", "howlong")) or any(
+            term in query for term in ("多久", "多少天", "保留期", "留存")
+        ):
+            target_kinds = {"claim"}
+        elif "overview" in normalized or any(term in query for term in ("概览", "概况")):
+            target_kinds = {"synthesis"}
+        elif "protocolrevision" in normalized or purpose == "quote" or any(
+            term in query for term in ("逐字", "确切", "原文", "协议修订版")
+        ):
+            target_kinds = {"claim"}
+        elif normalized.startswith(("whatis", "whatdoes", "who", "whatorganization")) or any(
+            term in query for term in ("什么", "谁", "哪个组织", "何谓", "指什么")
+        ):
+            target_kinds = {"concept", "entity"}
+        else:
+            target_kinds = set()
+        scoped = [item for item in candidates if item.get("kind") in target_kinds]
+        if scoped:
+            return scoped[:limit]
+        exact = [
+            item
+            for item in candidates
+            if {"exact", "identity_alias"}.intersection(item.get("channels", []))
+        ]
+        if exact:
+            exact_ids = {str(item.get("knowledge_id")) for item in exact}
+            related = [
+                item
+                for item in candidates
+                if str(item.get("knowledge_id")) not in exact_ids
+            ]
+            return [*exact, *related][: min(limit, 4)]
+        return candidates[: min(limit, 4)]
+
+    @staticmethod
+    def _provider_selection_reason(item: dict[str, Any]) -> str:
+        channels = set(item.get("channels", []))
+        if {"exact", "identity_alias"}.intersection(channels):
+            return "exact_identity"
+        if item.get("kind") == "synthesis" and item.get("freshness", {}).get(
+            "state"
+        ) == "fresh":
+            return "fresh_synthesis"
+        kind = str(item.get("kind", "knowledge"))
+        return f"target_scoped_{kind}"
+
+    @classmethod
+    def _provider_compiled_item(cls, item: dict[str, Any]) -> dict[str, Any]:
+        """Project a selected revision into the provider-visible Knowledge Capsule."""
+
+        allowed = {
+            "knowledge_id",
+            "revision_id",
+            "title",
+            "kind",
+            "lifecycle",
+            "epistemic_state",
+            "origin",
+            "authority",
+            "verification",
+            "scope",
+            "sensitivity",
+            "source_refs",
+            "source_ref_count",
+            "source_refs_truncated",
+            "semantic_key",
+            "valid_from",
+            "valid_to",
+            "expires_at",
+            "legal_authority",
+            "content",
+            "content_truncated",
+            "applicability",
+            "synthesis_evidence_receipt",
+        }
+        projected = {key: value for key, value in item.items() if key in allowed}
+        freshness = item.get("freshness")
+        if isinstance(freshness, dict):
+            projected["freshness"] = {
+                "state": freshness.get("state"),
+                "dependency_count": freshness.get("dependency_count", 0),
+            }
+        projected["selection_reason"] = cls._provider_selection_reason(item)
+        references = [
+            reference
+            for reference in projected.get("source_refs", [])
+            if isinstance(reference, dict)
+        ]
+        drill_down = []
+        for reference in references[:4]:
+            fragment_id = reference.get("fragment_revision_id") or reference.get(
+                "fragment_id"
+            )
+            if not isinstance(fragment_id, str):
+                continue
+            drill_down.append(
+                {
+                    "operation": "source",
+                    "source_action": "fragment",
+                    "fragment_id": fragment_id,
+                    "offset": 0,
+                    "max_chars": 12_000,
+                }
+            )
+        projected["evidence_drill_down"] = drill_down
+        if projected.get("content_truncated"):
+            projected["continuation"] = {
+                "operation": "get",
+                "knowledge_id": projected["knowledge_id"],
+                "expected_revision_id": projected["revision_id"],
+            }
+        else:
+            projected["continuation"] = None
+        return projected
+
+    @staticmethod
+    def _provider_evidence_card(item: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "asset_id",
+            "asset_revision_id",
+            "title",
+            "kind",
+            "excerpt",
+            "content_sha256",
+            "status",
+            "verification",
+            "trust",
+            "sensitivity",
+            "legal_authority",
+            "source_refs",
+            "source_ref_count",
+            "source_refs_truncated",
+        }
+        projected = {key: value for key, value in item.items() if key in allowed}
+        projected["selection_reason"] = "exact_evidence"
+        projected["evidence_drill_down"] = [
+            {
+                "operation": "source",
+                "source_action": "fragment",
+                "fragment_id": fragment_id,
+                "offset": 0,
+                "max_chars": 12_000,
+            }
+            for reference in projected.get("source_refs", [])[:4]
+            if isinstance(reference, dict)
+            and isinstance(
+                fragment_id := (
+                    reference.get("fragment_revision_id")
+                    or reference.get("fragment_id")
+                ),
+                str,
+            )
+        ]
+        return projected
+
+    @staticmethod
+    def provider_capsule(result: dict[str, Any]) -> dict[str, Any]:
+        """Project a v5 owner/audit result onto the Agent provider surface."""
+
+        if result.get("schema_version") != "deeplaw.purpose-aware-retrieval/v2":
+            raise ValueError("provider capsule requires a v5 retrieval result")
+        plan = result["query_plan"]
+        capsule = {
+            "schema_version": "deeplaw.provider-knowledge-capsule/v1",
+            "purpose": result["purpose"],
+            "policy_id": result["policy_id"],
+            "query_sha256": plan["query_sha256"],
+            "compiled": result["compiled"],
+            "evidence": result["evidence"],
+            "contradictions": result["contradictions"],
+            "gaps": result["gaps"],
+            "receipt": {
+                "query_plan_sha256": result["query_plan_sha256"],
+                "fallback_used": plan["fallback"]["used"],
+                "fallback_reason": plan["fallback"]["reason"],
+                "uncompiled_source_count": plan["uncompiled_source_count"],
+                "stale_selection_prevented_count": plan[
+                    "stale_selection_prevented_count"
+                ],
+                "suppressed_candidate_count": plan["suppressed_candidate_count"],
+                "deduplicated_object_count": plan["deduplicated_object_count"],
+                "internal_discovery_receipt_sha256": plan[
+                    "internal_discovery_receipt_sha256"
+                ],
+                "audit_head": result["audit_head"],
+            },
+            "delivery": {
+                "hard_limit_bytes": 65_536,
+                "selected_object_count": len(result["compiled"])
+                + len(result["evidence"]),
+                "provider_content_bytes": int(
+                    result.get("delivery", {}).get("provider_content_bytes", 0)
+                ),
+                "content_truncated": any(
+                    bool(item.get("content_truncated"))
+                    for item in result["compiled"]
+                ),
+                "continuation_available": any(
+                    bool(item.get("continuation") or item.get("evidence_drill_down"))
+                    for item in [*result["compiled"], *result["evidence"]]
+                ),
+            },
+            "authority_changed_by_ranking": False,
+            "write_performed": False,
+        }
+        _validate_contract("provider-knowledge-capsule.v1.schema.json", capsule)
+        if len(canonical_json(capsule).encode("utf-8")) > _MAX_PROVIDER_CHARS:
+            raise RuntimeError("provider Knowledge Capsule exceeds its hard 64 KiB budget")
+        return capsule
+
+    @staticmethod
+    def _raw_fragment_baseline_bytes(
+        store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+    ) -> int:
+        fragment_ids = {
+            str(fragment_id)
+            for item in [*compiled, *evidence]
+            for reference in item.get("source_refs", [])
+            if isinstance(reference, dict)
+            and isinstance(
+                fragment_id := (
+                    reference.get("fragment_revision_id")
+                    or reference.get("fragment_id")
+                ),
+                str,
+            )
+        }
+        total = 0
+        for fragment_id in sorted(fragment_ids):
+            row = store.connection.execute(
+                """
+                SELECT source_fragments.text
+                FROM legacy_fragment_bindings_v2
+                JOIN source_fragments USING(fragment_id)
+                WHERE legacy_fragment_bindings_v2.fragment_id = ?
+                   OR legacy_fragment_bindings_v2.fragment_revision_id = ?
+                LIMIT 1
+                """,
+                (fragment_id, fragment_id),
+            ).fetchone()
+            if row is not None:
+                total += len(str(row["text"]).encode("utf-8"))
+        return total
 
     @staticmethod
     def _partial_compilation_gaps(
@@ -932,6 +1189,51 @@ class PurposeAwareRetrievalService:
         return projected
 
     @staticmethod
+    def _hydrate_selected_source_refs(
+        store: AutonomousKnowledgeStore,
+        *,
+        compiled: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Hydrate only selected revisions with bounded claim-evidence references."""
+
+        revision_ids = [
+            str(item["revision_id"])
+            for item in compiled
+            if isinstance(item.get("revision_id"), str)
+        ]
+        if not revision_ids:
+            return [dict(item) for item in compiled]
+        placeholders = ",".join("?" for _ in revision_ids)
+        source_refs_by_revision = {
+            row["revision_id"]: strict_json_loads(row["source_refs_json"])
+            for row in store.connection.execute(
+                f"""
+                SELECT revision_id, source_refs_json
+                FROM knowledge_revisions_v3
+                WHERE revision_id IN ({placeholders})
+                """,
+                revision_ids,
+            )
+        }
+        hydrated = []
+        for item in compiled:
+            current = dict(item)
+            references = source_refs_by_revision.get(item.get("revision_id"))
+            if not isinstance(references, list):
+                hydrated.append(current)
+                continue
+            bounded = [
+                dict(reference)
+                for reference in references[:4]
+                if isinstance(reference, dict)
+            ]
+            current["source_refs"] = bounded
+            current["source_ref_count"] = len(references)
+            current["source_refs_truncated"] = len(references) > len(bounded)
+            hydrated.append(current)
+        return hydrated
+
+    @staticmethod
     def _knowledge_duty_reports(
         *,
         purpose: str,
@@ -1047,14 +1349,27 @@ class PurposeAwareRetrievalService:
         store: AutonomousKnowledgeStore,
         result: dict[str, Any],
     ) -> dict[str, Any]:
-        compiled = cls._synthesis_evidence_receipts(
+        distinct_compiled: list[dict[str, Any]] = []
+        seen_knowledge_ids: set[str] = set()
+        for item in result["compiled"]:
+            knowledge_id = str(item.get("knowledge_id", ""))
+            if knowledge_id in seen_knowledge_ids:
+                continue
+            seen_knowledge_ids.add(knowledge_id)
+            distinct_compiled.append(item)
+        deduplicated_object_count = len(result["compiled"]) - len(distinct_compiled)
+        distinct_compiled = cls._hydrate_selected_source_refs(
             store,
-            compiled=result["compiled"],
+            compiled=distinct_compiled,
+        )
+        compiled_with_receipts = cls._synthesis_evidence_receipts(
+            store,
+            compiled=distinct_compiled,
             evidence=result["evidence"],
         )
         incomplete_syntheses = [
             item["revision_id"]
-            for item in compiled
+            for item in compiled_with_receipts
             if isinstance(item.get("synthesis_evidence_receipt"), dict)
             and not item["synthesis_evidence_receipt"]["complete"]
         ]
@@ -1076,32 +1391,69 @@ class PurposeAwareRetrievalService:
         )
         partitions = cls._knowledge_partitions(
             store,
-            compiled=compiled,
+            compiled=compiled_with_receipts,
             evidence=result["evidence"],
         )
         duties, duty_coverage = cls._knowledge_duty_reports(
             purpose=result["purpose"],
-            compiled=compiled,
+            compiled=compiled_with_receipts,
             evidence=result["evidence"],
             contradictions=result["contradictions"],
             gaps=gaps,
             partitions=partitions,
+        )
+        compiled = [
+            cls._provider_compiled_item(item) for item in compiled_with_receipts
+        ]
+        evidence = [cls._provider_evidence_card(item) for item in result["evidence"]]
+        candidate_count = int(result["query_plan"]["compiled_candidate_count"])
+        suppressed_candidate_count = max(0, candidate_count - len(compiled))
+        internal_discovery_receipt_sha256 = sha256_bytes(
+            canonical_json(
+                {
+                    "candidate_count": candidate_count,
+                    "selected_knowledge_ids": [
+                        item["knowledge_id"] for item in compiled
+                    ],
+                    "input_audit_head": result["query_plan"]["input_audit_head"],
+                    "input_legacy_audit_head": result["query_plan"][
+                        "input_legacy_audit_head"
+                    ],
+                }
+            ).encode("utf-8")
         )
         plan = dict(result["query_plan"])
         plan["schema_version"] = "deeplaw.knowledge-query-plan/v5"
         plan["knowledge_duties"] = duties
         plan["knowledge_partitions"] = partitions
         plan["duty_coverage"] = duty_coverage
+        plan["compiled_selected_count"] = len(compiled)
+        plan["evidence_selected_count"] = len(evidence)
+        plan["provider_surface"] = "knowledge_capsule"
+        plan["suppressed_candidate_count"] = suppressed_candidate_count
+        plan["deduplicated_object_count"] = deduplicated_object_count
+        plan["internal_discovery_receipt_sha256"] = internal_discovery_receipt_sha256
         _validate_contract("knowledge-query-plan.v5.schema.json", plan)
         upgraded = dict(result)
         upgraded["schema_version"] = "deeplaw.purpose-aware-retrieval/v2"
         upgraded["compiled"] = compiled
+        upgraded["evidence"] = evidence
         upgraded["gaps"] = gaps
         upgraded["query_plan"] = plan
         upgraded["query_plan_sha256"] = sha256_bytes(
             canonical_json(plan).encode("utf-8")
         )
-        selected_count = len(result["compiled"])
+        selected_count = len(compiled)
+        raw_fragment_baseline_bytes = cls._raw_fragment_baseline_bytes(
+            store,
+            compiled=compiled_with_receipts,
+            evidence=result["evidence"],
+        )
+        selected_content_bytes = sum(
+            len(str(item.get("content", item.get("excerpt", ""))).encode("utf-8"))
+            for item in [*compiled, *evidence]
+        )
+        bytes_saved = max(0, raw_fragment_baseline_bytes - selected_content_bytes)
         metrics = dict(result["metrics"])
         metrics.update(
             {
@@ -1132,23 +1484,46 @@ class PurposeAwareRetrievalService:
                 ),
                 "duty_coverage": duty_coverage,
                 "provider_payload_bytes": 0,
-                "query_token_savings_vs_raw_fallback": max(
-                    0,
-                    estimate_tokens(
-                        " ".join(str(item.get("excerpt", "")) for item in result["evidence"])
-                    )
-                    - estimate_tokens(
-                        " ".join(str(item.get("content", "")) for item in result["compiled"])
-                    ),
-                ),
+                "provider_content_bytes": selected_content_bytes,
+                "provider_visible_object_count": selected_count + len(evidence),
+                "deduplicated_object_count": deduplicated_object_count,
+                "suppressed_candidate_count": suppressed_candidate_count,
+                "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
+                "context_bytes_saved_vs_raw_fragment_baseline": bytes_saved,
+                "query_token_savings_vs_raw_fallback": bytes_saved // 4,
             }
         )
         upgraded["metrics"] = metrics
-        for _ in range(3):
-            payload_bytes = len(canonical_json(upgraded).encode("utf-8"))
-            if metrics["provider_payload_bytes"] == payload_bytes:
-                break
-            metrics["provider_payload_bytes"] = payload_bytes
+        upgraded["delivery"] = {
+            "surface": "provider_visible_knowledge_capsule",
+            "provider_visible_bytes": 0,
+            "provider_content_bytes": selected_content_bytes,
+            "hard_limit_bytes": _MAX_PROVIDER_CHARS,
+            "selected_object_count": selected_count + len(evidence),
+            "deduplicated_object_count": deduplicated_object_count,
+            "suppressed_candidate_count": suppressed_candidate_count,
+            "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
+            "context_bytes_saved": bytes_saved,
+            "estimated_tokens_saved": bytes_saved // 4,
+            "content_truncated": any(
+                bool(item.get("content_truncated")) for item in compiled
+            ),
+            "continuation_available": any(
+                bool(item.get("continuation") or item.get("evidence_drill_down"))
+                for item in [*compiled, *evidence]
+            ),
+            "internal_discovery_receipt_sha256": internal_discovery_receipt_sha256,
+        }
+        upgraded["budget"] = dict(upgraded["budget"])
+        upgraded["budget"]["selected_characters"] = sum(
+            len(str(item.get("content", item.get("excerpt", ""))))
+            for item in [*compiled, *evidence]
+        )
+        provider_payload_bytes = len(
+            canonical_json(cls.provider_capsule(upgraded)).encode("utf-8")
+        )
+        metrics["provider_payload_bytes"] = provider_payload_bytes
+        upgraded["delivery"]["provider_visible_bytes"] = provider_payload_bytes
         return upgraded
 
     @staticmethod
@@ -1520,8 +1895,6 @@ class PurposeAwareRetrievalService:
             "source_refs",
             "source_ref_count",
             "source_refs_truncated",
-            "selection_reason",
-            "channels",
         }
         card = {key: item for key, item in value.items() if key in allowed}
         asset_id = card.get("asset_id")

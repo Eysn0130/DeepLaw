@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/provider-knowledge-capsule.v1.schema.json",
+  "title": "DeepLaw Provider-visible Knowledge Capsule v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "purpose", "policy_id", "query_sha256", "compiled",
+    "evidence", "contradictions", "gaps", "receipt", "delivery",
+    "authority_changed_by_ranking", "write_performed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.provider-knowledge-capsule/v1"},
+    "purpose": {
+      "enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]
+    },
+    "policy_id": {
+      "enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
+    },
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compiled": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+    "evidence": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+    "contradictions": {"type": "array", "maxItems": 40, "items": {"type": "object"}},
+    "gaps": {"type": "array", "maxItems": 40, "items": {"type": "object"}},
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_plan_sha256", "fallback_used", "fallback_reason",
+        "uncompiled_source_count", "stale_selection_prevented_count",
+        "suppressed_candidate_count", "deduplicated_object_count",
+        "internal_discovery_receipt_sha256", "audit_head"
+      ],
+      "properties": {
+        "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "fallback_used": {"type": "boolean"},
+        "fallback_reason": {"type": ["string", "null"], "maxLength": 1000},
+        "uncompiled_source_count": {"type": "integer", "minimum": 0},
+        "stale_selection_prevented_count": {"type": "integer", "minimum": 0},
+        "suppressed_candidate_count": {"type": "integer", "minimum": 0},
+        "deduplicated_object_count": {"type": "integer", "minimum": 0},
+        "internal_discovery_receipt_sha256": {
+          "type": "string", "pattern": "^[0-9a-f]{64}$"
+        },
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hard_limit_bytes", "selected_object_count", "provider_content_bytes", "content_truncated",
+        "continuation_available"
+      ],
+      "properties": {
+        "hard_limit_bytes": {"const": 65536},
+        "selected_object_count": {"type": "integer", "minimum": 0, "maximum": 40},
+        "provider_content_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "content_truncated": {"type": "boolean"},
+        "continuation_available": {"type": "boolean"}
+      }
+    },
+    "authority_changed_by_ranking": {"const": false},
+    "write_performed": {"const": false}
+  }
+}
