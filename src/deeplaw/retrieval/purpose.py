@@ -23,6 +23,8 @@ from ..util import (
     canonical_json,
     query_discovery_text,
     query_expansion_terms,
+    query_search_terms,
+    search_terms,
     sha256_bytes,
     strict_json_loads,
 )
@@ -1251,6 +1253,7 @@ class PurposeAwareRetrievalService:
         store: AutonomousKnowledgeStore,
         *,
         compiled: list[dict[str, Any]],
+        query: str,
     ) -> list[dict[str, Any]]:
         """Hydrate only selected revisions with bounded claim-evidence references."""
 
@@ -1280,14 +1283,89 @@ class PurposeAwareRetrievalService:
             if not isinstance(references, list):
                 hydrated.append(current)
                 continue
+            valid_references = [
+                dict(reference) for reference in references if isinstance(reference, dict)
+            ]
+            target_text = "\n".join(
+                str(value)
+                for value in (
+                    query,
+                    item.get("title", ""),
+                    item.get("content", ""),
+                    item.get("body", ""),
+                    item.get("semantic_key", ""),
+                )
+                if value
+            )
+            target_terms = set(
+                query_search_terms(target_text, limit=128, cover_tail=True)
+            )
+            fragment_ids = [
+                fragment_id
+                for reference in valid_references
+                if isinstance(
+                    fragment_id := (
+                        reference.get("fragment_id")
+                        or reference.get("fragment_revision_id")
+                    ),
+                    str,
+                )
+            ]
+            fragment_rows: dict[str, Any] = {}
+            if fragment_ids:
+                fragment_placeholders = ",".join("?" for _ in fragment_ids)
+                fragment_rows = {
+                    row["fragment_id"]: row
+                    for row in store.connection.execute(
+                        f"""
+                        SELECT fragment_id, text, ordinal
+                        FROM source_fragments
+                        WHERE fragment_id IN ({fragment_placeholders})
+                        """,
+                        fragment_ids,
+                    )
+                }
+            scored: list[tuple[int, int, dict[str, Any]]] = []
+            for index, reference in enumerate(valid_references):
+                fragment_id = reference.get("fragment_id") or reference.get(
+                    "fragment_revision_id"
+                )
+                row = fragment_rows.get(fragment_id)
+                overlap = 0
+                if row is not None and target_terms:
+                    overlap = len(
+                        target_terms.intersection(
+                            search_terms(str(row["text"]), limit=256, cover_tail=True)
+                        )
+                    )
+                scored.append((overlap, index, reference))
+
+            ranked = sorted(scored, key=lambda value: (-value[0], value[1]))
+            selected_indexes: set[int] = set()
+            best_by_source: dict[str, tuple[int, int, dict[str, Any]]] = {}
+            for candidate in ranked:
+                reference = candidate[2]
+                source_key = reference.get("source_revision_id") or reference.get(
+                    "source_id"
+                )
+                if isinstance(source_key, str) and source_key not in best_by_source:
+                    best_by_source[source_key] = candidate
+            for candidate in sorted(
+                best_by_source.values(), key=lambda value: (-value[0], value[1])
+            )[:4]:
+                selected_indexes.add(candidate[1])
+            for candidate in ranked:
+                if len(selected_indexes) >= 4:
+                    break
+                selected_indexes.add(candidate[1])
             bounded = [
-                dict(reference)
-                for reference in references[:4]
-                if isinstance(reference, dict)
+                reference
+                for index, reference in enumerate(valid_references)
+                if index in selected_indexes
             ]
             current["source_refs"] = bounded
-            current["source_ref_count"] = len(references)
-            current["source_refs_truncated"] = len(references) > len(bounded)
+            current["source_ref_count"] = len(valid_references)
+            current["source_refs_truncated"] = len(valid_references) > len(bounded)
             hydrated.append(current)
         return hydrated
 
@@ -1419,6 +1497,7 @@ class PurposeAwareRetrievalService:
         distinct_compiled = cls._hydrate_selected_source_refs(
             store,
             compiled=distinct_compiled,
+            query=str(result["query"]),
         )
         compiled_with_receipts = cls._synthesis_evidence_receipts(
             store,

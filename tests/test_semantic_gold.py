@@ -284,6 +284,26 @@ def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
     assert len(state["final_knowledge_ids"]) == 1
     assert tampered["valid"] is False
 
+    query = "What organization is also known as MRC, Meridian Research, and the Cooperative?"
+    retrieved = PurposeAwareRetrievalService(vault).query(
+        query,
+        purpose="answer",
+        query_plan_version="5",
+    )
+    entity = next(
+        item
+        for item in retrieved["compiled"]
+        if item["semantic_key"] == "entity:meridian-research-cooperative"
+    )
+    assert entity["source_ref_count"] == 37
+    assert entity["source_refs_truncated"] is True
+    assert {reference["locator"] for reference in entity["source_refs"]} == {
+        "section:1;paragraphs:3-5",
+        "section:35;paragraphs:140-141",
+        "section:36;paragraphs:144-145",
+        "section:37;paragraphs:148-149",
+    }
+
 
 def test_cross_source_synthesis_binds_every_input_source_in_its_receipt(
     tmp_path: Path,
