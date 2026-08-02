@@ -1708,6 +1708,15 @@ def test_synthesis_records_exact_inputs_and_transitively_stales(
         ).fetchone()
         assert synthesis is not None
         assert synthesis["verification"] == "revision_bound"
+        synthesis_detail = store.get_current(synthesis["knowledge_id"])
+        detail_schema = json.loads(
+            (
+                Path(__file__).resolve().parents[1]
+                / "contracts"
+                / "knowledge-revision-detail.v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        Draft202012Validator(detail_schema).validate(synthesis_detail)
         synthesis_revision_id = synthesis["revision_id"]
         registered = store.connection.execute(
             """

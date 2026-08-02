@@ -24,6 +24,11 @@ This release closes Semantic Living Wiki compilation and production editor integ
 - Provider-visible purpose-aware Knowledge Capsules with selected-object deduplication, explicit
   evidence drill-down/continuation, suppressed-candidate receipts, and UTF-8 byte accounting.
 
+### Fixed
+
+- Align the public Knowledge Revision Detail Schema with the existing `revision_bound` Synthesis
+  verification state and cover the exact emitted detail with a contract regression test.
+
 ### Verified boundaries
 
 - Deterministic Agent tests remain governed-transaction evidence only. The formal manifest binds

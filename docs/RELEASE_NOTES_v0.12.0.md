@@ -78,6 +78,9 @@ provenance, and post-release rows remain release gates rather than completed his
   read-only enforcement, and Authority failures. It explicitly keeps unreviewed legal Gold pending.
 - Exact v0.11 autonomous Vaults are accepted by the v0.12 verifier, receive a verified autonomous
   snapshot before reconciliation, and can be restored without losing compiled Knowledge state.
+- The public Knowledge Revision Detail contract admits the existing `revision_bound` verification
+  state used by Source Summary and Synthesis revisions, and the synthesis lifecycle regression
+  validates the emitted detail against that exact Schema.
 - All 15 Semantic Gold cases and five adversarial challenges must be independently confirmed by
   six isolated `gpt-5.6-sol` machine auditors. No majority vote is accepted, and any discrepancy
   invalidates all prior packets for that candidate.

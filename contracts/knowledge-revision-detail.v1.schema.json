@@ -40,7 +40,9 @@
     "mutability": {"const": "revision_only"},
     "writer_scope": {"enum": ["personal", "project", "domain"]},
     "activation_policy": {"const": "deeplaw.autonomous-activation/v1"},
-    "verification": {"enum": ["unverified", "source_bound", "run_bound"]},
+    "verification": {
+      "enum": ["unverified", "source_bound", "revision_bound", "run_bound"]
+    },
     "scope": {"enum": ["personal", "project", "domain"]},
     "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
     "writer_id": {"type": "string", "minLength": 1, "maxLength": 200},
