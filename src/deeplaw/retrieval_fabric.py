@@ -21,7 +21,7 @@ from .util import (
     fts_query,
     normalize_query_text,
     query_phrases,
-    search_terms,
+    query_search_terms,
     sha256_bytes,
     stable_id,
     strict_json_loads,
@@ -46,7 +46,7 @@ RETRIEVAL_MODES = frozenset(RetrievalMode.__args__)
 QUERY_PLAN_SCHEMA = "deeplaw.knowledge-query-plan/v1"
 RETRIEVAL_TRACE_SCHEMA = "deeplaw.knowledge-retrieval-trace/v1"
 RETRIEVAL_RESULT_SCHEMA = "deeplaw.knowledge-retrieval/v1"
-RETRIEVAL_IMPLEMENTATION_REVISION = "retrieval-fabric/2"
+RETRIEVAL_IMPLEMENTATION_REVISION = "retrieval-fabric/3"
 TOKENIZER_PROFILE = "deeplaw-mixed-cjk-code/2"
 FUSION_PROFILE = "rrf-duty-diversity/1"
 RERANKER_PROFILE = "off"
@@ -311,7 +311,7 @@ def build_query_plan(
     if "global_synthesis" in intents:
         weights["tree"] *= 1.25
         weights["graph"] *= 1.25
-    terms = search_terms(normalized, limit=48, cover_tail=True)
+    terms = query_search_terms(normalized, limit=48, cover_tail=True)
     phrases = query_phrases(normalized)
     if not terms and not phrases and not _ASSET_ID.search(normalized):
         raise ValueError("knowledge query has no searchable terms")
@@ -579,7 +579,7 @@ def _exact_candidates(
             phrases.append(query)
         phrase_values: list[tuple[str, str, float | None]] = []
         for phrase in phrases[:8]:
-            phrase_terms = search_terms(phrase, limit=16, cover_tail=True)
+            phrase_terms = query_search_terms(phrase, limit=16, cover_tail=True)
             if not phrase_terms:
                 continue
             safe_phrase_terms = (term.replace('"', '""') for term in phrase_terms)

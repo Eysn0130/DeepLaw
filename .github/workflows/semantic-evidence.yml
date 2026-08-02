@@ -9,12 +9,18 @@ on:
       - benchmarks/hosts/run_semantic_host_harness.py
       - benchmarks/semantic/**
       - contracts/deterministic-semantic-*.schema.json
+      - contracts/autonomous-query-plan.v1.schema.json
+      - contracts/knowledge-query-plan.v5.schema.json
       - contracts/knowledge-capsule-verification.v2.schema.json
       - contracts/real-semantic-host-report.v2.schema.json
       - contracts/semantic-*.schema.json
       - src/deeplaw/context_compiler.py
+      - src/deeplaw/knowledge_autonomy.py
+      - src/deeplaw/knowledge_store.py
       - src/deeplaw/read_services.py
       - src/deeplaw/retrieval/purpose.py
+      - src/deeplaw/retrieval_fabric.py
+      - src/deeplaw/util.py
   workflow_dispatch:
     inputs:
       mode:

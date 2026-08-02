@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/autonomous-query-plan.v1.schema.json",
+  "title": "DeepLaw autonomous query plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "intent", "query_sha256", "channels", "retrieval_mode",
+    "scope", "max_sensitivity", "as_of", "filters", "budget", "audit_head",
+    "legacy_audit_head", "candidate_count", "candidate_state_sha256",
+    "derived_manifest_sha256", "derived_lexical_ready", "derived_dense_ready",
+    "dense_manifest_sha256", "dense_model", "reranker_model",
+    "query_expansion_profile", "query_expansion_term_count",
+    "query_expansion_terms_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.autonomous-query-plan/v1"},
+    "intent": {"const": "autonomous_knowledge_recall"},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "channels": {
+      "type": "array",
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "exact", "identity_alias", "lexical", "lexical_fallback", "temporal_lexical", "dense",
+          "graph", "wiki", "community", "feedback", "reranker"
+        ]
+      }
+    },
+    "retrieval_mode": {"enum": ["exact", "lexical", "dense", "graph", "hybrid"]},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "as_of": {"type": ["string", "null"], "format": "date-time"},
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kinds", "required_tags"],
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"enum": [
+            "claim", "comparison", "concept", "decision", "entity", "event",
+            "experience", "memory", "preference", "procedure", "skill", "synthesis"
+          ]}
+        },
+        "required_tags": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items", "characters", "tokens", "sources", "graph_hops", "provider_characters"
+      ],
+      "properties": {
+        "items": {"type": "integer", "minimum": 0, "maximum": 20},
+        "characters": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "tokens": {"type": "integer", "minimum": 0, "maximum": 32000},
+        "sources": {"type": "integer", "minimum": 0, "maximum": 32},
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "provider_characters": {"const": 24576}
+      }
+    },
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "candidate_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "derived_manifest_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "derived_lexical_ready": {"type": "boolean"},
+    "derived_dense_ready": {"type": "boolean"},
+    "dense_manifest_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "dense_model": {"const": "deeplaw-multilingual-hash-dense/1"},
+    "reranker_model": {"const": "deeplaw-evidence-duty-reranker/1"},
+    "query_expansion_profile": {"const": "deeplaw-deterministic-query-expansion/1"},
+    "query_expansion_term_count": {"type": "integer", "minimum": 0, "maximum": 24},
+    "query_expansion_terms_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_derived": {"type": "object"}
+  }
+}

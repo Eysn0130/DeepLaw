@@ -41,10 +41,13 @@ from .knowledge_store import (
     _database_path as _knowledge_database_path,
 )
 from .util import (
+    QUERY_EXPANSION_PROFILE,
     canonical_json,
     compact_text,
     fts_query,
     has_instruction_risk,
+    query_expansion_terms,
+    query_search_terms,
     search_terms,
     sha256_bytes,
     sha256_file,
@@ -8028,7 +8031,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             as_of = canonical_timestamp(as_of, field="recall as_of")
         reference_time = as_of or utc_now()
         admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
-        terms = search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
+        terms = query_search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
+        expansion_terms = query_expansion_terms(query)
+        discovery_query = " ".join(expansion_terms) if expansion_terms else query
         exact_id = query if _KNOWLEDGE_ID.fullmatch(query) else None
         candidate_ids: list[str] = []
         channels: dict[str, list[str]] = defaultdict(list)
@@ -8193,7 +8198,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if dense_enabled and exact_id is None and as_of is None:
             dense = search_dense_index(
                 self.root,
-                query=query,
+                query=discovery_query,
                 input_audit_head=self.audit_head,
                 legacy_audit_head=self.legacy_audit_head,
                 scope=scope,
@@ -8534,7 +8539,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "feedback_utility": float(feedback_row["utility"]),
                     }
                 )
-            reranked = rerank_candidates(query, reranker_input)
+            reranked = rerank_candidates(discovery_query, reranker_input)
             candidate_ids = [item["knowledge_id"] for item in reranked]
             reranker_receipts = {
                 item["knowledge_id"]: {
@@ -8718,7 +8723,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             | ({"temporal_lexical"} if as_of is not None else set())
         )
         plan = {
-            "schema_version": "deeplaw.knowledge-query-plan/v3",
+            "schema_version": "deeplaw.autonomous-query-plan/v1",
             "intent": "autonomous_knowledge_recall",
             "query_sha256": sha256_bytes(query.encode("utf-8")),
             "channels": planned_channels,
@@ -8750,8 +8755,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "dense_manifest_sha256": dense.get("manifest_sha256"),
             "dense_model": LOCAL_DENSE_MODEL,
             "reranker_model": LOCAL_RERANKER_MODEL,
+            "query_expansion_profile": QUERY_EXPANSION_PROFILE,
+            "query_expansion_term_count": len(expansion_terms),
+            "query_expansion_terms_sha256": sha256_bytes(
+                canonical_json(expansion_terms).encode("utf-8")
+            ),
         }
-        _validate_contract("knowledge-query-plan.v3.schema.json", plan)
+        _validate_contract("autonomous-query-plan.v1.schema.json", plan)
         plan_sha256 = sha256_bytes(canonical_json(plan).encode("utf-8"))
         gaps: list[str] = []
         if not selected:

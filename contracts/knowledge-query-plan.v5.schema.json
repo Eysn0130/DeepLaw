@@ -13,7 +13,7 @@
     "evidence_attachment_count", "fallback", "knowledge_duties",
     "knowledge_partitions", "duty_coverage", "provider_surface",
     "suppressed_candidate_count", "deduplicated_object_count",
-    "internal_discovery_receipt_sha256", "created_at"
+    "internal_discovery_receipt_sha256", "query_expansion", "created_at"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.knowledge-query-plan/v5"},
@@ -83,6 +83,21 @@
     "deduplicated_object_count": {"type": "integer", "minimum": 0},
     "internal_discovery_receipt_sha256": {
       "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "query_expansion": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "profile", "applied", "term_count", "terms_sha256",
+        "authority_changed", "stored_evidence_changed"
+      ],
+      "properties": {
+        "profile": {"const": "deeplaw-deterministic-query-expansion/1"},
+        "applied": {"type": "boolean"},
+        "term_count": {"type": "integer", "minimum": 0, "maximum": 24},
+        "terms_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "authority_changed": {"const": false},
+        "stored_evidence_changed": {"const": false}
+      }
     },
     "created_at": {"type": "string", "format": "date-time"}
   },

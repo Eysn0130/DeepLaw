@@ -59,6 +59,7 @@ from .util import (
     excerpt,
     fts_query,
     has_instruction_risk,
+    query_search_terms,
     search_terms,
     search_terms_v1,
     sha256_bytes,
@@ -2223,7 +2224,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
     ) -> dict[str, Any]:
         if not self.identity_v2_enabled:
             raise RuntimeError("Knowledge Identity v2 is not installed")
-        terms = search_terms(query)
+        terms = query_search_terms(query)
         if not terms:
             raise ValueError("Source structure query produced no searchable terms")
         if isinstance(limit, bool) or not 1 <= limit <= 100:
@@ -6280,7 +6281,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             raise ValueError("knowledge search contains an unsupported asset kind")
         if any(tier not in MEMORY_TIERS for tier in selected_tiers):
             raise ValueError("knowledge search contains an unsupported memory tier")
-        terms = search_terms(query, limit=32, cover_tail=True)
+        terms = query_search_terms(query, limit=32, cover_tail=True)
         if not terms:
             raise ValueError("knowledge query has no searchable terms")
         conditions = ["asset_search MATCH ?"]

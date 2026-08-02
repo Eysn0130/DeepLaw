@@ -231,6 +231,52 @@ _QUERY_SYNONYMS = {
     "仓库": ("代码库",),
 }
 
+# Query-only lexical bridges are deliberately bounded and phrase based.  They
+# improve deterministic cross-language discovery without translating stored
+# evidence, changing source identity, or assigning Authority.  Index builders
+# continue to use ``search_terms`` so a profile change does not silently alter
+# durable derived-state inputs.
+QUERY_EXPANSION_PROFILE = "deeplaw-deterministic-query-expansion/1"
+_QUERY_CROSS_LANGUAGE_ALIASES = {
+    "组织": ("organization",),
+    "也称": ("known",),
+    "别名": ("alias", "known"),
+    "两位": ("two", "people"),
+    "区分": ("distinguished",),
+    "指什么": ("refer",),
+    "证据准入": ("evidence", "admission"),
+    "证据接纳": ("evidence", "admission"),
+    "生产服务": ("production", "service"),
+    "全球": ("worldwide",),
+    "公共 API": ("public", "api"),
+    "公共API": ("public", "api"),
+    "诊断日志": ("diagnostic", "logs"),
+    "保留政策": ("retention", "policies"),
+    "保留期限": ("retention", "period"),
+    "保留期": ("retention", "period"),
+    "根据每项政策": ("according", "each", "policy"),
+    "摘要": ("summarize", "summary"),
+    "来源": ("source",),
+    "有序步骤": ("ordered", "steps"),
+    "工作流": ("workflow",),
+    "时间线": ("timeline", "chronological"),
+    "发生": ("happened", "event"),
+    "协议修订": ("protocol", "revision"),
+    "使用哪个": ("use",),
+    "当前支持": ("currently", "support"),
+    "当前": ("current",),
+    "发布概览": ("release", "overview"),
+    "引用": ("quote",),
+    "精确颜色": ("exact", "color"),
+    "验证徽章": ("verification", "badge"),
+    "审阅完成": ("review", "completed"),
+    "计划发布": ("publication", "scheduled"),
+    "政策冲突": ("policy", "conflict"),
+    "之间的冲突": ("conflict",),
+    "冲突": ("conflict",),
+    "比较": ("compare", "comparison"),
+}
+
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -449,6 +495,44 @@ def search_terms(
     last = len(unique) - 1
     indexes = [round(index * last / (limit - 1)) for index in range(limit)]
     return [unique[index] for index in indexes]
+
+
+def query_expansion_terms(text: str) -> list[str]:
+    """Return bounded deterministic cross-language aliases for a query only."""
+
+    normalized = normalize_query_text(text).casefold()
+    terms: list[str] = []
+    seen: set[str] = set()
+    for phrase, aliases in _QUERY_CROSS_LANGUAGE_ALIASES.items():
+        if phrase not in normalized:
+            continue
+        for alias in aliases:
+            if alias not in seen:
+                seen.add(alias)
+                terms.append(alias)
+    return terms[:24]
+
+
+def query_search_terms(
+    text: str,
+    *,
+    limit: int | None = None,
+    cover_tail: bool = False,
+) -> list[str]:
+    """Tokenize a query and reserve bounded capacity for explicit aliases."""
+
+    expansions = query_expansion_terms(text)
+    if limit is None:
+        return list(dict.fromkeys((*search_terms(text), *expansions)))
+    if limit <= 0:
+        return []
+    expansion_budget = min(len(expansions), max(1, limit // 3))
+    base = search_terms(
+        text,
+        limit=max(0, limit - expansion_budget),
+        cover_tail=cover_tail,
+    )
+    return list(dict.fromkeys((*base, *expansions[:expansion_budget])))[:limit]
 
 
 def search_terms_v1(text: str) -> list[str]:

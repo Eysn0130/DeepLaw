@@ -29,15 +29,18 @@ from .knowledge_autonomy import (
     autonomous_core_installed,
     bounded_source_reference,
 )
+from .knowledge_intelligence import LOCAL_DENSE_MODEL, LOCAL_RERANKER_MODEL
 from .knowledge_models import ASSET_KINDS, MEMORY_TIERS, canonical_timestamp, utc_now
 from .knowledge_store import KnowledgeVault, default_knowledge_vault
 from .read_services import SourceReadService, WikiReadService
 from .retrieval import PurposeAwareRetrievalService
 from .retrieval_fabric import retrieve
 from .util import (
+    QUERY_EXPANSION_PROFILE,
     assert_provider_output_safe,
     canonical_json,
     provider_safe_exception,
+    query_expansion_terms,
     sha256_bytes,
     stable_id,
     strict_json_loads,
@@ -153,7 +156,7 @@ def _autonomous_capsule_validators() -> tuple[
     Draft202012Validator,
 ]:
     capsule_schema = _load_contract("knowledge-capsule.v2.schema.json")
-    plan_schema = _load_contract("knowledge-query-plan.v3.schema.json")
+    plan_schema = _load_contract("autonomous-query-plan.v1.schema.json")
     Draft202012Validator.check_schema(capsule_schema)
     Draft202012Validator.check_schema(plan_schema)
     return (
@@ -1001,7 +1004,7 @@ def _empty_autonomous_capsule(
     )
     query = f"{selected_task} {selected_goal or ''}".strip()
     query_plan = {
-        "schema_version": "deeplaw.knowledge-query-plan/v3",
+        "schema_version": "deeplaw.autonomous-query-plan/v1",
         "intent": "autonomous_knowledge_recall",
         "query_sha256": sha256_bytes(query.encode("utf-8")),
         "channels": [],
@@ -1026,8 +1029,13 @@ def _empty_autonomous_capsule(
         "derived_lexical_ready": False,
         "derived_dense_ready": False,
         "dense_manifest_sha256": None,
-        "dense_model": "deeplaw-multilingual-hash-dense/1",
-        "reranker_model": "deeplaw-evidence-duty-reranker/1",
+        "dense_model": LOCAL_DENSE_MODEL,
+        "reranker_model": LOCAL_RERANKER_MODEL,
+        "query_expansion_profile": QUERY_EXPANSION_PROFILE,
+        "query_expansion_term_count": len(query_expansion_terms(query)),
+        "query_expansion_terms_sha256": sha256_bytes(
+            canonical_json(query_expansion_terms(query)).encode("utf-8")
+        ),
     }
     capsule = {
         "schema_version": "deeplaw.knowledge-capsule/v2",

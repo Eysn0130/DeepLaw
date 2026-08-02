@@ -84,7 +84,8 @@
         "precision_definition", "extraction_completeness_definition",
         "source_coverage_definition", "source_coverage_metric",
         "retrieval_source_coverage_definition", "retrieval_sequence_definition",
-        "synthesis_direct_evidence_definition", "performance_comparison_definition",
+        "synthesis_direct_evidence_definition", "cross_language_query_definition",
+        "performance_comparison_definition",
         "performance_repetition_count", "performance_execution_order",
         "performance_pairing_definition", "performance_aggregation_definition",
         "performance_confidence_definition", "latency_definition",
@@ -113,6 +114,9 @@
         },
         "synthesis_direct_evidence_definition": {
           "const": "Every provider-visible Synthesis must directly bind exact evidence from every Source Revision named by each applicable claim-level Gold assertion; a receipt assembled only from companion query results is insufficient."
+        },
+        "cross_language_query_definition": {
+          "const": "Every frozen query variant is scored against the same target-scoped objects, claim entailment, exact citations, source coverage, safety, and provider budget as its canonical case; deterministic query expansion may improve discovery but cannot change Authority or silently translate stored evidence."
         },
         "performance_comparison_definition": {
           "const": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance."
@@ -227,6 +231,10 @@
           ]
         },
         "query": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "query_variants": {
+          "type": "array", "maxItems": 12, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/query_variant"}
+        },
         "purpose": {
           "enum": ["answer", "verify", "quote", "historical", "freshness_check"]
         },
@@ -391,6 +399,19 @@
           ]
         },
         "required_execution_count": {"const": 1}
+      }
+    },
+    "query_variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant_id", "language", "query"],
+      "properties": {
+        "variant_id": {
+          "type": "string",
+          "pattern": "^query-variant-[a-z0-9-]+$"
+        },
+        "language": {"enum": ["en", "zh-CN"]},
+        "query": {"type": "string", "minLength": 1, "maxLength": 1000}
       }
     }
   }

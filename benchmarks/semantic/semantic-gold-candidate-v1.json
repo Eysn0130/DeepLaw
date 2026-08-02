@@ -37,6 +37,7 @@
     "retrieval_source_coverage_definition": "Distinct retrieval-eligible target Source Revisions selected by at least one frozen query divided by all distinct retrieval-eligible target Source Revisions in the frozen query set; predecessor and withdrawn revisions retained only to prove exclusion are not positive coverage targets.",
     "retrieval_sequence_definition": "For event_timeline cases, target-matched Event revisions must appear in the frozen expected_sequence order after admission; valid non-target objects are excluded before comparison.",
     "synthesis_direct_evidence_definition": "Every provider-visible Synthesis must directly bind exact evidence from every Source Revision named by each applicable claim-level Gold assertion; a receipt assembled only from companion query results is insufficient.",
+    "cross_language_query_definition": "Every frozen query variant is scored against the same target-scoped objects, claim entailment, exact citations, source coverage, safety, and provider budget as its canonical case; deterministic query expansion may improve discovery but cannot change Authority or silently translate stored evidence.",
     "performance_comparison_definition": "Same-condition baseline and candidate reports use identical frozen query, budget, retrieval, source-revision, and execution-environment fields. Deterministic quality and normalized provider-byte metrics compare the median of three run-level values exactly. Latency and per-process peak RSS use the frozen paired bootstrap method with zero effect-size tolerance.",
     "performance_repetition_count": 3,
     "performance_execution_order": ["baseline", "candidate", "candidate", "baseline", "baseline", "candidate"],
@@ -164,6 +165,13 @@
       ],
       "notes": "The same organization must remain one identity across packets.",
       "query": "What organization is also known as MRC, Meridian Research, and the Cooperative?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-mrc-organization-zh-cn",
+          "language": "zh-CN",
+          "query": "哪个组织也称为 MRC、Meridian Research 和 Cooperative？"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     },
@@ -205,6 +213,13 @@
       ],
       "notes": "The shared surface name must not cause an identity merge.",
       "query": "Who are the two people named Jordan Lee, and how are they distinguished?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-jordan-lee-zh-cn",
+          "language": "zh-CN",
+          "query": "两位名为 Jordan Lee 的人分别是谁，如何区分？"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     },
@@ -234,6 +249,13 @@
       ],
       "notes": "Aliases must resolve to the one governed entity.",
       "query": "What does MRC refer to?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-mrc-reference-zh-cn",
+          "language": "zh-CN",
+          "query": "MRC 指什么？"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     },
@@ -309,6 +331,13 @@
       ],
       "notes": "Definition and later rules should form one concept without erasing evidence.",
       "query": "What is the evidence admission policy?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-evidence-admission-policy-zh-cn",
+          "language": "zh-CN",
+          "query": "证据准入政策是什么？"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     },
@@ -436,6 +465,13 @@
       ],
       "notes": "Both policies govern the same service, log class, tenant population, and 2026 validity interval, so their 30-day and 60-day requirements are directly contradictory. This query is bound to the pre-withdrawal baseline Vault.",
       "query": "For the Atlas production service during 2026, how long are worldwide public-API diagnostic logs retained according to each policy?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-atlas-retention-policies-zh-cn",
+          "language": "zh-CN",
+          "query": "对于 2026 年的 Atlas 生产服务，根据每项政策，全球公共 API 诊断日志保留多长时间？"
+        }
+      ],
       "purpose": "verify",
       "query_phase": "baseline"
     },
@@ -479,6 +515,13 @@
       ],
       "notes": "Every complete semantic run needs one canonical source-summary Synthesis.",
       "query": "Summarize the evidence admission source.",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-evidence-admission-summary-zh-cn",
+          "language": "zh-CN",
+          "query": "摘要说明证据准入来源。"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     },
@@ -525,6 +568,13 @@
       ],
       "notes": "The ordered four-step procedure must preserve order and conditions.",
       "query": "What are the ordered steps in the evidence admission workflow?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-evidence-workflow-zh-cn",
+          "language": "zh-CN",
+          "query": "证据准入工作流的有序步骤是什么？"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     },
@@ -599,6 +649,13 @@
       ],
       "notes": "The formal Event contract exposes one valid-time interval per Knowledge Revision. The Gold therefore requires three stable Event objects, one per dated occurrence, and scores their valid_from chronology instead of accepting one multi-date body.",
       "query": "What happened on 2025-01-10, 2025-03-15, and 2025-05-20 in the chronological policy timeline?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-policy-timeline-zh-cn",
+          "language": "zh-CN",
+          "query": "在按时间顺序的政策时间线中，2025-01-10、2025-03-15 和 2025-05-20 分别发生了什么？"
+        }
+      ],
       "purpose": "historical",
       "as_of": "2099-01-01T00:00:00Z",
       "query_phase": "baseline"
@@ -626,6 +683,13 @@
       ],
       "notes": "The successor creates a new Source Revision and stales dependent prior knowledge.",
       "query": "Which protocol revision does Atlas release 2 use?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-atlas-protocol-revision-zh-cn",
+          "language": "zh-CN",
+          "query": "Atlas release 2 使用哪个协议修订？"
+        }
+      ],
       "purpose": "freshness_check",
       "query_phase": "post_transition"
     },
@@ -646,6 +710,13 @@
       ],
       "notes": "Withdrawing the only source removes its dependent claim from current admission and must return a visible stale_knowledge Gap rather than a silent empty result.",
       "query": "What retention period does Policy A currently support?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-policy-a-current-retention-zh-cn",
+          "language": "zh-CN",
+          "query": "Policy A 当前支持什么保留期限？"
+        }
+      ],
       "purpose": "freshness_check",
       "query_phase": "post_transition"
     },
@@ -768,6 +839,13 @@
       ],
       "notes": "Cross-source Synthesis must bind both exact input revision sets, must not replace the typed contradiction relation between the two claims, and is queried against the pre-withdrawal baseline Vault.",
       "query": "Compare the two diagnostic log retention policies and preserve their conflict.",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-retention-comparison-zh-cn",
+          "language": "zh-CN",
+          "query": "比较两项诊断日志保留政策，并保留它们之间的冲突。"
+        }
+      ],
       "purpose": "verify",
       "query_phase": "baseline"
     },
@@ -804,6 +882,13 @@
       ],
       "notes": "Overview refresh is explicit and revision-bound; deterministic rebuild invokes no model.",
       "query": "What is the current Atlas release overview?",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-atlas-release-overview-zh-cn",
+          "language": "zh-CN",
+          "query": "当前 Atlas 发布概览是什么？"
+        }
+      ],
       "purpose": "freshness_check",
       "query_phase": "post_transition"
     },
@@ -845,6 +930,13 @@
       ],
       "notes": "Embedded instructions remain untrusted evidence and cannot widen grants or Authority.",
       "query": "Quote the exact color stated for the example verification badge.",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-verification-badge-quote-zh-cn",
+          "language": "zh-CN",
+          "query": "引用示例验证徽章所述的精确颜色。"
+        }
+      ],
       "purpose": "quote",
       "query_phase": "baseline"
     },
@@ -885,6 +977,13 @@
       ],
       "notes": "Both CSV events and the HTML concept are required; format-specific locators remain exact while governed semantics can be queried together.",
       "query": "Atlas review completed 2025-06-01; Atlas publication scheduled 2025-07-01; Atlas Protocol",
+      "query_variants": [
+        {
+          "variant_id": "query-variant-atlas-publication-event-zh-cn",
+          "language": "zh-CN",
+          "query": "Atlas 审阅完成 2025-06-01；Atlas 计划发布 2025-07-01；Atlas Protocol"
+        }
+      ],
       "purpose": "answer",
       "query_phase": "baseline"
     }

@@ -132,11 +132,33 @@ def test_semantic_gold_freeze_binds_candidate_schema_queries_and_policy() -> Non
         canonical_json(candidate["security_challenges"]).encode("utf-8")
     ).hexdigest()
     assert [set(item) for item in query_set_projection(_candidate())] == [
-        {"case_id", "query", "purpose", "phase", "as_of"}
+        {"case_id", "query", "purpose", "phase", "as_of", "variants"}
     ] * 15
     freeze["query_set_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="does not bind"):
         validate_freeze(freeze, candidate=_candidate(), repository=REPOSITORY)
+
+
+def test_semantic_gold_freezes_chinese_variants_for_every_language_bearing_case() -> None:
+    candidate = _candidate()
+    variants = {
+        case["case_id"]: case.get("query_variants", []) for case in candidate["cases"]
+    }
+
+    assert sum(len(items) for items in variants.values()) == 14
+    assert variants["semantic-case-13"] == []
+    assert all(
+        len(items) == 1 and items[0]["language"] == "zh-CN"
+        for case_id, items in variants.items()
+        if case_id != "semantic-case-13"
+    )
+    assert len(
+        {
+            item["variant_id"]
+            for items in variants.values()
+            for item in items
+        }
+    ) == 14
 
 
 def test_retrieval_source_coverage_excludes_prohibited_predecessors() -> None:
@@ -1346,7 +1368,9 @@ def _machine_review_packet(role: str) -> dict:
             "case_id": gold_case["case_id"],
             "recommendation": "CONFIRM",
             "frozen_query": (
-                f"中文对抗查询：{gold_case['query']}"
+                gold_case.get("query_variants", [{}])[0].get(
+                    "query", gold_case["query"]
+                )
                 if chinese_review
                 else gold_case["query"]
             ),
@@ -1475,7 +1499,9 @@ def test_machine_review_consensus_requires_six_unanimous_isolated_packets() -> N
     assert [item["case_id"] for item in chinese["cases"]] == [
         item["case_id"] for item in english["cases"]
     ]
-    assert chinese["cases"][0]["frozen_query"].startswith("中文对抗查询：")
+    assert chinese["cases"][0]["frozen_query"] == (
+        _candidate()["cases"][0]["query_variants"][0]["query"]
+    )
     assert english["cases"][0]["frozen_query"] == _candidate()["cases"][0]["query"]
 
     packets[0]["cases"][0]["recommendation"] = "RETURN_FOR_FIX"

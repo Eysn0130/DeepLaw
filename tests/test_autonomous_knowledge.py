@@ -23,7 +23,7 @@ from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_inbox import reject_inbox_artifact, submit_inbox_artifact
 from deeplaw.knowledge_maintenance import knowledge_doctor
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
-from deeplaw.util import canonical_json, sha256_bytes, stable_id
+from deeplaw.util import QUERY_EXPANSION_PROFILE, canonical_json, sha256_bytes, stable_id
 
 
 def _vault(tmp_path: Path) -> Path:
@@ -44,6 +44,56 @@ def _validate_contract(name: str, value: dict[str, object]) -> None:
     schema = json.loads((Path(__file__).parents[1] / "contracts" / name).read_text())
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     validator.validate(value)
+
+
+def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutation(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store)
+        target = store.remember(
+            grant_id=grant_id,
+            idempotency_key="cross-language-retention-target",
+            title="Diagnostic log retention policies",
+            body=(
+                "Policy A retains diagnostic logs for 30 days; Policy B retains "
+                "them for 60 days, and the two policies conflict."
+            ),
+            kind="synthesis",
+            operation="save_synthesis",
+            semantic_key="synthesis:diagnostic-log-retention-policy-conflict",
+            confirm_no_case_data=True,
+        )
+        store.remember(
+            grant_id=grant_id,
+            idempotency_key="cross-language-irrelevant-target",
+            title="Office access schedule",
+            body="The office opens at nine on weekdays.",
+            kind="memory",
+            semantic_key="memory:office-access-schedule",
+            confirm_no_case_data=True,
+        )
+        store.rebuild_derived()
+        before_head = store.audit_head
+
+        result = store.recall(
+            "比较两项诊断日志保留政策，并保留它们之间的冲突。",
+            retrieval_mode="hybrid",
+        )
+
+        assert result["results"][0]["knowledge_id"] == target["knowledge_id"]
+        assert result["query_plan"]["schema_version"] == (
+            "deeplaw.autonomous-query-plan/v1"
+        )
+        assert result["query_plan"]["query_expansion_profile"] == (
+            QUERY_EXPANSION_PROFILE
+        )
+        assert result["query_plan"]["query_expansion_term_count"] >= 6
+        assert store.audit_head == before_head
+        _validate_contract(
+            "autonomous-query-plan.v1.schema.json", result["query_plan"]
+        )
 
 
 def test_additive_migration_creates_strict_core_and_verified_rollback(tmp_path: Path) -> None:

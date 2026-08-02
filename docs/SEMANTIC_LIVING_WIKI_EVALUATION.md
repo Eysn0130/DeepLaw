@@ -62,6 +62,22 @@ receipt. The bilingual derived Owner Review Packets retain the full claims and c
 checks for inspection. Their human decision remains `not_required`; they do not alter canonical
 Gold.
 
+Fourteen cases also freeze a natural-Chinese query variant; the identifier-only
+`semantic-case-13` remains language-neutral. Every variant reuses the canonical case's exact
+target-scoped objects, claim assertions, citations, source coverage, safety rules, and provider
+budget. The runner executes each variant cold and warm through the first-party CLI and records a
+separate pass rate, provider-visible byte total, hard-limit count, stable IDs, Query Plan, evidence
+binding, and process RSS. A failed variant fails its canonical case and the whole run.
+
+Cross-language discovery uses the bounded query-only profile
+`deeplaw-deterministic-query-expansion/1`. Its phrase aliases are never written to source bytes,
+Source IR, Knowledge identity, Markdown, or indexes. Query Plan v5 records only the profile,
+application flag, term count, and terms digest together with explicit `authority_changed=false`
+and `stored_evidence_changed=false`; the internal autonomous plan binds the same facts under
+`deeplaw.autonomous-query-plan/v1`. Expansion can propose candidates but cannot admit content,
+alter temporal or sensitivity policy, elevate Authority, or substitute translated text for exact
+evidence.
+
 Multilingual timeline queries preserve exact ISO-date anchors through the deterministic relevance
 floor and order selected Events by valid time. Mixed Event/Concept queries retain exact identity
 matches alongside the purpose-selected kind set. Exact-identity discovery does not globally admit
@@ -104,8 +120,9 @@ machine-review packets, rejects duplicate or missing roles and any `RETURN_FOR_F
 cross-packet discrepancy, and emits a consensus record plus English and Chinese derived Owner
 Review Packets. Each packet binds exact commit/tree/version, canonical Gold, fixture manifest,
 Schema, frozen query, actual IDs/claims/citations, Query Plan, commands, and evidence digests. The
-Chinese auditor may use an explicitly bound natural-Chinese query; all other roles must reproduce
-the canonical English query. No Agent may populate a human reviewer identity or
+Chinese auditor must reproduce every frozen natural-Chinese variant (and the language-neutral
+identifier case); all other roles must reproduce every canonical English query. No Agent may
+populate a human reviewer identity or
 `maintainer_confirmed`.
 
 Claude Code and OpenCode pre-review reports record exact pinned versions and actual discovery,
@@ -140,9 +157,10 @@ CI but never constitutes real-host/model evidence.
 
 ## Query and scoring gates
 
-The query suite runs every frozen query twice using Query Plan v5 and a fixed public/personal
-budget. It records hashes, stable IDs, gap codes, bounded evidence receipts, actual metrics, and
-latency; it does not persist private source text. The gate checks explicit unanswerability,
+The query suite runs every canonical frozen query and every applicable frozen Chinese variant
+twice using Query Plan v5 and a fixed public/personal budget. It records hashes, stable IDs, gap
+codes, bounded evidence receipts, actual metrics, and latency; it does not persist private source
+text. The gate checks explicit unanswerability,
 successor-only selection, withdrawal exclusion, contradiction applicability, visible fallback,
 read-only behavior, Authority invariance, repeat reuse, pagination, and the UTF-8 64 KiB provider
 limit. The attached cost receipt labels its token number as a UTF-8 byte proxy rather than a

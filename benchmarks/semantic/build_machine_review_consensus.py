@@ -174,11 +174,17 @@ def validate_packet(
     for case in packet["cases"]:
         gold_case = candidate_cases[case["case_id"]]
         canonical_query = gold_case["query"]
+        chinese_variants = gold_case.get("query_variants", [])
+        expected_review_query = (
+            chinese_variants[0]["query"]
+            if chinese_review and chinese_variants
+            else canonical_query
+        )
         if (
             case["canonical_query_sha256"]
             != hashlib.sha256(canonical_query.encode("utf-8")).hexdigest()
             or case["query_language"] != ("zh-CN" if chinese_review else "en")
-            or (not chinese_review and case["frozen_query"] != canonical_query)
+            or case["frozen_query"] != expected_review_query
         ):
             raise ValueError("machine review packet query binding is invalid")
         if (

@@ -21,7 +21,7 @@ from .util import (
     compact_text,
     excerpt,
     normalize_text,
-    search_terms,
+    query_search_terms,
     sha256_bytes,
     stable_id,
     strict_json_loads,
@@ -519,7 +519,7 @@ def compile_context(
     if not vault.verify_integrity()["valid"]:
         raise RuntimeError("knowledge vault integrity is invalid; context compilation stopped")
     context_query = f"{task} {goal or ''}".strip()
-    query_terms = tuple(search_terms(context_query, limit=32, cover_tail=True))
+    query_terms = tuple(query_search_terms(context_query, limit=32, cover_tail=True))
     if retrieval_result is None:
         search = vault.search(
             context_query,

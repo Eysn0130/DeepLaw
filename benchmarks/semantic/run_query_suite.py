@@ -1870,6 +1870,81 @@ def run(
         )
         result["cold_peak_rss_bytes"] = cold_peak_rss
         result["warm_peak_rss_bytes"] = warm_peak_rss
+        variant_checks: list[dict[str, Any]] = []
+        for variant in case.get("query_variants", []):
+            variant_case = {**case, "query": variant["query"]}
+            variant_cold, variant_cold_latency, variant_cold_peak_rss = _query(
+                prefix,
+                vault=query_vault,
+                query=variant["query"],
+                purpose=case["purpose"],
+                as_of=case.get("as_of"),
+            )
+            variant_warm, variant_warm_latency, variant_warm_peak_rss = _query(
+                prefix,
+                vault=query_vault,
+                query=variant["query"],
+                purpose=case["purpose"],
+                as_of=case.get("as_of"),
+            )
+            variant_result = _case_result(
+                prefix=prefix,
+                vault=query_vault,
+                case=variant_case,
+                cold=variant_cold,
+                warm=variant_warm,
+                cold_latency_ms=variant_cold_latency,
+                warm_latency_ms=variant_warm_latency,
+                source_ids=source_ids,
+            )
+            variant_checks.append(
+                {
+                    "variant_id": variant["variant_id"],
+                    "language": variant["language"],
+                    "query_sha256": variant_result["query_sha256"],
+                    "status": variant_result["status"],
+                    "actual_knowledge_ids": sorted(
+                        str(item["knowledge_id"])
+                        for item in variant_result["actual_objects"]
+                        if isinstance(item.get("knowledge_id"), str)
+                    ),
+                    "compiled_revision_ids": variant_result["compiled_revision_ids"],
+                    "selected_source_revision_ids": variant_result[
+                        "selected_source_revision_ids"
+                    ],
+                    "query_plan": variant_result["query_plan"],
+                    "query_plan_sha256": variant_result["query_plan_sha256"],
+                    "recall_at_k": variant_result["recall_at_k"],
+                    "target_scoped_precision_at_k": variant_result[
+                        "target_scoped_precision_at_k"
+                    ],
+                    "citation_validity": variant_result["citation_validity"],
+                    "claim_evidence_binding_accuracy": variant_result[
+                        "claim_evidence_binding_accuracy"
+                    ],
+                    "context_verification_valid": variant_result[
+                        "context_verification_valid"
+                    ],
+                    "provider_hard_limit_valid": variant_result[
+                        "provider_hard_limit_valid"
+                    ],
+                    "provider_payload_bytes": variant_result[
+                        "provider_payload_bytes"
+                    ],
+                    "context_provider_payload_bytes": variant_result[
+                        "context_provider_payload_bytes"
+                    ],
+                    "cold_latency_ms": variant_cold_latency,
+                    "warm_latency_ms": variant_warm_latency,
+                    "cold_peak_rss_bytes": variant_cold_peak_rss,
+                    "warm_peak_rss_bytes": variant_warm_peak_rss,
+                    "failure_reason": variant_result["failure_reason"],
+                }
+            )
+        result["query_variant_checks"] = variant_checks
+        if any(item["status"] != "passed" for item in variant_checks):
+            result["status"] = "failed"
+            result["failure_reason"] = "one or more frozen query variants failed"
         cases.append(result)
     cross_packet_gold_case = next(
         item
@@ -1989,9 +2064,29 @@ def run(
     evidence_attachment_count = sum(
         int(item["query_plan"].get("evidence_attachment_count", 0)) for item in cases
     )
+    variant_checks = [
+        variant
+        for case in cases
+        for variant in case["query_variant_checks"]
+    ]
     metrics = {
         "query_count": len(cases),
-        "execution_count": len(cases) * 2,
+        "execution_count": (len(cases) + len(variant_checks)) * 2,
+        "query_variant_count": len(variant_checks),
+        "query_variant_pass_rate": round(
+            sum(item["status"] == "passed" for item in variant_checks)
+            / len(variant_checks),
+            6,
+        ) if variant_checks else 1.0,
+        "query_variant_provider_payload_bytes": sum(
+            item["provider_payload_bytes"] + item["context_provider_payload_bytes"]
+            for item in variant_checks
+        ),
+        "query_variant_provider_hard_limit_violations": sum(
+            (not item["provider_hard_limit_valid"])
+            or item["context_provider_payload_bytes"] > 65_536
+            for item in variant_checks
+        ),
         "passed_count": passed_count,
         "provider_payload_bytes": provider_bytes,
         "provider_content_bytes": provider_content_bytes,
@@ -2050,6 +2145,11 @@ def run(
                         for key in ("cold_peak_rss_bytes", "warm_peak_rss_bytes")
                     ),
                     *(item["peak_rss_bytes"] for item in challenges),
+                    *(
+                        item[key]
+                        for item in variant_checks
+                        for key in ("cold_peak_rss_bytes", "warm_peak_rss_bytes")
+                    ),
                 ]
                 if peak is not None
             ),
@@ -2109,6 +2209,8 @@ def run(
     passed = bool(
         passed_count == len(cases)
         and metrics["provider_hard_limit_violations"] == 0
+        and metrics["query_variant_pass_rate"] == 1.0
+        and metrics["query_variant_provider_hard_limit_violations"] == 0
         and metrics["unauthorized_writes"] == 0
         and metrics["authority_elevations"] == 0
         and metrics["invalid_official_citations"] == 0

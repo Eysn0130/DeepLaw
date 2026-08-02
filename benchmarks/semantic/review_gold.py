@@ -18,7 +18,8 @@ CANONICAL_JSON_PROFILE = (
 )
 QUERY_SET_PROJECTION = (
     "Map cases in array order to objects {case_id, query, purpose, "
-    "phase=query_phase, as_of=case.as_of or null}; serialize with "
+    "phase=query_phase, as_of=case.as_of or null, variants=case.query_variants or []}; "
+    "serialize with "
     "canonical_json_profile; SHA-256 the exact UTF-8 bytes"
 )
 COMMITMENT_PROFILES = {
@@ -89,6 +90,7 @@ def query_set_projection(value: dict[str, Any]) -> list[dict[str, Any]]:
             "purpose": item["purpose"],
             "phase": item["query_phase"],
             "as_of": item.get("as_of"),
+            "variants": item.get("query_variants", []),
         }
         for item in value["cases"]
     ]

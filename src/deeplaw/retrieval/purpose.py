@@ -18,7 +18,13 @@ from ..knowledge_intelligence import (
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
 from ..retrieval_fabric import retrieve
-from ..util import canonical_json, sha256_bytes, strict_json_loads
+from ..util import (
+    QUERY_EXPANSION_PROFILE,
+    canonical_json,
+    query_expansion_terms,
+    sha256_bytes,
+    strict_json_loads,
+)
 
 QueryPurpose = Literal[
     "answer",
@@ -1484,6 +1490,17 @@ class PurposeAwareRetrievalService:
         plan["suppressed_candidate_count"] = suppressed_candidate_count
         plan["deduplicated_object_count"] = deduplicated_object_count
         plan["internal_discovery_receipt_sha256"] = internal_discovery_receipt_sha256
+        expansion_terms = query_expansion_terms(str(result["query"]))
+        plan["query_expansion"] = {
+            "profile": QUERY_EXPANSION_PROFILE,
+            "applied": bool(expansion_terms),
+            "term_count": len(expansion_terms),
+            "terms_sha256": sha256_bytes(
+                canonical_json(expansion_terms).encode("utf-8")
+            ),
+            "authority_changed": False,
+            "stored_evidence_changed": False,
+        }
         _validate_contract("knowledge-query-plan.v5.schema.json", plan)
         upgraded = dict(result)
         upgraded["schema_version"] = "deeplaw.purpose-aware-retrieval/v2"
@@ -1834,10 +1851,12 @@ class PurposeAwareRetrievalService:
             and item.get("sensitivity") != "restricted"
             and isinstance(item.get("asset_id"), str)
         ]
+        expansion_terms = query_expansion_terms(query)
+        discovery_query = " ".join(expansion_terms) if expansion_terms else query
         evidence_scores = {
             item["knowledge_id"]: float(item["reranker_score"])
             for item in rerank_candidates(
-                query,
+                discovery_query,
                 [
                     {
                         "knowledge_id": item["asset_id"],

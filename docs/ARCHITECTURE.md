@@ -229,6 +229,10 @@ a universal hard-coded ranking by object kind:
   Synthesis. The receipt binds its frozen input set to the exact provider-visible Source Revision,
   fragment, locator, and quote hash set; incomplete cross-source coverage remains an explicit
   `evidence_gap`;
+- bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
+  stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v5 binds
+  the expansion profile/count/digest and the autonomous retrieval plane validates the corresponding
+  `deeplaw.autonomous-query-plan/v1` receipt;
 - every fallback from compiled knowledge to source fragments must be observable in the plan,
   explanation, gap, or receipt;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.

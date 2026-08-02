@@ -224,7 +224,10 @@
     "metrics": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "query_count", "execution_count", "passed_count", "provider_payload_bytes",
+        "query_count", "execution_count", "query_variant_count",
+        "query_variant_pass_rate", "query_variant_provider_payload_bytes",
+        "query_variant_provider_hard_limit_violations",
+        "passed_count", "provider_payload_bytes",
         "provider_content_bytes", "provider_transport_overhead_bytes",
         "provider_bytes_per_matched_target",
         "raw_fragment_baseline_bytes", "bytes_saved_ratio", "cold_latency_p50_ms",
@@ -248,6 +251,12 @@
       "properties": {
         "query_count": {"type": "integer", "minimum": 15, "maximum": 100},
         "execution_count": {"type": "integer", "minimum": 30, "maximum": 200},
+        "query_variant_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "query_variant_pass_rate": {"$ref": "#/$defs/ratio"},
+        "query_variant_provider_payload_bytes": {"type": "integer", "minimum": 0},
+        "query_variant_provider_hard_limit_violations": {
+          "type": "integer", "minimum": 0
+        },
         "passed_count": {"type": "integer", "minimum": 0, "maximum": 100},
         "provider_payload_bytes": {"type": "integer", "minimum": 0},
         "provider_content_bytes": {"type": "integer", "minimum": 0},
@@ -318,6 +327,7 @@
       "required": [
         "case_id", "task_type", "query_phase", "query_sha256", "purpose", "status",
         "expected_targets", "expected_relations", "actual_objects", "relation_checks",
+        "query_variant_checks",
         "sequence_check",
         "query_plan", "query_plan_sha256",
         "cold_latency_ms", "warm_latency_ms", "cold_peak_rss_bytes",
@@ -352,6 +362,10 @@
           "type": "array", "maxItems": 20,
           "items": {"$ref": "#/$defs/relation_check"}
         },
+        "query_variant_checks": {
+          "type": "array", "maxItems": 12,
+          "items": {"$ref": "#/$defs/query_variant_check"}
+        },
         "sequence_check": {"$ref": "#/$defs/sequence_check"},
         "query_plan": {"type": "object"},
         "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -385,6 +399,58 @@
         "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
         "reciprocal_rank": {"$ref": "#/$defs/ratio"},
         "ndcg_at_k": {"$ref": "#/$defs/ratio"},
+        "failure_reason": {"type": ["string", "null"], "maxLength": 1000}
+      }
+    },
+    "query_variant_check": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "variant_id", "language", "query_sha256", "status",
+        "actual_knowledge_ids", "compiled_revision_ids",
+        "selected_source_revision_ids", "query_plan", "query_plan_sha256",
+        "recall_at_k", "target_scoped_precision_at_k", "citation_validity",
+        "claim_evidence_binding_accuracy", "context_verification_valid",
+        "provider_hard_limit_valid", "provider_payload_bytes",
+        "context_provider_payload_bytes", "cold_latency_ms", "warm_latency_ms",
+        "cold_peak_rss_bytes", "warm_peak_rss_bytes", "failure_reason"
+      ],
+      "properties": {
+        "variant_id": {
+          "type": "string", "pattern": "^query-variant-[a-z0-9-]+$"
+        },
+        "language": {"enum": ["en", "zh-CN"]},
+        "query_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"enum": ["passed", "failed"]},
+        "actual_knowledge_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"}
+        },
+        "compiled_revision_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}
+        },
+        "selected_source_revision_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+        },
+        "query_plan": {"type": "object"},
+        "query_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "citation_validity": {"$ref": "#/$defs/ratio"},
+        "claim_evidence_binding_accuracy": {"$ref": "#/$defs/ratio"},
+        "context_verification_valid": {"type": "boolean"},
+        "provider_hard_limit_valid": {"type": "boolean"},
+        "provider_payload_bytes": {
+          "type": "integer", "minimum": 0, "maximum": 65536
+        },
+        "context_provider_payload_bytes": {
+          "type": "integer", "minimum": 0, "maximum": 65536
+        },
+        "cold_latency_ms": {"type": "integer", "minimum": 0},
+        "warm_latency_ms": {"type": "integer", "minimum": 0},
+        "cold_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "warm_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
         "failure_reason": {"type": ["string", "null"], "maxLength": 1000}
       }
     },

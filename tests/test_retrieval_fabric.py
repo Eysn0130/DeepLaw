@@ -7,7 +7,12 @@ from deeplaw.context_compiler import compile_context, verify_capsule
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.retrieval_fabric import build_query_plan, compare_retrieval, recall, retrieve
-from deeplaw.util import search_terms
+from deeplaw.util import (
+    QUERY_EXPANSION_PROFILE,
+    query_expansion_terms,
+    query_search_terms,
+    search_terms,
+)
 
 
 def _vault(tmp_path: Path) -> Path:
@@ -47,6 +52,22 @@ def test_mixed_tokenizer_covers_traditional_chinese_and_code_shapes() -> None:
         terms
     )
     assert {"repo_path", "repo", "path", "v2.4.1", "err-2048", "2048"} <= set(terms)
+
+
+def test_query_only_cross_language_expansion_is_bounded_and_auditable() -> None:
+    query = "比较两项诊断日志保留政策，并保留它们之间的冲突。"
+    expansions = query_expansion_terms(query)
+    terms = query_search_terms(query, limit=16, cover_tail=True)
+    plan = build_query_plan(query, mode="lexical")
+
+    assert QUERY_EXPANSION_PROFILE == "deeplaw-deterministic-query-expansion/1"
+    assert {"compare", "diagnostic", "logs", "retention", "policies", "conflict"} <= set(
+        expansions
+    )
+    assert set(expansions[:5]) <= set(terms)
+    assert len(terms) <= 16
+    assert set(expansions[:16]) & set(plan["search_terms"])
+    assert plan["implementation_revision"] == "retrieval-fabric/3"
 
 
 def test_bounded_typo_repair_recovers_one_edit_and_rejects_distant_noise(

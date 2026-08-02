@@ -32,7 +32,7 @@
       "const": "UTF-8 JSON; object keys sorted recursively; ensure_ascii=false; separators=(',', ':'); no trailing whitespace"
     },
     "query_set_projection": {
-      "const": "Map cases in array order to objects {case_id, query, purpose, phase=query_phase, as_of=case.as_of or null}; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes"
+      "const": "Map cases in array order to objects {case_id, query, purpose, phase=query_phase, as_of=case.as_of or null, variants=case.query_variants or []}; serialize with canonical_json_profile; SHA-256 the exact UTF-8 bytes"
     },
     "commitment_profiles": {
       "const": {

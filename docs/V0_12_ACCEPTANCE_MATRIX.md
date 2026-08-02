@@ -27,6 +27,7 @@ and `reviewer_id=null` are deliberate owner policy, not missing evidence.
 | Contradiction applicability | retention A/B fixtures; structured `expected_relations`; query runner and scorer | Same Atlas production service, ordinary public-API diagnostic-log class, worldwide scope, restricted-payload exclusion, distinct non-mergeable endpoints, and 2026 valid interval before typed-relation contradiction credit |
 | Withdrawal gap | case-10 `explicit_gap` plus frozen `stale_knowledge` code | Withdrawn evidence is neither selected nor silently omitted; the current no-answer state remains visible |
 | Reproducible freeze commitments | freeze Schema canonical-JSON profile, query-set projection, and per-field commitment profiles | A reviewer can independently reproduce every candidate, fixture-manifest, Schema, query-set, scoring-policy, and challenge digest without inferring mixed serialization rules |
+| Cross-language retrieval | 14 natural-Chinese query variants; bounded query-only expansion; autonomous plan v1 and Query Plan v5 receipts | Every variant uses the canonical case targets/claims/citations/budget, runs cold and warm through the first-party CLI, and cannot change Authority or stored evidence |
 | Timeline and multi-format | case-08 three Event labels; case-15 scheduled-publication Event | One formal valid-time interval per Event revision and every frozen date/object retrieved |
 | Host declaration discipline | real-host report v2; deterministic workflow | Claude Code/OpenCode exact version/discovery/auth/model-access reason; external execution is `not_executed` |
 | Independent audit | six isolated machine-review packets and bilingual derived Owner packets | Every auditor covers all 15 cases and five challenges; only six-way `CONFIRM` without material divergence passes |
@@ -126,7 +127,7 @@ and `reviewer_id=null` are deliberate owner policy, not missing evidence.
 | 19 | Production Obsidian plugin | adapter source, manifest, bridge schema, npm tests/build/bundle receipt |
 | 20 | Tolaria integration | adapter module/harness, bridge schema, merge/context tests |
 | 21 | Host-neutral Agent evidence | deterministic lifecycle, truthful external-host `not_executed` reports, and `semantic-evidence.yml` packaging gate |
-| 22 | Semantic Gold | Gold schema/candidate/freeze; target-scoped scoring; explicit owner machine-consensus policy; bilingual derived Owner packet |
+| 22 | Semantic Gold | Gold schema/candidate/freeze; target-scoped scoring; 14 frozen Chinese variants; explicit owner machine-consensus policy; bilingual derived Owner packet |
 | 23 | Semantic machine-review consensus | six packet roles, unanimous consensus contract, claim/safety/coverage metrics, and no human-review impersonation |
 | 24 | Authoritative Challenge Trace | authoritative challenge module, trace/replay contracts/tests, executable `authoritative-evidence-quality.json` release receipt |
 | 25 | Evidence Capability Types | capability module/contracts and migration/rollback tests |

@@ -21,6 +21,9 @@ provenance, and post-release rows remain release gates rather than completed his
 - Query Plan v5 makes purpose duties, compiled-first/evidence-first selection, provenance
   partitions, stale/uncompiled gaps, and raw fallback explicit while retaining provider-visible
   UTF-8 byte limits and read-only query behavior.
+- Bounded deterministic query-only cross-language expansion improves Chinese-to-English discovery
+  without rewriting evidence or identity. Query Plan v5 binds the expansion profile, count, and
+  digest and explicitly records that neither Authority nor stored evidence changed.
 - Exact Source IR fragment revision identities are accepted by the first-party Source fragment
   read surface, so v2 evidence receipts remain directly verifiable without duplicating a legacy
   fragment identity in provider-visible fallback cards.
@@ -42,8 +45,10 @@ provenance, and post-release rows remain release gates rather than completed his
   Synthesis assertions, structured typed-relation endpoints and valid time for contradictions,
   exact `production`/`ordinary` applicability and restricted-payload exclusions for retention
   claims, explicit non-mergeable contradiction endpoints, an explicit withdrawal Gap, fully
-  specified per-field freeze commitment algorithms, one-event-per-valid-time timeline labels,
-  and a scheduled-publication multi-format Event.
+  specified per-field freeze commitment algorithms, one-event-per-valid-time timeline labels, a
+  scheduled-publication multi-format Event, and fourteen natural-Chinese frozen query variants
+  scored against the same objects, claims, citations, coverage, safety rules, and budgets as their
+  canonical cases.
 - Credential-free evaluation now compiles the entire public corpus through the real governed
   transaction using a deterministic no-model Agent, executes all 15 first-party CLI retrieval
   cases and five adversarial challenges, and exports source-free bilingual derived Owner packets.
@@ -86,9 +91,9 @@ provenance, and post-release rows remain release gates rather than completed his
   depress the coverage metric.
 - Purpose-aware selection preserves exact identities in mixed Event/Concept requests, uses exact
   ISO dates as bounded structured anchors without admitting unrelated low-score candidates, and
-  emits timeline Events in chronological valid-time order. Explicit bilingual comparison intent
-  admits a relevant comparison Synthesis through a bounded kind-specific floor without admitting
-  generic Source Summaries.
+  emits timeline Events in chronological valid-time order. Frozen Chinese variants are executed
+  cold and warm by the first-party CLI; correct extra objects remain outside target-scoped
+  precision, while every required object and claim still needs exact evidence.
 - A profile-v2 cross-source Synthesis may bind exact admitted evidence only from Source Revisions
   present in its validated input set. The deterministic retention comparison binds both inputs
   directly, making its provider-visible evidence receipt complete even when no companion Claim or

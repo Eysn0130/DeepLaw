@@ -2420,6 +2420,14 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     assert "channels" not in v5_result["compiled"][0]
     assert "reranker" not in v5_result["compiled"][0]
     assert v5_result["query_plan"]["provider_surface"] == "knowledge_capsule"
+    assert v5_result["query_plan"]["query_expansion"] == {
+        "profile": "deeplaw-deterministic-query-expansion/1",
+        "applied": False,
+        "term_count": 0,
+        "terms_sha256": sha256_bytes(b"[]"),
+        "authority_changed": False,
+        "stored_evidence_changed": False,
+    }
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (
