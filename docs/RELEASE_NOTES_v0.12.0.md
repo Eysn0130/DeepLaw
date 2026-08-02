@@ -110,6 +110,9 @@ provenance, and post-release rows remain release gates rather than completed his
   comparison, timeline, contradiction, fallback, stale, or gap evidence. An explicit target beyond
   the admitted scope/sensitivity returns an empty non-identifying gap instead of a nearby public
   substitute.
+- Explicit legacy FTS rebuild and Doctor repair recover deleted or mismatched removable search
+  rows, then rerun full integrity verification. Audit-chain, Source, Asset, relation, and other
+  canonical-state failures continue to block repair.
 - Source-byte tamper checks now cover direct fragment reads and every selected source-bound
   compiled revision. Provider-visible contradiction entries retain the exact typed Relation
   Revision and titled stable endpoints. Historical evidence-first retrieval returns an exact

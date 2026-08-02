@@ -138,3 +138,23 @@ def test_doctor_and_gc_only_repair_removable_state(tmp_path: Path) -> None:
         assert collected["canonical_database_modified"] is False
         assert vault.verify_integrity()["valid"] is True
     assert not temporary.exists()
+
+
+def test_doctor_repairs_missing_search_index_without_weakening_canonical_checks(
+    tmp_path: Path,
+) -> None:
+    root, _ = _active_vault(tmp_path)
+    with KnowledgeVault(root, read_only=False) as vault:
+        vault.connection.execute("DELETE FROM asset_search")
+        vault.connection.commit()
+        assert vault.verify_integrity()["state"]["reason"] == (
+            "search_index_inventory_mismatch"
+        )
+
+    repaired = knowledge_doctor(root, repair_derived=True)
+
+    assert repaired["canonical_valid"] is True
+    assert repaired["ready"] is True
+    assert repaired["repair"]["valid"] is True
+    assert repaired["checks"]["canonical_integrity"]["valid"] is True
+    assert repaired["checks"]["orphans"]["valid"] is True

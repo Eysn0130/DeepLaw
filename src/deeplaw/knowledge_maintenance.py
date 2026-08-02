@@ -494,6 +494,18 @@ def garbage_collect_derived(
     }
 
 
+def _orphans_allow_search_index_rebuild(report: dict[str, Any]) -> bool:
+    return not any(
+        report.get(field)
+        for field in (
+            "untracked_source_files",
+            "missing_source_files",
+            "unsafe_source_entries",
+            "foreign_key_violations",
+        )
+    )
+
+
 def knowledge_doctor(
     vault_path: str | Path,
     *,
@@ -584,11 +596,29 @@ def knowledge_doctor(
                 and orphans["valid"]
             )
             if repair_derived:
-                if not canonical_valid:
+                repair_preflight_valid = bool(
+                    quick_check == "ok"
+                    and vault.derived_indexes_rebuildable(integrity)
+                    and source_integrity["valid"]
+                    and source_ir["valid"]
+                    and _orphans_allow_search_index_rebuild(orphans)
+                )
+                if not repair_preflight_valid:
                     raise RuntimeError(
                         "derived repair is blocked while canonical integrity is invalid"
                     )
                 repaired = vault.rebuild_derived_indexes()
+                integrity = vault.verify_integrity()
+                orphans = detect_knowledge_orphans(vault)
+                checks["canonical_integrity"] = integrity
+                checks["orphans"] = orphans
+                canonical_valid = bool(
+                    quick_check == "ok"
+                    and integrity["valid"]
+                    and source_integrity["valid"]
+                    and source_ir["valid"]
+                    and orphans["valid"]
+                )
         autonomous_installed = autonomous_core_installed(vault_path)
         checks["autonomous_core"] = {"installed": autonomous_installed}
         if autonomous_installed:

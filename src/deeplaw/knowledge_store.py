@@ -114,6 +114,13 @@ _INTEGRITY_CACHE_LOCK = RLock()
 _MAX_SOURCE_HASH_CACHE_ENTRIES = 256
 _SOURCE_HASH_CACHE: OrderedDict[tuple[Any, ...], str] = OrderedDict()
 _SOURCE_HASH_CACHE_LOCK = RLock()
+_REBUILDABLE_SEARCH_INDEX_FAILURES = frozenset(
+    {
+        "search_index_inventory_mismatch",
+        "search_index_asset_mismatch",
+        "search_index_content_mismatch",
+    }
+)
 _SENSITIVITY_ORDER = ("public", "internal", "private", "restricted")
 _KNOWN_EVENT_TYPES = frozenset(
     {
@@ -1737,7 +1744,11 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
         self._require_write()
         try:
             self.connection.execute("BEGIN IMMEDIATE")
-            self._require_healthy_integrity()
+            integrity = self.verify_integrity()
+            if not self.derived_indexes_rebuildable(integrity):
+                raise RuntimeError(
+                    "knowledge vault integrity is invalid; persistent operation stopped"
+                )
             result = self._rebuild_search_index_in_transaction()
             revision, audit_head = self._append_event(
                 event_type="search_index_rebuilt",
@@ -1759,6 +1770,21 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "audit_head": audit_head,
             "valid": True,
         }
+
+    @staticmethod
+    def derived_indexes_rebuildable(integrity: dict[str, Any]) -> bool:
+        """Return whether integrity is healthy or only removable search state is invalid."""
+
+        if integrity.get("valid") is True:
+            return True
+        audit = integrity.get("audit")
+        state = integrity.get("state")
+        return bool(
+            isinstance(audit, dict)
+            and audit.get("valid") is True
+            and isinstance(state, dict)
+            and state.get("reason") in _REBUILDABLE_SEARCH_INDEX_FAILURES
+        )
 
     def _require_healthy_integrity(self) -> None:
         integrity = self.verify_integrity()

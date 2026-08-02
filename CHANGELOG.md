@@ -60,6 +60,9 @@ This release closes Semantic Living Wiki compilation and production editor integ
 - Keep v5 relevance-floor and internal overfetch rejections in the suppressed-candidate receipt
   instead of provider-visible gaps. Genuine stale, fallback, compilation, integrity, contradiction,
   and evidence gaps remain explicit.
+- Permit the explicit legacy FTS rebuild and Doctor repair paths to recover when integrity failure
+  is confined to removable search rows, while continuing to reject audit, source, Asset, relation,
+  and other canonical-state damage.
 
 ### Verified boundaries
 

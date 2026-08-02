@@ -1031,6 +1031,30 @@ def test_state_reconciliation_detects_search_index_tampering(tmp_path: Path) -> 
     assert integrity["state"]["reason"] == "search_index_content_mismatch"
 
 
+def test_search_index_rebuild_repairs_only_removable_integrity(tmp_path: Path) -> None:
+    root = _vault(tmp_path)
+    with KnowledgeVault(root, read_only=False) as vault:
+        _propose_and_approve(
+            vault,
+            title="Rebuildable indexed state",
+            statement="The derived search row can be recreated from canonical Assets.",
+        )
+        vault.connection.execute("DELETE FROM asset_search")
+        vault.connection.commit()
+        damaged = vault.verify_integrity()
+        assert damaged["state"]["reason"] == "search_index_inventory_mismatch"
+
+        rebuilt = vault.rebuild_derived_indexes()
+
+        assert rebuilt["valid"] is True
+        assert vault.verify_integrity()["valid"] is True
+        vault.connection.execute("UPDATE assets SET status = 'revoked'")
+        vault.connection.execute("DELETE FROM asset_search")
+        vault.connection.commit()
+        with pytest.raises(RuntimeError, match="integrity is invalid"):
+            vault.rebuild_derived_indexes()
+
+
 def test_pinned_reader_cannot_cache_an_old_snapshot_for_a_changed_database(
     tmp_path: Path,
 ) -> None:

@@ -97,6 +97,67 @@ def test_knowledge_cli_lifecycle_compiles_a_verified_capsule(tmp_path: Path) -> 
     assert json.loads(verified.stdout)["valid"] is True
 
 
+def test_knowledge_cli_rebuild_indexes_recovers_deleted_derived_fts(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    assert (
+        _run_cli(
+            "knowledge",
+            "init",
+            "--vault",
+            str(vault),
+            "--name",
+            "rebuild-indexes",
+        ).returncode
+        == 0
+    )
+    proposed = _run_cli(
+        "knowledge",
+        "propose",
+        "--vault",
+        str(vault),
+        "--kind",
+        "fact",
+        "--memory-tier",
+        "project",
+        "--title",
+        "Rebuild target",
+        "--statement",
+        "The removable FTS index is rebuilt from canonical Assets.",
+        "--confirm-no-case-data",
+    )
+    assert proposed.returncode == 0, proposed.stderr
+    asset_id = json.loads(proposed.stdout)["asset_id"]
+    approved = _run_cli(
+        "knowledge",
+        "approve",
+        "--vault",
+        str(vault),
+        "--asset-id",
+        asset_id,
+        "--confirm-reviewed",
+    )
+    assert approved.returncode == 0, approved.stderr
+    connection = sqlite3.connect(vault / ".deeplaw" / "ledger.sqlite3")
+    try:
+        connection.execute("DELETE FROM asset_search")
+        connection.commit()
+    finally:
+        connection.close()
+
+    rebuilt = _run_cli(
+        "knowledge",
+        "rebuild-indexes",
+        "--vault",
+        str(vault),
+        "--confirm",
+    )
+
+    assert rebuilt.returncode == 0, rebuilt.stderr
+    assert json.loads(rebuilt.stdout)["valid"] is True
+
+
 def test_knowledge_cli_supports_stable_jsonl_and_human_output(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     initialized = _run_cli(
