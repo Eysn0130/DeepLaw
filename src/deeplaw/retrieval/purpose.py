@@ -328,6 +328,7 @@ class PurposeAwareRetrievalService:
                 limit=limit,
                 max_chars=max_chars,
             )
+            compiled_graph_hops = 0 if purpose == "freshness_check" else graph_hops
             compiled = self._compiled(
                 knowledge_store,
                 query=selected_query,
@@ -344,7 +345,7 @@ class PurposeAwareRetrievalService:
                 max_chars=compiled_budget["characters"],
                 max_tokens=max_tokens,
                 max_sources=max_sources,
-                graph_hops=graph_hops,
+                graph_hops=compiled_graph_hops,
                 retrieval_mode=retrieval_mode,
                 as_of=selected_as_of,
                 kinds=kinds,
@@ -704,20 +705,25 @@ class PurposeAwareRetrievalService:
                 "selected_characters": 0,
                 "stale_prevented_count": 0,
             }
-        raw = store.recall(
-            query,
-            scope=cast(Any, scope),
-            max_sensitivity=cast(Any, max_sensitivity),
-            limit=limit,
-            max_chars=max_chars,
-            max_tokens=max_tokens,
-            max_sources=max_sources,
-            graph_hops=graph_hops,
-            retrieval_mode=retrieval_mode,
-            as_of=as_of,
-            kinds=kinds,
-            force_canonical_lexical=force_canonical_lexical,
-        )
+        def recall(selected_mode: str) -> dict[str, Any]:
+            return store.recall(
+                query,
+                scope=cast(Any, scope),
+                max_sensitivity=cast(Any, max_sensitivity),
+                limit=limit,
+                max_chars=max_chars,
+                max_tokens=max_tokens,
+                max_sources=max_sources,
+                graph_hops=graph_hops,
+                retrieval_mode=selected_mode,
+                as_of=as_of,
+                kinds=kinds,
+                force_canonical_lexical=force_canonical_lexical,
+            )
+
+        raw = recall("exact") if purpose == "freshness_check" else recall(retrieval_mode)
+        if purpose == "freshness_check" and not raw["results"] and retrieval_mode != "exact":
+            raw = recall(retrieval_mode)
         accepted: list[dict[str, Any]] = []
         freshness_gaps: list[dict[str, Any]] = []
         stale_prevented = 0

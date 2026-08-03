@@ -61,6 +61,9 @@ provenance, and post-release rows remain release gates rather than completed his
   withdrawn bodies, internal paths, and unauthorized metadata remain audit-only. Exact evidence,
   Authority, lifecycle, temporal applicability, contradictions, gaps, fallback, and continuation
   receipts remain visible.
+- Freshness checks use bounded exact-identity discovery before broader lexical/dense fallback and
+  do not traverse graph neighbors that cannot affect the selected revision's dependency state.
+  This keeps rebuilt derived indexes from expanding a target-scoped check into unrelated work.
 - The signed 28-source Authoritative Pack gate verifies each immutable source hash, parser/segment
   inventory, locator, lifecycle, active release, exact title/citation retrieval, deterministic
   rebuild, baseline non-regression, read-only `law_support`, and zero security failures without

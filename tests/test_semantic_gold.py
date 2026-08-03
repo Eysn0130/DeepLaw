@@ -471,6 +471,64 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
     assert metrics["target_scoped_precision_at_k"] == 1.0
 
 
+def test_freshness_check_does_not_expand_unrelated_graph_neighbors(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "vault"
+    initialize_knowledge_vault(vault, name="freshness graph bound", scope="personal")
+    initialize_autonomous_core(vault)
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        grant = store.enable_grant(
+            writer_id="freshness-graph-agent",
+            allowed_scope="personal",
+            operations=tuple(sorted(SINK_OPERATIONS)),
+        )
+        target = store.remember(
+            grant_id=grant["grant_id"],
+            idempotency_key="freshness-target",
+            title="Atlas release overview",
+            body="Atlas release 2 supersedes release 1.",
+            kind="synthesis",
+            operation="save_synthesis",
+            scope="personal",
+            aliases=["Atlas release overview"],
+            confirm_no_case_data=True,
+        )
+        neighbor = store.remember(
+            grant_id=grant["grant_id"],
+            idempotency_key="freshness-neighbor",
+            title="Unrelated graph neighbor",
+            body="This object is not needed to evaluate the target revision freshness.",
+            kind="concept",
+            operation="upsert_concept",
+            scope="personal",
+            confirm_no_case_data=True,
+        )
+        store.add_relation(
+            grant_id=grant["grant_id"],
+            idempotency_key="freshness-neighbor-edge",
+            subject_knowledge_id=target["knowledge_id"],
+            predicate="related_to",
+            object_knowledge_id=neighbor["knowledge_id"],
+            evidence_refs=[{"revision_id": target["revision_id"]}],
+            confirm_no_case_data=True,
+        )
+        store.rebuild_derived()
+
+    result = PurposeAwareRetrievalService(vault).query(
+        "What is the current Atlas release overview?",
+        purpose="freshness_check",
+        graph_hops=1,
+        query_plan_version="5",
+    )
+
+    assert [item["knowledge_id"] for item in result["compiled"]] == [
+        target["knowledge_id"]
+    ]
+    assert result["query_plan"]["compiled_candidate_count"] == 1
+    assert result["query_plan"]["budget"]["graph_hops"] == 1
+
+
 def test_target_scoped_precision_excludes_other_generic_source_summaries() -> None:
     case = next(
         case for case in _candidate()["cases"] if case["case_id"] == "semantic-case-06"

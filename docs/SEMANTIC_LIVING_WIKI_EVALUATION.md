@@ -84,6 +84,11 @@ matches alongside the purpose-selected kind set. Exact-identity discovery does n
 unrelated low-score candidates. These rules keep target extraction complete without counting valid
 out-of-scope objects as false positives.
 
+Target-scoped freshness checks first resolve a bounded exact Knowledge identity and fall back to
+the requested lexical/dense mode only when no exact result exists. They skip graph expansion because
+dependency freshness is evaluated from canonical bindings rather than neighboring knowledge. The
+requested graph-hop budget remains visible as a maximum in Query Plan v5 even when no hop is used.
+
 ## Deterministic pre-review lifecycle
 
 `benchmarks/semantic/run_deterministic_lifecycle.py` is an offline, fixture-specific no-model Agent.
