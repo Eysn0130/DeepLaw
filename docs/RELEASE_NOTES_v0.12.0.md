@@ -143,6 +143,8 @@ artifacts:
   comparison, first-party CLI/MCP evidence, and all safety counters at zero;
 - exact fresh-wheel quality, byte-reproducible wheel/sdist, OCI, dependency audit, SBOM, license,
   OpenVEX, Sigstore, and GitHub provenance evidence;
+- Schema-closed `semantic_living_wiki_quality.formal_release_eligible=true` binding consumed by
+  both the tag publisher and public-download verifier; a missing decision fails closed;
 - public GitHub Release re-download, digest/signature/provenance verification, isolated install,
   Semantic v2 smoke, rollback, and uninstall.
 

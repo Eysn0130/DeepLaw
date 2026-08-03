@@ -445,7 +445,8 @@
         "independent_machine_review", "external_real_model_semantic_execution",
         "recall_at_k", "target_scoped_precision_at_k", "citation_validity",
         "claim_evidence_binding_accuracy", "provider_payload_bytes",
-        "provider_content_bytes", "hard_failures", "passed"
+        "provider_content_bytes", "hard_failures", "formal_release_eligible",
+        "passed"
       ],
       "properties": {
         "gold_path": {"const": "semantic/semantic-gold.json"},
@@ -506,6 +507,7 @@
         "provider_payload_bytes": {"type": "integer", "minimum": 0},
         "provider_content_bytes": {"type": "integer", "minimum": 0},
         "hard_failures": {"const": 0},
+        "formal_release_eligible": {"const": true},
         "passed": {"const": true}
       }
     },

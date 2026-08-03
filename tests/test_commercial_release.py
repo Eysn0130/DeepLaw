@@ -104,6 +104,13 @@ def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:
         "authoritative_evidence_quality",
         "editor_integrations",
     } <= set(schema["required"])
+    semantic_quality = properties["semantic_living_wiki_quality"]
+    assert "formal_release_eligible" in semantic_quality["required"]
+    assert semantic_quality["properties"]["formal_release_eligible"] == {"const": True}
+    assembler = (REPOSITORY / "benchmarks/release/commercial_release.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"formal_release_eligible": True' in assembler
 
 
 def test_authoritative_source_matrix_binds_exact_signed_catalog(

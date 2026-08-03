@@ -1149,6 +1149,7 @@ def assemble(
                 "provider_content_bytes"
             ],
             "hard_failures": 0,
+            "formal_release_eligible": True,
             "passed": True,
         },
         "authoritative_evidence_quality": {
