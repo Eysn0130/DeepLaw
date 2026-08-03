@@ -210,7 +210,11 @@ jobs:
       - name: Validate and package exact machine-review evidence
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
+          pwd
+          git rev-parse HEAD HEAD^{tree}
+          git -C .release-evidence-input rev-parse HEAD HEAD^{tree}
+          find .release-evidence-input/release-evidence -maxdepth 2 -type d -print
           uv sync --frozen --extra dev
           commit=$(git rev-parse HEAD)
           evidence_root=".release-evidence-input/release-evidence/${commit}"
