@@ -1,0 +1,2975 @@
+{
+  "active_release": {
+    "catalog_sequence": 2,
+    "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+    "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+    "verified": true
+  },
+  "candidate_binding": {
+    "artifact_sha256": "9ad7bca1455832f9b2ad4e12833cc971c4e62216a7555c9939c4df06f57274f2",
+    "commit": "add2cd542c4014f4d36bf381080f50db33851d42",
+    "tree": "e035d2d1d0016f065e1b22c719f85a81acd04d48",
+    "version": "0.12.0"
+  },
+  "catalog": {
+    "catalog_id": "deeplaw-cn-official",
+    "document_count": 28,
+    "sequence": 2,
+    "sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+    "signature_key_id": "ed25519:0e3f95bd070fa3b48f84670b18805947f4f3f553fe60346d8abc6b76dcfd84eb",
+    "signature_sha256": "2a653b19966e8d3615dbde9b6e3c9356a67f192a367c41a0b356387988f302f6",
+    "signature_verified": true
+  },
+  "competitive_claim_eligible": false,
+  "decision_summary": {
+    "blocked_invalid_evidence": 0,
+    "ingest_new_source_revision": 0,
+    "no_action": 23,
+    "rebuild_derived": 0,
+    "recompile_knowledge": 0,
+    "reparse_source_ir": 5
+  },
+  "external_real_model_semantic_execution": "not_executed",
+  "limitations": [
+    "These 28 identities belong to the isolated Authoritative Pack, not the general Living Wiki source plane.",
+    "No title, original text, source path, private path, or private payload is recorded.",
+    "Target-scoped precision excludes unlabeled additional relevant evidence from the denominator.",
+    "Agent-derived legal interpretation remains legal_authority=false and is not scored as official evidence.",
+    "The frozen legal cases are deterministic and source-bound, not expert legal adjudication.",
+    "5 signed sources retain parser review warnings accepted by the signed allowNeedsOcr build policy; exact quote correctness is verified against deterministic extracted bytes, not an independent human transcription of flagged pages.",
+    "External real-model semantic execution was not performed."
+  ],
+  "rebuild": {
+    "external_model_used": false,
+    "first_compilation_latency_ms": 211392.904,
+    "incremental_refresh_latency_ms": 1113.284,
+    "network_used_for_exact_catalog_acquisition": false,
+    "rebuild_latency_ms": 212599.154
+  },
+  "record_sha256": "f50b09e23ed1518a40c1a0d4ad575487c6604e72e0f7ec00b269d2abb14c6f73",
+  "release_target": "0.12.0",
+  "reproducibility": {
+    "build_report_identical": true,
+    "database_byte_identical": true,
+    "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+    "isolated_build_count": 2,
+    "query_result_semantics_identical": true,
+    "signed_catalog_build_policy": {
+      "allowNeedsOcr": true,
+      "pdfFallback": "document-engine"
+    },
+    "snapshot_restore_verified": true
+  },
+  "retrieval_quality": {
+    "authoritative_evidence_hit_ratio": 1.0,
+    "baseline": {
+      "blocking_gap_case_count": 9,
+      "case_count": 28,
+      "cases_sha256": "1e38c7c7ad9ea33c820797d2d2531ca3d4f2bba6fe9f211d8ee114e34e0d7917",
+      "citation_validity": 1.0,
+      "claim_evidence_binding_accuracy": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "overall_pass_rate": 1.0,
+      "p50_latency_ms": 15.879,
+      "p95_latency_ms": 24.175,
+      "recall_at_5": 1.0,
+      "required_duty_covered_rate": 0.7386363636363636,
+      "target_scoped_precision_at_5": 1.0,
+      "target_scoped_precision_definition": "Only frozen target labels are scored; unlabeled additional relevant evidence is excluded from the precision denominator and is not a false positive."
+    },
+    "candidate": {
+      "blocking_gap_case_count": 9,
+      "case_count": 28,
+      "cases_sha256": "1e38c7c7ad9ea33c820797d2d2531ca3d4f2bba6fe9f211d8ee114e34e0d7917",
+      "citation_validity": 1.0,
+      "claim_evidence_binding_accuracy": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "overall_pass_rate": 1.0,
+      "p50_latency_ms": 16.821,
+      "p95_latency_ms": 25.058,
+      "recall_at_5": 1.0,
+      "required_duty_covered_rate": 0.7386363636363636,
+      "target_scoped_precision_at_5": 1.0,
+      "target_scoped_precision_definition": "Only frozen target labels are scored; unlabeled additional relevant evidence is excluded from the precision denominator and is not a false positive."
+    },
+    "cold_query_latency_p50_ms": 400.016,
+    "cold_query_latency_p95_ms": 432.691,
+    "compiled_hit_ratio": 0.0,
+    "compiled_hit_ratio_reason": "not_applicable_to_isolated_law_support_evidence_plane",
+    "context_bytes_saved": 23380,
+    "estimated_tokens_saved": 5845,
+    "evidence_attachment_rate": 1.0,
+    "extraction_completeness": 1.0,
+    "extraction_completeness_definition": "Fraction of signed sources with complete stable fragment order and locators; recorded extraction review risk is reported separately.",
+    "failure_recovery_rate": 1.0,
+    "parse_risk_free_rate": 0.8214285714285714,
+    "peak_rss_bytes": 109510656,
+    "peak_rss_measurement": "RUSAGE_CHILDREN_peak_normalized_to_bytes",
+    "provider_excerpt_bytes": 17532,
+    "provider_visible_max_bytes": 11187,
+    "quality_regression": false,
+    "raw_fragment_baseline_bytes": 40912,
+    "repeated_process_query_latency_p50_ms": 396.262,
+    "repeated_query_reuse_rate": 1.0,
+    "review_required_source_count": 5,
+    "source_coverage": 1.0,
+    "source_fallback_ratio": 0.0,
+    "stale_selection_prevention": 1.0,
+    "warm_query_latency_p50_ms": 120.064,
+    "warm_query_latency_p95_ms": 127.431
+  },
+  "schema_version": "deeplaw.authoritative-source-quality-decision-matrix/v2",
+  "security": {
+    "authority_elevation": 0,
+    "challenge_attempt_count": 10,
+    "challenge_execution": {
+      "authority_elevation": true,
+      "law_support_mutation_rejected": true,
+      "prompt_injection": true,
+      "restricted_disclosure": true,
+      "signed_catalog_rollback_rejected": true,
+      "silent_fallback": true,
+      "tampered_receipt_rejected": true,
+      "tampered_signature_rejected": true,
+      "unauthorized_disclosure": true,
+      "unsupported_authoritative_claim": true
+    },
+    "invalid_official_citation": 0,
+    "provider_hard_limit_violation": 0,
+    "restricted_disclosure": 0,
+    "silent_fallback": 0,
+    "stale_prohibited_selection": 0,
+    "unauthorized_disclosure": 0,
+    "unauthorized_mutation": 0,
+    "unsupported_authoritative_claim": 0
+  },
+  "snapshot": {
+    "active_pointer_verified_after_restore": true,
+    "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+    "file_count": 11,
+    "restore_verified": true,
+    "sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00",
+    "verified_before_rebuild": true
+  },
+  "sources": [
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 346228,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2967,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 4,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 4,
+        "inventory_sha256": "92f99618b92f41d8c52be11ed9fdfbb09056c982c7e8f5a9d5f997964ad26d3e",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "0025f6ab6f48c6055cf9692ae88b46cc4800ff9e02f29dacbc9fab988e23b2e6",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unknown",
+        "freshness": "unknown",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unknown",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 8777,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "92f99618b92f41d8c52be11ed9fdfbb09056c982c7e8f5a9d5f997964ad26d3e",
+        "identity": "92f99618b92f41d8c52be11ed9fdfbb09056c982c7e8f5a9d5f997964ad26d3e"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_fb700512ae7200a854b04e33"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 319308,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 5869,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 14,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 46,
+        "inventory_sha256": "2bcd3dcf686efac317b0e34dde3882561168a6be4e026968158b4b77f36aff47",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "02cefeec306c9d55fe5dd7ef69c91fbde84ef25061e6433dbbedcfd7aac04b3c",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 6700,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "2bcd3dcf686efac317b0e34dde3882561168a6be4e026968158b4b77f36aff47",
+        "identity": "2bcd3dcf686efac317b0e34dde3882561168a6be4e026968158b4b77f36aff47"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_6ebcbdf0499389339843e9c4"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 530328,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "reparse_source_ir",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 52404,
+        "coverage_ratio": 1.0,
+        "needs_ocr": true,
+        "pages": 193,
+        "parse_risk": "recorded_review_required",
+        "review_required": true,
+        "review_required_fragment_count": 1,
+        "skipped_fragment_count": 0,
+        "warning_count": 7
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 454,
+        "inventory_sha256": "b96c7ec7629808676c854388f152f3c3c5e129b14239680d6ee8b03d5c614690",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "1393c6ac1f94704c6a2995e4def1b485184070bdb0062bf47f430ddbbac3ceeb",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=tesseract 5.5.2",
+          "renderer=pdftoppm version 24.02.0",
+          "document_engine=deeplaw-document-engine",
+          "document_engine_version=deeplaw-document-engine 3.4.4 model-manifest-sha256=c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12",
+          "document_engine_run=schemas=content_list_v2;methods=auto;backends=pipeline;languages=ch;ranges=1"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "reparse_executed_for_recorded_parse_risk",
+        "signed_build_policy_preserves_review_warning"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7915,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "b96c7ec7629808676c854388f152f3c3c5e129b14239680d6ee8b03d5c614690",
+        "identity": "b96c7ec7629808676c854388f152f3c3c5e129b14239680d6ee8b03d5c614690"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_60224e01894c870874c413df"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 30818,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 9183,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 97,
+        "inventory_sha256": "24a79bb622f40fedafeaeb591bb31a7d2cf41057d0a78fadd44b747c2f6f8f44",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "1815f84f43dd5011442c817a197d745c9aef631f5db3b6c7a75be1acc2b5cd8b",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 8174,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "24a79bb622f40fedafeaeb591bb31a7d2cf41057d0a78fadd44b747c2f6f8f44",
+        "identity": "24a79bb622f40fedafeaeb591bb31a7d2cf41057d0a78fadd44b747c2f6f8f44"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_ffcee4f4146408fecb228478"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 27425,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 11025,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 80,
+        "inventory_sha256": "f7f2aed9691b109310a589b2f65790a0b8da270cc74c31395b93d2d586e06be8",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "19e760e7c1cf5ffb9806a4063a5dbb641cc5aad1c196bcd1c5b905e5a88948fd",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9183,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "f7f2aed9691b109310a589b2f65790a0b8da270cc74c31395b93d2d586e06be8",
+        "identity": "f7f2aed9691b109310a589b2f65790a0b8da270cc74c31395b93d2d586e06be8"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_d0ba86c63cb355a6f65ef525"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 5156550,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "reparse_source_ir",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2941,
+        "coverage_ratio": 1.0,
+        "needs_ocr": true,
+        "pages": 8,
+        "parse_risk": "recorded_review_required",
+        "review_required": true,
+        "review_required_fragment_count": 1,
+        "skipped_fragment_count": 0,
+        "warning_count": 9
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 1,
+        "inventory_sha256": "855cf0197a3e68f430c7a4a7aa42c3d76a56839a5381465cb0d16245a83f3f2a",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "1a65e80fe998af0729b87bcf5474d6d4827bace7eeb799c2bd94fb9fd58f0459",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unknown",
+        "freshness": "unknown",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unknown",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=tesseract 5.5.2",
+          "renderer=pdftoppm version 24.02.0",
+          "document_engine=deeplaw-document-engine",
+          "document_engine_version=deeplaw-document-engine 3.4.4 model-manifest-sha256=c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12",
+          "document_engine_run=schemas=content_list_v2;methods=auto;backends=pipeline;languages=ch;ranges=1"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "reparse_executed_for_recorded_parse_risk",
+        "signed_build_policy_preserves_review_warning"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 10075,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "855cf0197a3e68f430c7a4a7aa42c3d76a56839a5381465cb0d16245a83f3f2a",
+        "identity": "855cf0197a3e68f430c7a4a7aa42c3d76a56839a5381465cb0d16245a83f3f2a"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_d63068d170e2015069276833"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 301472,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 4510,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 13,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 38,
+        "inventory_sha256": "c15df6db24d203ee640ce1e155456935f01c4d88b1f6a3ec99ea12724032b414",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "1f0e210f5d01b5c3029d8d6d71db3adad16385c0b022510bb2a3c6f42c6bb5b0",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "superseded",
+        "freshness": "superseded",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "superseded",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": true,
+        "provider_visible_bytes": 8397,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "c15df6db24d203ee640ce1e155456935f01c4d88b1f6a3ec99ea12724032b414",
+        "identity": "c15df6db24d203ee640ce1e155456935f01c4d88b1f6a3ec99ea12724032b414"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_6e761407f12174c14869c040"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 277353,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 20056,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 35,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 88,
+        "inventory_sha256": "050f56bcce41dee46f9ee5fd4379ba68f6ffa59a7989e2597f7b00df6cd2a58a",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "26e82081c441c0237a3b43581550f0fd77db4e817e291b40793499aa03df6954",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 6458,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "050f56bcce41dee46f9ee5fd4379ba68f6ffa59a7989e2597f7b00df6cd2a58a",
+        "identity": "050f56bcce41dee46f9ee5fd4379ba68f6ffa59a7989e2597f7b00df6cd2a58a"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_cd0f4bf25bcdd95dfd4a719b"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 114407,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 72515,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 614,
+        "inventory_sha256": "998d7e10b24ace4fa3e26c189a236220f4bade851508f14b638b18870721ca78",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "282fee49f12b6420a1a5ecde4ea2aa58b0e496e566cf959378bd1f8edb53f5e6",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "superseded",
+        "freshness": "superseded",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "superseded",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7231,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "998d7e10b24ace4fa3e26c189a236220f4bade851508f14b638b18870721ca78",
+        "identity": "998d7e10b24ace4fa3e26c189a236220f4bade851508f14b638b18870721ca78"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_a399d4e148ee136702fcf919"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 371064,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "reparse_source_ir",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 9407,
+        "coverage_ratio": 1.0,
+        "needs_ocr": true,
+        "pages": 22,
+        "parse_risk": "recorded_review_required",
+        "review_required": true,
+        "review_required_fragment_count": 3,
+        "skipped_fragment_count": 0,
+        "warning_count": 4
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 67,
+        "inventory_sha256": "58ff3ecc6e74484eb3c52cf081f13c8c14c79853ed697a4ff55ab3dd0626f6b5",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "2ee521dff7070bf0471b041fb302b8b0f46b6b137b13157b7e627203aa6907c8",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=tesseract 5.5.2",
+          "renderer=pdftoppm version 24.02.0",
+          "document_engine=deeplaw-document-engine",
+          "document_engine_version=deeplaw-document-engine 3.4.4 model-manifest-sha256=c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12",
+          "document_engine_run=schemas=content_list_v2;methods=auto;backends=pipeline;languages=ch;ranges=1"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "reparse_executed_for_recorded_parse_risk",
+        "signed_build_policy_preserves_review_warning"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9515,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "58ff3ecc6e74484eb3c52cf081f13c8c14c79853ed697a4ff55ab3dd0626f6b5",
+        "identity": "58ff3ecc6e74484eb3c52cf081f13c8c14c79853ed697a4ff55ab3dd0626f6b5"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_27744b8e4a30bea1d9e3f92f"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 134295,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 91039,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 766,
+        "inventory_sha256": "a7c118ce8021c76acf592571f7d4c69ae5383450d915c419afb601b9ed9a986d",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "3f2a61fe440bef7ff186714c40a50526bdea9a041d5bbd1035a93f6962f63a39",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9249,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "a7c118ce8021c76acf592571f7d4c69ae5383450d915c419afb601b9ed9a986d",
+        "identity": "a7c118ce8021c76acf592571f7d4c69ae5383450d915c419afb601b9ed9a986d"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_8818f5c65d424fcfaa2abe1d"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 291609,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 13238,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 22,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 91,
+        "inventory_sha256": "3476fdb04735257c2a8c18b69cfa77e0c0638ab1648ed9432188c6ff3f80ce52",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "55f16443ff508902e2c820676fcf6d680fe518776182906d5f7685835bf4e00d",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9641,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "3476fdb04735257c2a8c18b69cfa77e0c0638ab1648ed9432188c6ff3f80ce52",
+        "identity": "3476fdb04735257c2a8c18b69cfa77e0c0638ab1648ed9432188c6ff3f80ce52"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_f86ab1cc07f555b50031d302"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 78913,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 38616,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 393,
+        "inventory_sha256": "c079ae248dba6007e89d68aa5a3d3281c42a5db4f4410a9c2c3e5bfdc0ea4ba1",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "6810ffec97e23afcf5e5e0605f6f15c38299e0acb70c55d77c3c5a1882d954a7",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9218,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "c079ae248dba6007e89d68aa5a3d3281c42a5db4f4410a9c2c3e5bfdc0ea4ba1",
+        "identity": "c079ae248dba6007e89d68aa5a3d3281c42a5db4f4410a9c2c3e5bfdc0ea4ba1"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_933f49263babe2cb070634bb"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 21467,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 5551,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 70,
+        "inventory_sha256": "5fbb8350ac30a9cdac16ea2c24d5b957aea254ece084613b570616e7c36f003b",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "722d29084fef73485e45485309daef570cee2cdee5c1ed19dcac95b0a28a065b",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 6675,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "5fbb8350ac30a9cdac16ea2c24d5b957aea254ece084613b570616e7c36f003b",
+        "identity": "5fbb8350ac30a9cdac16ea2c24d5b957aea254ece084613b570616e7c36f003b"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_e378fb9f99b4f9f0a687a317"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 337117,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2856,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 4,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 4,
+        "inventory_sha256": "530c42c197bb1ec249706e0d6786db03ecba32d26d2f39be0ec36f60fa93a2c4",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "76ce473953c210c76df7239f638335187dc3e200cd37c9fea2e1dd144c2fbb23",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unknown",
+        "freshness": "unknown",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unknown",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9140,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "530c42c197bb1ec249706e0d6786db03ecba32d26d2f39be0ec36f60fa93a2c4",
+        "identity": "530c42c197bb1ec249706e0d6786db03ecba32d26d2f39be0ec36f60fa93a2c4"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_8e2cdf8672496f3299287a56"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 269856,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 19275,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 46,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 88,
+        "inventory_sha256": "aa3bd17b7da433a727341a219d41a7ca2fb897bf93502d2c4965dcda48af4cbb",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "7e99645e83429ef4e073dec77ff4e2ce31558a41c13c1910fafbf8f22dc64afb",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7752,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "aa3bd17b7da433a727341a219d41a7ca2fb897bf93502d2c4965dcda48af4cbb",
+        "identity": "aa3bd17b7da433a727341a219d41a7ca2fb897bf93502d2c4965dcda48af4cbb"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_0036f31247cbc26f88253cc1"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 203917,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2095,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 3,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 5,
+        "inventory_sha256": "9d7f7d0f866fcedd875c86372d86e59aed2fdb00aeaa3056011630d8cc51871a",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "810467739eaebe231aba8c49369188ee3d67345ccfb98b41b4f1f1f3c5b95e72",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unknown",
+        "freshness": "unknown",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unknown",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7285,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "9d7f7d0f866fcedd875c86372d86e59aed2fdb00aeaa3056011630d8cc51871a",
+        "identity": "9d7f7d0f866fcedd875c86372d86e59aed2fdb00aeaa3056011630d8cc51871a"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_505e13bbc89a85b1c1f5665e"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 163788,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 5037,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 15,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 2,
+        "inventory_sha256": "11d9ad9fd807f8925a479390a5db1af7ec26330656322ad78a0153e54d03d140",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "830768edc19e64eaa7491dcb9940d09b33a6e22418af72a01dde5ce0db218996",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 11187,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "11d9ad9fd807f8925a479390a5db1af7ec26330656322ad78a0153e54d03d140",
+        "identity": "11d9ad9fd807f8925a479390a5db1af7ec26330656322ad78a0153e54d03d140"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_0717a825021a9c7688bba441"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 373853,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "reparse_source_ir",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 5335,
+        "coverage_ratio": 1.0,
+        "needs_ocr": true,
+        "pages": 13,
+        "parse_risk": "recorded_review_required",
+        "review_required": true,
+        "review_required_fragment_count": 2,
+        "skipped_fragment_count": 0,
+        "warning_count": 4
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 63,
+        "inventory_sha256": "ec613f73cad59cf788412c9c6e0563382101a704c8d7de7aeb49b5bdc5b35c2b",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "87ee8eb151daa3b45b0e2c2f0a31ed9257e1ca59f8ec79ebc06c3df7df1715c1",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=tesseract 5.5.2",
+          "renderer=pdftoppm version 24.02.0",
+          "document_engine=deeplaw-document-engine",
+          "document_engine_version=deeplaw-document-engine 3.4.4 model-manifest-sha256=c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12",
+          "document_engine_run=schemas=content_list_v2;methods=auto;backends=pipeline;languages=ch;ranges=1"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "reparse_executed_for_recorded_parse_risk",
+        "signed_build_policy_preserves_review_warning"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 6271,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "ec613f73cad59cf788412c9c6e0563382101a704c8d7de7aeb49b5bdc5b35c2b",
+        "identity": "ec613f73cad59cf788412c9c6e0563382101a704c8d7de7aeb49b5bdc5b35c2b"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_9364963e345975e871203e53"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 23365,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 6448,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 23,
+        "inventory_sha256": "f5e5aeacb32f45b3b31a6e1b40c3319d94240366dadcc045839bec5251a52ced",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "99ccd53a5245c7aa4a1777c24eeadedf4a38a307320309831325549e90154f05",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 8029,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "f5e5aeacb32f45b3b31a6e1b40c3319d94240366dadcc045839bec5251a52ced",
+        "identity": "f5e5aeacb32f45b3b31a6e1b40c3319d94240366dadcc045839bec5251a52ced"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_42ab330374fbe8bdab255f1f"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 250905,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 14233,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 39,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 60,
+        "inventory_sha256": "8663cacab54f3e0531757253c02289796f259ef6108d18f7d76887d1e49287a2",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "b304b78dca6ccf44fe076866cda884fcee16a9dc687394ecdc7d7b11a3b84f85",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 8033,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "8663cacab54f3e0531757253c02289796f259ef6108d18f7d76887d1e49287a2",
+        "identity": "8663cacab54f3e0531757253c02289796f259ef6108d18f7d76887d1e49287a2"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_fbe85513aa63c2ec54b9f986"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 133834,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2296,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 7,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 18,
+        "inventory_sha256": "66ad9b386e2a18b7c0d093ca31be664516a3640c27641444e48a9ccf2acc7c35",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "c12a102ff3bc3ad942d0af08f9030669f3189f8bcdc9687c13d5d307a576c0b5",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 6021,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "66ad9b386e2a18b7c0d093ca31be664516a3640c27641444e48a9ccf2acc7c35",
+        "identity": "66ad9b386e2a18b7c0d093ca31be664516a3640c27641444e48a9ccf2acc7c35"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_0ba1c0c15694d4eebf4ab03b"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 289681,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2803,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 7,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 36,
+        "inventory_sha256": "c105c9be678488f52ba6cdf7a537da7f52b49e90c26355aeae8b1c1ae755773e",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "d58dc8bcdcef4111146641734d7c485083a5d28edf567f24f78123decc288111",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "repealed",
+        "freshness": "repealed",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "repealed",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7341,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "c105c9be678488f52ba6cdf7a537da7f52b49e90c26355aeae8b1c1ae755773e",
+        "identity": "c105c9be678488f52ba6cdf7a537da7f52b49e90c26355aeae8b1c1ae755773e"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_58a9cc1d3fe3803c4af4f184"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 264585,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "reparse_source_ir",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 6967,
+        "coverage_ratio": 1.0,
+        "needs_ocr": true,
+        "pages": 22,
+        "parse_risk": "recorded_review_required",
+        "review_required": true,
+        "review_required_fragment_count": 1,
+        "skipped_fragment_count": 0,
+        "warning_count": 8
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 45,
+        "inventory_sha256": "d2dc4d53eeccfc9d65f9f8b2fffe86ea1fb892449c12922d4c45fdb6f1517fac",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "d7b9322aff9da739f5167ad0befb34ad5cc4b47ebee6ff658bbccb0656bba5ce",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "superseded",
+        "freshness": "superseded",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "superseded",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=tesseract 5.5.2",
+          "renderer=pdftoppm version 24.02.0",
+          "document_engine=deeplaw-document-engine",
+          "document_engine_version=deeplaw-document-engine 3.4.4 model-manifest-sha256=c2531fb0b09425d09824458b9c2dc7f343d1d2a8fad0a1ac25109ebc76321b12",
+          "document_engine_run=schemas=content_list_v2;methods=auto;backends=pipeline;languages=ch;ranges=2"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "reparse_executed_for_recorded_parse_risk",
+        "signed_build_policy_preserves_review_warning"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7890,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "d2dc4d53eeccfc9d65f9f8b2fffe86ea1fb892449c12922d4c45fdb6f1517fac",
+        "identity": "d2dc4d53eeccfc9d65f9f8b2fffe86ea1fb892449c12922d4c45fdb6f1517fac"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_003bce0e629646f4798dad04"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 17838,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 2023,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 14,
+        "inventory_sha256": "c2efa02f7c9cb65b7cdc429d92ef73ec359a46a9ab23070150feb5bbf659c8a6",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "ee2b353b241645588d93f974f37d7467132b73a98f5e9d6367de4f60333dd102",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 7963,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "c2efa02f7c9cb65b7cdc429d92ef73ec359a46a9ab23070150feb5bbf659c8a6",
+        "identity": "c2efa02f7c9cb65b7cdc429d92ef73ec359a46a9ab23070150feb5bbf659c8a6"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_7e39a6d09f3b85869342dff2"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 16198,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 1682,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 1,
+        "inventory_sha256": "27b51999511a25b9c081d9657e9022e625dd3fa1c02b5312ebec9f2d8bb67fb5",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "ee51fc72c880c8ed4456ec50196498da6b16bab2430ad63229d408b247ce20c4",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 8612,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "27b51999511a25b9c081d9657e9022e625dd3fa1c02b5312ebec9f2d8bb67fb5",
+        "identity": "27b51999511a25b9c081d9657e9022e625dd3fa1c02b5312ebec9f2d8bb67fb5"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_b3e09247c607cbd83db12141"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 24566,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 8413,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": null,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "DOCX",
+      "fragments": {
+        "count": 65,
+        "inventory_sha256": "68004433c0cc0680f83f70d011fb472d16f764857b7720b1949f196913dd76d7",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "f4d47081a729a401b65dd2292159d888c445e51e39b43528a7a49c8e2d68578b",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unverified_current",
+        "freshness": "unverified_current",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unverified_current",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "official",
+      "parser": {
+        "configuration": [],
+        "identity": "ooxml",
+        "version": "deeplaw-ooxml/v3"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9023,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "68004433c0cc0680f83f70d011fb472d16f764857b7720b1949f196913dd76d7",
+        "identity": "68004433c0cc0680f83f70d011fb472d16f764857b7720b1949f196913dd76d7"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_72662dc29414426dffabcd9e"
+    },
+    {
+      "authoritative_pack": {
+        "active_pointer_verified": true,
+        "catalog_id": "deeplaw-cn-official",
+        "catalog_sequence": 2,
+        "catalog_sha256": "49cf75169726e18851897556617fad4132881614c3f6ab9c6b2a78d4f8524305",
+        "database_sha256": "f005d21b6809fe5d43cdadc7d01db3e44d5afce85e71b9bcedfd26458e261397",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638",
+        "signature_verified": true
+      },
+      "authority": "official",
+      "byte_size": 372809,
+      "compilation": {
+        "build_report_sha256": "5f225ba990fee0f1b680254becffe4bf118c4ba4f8be7794f336ea9fa590f08e",
+        "compilation_run_id": null,
+        "compiler_profile": {
+          "allowNeedsOcr": true,
+          "pdfFallback": "document-engine"
+        },
+        "domain": "authoritative_pack_release_build",
+        "release_id": "lawrel_a8c33b88404732614c39a557e8d76638"
+      },
+      "decision": "no_action",
+      "derived_state": {
+        "canvas": "not_applicable_authoritative_pack",
+        "dense": "not_enabled",
+        "fts": "ready",
+        "graph": "ready",
+        "wiki": "not_applicable_authoritative_pack"
+      },
+      "execution_status": "verified",
+      "extraction_quality": {
+        "characters": 4057,
+        "coverage_ratio": 1.0,
+        "needs_ocr": false,
+        "pages": 5,
+        "parse_risk": "none_recorded",
+        "review_required": false,
+        "review_required_fragment_count": 0,
+        "skipped_fragment_count": 0,
+        "warning_count": 0
+      },
+      "format": "PDF",
+      "fragments": {
+        "count": 4,
+        "inventory_sha256": "ca212a168b3a43a158a2f0250ae84ceee7952aebc6075aeb727b9e38c45af1c3",
+        "locator_complete": true,
+        "order_stable": true,
+        "stable_ids": true
+      },
+      "immutable_bytes_sha256": "ff9983bb190581066c850ca642920c2801f04d7f5abf49f42ce9725c027cefcd",
+      "immutable_bytes_verified": true,
+      "knowledge_output": {
+        "agent_interpretation": false,
+        "applicability": "unknown",
+        "freshness": "unknown",
+        "legal_authority": true,
+        "ranking_is_authority": false
+      },
+      "lifecycle": "unknown",
+      "media_type": "application/pdf",
+      "origin": "official",
+      "parser": {
+        "configuration": [
+          "dpi=300",
+          "language=chi_sim+eng",
+          "psm=3",
+          "tesseract=not-used",
+          "renderer=pdftoppm version 24.02.0"
+        ],
+        "identity": "deeplaw-vision-consensus",
+        "version": "deeplaw-vision-consensus/v2"
+      },
+      "reason_codes": [
+        "immutable_source_bytes_verified",
+        "signed_catalog_identity_verified",
+        "exact_release_evidence_verified",
+        "parser_and_extraction_equivalent"
+      ],
+      "retrieval_probe": {
+        "citation_valid": true,
+        "historical_probe": false,
+        "provider_visible_bytes": 9388,
+        "rank": 1,
+        "repeated_query_stable": true
+      },
+      "rollback": {
+        "baseline_release_id": "lawrel_1bee97015ee440c71ea993b083a89005",
+        "restore_verified": true,
+        "snapshot_sha256": "c2fb1c36a5836a21d522de66a63ac07c4869de26aa0426093018a5c63cfabb00"
+      },
+      "scope": "law_support_official",
+      "sensitivity": "public",
+      "source_ir": {
+        "authoritative_segment_semantics": true,
+        "digest": "ca212a168b3a43a158a2f0250ae84ceee7952aebc6075aeb727b9e38c45af1c3",
+        "identity": "ca212a168b3a43a158a2f0250ae84ceee7952aebc6075aeb727b9e38c45af1c3"
+      },
+      "source_revision_id": null,
+      "source_revision_semantics": "Authoritative Pack identity is the signed document_id plus exact source SHA-256 and immutable release; it is not a general Knowledge OS Source Revision.",
+      "stable_source_id": "doc_4e2ad13937f038683bb4d178"
+    }
+  ],
+  "status": "executed_and_verified"
+}
