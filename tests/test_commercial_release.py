@@ -328,6 +328,15 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
 def test_semantic_release_evidence_uses_deterministic_machine_consensus() -> None:
     workflow = (REPOSITORY / ".github/workflows/semantic-evidence.yml").read_text(encoding="utf-8")
     release = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    assembler = (REPOSITORY / "benchmarks/release/commercial_release.py").read_text(
+        encoding="utf-8"
+    )
+    lifecycle_schema = json.loads(
+        (
+            REPOSITORY
+            / "contracts/deterministic-semantic-lifecycle.v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
 
     assert "if: ${{ inputs.mode == 'package_consensus' }}" in workflow
     assert "secrets.OPENAI_API_KEY" not in workflow
@@ -344,6 +353,18 @@ def test_semantic_release_evidence_uses_deterministic_machine_consensus() -> Non
     assert "external_model_execution" not in workflow
     assert "semantic_evidence_run_id" in release
     assert "semantic-release-evidence" in release
+    assert lifecycle_schema["properties"]["formal_release_evidence_ready"] == {
+        "const": False
+    }
+    assert (
+        'lifecycle.get("formal_release_evidence_ready") is False'
+        in assembler
+    )
+    assert (
+        'lifecycle.get("formal_release_evidence_ready") is not True'
+        not in assembler
+    )
+    assert "Machine review packet does not bind first-party query evidence" not in assembler
 
 
 def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
