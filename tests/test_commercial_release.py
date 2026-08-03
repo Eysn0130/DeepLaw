@@ -333,6 +333,9 @@ def test_semantic_release_evidence_uses_deterministic_machine_consensus() -> Non
     assert "secrets.OPENAI_API_KEY" not in workflow
     assert "owner-approved release scope" in workflow
     assert "build_machine_review_consensus" in workflow
+    assert "packet_count=$((packet_count + 1))" in workflow
+    assert 'test "${packet_count}" -eq 6' in workflow
+    assert 'test "${#packet_arguments[@]}" -eq 6' not in workflow
     assert "v0.12-28-source-decision-matrix.json" in workflow
     assert "semantic-release-evidence" in workflow
     assert "human_final_decision" not in workflow

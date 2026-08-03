@@ -230,10 +230,12 @@ jobs:
           cp "${evidence_root}/quality/v0.12-28-source-decision-matrix.json" \
             "${output}/quality/v0.12-28-source-decision-matrix.json"
           packet_arguments=()
+          packet_count=0
           for packet in "${output}"/machine-reviews/*.json; do
             packet_arguments+=(--packet "${packet}")
+            packet_count=$((packet_count + 1))
           done
-          test "${#packet_arguments[@]}" -eq 6
+          test "${packet_count}" -eq 6
           uv run --frozen python -m benchmarks.semantic.build_machine_review_consensus \
             "${packet_arguments[@]}" --output "${output}"
           python - "${output}" <<'PY'
