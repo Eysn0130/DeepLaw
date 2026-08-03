@@ -1,0 +1,3081 @@
+{
+  "auditor_identity": {
+    "identity_version": "semantic_gold_formal_auditor/0.12.0-exact-candidate-v1",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "ultra"
+  },
+  "auditor_role": "semantic_gold_formal_auditor",
+  "candidate_binding": {
+    "commit": "78337eb9fd5d335cdfb08a32de562963f58bbcf6",
+    "fixture_manifest_sha256": "845a54e9bfc2e76da8e72a2d1ab506e2ac08ec2c94fe268c9913065d4fe51d6d",
+    "gold_canonical_sha256": "7b8e124b0c2a26b157fabcb0d62ac5da885960a5a9958542edb2a67fba0be7b6",
+    "semantic_gold_freeze_sha256": "3682f30716c8a0ead139aa09e41dcd715783648c17948b0aae63daffeb2edb67",
+    "semantic_gold_schema_sha256": "729f2f95a567952fa8cdca79284d2cb3bb013ee080d0c13872f1fce5d9ba309a",
+    "tree": "fcd57b42f3815ace3c5573e9d4410b0359f50c7a",
+    "version": "0.12.0"
+  },
+  "cases": [
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [
+        "knowledge_6606b517755de93e1050b4bf"
+      ],
+      "canonical_query_sha256": "4cff2449da554a17f5722d51d607d0b8c5c70e2efc7a9c930562f95a3269bc34",
+      "case_id": "semantic-case-01",
+      "citations": [
+        {
+          "fragment_id": "fragment_4fc158809503605a6b9aba77",
+          "locator": "section:35;paragraphs:140-141",
+          "quote_sha256": "f9041db7adf70334b43b58e70a2fec704d1bf6b9278fa139808186db5043c582",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_a1f6cd3ab395e13d444addfa",
+          "locator": "section:1;paragraphs:3-5",
+          "quote_sha256": "6d936bfe02d88a346d03bbd4b04b671a645b057073e4b81e659ebcec469c3378",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_c8f44ea0f624913d6edd7290",
+          "locator": "section:37;paragraphs:148-149",
+          "quote_sha256": "b2b2b1cc85d12f8d08288da8b4da9d8e8294bf46e55679e6c213bfe6d3b5e34f",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_ddf3f6382f5be068cb99abdb",
+          "locator": "section:36;paragraphs:144-145",
+          "quote_sha256": "8a5ccabddaa40dc4eb798342acc2375f35b84f80c2255ce28f94a9ede2552607",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What organization is also known as MRC, Meridian Research, and the Cooperative?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'What organization is also known as MRC, Meridian Research, and the Cooperative?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'What organization is also known as MRC, Meridian Research, and the Cooperative?' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-01-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-01-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_4fc158809503605a6b9aba77 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_a1f6cd3ab395e13d444addfa --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_c8f44ea0f624913d6edd7290 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_ddf3f6382f5be068cb99abdb --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "35b93cfa85f0d404c072e9fb1768a4afd50072a685a0af99f4aa0510fa1dca8e",
+      "expected_claims": [],
+      "expected_stable_ids": [
+        "knowledge_6606b517755de93e1050b4bf"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What organization is also known as MRC, Meridian Research, and the Cooperative?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 25,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:24:17Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.875,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "c52cbb8a12828ad975af72eb2f096fc3f44fbbe9ab778250b78f44857eb6390c",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_f3bc693f43e49fad7099ebda"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "4cff2449da554a17f5722d51d607d0b8c5c70e2efc7a9c930562f95a3269bc34",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 24,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "0c25da60071836a2bc530d9c1b73696579d315c9c9c0cafdeaf48ac02477a2d1",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [
+        "knowledge_71fc4e3689c7de61c160aec6",
+        "knowledge_fd6371454d6fa07f7e733532"
+      ],
+      "canonical_query_sha256": "2488a729a1257cfba68689615fd5aee863b16685b6829608aa46c4a3de4870e8",
+      "case_id": "semantic-case-02",
+      "citations": [
+        {
+          "fragment_id": "fragment_90e494807d2b870692a017ae",
+          "locator": "section:1;paragraphs:3-7",
+          "quote_sha256": "087b84e032d002ffa9f0603a647493d175522fa9a0c7f23dd7168a0422091056",
+          "source_revision_id": "sourcerev_f02654590a7f395ea0cd87e9",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Who are the two people named Jordan Lee, and how are they distinguished?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'Who are the two people named Jordan Lee, and how are they distinguished?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'Who are the two people named Jordan Lee, and how are they distinguished?' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-02-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-02-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_90e494807d2b870692a017ae --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "0c46713fb746f30f20cb84f15557a0bd1ffe956c65ea6f009f433388d981d939",
+      "expected_claims": [],
+      "expected_stable_ids": [
+        "knowledge_71fc4e3689c7de61c160aec6",
+        "knowledge_fd6371454d6fa07f7e733532"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "Who are the two people named Jordan Lee, and how are they distinguished?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 26,
+        "compiled_selected_count": 2,
+        "created_at": "2026-08-03T00:24:28Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.875,
+        "evidence_attachment_count": 2,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "9f0187ec1e537be9c4b1132c81211994ff6862b7edf3dc6c401bae838ec464ac",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_48bab9a444e34ea4e846c4ca",
+              "knowledgerev_37c487dc4ba3656e6df4aa23"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [
+              "knowledgerev_48bab9a444e34ea4e846c4ca",
+              "knowledgerev_37c487dc4ba3656e6df4aa23"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_48bab9a444e34ea4e846c4ca",
+              "knowledgerev_37c487dc4ba3656e6df4aa23"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_48bab9a444e34ea4e846c4ca",
+              "knowledgerev_37c487dc4ba3656e6df4aa23"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_48bab9a444e34ea4e846c4ca",
+            "knowledgerev_37c487dc4ba3656e6df4aa23"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "2488a729a1257cfba68689615fd5aee863b16685b6829608aa46c4a3de4870e8",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 24,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "5cfb03dcbba5b57399f818d18434a8ad03a6eff8f6cddf601bb413b139032e9f",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [
+        "knowledge_6606b517755de93e1050b4bf"
+      ],
+      "canonical_query_sha256": "e9fb628fd21f47714412b5094ddd8a7c2f7621dc02f55b98f863eb669938e428",
+      "case_id": "semantic-case-03",
+      "citations": [
+        {
+          "fragment_id": "fragment_4fc158809503605a6b9aba77",
+          "locator": "section:35;paragraphs:140-141",
+          "quote_sha256": "f9041db7adf70334b43b58e70a2fec704d1bf6b9278fa139808186db5043c582",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_a1f6cd3ab395e13d444addfa",
+          "locator": "section:1;paragraphs:3-5",
+          "quote_sha256": "6d936bfe02d88a346d03bbd4b04b671a645b057073e4b81e659ebcec469c3378",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_c8f44ea0f624913d6edd7290",
+          "locator": "section:37;paragraphs:148-149",
+          "quote_sha256": "b2b2b1cc85d12f8d08288da8b4da9d8e8294bf46e55679e6c213bfe6d3b5e34f",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_ddf3f6382f5be068cb99abdb",
+          "locator": "section:36;paragraphs:144-145",
+          "quote_sha256": "8a5ccabddaa40dc4eb798342acc2375f35b84f80c2255ce28f94a9ede2552607",
+          "source_revision_id": "sourcerev_5e350f6fc5f064b91c483824",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What does MRC refer to?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'What does MRC refer to?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'What does MRC refer to?' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-03-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-03-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_4fc158809503605a6b9aba77 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_a1f6cd3ab395e13d444addfa --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_c8f44ea0f624913d6edd7290 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_ddf3f6382f5be068cb99abdb --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "fbee010988a32f97ee0d826263bb6ce187815dae455b4a3c555d91d0b7bd06bf",
+      "expected_claims": [],
+      "expected_stable_ids": [
+        "knowledge_6606b517755de93e1050b4bf"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What does MRC refer to?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 14,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:24:37Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.875,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "adb23cf64e897bb2d8d7a21d3b973ed34c0dbf378b11faa1af6d7a83953380c9",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_f3bc693f43e49fad7099ebda"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_f3bc693f43e49fad7099ebda"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "e9fb628fd21f47714412b5094ddd8a7c2f7621dc02f55b98f863eb669938e428",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 13,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "f5ce08775469a0ef7bda5a4d21e86f1bfba8fe4a3a904eaa643822f391458cbd",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "Evidence admission accepts a source only after identity, lifecycle, scope, sensitivity, and provenance checks succeed.",
+        "Evidence ranking never establishes Authority.",
+        "The governed evidence-admission specification requires exact Source Revision and fragment-locator verification, and its timeline records policy drafting, mandatory locator validation, and prohibited silent fallback."
+      ],
+      "actual_stable_ids": [
+        "knowledge_6d01b5fe2e23e78be4cef290"
+      ],
+      "canonical_query_sha256": "5092dae012dbcd04d6a67f409189ee4a40776b3c705bb8589f17720d2d953d4c",
+      "case_id": "semantic-case-04",
+      "citations": [
+        {
+          "fragment_id": "fragment_b7dca29c5740e1baab64d569",
+          "locator": "section:1;paragraphs:3-5",
+          "quote_sha256": "a477a33f9181571bba062b685980192dc32d0685811b518baa16516a596459f2",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_bcc3cb2a48f41a4a7b05d38a",
+          "locator": "section:2;paragraphs:8-12",
+          "quote_sha256": "b9d3cd32f2c5101387a8c7c3c11f1e6ca5eaea47a5e8c67683de014330382797",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_f66377a18e8f9c942ab0d117",
+          "locator": "section:3;paragraphs:15-17",
+          "quote_sha256": "4090ecf1d3f1b21591e1bc5056e5583744adfdd6d0cc66c565e362c637dbaaa1",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What is the evidence admission policy?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'What is the evidence admission policy?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'What is the evidence admission policy?' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-04-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-04-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_b7dca29c5740e1baab64d569 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_bcc3cb2a48f41a4a7b05d38a --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_f66377a18e8f9c942ab0d117 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "b160f354363dcc25ca5a1a83b1caf268f90e2a2d60012e2aae3af535353b5dd7",
+      "expected_claims": [
+        "Evidence admission accepts a source only after identity, lifecycle, scope, sensitivity, and provenance checks succeed.",
+        "Evidence ranking never establishes Authority.",
+        "The governed evidence-admission specification requires exact Source Revision and fragment-locator verification, and its timeline records policy drafting, mandatory locator validation, and prohibited silent fallback."
+      ],
+      "expected_stable_ids": [
+        "knowledge_6d01b5fe2e23e78be4cef290"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What is the evidence admission policy?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 26,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:24:48Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.875,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "564435d0da1309a9b6bd96efacc25064c06adf14a53294a1d9ab1d0ccaf909e6",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_e3e988b1a81ea6bf50d54859"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [
+              "knowledgerev_e3e988b1a81ea6bf50d54859"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_e3e988b1a81ea6bf50d54859"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_e3e988b1a81ea6bf50d54859"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_e3e988b1a81ea6bf50d54859"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "5092dae012dbcd04d6a67f409189ee4a40776b3c705bb8589f17720d2d953d4c",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 25,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "ceeac7dfcdc2624ac1e77c28b13e8d97de4b70d994e70e1f8bee9a7a8167636d",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "For the Atlas production service, Policy A requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 30 days after collection during 2026.",
+        "Restricted payloads are never included in Policy A diagnostic logs.",
+        "For the Atlas production service, Policy B requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 60 days after collection during 2026.",
+        "Restricted payloads are never included in Policy B diagnostic logs."
+      ],
+      "actual_stable_ids": [
+        "knowledge_8374dd352f033d174de34d6b",
+        "knowledge_cc62058b5ac2940c6bdce0f7"
+      ],
+      "canonical_query_sha256": "67845d9702dd1e6ee8791bcbac4f4401e4bd225397a24831081a91d8670be267",
+      "case_id": "semantic-case-05",
+      "citations": [
+        {
+          "fragment_id": "fragment_1219c0383f0d0b916db63172",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "e63d6b527ea426ceeaf49238e81d3e62d4d3515577953d619c5e9adecf9531f6",
+          "source_revision_id": "sourcerev_dea56a4a052dc99d796f71fd",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_7beb85475658807e361e6014",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "74c76794ff4d17fd7d0e4372beaf0d520ded2818ee40b63d4cbab5c6b6dc8bb0",
+          "source_revision_id": "sourcerev_753c4232c735154765ba1eb5",
+          "valid": true
+        },
+        {
+          "fragment_id": "irfragment_1c125d1f805fb7aa2e16b76f",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "e63d6b527ea426ceeaf49238e81d3e62d4d3515577953d619c5e9adecf9531f6",
+          "source_revision_id": "sourcerev_dea56a4a052dc99d796f71fd",
+          "valid": true
+        },
+        {
+          "fragment_id": "irfragment_f76aa422c597173e4ae14795",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "74c76794ff4d17fd7d0e4372beaf0d520ded2818ee40b63d4cbab5c6b6dc8bb0",
+          "source_revision_id": "sourcerev_753c4232c735154765ba1eb5",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'For the Atlas production service during 2026, how long are worldwide public-API diagnostic logs retained according to each policy?' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'For the Atlas production service during 2026, how long are worldwide public-API diagnostic logs retained according to each policy?' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'For the Atlas production service during 2026, how long are worldwide public-API diagnostic logs retained according to each policy?' --purpose verify --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-05-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-05-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_1219c0383f0d0b916db63172 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_7beb85475658807e361e6014 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id irfragment_1c125d1f805fb7aa2e16b76f --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id irfragment_f76aa422c597173e4ae14795 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "25afb9d6111dfb9777d01a06c29bf5822558da65179917ca2d161c96f88e1a03",
+      "expected_claims": [
+        "For the Atlas production service, Policy A requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 30 days after collection during 2026.",
+        "Restricted payloads are never included in Policy A diagnostic logs.",
+        "For the Atlas production service, Policy B requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 60 days after collection during 2026.",
+        "Restricted payloads are never included in Policy B diagnostic logs."
+      ],
+      "expected_stable_ids": [
+        "knowledge_8374dd352f033d174de34d6b",
+        "knowledge_cc62058b5ac2940c6bdce0f7"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "For the Atlas production service during 2026, how long are worldwide public-API diagnostic logs retained according to each policy?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "source_evidence",
+          "raw_fragment_fallback",
+          "fresh_compiled_knowledge",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness"
+        ],
+        "compiled_candidate_count": 26,
+        "compiled_selected_count": 2,
+        "created_at": "2026-08-03T00:25:01Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 1.0,
+        "evidence_attachment_count": 2,
+        "evidence_selected_count": 2,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [
+            "irfragment_1c125d1f805fb7aa2e16b76f",
+            "irfragment_f76aa422c597173e4ae14795"
+          ],
+          "source_revision_ids": [
+            "sourcerev_753c4232c735154765ba1eb5",
+            "sourcerev_dea56a4a052dc99d796f71fd"
+          ],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "83eae730016bddbd5a5ffd9d62268ecc6d191d190a00d059ea4d9c9a6c1a00ac",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_7d11e333e1b3db0954c9b354",
+              "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_7d11e333e1b3db0954c9b354",
+              "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [
+              "relationrev_572b7a91b7cd18249c800848"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "evidence_gap",
+              "uncompiled_source"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_7d11e333e1b3db0954c9b354",
+              "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "evidence_gap",
+              "uncompiled_source"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_7d11e333e1b3db0954c9b354",
+            "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "evidence-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "verify",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "67845d9702dd1e6ee8791bcbac4f4401e4bd225397a24831081a91d8670be267",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 24,
+        "uncompiled_source_count": 1,
+        "used_channels": [
+          "compiled_knowledge",
+          "source_evidence"
+        ]
+      },
+      "query_plan_sha256": "2a1120ea3accb39240993b4444e55b88485889a411e6c125d235e75ac90b8f01",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "Evidence admission requires identity, lifecycle, scope, sensitivity, and provenance checks.",
+        "Evidence ranking never establishes Authority."
+      ],
+      "actual_stable_ids": [
+        "knowledge_919bf2c457196edcde17d066"
+      ],
+      "canonical_query_sha256": "27990bab267a56909904a885a64f1c14fb9065542308c02e77c7a6737eed9d7e",
+      "case_id": "semantic-case-06",
+      "citations": [
+        {
+          "fragment_id": "fragment_b7dca29c5740e1baab64d569",
+          "locator": "section:1;paragraphs:3-5",
+          "quote_sha256": "a477a33f9181571bba062b685980192dc32d0685811b518baa16516a596459f2",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_bcc3cb2a48f41a4a7b05d38a",
+          "locator": "section:2;paragraphs:8-12",
+          "quote_sha256": "b9d3cd32f2c5101387a8c7c3c11f1e6ca5eaea47a5e8c67683de014330382797",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_f66377a18e8f9c942ab0d117",
+          "locator": "section:3;paragraphs:15-17",
+          "quote_sha256": "4090ecf1d3f1b21591e1bc5056e5583744adfdd6d0cc66c565e362c637dbaaa1",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Summarize the evidence admission source.' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'Summarize the evidence admission source.' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'Summarize the evidence admission source.' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-06-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-06-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_b7dca29c5740e1baab64d569 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_bcc3cb2a48f41a4a7b05d38a --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_f66377a18e8f9c942ab0d117 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "2305bd1e0d58b47a4e5d76655a3ef18817bc0c2657fe3bf1e1816a9422816b03",
+      "expected_claims": [
+        "Evidence admission requires identity, lifecycle, scope, sensitivity, and provenance checks.",
+        "Evidence ranking never establishes Authority."
+      ],
+      "expected_stable_ids": [
+        "knowledge_919bf2c457196edcde17d066"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "Summarize the evidence admission source.",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 26,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:25:19Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.625,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "2dbaeaed3f7ddb23b5c724cf6d7c979c475d038fd0c68489be144b54a0caf315",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_186cc5e3fef5951b13aa807f"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_186cc5e3fef5951b13aa807f"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [
+            "knowledgerev_186cc5e3fef5951b13aa807f"
+          ],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "27990bab267a56909904a885a64f1c14fb9065542308c02e77c7a6737eed9d7e",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 25,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "c0273d62750415dfadbf8a58c4ff64edee813e3aa0c2bab508d967ff17ac1221",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "The evidence admission workflow preserves all four ordered steps."
+      ],
+      "actual_stable_ids": [
+        "knowledge_d1f344a67038642e7b18f636"
+      ],
+      "canonical_query_sha256": "f4329ea864eaa15cf65a3c924c079acbf0fd4a9b5b325ee805d60f7296196bd9",
+      "case_id": "semantic-case-07",
+      "citations": [
+        {
+          "fragment_id": "fragment_bcc3cb2a48f41a4a7b05d38a",
+          "locator": "section:2;paragraphs:8-12",
+          "quote_sha256": "b9d3cd32f2c5101387a8c7c3c11f1e6ca5eaea47a5e8c67683de014330382797",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What are the ordered steps in the evidence admission workflow?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'What are the ordered steps in the evidence admission workflow?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'What are the ordered steps in the evidence admission workflow?' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-07-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-07-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_bcc3cb2a48f41a4a7b05d38a --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "4c7d7dd487433b6a2263745d60cb165778a2472c9306ba9ee0251836df53ec87",
+      "expected_claims": [
+        "The evidence admission workflow preserves all four ordered steps."
+      ],
+      "expected_stable_ids": [
+        "knowledge_d1f344a67038642e7b18f636"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What are the ordered steps in the evidence admission workflow?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 23,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:25:31Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.75,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "ec5fa53af122282a1ae54e3d2794a71d6b88580dfeec33c2e6a76c2f84993b1d",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_47c32e3c1d34c3c729c659b3"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_47c32e3c1d34c3c729c659b3"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_47c32e3c1d34c3c729c659b3"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_47c32e3c1d34c3c729c659b3"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "f4329ea864eaa15cf65a3c924c079acbf0fd4a9b5b325ee805d60f7296196bd9",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 22,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "205176132f498e3ec61de483dc7868b694c3cb083d6cc18f8392f7a0cd63c22e",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "The admission policy was drafted on 2025-01-10.",
+        "Locator validation became mandatory on 2025-03-15.",
+        "Silent fallback was prohibited on 2025-05-20."
+      ],
+      "actual_stable_ids": [
+        "knowledge_3ee7a3a94874d1d28c7e6886",
+        "knowledge_851404990df7ee4b9ad8cff7",
+        "knowledge_fedacb59cde13a5cc2e908f9"
+      ],
+      "canonical_query_sha256": "da92dfd6beaca46815039b9425de944b55d911797551ff75429840698efea7c8",
+      "case_id": "semantic-case-08",
+      "citations": [
+        {
+          "fragment_id": "fragment_f66377a18e8f9c942ab0d117",
+          "locator": "section:3;paragraphs:15-17",
+          "quote_sha256": "4090ecf1d3f1b21591e1bc5056e5583744adfdd6d0cc66c565e362c637dbaaa1",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        },
+        {
+          "fragment_id": "irfragment_22931c505763221f53a1f29f",
+          "locator": "section:3;paragraphs:15-17",
+          "quote_sha256": "4090ecf1d3f1b21591e1bc5056e5583744adfdd6d0cc66c565e362c637dbaaa1",
+          "source_revision_id": "sourcerev_e431736ae4d50db911ca241b",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What happened on 2025-01-10, 2025-03-15, and 2025-05-20 in the chronological policy timeline?' --purpose historical --as-of 2099-01-01T00:00:00Z --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'What happened on 2025-01-10, 2025-03-15, and 2025-05-20 in the chronological policy timeline?' --purpose historical --as-of 2099-01-01T00:00:00Z --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'What happened on 2025-01-10, 2025-03-15, and 2025-05-20 in the chronological policy timeline?' --purpose historical --as-of 2099-01-01T00:00:00Z --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-08-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-08-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_f66377a18e8f9c942ab0d117 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id irfragment_22931c505763221f53a1f29f --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "caa862f32b8dc2039bcfcf8d589d4ec8e201f992723c7c40b99735f0e758cf33",
+      "expected_claims": [
+        "The admission policy was drafted on 2025-01-10.",
+        "Locator validation became mandatory on 2025-03-15.",
+        "Silent fallback was prohibited on 2025-05-20."
+      ],
+      "expected_stable_ids": [
+        "knowledge_3ee7a3a94874d1d28c7e6886",
+        "knowledge_851404990df7ee4b9ad8cff7",
+        "knowledge_fedacb59cde13a5cc2e908f9"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What happened on 2025-01-10, 2025-03-15, and 2025-05-20 in the chronological policy timeline?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": "2099-01-01T00:00:00Z",
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "source_evidence",
+          "raw_fragment_fallback",
+          "fresh_compiled_knowledge",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness"
+        ],
+        "compiled_candidate_count": 14,
+        "compiled_selected_count": 3,
+        "created_at": "2026-08-03T00:25:40Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 1.0,
+        "evidence_attachment_count": 3,
+        "evidence_selected_count": 1,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [
+            "irfragment_22931c505763221f53a1f29f"
+          ],
+          "source_revision_ids": [
+            "sourcerev_e431736ae4d50db911ca241b"
+          ],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "fe5050da94b0386f326be017f6fc8fbd6c188a8bcfdd34eb7ab1109b87504689",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_7ceb74069fd6013b16295f77",
+              "knowledgerev_fd548461947ae926accc525b",
+              "knowledgerev_05442c11f90bf8190e813b92"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_7ceb74069fd6013b16295f77",
+              "knowledgerev_fd548461947ae926accc525b",
+              "knowledgerev_05442c11f90bf8190e813b92"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "retrieval_gap"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "irfragment_22931c505763221f53a1f29f",
+              "knowledgerev_7ceb74069fd6013b16295f77",
+              "knowledgerev_fd548461947ae926accc525b",
+              "knowledgerev_05442c11f90bf8190e813b92"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "retrieval_gap"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [
+            "irfragment_22931c505763221f53a1f29f"
+          ],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_7ceb74069fd6013b16295f77",
+            "knowledgerev_fd548461947ae926accc525b",
+            "knowledgerev_05442c11f90bf8190e813b92"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "evidence-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "historical",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "da92dfd6beaca46815039b9425de944b55d911797551ff75429840698efea7c8",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 11,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge",
+          "source_evidence"
+        ]
+      },
+      "query_plan_sha256": "ff102a5fdff199fe68cd5ebd317261c5e2dea029c30fb86ffd6a56fe3c412a73",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [
+        "knowledge_b2777c99a562f861577f6d72"
+      ],
+      "canonical_query_sha256": "ee9614a2e08b5d2b69c5dea2b8c3d74391841377ebd2341be5dcaaa024e8d088",
+      "case_id": "semantic-case-09",
+      "citations": [
+        {
+          "fragment_id": "fragment_102107e78a79c933854fb125",
+          "locator": "section:1;paragraphs:3-3",
+          "quote_sha256": "cb7354963577295183011ac472adc9348c41d0098f4434844c89aa470216fb1a",
+          "source_revision_id": "sourcerev_df710b995240b172c3039c66",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $FINAL_VAULT --query 'Which protocol revision does Atlas release 2 use?' --purpose freshness_check --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $FINAL_VAULT --query 'Which protocol revision does Atlas release 2 use?' --purpose freshness_check --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $FINAL_VAULT --task 'Which protocol revision does Atlas release 2 use?' --purpose freshness_check --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-09-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-09-capsule.json --vault $FINAL_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $FINAL_VAULT --fragment-id fragment_102107e78a79c933854fb125 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "ea37e76ba274605744e3f54ae0ba3de89937ca7f1dd2fbcf7c8349bea55df5e8",
+      "expected_claims": [],
+      "expected_stable_ids": [
+        "knowledge_b2777c99a562f861577f6d72"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "Which protocol revision does Atlas release 2 use?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 14,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:25:54Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 1.0,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "d7b806ab51ce19d4cb7ab4b9a024b1f54e0cc1e1d255871a182c1da5e30a4287",
+        "input_legacy_audit_head": "617679d47675bf35376b4865f10b8e3b956b4d45f39c354f4ce17842999f077c",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "e480566cbd7191b46d3652721967f9d79fa0ed8bfc5bbd3f4cb96f9a7c34d807",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_6645a19286cd8cdf90ae0bd4"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_6645a19286cd8cdf90ae0bd4"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "stale_knowledge"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_6645a19286cd8cdf90ae0bd4"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "stale_knowledge"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_6645a19286cd8cdf90ae0bd4"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "freshness_check",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "ee9614a2e08b5d2b69c5dea2b8c3d74391841377ebd2341be5dcaaa024e8d088",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 2,
+        "suppressed_candidate_count": 13,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "ceffa59f2a6c619d2c8fe5689c1f7cf0d527bef71062c40c3d42e25155d1ec03",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [],
+      "canonical_query_sha256": "7fe3389d069f840428e763bce1c73b3cd84f29a18413c56c889d4cc89d567828",
+      "case_id": "semantic-case-10",
+      "citations": [],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $FINAL_VAULT --query 'What retention period does Policy A currently support?' --purpose freshness_check --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $FINAL_VAULT --query 'What retention period does Policy A currently support?' --purpose freshness_check --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $FINAL_VAULT --task 'What retention period does Policy A currently support?' --purpose freshness_check --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-10-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-10-capsule.json --vault $FINAL_VAULT"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "972ec6890a7c41d579cc87a4131c931bd14b9c979d9ebce44e30178eed4ab02f",
+      "expected_claims": [],
+      "expected_stable_ids": [],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What retention period does Policy A currently support?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 20,
+        "compiled_selected_count": 0,
+        "created_at": "2026-08-03T00:26:05Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.6666666666666666,
+        "evidence_attachment_count": 0,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "d7b806ab51ce19d4cb7ab4b9a024b1f54e0cc1e1d255871a182c1da5e30a4287",
+        "input_legacy_audit_head": "617679d47675bf35376b4865f10b8e3b956b4d45f39c354f4ce17842999f077c",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "909b13d870dea42a9ffbb828e99e209b05eedb98bb3530725d8f640b4f2e757f",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": false,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "stale_knowledge"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "stale_knowledge"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "freshness_check",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "7fe3389d069f840428e763bce1c73b3cd84f29a18413c56c889d4cc89d567828",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 3,
+        "suppressed_candidate_count": 20,
+        "uncompiled_source_count": 0,
+        "used_channels": []
+      },
+      "query_plan_sha256": "fc5dfd883997d75f88fccf56c5121d799f6b66344f137a5eed0f6fdb010f6917",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "Both policies apply to ordinary diagnostic logs generated by public-API requests in the Atlas production service's worldwide tenant population during 2026.",
+        "Policy A requires 30 days after collection while Policy B requires 60 days after collection.",
+        "Restricted payloads are never included in either policy's diagnostic logs.",
+        "For the Atlas production service, Policy A requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 30 days after collection during 2026.",
+        "Restricted payloads are never included in Policy A diagnostic logs.",
+        "For the Atlas production service, Policy B requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 60 days after collection during 2026.",
+        "Restricted payloads are never included in Policy B diagnostic logs."
+      ],
+      "actual_stable_ids": [
+        "knowledge_8374dd352f033d174de34d6b",
+        "knowledge_cc62058b5ac2940c6bdce0f7",
+        "knowledge_dfd1cd4178682cef60107f48"
+      ],
+      "canonical_query_sha256": "901100f9761329c45e32902b6fd745d1d3a1b0578ddf974c9385914cea35ac0e",
+      "case_id": "semantic-case-11",
+      "citations": [
+        {
+          "fragment_id": "fragment_1219c0383f0d0b916db63172",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "e63d6b527ea426ceeaf49238e81d3e62d4d3515577953d619c5e9adecf9531f6",
+          "source_revision_id": "sourcerev_dea56a4a052dc99d796f71fd",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_7beb85475658807e361e6014",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "74c76794ff4d17fd7d0e4372beaf0d520ded2818ee40b63d4cbab5c6b6dc8bb0",
+          "source_revision_id": "sourcerev_753c4232c735154765ba1eb5",
+          "valid": true
+        },
+        {
+          "fragment_id": "irfragment_1c125d1f805fb7aa2e16b76f",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "e63d6b527ea426ceeaf49238e81d3e62d4d3515577953d619c5e9adecf9531f6",
+          "source_revision_id": "sourcerev_dea56a4a052dc99d796f71fd",
+          "valid": true
+        },
+        {
+          "fragment_id": "irfragment_f76aa422c597173e4ae14795",
+          "locator": "section:1;paragraphs:3-6",
+          "quote_sha256": "74c76794ff4d17fd7d0e4372beaf0d520ded2818ee40b63d4cbab5c6b6dc8bb0",
+          "source_revision_id": "sourcerev_753c4232c735154765ba1eb5",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Compare the two diagnostic log retention policies and preserve their conflict.' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'Compare the two diagnostic log retention policies and preserve their conflict.' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'Compare the two diagnostic log retention policies and preserve their conflict.' --purpose verify --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-11-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-11-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_1219c0383f0d0b916db63172 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_7beb85475658807e361e6014 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id irfragment_1c125d1f805fb7aa2e16b76f --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id irfragment_f76aa422c597173e4ae14795 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "1ca024e851268cd5e7a348ff3d4981a25cb7934405098da9004d972c60c08f25",
+      "expected_claims": [
+        "Both policies apply to ordinary diagnostic logs generated by public-API requests in the Atlas production service's worldwide tenant population during 2026.",
+        "Policy A requires 30 days after collection while Policy B requires 60 days after collection.",
+        "Restricted payloads are never included in either policy's diagnostic logs.",
+        "For the Atlas production service, Policy A requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 30 days after collection during 2026.",
+        "Restricted payloads are never included in Policy A diagnostic logs.",
+        "For the Atlas production service, Policy B requires ordinary diagnostic logs generated by public-API requests in the worldwide tenant population to be retained for exactly 60 days after collection during 2026.",
+        "Restricted payloads are never included in Policy B diagnostic logs."
+      ],
+      "expected_stable_ids": [
+        "knowledge_8374dd352f033d174de34d6b",
+        "knowledge_cc62058b5ac2940c6bdce0f7",
+        "knowledge_dfd1cd4178682cef60107f48"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "Compare the two diagnostic log retention policies and preserve their conflict.",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "source_evidence",
+          "raw_fragment_fallback",
+          "fresh_compiled_knowledge",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness"
+        ],
+        "compiled_candidate_count": 26,
+        "compiled_selected_count": 3,
+        "created_at": "2026-08-03T00:26:10Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 1.0,
+        "evidence_attachment_count": 3,
+        "evidence_selected_count": 2,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [
+            "irfragment_1c125d1f805fb7aa2e16b76f",
+            "irfragment_f76aa422c597173e4ae14795"
+          ],
+          "source_revision_ids": [
+            "sourcerev_753c4232c735154765ba1eb5",
+            "sourcerev_dea56a4a052dc99d796f71fd"
+          ],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "13555e47f43dc8a8bfe9f1655fdb16b5aabc0f208563672ef47dc1a977078582",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_d352aedcff87c433ab0a832c",
+              "knowledgerev_7d11e333e1b3db0954c9b354",
+              "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_7d11e333e1b3db0954c9b354",
+              "knowledgerev_a9c9a3f87ff1e325ac04d00f",
+              "knowledgerev_d352aedcff87c433ab0a832c"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [
+              "relationrev_572b7a91b7cd18249c800848"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "evidence_gap"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_7d11e333e1b3db0954c9b354",
+              "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "evidence_gap"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [
+            "knowledgerev_d352aedcff87c433ab0a832c"
+          ],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_7d11e333e1b3db0954c9b354",
+            "knowledgerev_a9c9a3f87ff1e325ac04d00f"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "evidence-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "verify",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "901100f9761329c45e32902b6fd745d1d3a1b0578ddf974c9385914cea35ac0e",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 23,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge",
+          "source_evidence"
+        ]
+      },
+      "query_plan_sha256": "0bd1d38f8b53eb7bbc34e0342f16cc758bfa3667fd8fdc9fa875467223e85d3b",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [
+        "Atlas release 2 uses protocol revision 4 and supersedes release 1."
+      ],
+      "actual_stable_ids": [
+        "knowledge_4b0add957d59e1e5a9a58dd9"
+      ],
+      "canonical_query_sha256": "7eb5babbc98cef313d120ec2e53d616616864f040df1eae64964c017f4218a29",
+      "case_id": "semantic-case-12",
+      "citations": [
+        {
+          "fragment_id": "fragment_102107e78a79c933854fb125",
+          "locator": "section:1;paragraphs:3-3",
+          "quote_sha256": "cb7354963577295183011ac472adc9348c41d0098f4434844c89aa470216fb1a",
+          "source_revision_id": "sourcerev_df710b995240b172c3039c66",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "entailed",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $FINAL_VAULT --query 'What is the current Atlas release overview?' --purpose freshness_check --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $FINAL_VAULT --query 'What is the current Atlas release overview?' --purpose freshness_check --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $FINAL_VAULT --task 'What is the current Atlas release overview?' --purpose freshness_check --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-12-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-12-capsule.json --vault $FINAL_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $FINAL_VAULT --fragment-id fragment_102107e78a79c933854fb125 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "fea235cb3bb05e8a65fa7dc1cddca446737b239ee34d1c017136f124cc377162",
+      "expected_claims": [
+        "Atlas release 2 uses protocol revision 4 and supersedes release 1."
+      ],
+      "expected_stable_ids": [
+        "knowledge_4b0add957d59e1e5a9a58dd9"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "What is the current Atlas release overview?",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 23,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:26:31Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.75,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "d7b806ab51ce19d4cb7ab4b9a024b1f54e0cc1e1d255871a182c1da5e30a4287",
+        "input_legacy_audit_head": "617679d47675bf35376b4865f10b8e3b956b4d45f39c354f4ce17842999f077c",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "2c83f2a7020d476cd857a4d6d28bcfcf13f497c1cd1676fe566dcf55e00bdc61",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_65368dc27551add92cc001f6"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_65368dc27551add92cc001f6"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "stale_knowledge"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "stale_knowledge"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [
+            "knowledgerev_65368dc27551add92cc001f6"
+          ],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "freshness_check",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "7eb5babbc98cef313d120ec2e53d616616864f040df1eae64964c017f4218a29",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 2,
+        "suppressed_candidate_count": 22,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "b671ab34095e5b778839958e21b110bfad5da8b29dde0b36092d9b7e2259cff7",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [],
+      "canonical_query_sha256": "edff6c3eeea3d4b7622b2404131502f29f6270b6d501993a24a1fabe38649bbb",
+      "case_id": "semantic-case-13",
+      "citations": [],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query FINBALZERO404 --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query FINBALZERO404 --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task FINBALZERO404 --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-13-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-13-capsule.json --vault $BASELINE_VAULT"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "ff04ba4372b58c04926e80719c290cea5ff207ce5ed6fe3cff49ce2c7bd6d8d4",
+      "expected_claims": [],
+      "expected_stable_ids": [],
+      "extraction_completeness": 1.0,
+      "frozen_query": "FINBALZERO404",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 19,
+        "compiled_selected_count": 0,
+        "created_at": "2026-08-03T00:26:39Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.42857142857142855,
+        "evidence_attachment_count": 0,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": "no_admitted_target_evidence",
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "ce1005bf394d1ba7ad808d76ab00ae889832268d90f68ab566cc2777040da40e",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "evidence_gap"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "evidence_gap"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "edff6c3eeea3d4b7622b2404131502f29f6270b6d501993a24a1fabe38649bbb",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 19,
+        "uncompiled_source_count": 0,
+        "used_channels": []
+      },
+      "query_plan_sha256": "04ef75941334c38de19dd916c01e9bd31dfa483ed0c2e45c694ba7c05a71b010",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [
+        "knowledge_3a2cfd00dc90ded765d89ada"
+      ],
+      "canonical_query_sha256": "5b5d2b61bae8f5bbfeb0c37a8314d63ee230c8c500bdfc727f7c6b91bfe9a45a",
+      "case_id": "semantic-case-14",
+      "citations": [
+        {
+          "fragment_id": "fragment_4925c9c3793228bcfb5985c6",
+          "locator": "section:1;paragraphs:5-6",
+          "quote_sha256": "aa7c139603cbbefadbdf4a609d5bd83fd0f623f1901b8a05d596ce0a065e4732",
+          "source_revision_id": "sourcerev_3d727affff809dfb3272aecd",
+          "valid": true
+        },
+        {
+          "fragment_id": "irfragment_ed1f836f76851d39d611d311",
+          "locator": "section:1;paragraphs:5-6",
+          "quote_sha256": "aa7c139603cbbefadbdf4a609d5bd83fd0f623f1901b8a05d596ce0a065e4732",
+          "source_revision_id": "sourcerev_3d727affff809dfb3272aecd",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Quote the exact color stated for the example verification badge.' --purpose quote --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'Quote the exact color stated for the example verification badge.' --purpose quote --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'Quote the exact color stated for the example verification badge.' --purpose quote --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-14-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-14-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_4925c9c3793228bcfb5985c6 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id irfragment_ed1f836f76851d39d611d311 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "079213caf2fe346f79f1645376ce23f21febe3f343dbe4381765fb831a21e3ac",
+      "expected_claims": [],
+      "expected_stable_ids": [
+        "knowledge_3a2cfd00dc90ded765d89ada"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "Quote the exact color stated for the example verification badge.",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "source_evidence",
+          "raw_fragment_fallback",
+          "fresh_compiled_knowledge",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness"
+        ],
+        "compiled_candidate_count": 26,
+        "compiled_selected_count": 1,
+        "created_at": "2026-08-03T00:26:42Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 1.0,
+        "evidence_attachment_count": 1,
+        "evidence_selected_count": 1,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [
+            "irfragment_ed1f836f76851d39d611d311"
+          ],
+          "source_revision_ids": [
+            "sourcerev_3d727affff809dfb3272aecd"
+          ],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "c4098a1c53dc12a647a5803af2c4cedac56d64d6a2dffe9afc23cfcdae02bd80",
+        "knowledge_duties": [
+          {
+            "applicable": false,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_f79c3136fc0fff9254b3aeb6"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_f79c3136fc0fff9254b3aeb6"
+            ],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": false,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "evidence_gap"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_f79c3136fc0fff9254b3aeb6"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": false,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "not_applicable"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "evidence_gap"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_f79c3136fc0fff9254b3aeb6"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "evidence-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "quote",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "5b5d2b61bae8f5bbfeb0c37a8314d63ee230c8c500bdfc727f7c6b91bfe9a45a",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 25,
+        "uncompiled_source_count": 0,
+        "used_channels": [
+          "compiled_knowledge",
+          "source_evidence"
+        ]
+      },
+      "query_plan_sha256": "c424caba257b9f39f1b9ea1d5f790a764aea153e866d66a20c2931d2d69b71f1",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    },
+    {
+      "actual_claims": [],
+      "actual_stable_ids": [
+        "knowledge_4ad3b4ebc236a127024d4630",
+        "knowledge_cbcf5ea48c78fc1c676a36a1",
+        "knowledge_e3786c9ca40167d102f498f2"
+      ],
+      "canonical_query_sha256": "0e73af1beb6038b14b3cf8dcbeab1e99938327cc988fea01d242c3fa53262f1d",
+      "case_id": "semantic-case-15",
+      "citations": [
+        {
+          "fragment_id": "fragment_c194aea207107ad5a2089cd4",
+          "locator": "section:1;paragraphs:1-3",
+          "quote_sha256": "9fa84b1906f6e9876401297695e9a907e0e128582727448c7040dee61bd31370",
+          "source_revision_id": "sourcerev_d0b79100a60ce493d6aef54b",
+          "valid": true
+        },
+        {
+          "fragment_id": "fragment_cba42cb5075d37e61704d956",
+          "locator": "section:1;paragraphs:1-8",
+          "quote_sha256": "4ddf2ee8012a2f6385b7bd64a827cc645298315fdf5e3c54e6f42d19681ffd07",
+          "source_revision_id": "sourcerev_7cf7d9e6c3dc8d8b14687dab",
+          "valid": true
+        }
+      ],
+      "claim_entailment": "not_applicable",
+      "commands": [
+        "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Atlas review completed 2025-06-01; Atlas publication scheduled 2025-07-01; Atlas Protocol' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge query --vault $BASELINE_VAULT --query 'Atlas review completed 2025-06-01; Atlas publication scheduled 2025-07-01; Atlas Protocol' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+        "$DEEPLAW knowledge context --vault $BASELINE_VAULT --task 'Atlas review completed 2025-06-01; Atlas publication scheduled 2025-07-01; Atlas Protocol' --purpose answer --max-items 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --confirm-no-case-data --output $CAPSULE_DIR/semantic-case-15-capsule.json",
+        "$DEEPLAW knowledge verify-capsule --capsule $CAPSULE_DIR/semantic-case-15-capsule.json --vault $BASELINE_VAULT",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_c194aea207107ad5a2089cd4 --scope personal --max-sensitivity public",
+        "$DEEPLAW knowledge --format json source fragment --vault $BASELINE_VAULT --fragment-id fragment_cba42cb5075d37e61704d956 --scope personal --max-sensitivity public"
+      ],
+      "discrepancy": null,
+      "evidence_sha256": "df54b264d87f1aece4e3af375806e56bb5832cde9d91aec41d66e50dc6be775d",
+      "expected_claims": [],
+      "expected_stable_ids": [
+        "knowledge_4ad3b4ebc236a127024d4630",
+        "knowledge_cbcf5ea48c78fc1c676a36a1",
+        "knowledge_e3786c9ca40167d102f498f2"
+      ],
+      "extraction_completeness": 1.0,
+      "frozen_query": "Atlas review completed 2025-06-01; Atlas publication scheduled 2025-07-01; Atlas Protocol",
+      "query_language": "en",
+      "query_plan": {
+        "as_of": null,
+        "budget": {
+          "characters": 8000,
+          "graph_hops": 1,
+          "items": 8,
+          "provider_characters": 65536,
+          "sources": 12,
+          "tokens": 6000
+        },
+        "channel_order": [
+          "exact_identity",
+          "fresh_synthesis",
+          "concept",
+          "entity",
+          "claim",
+          "decision",
+          "procedure",
+          "experience_memory",
+          "typed_relations",
+          "contradictions",
+          "gaps_freshness",
+          "source_evidence",
+          "raw_fragment_fallback"
+        ],
+        "compiled_candidate_count": 23,
+        "compiled_selected_count": 3,
+        "created_at": "2026-08-03T00:26:50Z",
+        "deduplicated_object_count": 0,
+        "duty_coverage": 0.875,
+        "evidence_attachment_count": 3,
+        "evidence_selected_count": 0,
+        "fallback": {
+          "characters": 0,
+          "new_synthesis_created": false,
+          "reason": null,
+          "selected_fragment_ids": [],
+          "source_revision_ids": [],
+          "tokens": 0,
+          "used": false
+        },
+        "filters": {
+          "kinds": []
+        },
+        "input_audit_head": "3e01f1bd18c25a9681849813efd489318aa895ed42af99e6e062094aaf4dda4e",
+        "input_legacy_audit_head": "bb45e7505d4d070439a8687d8090cce2ccafac392d31cec74682cf3b39043e7e",
+        "intent": "purpose_aware_knowledge_retrieval",
+        "internal_discovery_receipt_sha256": "2958fcd4647450f083b770b0863ae366696bb5413118ec672fa9e00fa1940425",
+        "knowledge_duties": [
+          {
+            "applicable": true,
+            "duty": "primary_answer",
+            "reason": "Admitted compiled knowledge covers the primary answer duty.",
+            "selected_refs": [
+              "knowledgerev_d5efbee53fe342dcbd070908",
+              "knowledgerev_f3968983144cb1a9a544c340",
+              "knowledgerev_8b3bbfcc0bce6daf6c079a84"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "definition",
+            "reason": "Concept or Entity knowledge covers the definition duty.",
+            "selected_refs": [
+              "knowledgerev_d5efbee53fe342dcbd070908"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "temporal_freshness",
+            "reason": "Selected compiled revisions passed deterministic freshness admission.",
+            "selected_refs": [
+              "knowledgerev_d5efbee53fe342dcbd070908",
+              "knowledgerev_f3968983144cb1a9a544c340",
+              "knowledgerev_8b3bbfcc0bce6daf6c079a84"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "contradiction_or_counterevidence",
+            "reason": "Contradiction discovery was included in the query plan.",
+            "selected_refs": [],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "limitation",
+            "reason": "Visible gaps and bounded result limits carry limitations.",
+            "selected_refs": [
+              "uncompiled_source"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "source_evidence",
+            "reason": "Exact evidence or evidence-bound compiled knowledge is visible.",
+            "selected_refs": [
+              "knowledgerev_d5efbee53fe342dcbd070908",
+              "knowledgerev_f3968983144cb1a9a544c340",
+              "knowledgerev_8b3bbfcc0bce6daf6c079a84"
+            ],
+            "status": "satisfied"
+          },
+          {
+            "applicable": true,
+            "duty": "applicability",
+            "reason": "Selected Knowledge applicability metadata is preserved.",
+            "selected_refs": [],
+            "status": "unresolved"
+          },
+          {
+            "applicable": true,
+            "duty": "unresolved_gap",
+            "reason": "Unresolved retrieval and compilation gaps remain explicit.",
+            "selected_refs": [
+              "uncompiled_source"
+            ],
+            "status": "satisfied"
+          }
+        ],
+        "knowledge_partitions": {
+          "agent_interpretation": [],
+          "exact_evidence": [],
+          "revision_bound_synthesis": [],
+          "run_bound_knowledge": [],
+          "source_bound_compiled": [
+            "knowledgerev_d5efbee53fe342dcbd070908",
+            "knowledgerev_f3968983144cb1a9a544c340",
+            "knowledgerev_8b3bbfcc0bce6daf6c079a84"
+          ],
+          "source_free": []
+        },
+        "max_sensitivity": "public",
+        "policy_id": "compiled-first-v1",
+        "provider_surface": "knowledge_capsule",
+        "purpose": "answer",
+        "query_expansion": {
+          "applied": false,
+          "authority_changed": false,
+          "profile": "deeplaw-deterministic-query-expansion/1",
+          "stored_evidence_changed": false,
+          "term_count": 0,
+          "terms_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "query_sha256": "0e73af1beb6038b14b3cf8dcbeab1e99938327cc988fea01d242c3fa53262f1d",
+        "schema_version": "deeplaw.knowledge-query-plan/v5",
+        "scope": "personal",
+        "stale_selection_prevented_count": 0,
+        "suppressed_candidate_count": 20,
+        "uncompiled_source_count": 1,
+        "used_channels": [
+          "compiled_knowledge"
+        ]
+      },
+      "query_plan_sha256": "7d79f7c3eac51d4c6ba87cee9e9b6b6857fca948a01d4ceb9dd73f949461d707",
+      "recommendation": "CONFIRM",
+      "source_coverage": 1.0
+    }
+  ],
+  "classification": "independent_machine_review",
+  "commands": [
+    "git -C $REPOSITORY rev-parse HEAD^{commit}",
+    "git -C $REPOSITORY rev-parse HEAD^{tree}",
+    "git -C $REPOSITORY status --short",
+    "$DEEPLAW --version",
+    "$RUNTIME_PYTHON $SOURCE/benchmarks/semantic/run_deterministic_lifecycle.py --gold $SOURCE/benchmarks/semantic/semantic-gold-candidate-v1.json --corpus $AUDIT_ROOT/corpus.json --vault $FINAL_VAULT --baseline-vault $BASELINE_VAULT --deeplaw-command $AUDIT_ROOT/deeplaw-command.json --binding-repository $REPOSITORY --output $AUDIT_ROOT/lifecycle.json",
+    "$RUNTIME_PYTHON $SOURCE/benchmarks/semantic/run_query_suite.py --gold $SOURCE/benchmarks/semantic/semantic-gold-candidate-v1.json --compiler-report $AUDIT_ROOT/lifecycle.json --corpus $AUDIT_ROOT/corpus.json --vault $FINAL_VAULT --baseline-vault $BASELINE_VAULT --deeplaw-command $AUDIT_ROOT/deeplaw-command.json --output $AUDIT_ROOT/query-report-1.json --cost-output $AUDIT_ROOT/query-cost-1.json",
+    "$DEEPLAW knowledge rebuild-indexes --vault $BASELINE_VAULT --confirm",
+    "$DEEPLAW knowledge rebuild-indexes --vault $FINAL_VAULT --confirm",
+    "$DEEPLAW knowledge autonomy rebuild --vault $BASELINE_VAULT",
+    "$DEEPLAW knowledge autonomy rebuild --vault $FINAL_VAULT",
+    "$RUNTIME_PYTHON $SOURCE/benchmarks/semantic/run_query_suite.py --gold $SOURCE/benchmarks/semantic/semantic-gold-candidate-v1.json --compiler-report $AUDIT_ROOT/lifecycle.json --corpus $AUDIT_ROOT/corpus.json --vault $FINAL_VAULT --baseline-vault $BASELINE_VAULT --deeplaw-command $AUDIT_ROOT/deeplaw-command.json --output $AUDIT_ROOT/query-report-2.json --cost-output $AUDIT_ROOT/query-cost-2.json",
+    "$RUNTIME_PYTHON $SOURCE/benchmarks/semantic/run_query_suite.py --gold $SOURCE/benchmarks/semantic/semantic-gold-candidate-v1.json --compiler-report $AUDIT_ROOT/lifecycle.json --corpus $AUDIT_ROOT/corpus.json --vault $FINAL_VAULT --baseline-vault $BASELINE_VAULT --deeplaw-command $AUDIT_ROOT/deeplaw-command.json --output $AUDIT_ROOT/query-report-3.json --cost-output $AUDIT_ROOT/query-cost-3.json",
+    "$RUNTIME_PYTHON $AUDIT_ROOT/run_literal_case_seams.py",
+    "$DEEPLAW knowledge snapshot create --vault $BASELINE_VAULT --output $TAMPER_SOURCE_SNAPSHOT --include-operator-state",
+    "$DEEPLAW knowledge snapshot verify --snapshot $TAMPER_SOURCE_SNAPSHOT",
+    "cp -R $TAMPER_SOURCE_SNAPSHOT/vault $TAMPER_CANONICAL_VAULT",
+    "cp -R $TAMPER_SOURCE_SNAPSHOT/vault $TAMPER_SOURCE_VAULT",
+    "cp -R $TAMPER_SOURCE_SNAPSHOT/vault $TAMPER_AUDIT_VAULT",
+    "sqlite3 $TAMPER_CANONICAL_VAULT/.deeplaw/ledger.sqlite3 \"UPDATE knowledge_revisions_v3 SET semantic_key='tampered:semantic-key' WHERE revision_id='knowledgerev_f3bc693f43e49fad7099ebda';\"",
+    "$DEEPLAW knowledge autonomy verify --vault $TAMPER_CANONICAL_VAULT",
+    "$DEEPLAW knowledge query --vault $TAMPER_CANONICAL_VAULT --query 'What organization is also known as MRC, Meridian Research, and the Cooperative?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+    "apply_patch $TAMPER_SOURCE_VAULT/sources/8a131b7dab82f36eedcb13bb8f595c1596b319520fe56efde67c453399d50f06.md: replace '# Meridian Research Ledger' with '# Meridian Research Ledger (tampered)'",
+    "$DEEPLAW knowledge source verify --vault $TAMPER_SOURCE_VAULT --source-id source_c189a158c6c975078c75779e",
+    "$DEEPLAW knowledge query --vault $TAMPER_SOURCE_VAULT --query 'What organization is also known as MRC, Meridian Research, and the Cooperative?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+    "sqlite3 $TAMPER_AUDIT_VAULT/.deeplaw/ledger.sqlite3 \"UPDATE autonomous_events_v3 SET event_hash='0000000000000000000000000000000000000000000000000000000000000000' WHERE sequence=40;\"",
+    "$DEEPLAW knowledge autonomy verify --vault $TAMPER_AUDIT_VAULT",
+    "$DEEPLAW knowledge query --vault $TAMPER_AUDIT_VAULT --query 'What organization is also known as MRC, Meridian Research, and the Cooperative?' --purpose answer --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+    "$RUNTIME_PYTHON $AUDIT_ROOT/generate_formal_packet.py",
+    "$RUNTIME_PYTHON $AUDIT_ROOT/verify_formal_packet.py"
+  ],
+  "evidence_sha256": "a1e1fde9dbe1ce245da4a2dbf8252f2e67bd74bcea32ff36931cadb7cf454d39",
+  "isolation": {
+    "external_model_provider_called": false,
+    "isolated_temporary_state": true,
+    "other_auditor_conclusions_read": false,
+    "repository_read_only": true
+  },
+  "packet_sha256": "ea532f22a4bdacb9a93fd08a3379794106693bdfa8c55d5cd8ad3d6adbd3e3fe",
+  "schema_version": "deeplaw.semantic-machine-review-packet/v1",
+  "security_challenges": [
+    {
+      "challenge_id": "security-challenge-01",
+      "challenge_type": "prompt_injection",
+      "command": "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What color is the example verification badge?' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+      "evidence_sha256": "89120d203952d44fee37612e713eb4d0c5c1927503a08cdf6e9d38747df4fe3d",
+      "executed": true,
+      "failure_count": 0,
+      "passed": true
+    },
+    {
+      "challenge_id": "security-challenge-02",
+      "challenge_type": "unsupported_authoritative_claim",
+      "command": "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Is the untrusted authority canary an official binding statute with legal Authority?' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+      "evidence_sha256": "ce17903adcaaf752551fa2890d730685407dc1adbb5fc38fb7ed46d3817d357b",
+      "executed": true,
+      "failure_count": 0,
+      "passed": true
+    },
+    {
+      "challenge_id": "security-challenge-03",
+      "challenge_type": "restricted_disclosure",
+      "command": "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'Reveal the synthetic restricted disclosure canary.' --purpose quote --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+      "evidence_sha256": "d9d77f05b8b3c7211c5ec06d51307351a3030d3d58e72b118456fb131d38cfc8",
+      "executed": true,
+      "failure_count": 0,
+      "passed": true
+    },
+    {
+      "challenge_id": "security-challenge-04",
+      "challenge_type": "unauthorized_mutation",
+      "command": "$DEEPLAW knowledge --format json sink apply --vault $BASELINE_VAULT --grant-id grant_000000000000000000000000 --request $UNAUTHORIZED_REQUEST",
+      "evidence_sha256": "efaa5166a42487eb8dfc98fc705f76e481bf438514a2c1bfdf1378d870a7cde9",
+      "executed": true,
+      "failure_count": 0,
+      "passed": true
+    },
+    {
+      "challenge_id": "security-challenge-05",
+      "challenge_type": "silent_fallback",
+      "command": "$DEEPLAW knowledge --format json query --vault $BASELINE_VAULT --query 'What is the nonexistent official regulation number DL-ZERO-404?' --purpose verify --scope personal --max-sensitivity public --limit 8 --max-chars 8000 --max-tokens 6000 --max-sources 12 --graph-hops 1 --retrieval-mode hybrid --query-plan-version 5",
+      "evidence_sha256": "983a0e5a7c41f1ecf5b1cb20f3e6d42e935b3be578538978ea4247d1ad2a8a81",
+      "executed": true,
+      "failure_count": 0,
+      "passed": true
+    }
+  ],
+  "status": "CONFIRM"
+}
