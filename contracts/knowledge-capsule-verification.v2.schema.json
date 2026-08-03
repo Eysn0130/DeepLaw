@@ -8,7 +8,7 @@
     "schema_version", "capsule_id", "expected_capsule_id", "digest_valid",
     "id_valid", "query_plan_valid", "provider_payload_bytes",
     "provider_hard_limit_valid", "vault_matches", "audit_anchor_valid",
-    "receipt_checks", "valid"
+    "autonomous_integrity_valid", "receipt_checks", "valid"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.knowledge-capsule-verification/v2"},
@@ -21,14 +21,18 @@
     "provider_hard_limit_valid": {"type": "boolean"},
     "vault_matches": {"type": ["boolean", "null"]},
     "audit_anchor_valid": {"type": ["boolean", "null"]},
+    "autonomous_integrity_valid": {"type": ["boolean", "null"]},
     "receipt_checks": {
       "type": "array", "maxItems": 40,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["knowledge_id", "revision_id", "valid"],
+        "required": [
+          "knowledge_id", "revision_id", "source_integrity_valid", "valid"
+        ],
         "properties": {
           "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
           "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+          "source_integrity_valid": {"type": "boolean"},
           "valid": {"type": "boolean"}
         }
       }

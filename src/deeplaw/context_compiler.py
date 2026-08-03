@@ -100,6 +100,63 @@ def _validate_capsule_contract(capsule: dict[str, Any]) -> None:
         raise ValueError("knowledge capsule does not match its closed JSON contract")
 
 
+def _source_references_remain_valid(
+    source_refs_json: str,
+    *,
+    store: Any,
+    vault: KnowledgeVault,
+) -> bool:
+    from .knowledge_autonomy import _canonical_source_references, _read_object
+
+    try:
+        references = _canonical_source_references(
+            strict_json_loads(source_refs_json),
+            field="Knowledge Capsule receipt source_refs",
+        )
+        legacy_source_ids: list[str] = []
+        for reference in references:
+            if not store._source_reference_is_bound(reference, require_active=True):
+                return False
+            source_revision_id = reference.get("source_revision_id")
+            source_id = reference.get("source_id")
+            if source_revision_id is None and source_id is None:
+                continue
+            if source_revision_id is not None:
+                binding = store.connection.execute(
+                    """
+                    SELECT legacy_source_id, object_sha256
+                    FROM evidence_bindings_v3
+                    WHERE source_revision_id = ?
+                    ORDER BY recorded_at DESC, binding_id DESC
+                    LIMIT 1
+                    """,
+                    (source_revision_id,),
+                ).fetchone()
+            else:
+                binding = store.connection.execute(
+                    """
+                    SELECT legacy_source_id, object_sha256
+                    FROM evidence_bindings_v3
+                    WHERE legacy_source_id = ?
+                    ORDER BY recorded_at DESC, binding_id DESC
+                    LIMIT 1
+                    """,
+                    (source_id,),
+                ).fetchone()
+            if (
+                binding is None
+                or (source_id is not None and binding["legacy_source_id"] != source_id)
+            ):
+                return False
+            _read_object(store.root, binding["object_sha256"])
+            legacy_source_id = binding["legacy_source_id"]
+            if legacy_source_id is not None:
+                legacy_source_ids.append(legacy_source_id)
+        return vault.verify_source_files(legacy_source_ids)["valid"] is True
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+        return False
+
+
 @cache
 def _autonomous_capsule_contract_validator() -> Draft202012Validator:
     packaged = (
@@ -140,12 +197,14 @@ def _verify_autonomous_capsule(
     provider_hard_limit_valid = provider_payload_bytes <= 65_536
     vault_matches: bool | None = None
     audit_anchor_valid: bool | None = None
+    autonomous_integrity_valid: bool | None = None
     receipt_checks: list[dict[str, Any]] = []
     if vault is not None:
         from .knowledge_autonomy import AutonomousKnowledgeStore
 
         with AutonomousKnowledgeStore(vault.root, read_only=True) as store:
             vault_matches = store.vault_id == capsule["vault_id"]
+            autonomous_integrity_valid = store.verify()["valid"] is True
             audit_anchor_valid = store.connection.execute(
                 "SELECT 1 FROM autonomous_events_v3 WHERE event_hash = ?",
                 (capsule["audit_head"],),
@@ -156,21 +215,35 @@ def _verify_autonomous_capsule(
                 markdown_sha256 = receipt.get("markdown_sha256")
                 row = store.connection.execute(
                     """
-                    SELECT knowledge_id, revision_id, markdown_sha256
+                    SELECT knowledge_id, revision_id, markdown_sha256, source_refs_json
                     FROM knowledge_revisions_v3
                     WHERE revision_id = ?
                     """,
                     (revision_id,),
                 ).fetchone()
-                valid = bool(
+                revision_valid = bool(
                     row is not None
                     and row["knowledge_id"] == knowledge_id
                     and row["markdown_sha256"] == markdown_sha256
+                )
+                source_integrity_valid = bool(
+                    revision_valid
+                    and _source_references_remain_valid(
+                        row["source_refs_json"],
+                        store=store,
+                        vault=vault,
+                    )
+                )
+                valid = bool(
+                    revision_valid
+                    and source_integrity_valid
+                    and autonomous_integrity_valid
                 )
                 receipt_checks.append(
                     {
                         "knowledge_id": knowledge_id,
                         "revision_id": revision_id,
+                        "source_integrity_valid": source_integrity_valid,
                         "valid": valid,
                     }
                 )
@@ -181,6 +254,7 @@ def _verify_autonomous_capsule(
         and provider_hard_limit_valid
         and (vault_matches is not False)
         and (audit_anchor_valid is not False)
+        and (autonomous_integrity_valid is not False)
         and all(item["valid"] for item in receipt_checks)
     )
     result = {
@@ -194,6 +268,7 @@ def _verify_autonomous_capsule(
         "provider_hard_limit_valid": provider_hard_limit_valid,
         "vault_matches": vault_matches,
         "audit_anchor_valid": audit_anchor_valid,
+        "autonomous_integrity_valid": autonomous_integrity_valid,
         "receipt_checks": receipt_checks,
         "valid": valid,
     }

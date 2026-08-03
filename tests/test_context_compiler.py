@@ -194,9 +194,102 @@ def test_autonomous_capsule_is_verified_by_first_party_dispatch(tmp_path: Path) 
 
     assert capsule["sections"]["receipts"][0]["revision_id"] == revision["revision_id"]
     assert verified["valid"] is True
+    assert verified["autonomous_integrity_valid"] is True
+    assert verified["receipt_checks"][0]["source_integrity_valid"] is True
     assert verified["receipt_checks"][0]["valid"] is True
     assert tampered_result["digest_valid"] is True
     assert tampered_result["valid"] is False
+
+
+def test_autonomous_capsule_rejects_canonical_ledger_identity_tampering(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "ledger-tamper-vault"
+    initialize_knowledge_vault(root, name="ledger tamper", scope="project")
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant = store.enable_grant(writer_id="capsule-test", operations=("remember",))
+        revision = store.remember(
+            grant_id=grant["grant_id"],
+            idempotency_key="ledger-tamper-capsule",
+            title="Ledger identity receipt",
+            body="Capsule verification must bind the canonical Ledger identity.",
+            kind="decision",
+            scope="project",
+            sensitivity="public",
+            confirm_no_case_data=True,
+        )
+        capsule = store.build_capsule(
+            task="Verify the Ledger identity receipt",
+            scope="project",
+            max_sensitivity="public",
+            confirm_no_case_data=True,
+        )
+        store.connection.execute(
+            "UPDATE knowledge_objects_v3 SET current_revision_id = NULL "
+            "WHERE knowledge_id = ?",
+            (revision["knowledge_id"],),
+        )
+        store.connection.commit()
+
+    with KnowledgeVault(root, read_only=True) as vault:
+        verified = verify_capsule(capsule, vault=vault)
+
+    assert verified["autonomous_integrity_valid"] is False
+    assert verified["receipt_checks"][0]["valid"] is False
+    assert verified["valid"] is False
+
+
+def test_autonomous_capsule_rechecks_bound_source_bytes(tmp_path: Path) -> None:
+    root = tmp_path / "source-tamper-vault"
+    initialize_knowledge_vault(root, name="source tamper", scope="project")
+    source = tmp_path / "source.md"
+    source.write_text(
+        "# Evidence\n\nThe immutable evidence supports the capsule receipt.\n",
+        encoding="utf-8",
+    )
+    with KnowledgeVault(root, read_only=False) as vault:
+        compiled = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            sensitivity="public",
+            confirm_no_case_data=True,
+        )
+    initialize_autonomous_core(root)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant = store.enable_grant(writer_id="capsule-test", operations=("remember",))
+        revision = store.remember(
+            grant_id=grant["grant_id"],
+            idempotency_key="source-tamper-capsule",
+            title="Source-bound receipt",
+            body="The capsule receipt is bound to immutable source evidence.",
+            kind="claim",
+            scope="project",
+            sensitivity="public",
+            source_refs=[{"source_id": compiled["source"]["source_id"]}],
+            confirm_no_case_data=True,
+        )
+        capsule = store.build_capsule(
+            task="immutable source evidence capsule receipt",
+            scope="project",
+            max_sensitivity="public",
+            confirm_no_case_data=True,
+        )
+    assert capsule["sections"]["receipts"][0]["revision_id"] == revision["revision_id"]
+    with KnowledgeVault(root, read_only=True) as vault:
+        before = verify_capsule(capsule, vault=vault)
+        stored_source = vault.source_file_path(compiled["source"]["source_id"])
+    stored_source.write_bytes(b"X" + stored_source.read_bytes()[1:])
+    with KnowledgeVault(root, read_only=True) as vault:
+        after = verify_capsule(capsule, vault=vault)
+
+    assert before["receipt_checks"][0]["source_integrity_valid"] is True
+    assert before["valid"] is True
+    assert after["autonomous_integrity_valid"] is True
+    assert after["receipt_checks"][0]["source_integrity_valid"] is False
+    assert after["receipt_checks"][0]["valid"] is False
+    assert after["valid"] is False
 
 
 def test_capsule_file_verification_rejects_a_symbolic_link(tmp_path: Path) -> None:
