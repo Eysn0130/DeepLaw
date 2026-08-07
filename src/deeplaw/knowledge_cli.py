@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
+from .agent_context import build_agent_context
 from .api import KnowledgeOS
 from .compilation.models import (
     COMPILER_GRANT_OPERATIONS,
@@ -747,6 +748,45 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     get.add_argument("--asset-id", required=True)
     get.add_argument("--include-inactive", action="store_true")
 
+    agent_context = subcommands.add_parser(
+        "agent-context",
+        help="Build one host-neutral, ephemeral Agent Context Envelope",
+    )
+    agent_context.add_argument("--task", required=True)
+    agent_context.add_argument("--goal")
+    agent_context.add_argument("--workspace-identity", required=True)
+    agent_context.add_argument("--repository-identity", required=True)
+    agent_context.add_argument("--commit")
+    agent_context.add_argument("--branch")
+    agent_context.add_argument("--active-file", action="append", default=[])
+    agent_context.add_argument("--selected-text")
+    agent_context.add_argument("--open-tab", action="append", default=[])
+    agent_context.add_argument("--current-note")
+    agent_context.add_argument(
+        "--purpose",
+        choices=(
+            "answer",
+            "verify",
+            "quote",
+            "historical",
+            "legal",
+            "debug",
+            "freshness_check",
+        ),
+        default="answer",
+    )
+    agent_context.add_argument(
+        "--scope",
+        choices=("personal", "project", "domain"),
+        default="project",
+    )
+    agent_context.add_argument(
+        "--max-sensitivity",
+        choices=("public", "internal", "private", "restricted"),
+        default="private",
+    )
+    agent_context.add_argument("--max-tokens", type=int, default=4_000)
+
     context = subcommands.add_parser(
         "context",
         help="Compile a bounded, verifiable Knowledge Capsule for one task",
@@ -1385,6 +1425,12 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     compilation_profile.add_argument("--vault", type=Path, default=default_knowledge_vault())
     compilation_profile.add_argument("--compiler-profile", default="living-wiki-agent")
     compilation_profile.add_argument("--compiler-profile-version", default="1")
+    compilation_list = compilation_commands.add_parser(
+        "list",
+        help="List bounded Compilation Run metadata for operator selection",
+    )
+    compilation_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    compilation_list.add_argument("--source-revision-id")
     compilation_begin = compilation_commands.add_parser("begin")
     compilation_begin.add_argument("--vault", type=Path, default=default_knowledge_vault())
     compilation_begin.add_argument("--grant-id", required=True)
@@ -1529,6 +1575,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
             default="private",
         )
         wiki_page.add_argument("--limit", type=int, default=20)
+        wiki_page.add_argument("--cursor")
     wiki_graph = wiki_commands.add_parser("local-graph")
     wiki_graph.add_argument("--vault", type=Path, default=default_knowledge_vault())
     wiki_graph.add_argument("--knowledge-id", required=True)
@@ -1610,8 +1657,33 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     purpose_query.add_argument("--as-of")
     purpose_query.add_argument(
         "--query-plan-version",
-        choices=("4", "5"),
-        default="4",
+        choices=("4", "5", "6"),
+        default="6",
+    )
+    purpose_query.add_argument("--query-target")
+    purpose_query.add_argument(
+        "--applicable-duty",
+        choices=(
+            "primary_answer",
+            "identity",
+            "definition",
+            "current_state",
+            "temporal_freshness",
+            "procedure",
+            "exception",
+            "contradiction",
+            "applicability",
+            "limitation",
+            "source_evidence",
+            "unresolved_gap",
+        ),
+        action="append",
+        default=[],
+    )
+    purpose_query.add_argument(
+        "--capsule-projection",
+        choices=("compact", "standard", "audit"),
+        default="standard",
     )
 
     backfill = subcommands.add_parser(
@@ -2012,6 +2084,10 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 args.compiler_profile,
                 args.compiler_profile_version,
             )
+        if action == "list":
+            return knowledge_os.sources.compilation_status(
+                source_revision_id=args.source_revision_id,
+            )
         if action == "begin":
             profile = knowledge_os.compilations.profile(
                 args.compiler_profile,
@@ -2125,8 +2201,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             compilation_run_id=args.run_id,
             grant_id=args.grant_id,
         )
-        if run.compiler_profile_version != "2":
-            raise ValueError("semantic command requires compiler profile version 2")
+        if run.compiler_profile_version not in {"2", "3"}:
+            raise ValueError("semantic command requires compiler profile version 2 or 3")
         if action == "packet":
             packet = run.next_packet()
             return packet or {
@@ -2237,6 +2313,28 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             as_of=args.as_of,
             kinds=tuple(args.kind),
             query_plan_version=args.query_plan_version,
+            query_target=args.query_target,
+            applicable_duties=(
+                tuple(args.applicable_duty) if args.applicable_duty else None
+            ),
+            projection=args.capsule_projection,
+        )
+    if command == "agent-context":
+        return build_agent_context(
+            task=args.task,
+            goal=args.goal,
+            workspace_identity=args.workspace_identity,
+            repository_identity=args.repository_identity,
+            commit=args.commit,
+            branch=args.branch,
+            requested_purpose=args.purpose,
+            scope=args.scope,
+            max_sensitivity=args.max_sensitivity,
+            active_files=args.active_file,
+            selected_text=args.selected_text,
+            open_tabs=args.open_tab,
+            current_note=args.current_note,
+            token_budget=args.max_tokens,
         )
     if command == "backfill":
         action = args.backfill_command
@@ -2536,11 +2634,11 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             "limit": args.limit,
         }
         if action == "page":
-            return wiki_api.page(args.wiki_path, **options)
+            return wiki_api.page(args.wiki_path, cursor=args.cursor, **options)
         if action == "backlinks":
-            return wiki_api.backlinks(args.wiki_path, **options)
+            return wiki_api.backlinks(args.wiki_path, cursor=args.cursor, **options)
         if action == "outlinks":
-            return wiki_api.outlinks(args.wiki_path, **options)
+            return wiki_api.outlinks(args.wiki_path, cursor=args.cursor, **options)
         if action == "local-graph":
             return wiki_api.local_graph(args.knowledge_id, **options)
         if action == "browse-kind":
@@ -3500,7 +3598,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     or args.policy is not None
                     or args.as_of is not None
                 )
-                ):
+            ):
                 raise ValueError(
                     "purpose-aware context requires an autonomous compilation workspace"
                 )

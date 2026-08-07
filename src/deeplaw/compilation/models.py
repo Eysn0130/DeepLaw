@@ -4,6 +4,7 @@ from typing import Final
 
 COMPILATION_CORE_SCHEMA: Final = "deeplaw.source-compilation-core/v1"
 SEMANTIC_COMPILATION_CORE_SCHEMA: Final = "deeplaw.semantic-compilation-core/v1"
+STATEMENT_EVIDENCE_CORE_SCHEMA: Final = "deeplaw.statement-evidence-core/v1"
 COMPILATION_RUN_SCHEMA: Final = "deeplaw.source-compilation-run/v1"
 COMPILATION_PACKET_SCHEMA: Final = "deeplaw.source-compilation-packet/v1"
 COMPILATION_PLAN_SCHEMA: Final = "deeplaw.source-compilation-plan/v1"

@@ -75,7 +75,7 @@ proposal；`approve`、`revoke`、`relate` 和 `import` 仅存在于人工管理
 ### 4. 隔离优先于检索后过滤
 
 不同用户、项目和领域使用独立 owner-only vault。restricted Asset 永不进入 Agent MCP；
-Analytix 案件附件、会话和案件数据库不进入 DeepLaw。应用层过滤不能替代物理数据边界。
+客户/案件附件、会话和案件数据库不进入 DeepLaw。应用层过滤不能替代物理数据边界。
 
 ### 5. Context Capsule 是有预算的编译产物
 

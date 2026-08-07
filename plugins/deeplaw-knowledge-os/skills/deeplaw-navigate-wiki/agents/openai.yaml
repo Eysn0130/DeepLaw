@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepLaw Wiki Navigator"
+  short_description: "Navigate derived Living Wiki pages safely"
+  default_prompt: "Use $deeplaw-navigate-wiki to navigate the derived Living Wiki for this task."

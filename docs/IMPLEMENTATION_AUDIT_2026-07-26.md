@@ -34,7 +34,7 @@ Legal Pack 重建和评测/宣称门禁。
 
 关闭后的边界：
 
-- 通用 Knowledge Asset、官方 Legal Pack、用户私有法律资料和 Analytix 案件项目仍是四个不同
+- 通用 Knowledge Asset、官方 Legal Pack、用户私有法律资料和客户/案件项目仍是四个不同
   scope；DeepLaw 不摄取案件项目；
 - Agent 可见 MCP 仍完全只读；任何长期知识变化都要走 owner CLI、proposal 和人工审核；
 - 法律正文、来源、版本、时效、关系和 release 内审核状态不能被 Agent 修改；
@@ -48,7 +48,7 @@ Legal Pack 重建和评测/宣称门禁。
 | 通用 Knowledge Asset | owner-only SQLite vault + 原件 fragment | 只读 `knowledge_support` | CLI proposal、审核、替代、撤销 | `knowledge_store.py`、`knowledge_mcp_server.py` |
 | 官方 Legal Pack | 签名目录 + 本地不可变 release | 只读 `law_support` | 团队递增签名目录，用户显式 install/update | `official.py`、`store.py`、`mcp_server.py` |
 | 用户私有法律资料 | 独立 owner-only source/release/ACTIVE | 只读私有查询 | 用户显式 add/delete 后重建快照 | `private_library.py` |
-| Analytix 案件项目 | Analytix 自有附件、会话、SQLite/DuckDB | DeepLaw 无权访问 | 仅 Analytix | 两个 Skill 的边界、CLI 确认和 schema 负例 |
+| 客户或案件项目 | 宿主自有附件、会话、SQLite/DuckDB | DeepLaw 无权访问 | 仅对应宿主 | Skill 边界、CLI 确认和 schema 负例 |
 
 同账户任意 Shell 不是 DeepLaw 能自行建立的安全边界。宿主若授予 Agent 写
 `~/.deeplaw` 或执行管理 CLI 的权限，必须由宿主工具策略或独立 OS 身份隔离；项目没有伪称
@@ -195,7 +195,7 @@ v1 只保留历史且被门禁拒绝。
 - AI 视觉复核等于人类逐字法律审查；
 - `trust`、hash、签名或 retrieval score 等于法律事实正确；
 - DeepLaw MCP 能约束宿主授予的通用 Shell；
-- 通用 Asset 能替代 Legal Pack，或 Legal Pack 能保存 Analytix 案件事实。
+- 通用 Asset 能替代 Legal Pack，或 Legal Pack 能保存客户/案件事实。
 
 ## 下一步执行顺序
 

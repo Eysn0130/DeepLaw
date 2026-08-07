@@ -490,8 +490,8 @@ def compile_source(
 ) -> dict[str, Any]:
     if not confirm_no_case_data:
         raise ValueError(
-            "knowledge ingestion requires confirmation that the source is not Analytix "
-            "case material"
+            "knowledge ingestion requires confirmation that the source is not client "
+            "or case material"
         )
     if typed_extraction not in TYPED_EXTRACTION_MODES:
         raise ValueError("unsupported typed extraction mode")

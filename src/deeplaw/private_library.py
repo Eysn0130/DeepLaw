@@ -425,7 +425,7 @@ def add_private_document(
     if not confirm_no_case_data:
         raise ValueError(
             "private add requires explicit confirmation that the file is a legal reference, "
-            "not Analytix case material"
+            "not client or case material"
         )
     declared_source = Path(source).expanduser()
     if declared_source.is_symlink():

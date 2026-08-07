@@ -296,7 +296,7 @@ def _parser() -> argparse.ArgumentParser:
     private_add.add_argument(
         "--confirm-no-case-data",
         action="store_true",
-        help="Confirm this is a legal reference, not Analytix case material",
+        help="Confirm this is a legal reference, not client or case material",
     )
     private_add.add_argument(
         "--pdf-fallback",

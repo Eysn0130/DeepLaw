@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/v013-scale-performance-report.v1.schema.json",
+  "title": "DeepLaw v0.13 scale and performance diagnostic report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "claim_eligible",
+    "claim_ineligibility_reason",
+    "profile",
+    "generated_at_utc",
+    "release_gate_passed",
+    "candidate",
+    "environment",
+    "configuration",
+    "operation_inventory",
+    "reference_targets",
+    "scale_reports",
+    "overall",
+    "limitations",
+    "rerun_commands",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-scale-performance-report/v1"},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "profile": {"const": "construction_diagnostic"},
+    "generated_at_utc": {"type": "string", "format": "date-time"},
+    "release_gate_passed": {"const": false},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_version", "runner", "runner_sha256"],
+      "properties": {
+        "package_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "runner": {"const": "benchmarks/v013/scale_performance.py"},
+        "runner_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu",
+        "ram",
+        "os",
+        "python",
+        "filesystem",
+        "git_commit",
+        "working_tree_dirty",
+        "git_reason"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["logical_count", "model"],
+          "properties": {
+            "logical_count": {"type": "integer", "minimum": 1},
+            "model": {"type": "string", "minLength": 1, "maxLength": 300}
+          }
+        },
+        "ram": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_bytes", "reason"],
+          "properties": {
+            "total_bytes": {"type": ["integer", "null"], "minimum": 1},
+            "reason": {"type": ["string", "null"], "maxLength": 300}
+          }
+        },
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "release", "machine"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1, "maxLength": 100},
+            "release": {"type": "string", "minLength": 1, "maxLength": 200},
+            "machine": {"type": "string", "minLength": 1, "maxLength": 100}
+          }
+        },
+        "python": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
+        "filesystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "block_size", "reason"],
+          "properties": {
+            "kind": {"type": "string", "minLength": 1, "maxLength": 100},
+            "block_size": {"type": ["integer", "null"], "minimum": 1},
+            "reason": {"type": ["string", "null"], "maxLength": 300}
+          }
+        },
+        "git_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "working_tree_dirty": {"type": "boolean"},
+        "git_reason": {"type": ["string", "null"], "maxLength": 300}
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scales",
+        "query_runs",
+        "warmup_runs",
+        "rss_requests",
+        "execute_expensive",
+        "max_latency_samples",
+        "projection_profile",
+        "query_plan_version",
+        "semantic_profile"
+      ],
+      "properties": {
+        "scales": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {"enum": [1000, 10000, 100000]}
+        },
+        "query_runs": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "warmup_runs": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "rss_requests": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "execute_expensive": {"type": "boolean"},
+        "max_latency_samples": {"const": 1000},
+        "projection_profile": {"const": "standard"},
+        "query_plan_version": {"const": "6"},
+        "semantic_profile": {"const": "not_executed"}
+      }
+    },
+    "operation_inventory": {
+      "const": [
+        "exact_get",
+        "wiki_page",
+        "backlinks",
+        "outlinks",
+        "compiled_first",
+        "evidence_first",
+        "context",
+        "verify",
+        "source_update",
+        "incremental_projection",
+        "full_rebuild",
+        "mcp_cold",
+        "mcp_warm",
+        "concurrent_read",
+        "rss_stability_10000_requests",
+        "cache_invalidation_after_source_update",
+        "storage_sqlite_bytes",
+        "storage_file_count",
+        "storage_canvas_count",
+        "provider_payload_bytes"
+      ]
+    },
+    "reference_targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scale_1000",
+        "scale_10000",
+        "scale_100000",
+        "rss_stability_10000_requests",
+        "concurrent_readers",
+        "cache_invalidation_after_source_update",
+        "provider_hard_limit_violations"
+      ],
+      "properties": {
+        "scale_1000": {"$ref": "#/$defs/target_map"},
+        "scale_10000": {"$ref": "#/$defs/target_map"},
+        "scale_100000": {"$ref": "#/$defs/target_map"},
+        "rss_stability_10000_requests": {"$ref": "#/$defs/target_map"},
+        "concurrent_readers": {"$ref": "#/$defs/target_map"},
+        "cache_invalidation_after_source_update": {"$ref": "#/$defs/target_map"},
+        "provider_hard_limit_violations": {"$ref": "#/$defs/target_map"}
+      }
+    },
+    "scale_reports": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/scale_report"}
+    },
+    "overall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "release_gate_passed",
+        "operation_count",
+        "pass_count",
+        "fail_count",
+        "degraded_count",
+        "executed_count",
+        "not_executed_count",
+        "not_executed",
+        "limitations"
+      ],
+      "properties": {
+        "status": {"const": "not_released"},
+        "release_gate_passed": {"const": false},
+        "operation_count": {"type": "integer", "minimum": 1},
+        "pass_count": {"type": "integer", "minimum": 0},
+        "fail_count": {"type": "integer", "minimum": 0},
+        "degraded_count": {"type": "integer", "minimum": 0},
+        "executed_count": {"type": "integer", "minimum": 0},
+        "not_executed_count": {"type": "integer", "minimum": 0},
+        "not_executed": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/not_executed"},
+          "maxItems": 300
+        },
+        "limitations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/text"}}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/text"}
+    },
+    "rerun_commands": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operator", "value", "unit"],
+      "properties": {
+        "operator": {"enum": ["<=", ">=", "=="]},
+        "value": {"type": ["number", "boolean"]},
+        "unit": {"type": "string", "minLength": 1, "maxLength": 20}
+      }
+    },
+    "target_map": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/target"}
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applies", "metric", "operator", "value", "unit", "reference", "reason"],
+      "properties": {
+        "applies": {"type": "boolean"},
+        "metric": {"type": "string", "minLength": 1, "maxLength": 100},
+        "operator": {"enum": ["<=", ">=", "==", "none"]},
+        "value": {"type": ["number", "boolean", "null"]},
+        "unit": {"type": "string", "minLength": 1, "maxLength": 20},
+        "reference": {"type": ["string", "null"], "maxLength": 200},
+        "reason": {"type": ["string", "null"], "maxLength": 500}
+      }
+    },
+    "latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["samples", "p50", "p95", "p99", "max"],
+      "properties": {
+        "samples": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {"type": "number", "minimum": 0}
+        },
+        "p50": {"type": ["number", "null"], "minimum": 0},
+        "p95": {"type": ["number", "null"], "minimum": 0},
+        "p99": {"type": ["number", "null"], "minimum": 0},
+        "max": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "unit",
+        "valid",
+        "successful_readers",
+        "rss_growth_percent",
+        "stale_cache_served",
+        "full_filesystem_scan",
+        "per_request_full_verify",
+        "provider_payload_bytes",
+        "provider_hard_limit_violations",
+        "file_count",
+        "canvas_count"
+      ],
+      "properties": {
+        "value": {"type": ["number", "boolean", "null"]},
+        "unit": {"type": ["string", "null"], "maxLength": 30},
+        "valid": {"type": ["boolean", "null"]},
+        "successful_readers": {"type": ["integer", "null"], "minimum": 0},
+        "rss_growth_percent": {"type": ["number", "null"], "minimum": 0},
+        "stale_cache_served": {"type": ["boolean", "null"]},
+        "full_filesystem_scan": {"type": ["boolean", "null"]},
+        "per_request_full_verify": {"type": ["boolean", "null"]},
+        "provider_payload_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "provider_hard_limit_violations": {"type": ["integer", "null"], "minimum": 0},
+        "file_count": {"type": ["integer", "null"], "minimum": 0},
+        "canvas_count": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scale",
+        "operation",
+        "status",
+        "sample_count",
+        "warmup_count",
+        "run_count",
+        "latency_ms",
+        "threshold",
+        "judgment",
+        "measured_value",
+        "measurement",
+        "limitation",
+        "reason"
+      ],
+      "properties": {
+        "scale": {"enum": [1000, 10000, 100000]},
+        "operation": {
+          "enum": [
+            "exact_get",
+            "wiki_page",
+            "backlinks",
+            "outlinks",
+            "compiled_first",
+            "evidence_first",
+            "context",
+            "verify",
+            "source_update",
+            "incremental_projection",
+            "full_rebuild",
+            "mcp_cold",
+            "mcp_warm",
+            "concurrent_read",
+            "rss_stability_10000_requests",
+            "cache_invalidation_after_source_update",
+            "storage_sqlite_bytes",
+            "storage_file_count",
+            "storage_canvas_count",
+            "provider_payload_bytes"
+          ]
+        },
+        "status": {"enum": ["executed", "pass", "fail", "degraded", "not_executed"]},
+        "sample_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "warmup_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "run_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "latency_ms": {"$ref": "#/$defs/latency"},
+        "threshold": {"$ref": "#/$defs/threshold"},
+        "judgment": {"enum": ["pass", "fail", "degraded", "not_applicable", "not_executed"]},
+        "measured_value": {"type": ["number", "boolean", "null"]},
+        "measurement": {"$ref": "#/$defs/measurement"},
+        "limitation": {"$ref": "#/$defs/text"},
+        "reason": {"type": "string", "maxLength": 500}
+      }
+    },
+    "scale_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "object_count", "fixture_status", "fixture_reason", "operations"],
+      "properties": {
+        "scale": {"enum": [1000, 10000, 100000]},
+        "object_count": {"type": "integer", "minimum": 1000},
+        "fixture_status": {"enum": ["executed", "not_executed"]},
+        "fixture_reason": {"$ref": "#/$defs/text"},
+        "operations": {
+          "type": "array",
+          "minItems": 20,
+          "maxItems": 20,
+          "items": {"$ref": "#/$defs/operation"}
+        }
+      }
+    },
+    "not_executed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "operation", "reason"],
+      "properties": {
+        "scale": {"enum": [1000, 10000, 100000]},
+        "operation": {"type": "string", "minLength": 1, "maxLength": 100},
+        "reason": {"$ref": "#/$defs/text"}
+      }
+    }
+  }
+}

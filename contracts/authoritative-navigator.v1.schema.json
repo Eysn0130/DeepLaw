@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-navigator.v1.schema.json",
+  "title": "DeepLaw Authoritative Navigator v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "derived_view", "read_only", "official_prose_generated",
+    "authority_changed", "legal_authority_decision", "binding", "document_index",
+    "release_timeline", "effective_dates", "segment_index", "definitions",
+    "cross_references", "review_warnings", "evidence_gaps", "receipt_drill_down",
+    "manifest", "navigator_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.authoritative-navigator/v1"},
+    "derived_view": {"const": true},
+    "read_only": {"const": true},
+    "official_prose_generated": {"const": false},
+    "authority_changed": {"const": false},
+    "legal_authority_decision": {"const": false},
+    "binding": {"$ref": "#/$defs/binding"},
+    "document_index": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/document"}},
+    "release_timeline": {"type": "array", "items": {"$ref": "#/$defs/timeline"}},
+    "effective_dates": {"type": "array", "items": {"$ref": "#/$defs/effective_date"}},
+    "segment_index": {"type": "array", "maxItems": 2000000, "items": {"$ref": "#/$defs/segment"}},
+    "definitions": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+    "cross_references": {"type": "array", "items": {"$ref": "#/$defs/cross_reference"}},
+    "review_warnings": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/reference"}},
+    "evidence_gaps": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/reference"}},
+    "receipt_drill_down": {"type": "array", "items": {"$ref": "#/$defs/receipt"}},
+    "manifest": {"$ref": "#/$defs/manifest"},
+    "navigator_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pack_id": {"type": "string", "pattern": "^authpack_[0-9a-f]{24}$"},
+    "document_id": {"type": "string", "pattern": "^doc_[0-9a-f]{24}$"},
+    "segment_id": {"type": "string", "pattern": "^seg_[0-9a-f]{24}$"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "receipt_id": {"type": "string", "pattern": "^lawrcpt_[0-9a-f]{32}$"},
+    "catalog_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,199}$"},
+    "date": {"type": ["string", "null"], "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "label": {"type": "string", "minLength": 1, "maxLength": 500},
+    "locator": {"type": ["string", "null"], "maxLength": 2048},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pack_id", "catalog_id", "catalog_sha256", "catalog_sequence", "release_id", "release_sha256", "pack_input_sha256", "release_input_sha256"],
+      "properties": {
+        "pack_id": {"$ref": "#/$defs/pack_id"},
+        "catalog_id": {"$ref": "#/$defs/catalog_id"},
+        "catalog_sha256": {"$ref": "#/$defs/sha256"},
+        "catalog_sequence": {"type": "integer", "minimum": 1},
+        "release_id": {"$ref": "#/$defs/release_id"},
+        "release_sha256": {"$ref": "#/$defs/sha256"},
+        "pack_input_sha256": {"$ref": "#/$defs/sha256"},
+        "release_input_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "capabilities": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "schema_version": {"const": "deeplaw.evidence-capabilities/v1"},
+            "integrity": {"enum": ["verified", "failed"]},
+            "source_identity": {"enum": ["signed_official", "reviewed", "declared", "unknown"]},
+            "authority_metadata": {"enum": ["verified", "declared", "unknown"]},
+            "temporal": {"enum": ["verified_at", "outside", "unknown", "not_evaluated"]},
+            "extraction": {"enum": ["native_reviewed", "native_unreviewed", "ocr_human_reviewed", "ocr_unreviewed", "warned"]},
+            "provenance": {"enum": ["exact_segment", "derived"]},
+            "temporal_as_of": {"$ref": "#/$defs/date"},
+            "capability_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "document": {
+      "type": "object", "additionalProperties": false,
+      "required": ["document_id", "release_id", "catalog_id", "catalog_sha256", "source_sha256", "label", "locator", "document_number", "jurisdiction", "document_type", "promulgated_on", "effective_from", "effective_to", "status", "capability", "capabilities", "warning_refs", "gap_refs", "segment_ids", "input_sha256"],
+      "properties": {
+        "document_id": {"$ref": "#/$defs/document_id"}, "release_id": {"$ref": "#/$defs/release_id"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "source_sha256": {"$ref": "#/$defs/sha256"}, "label": {"$ref": "#/$defs/label"}, "locator": {"$ref": "#/$defs/locator"},
+        "document_number": {"type": ["string", "null"], "maxLength": 200}, "jurisdiction": {"type": ["string", "null"], "maxLength": 64}, "document_type": {"type": ["string", "null"], "maxLength": 64}, "promulgated_on": {"$ref": "#/$defs/date"}, "effective_from": {"$ref": "#/$defs/date"}, "effective_to": {"$ref": "#/$defs/date"}, "status": {"type": ["string", "null"], "maxLength": 64}, "capability": {"type": "string", "maxLength": 200}, "capabilities": {"$ref": "#/$defs/capabilities"}, "warning_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 200}}, "gap_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 200}}, "segment_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/segment_id"}}, "input_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "timeline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["release_id", "release_sha256", "catalog_id", "catalog_sha256", "catalog_sequence", "version", "published_on", "effective_from", "effective_to", "previous_release_id", "label", "input_sha256"],
+      "properties": {
+        "release_id": {"$ref": "#/$defs/release_id"}, "release_sha256": {"$ref": "#/$defs/sha256"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "catalog_sequence": {"type": "integer", "minimum": 1}, "version": {"type": ["string", "null"], "maxLength": 100}, "published_on": {"$ref": "#/$defs/date"}, "effective_from": {"$ref": "#/$defs/date"}, "effective_to": {"$ref": "#/$defs/date"}, "previous_release_id": {"type": ["string", "null"], "maxLength": 200}, "label": {"$ref": "#/$defs/label"}, "input_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "effective_date": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "document_id", "segment_id", "release_id", "effective_from", "effective_to", "input_sha256"],
+      "properties": {"kind": {"enum": ["document", "segment"]}, "document_id": {"$ref": "#/$defs/document_id"}, "segment_id": {"oneOf": [{"$ref": "#/$defs/segment_id"}, {"type": "null"}]}, "release_id": {"$ref": "#/$defs/release_id"}, "effective_from": {"$ref": "#/$defs/date"}, "effective_to": {"$ref": "#/$defs/date"}, "input_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "segment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["segment_id", "document_id", "release_id", "catalog_id", "catalog_sha256", "receipt_id", "source_sha256", "segment_sha256", "label", "locator", "promulgated_on", "effective_from", "effective_to", "status", "capability", "capabilities", "warning_labels", "warning_refs", "gap_refs", "input_sha256"],
+      "properties": {
+        "segment_id": {"$ref": "#/$defs/segment_id"}, "document_id": {"$ref": "#/$defs/document_id"}, "release_id": {"$ref": "#/$defs/release_id"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "receipt_id": {"oneOf": [{"$ref": "#/$defs/receipt_id"}, {"type": "null"}]}, "source_sha256": {"$ref": "#/$defs/sha256"}, "segment_sha256": {"$ref": "#/$defs/sha256"}, "label": {"$ref": "#/$defs/label"},
+        "locator": {"type": "object", "additionalProperties": false, "required": ["ordinal", "part_index", "article_label", "heading", "page_start", "page_end", "paragraph_start", "paragraph_end"], "properties": {"ordinal": {"type": ["integer", "null"], "minimum": 1}, "part_index": {"type": ["integer", "null"], "minimum": 1}, "article_label": {"type": ["string", "null"], "maxLength": 100}, "heading": {"type": ["string", "null"], "maxLength": 500}, "page_start": {"type": ["integer", "null"], "minimum": 1}, "page_end": {"type": ["integer", "null"], "minimum": 1}, "paragraph_start": {"type": ["integer", "null"], "minimum": 1}, "paragraph_end": {"type": ["integer", "null"], "minimum": 1}}},
+        "promulgated_on": {"$ref": "#/$defs/date"}, "effective_from": {"$ref": "#/$defs/date"}, "effective_to": {"$ref": "#/$defs/date"}, "status": {"type": ["string", "null"], "maxLength": 64}, "capability": {"type": "string", "maxLength": 200}, "capabilities": {"$ref": "#/$defs/capabilities"}, "warning_labels": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 200}}, "warning_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 200}}, "gap_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 200}}, "input_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "document_id", "segment_id", "label", "code", "locator", "warning_count", "required_capability", "input_sha256"],
+      "properties": {"id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,199}$"}, "document_id": {"oneOf": [{"$ref": "#/$defs/document_id"}, {"type": "null"}]}, "segment_id": {"oneOf": [{"$ref": "#/$defs/segment_id"}, {"type": "null"}]}, "release_id": {"$ref": "#/$defs/release_id"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "label": {"$ref": "#/$defs/label"}, "code": {"type": ["string", "null"], "maxLength": 200}, "locator": {"$ref": "#/$defs/locator"}, "warning_count": {"type": ["integer", "null"], "minimum": 0, "maximum": 100000}, "required_capability": {"type": ["string", "null"], "maxLength": 200}, "input_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "document_id", "segment_id", "release_id", "catalog_id", "catalog_sha256", "label", "code", "locator", "warning_count", "required_capability", "input_sha256", "receipt_id"],
+      "properties": {"id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,199}$"}, "document_id": {"oneOf": [{"$ref": "#/$defs/document_id"}, {"type": "null"}]}, "segment_id": {"oneOf": [{"$ref": "#/$defs/segment_id"}, {"type": "null"}]}, "release_id": {"$ref": "#/$defs/release_id"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "label": {"$ref": "#/$defs/label"}, "code": {"type": ["string", "null"], "maxLength": 200}, "locator": {"$ref": "#/$defs/locator"}, "warning_count": {"type": ["integer", "null"], "minimum": 0, "maximum": 100000}, "required_capability": {"type": ["string", "null"], "maxLength": 200}, "input_sha256": {"$ref": "#/$defs/sha256"}, "receipt_id": {"$ref": "#/$defs/receipt_id"}}
+    },
+    "cross_reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cross_reference_id", "from_segment_id", "to_segment_id", "from_document_id", "to_document_id", "release_id", "catalog_id", "catalog_sha256", "reference_type", "label", "locator", "input_sha256"],
+      "properties": {"cross_reference_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,199}$"}, "from_segment_id": {"$ref": "#/$defs/segment_id"}, "to_segment_id": {"$ref": "#/$defs/segment_id"}, "from_document_id": {"$ref": "#/$defs/document_id"}, "to_document_id": {"$ref": "#/$defs/document_id"}, "release_id": {"$ref": "#/$defs/release_id"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "reference_type": {"type": ["string", "null"], "maxLength": 100}, "label": {"$ref": "#/$defs/label"}, "locator": {"$ref": "#/$defs/locator"}, "input_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "effective_date_digest": {"$ref": "#/$defs/sha256"},
+    "manifest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["binding", "input_digests", "section_digests", "counts", "limits"],
+      "properties": {
+        "binding": {"$ref": "#/$defs/binding"},
+        "input_digests": {"type": "object", "additionalProperties": false, "required": ["pack", "release", "documents", "segments", "release_timeline", "definitions", "cross_references", "review_warnings", "evidence_gaps", "receipt_drill_down"], "properties": {"pack": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "release": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "documents": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "segments": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "release_timeline": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "definitions": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "cross_references": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "review_warnings": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "evidence_gaps": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}, "receipt_drill_down": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}}},
+        "section_digests": {"type": "object", "additionalProperties": false, "required": ["document_index", "release_timeline", "effective_dates", "segment_index", "definitions", "cross_references", "review_warnings", "evidence_gaps", "receipt_drill_down"], "properties": {"document_index": {"$ref": "#/$defs/sha256"}, "release_timeline": {"$ref": "#/$defs/sha256"}, "effective_dates": {"$ref": "#/$defs/sha256"}, "segment_index": {"$ref": "#/$defs/sha256"}, "definitions": {"$ref": "#/$defs/sha256"}, "cross_references": {"$ref": "#/$defs/sha256"}, "review_warnings": {"$ref": "#/$defs/sha256"}, "evidence_gaps": {"$ref": "#/$defs/sha256"}, "receipt_drill_down": {"$ref": "#/$defs/sha256"}}},
+        "counts": {"type": "object", "additionalProperties": false, "required": ["document_index", "release_timeline", "effective_dates", "segment_index", "definitions", "cross_references", "review_warnings", "evidence_gaps", "receipt_drill_down"], "properties": {"document_index": {"type": "integer", "minimum": 0}, "release_timeline": {"type": "integer", "minimum": 0}, "effective_dates": {"type": "integer", "minimum": 0}, "segment_index": {"type": "integer", "minimum": 0}, "definitions": {"type": "integer", "minimum": 0}, "cross_references": {"type": "integer", "minimum": 0}, "review_warnings": {"type": "integer", "minimum": 0}, "evidence_gaps": {"type": "integer", "minimum": 0}, "receipt_drill_down": {"type": "integer", "minimum": 0}}},
+        "limits": {"type": "object", "additionalProperties": false, "required": ["document_max", "segment_max", "warning_max", "gap_max", "encoded_max_bytes"], "properties": {"document_max": {"const": 100000}, "segment_max": {"const": 2000000}, "warning_max": {"const": 100000}, "gap_max": {"const": 100000}, "encoded_max_bytes": {"const": 67108864}}}
+      }
+    }
+  }
+}

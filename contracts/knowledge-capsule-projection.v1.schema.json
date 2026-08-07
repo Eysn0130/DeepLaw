@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-capsule-projection.v1.schema.json",
+  "title": "DeepLaw bounded Knowledge Capsule projection v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "projection", "receipt_id", "hard_limit_bytes", "statements", "gaps", "selected_statement_count", "selected_source_count"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-capsule-projection/v1"},
+    "projection": {"enum": ["compact", "standard", "audit"]},
+    "receipt_id": {"type": "string", "pattern": "^queryreceipt_[0-9a-f]{24}$"},
+    "hard_limit_bytes": {"const": 65536},
+    "statements": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/statement"}},
+    "gaps": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
+    "selected_statement_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "selected_source_count": {"type": "integer", "minimum": 0, "maximum": 32},
+    "citations": {"type": "array", "maxItems": 16, "items": {"type": "object"}},
+    "evidence": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
+    "contradictions": {"type": "array", "maxItems": 16, "items": {"type": "object"}},
+    "audit": {"type": "object"}
+  },
+  "$defs": {"statement": {"type": "object", "additionalProperties": false, "required": ["statement_id", "statement_text", "statement_type", "support_status", "current_supported", "freshness", "origin", "authority", "verification", "legal_authority", "source_refs"], "properties": {"statement_id": {"type": "string"}, "statement_text": {"type": "string", "minLength": 1, "maxLength": 2000}, "statement_type": {"enum": ["factual", "interpretation", "limitation", "unresolved"]}, "support_status": {"enum": ["supported", "contested", "unsupported", "not_applicable"]}, "current_supported": {"type": "boolean"}, "freshness": {"enum": ["fresh", "unknown", "stale", "invalidated"]}, "origin": {"type": "string", "minLength": 1}, "authority": {"type": "string", "minLength": 1}, "verification": {"type": "string", "minLength": 1}, "legal_authority": {"const": false}, "source_refs": {"type": "array", "maxItems": 2, "items": {"type": "object"}}, "knowledge_revision_id": {"type": "string"}, "knowledge_id": {"type": "string"}, "ordinal": {"type": "integer"}, "valid_from": {"type": ["string", "null"]}, "valid_to": {"type": ["string", "null"]}, "limitation": {"type": ["string", "null"]}, "partition": {"type": "string"}, "object_summary": {"type": "object"}}}}
+}

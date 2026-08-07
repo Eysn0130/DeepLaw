@@ -1,0 +1,81 @@
+{
+  "schema_version": "deeplaw.query-ablation-corpus/v1",
+  "corpus_id": "v013-heldout-query-ablation-v1",
+  "source_free": true,
+  "query_count": 8,
+  "queries": [
+    {
+      "query_id": "zh-aurora-boundary",
+      "language": "zh",
+      "query": "极光快照仅能由所有者在本地保存",
+      "expected_ids": [
+        "fixture.aurora.boundary"
+      ],
+      "negative": false
+    },
+    {
+      "query_id": "en-aurora-recovery",
+      "language": "en",
+      "query": "reopen the sealed snapshot only after integrity checks",
+      "expected_ids": [
+        "fixture.aurora.recovery"
+      ],
+      "negative": false
+    },
+    {
+      "query_id": "cross-meridian-audit",
+      "language": "cross",
+      "query": "Meridian 收据 records a one-way handoff",
+      "expected_ids": [
+        "fixture.meridian.audit"
+      ],
+      "negative": false
+    },
+    {
+      "query_id": "en-nova-retry",
+      "language": "en",
+      "query": "Nova retry credential appears after attempt three",
+      "expected_ids": [
+        "fixture.nova.retry"
+      ],
+      "negative": false
+    },
+    {
+      "query_id": "cross-meridian-link",
+      "language": "cross",
+      "query": "Meridian 收据 ties the audit record to recovery steps",
+      "expected_ids": [
+        "fixture.meridian.link"
+      ],
+      "negative": false
+    },
+    {
+      "query_id": "zh-harbor-distractor",
+      "language": "zh",
+      "query": "Harbor 晨报需要哪条管辖规则",
+      "expected_ids": [],
+      "negative": true
+    },
+    {
+      "query_id": "en-no-answer-quartz",
+      "language": "en",
+      "query": "Quartz nebula jurisdiction",
+      "expected_ids": [],
+      "negative": true
+    },
+    {
+      "query_id": "cross-no-answer-cobalt",
+      "language": "cross",
+      "query": "Cobalt 霜线 procedure",
+      "expected_ids": [],
+      "negative": true
+    }
+  ],
+  "limits": {
+    "k": 3,
+    "max_chars": 2000,
+    "max_tokens": 512,
+    "repeats": 1
+  },
+  "corpus_sha256": "e2c8ef7a13f87b6c3aff92c1abfb31cfbb5d852e25c766f62b7a46953f9a65c7"
+}

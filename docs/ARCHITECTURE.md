@@ -214,6 +214,19 @@ must remain authoritative for schema validation, identity resolution, source and
 grant and operation checks, scope, sensitivity, Authority, conflict handling, idempotency, atomic
 commit, audit, and recovery.
 
+The v0.13 source candidate adds four bound layers without changing those authorities:
+
+- Semantic Profile v3 computes dynamic applicability from the registered Source/IR, observations
+  and owner profile. `unknown` or unresolved applicable duties block completeness.
+- Statement Evidence core v1 persists stable statement ordinal/text/hash/type, exact evidence maps,
+  independent receipts and dependency staleness in the semantic commit transaction.
+- Living Wiki projection Profile `standard` (the default) produces no per-object Canvas and pairs
+  its file manifest with a v3 Page Registry, Link Index and Stable Resolver. All files are published
+  through one crash-recoverable ownership transaction.
+- The knowledge MCP lifespan owns one verified persistent read snapshot. Warm requests compare
+  cheap database/audit/manifest identities before reuse; a changed identity invalidates the old
+  snapshot before reopening and verification. Explicit `verify` always performs full verification.
+
 ### Compiled-first retrieval policy
 
 For ordinary reusable task context, the default is to prefer admitted compiled Knowledge
@@ -225,17 +238,19 @@ a universal hard-coded ranking by object kind:
 - exact citation, source verification, incomplete coverage, and authoritative or legal evidence
   duties may require evidence-first selection or direct source drill-down;
 - raw fragments remain bounded verification and fallback material;
-- Query Plan v5 projects a hash-bound `synthesis-query-evidence-receipt/v1` for each selected
-  Synthesis. The receipt binds its frozen input set to the exact provider-visible Source Revision,
-  fragment, locator, and quote hash set; incomplete cross-source coverage remains an explicit
-  `evidence_gap`;
+- Query Plan v6 selects admitted statement identities and projects independent Statement Evidence
+  receipts. Each receipt binds the statement hash and frozen input set to exact provider-visible
+  Source Revision, fragment, locator and quote hashes; incomplete cross-source coverage remains an
+  explicit Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
 - bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
-  stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v5 binds
-  the expansion profile/count/digest and the autonomous retrieval plane validates the corresponding
-  `deeplaw.autonomous-query-plan/v1` receipt;
+  stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v6 binds
+  the expansion profile/count/digest and validates it as part of the query/audit receipt; v5
+  continues to accept the additive v1/v2 expansion receipt shape;
 - every fallback from compiled knowledge to source fragments must be observable in the plan,
   explanation, gap, or receipt;
-- CLI, MCP, and Python Knowledge Capsule compilation reuse Query Plan v5 admission. An exact
+- CLI, MCP, and Python use Query Plan v6 by default in the source candidate. The planner resolves
+  applicable duties, selects statements, performs only duty-targeted evidence fallback, suppresses
+  represented evidence and reports residual gaps. Query Plan v5 remains explicitly selectable. An exact
   policy/entity designator cannot be silently replaced by a different designator when the target
   revision is stale or withdrawn; the Capsule stays empty and preserves the explicit gap;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.

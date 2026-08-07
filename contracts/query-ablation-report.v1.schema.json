@@ -1,0 +1,418 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/query-ablation-report.v1.schema.json",
+  "title": "DeepLaw v0.13 Query Ablation Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus",
+    "denominator",
+    "budget",
+    "profile_binding",
+    "environment",
+    "variants",
+    "competitive_claim_eligible",
+    "limitations",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.query-ablation-report/v1"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "denominator": {"$ref": "#/$defs/denominator"},
+    "budget": {"$ref": "#/$defs/budget"},
+    "profile_binding": {"$ref": "#/$defs/profile_binding"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "variants": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/variant"}
+    },
+    "competitive_claim_eligible": {"const": false},
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fixture_id": {
+      "type": "string",
+      "pattern": "^fixture\\.[a-z0-9]+(?:\\.[a-z0-9]+)+$",
+      "maxLength": 200
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_id",
+        "corpus_sha256",
+        "query_count",
+        "positive_query_count",
+        "negative_query_count",
+        "filename",
+        "source_free",
+        "fixture_sha256"
+      ],
+      "properties": {
+        "corpus_id": {"const": "v013-heldout-query-ablation-v1"},
+        "corpus_sha256": {"$ref": "#/$defs/sha256"},
+        "query_count": {"const": 8},
+        "positive_query_count": {"const": 5},
+        "negative_query_count": {"const": 3},
+        "filename": {"const": "query-ablation-corpus-v1.json"},
+        "source_free": {"const": true},
+        "fixture_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "denominator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_count",
+        "positive_query_count",
+        "negative_query_count",
+        "k",
+        "expected_id_unit",
+        "recall_denominator",
+        "precision_denominator",
+        "false_positive_denominator"
+      ],
+      "properties": {
+        "query_count": {"const": 8},
+        "positive_query_count": {"const": 5},
+        "negative_query_count": {"const": 3},
+        "k": {"const": 3},
+        "expected_id_unit": {"const": "synthetic fixture semantic_key"},
+        "recall_denominator": {
+          "const": "expected fixture IDs; empty expected set scores 1 only when no result is returned"
+        },
+        "precision_denominator": {
+          "const": "min(K, unique returned fixture IDs); empty negative result scores 1"
+        },
+        "false_positive_denominator": {
+          "const": "unique returned fixture IDs; empty result scores 0"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_chars", "max_tokens", "repeats", "token_measurement_method"],
+      "properties": {
+        "max_chars": {"const": 2000},
+        "max_tokens": {"const": 512},
+        "repeats": {"const": 1},
+        "token_measurement_method": {"const": "UTF-8 byte proxy; no model invocation"}
+      }
+    },
+    "profile_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_expansion_profile",
+        "query_expansion_profile_sha256",
+        "query_expansion_lexicon_sha256",
+        "retrieval_implementation_revision",
+        "purpose_aware_retrieval_revision",
+        "tokenizer_profile",
+        "dense_model_used",
+        "network_used"
+      ],
+      "properties": {
+        "query_expansion_profile": {
+          "const": "deeplaw-deterministic-query-expansion/2"
+        },
+        "query_expansion_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "query_expansion_lexicon_sha256": {"$ref": "#/$defs/sha256"},
+        "retrieval_implementation_revision": {"const": "retrieval-fabric/3"},
+        "purpose_aware_retrieval_revision": {"const": "purpose-aware-retrieval/v5"},
+        "tokenizer_profile": {"const": "deeplaw-mixed-cjk-code/2"},
+        "dense_model_used": {"const": false},
+        "network_used": {"const": false}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python",
+        "platform",
+        "machine",
+        "source_free_synthetic_vault",
+        "purpose_calibration_source_fixture",
+        "network",
+        "model"
+      ],
+      "properties": {
+        "python": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$"},
+        "platform": {"type": "string", "minLength": 1, "maxLength": 100},
+        "machine": {"type": "string", "minLength": 1, "maxLength": 100},
+        "source_free_synthetic_vault": {"const": true},
+        "purpose_calibration_source_fixture": {"const": true},
+        "network": {"const": "not_used_by_code_path"},
+        "model": {"const": "not_invoked"}
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_id",
+        "status",
+        "execution_status",
+        "mode",
+        "expansion_mode",
+        "config_digest",
+        "degraded_reasons",
+        "not_executed_reason",
+        "per_query",
+        "metrics",
+        "observed_channels",
+        "calibration"
+      ],
+      "properties": {
+        "variant_id": {
+          "enum": [
+            "expansion_on",
+            "expansion_off",
+            "lexical_only",
+            "dense_only",
+            "graph_only",
+            "hybrid",
+            "compiled_first",
+            "targeted_evidence_fallback"
+          ]
+        },
+        "status": {"enum": ["executed", "not_executed"]},
+        "execution_status": {"enum": ["executed", "degraded", "not_executed"]},
+        "mode": {"enum": ["auto", "lexical", "semantic", "graph", "hybrid", "purpose_aware"]},
+        "expansion_mode": {
+          "enum": ["default_v2", "disabled_process_local_adapter", "not_applicable"]
+        },
+        "config_digest": {"$ref": "#/$defs/sha256"},
+        "degraded_reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "not_executed_reason": {"type": ["string", "null"], "maxLength": 1000},
+        "per_query": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/query_metrics"}
+        },
+        "metrics": {"$ref": "#/$defs/aggregate_metrics"},
+        "observed_channels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/channel"}
+        },
+        "calibration": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/calibration"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "executed"}}},
+          "then": {
+            "properties": {
+              "not_executed_reason": {"type": "null"},
+              "per_query": {"minItems": 8, "maxItems": 8}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "not_executed"}}},
+          "then": {
+            "properties": {
+              "execution_status": {"const": "not_executed"},
+              "not_executed_reason": {"type": "string", "minLength": 1},
+              "per_query": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"execution_status": {"const": "degraded"}}},
+          "then": {
+            "properties": {
+              "status": {"const": "executed"},
+              "degraded_reasons": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant_id": {"enum": ["compiled_first", "targeted_evidence_fallback"]}
+            }
+          },
+          "then": {
+            "properties": {"calibration": {"$ref": "#/$defs/calibration"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "variant_id": {
+                "enum": [
+                  "expansion_on",
+                  "expansion_off",
+                  "lexical_only",
+                  "dense_only",
+                  "graph_only",
+                  "hybrid"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {"calibration": {"type": "null"}}
+          }
+        }
+      ]
+    },
+    "channel": {
+      "enum": [
+        "exact_id",
+        "knowledge_key",
+        "semantic_key",
+        "exact_phrase",
+        "lexical",
+        "graph",
+        "temporal",
+        "compiled_knowledge",
+        "source_evidence",
+        "raw_fragment_fallback"
+      ]
+    },
+    "query_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_id",
+        "expected_ids",
+        "returned_ids",
+        "true_positive_count",
+        "false_positive_count",
+        "recall_at_k",
+        "precision_at_k",
+        "false_positive_rate",
+        "latency_ms",
+        "token_proxy",
+        "observed_channels"
+      ],
+      "properties": {
+        "query_id": {"type": "string", "pattern": "^[a-z0-9-]{1,100}$"},
+        "expected_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/fixture_id"}},
+        "returned_ids": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/fixture_id"}},
+        "true_positive_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "false_positive_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "recall_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+        "precision_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+        "false_positive_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "latency_ms": {"type": "number", "minimum": 0},
+        "token_proxy": {"type": "integer", "minimum": 0, "maximum": 200000},
+        "observed_channels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/channel"}
+        }
+      }
+    },
+    "aggregate_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_id",
+        "recall_at_k",
+        "precision_at_k",
+        "false_positive_rate",
+        "latency_ms",
+        "throughput_qps",
+        "token_proxy"
+      ],
+      "properties": {
+        "variant_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "recall_at_k": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "precision_at_k": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "false_positive_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "latency_ms": {"$ref": "#/$defs/latency"},
+        "throughput_qps": {"$ref": "#/$defs/throughput"},
+        "token_proxy": {"$ref": "#/$defs/token_proxy"}
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture",
+        "fixture_sha256",
+        "execution_status",
+        "query_count",
+        "per_query",
+        "metrics",
+        "observed_channels",
+        "source_revision_bound"
+      ],
+      "properties": {
+        "fixture": {"const": "synthetic_source_bound_autonomous_v1"},
+        "fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "execution_status": {"const": "executed"},
+        "query_count": {"const": 1},
+        "per_query": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"$ref": "#/$defs/query_metrics"}
+        },
+        "metrics": {"$ref": "#/$defs/aggregate_metrics"},
+        "observed_channels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/channel"}
+        },
+        "source_revision_bound": {"const": true}
+      }
+    },
+    "latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mean", "p50", "p95", "sample_count"],
+      "properties": {
+        "mean": {"type": ["number", "null"], "minimum": 0},
+        "p50": {"type": ["number", "null"], "minimum": 0},
+        "p95": {"type": ["number", "null"], "minimum": 0},
+        "sample_count": {"type": "integer", "minimum": 0, "maximum": 8},
+        "scope": {"type": "string", "maxLength": 300}
+      }
+    },
+    "throughput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mean", "method"],
+      "properties": {
+        "mean": {"type": ["number", "null"], "minimum": 0},
+        "method": {"type": "string", "minLength": 1, "maxLength": 300}
+      }
+    },
+    "token_proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "mean", "method"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "mean": {"type": ["number", "null"], "minimum": 0},
+        "method": {"type": "string", "minLength": 1, "maxLength": 300}
+      }
+    }
+  }
+}

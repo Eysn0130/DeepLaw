@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal, cast
@@ -40,7 +42,7 @@ QueryPurpose = Literal[
     "freshness_check",
 ]
 QueryPolicy = Literal["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
-QueryPlanVersion = Literal["4", "5"]
+QueryPlanVersion = Literal["4", "5", "6"]
 
 QUERY_PURPOSES: Final = frozenset(
     {
@@ -65,6 +67,50 @@ _DEFAULT_POLICY: Final[dict[str, QueryPolicy]] = {
     "debug": "balanced-v1",
     "freshness_check": "compiled-first-v1",
 }
+
+
+@contextmanager
+def _purpose_read_stores(
+    root: Path,
+    runtime_snapshot: Any | None,
+) -> Iterator[tuple[KnowledgeVault, AutonomousKnowledgeStore]]:
+    """Yield one verified snapshot without re-verifying a warm MCP lifespan."""
+
+    if runtime_snapshot is not None:
+        if bool(getattr(runtime_snapshot, "closed", True)):
+            raise RuntimeError("persistent knowledge read snapshot is closed")
+        evidence_store = getattr(runtime_snapshot, "legacy", None)
+        knowledge_store = getattr(runtime_snapshot, "store", None)
+        if not isinstance(evidence_store, KnowledgeVault) or not isinstance(
+            knowledge_store, AutonomousKnowledgeStore
+        ):
+            raise RuntimeError("persistent knowledge read snapshot is invalid")
+        if evidence_store.root != root or knowledge_store.root != root:
+            raise RuntimeError("persistent knowledge read snapshot belongs to another Vault")
+        if evidence_store.audit_head != knowledge_store.legacy_audit_head:
+            raise RuntimeError("knowledge read planes changed while opening a snapshot")
+        yield evidence_store, knowledge_store
+        return
+
+    with (
+        KnowledgeVault(root, read_only=True) as evidence_store,
+        AutonomousKnowledgeStore(
+            root,
+            read_only=True,
+            legacy_snapshot=evidence_store,
+        ) as knowledge_store,
+    ):
+        legacy_integrity = evidence_store.verify_integrity()
+        if not legacy_integrity["valid"]:
+            raise RuntimeError("knowledge vault integrity is invalid; query stopped")
+        if evidence_store.audit_head != knowledge_store.legacy_audit_head:
+            raise RuntimeError("knowledge read planes changed while opening a snapshot")
+        if not knowledge_store.verify(
+            preverified_legacy_integrity=legacy_integrity,
+            preverified_legacy_audit_head=evidence_store.audit_head,
+        )["valid"]:
+            raise RuntimeError("knowledge vault integrity is invalid; query stopped")
+        yield evidence_store, knowledge_store
 _POLICY_ORDER: Final[dict[QueryPolicy, tuple[str, ...]]] = {
     "compiled-first-v1": (
         "exact_identity",
@@ -254,14 +300,24 @@ class PurposeAwareRetrievalService:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
-        query_plan_version: QueryPlanVersion = "4",
+        query_plan_version: QueryPlanVersion = "6",
         force_canonical_lexical: bool = False,
+        query_target: str | dict[str, Any] | None = None,
+        applicable_duties: tuple[str, ...] | list[str] | None = None,
+        projection: str = "standard",
+        _runtime_snapshot: Any | None = None,
     ) -> dict[str, Any]:
         selected_query = self._bounded_query(query)
         if purpose not in QUERY_PURPOSES:
             raise ValueError("query purpose is invalid")
-        if query_plan_version not in {"4", "5"}:
+        if query_plan_version not in {"4", "5", "6"}:
             raise ValueError("query plan version is invalid")
+        if query_plan_version == "6" and projection not in {
+            "compact",
+            "standard",
+            "audit",
+        }:
+            raise ValueError("query projection is invalid")
         selected_policy = policy or _DEFAULT_POLICY[purpose]
         if selected_policy not in QUERY_POLICIES:
             raise ValueError("query policy is invalid")
@@ -283,21 +339,40 @@ class PurposeAwareRetrievalService:
         if graph_hops not in {0, 1, 2}:
             raise ValueError("purpose-aware query graph-hop budget is invalid")
 
-        with (
-            KnowledgeVault(self.root, read_only=True) as evidence_store,
-            AutonomousKnowledgeStore(self.root, read_only=True) as knowledge_store,
+        with _purpose_read_stores(self.root, _runtime_snapshot) as (
+            evidence_store,
+            knowledge_store,
         ):
             selected_scope = scope or knowledge_store.vault_scope
             if selected_scope not in {"personal", "project", "domain"}:
                 raise ValueError("purpose-aware query scope is invalid")
-            if evidence_store.audit_head != knowledge_store.legacy_audit_head:
-                raise RuntimeError("knowledge read planes changed while opening a snapshot")
-            if not evidence_store.verify_integrity()["valid"] or not knowledge_store.verify()[
-                "valid"
-            ]:
-                raise RuntimeError("knowledge vault integrity is invalid; query stopped")
 
             if purpose == "legal":
+                if query_plan_version == "6":
+                    from .query_v6 import execute_v6
+
+                    return execute_v6(
+                        self,
+                        evidence_store=evidence_store,
+                        knowledge_store=knowledge_store,
+                        query=selected_query,
+                        purpose=purpose,
+                        policy=selected_policy,
+                        scope=selected_scope,
+                        max_sensitivity=max_sensitivity,
+                        limit=limit,
+                        max_chars=max_chars,
+                        max_tokens=max_tokens,
+                        max_sources=max_sources,
+                        graph_hops=graph_hops,
+                        retrieval_mode=retrieval_mode,
+                        as_of=selected_as_of,
+                        kinds=kinds,
+                        force_canonical_lexical=force_canonical_lexical,
+                        query_target=query_target,
+                        applicable_duties=applicable_duties,
+                        projection=projection,
+                    )
                 result = self._legal_boundary_result(
                     query=selected_query,
                     policy=selected_policy,
@@ -322,6 +397,32 @@ class PurposeAwareRetrievalService:
                 else:
                     _validate_contract("purpose-aware-retrieval.v1.schema.json", result)
                 return result
+
+            if query_plan_version == "6":
+                from .query_v6 import execute_v6
+
+                return execute_v6(
+                    self,
+                    evidence_store=evidence_store,
+                    knowledge_store=knowledge_store,
+                    query=selected_query,
+                    purpose=purpose,
+                    policy=selected_policy,
+                    scope=selected_scope,
+                    max_sensitivity=max_sensitivity,
+                    limit=limit,
+                    max_chars=max_chars,
+                    max_tokens=max_tokens,
+                    max_sources=max_sources,
+                    graph_hops=graph_hops,
+                    retrieval_mode=retrieval_mode,
+                    as_of=selected_as_of,
+                    kinds=kinds,
+                    force_canonical_lexical=force_canonical_lexical,
+                    query_target=query_target,
+                    applicable_duties=applicable_duties,
+                    projection=projection,
+                )
 
             compiled_budget, evidence_budget = self._partition_budget(
                 selected_policy,
@@ -2224,6 +2325,7 @@ class PurposeAwareRetrievalService:
             include_restricted=False,
             include_inactive=False,
             explain=False,
+            _preverified_audit_head=evidence_store.audit_head,
         )
         sensitivity_order = ("public", "internal", "private", "restricted")
         query_policy_designators = _policy_designators(query)

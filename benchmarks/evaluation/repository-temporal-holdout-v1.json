@@ -2,7 +2,7 @@
   "schema_version": "deeplaw.repository-gold-set/v2",
   "status": "public_time_frozen_holdout",
   "claim_eligible": false,
-  "frozen_at": "2026-07-30T12:00:00Z",
+  "frozen_at": "2026-08-07T21:33:27Z",
   "split": "public_time_frozen_holdout",
   "freeze_policy": {
     "visibility": "public",
@@ -37,7 +37,7 @@
       "document_id": "holdout_zh_implementation_audit",
       "category": "chinese",
       "path": "docs/IMPLEMENTATION_AUDIT_2026-07-26.md",
-      "sha256": "ee809f00f4cd3eabf2284ab7c07f3822c7a9e2c7c86350764857a2071b88e372",
+      "sha256": "9cbe726c2891092565262d4201e202bf8a9f2c44bb8708758e04fa3fef021fd1",
       "title": "DeepLaw 施工方案源码证据复核",
       "anchor": "当前实现擅长已明确写入的事实、更新和时间信息"
     },
@@ -45,7 +45,7 @@
       "document_id": "holdout_zh_source_audit",
       "category": "chinese",
       "path": "docs/SOURCE_AUDIT_2026-07-14.md",
-      "sha256": "8f43bd164ccfa9d2dcb989b5e25e1829b9facd976cc6596dfd93983a6c6d12be",
+      "sha256": "bd8fd488cc18c00d1e953554eddc90adf25e59d7c2f79b2e76da039d3bce4537",
       "title": "DeepLaw 法律资料来源审计",
       "anchor": "URL 存在不等于当前仍可访问"
     },

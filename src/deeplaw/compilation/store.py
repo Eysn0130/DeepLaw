@@ -5,9 +5,17 @@ import sqlite3
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from ..evidence.statements import validate_statement
+from ..knowledge_autonomy import _read_object, _validate_contract, parse_knowledge_markdown
 from ..knowledge_models import canonical_timestamp
-from ..util import canonical_json, sha256_file, strict_json_loads
-from .models import COMPILATION_CORE_SCHEMA, SEMANTIC_COMPILATION_CORE_SCHEMA
+from ..util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
+from .applicability import applicability_digest, policy_digest
+from .models import (
+    COMPILATION_CORE_SCHEMA,
+    SEMANTIC_COMPILATION_CORE_SCHEMA,
+    STATEMENT_EVIDENCE_CORE_SCHEMA,
+)
+from .profiles import SEMANTIC_DUTIES
 
 
 def compilation_tables_sql() -> str:
@@ -19,6 +27,12 @@ def compilation_tables_sql() -> str:
         ) STRICT;
 
         CREATE TABLE IF NOT EXISTS semantic_compilation_core_v1 (
+            schema_version TEXT PRIMARY KEY,
+            installed_at TEXT NOT NULL,
+            migration_source TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS statement_evidence_core_v1 (
             schema_version TEXT PRIMARY KEY,
             installed_at TEXT NOT NULL,
             migration_source TEXT NOT NULL
@@ -92,7 +106,8 @@ def compilation_tables_sql() -> str:
                 'freshness', 'query_backfill', 'mcp_result',
                 'observation_plan', 'semantic_inventory', 'finalization_packet',
                 'publication_plan', 'semantic_receipt', 'synthesis_packet',
-                'synthesis_plan', 'synthesis_receipt'
+                'synthesis_plan', 'synthesis_receipt', 'statement',
+                'statement_map', 'statement_evidence_receipt'
             )),
             byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
             media_type TEXT NOT NULL,
@@ -464,6 +479,98 @@ def compilation_tables_sql() -> str:
             recorded_at TEXT NOT NULL
         ) STRICT;
 
+        CREATE TABLE IF NOT EXISTS knowledge_statements_v1 (
+            statement_id TEXT PRIMARY KEY
+                CHECK(
+                    length(statement_id) = 34
+                    AND substr(statement_id, 1, 10) = 'statement_'
+                    AND substr(statement_id, 11) NOT GLOB '*[^0-9a-f]*'
+                ),
+            knowledge_revision_id TEXT NOT NULL
+                REFERENCES knowledge_revisions_v3(revision_id),
+            ordinal INTEGER NOT NULL CHECK(ordinal BETWEEN 1 AND 4096),
+            statement_text TEXT NOT NULL,
+            statement_sha256 TEXT NOT NULL,
+            statement_type TEXT NOT NULL CHECK(
+                statement_type IN ('factual', 'interpretation', 'limitation', 'unresolved')
+            ),
+            support_status TEXT NOT NULL CHECK(
+                support_status IN ('supported', 'contested', 'unsupported', 'not_applicable')
+            ),
+            valid_from TEXT,
+            valid_to TEXT,
+            limitation TEXT,
+            input_set_sha256 TEXT NOT NULL,
+            statement_artifact_sha256 TEXT NOT NULL UNIQUE
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            statement_json TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            UNIQUE(knowledge_revision_id, ordinal),
+            UNIQUE(knowledge_revision_id, statement_sha256)
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS knowledge_statements_v1_revision
+            ON knowledge_statements_v1(knowledge_revision_id, ordinal);
+
+        CREATE TABLE IF NOT EXISTS statement_evidence_maps_v1 (
+            statement_id TEXT PRIMARY KEY
+                REFERENCES knowledge_statements_v1(statement_id) ON DELETE CASCADE,
+            knowledge_revision_id TEXT NOT NULL
+                REFERENCES knowledge_revisions_v3(revision_id),
+            ordinal INTEGER NOT NULL CHECK(ordinal BETWEEN 1 AND 4096),
+            char_start INTEGER NOT NULL CHECK(char_start >= 0),
+            char_end INTEGER NOT NULL CHECK(char_end > char_start),
+            statement_sha256 TEXT NOT NULL,
+            input_set_sha256 TEXT NOT NULL,
+            map_sha256 TEXT NOT NULL UNIQUE
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            map_artifact_sha256 TEXT NOT NULL UNIQUE
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            map_json TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            UNIQUE(knowledge_revision_id, ordinal)
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS statement_evidence_maps_v1_revision
+            ON statement_evidence_maps_v1(knowledge_revision_id, ordinal);
+
+        CREATE TABLE IF NOT EXISTS statement_evidence_refs_v1 (
+            statement_id TEXT NOT NULL
+                REFERENCES knowledge_statements_v1(statement_id) ON DELETE CASCADE,
+            ref_ordinal INTEGER NOT NULL CHECK(ref_ordinal >= 1),
+            ref_kind TEXT NOT NULL CHECK(ref_kind IN ('source', 'knowledge', 'relation')),
+            ref_json TEXT NOT NULL,
+            PRIMARY KEY(statement_id, ref_ordinal)
+        ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS statement_evidence_receipts_v1 (
+            receipt_sha256 TEXT PRIMARY KEY,
+            artifact_sha256 TEXT NOT NULL UNIQUE
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            statement_id TEXT NOT NULL UNIQUE
+                REFERENCES knowledge_statements_v1(statement_id) ON DELETE CASCADE,
+            knowledge_revision_id TEXT NOT NULL
+                REFERENCES knowledge_revisions_v3(revision_id),
+            map_sha256 TEXT NOT NULL
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            statement_sha256 TEXT NOT NULL,
+            statement_type TEXT NOT NULL CHECK(
+                statement_type IN ('factual', 'interpretation', 'limitation', 'unresolved')
+            ),
+            support_status TEXT NOT NULL CHECK(
+                support_status IN ('supported', 'contested', 'unsupported', 'not_applicable')
+            ),
+            valid_from TEXT,
+            valid_to TEXT,
+            limitation TEXT,
+            input_set_sha256 TEXT NOT NULL,
+            compilation_run_id TEXT NOT NULL
+                REFERENCES source_compilation_runs_v1(compilation_run_id),
+            transaction_audit_head TEXT NOT NULL,
+            commit_audit_head TEXT NOT NULL,
+            recorded_at TEXT NOT NULL
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS statement_evidence_receipts_v1_revision
+            ON statement_evidence_receipts_v1(knowledge_revision_id);
+
         CREATE TABLE IF NOT EXISTS synthesis_refresh_tasks_v1 (
             refresh_task_id TEXT PRIMARY KEY,
             target_knowledge_id TEXT NOT NULL
@@ -516,7 +623,12 @@ def compilation_tables_sql() -> str:
 def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) -> None:
     """Expand frozen v0.11 CHECK domains without losing existing rows or FKs."""
     required = {
-        "source_compilation_artifacts_v1": "semantic_receipt",
+        "source_compilation_artifacts_v1": (
+            "semantic_receipt",
+            "statement",
+            "statement_map",
+            "statement_evidence_receipt",
+        ),
         "source_compilation_usage_v1": "freeze_semantic_inventory",
         "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
     }
@@ -529,7 +641,8 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
                     'freshness', 'query_backfill', 'mcp_result',
                     'observation_plan', 'semantic_inventory', 'finalization_packet',
                     'publication_plan', 'semantic_receipt', 'synthesis_packet',
-                    'synthesis_plan', 'synthesis_receipt'
+                    'synthesis_plan', 'synthesis_receipt', 'statement',
+                    'statement_map', 'statement_evidence_receipt'
                 )),
                 byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
                 media_type TEXT NOT NULL,
@@ -586,7 +699,8 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
         ).fetchone()
         if row is None:
             raise RuntimeError(f"source compilation table is unavailable: {table}")
-        if marker not in row[0]:
+        markers = marker if isinstance(marker, tuple) else (marker,)
+        if any(token not in row[0] for token in markers):
             selected.append(table)
     if not selected:
         return
@@ -611,9 +725,7 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
                     "result_sha256, recorded_at"
                 ),
             }[table]
-            connection.execute(
-                f"INSERT INTO {temporary}({columns}) SELECT {columns} FROM {table}"
-            )
+            connection.execute(f"INSERT INTO {temporary}({columns}) SELECT {columns} FROM {table}")
             connection.execute(f"DROP TABLE {table}")
             connection.execute(f"ALTER TABLE {temporary} RENAME TO {table}")
         connection.execute(
@@ -656,20 +768,33 @@ def install_compilation_schema(
         """,
         (SEMANTIC_COMPILATION_CORE_SCHEMA, installed_at, migration_source),
     )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO statement_evidence_core_v1(
+            schema_version, installed_at, migration_source
+        ) VALUES (?, ?, ?)
+        """,
+        (STATEMENT_EVIDENCE_CORE_SCHEMA, installed_at, migration_source),
+    )
     row = connection.execute("SELECT * FROM source_compilation_core_v1").fetchone()
     if row is None or row["schema_version"] != COMPILATION_CORE_SCHEMA:
         raise RuntimeError("source compilation schema is unavailable")
     canonical_timestamp(row["installed_at"], field="source compilation installed_at")
-    semantic_row = connection.execute(
-        "SELECT * FROM semantic_compilation_core_v1"
+    semantic_row = connection.execute("SELECT * FROM semantic_compilation_core_v1").fetchone()
+    if semantic_row is None or semantic_row["schema_version"] != SEMANTIC_COMPILATION_CORE_SCHEMA:
+        raise RuntimeError("semantic compilation schema is unavailable")
+    canonical_timestamp(semantic_row["installed_at"], field="semantic compilation installed_at")
+    evidence_row = connection.execute(
+        "SELECT * FROM statement_evidence_core_v1"
     ).fetchone()
     if (
-        semantic_row is None
-        or semantic_row["schema_version"] != SEMANTIC_COMPILATION_CORE_SCHEMA
+        evidence_row is None
+        or evidence_row["schema_version"] != STATEMENT_EVIDENCE_CORE_SCHEMA
     ):
-        raise RuntimeError("semantic compilation schema is unavailable")
+        raise RuntimeError("statement evidence schema is unavailable")
     canonical_timestamp(
-        semantic_row["installed_at"], field="semantic compilation installed_at"
+        evidence_row["installed_at"],
+        field="statement evidence installed_at",
     )
     connection.commit()
 
@@ -692,10 +817,7 @@ def verify_compilation_schema(
     semantic_row = connection.execute(
         "SELECT schema_version, installed_at FROM semantic_compilation_core_v1"
     ).fetchone()
-    if (
-        semantic_row is None
-        or semantic_row["schema_version"] != SEMANTIC_COMPILATION_CORE_SCHEMA
-    ):
+    if semantic_row is None or semantic_row["schema_version"] != SEMANTIC_COMPILATION_CORE_SCHEMA:
         failures.append({"code": "semantic_compilation_schema_invalid", "object_id": "core"})
     else:
         try:
@@ -704,8 +826,24 @@ def verify_compilation_schema(
                 field="semantic compilation installed_at",
             )
         except (TypeError, ValueError):
+            failures.append({"code": "semantic_compilation_schema_invalid", "object_id": "core"})
+    evidence_row = connection.execute(
+        "SELECT schema_version, installed_at FROM statement_evidence_core_v1"
+    ).fetchone()
+    if (
+        evidence_row is None
+        or evidence_row["schema_version"] != STATEMENT_EVIDENCE_CORE_SCHEMA
+    ):
+        failures.append({"code": "statement_evidence_schema_invalid", "object_id": "core"})
+    else:
+        try:
+            canonical_timestamp(
+                evidence_row["installed_at"],
+                field="statement evidence installed_at",
+            )
+        except (TypeError, ValueError):
             failures.append(
-                {"code": "semantic_compilation_schema_invalid", "object_id": "core"}
+                {"code": "statement_evidence_schema_invalid", "object_id": "core"}
             )
     for artifact in connection.execute(
         """
@@ -761,17 +899,14 @@ def verify_compilation_schema(
             if artifact is None or artifact["artifact_role"] != "mcp_result":
                 raise ValueError("source compilation MCP replay artifact is invalid")
             digest = replay["result_sha256"]
-            result_path = (
-                root / ".deeplaw" / "objects" / "sha256" / digest[:2] / digest[2:]
-            )
+            result_path = root / ".deeplaw" / "objects" / "sha256" / digest[:2] / digest[2:]
             if result_path.is_symlink() or not result_path.is_file():
                 raise ValueError("source compilation MCP replay path is unsafe")
             value = strict_json_loads(result_path.read_bytes())
             if (
                 not isinstance(value, dict)
                 or set(value) != {"schema_version", "operation", "result"}
-                or value["schema_version"]
-                != "deeplaw.source-compilation-mcp-result/v1"
+                or value["schema_version"] != "deeplaw.source-compilation-mcp-result/v1"
                 or value["operation"] != replay["operation"]
                 or not isinstance(value["result"], dict)
             ):
@@ -781,10 +916,7 @@ def verify_compilation_schema(
                 {
                     "code": "source_compilation_mcp_replay_invalid",
                     "object_id": hashlib.sha256(
-                        (
-                            f"{replay['grant_id']}:"
-                            f"{replay['idempotency_key']}"
-                        ).encode()
+                        (f"{replay['grant_id']}:{replay['idempotency_key']}").encode()
                     ).hexdigest(),
                 }
             )
@@ -814,9 +946,7 @@ def verify_compilation_schema(
                 (run["compilation_run_id"],),
             )
         ]
-        output_digest = hashlib.sha256(
-            canonical_json(outputs).encode("utf-8")
-        ).hexdigest()
+        output_digest = hashlib.sha256(canonical_json(outputs).encode("utf-8")).hexdigest()
         if packet_count != run["packet_count"] or (
             run["status"] in {"committed", "projection_pending", "succeeded"}
             and (run["receipt_sha256"] is None or run["output_set_sha256"] != output_digest)
@@ -837,11 +967,7 @@ def verify_compilation_schema(
                 (run["compilation_run_id"],),
             ).fetchone()
             try:
-                payload = (
-                    strict_json_loads(event["payload_json"])
-                    if event is not None
-                    else None
-                )
+                payload = strict_json_loads(event["payload_json"]) if event is not None else None
                 if (
                     not isinstance(payload, dict)
                     or payload.get("output_set_sha256") != run["output_set_sha256"]
@@ -917,16 +1043,18 @@ def verify_compilation_schema(
                 )
             ):
                 raise ValueError("run metadata binding is invalid")
-            for digest, role in (
-                (metadata["validation_sha256"], "validation"),
-            ):
-                if digest is not None and connection.execute(
-                    """
+            for digest, role in ((metadata["validation_sha256"], "validation"),):
+                if (
+                    digest is not None
+                    and connection.execute(
+                        """
                     SELECT 1 FROM source_compilation_artifacts_v1
                     WHERE artifact_sha256 = ? AND artifact_role = ?
                     """,
-                    (digest, role),
-                ).fetchone() is None:
+                        (digest, role),
+                    ).fetchone()
+                    is None
+                ):
                     raise ValueError("run metadata artifact is missing")
         except (TypeError, ValueError):
             failures.append(
@@ -935,6 +1063,469 @@ def verify_compilation_schema(
                     "object_id": run["compilation_run_id"],
                 }
             )
+    # Semantic v3 keeps the existing v2 tables and artifacts. Verify its
+    # additive bindings inside the Statement Evidence v1 migration boundary
+    # without creating a second store.
+    for semantic in connection.execute(
+        """
+        SELECT runs.compilation_run_id, runs.source_revision_id,
+               runs.compiler_profile_version, runs.input_audit_head,
+               semantic.semantic_status, semantic.inventory_sha256,
+               semantic.publication_plan_sha256, semantic.quality_receipt_sha256
+        FROM semantic_compilation_runs_v2 AS semantic
+        JOIN source_compilation_runs_v1 AS runs USING(compilation_run_id)
+        WHERE runs.compiler_profile_version = '3'
+        ORDER BY runs.compilation_run_id
+        """
+    ):
+        run_id = semantic["compilation_run_id"]
+        try:
+            duty_rows = connection.execute(
+                """
+                SELECT duty_type, duty_id, required, status, report_json
+                FROM semantic_duty_reports_v1
+                WHERE compilation_run_id = ? ORDER BY duty_type
+                """,
+                (run_id,),
+            ).fetchall()
+            if semantic["publication_plan_sha256"] is None and not duty_rows:
+                # A planned/partial run has no frozen duty report yet; its
+                # canonical v2 rows are verified by the surrounding checks.
+                continue
+            if len(duty_rows) != len(SEMANTIC_DUTIES) or {
+                row["duty_type"] for row in duty_rows
+            } != set(SEMANTIC_DUTIES):
+                raise ValueError("v3 duty inventory is incomplete")
+            reports: dict[str, dict[str, Any]] = {}
+            for row in duty_rows:
+                report = strict_json_loads(row["report_json"])
+                if not isinstance(report, dict):
+                    raise ValueError("v3 duty report is not an object")
+                _validate_contract("semantic-compilation-duty-report.v2.schema.json", report)
+                if report["duty_type"] != row["duty_type"] or report["duty_id"] != row["duty_id"]:
+                    raise ValueError("v3 duty table/report identity mismatch")
+                if report["status"] != row["status"] or bool(report["required"]) != bool(
+                    row["required"]
+                ):
+                    raise ValueError("v3 duty table/report status mismatch")
+                basis = report["deterministic_basis"]
+                if basis["facts_sha256"] != sha256_bytes(
+                    canonical_json(basis["facts"]).encode("utf-8")
+                ):
+                    raise ValueError("v3 duty deterministic basis digest is invalid")
+                reports[report["duty_type"]] = report
+            if semantic["inventory_sha256"] is None:
+                raise ValueError("v3 inventory binding is missing")
+            inventory_row = connection.execute(
+                """
+                SELECT artifact_sha256 FROM semantic_inventories_v1
+                WHERE compilation_run_id = ? AND inventory_sha256 = ?
+                """,
+                (run_id, semantic["inventory_sha256"]),
+            ).fetchone()
+            if inventory_row is None:
+                raise ValueError("v3 inventory artifact binding is invalid")
+            inventory_digest = inventory_row["artifact_sha256"]
+            inventory_path = (
+                root
+                / ".deeplaw"
+                / "objects"
+                / "sha256"
+                / inventory_digest[:2]
+                / inventory_digest[2:]
+            )
+            if (
+                inventory_path.is_symlink()
+                or not inventory_path.is_file()
+                or sha256_file(inventory_path) != inventory_digest
+            ):
+                raise ValueError("v3 inventory artifact bytes are invalid")
+            inventory = strict_json_loads(inventory_path.read_bytes())
+            if (
+                not isinstance(inventory, dict)
+                or inventory.get("inventory_sha256") != semantic["inventory_sha256"]
+            ):
+                raise ValueError("v3 inventory artifact digest is invalid")
+            coverage = inventory.get("coverage")
+            if not isinstance(coverage, dict) or coverage.get(
+                "applicability_digest"
+            ) != applicability_digest(
+                {
+                    duty: {
+                        "applicability": reports[duty]["applicability"],
+                        "deterministic_basis": reports[duty]["deterministic_basis"],
+                    }
+                    for duty in reports
+                }
+            ):
+                raise ValueError("v3 applicability digest is invalid")
+            if coverage.get("applicability_policy_sha256") != policy_digest():
+                raise ValueError("v3 applicability policy binding is invalid")
+            if semantic["publication_plan_sha256"] is not None:
+                plan_artifact = connection.execute(
+                    """
+                    SELECT artifact_role, byte_size
+                    FROM source_compilation_artifacts_v1 WHERE artifact_sha256 = ?
+                    """,
+                    (semantic["publication_plan_sha256"],),
+                ).fetchone()
+                if plan_artifact is None or plan_artifact["artifact_role"] != "publication_plan":
+                    raise ValueError("v3 publication artifact binding is invalid")
+                plan_digest = semantic["publication_plan_sha256"]
+                plan_path = (
+                    root / ".deeplaw" / "objects" / "sha256" / plan_digest[:2] / plan_digest[2:]
+                )
+                if (
+                    plan_path.is_symlink()
+                    or not plan_path.is_file()
+                    or sha256_file(plan_path) != plan_digest
+                ):
+                    raise ValueError("v3 publication artifact bytes are invalid")
+                plan = strict_json_loads(plan_path.read_bytes())
+                if (
+                    not isinstance(plan, dict)
+                    or plan.get("schema_version") != "deeplaw.semantic-publication-plan/v3"
+                ):
+                    raise ValueError("v3 publication plan is invalid")
+                _validate_contract("semantic-publication-plan.v3.schema.json", plan)
+                if (
+                    plan.get("compilation_run_id") != run_id
+                    or plan.get("compiler_profile_version") != "3"
+                    or plan.get("source_revision_id") != semantic["source_revision_id"]
+                    or plan.get("inventory_sha256") != semantic["inventory_sha256"]
+                    or plan.get("expected_audit_head") != semantic["input_audit_head"]
+                    or plan.get("applicability_policy_sha256") != policy_digest()
+                    or plan.get("applicability_digest") != coverage.get("applicability_digest")
+                ):
+                    raise ValueError("v3 publication plan binding is invalid")
+                plan_reports = {item["duty_type"]: item for item in plan["duty_reports"]}
+                if set(plan_reports) != set(SEMANTIC_DUTIES) or any(
+                    plan_reports[duty] != reports[duty] for duty in SEMANTIC_DUTIES
+                ):
+                    raise ValueError("v3 publication plan duty reports are not table-bound")
+            if semantic["quality_receipt_sha256"] is not None:
+                receipt_row = connection.execute(
+                    """
+                    SELECT receipts.artifact_sha256, artifacts.artifact_role
+                    FROM semantic_quality_receipts_v1 AS receipts
+                    JOIN source_compilation_artifacts_v1 AS artifacts
+                      ON artifacts.artifact_sha256 = receipts.artifact_sha256
+                    WHERE receipts.compilation_run_id = ?
+                      AND receipts.receipt_sha256 = ?
+                    """,
+                    (run_id, semantic["quality_receipt_sha256"]),
+                ).fetchone()
+                if receipt_row is None or receipt_row["artifact_role"] != "semantic_receipt":
+                    raise ValueError("v3 quality receipt binding is invalid")
+                receipt_digest = receipt_row["artifact_sha256"]
+                receipt_path = (
+                    root
+                    / ".deeplaw"
+                    / "objects"
+                    / "sha256"
+                    / receipt_digest[:2]
+                    / receipt_digest[2:]
+                )
+                if (
+                    receipt_path.is_symlink()
+                    or not receipt_path.is_file()
+                    or sha256_file(receipt_path) != receipt_digest
+                ):
+                    raise ValueError("v3 quality receipt artifact bytes are invalid")
+                receipt = strict_json_loads(receipt_path.read_bytes())
+                if (
+                    not isinstance(receipt, dict)
+                    or receipt.get("publication_plan_sha256") != semantic["publication_plan_sha256"]
+                ):
+                    raise ValueError("v3 quality receipt binding is invalid")
+                observation_count = connection.execute(
+                    """
+                    SELECT observation_count FROM semantic_compilation_runs_v2
+                    WHERE compilation_run_id = ?
+                    """,
+                    (run_id,),
+                ).fetchone()[0]
+                disposition_count = connection.execute(
+                    """
+                    SELECT COUNT(*) FROM semantic_observation_dispositions_v1
+                    WHERE compilation_run_id = ?
+                    """,
+                    (run_id,),
+                ).fetchone()[0]
+                if (
+                    receipt.get("inventory_sha256") != semantic["inventory_sha256"]
+                    or receipt.get("semantic_status") != semantic["semantic_status"]
+                    or receipt.get("observation_count") != observation_count
+                    or receipt.get("disposition_count") != disposition_count
+                    or receipt.get("duty_reports") != list(reports.values())
+                ):
+                    raise ValueError("v3 quality receipt counts/reports are not table-bound")
+                receipt_body = dict(receipt)
+                receipt_sha = receipt_body.pop("receipt_sha256", None)
+                if receipt_sha != sha256_bytes(canonical_json(receipt_body).encode("utf-8")):
+                    raise ValueError("v3 quality receipt digest is invalid")
+        except (OSError, TypeError, ValueError, KeyError):
+            failures.append({"code": "semantic_v3_integrity_invalid", "object_id": run_id})
+    # Statement-level evidence is additive.  A vault with no statement rows is
+    # valid (including all v1/v2 runs); whenever rows exist, every immutable
+    # artifact, span, reference row, and independent receipt must replay exactly.
+    statement_rows = connection.execute(
+        """
+        SELECT * FROM knowledge_statements_v1
+        ORDER BY knowledge_revision_id, ordinal, statement_id
+        """
+    ).fetchall()
+    statement_spans: dict[str, list[tuple[int, int]]] = {}
+    for statement_row in statement_rows:
+        statement_id_value = statement_row["statement_id"]
+        try:
+            artifact = connection.execute(
+                """
+                SELECT artifact_role, byte_size
+                FROM source_compilation_artifacts_v1
+                WHERE artifact_sha256 = ?
+                """,
+                (statement_row["statement_artifact_sha256"],),
+            ).fetchone()
+            if artifact is None or artifact["artifact_role"] != "statement":
+                raise ValueError("statement artifact role is invalid")
+            statement_path = (
+                root
+                / ".deeplaw"
+                / "objects"
+                / "sha256"
+                / statement_row["statement_artifact_sha256"][:2]
+                / statement_row["statement_artifact_sha256"][2:]
+            )
+            if (
+                statement_path.is_symlink()
+                or not statement_path.is_file()
+                or statement_path.stat().st_size != artifact["byte_size"]
+                or sha256_file(statement_path) != statement_row["statement_artifact_sha256"]
+            ):
+                raise ValueError("statement artifact bytes are invalid")
+            statement = strict_json_loads(statement_path.read_bytes())
+            if not isinstance(statement, dict):
+                raise ValueError("statement artifact is not an object")
+            _validate_contract("knowledge-statement.v1.schema.json", statement)
+            if (
+                canonical_json(statement) != statement_row["statement_json"]
+                or statement["knowledge_revision_id"] != statement_row["knowledge_revision_id"]
+                or statement["statement_text"] != statement_row["statement_text"]
+                or statement["statement_sha256"] != statement_row["statement_sha256"]
+                or statement["statement_type"] != statement_row["statement_type"]
+                or statement["support_status"] != statement_row["support_status"]
+                or statement["valid_from"] != statement_row["valid_from"]
+                or statement["valid_to"] != statement_row["valid_to"]
+                or statement["limitation"] != statement_row["limitation"]
+                or statement["input_set_sha256"] != statement_row["input_set_sha256"]
+            ):
+                raise ValueError("statement table/artifact binding is invalid")
+            validate_statement(statement, require_statement_id=True)
+            for reference in statement["source_refs"]:
+                source_row = connection.execute(
+                    """
+                    SELECT source_fragments.text_sha256, source_fragments.locator
+                    FROM source_fragments
+                    JOIN source_revision_bindings_v2
+                      ON source_revision_bindings_v2.legacy_source_id = source_fragments.source_id
+                    WHERE source_revision_bindings_v2.source_revision_id = ?
+                      AND source_fragments.fragment_id = ?
+                    """,
+                    (reference["source_revision_id"], reference["fragment_id"]),
+                ).fetchone()
+                if source_row is None or (
+                    source_row["text_sha256"] != reference["quote_sha256"]
+                    or source_row["locator"] != reference["locator"]
+                ):
+                    raise ValueError("statement source reference is not exact")
+            for revision_id in statement["knowledge_revision_refs"]:
+                if connection.execute(
+                    "SELECT 1 FROM knowledge_revisions_v3 WHERE revision_id = ?",
+                    (revision_id,),
+                ).fetchone() is None:
+                    raise ValueError("statement Knowledge reference is unavailable")
+            for relation_id in statement["relation_revision_refs"]:
+                if connection.execute(
+                    """
+                    SELECT 1 FROM knowledge_relation_revisions_v3
+                    WHERE relation_revision_id = ?
+                    """,
+                    (relation_id,),
+                ).fetchone() is None:
+                    raise ValueError("statement relation reference is unavailable")
+            revision = connection.execute(
+                "SELECT markdown_sha256 FROM knowledge_revisions_v3 WHERE revision_id = ?",
+                (statement_row["knowledge_revision_id"],),
+            ).fetchone()
+            if revision is None:
+                raise ValueError("statement revision is unavailable")
+            parsed_revision = parse_knowledge_markdown(
+                _read_object(root, revision["markdown_sha256"])
+            )
+            if parsed_revision["frontmatter"].get("revision") != statement_row[
+                "knowledge_revision_id"
+            ]:
+                raise ValueError("statement revision Markdown identity is invalid")
+            body = parsed_revision["body"]
+            map_row = connection.execute(
+                "SELECT * FROM statement_evidence_maps_v1 WHERE statement_id = ?",
+                (statement_id_value,),
+            ).fetchone()
+            if map_row is None or map_row["knowledge_revision_id"] != statement_row[
+                "knowledge_revision_id"
+            ]:
+                raise ValueError("statement evidence map is missing")
+            map_artifact = connection.execute(
+                """
+                SELECT artifact_role, byte_size
+                FROM source_compilation_artifacts_v1
+                WHERE artifact_sha256 = ?
+                """,
+                (map_row["map_artifact_sha256"],),
+            ).fetchone()
+            if map_artifact is None or map_artifact["artifact_role"] != "statement_map":
+                raise ValueError("statement map artifact role is invalid")
+            map_path = (
+                root
+                / ".deeplaw"
+                / "objects"
+                / "sha256"
+                / map_row["map_artifact_sha256"][:2]
+                / map_row["map_artifact_sha256"][2:]
+            )
+            if (
+                map_path.is_symlink()
+                or not map_path.is_file()
+                or map_path.stat().st_size != map_artifact["byte_size"]
+                or sha256_file(map_path) != map_row["map_artifact_sha256"]
+                or map_row["map_sha256"] != map_row["map_artifact_sha256"]
+            ):
+                raise ValueError("statement map artifact bytes are invalid")
+            map_value = strict_json_loads(map_path.read_bytes())
+            if not isinstance(map_value, dict):
+                raise ValueError("statement map is not an object")
+            _validate_contract("statement-evidence-map.v1.schema.json", map_value)
+            if (
+                canonical_json(map_value) != map_row["map_json"]
+                or map_value["statement_id"] != statement_id_value
+                or map_value["statement_sha256"] != statement_row["statement_sha256"]
+                or map_value["input_set_sha256"] != statement_row["input_set_sha256"]
+                or map_value["char_start"] != map_row["char_start"]
+                or map_value["char_end"] != map_row["char_end"]
+                or body[map_value["char_start"] : map_value["char_end"]]
+                != map_value["statement_text"]
+                or sha256_bytes(map_value["statement_text"].encode("utf-8"))
+                != map_value["statement_sha256"]
+            ):
+                raise ValueError("statement map span/hash is invalid")
+            statement_spans.setdefault(statement_row["knowledge_revision_id"], []).append(
+                (map_value["char_start"], map_value["char_end"])
+            )
+            refs = connection.execute(
+                """
+                SELECT ref_ordinal, ref_kind, ref_json
+                FROM statement_evidence_refs_v1
+                WHERE statement_id = ? ORDER BY ref_ordinal
+                """,
+                (statement_id_value,),
+            ).fetchall()
+            expected_refs = [
+                ("source", canonical_json(item)) for item in statement["source_refs"]
+            ] + [
+                ("knowledge", item) for item in statement["knowledge_revision_refs"]
+            ] + [("relation", item) for item in statement["relation_revision_refs"]]
+            if len(refs) != len(expected_refs) or any(
+                (row["ref_ordinal"], row["ref_kind"], row["ref_json"])
+                != (index, kind, value)
+                for index, ((kind, value), row) in enumerate(
+                    zip(expected_refs, refs, strict=True), start=1
+                )
+            ):
+                raise ValueError("statement evidence refs are not table-bound")
+            receipt_row = connection.execute(
+                "SELECT * FROM statement_evidence_receipts_v1 WHERE statement_id = ?",
+                (statement_id_value,),
+            ).fetchone()
+            if receipt_row is None:
+                raise ValueError("statement evidence receipt is missing")
+            receipt_artifact = connection.execute(
+                """
+                SELECT artifact_role, byte_size
+                FROM source_compilation_artifacts_v1
+                WHERE artifact_sha256 = ?
+                """,
+                (receipt_row["artifact_sha256"],),
+            ).fetchone()
+            if (
+                receipt_artifact is None
+                or receipt_artifact["artifact_role"] != "statement_evidence_receipt"
+            ):
+                raise ValueError("statement evidence receipt artifact role is invalid")
+            receipt_path = (
+                root
+                / ".deeplaw"
+                / "objects"
+                / "sha256"
+                / receipt_row["artifact_sha256"][:2]
+                / receipt_row["artifact_sha256"][2:]
+            )
+            if (
+                receipt_path.is_symlink()
+                or not receipt_path.is_file()
+                or receipt_path.stat().st_size != receipt_artifact["byte_size"]
+                or sha256_file(receipt_path) != receipt_row["artifact_sha256"]
+            ):
+                raise ValueError("statement evidence receipt artifact bytes are invalid")
+            receipt = strict_json_loads(receipt_path.read_bytes())
+            if not isinstance(receipt, dict):
+                raise ValueError("statement evidence receipt is not an object")
+            _validate_contract("statement-evidence-receipt.v1.schema.json", receipt)
+            receipt_body = dict(receipt)
+            receipt_digest = receipt_body.pop("receipt_sha256", None)
+            if (
+                receipt_digest != receipt_row["receipt_sha256"]
+                or receipt_digest != sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
+                or receipt["statement_id"] != statement_id_value
+                or receipt["knowledge_revision_id"] != statement_row["knowledge_revision_id"]
+                or receipt["map_sha256"] != map_row["map_sha256"]
+                or receipt["statement_sha256"] != statement_row["statement_sha256"]
+                or receipt["input_set_sha256"] != statement_row["input_set_sha256"]
+                or receipt["statement_type"] != statement["statement_type"]
+                or receipt["support_status"] != statement["support_status"]
+                or receipt["valid_from"] != statement["valid_from"]
+                or receipt["valid_to"] != statement["valid_to"]
+                or receipt["limitation"] != statement["limitation"]
+                or receipt["compilation_run_id"] != receipt_row["compilation_run_id"]
+                or receipt["transaction_audit_head"] != receipt_row["transaction_audit_head"]
+                or receipt["commit_audit_head"] != receipt_row["commit_audit_head"]
+            ):
+                raise ValueError("statement evidence receipt binding is invalid")
+        except (OSError, TypeError, ValueError, KeyError, RuntimeError):
+            failures.append({"code": "statement_evidence_invalid", "object_id": statement_id_value})
+    for revision_id, spans in statement_spans.items():
+        if len(spans) > 4096 or any(start < 0 or end <= start for start, end in spans):
+            failures.append({"code": "statement_evidence_span_invalid", "object_id": revision_id})
+        ordered = sorted(spans)
+        if any(
+            start < prior_end
+            for (start, _), (_, prior_end) in zip(ordered[1:], ordered, strict=False)
+        ):
+            failures.append({"code": "statement_evidence_span_invalid", "object_id": revision_id})
+    for table, code, join_key in (
+        ("statement_evidence_maps_v1", "statement_evidence_map_orphan", "statement_id"),
+        ("statement_evidence_refs_v1", "statement_evidence_ref_orphan", "statement_id"),
+        ("statement_evidence_receipts_v1", "statement_evidence_receipt_orphan", "statement_id"),
+    ):
+        for orphan in connection.execute(
+            f"""
+            SELECT child.{join_key} AS object_id FROM {table} AS child
+            LEFT JOIN knowledge_statements_v1 AS parent
+              ON parent.statement_id = child.{join_key}
+            WHERE parent.statement_id IS NULL
+            """
+        ):
+            failures.append({"code": code, "object_id": orphan["object_id"]})
     for row in connection.execute(
         """
         SELECT prepared_json FROM source_compilation_staged_objects_v1
@@ -1062,18 +1653,12 @@ def verify_compilation_schema(
     ):
         try:
             canonical_inputs = {
-                "source_revision_ids": strict_json_loads(
-                    input_set["source_revision_ids_json"]
-                ),
+                "source_revision_ids": strict_json_loads(input_set["source_revision_ids_json"]),
                 "knowledge_revision_ids": strict_json_loads(
                     input_set["knowledge_revision_ids_json"]
                 ),
-                "relation_revision_ids": strict_json_loads(
-                    input_set["relation_revision_ids_json"]
-                ),
-                "compilation_run_ids": strict_json_loads(
-                    input_set["compilation_run_ids_json"]
-                ),
+                "relation_revision_ids": strict_json_loads(input_set["relation_revision_ids_json"]),
+                "compilation_run_ids": strict_json_loads(input_set["compilation_run_ids_json"]),
             }
             if any(
                 not isinstance(values, list)
@@ -1083,9 +1668,7 @@ def verify_compilation_schema(
             ):
                 raise ValueError("Synthesis input list is not canonical")
             if (
-                hashlib.sha256(
-                    canonical_json(canonical_inputs).encode("utf-8")
-                ).hexdigest()
+                hashlib.sha256(canonical_json(canonical_inputs).encode("utf-8")).hexdigest()
                 != input_set["input_set_sha256"]
             ):
                 raise ValueError("Synthesis input-set digest does not match")

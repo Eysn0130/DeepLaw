@@ -28,7 +28,7 @@
     "deeplaw_knowledge_sink_knowledge_sink": "allow",
     "skill": {
       "*": "deny",
-      "compile-living-wiki": "allow"
+      "deeplaw-compile-source": "allow"
     }
   }
 }

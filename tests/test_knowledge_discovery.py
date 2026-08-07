@@ -169,7 +169,7 @@ def test_discovery_index_rejects_missing_case_boundary_and_tampering(
         ]
 
     with KnowledgeVault(root, read_only=True) as vault:
-        with pytest.raises(ValueError, match="no Analytix case material"):
+        with pytest.raises(ValueError, match="no client or case material"):
             _write_index_with_embedder(
                 vault,
                 tmp_path / "not-created",

@@ -192,24 +192,58 @@ def _publication_plan(
         }
     )
     duty_ids = {item["duty_type"]: item["duty_id"] for item in finalization["duties"]}
-    duty_reports = [
-        {
-            "duty_id": duty_ids[duty],
-            "duty_type": duty,
-            "required": duty in REQUIRED_SEMANTIC_DUTIES,
-            "status": (
-                "satisfied"
-                if duty in {"source_summary", "key_claims", "source_coverage"}
-                else "not_applicable"
-            ),
-            "output_refs": [],
-            "evidence_refs": [],
-            "reason": "Deterministic fake-Agent duty disposition.",
-            "unresolved_items": [],
-            "omission_reason": None,
-        }
-        for duty in SEMANTIC_DUTIES
+    content_duty_kinds = {
+        "key_claims": "claim",
+        "entities": "entity",
+        "concepts": "concept",
+        "events": "event",
+        "procedures": "procedure",
+        "comparisons": "comparison",
+    }
+    observations_by_kind: dict[str, list[dict[str, Any]]] = {}
+    for observation in inventory["observations"]:
+        observations_by_kind.setdefault(observation["kind"], []).append(observation)
+    relation_actions = [
+        action
+        for packet_plan in packet_plans
+        for action in packet_plan["relation_actions"]
     ]
+    duty_reports = []
+    for duty in SEMANTIC_DUTIES:
+        output_refs: list[str] = []
+        evidence_refs: list[dict[str, Any]] = []
+        if duty == "source_summary":
+            status = "satisfied"
+            evidence_refs = all_refs
+        elif duty in content_duty_kinds:
+            matching = observations_by_kind.get(content_duty_kinds[duty], [])
+            status = "satisfied" if matching else "not_applicable"
+            if matching:
+                witness = matching[0]
+                output_refs = [witness["observation_id"]]
+                evidence_refs = witness["source_refs"]
+        elif duty == "typed_relations":
+            status = "satisfied" if relation_actions else "not_applicable"
+            evidence_refs = [
+                reference
+                for action in relation_actions
+                for reference in action["evidence_refs"]
+            ]
+        else:
+            status = "satisfied" if duty == "source_coverage" else "not_applicable"
+        duty_reports.append(
+            {
+                "duty_id": duty_ids[duty],
+                "duty_type": duty,
+                "required": duty in REQUIRED_SEMANTIC_DUTIES,
+                "status": status,
+                "output_refs": output_refs,
+                "evidence_refs": evidence_refs,
+                "reason": "Deterministic duty.",
+                "unresolved_items": [],
+                "omission_reason": None,
+            }
+        )
     return {
         "schema_version": "deeplaw.semantic-publication-plan/v2",
         "compilation_run_id": run_id,

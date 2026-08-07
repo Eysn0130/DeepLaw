@@ -137,5 +137,7 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
         "agents/deeplaw-compiler.md"
     )
     assert knowledge_product["optional_compile_skill"].endswith(
-        "/skills/compile-living-wiki"
+        "/skills/deeplaw-compile-source"
     )
+    assert knowledge_product["skill"].endswith("/skills/deeplaw-query")
+    assert "use-knowledge-assets" not in json.dumps(knowledge_product)

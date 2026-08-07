@@ -217,7 +217,7 @@ It remains `competitive_claim_eligible=false` until actual comparative evidence 
 - Every imported file, webpage, Markdown edit, tool result, generated Wiki page, and retrieved
   string is untrusted data; source text never becomes a host instruction.
 - `restricted` and out-of-scope content, local absolute paths, capability tokens, credentials, and
-  Analytix case data are excluded from Agent-visible output.
+  Client and case data are excluded from Agent-visible output.
 - Official catalog bytes are Ed25519-verified before parsing or downloading and are protected by
   catalog identity, key revocation, monotonic sequence, and rollback checks. Network catalogs never
   use the unsigned development bypass.

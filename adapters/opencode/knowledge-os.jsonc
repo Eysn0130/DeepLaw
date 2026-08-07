@@ -16,7 +16,9 @@
   "permission": {
     "deeplaw_knowledge_*": "deny",
     "skill": {
-      "use-knowledge-assets": "deny"
+      "deeplaw-query": "deny",
+      "deeplaw-navigate-wiki": "deny",
+      "deeplaw-verify-evidence": "deny"
     },
     "task": {
       "deeplaw-knowledge": "deny"

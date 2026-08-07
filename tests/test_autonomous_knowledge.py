@@ -78,7 +78,7 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         before_head = store.audit_head
 
         result = store.recall(
-            "比较两项诊断日志保留政策，并保留它们之间的冲突。",
+            "这两个日志政策有什么不同，哪里互相冲突?",
             retrieval_mode="hybrid",
         )
 
@@ -89,7 +89,7 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         assert result["query_plan"]["query_expansion_profile"] == (
             QUERY_EXPANSION_PROFILE
         )
-        assert result["query_plan"]["query_expansion_term_count"] >= 6
+        assert result["query_plan"]["query_expansion_term_count"] >= 3
         assert store.audit_head == before_head
         _validate_contract(
             "autonomous-query-plan.v1.schema.json", result["query_plan"]

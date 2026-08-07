@@ -107,7 +107,7 @@ receipt 的往返验证均已在该 release 上通过。
 
 ## 审计结论（2026-07-14 初始状态）
 
-逻辑输入包 `Analytix-经侦法源核心包-2026-07-14` 可以作为 DeepLaw 的首个
+审计时提供的首批法律资料包可以作为 DeepLaw 的首个
 `candidate`：28 份法源均有 manifest 记录，路径、字节数和 SHA-256 全部匹配，文件容器
 可解析且未发现重复正文。
 
@@ -127,7 +127,7 @@ receipt 的往返验证均已在该 release 上通过。
 只读检查了两个显式输入：
 
 - 2026-07-14 经侦法源核心包；
-- Obsidian `Analytix/知识库` 中的维护笔记。
+- 单独维护的外部 Obsidian 知识库笔记。
 
 检查内容包括：文件数、大小、扩展名、目录结构、manifest schema、SHA-256、DOCX 容器
 结构、PDF 页数/文本层/字体/图像、PDF JavaScript 和附件、基础 PII 模式及本地路径模式。

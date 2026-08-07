@@ -7,6 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+from ..evidence.statements import (
+    MAX_STATEMENTS_PER_REVISION,
+    validate_statement,
+    validate_statement_plans,
+)
 from ..knowledge_autonomy import (
     AGENT_KNOWLEDGE_MUTABILITY,
     AUTONOMOUS_ACTIVATION_POLICY,
@@ -25,6 +30,7 @@ from ..knowledge_autonomy import (
     _validate_contract,
     _workspace_path,
     _write_object,
+    parse_knowledge_markdown,
     render_knowledge_markdown,
 )
 from ..knowledge_intelligence import normalize_identity_text
@@ -132,6 +138,26 @@ def _decoded_artifact(
     if not isinstance(value, dict):
         raise RuntimeError("source compilation artifact is not an object")
     return value
+
+
+def _statement_plan_index(
+    publication_plan: dict[str, Any],
+) -> dict[tuple[str, int], list[dict[str, Any]]]:
+    plans = publication_plan.get("statement_plans")
+    if not isinstance(plans, list):
+        raise ValueError("v3 publication plan has no statement plans")
+    indexed: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for item in plans:
+        if not isinstance(item, dict):
+            raise ValueError("statement plan is invalid")
+        key = (item.get("packet_id"), item.get("object_action_ordinal"))
+        if not isinstance(key[0], str) or not isinstance(key[1], int) or key in indexed:
+            raise ValueError("statement plan target is invalid or duplicated")
+        statements = item.get("statements")
+        if not isinstance(statements, list) or len(statements) > MAX_STATEMENTS_PER_REVISION:
+            raise ValueError("statement plan statements exceed their bound")
+        indexed[key] = statements
+    return indexed
 
 
 class CompilationCoordinator:
@@ -653,7 +679,7 @@ class CompilationCoordinator:
                         ),
                     ),
                 )
-                if compiler_profile_version == "2":
+                if compiler_profile_version in {"2", "3"}:
                     store.connection.execute(
                         """
                         INSERT INTO semantic_compilation_runs_v2(
@@ -1027,11 +1053,11 @@ class CompilationCoordinator:
             run_fragments: dict[str, dict[str, Any]] | None = None
             if _allow_run_wide_source_refs:
                 if not (
-                    run["compiler_profile_version"] == "2"
+                    run["compiler_profile_version"] in {"2", "3"}
                     or run["compiler_profile"] == "synthesis-refresh-agent"
                 ):
                     raise PermissionError(
-                        "run-wide evidence binding requires compiler profile v2"
+                        "run-wide evidence binding requires semantic compiler profile v2 or v3"
                     )
                 run_fragments = {}
                 rows = store.connection.execute(
@@ -2154,7 +2180,7 @@ class CompilationCoordinator:
             referenced_source_revision_id = reference.get("source_revision_id")
             if referenced_source_revision_id != run["source_revision_id"] and not (
                 kind == "synthesis"
-                and run["compiler_profile_version"] == "2"
+                and run["compiler_profile_version"] in {"2", "3"}
                 and referenced_source_revision_id in synthesis_source_revision_ids
             ):
                 raise ValueError(
@@ -2583,10 +2609,10 @@ class CompilationCoordinator:
         for reference in refs:
             if (
                 reference.get("source_revision_id") != run["source_revision_id"]
-                and run["compiler_profile_version"] != "2"
+                and run["compiler_profile_version"] not in {"2", "3"}
             ):
                 raise ValueError(
-                    "cross-source relation evidence requires compiler profile v2"
+                    "cross-source relation evidence requires compiler profile v2 or v3"
                 )
             binding = store._source_reference_binding(reference)
             if binding is None or binding["active"] is not True:
@@ -2759,6 +2785,422 @@ class CompilationCoordinator:
             raise RuntimeError("compiled relation endpoint identity is unresolved or ambiguous")
         return cast(str, rows[0]["knowledge_id"])
 
+    @staticmethod
+    def _validate_statement_references(
+        store: AutonomousKnowledgeStore,
+        *,
+        run: sqlite3.Row,
+        grant: sqlite3.Row,
+        prepared: dict[str, Any],
+        statement: dict[str, Any],
+    ) -> None:
+        """Re-check every evidence witness immediately before persistence."""
+
+        allowed_source_revision_ids = {run["source_revision_id"]}
+        synthesis_inputs = prepared.get("synthesis_inputs")
+        if isinstance(synthesis_inputs, dict):
+            allowed_source_revision_ids.update(
+                item
+                for item in synthesis_inputs.get("source_revision_ids", [])
+                if isinstance(item, str)
+            )
+        for reference in statement["source_refs"]:
+            if reference["source_revision_id"] not in allowed_source_revision_ids:
+                raise ValueError("statement source evidence is outside the current run input set")
+            if not store._source_reference_is_bound(
+                reference,
+                scope=grant["allowed_scope"],
+                max_sensitivity=grant["max_sensitivity"],
+                require_active=True,
+            ):
+                raise PermissionError("statement source evidence is not admitted")
+        for revision_id in statement["knowledge_revision_refs"]:
+            row = store.connection.execute(
+                """
+                SELECT knowledge_objects_v3.current_revision_id,
+                       knowledge_revisions_v3.*
+                FROM knowledge_revisions_v3
+                JOIN knowledge_objects_v3 USING(knowledge_id)
+                WHERE knowledge_revisions_v3.revision_id = ?
+                """,
+                (revision_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("statement Knowledge evidence revision is unavailable")
+            revision = store._revision_row(row, include_body=False)
+            if (
+                revision["lifecycle"] in {"quarantined", "forgotten", "revoked"}
+                or revision["scope"] != grant["allowed_scope"]
+                or SENSITIVITY_ORDER.index(revision["sensitivity"])
+                > SENSITIVITY_ORDER.index(grant["max_sensitivity"])
+                or not store.revision_provenance_admitted(revision)
+            ):
+                raise PermissionError("statement Knowledge evidence revision is not admitted")
+        for relation_revision_id in statement["relation_revision_refs"]:
+            row = store.connection.execute(
+                """
+                SELECT knowledge_relations_v3.current_revision_id,
+                       knowledge_relation_revisions_v3.*
+                FROM knowledge_relation_revisions_v3
+                JOIN knowledge_relations_v3 USING(relation_key)
+                WHERE relation_revision_id = ?
+                """,
+                (relation_revision_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("statement relation evidence revision is unavailable")
+            relation = {
+                **dict(row),
+                "evidence_refs": strict_json_loads(row["evidence_refs_json"]),
+                "source_free": bool(row["source_free"]),
+            }
+            if (
+                relation["lifecycle"] in {"quarantined", "forgotten", "revoked"}
+                or relation["scope"] != grant["allowed_scope"]
+                or SENSITIVITY_ORDER.index(relation["sensitivity"])
+                > SENSITIVITY_ORDER.index(grant["max_sensitivity"])
+                or not store.relation_provenance_admitted(relation)
+            ):
+                raise PermissionError("statement relation evidence revision is not admitted")
+
+    @classmethod
+    def _persist_statement_evidence(
+        cls,
+        store: AutonomousKnowledgeStore,
+        *,
+        run: sqlite3.Row,
+        grant: sqlite3.Row,
+        publication_plan: dict[str, Any],
+        prepared_objects: list[dict[str, Any]],
+        committed_at: str,
+        commit_audit_head: str,
+    ) -> int:
+        """Persist all v3 statement rows/maps/receipts in the open commit.
+
+        The caller must have started ``BEGIN IMMEDIATE`` and must not commit
+        until this method returns.  Any malformed statement or evidence witness
+        raises and therefore rolls back the source revisions as well.
+        """
+
+        by_target = _statement_plan_index(publication_plan)
+        persisted = 0
+        for prepared in prepared_objects:
+            packet_row = store.connection.execute(
+                "SELECT ordinal FROM source_compilation_packets_v1 WHERE packet_id = ?",
+                (prepared["packet_id"],),
+            ).fetchone()
+            if packet_row is None:
+                raise RuntimeError("statement plan packet binding is missing")
+            local_action_ordinal = prepared["action_ordinal"] - (
+                packet_row["ordinal"] - 1
+            ) * MAX_ACTIONS_PER_PACKET
+            target = (prepared["packet_id"], local_action_ordinal)
+            planned = by_target.get(target, [])
+            if not planned:
+                continue
+            revision_id = prepared.get("revision_id")
+            if not isinstance(revision_id, str):
+                raise ValueError("statement plan targets an action without a revision")
+            markdown = _read_object(store.root, prepared["markdown_sha256"])
+            parsed = parse_knowledge_markdown(markdown)
+            body = parsed["body"]
+            if len(planned) > MAX_STATEMENTS_PER_REVISION:
+                raise ValueError("statement count exceeds its per-revision bound")
+            statements: list[dict[str, Any]] = []
+            for item in planned:
+                statement = validate_statement(
+                    item,
+                    body=body,
+                    knowledge_revision_id=revision_id,
+                )
+                cls._validate_statement_references(
+                    store,
+                    run=run,
+                    grant=grant,
+                    prepared=prepared,
+                    statement=statement,
+                )
+                statements.append(statement)
+            if [item["ordinal"] for item in statements] != list(
+                range(1, len(statements) + 1)
+            ):
+                raise ValueError("statement ordinals must be contiguous and one-based")
+            spans = sorted(
+                (item["char_start"], item["char_end"], item["ordinal"])
+                for item in planned
+            )
+            prior_end = -1
+            for start, end, _ordinal in spans:
+                if not isinstance(start, int) or not isinstance(end, int) or end <= start:
+                    raise ValueError("statement body span is invalid")
+                if start < prior_end:
+                    raise ValueError("statement body spans overlap")
+                prior_end = end
+            for statement in statements:
+                statement_id_value = statement["statement_id"]
+                if not isinstance(statement_id_value, str):
+                    raise RuntimeError("statement identity was not prepared")
+                statement_payload = dict(statement)
+                statement_payload.pop("char_start", None)
+                statement_payload.pop("char_end", None)
+                _validate_contract("knowledge-statement.v1.schema.json", statement_payload)
+                statement_artifact_sha256, _ = _artifact(
+                    store,
+                    value=statement_payload,
+                    role="statement",
+                    created_at=committed_at,
+                )
+                statement_payload_json = canonical_json(statement_payload)
+                store.connection.execute(
+                    """
+                    INSERT INTO knowledge_statements_v1(
+                        statement_id, knowledge_revision_id, ordinal,
+                        statement_text, statement_sha256, statement_type,
+                        support_status, valid_from, valid_to, limitation,
+                        input_set_sha256,
+                        statement_artifact_sha256, statement_json, recorded_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        statement_id_value,
+                        revision_id,
+                        statement["ordinal"],
+                        statement["statement_text"],
+                        statement["statement_sha256"],
+                        statement["statement_type"],
+                        statement["support_status"],
+                        statement["valid_from"],
+                        statement["valid_to"],
+                        statement["limitation"],
+                        statement["input_set_sha256"],
+                        statement_artifact_sha256,
+                        statement_payload_json,
+                        committed_at,
+                    ),
+                )
+                span_start = next(
+                    item["char_start"]
+                    for item in planned
+                    if item["ordinal"] == statement["ordinal"]
+                )
+                span_end = next(
+                    item["char_end"]
+                    for item in planned
+                    if item["ordinal"] == statement["ordinal"]
+                )
+                map_value = {
+                    "schema_version": "deeplaw.statement-evidence-map/v1",
+                    "statement_id": statement_id_value,
+                    "knowledge_revision_id": revision_id,
+                    "ordinal": statement["ordinal"],
+                    "char_start": span_start,
+                    "char_end": span_end,
+                    "statement_text": statement["statement_text"],
+                    "statement_sha256": statement["statement_sha256"],
+                    "statement_type": statement["statement_type"],
+                    "support_status": statement["support_status"],
+                    "valid_from": statement["valid_from"],
+                    "valid_to": statement["valid_to"],
+                    "limitation": statement["limitation"],
+                    "input_set_sha256": statement["input_set_sha256"],
+                    "source_refs": statement["source_refs"],
+                    "knowledge_revision_refs": statement["knowledge_revision_refs"],
+                    "relation_revision_refs": statement["relation_revision_refs"],
+                    "gaps": statement["gaps"],
+                }
+                _validate_contract("statement-evidence-map.v1.schema.json", map_value)
+                map_sha256, _ = _artifact(
+                    store,
+                    value=map_value,
+                    role="statement_map",
+                    created_at=committed_at,
+                )
+                store.connection.execute(
+                    """
+                    INSERT INTO statement_evidence_maps_v1(
+                        statement_id, knowledge_revision_id, ordinal,
+                        char_start, char_end, statement_sha256, input_set_sha256,
+                        map_sha256, map_artifact_sha256, map_json, recorded_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        statement_id_value,
+                        revision_id,
+                        statement["ordinal"],
+                        span_start,
+                        span_end,
+                        statement["statement_sha256"],
+                        statement["input_set_sha256"],
+                        map_sha256,
+                        map_sha256,
+                        canonical_json(map_value),
+                        committed_at,
+                    ),
+                )
+                ref_ordinal = 1
+                for ref_kind, refs in (
+                    ("source", statement["source_refs"]),
+                    ("knowledge", statement["knowledge_revision_refs"]),
+                    ("relation", statement["relation_revision_refs"]),
+                ):
+                    for reference in refs:
+                        ref_json = canonical_json(reference)
+                        store.connection.execute(
+                            """
+                            INSERT INTO statement_evidence_refs_v1(
+                                statement_id, ref_ordinal, ref_kind, ref_json
+                            ) VALUES (?, ?, ?, ?)
+                            """,
+                            (statement_id_value, ref_ordinal, ref_kind, ref_json),
+                        )
+                        ref_ordinal += 1
+                receipt_body = {
+                    "schema_version": "deeplaw.statement-evidence-receipt/v1",
+                    "statement_id": statement_id_value,
+                    "knowledge_revision_id": revision_id,
+                    "map_sha256": map_sha256,
+                    "statement_sha256": statement["statement_sha256"],
+                    "statement_type": statement["statement_type"],
+                    "support_status": statement["support_status"],
+                    "valid_from": statement["valid_from"],
+                    "valid_to": statement["valid_to"],
+                    "limitation": statement["limitation"],
+                    "input_set_sha256": statement["input_set_sha256"],
+                    "source_refs": statement["source_refs"],
+                    "knowledge_revision_refs": statement["knowledge_revision_refs"],
+                    "relation_revision_refs": statement["relation_revision_refs"],
+                    "gaps": statement["gaps"],
+                    "compilation_run_id": run["compilation_run_id"],
+                    "transaction_audit_head": run["input_audit_head"],
+                    "commit_audit_head": commit_audit_head,
+                    "recorded_at": committed_at,
+                }
+                receipt_digest = sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
+                receipt_value = {**receipt_body, "receipt_sha256": receipt_digest}
+                _validate_contract("statement-evidence-receipt.v1.schema.json", receipt_value)
+                receipt_artifact_sha256, _ = _artifact(
+                    store,
+                    value=receipt_value,
+                    role="statement_evidence_receipt",
+                    created_at=committed_at,
+                )
+                store.connection.execute(
+                    """
+                    INSERT INTO statement_evidence_receipts_v1(
+                        receipt_sha256, artifact_sha256, statement_id,
+                        knowledge_revision_id, map_sha256, statement_sha256,
+                        statement_type, support_status, valid_from, valid_to, limitation,
+                        input_set_sha256, compilation_run_id,
+                        transaction_audit_head, commit_audit_head, recorded_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        receipt_digest,
+                        receipt_artifact_sha256,
+                        statement_id_value,
+                        revision_id,
+                        map_sha256,
+                        statement["statement_sha256"],
+                        statement["statement_type"],
+                        statement["support_status"],
+                        statement["valid_from"],
+                        statement["valid_to"],
+                        statement["limitation"],
+                        statement["input_set_sha256"],
+                        run["compilation_run_id"],
+                        run["input_audit_head"],
+                        commit_audit_head,
+                        committed_at,
+                    ),
+                )
+                persisted += 1
+        return persisted
+
+    @staticmethod
+    def _validate_v3_publication_for_commit(
+        store: AutonomousKnowledgeStore,
+        *,
+        run: sqlite3.Row,
+        publication_plan: dict[str, Any],
+    ) -> None:
+        """Re-bind the frozen v3 publication artifact at the commit boundary."""
+
+        _validate_contract("semantic-publication-plan.v3.schema.json", publication_plan)
+        if (
+            publication_plan["compilation_run_id"] != run["compilation_run_id"]
+            or publication_plan["source_revision_id"] != run["source_revision_id"]
+            or publication_plan["compiler_profile_version"] != "3"
+            or publication_plan["expected_audit_head"] != run["input_audit_head"]
+        ):
+            raise RuntimeError("v3 publication artifact binding changed before commit")
+        semantic = store.connection.execute(
+            """
+            SELECT inventory_sha256, publication_plan_sha256
+            FROM semantic_compilation_runs_v2
+            WHERE compilation_run_id = ?
+            """,
+            (run["compilation_run_id"],),
+        ).fetchone()
+        if semantic is None or semantic["publication_plan_sha256"] is None:
+            raise RuntimeError("v3 semantic publication binding is missing")
+        inventory_row = store.connection.execute(
+            """
+            SELECT artifact_sha256
+            FROM semantic_inventories_v1
+            WHERE compilation_run_id = ? AND inventory_sha256 = ?
+            """,
+            (run["compilation_run_id"], semantic["inventory_sha256"]),
+        ).fetchone()
+        if inventory_row is None:
+            raise RuntimeError("v3 semantic inventory binding is missing")
+        inventory = _decoded_artifact(
+            store,
+            inventory_row["artifact_sha256"],
+            role="semantic_inventory",
+        )
+        if inventory.get("inventory_sha256") != semantic["inventory_sha256"]:
+            raise RuntimeError("v3 semantic inventory digest is invalid")
+        coverage = inventory.get("coverage")
+        if (
+            publication_plan["inventory_sha256"] != semantic["inventory_sha256"]
+            or not isinstance(coverage, dict)
+            or publication_plan["applicability_policy_sha256"]
+            != coverage.get("applicability_policy_sha256")
+            or publication_plan["applicability_digest"] != coverage.get("applicability_digest")
+        ):
+            raise RuntimeError("v3 publication applicability binding changed before commit")
+        action_bodies: dict[tuple[str, int], str] = {}
+        action_kinds: dict[tuple[str, int], str] = {}
+        for row in store.connection.execute(
+            """
+            SELECT packet_id, action_ordinal, action_json
+            FROM source_compilation_staged_objects_v1
+            WHERE compilation_run_id = ? AND validation_state = 'valid'
+            ORDER BY action_ordinal
+            """,
+            (run["compilation_run_id"],),
+        ):
+            packet = store.connection.execute(
+                "SELECT ordinal FROM source_compilation_packets_v1 WHERE packet_id = ?",
+                (row["packet_id"],),
+            ).fetchone()
+            if packet is None:
+                raise RuntimeError("v3 statement packet binding is missing")
+            action = strict_json_loads(row["action_json"])
+            if not isinstance(action, dict):
+                raise RuntimeError("v3 staged object action is invalid")
+            local_ordinal = row["action_ordinal"] - (
+                packet["ordinal"] - 1
+            ) * MAX_ACTIONS_PER_PACKET
+            target = (row["packet_id"], local_ordinal)
+            action_bodies[target] = action["body"]
+            action_kinds[target] = action["kind"]
+        validate_statement_plans(
+            publication_plan["statement_plans"],
+            action_bodies=action_bodies,
+            action_kinds=action_kinds,
+        )
+
     def commit(
         self,
         *,
@@ -2892,6 +3334,28 @@ class CompilationCoordinator:
                     )
                     if source_binding is None or source_binding["active"] is not True:
                         raise PermissionError("Source Revision became inadmissible before commit")
+                    publication_plan: dict[str, Any] | None = None
+                    if locked["compiler_profile_version"] == "3":
+                        semantic_row = store.connection.execute(
+                            """
+                            SELECT publication_plan_sha256
+                            FROM semantic_compilation_runs_v2
+                            WHERE compilation_run_id = ?
+                            """,
+                            (compilation_run_id,),
+                        ).fetchone()
+                        if semantic_row is None or semantic_row["publication_plan_sha256"] is None:
+                            raise RuntimeError("v3 statement publication plan binding is missing")
+                        publication_plan = _decoded_artifact(
+                            store,
+                            semantic_row["publication_plan_sha256"],
+                            role="publication_plan",
+                        )
+                        self._validate_v3_publication_for_commit(
+                            store,
+                            run=locked,
+                            publication_plan=publication_plan,
+                        )
                     locked_current_count = store.connection.execute(
                         "SELECT COUNT(*) FROM knowledge_objects_v3"
                     ).fetchone()[0]
@@ -2989,6 +3453,16 @@ class CompilationCoordinator:
                         recorded_at=committed_at,
                     )
                     commit_audit_head = store.audit_head
+                    if publication_plan is not None:
+                        self._persist_statement_evidence(
+                            store,
+                            run=locked,
+                            grant=locked_grant,
+                            publication_plan=publication_plan,
+                            prepared_objects=publish_objects,
+                            committed_at=committed_at,
+                            commit_audit_head=commit_audit_head,
+                        )
                     receipt = {
                         "schema_version": COMPILATION_RECEIPT_SCHEMA,
                         "compilation_run_id": compilation_run_id,
@@ -4126,14 +4600,27 @@ class CompilationCoordinator:
         living_files = living_wiki.get("files")
         if not isinstance(living_files, list):
             raise RuntimeError("Living Wiki projection file inventory is invalid")
+        components = projection.get("components")
+        if not isinstance(components, list):
+            raise RuntimeError("derived projection component inventory is invalid")
+        profile_name = living_wiki.get("projection_profile_name")
+        profile_version = living_wiki.get("projection_profile_version")
+        if profile_name not in {"minimal", "standard", "full"} or profile_version != "1":
+            raise RuntimeError("Living Wiki projection profile is invalid")
+        inventory = {
+            "direct_files": files,
+            "components": components,
+        }
         receipt = {
-            "schema_version": "deeplaw.source-compilation-projection/v1",
+            "schema_version": "deeplaw.source-compilation-projection/v2",
             "derived_manifest_sha256": projection["manifest_sha256"],
-            "derived_file_count": len(files),
+            "derived_file_count": len(files) + len(living_files),
             "derived_file_inventory_sha256": sha256_bytes(
-                canonical_json(files).encode("utf-8")
+                canonical_json(inventory).encode("utf-8")
             ),
             "input_audit_head": projection["input_audit_head"],
+            "projection_profile_name": profile_name,
+            "projection_profile_version": profile_version,
             "living_wiki": {
                 "schema_version": living_wiki["schema_version"],
                 "manifest_sha256": living_wiki["manifest_sha256"],
@@ -4148,7 +4635,9 @@ class CompilationCoordinator:
                 "canvas_count": living_wiki["canvas_count"],
                 "community_count": living_wiki["community_count"],
                 "input_audit_head": living_wiki["input_audit_head"],
+                "projection_profile_name": profile_name,
+                "projection_profile_version": profile_version,
             },
         }
-        _validate_contract("source-compilation-projection.v1.schema.json", receipt)
+        _validate_contract("source-compilation-projection.v2.schema.json", receipt)
         return receipt

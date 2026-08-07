@@ -24,10 +24,10 @@ atomic commit, projection, and audit.
 Read [host-configurations.md](references/host-configurations.md) only when configuring or checking
 Codex, Claude Code, or OpenCode.
 
-## Run a semantic v2 compilation
+## Run a semantic v3 compilation
 
 1. Call `knowledge_support` with `operation=semantic`, `semantic_action=profile`,
-   `compiler_profile=living-wiki-agent`, and `compiler_profile_version=2`. Use the returned
+   `compiler_profile=living-wiki-agent`, and `compiler_profile_version=3`. Use the returned
    repository-owned prompt template ID and exact configuration hashes; never invent provenance
    digests. Version 1 remains available only for explicit compatibility runs.
 2. Call `knowledge_support` with `operation=compilation`,
@@ -41,7 +41,7 @@ Codex, Claude Code, or OpenCode.
    hashes.
 4. Repeat the observation phase until `operation=semantic`,
    `semantic_action=next_packet` returns the end receipt:
-   - create one closed `deeplaw.source-compilation-observation-plan/v2` covering only that packet;
+   - create one closed `deeplaw.source-compilation-observation-plan/v3` covering only that packet;
    - cite exact `source_revision_id`, `fragment_id`, `locator`, and `quote_sha256`;
    - record semantic candidates, aliases, applicability, omissions, ambiguity, contradictions,
      and gaps without publishing them into Recall;
@@ -51,7 +51,7 @@ Codex, Claude Code, or OpenCode.
    inventory with `knowledge_support` `operation=semantic`, `semantic_action=inventory`, and obtain
    `semantic_action=finalization`. Do not continue while packets are unobserved or the inventory is
    truncated.
-6. Create one closed `deeplaw.semantic-publication-plan/v2` for the whole run. It must:
+6. Create one closed `deeplaw.semantic-publication-plan/v3` for the whole run. It must:
    - assign exactly one final disposition to every observation;
    - resolve identities across packets without merging ambiguous same-name entities;
    - contain all 15 policy-owned Duty Reports;
@@ -75,7 +75,7 @@ Codex, Claude Code, or OpenCode.
 10. Call `knowledge_support` with:
    - `operation=semantic`, `semantic_action=status` and `semantic_action=explain`;
    - `operation=verify`;
-   - `operation=query`, `query_plan_version=5`, `purpose=answer`, and a concrete bounded `query`.
+   - `operation=query`, `query_plan_version=6`, `purpose=answer`, and a concrete bounded `query`.
    Report success only when canonical verification passes, the run reaches `succeeded`, coverage
    is explicit, every required Duty is satisfied or correctly not applicable, the Source Summary
    exists, and `semantic_status=complete`. A transaction may succeed while semantic status remains

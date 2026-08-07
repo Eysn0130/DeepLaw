@@ -73,7 +73,9 @@ KNOWLEDGE_RELATION_SCHEMA = "deeplaw.knowledge-relation/v3"
 KNOWLEDGE_CAPSULE_SCHEMA = "deeplaw.knowledge-capsule/v2"
 KNOWLEDGE_SINK_SCHEMA = "deeplaw.knowledge-sink/v1"
 AUTONOMOUS_EVENT_SCHEMA = "deeplaw.autonomous-event/v1"
-DERIVED_MANIFEST_SCHEMA = "deeplaw.derived-manifest/v1"
+DERIVED_MANIFEST_SCHEMA_V1 = "deeplaw.derived-manifest/v1"
+DERIVED_MANIFEST_SCHEMA = "deeplaw.derived-manifest/v2"
+DERIVED_MANIFEST_SCHEMA_V2 = DERIVED_MANIFEST_SCHEMA
 AUTONOMOUS_SNAPSHOT_SCHEMA = "deeplaw.autonomous-snapshot/v1"
 AUTONOMOUS_ACTIVATION_POLICY = "deeplaw.autonomous-activation/v1"
 AGENT_KNOWLEDGE_MUTABILITY = "revision_only"
@@ -226,6 +228,8 @@ _SKILL_FACTORY_STEP = re.compile(
     r"^\s*(?:\d{1,3}[.)]|[-*+])\s+(.{1,4000}?)\s+(?:=>|::)\s+(.{1,2000})\s*$"
 )
 _MAX_MARKDOWN_BYTES = 256 * 1024
+_MAX_LIVING_WIKI_MANIFEST_BYTES = 64 * 1024 * 1024
+_MAX_DERIVED_MANIFEST_V2_BYTES = 1 * 1024 * 1024
 _MAX_REQUEST_BYTES = 320 * 1024
 _MAX_TITLE_CHARS = 500
 _MAX_BODY_CHARS = 200_000
@@ -2237,18 +2241,33 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         path: str | Path | None = None,
         *,
         read_only: bool = True,
+        legacy_snapshot: KnowledgeVault | None = None,
     ) -> None:
         self.root = (
             Path(path).expanduser().absolute() if path is not None else default_knowledge_vault()
         )
-        with KnowledgeVault(self.root, read_only=True) as vault:
+        if legacy_snapshot is not None:
+            if not read_only or not legacy_snapshot.read_only:
+                raise ValueError("legacy snapshot reuse is read-only only")
+            if legacy_snapshot.root != self.root:
+                raise ValueError("legacy snapshot belongs to another Knowledge Vault")
+            vault = legacy_snapshot
             self.vault_id = vault.vault_id
             opened_legacy_audit_head = vault.audit_head
             manifest_scope = vault.manifest.get("scope")
-            self.vault_scope: Scope = cast(
+            self.vault_scope = cast(
                 Scope,
                 manifest_scope if manifest_scope in SCOPES else "project",
             )
+        else:
+            with KnowledgeVault(self.root, read_only=True) as vault:
+                self.vault_id = vault.vault_id
+                opened_legacy_audit_head = vault.audit_head
+                manifest_scope = vault.manifest.get("scope")
+                self.vault_scope = cast(
+                    Scope,
+                    manifest_scope if manifest_scope in SCOPES else "project",
+                )
         self.database = _database_path(self.root)
         if read_only:
             self.connection = sqlite3.connect(
@@ -9904,8 +9923,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         self,
         *,
         run_status_overrides: dict[str, str] | None = None,
+        projection_profile: str = "standard",
     ) -> dict[str, Any]:
         self._require_write()
+        from .projection.profiles import projection_profile as resolve_projection_profile
+
+        resolve_projection_profile(projection_profile)
         for relative in _DERIVED_REBUILD_DIRECTORIES:
             _restore_owner_subdirectory(self.root, relative)
         input_audit_head = self.audit_head
@@ -10009,14 +10032,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             input_audit_head=input_audit_head,
             legacy_audit_head=self.legacy_audit_head,
         )
-        communities = self._communities(rows, relations)
-        community_directory = self.root / "wiki" / "communities"
-        if community_directory.is_symlink() or not community_directory.is_dir():
-            raise RuntimeError("derived community directory is missing or unsafe")
-        for stale in community_directory.glob("community_*.md"):
-            if stale.is_symlink() or not stale.is_file():
-                raise RuntimeError("derived community view is unsafe")
-            stale.unlink()
         generated_files: list[dict[str, Any]] = []
         for name in ("vectors.bin", "records.json", "manifest.json"):
             dense_path = self.root / ".deeplaw" / "derived" / "vectors" / name
@@ -10027,237 +10042,68 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "sha256": sha256_file(dense_path),
                 }
             )
-
-        def write(relative: str, content: str) -> None:
-            payload = content.encode("utf-8")
-            if len(payload) > _MAX_MARKDOWN_BYTES:
-                raise RuntimeError("derived workspace file exceeds its hard byte limit")
-            destination = self.root / relative
-            _atomic_owner_write(destination, payload)
-            generated_files.append(
-                {
-                    "path": relative,
-                    "byte_size": len(payload),
-                    "sha256": sha256_bytes(payload),
-                }
-            )
-
-        overview_lines = [
-            "---",
-            "schema: deeplaw.living-wiki-overview/v1",
-            "derived_view: true",
-            f"audit_head: {input_audit_head}",
-            "authority: none",
-            "---",
-            "",
-            "# DeepLaw Living Wiki",
-            "",
-            f"Current autonomous Knowledge Objects: {len(rows)}",
-            f"Current canonical relations: {len(relations)}",
-            f"Semantic lint issues: {lint['issue_count']}",
-            "",
-            "## Knowledge",
-            "",
-        ]
-        overview_rows = rows[:_MAX_WIKI_ITEMS]
-        overview_lines.extend(
-            f"- [[{PurePosixPath(row['current_workspace_path']).with_suffix('').as_posix()}|"
-            f"{row['title']}]] — `{row['kind']}` / "
-            f"`{row['epistemic_state']}`"
-            for row in overview_rows
-        )
-        if len(rows) > len(overview_rows):
-            overview_lines.extend(
-                [
-                    "",
-                    f"> View truncated to {len(overview_rows)} of {len(rows)} Knowledge Objects.",
-                ]
-            )
-        overview_lines.extend(
-            [
-                "",
-                "> This is a rebuildable navigation view. Authority remains in the "
-                "Ledger and evidence.",
-                "",
-            ]
-        )
-        write("wiki/overview.md", "\n".join(overview_lines))
-        write("wiki/index.md", "\n".join(overview_lines))
-        lint_json = json.dumps(lint, ensure_ascii=False, indent=2, sort_keys=True)
-        write(
-            "wiki/gaps/semantic-lint.md",
-            "---\nschema: deeplaw.semantic-lint-view/v1\nderived_view: true\n"
-            f"audit_head: {input_audit_head}\n---\n\n"
-            f"# Semantic Lint\n\n```json\n{lint_json}\n```\n",
-        )
-        gaps_json = json.dumps(gaps, ensure_ascii=False, indent=2, sort_keys=True)
-        write(
-            "wiki/gaps/knowledge-gaps.md",
-            "---\nschema: deeplaw.knowledge-gap-view/v1\nderived_view: true\n"
-            f"audit_head: {input_audit_head}\n---\n\n"
-            f"# Knowledge Gaps\n\n```json\n{gaps_json}\n```\n",
-        )
-        workspace_paths = {
-            row["knowledge_id"]: PurePosixPath(row["current_workspace_path"])
-            .with_suffix("")
-            .as_posix()
-            for row in rows
-        }
-        relation_neighbors: dict[str, list[tuple[str, str]]] = defaultdict(list)
-        for relation in relations:
-            relation_neighbors[relation["subject_knowledge_id"]].append(
-                (relation["predicate"], relation["object_knowledge_id"])
-            )
-            relation_neighbors[relation["object_knowledge_id"]].append(
-                (f"inverse:{relation['predicate']}", relation["subject_knowledge_id"])
-            )
-        wiki_kind_directories = {
-            "concept": "concepts",
-            "entity": "entities",
-            "event": "events",
-            "comparison": "comparisons",
-            "synthesis": "syntheses",
-        }
-        for directory_name in wiki_kind_directories.values():
-            directory = self.root / "wiki" / directory_name
-            if directory.is_symlink() or not directory.is_dir():
-                raise RuntimeError("Living Wiki directory is missing or unsafe")
-            for stale in directory.glob("view_*.md"):
-                if stale.is_symlink() or not stale.is_file():
-                    raise RuntimeError("Living Wiki view is unsafe")
-                stale.unlink()
-        wiki_page_count = 0
-        for row in rows:
-            directory_name = wiki_kind_directories.get(row["kind"])
-            if directory_name is None or wiki_page_count >= _MAX_WIKI_ITEMS:
-                continue
-            neighbors = sorted(
-                relation_neighbors.get(row["knowledge_id"], []),
-                key=lambda item: (item[0], item[1]),
-            )[:100]
-            page_lines = [
-                "---",
-                "schema: deeplaw.living-wiki-page/v1",
-                "derived_view: true",
-                f"audit_head: {input_audit_head}",
-                f"knowledge_id: {row['knowledge_id']}",
-                f"revision_id: {row['revision_id']}",
-                "authority: none",
-                "---",
-                "",
-                f"# {row['title']}",
-                "",
-                "## Canonical knowledge",
-                "",
-                f"- [[{workspace_paths[row['knowledge_id']]}|{row['title']}]]",
-                f"- Kind: `{row['kind']}`",
-                f"- Epistemic state: `{row['epistemic_state']}`",
-                "",
-                "## Relations",
-                "",
-            ]
-            if neighbors:
-                page_lines.extend(
-                    f"- `{predicate}` → [[{workspace_paths[target]}|{target}]]"
-                    for predicate, target in neighbors
-                    if target in workspace_paths
-                )
-            else:
-                page_lines.append("- No admitted canonical relation.")
-            page_lines.extend(
-                [
-                    "",
-                    "> Rebuildable navigation page; it does not replace the canonical Markdown "
-                    "Knowledge Revision.",
-                    "",
-                ]
-            )
-            write(
-                f"wiki/{directory_name}/view_{row['knowledge_id']}.md",
-                "\n".join(page_lines),
-            )
-            wiki_page_count += 1
-        for community in communities[:_MAX_COMMUNITY_VIEWS]:
-            visible_members = community["knowledge_ids"][:_MAX_COMMUNITY_VIEW_MEMBERS]
-            lines = [
-                "---",
-                "schema: deeplaw.community-view/v1",
-                "derived_view: true",
-                f"audit_head: {input_audit_head}",
-                "authority: none",
-                "---",
-                "",
-                f"# Community {community['community_id']}",
-                "",
-                f"Members: {len(community['knowledge_ids'])}",
-                "",
-                *[f"- [[{workspace_paths[item]}|{item}]]" for item in visible_members],
-                "",
-            ]
-            if len(community["knowledge_ids"]) > len(visible_members):
-                lines.extend(
-                    [
-                        f"> View truncated to {len(visible_members)} members.",
-                        "",
-                    ]
-                )
-            write(
-                f"wiki/communities/{community['community_id']}.md",
-                "\n".join(lines),
-            )
-        nodes = []
-        positions: dict[str, str] = {}
-        for index, row in enumerate(rows[:500]):
-            node_id = stable_id("canvasnode", row["knowledge_id"])
-            positions[row["knowledge_id"]] = node_id
-            nodes.append(
-                {
-                    "id": node_id,
-                    "type": "file",
-                    "file": row["current_workspace_path"],
-                    "x": (index % 5) * 420,
-                    "y": (index // 5) * 260,
-                    "width": 360,
-                    "height": 200,
-                }
-            )
-        edges = []
-        for relation in relations[:1_000]:
-            source = positions.get(relation["subject_knowledge_id"])
-            target = positions.get(relation["object_knowledge_id"])
-            if source and target:
-                edges.append(
-                    {
-                        "id": relation["relation_revision_id"],
-                        "fromNode": source,
-                        "toNode": target,
-                        "label": relation["predicate"],
-                    }
-                )
-        canvas_payload = (
-            json.dumps(
-                {"nodes": nodes, "edges": edges},
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n"
-        )
-        write("canvas/knowledge-graph.canvas", canvas_payload)
         from .projection.builder import rebuild_living_wiki
 
         living_wiki = rebuild_living_wiki(
             self,
             input_audit_head=input_audit_head,
             run_status_overrides=run_status_overrides,
+            projection_profile=projection_profile,
+            reference_time=reference_time,
+            lint=lint,
+            gaps=gaps,
         )
-        generated_by_path = {item["path"]: item for item in generated_files}
-        generated_by_path.update(
-            {item["path"]: item for item in living_wiki["files"]}
+        living_wiki_manifest_path = (
+            self.root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json"
         )
-        generated_files = list(generated_by_path.values())
+        if (
+            living_wiki_manifest_path.is_symlink()
+            or not living_wiki_manifest_path.is_file()
+            or not 1 <= living_wiki_manifest_path.stat().st_size <= _MAX_LIVING_WIKI_MANIFEST_BYTES
+        ):
+            raise RuntimeError("Living Wiki manifest is missing or unsafe")
+        living_wiki_manifest = strict_json_loads(living_wiki_manifest_path.read_bytes())
+        if not isinstance(living_wiki_manifest, dict):
+            raise RuntimeError("Living Wiki manifest is not an object")
+        _validate_contract("living-wiki-manifest.v2.schema.json", living_wiki_manifest)
+        living_wiki_manifest_body = {
+            key: value for key, value in living_wiki_manifest.items() if key != "manifest_sha256"
+        }
+        if (
+            living_wiki_manifest.get("manifest_sha256")
+            != sha256_bytes(canonical_json(living_wiki_manifest_body).encode("utf-8"))
+            or living_wiki_manifest.get("manifest_sha256") != living_wiki["manifest_sha256"]
+            or living_wiki_manifest.get("input_audit_head") != input_audit_head
+            or living_wiki_manifest.get("legacy_audit_head") != self.legacy_audit_head
+        ):
+            raise RuntimeError("Living Wiki manifest binding is invalid")
+        living_wiki_files = living_wiki_manifest.get("files")
+        if not isinstance(living_wiki_files, list):
+            raise RuntimeError("Living Wiki manifest file inventory is invalid")
+        sorted_living_wiki_files = sorted(living_wiki_files, key=lambda item: item["path"])
+        if living_wiki_files != sorted_living_wiki_files:
+            raise RuntimeError("Living Wiki manifest file inventory is not sorted")
+        component = {
+            "component": "living_wiki",
+            "manifest_path": ".deeplaw/derived/tree/living-wiki-manifest.json",
+            "manifest_byte_size": living_wiki_manifest_path.stat().st_size,
+            "schema_version": living_wiki_manifest["schema_version"],
+            "manifest_sha256": living_wiki_manifest["manifest_sha256"],
+            "configuration_sha256": living_wiki_manifest["configuration_sha256"],
+            "profile_sha256": living_wiki_manifest["configuration"][
+                "projection_profile_sha256"
+            ],
+            "file_count": len(living_wiki_files),
+            "file_inventory_sha256": sha256_bytes(
+                canonical_json(sorted_living_wiki_files).encode("utf-8")
+            ),
+            "input_audit_head": living_wiki_manifest["input_audit_head"],
+            "legacy_audit_head": living_wiki_manifest["legacy_audit_head"],
+            "generator": living_wiki_manifest["generator"],
+            "generator_version": living_wiki_manifest["generator_version"],
+        }
         manifest = {
-            "schema_version": DERIVED_MANIFEST_SCHEMA,
+            "schema_version": DERIVED_MANIFEST_SCHEMA_V2,
             "input_audit_head": input_audit_head,
             "legacy_audit_head": self.legacy_audit_head,
             "generator": "deeplaw.knowledge-autonomy/v1",
@@ -10277,14 +10123,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "fts_rows_sha256": sha256_bytes(canonical_json(fts_rows).encode("utf-8")),
             "dense_manifest_sha256": dense_manifest["manifest_sha256"],
             "knowledge_revision_count": len(rows),
-            "knowledge_revision_ids_sha256": sha256_bytes(
-                canonical_json([row["revision_id"] for row in rows]).encode("utf-8")
-            ),
+            "knowledge_revision_ids_sha256": living_wiki_manifest[
+                "knowledge_revision_ids_sha256"
+            ],
             "relation_revision_count": len(relations),
-            "relation_revision_ids_sha256": sha256_bytes(
-                canonical_json([item["relation_revision_id"] for item in relations]).encode("utf-8")
-            ),
+            "relation_revision_ids_sha256": living_wiki_manifest[
+                "relation_revision_ids_sha256"
+            ],
             "files": sorted(generated_files, key=lambda item: item["path"]),
+            "components": [component],
             "generated_at": reference_time,
         }
         manifest["manifest_sha256"] = sha256_bytes(canonical_json(manifest).encode("utf-8"))
@@ -10311,10 +10158,386 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             **manifest,
             "knowledge_count": len(rows),
             "relation_count": len(relations),
-            "community_count": len(communities),
+            "community_count": living_wiki["community_count"],
             "lint": lint,
             "living_wiki": living_wiki,
         }
+
+    def _derived_search_snapshot_at(
+        self,
+        reference_time: str,
+    ) -> tuple[list[tuple[str, str, str, str, str, str]], list[str], str]:
+        """Rebuild the lexical and relation identities at a Ledger event time."""
+
+        reference_time = canonical_timestamp(reference_time, field="derived snapshot time")
+        rows = self.connection.execute(
+            """
+            WITH ranked AS (
+                SELECT knowledge_revisions_v3.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY knowledge_id
+                           ORDER BY recorded_at DESC, revision_id DESC
+                       ) AS revision_rank
+                FROM knowledge_revisions_v3
+                WHERE recorded_at <= ?
+            )
+            SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                   ranked.*
+            FROM knowledge_objects_v3
+            JOIN ranked
+              ON ranked.knowledge_id = knowledge_objects_v3.knowledge_id
+             AND ranked.revision_rank = 1
+            WHERE ranked.lifecycle = 'active'
+            ORDER BY knowledge_objects_v3.knowledge_id
+            """,
+            (reference_time,),
+        ).fetchall()
+        expected_search: list[tuple[str, str, str, str, str, str]] = []
+        admitted_ids: set[str] = set()
+        for row in rows:
+            if not self.revision_provenance_admitted(
+                self._revision_row(row, include_body=False)
+            ) or not _interval_admits(
+                reference_time=reference_time,
+                valid_from=row["valid_from"],
+                valid_to=row["valid_to"],
+                expires_at=row["expires_at"],
+            ):
+                continue
+            body = parse_knowledge_markdown(_read_object(self.root, row["markdown_sha256"]))["body"]
+            tags = strict_json_loads(row["tags_json"])
+            if not isinstance(tags, list):
+                raise ValueError("knowledge tags are invalid")
+            expected_search.append(
+                (
+                    row["knowledge_id"],
+                    row["revision_id"],
+                    " ".join(search_terms(row["title"])),
+                    " ".join(search_terms(body)),
+                    " ".join(search_terms(row["semantic_key"] or "")),
+                    " ".join(search_terms(" ".join(tags))),
+                )
+            )
+            admitted_ids.add(row["knowledge_id"])
+        relations = [
+            relation
+            for relation in self._relations_at(
+                reference_time,
+                reference_time=reference_time,
+            )
+            if self.relation_provenance_admitted(relation)
+            and relation["subject_knowledge_id"] in admitted_ids
+            and relation["object_knowledge_id"] in admitted_ids
+        ]
+        revision_ids = [
+            row["revision_id"]
+            for row in sorted(
+                rows,
+                key=lambda item: (item["kind"], item["title"], item["knowledge_id"]),
+            )
+            if row["knowledge_id"] in admitted_ids
+        ]
+        relation_ids = [relation["relation_revision_id"] for relation in relations]
+        return (
+            expected_search,
+            relation_ids,
+            sha256_bytes(canonical_json(revision_ids).encode("utf-8")),
+        )
+
+    def _read_dense_manifest(self) -> dict[str, Any]:
+        dense_manifest_path = self.root / ".deeplaw" / "derived" / "vectors" / "manifest.json"
+        if (
+            dense_manifest_path.is_symlink()
+            or not dense_manifest_path.is_file()
+            or not 1 <= dense_manifest_path.stat().st_size <= _MAX_MARKDOWN_BYTES
+        ):
+            raise ValueError("dense manifest is missing or unsafe")
+        dense_manifest = strict_json_loads(dense_manifest_path.read_bytes())
+        if not isinstance(dense_manifest, dict):
+            raise ValueError("dense manifest must be an object")
+        return dense_manifest
+
+    def _current_revision_ids_sha256(self, reference_time: str) -> str:
+        rows = self.connection.execute(
+            """
+            SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                   knowledge_revisions_v3.*
+            FROM knowledge_objects_v3
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id = knowledge_objects_v3.current_revision_id
+            WHERE knowledge_revisions_v3.lifecycle = 'active'
+            ORDER BY knowledge_revisions_v3.kind,
+                     knowledge_revisions_v3.title,
+                     knowledge_revisions_v3.knowledge_id
+            """
+        ).fetchall()
+        revision_ids = [
+            row["revision_id"]
+            for row in rows
+            if self.revision_provenance_admitted(
+                self._revision_row(row, include_body=False)
+            )
+            and _interval_admits(
+                reference_time=reference_time,
+                valid_from=row["valid_from"],
+                valid_to=row["valid_to"],
+                expires_at=row["expires_at"],
+            )
+        ]
+        return sha256_bytes(canonical_json(revision_ids).encode("utf-8"))
+
+    def _verify_derived_manifest_v2(
+        self,
+        manifest: dict[str, Any],
+        *,
+        manifest_path: Path,
+        expected_search: list[tuple[str, str, str, str, str, str]],
+        verification_time: str,
+    ) -> bool:
+        """Verify the additive aggregate manifest and its owned Living Wiki component."""
+
+        if manifest_path.stat().st_size > _MAX_DERIVED_MANIFEST_V2_BYTES:
+            raise ValueError("derived v2 manifest exceeds its local byte bound")
+        _validate_contract("derived-manifest.v2.schema.json", manifest)
+        manifest_body = {
+            key: value for key, value in manifest.items() if key != "manifest_sha256"
+        }
+        if manifest.get("manifest_sha256") != sha256_bytes(
+            canonical_json(manifest_body).encode("utf-8")
+        ):
+            raise ValueError("derived v2 manifest hash is invalid")
+        expected_configuration = {
+            "fts_tokenizer": "unicode61 remove_diacritics 2",
+            "community_algorithm": "weighted-label-propagation+semantic-bridges/1",
+            "dense_model": LOCAL_DENSE_MODEL,
+            "reranker_model": LOCAL_RERANKER_MODEL,
+            "canvas_node_limit": 500,
+            "canvas_edge_limit": 1_000,
+            "wiki_item_limit": _MAX_WIKI_ITEMS,
+            "community_view_limit": _MAX_COMMUNITY_VIEWS,
+            "community_member_limit": _MAX_COMMUNITY_VIEW_MEMBERS,
+            "semantic_lint_issue_limit": _MAX_LINT_ISSUES,
+        }
+        if manifest.get("configuration") != expected_configuration:
+            raise ValueError("derived v2 manifest configuration is invalid")
+        if canonical_timestamp(
+            manifest.get("generated_at"),
+            field="derived v2 generated_at",
+        ) != manifest.get("generated_at"):
+            raise ValueError("derived v2 manifest timestamp is invalid")
+        known_event_hash = self.connection.execute(
+            "SELECT recorded_at FROM autonomous_events_v3 WHERE event_hash = ?",
+            (manifest["input_audit_head"],),
+        ).fetchone()
+        if known_event_hash is None:
+            raise ValueError("derived v2 manifest audit input is not registered")
+        if manifest.get("generated_at") != known_event_hash["recorded_at"]:
+            raise ValueError("derived v2 manifest time is not bound to its audit input")
+        stale = bool(
+            manifest.get("input_audit_head") != self.audit_head
+            or manifest.get("legacy_audit_head") != self.legacy_audit_head
+        )
+
+        direct_files = manifest["files"]
+        if direct_files != sorted(direct_files, key=lambda item: item["path"]):
+            raise ValueError("derived v2 direct file inventory is not sorted")
+        direct_paths: set[str] = set()
+        expected_direct_paths = {
+            ".deeplaw/derived/vectors/vectors.bin",
+            ".deeplaw/derived/vectors/records.json",
+            ".deeplaw/derived/vectors/manifest.json",
+        }
+        for item in direct_files:
+            if not isinstance(item, dict) or set(item) != {"path", "byte_size", "sha256"}:
+                raise ValueError("derived v2 direct file manifest is invalid")
+            relative = _safe_derived_path(item["path"])
+            if (
+                relative not in expected_direct_paths
+                or relative in direct_paths
+                or not isinstance(item["byte_size"], int)
+                or isinstance(item["byte_size"], bool)
+                or not 0 <= item["byte_size"] <= 256 * 1024 * 1024
+                or not isinstance(item["sha256"], str)
+                or not _SHA256.fullmatch(item["sha256"])
+            ):
+                raise ValueError("derived v2 direct file escaped its allowed workspace")
+            direct_paths.add(relative)
+            path = self.root / relative
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.stat().st_size != item["byte_size"]
+                or sha256_file(path) != item["sha256"]
+            ):
+                raise ValueError("derived v2 direct file hash is invalid")
+        if direct_paths != expected_direct_paths:
+            raise ValueError("derived v2 direct file inventory is incomplete")
+
+        dense_manifest = self._read_dense_manifest()
+        dense_manifest_digest = dense_manifest.get("manifest_sha256")
+        dense_manifest_body = {
+            key: value for key, value in dense_manifest.items() if key != "manifest_sha256"
+        }
+        dense_binding_valid = bool(
+            dense_manifest.get("model_identity") == LOCAL_DENSE_MODEL
+            and dense_manifest.get("network_policy") == "offline"
+            and dense_manifest.get("input_audit_head") == manifest["input_audit_head"]
+            and dense_manifest.get("legacy_audit_head") == manifest["legacy_audit_head"]
+            and dense_manifest_digest
+            == sha256_bytes(canonical_json(dense_manifest_body).encode("utf-8"))
+        )
+        if (
+            manifest.get("dense_manifest_sha256") != dense_manifest_digest
+            or not dense_binding_valid
+        ):
+            raise ValueError("derived v2 dense manifest binding is invalid")
+
+        components = manifest["components"]
+        if len(components) != 1 or components[0].get("component") != "living_wiki":
+            raise ValueError("derived v2 component inventory is invalid")
+        component = components[0]
+        component_path = self.root / component["manifest_path"]
+        if (
+            component_path.is_symlink()
+            or not component_path.is_file()
+            or not 1 <= component_path.stat().st_size <= _MAX_LIVING_WIKI_MANIFEST_BYTES
+            or component_path.stat().st_size != component["manifest_byte_size"]
+        ):
+            raise ValueError("Living Wiki component manifest is missing or unsafe")
+        living_manifest = strict_json_loads(component_path.read_bytes())
+        if not isinstance(living_manifest, dict):
+            raise ValueError("Living Wiki component manifest is not an object")
+        _validate_contract("living-wiki-manifest.v2.schema.json", living_manifest)
+        living_manifest_body = {
+            key: value for key, value in living_manifest.items() if key != "manifest_sha256"
+        }
+        if (
+            component["schema_version"] != living_manifest.get("schema_version")
+            or component["manifest_sha256"] != living_manifest.get("manifest_sha256")
+            or component["manifest_sha256"]
+            != sha256_bytes(canonical_json(living_manifest_body).encode("utf-8"))
+            or component["input_audit_head"] != living_manifest.get("input_audit_head")
+            or component["legacy_audit_head"] != living_manifest.get("legacy_audit_head")
+            or component["input_audit_head"] != manifest["input_audit_head"]
+            or component["legacy_audit_head"] != manifest["legacy_audit_head"]
+            or living_manifest.get("generated_at") != manifest.get("generated_at")
+            or component["generator"] != living_manifest.get("generator")
+            or component["generator_version"] != living_manifest.get("generator_version")
+            or component["configuration_sha256"] != living_manifest.get("configuration_sha256")
+            or component["profile_sha256"]
+            != living_manifest.get("configuration", {}).get("projection_profile_sha256")
+        ):
+            raise ValueError("Living Wiki component binding is invalid")
+        living_configuration = living_manifest.get("configuration")
+        if not isinstance(living_configuration, dict):
+            raise ValueError("Living Wiki component configuration is invalid")
+        configuration_body = canonical_json(living_configuration).encode("utf-8")
+        if living_manifest.get("configuration_sha256") != sha256_bytes(configuration_body):
+            raise ValueError("Living Wiki component configuration hash is invalid")
+        projection_profile = living_configuration.get("projection_profile")
+        if not isinstance(projection_profile, dict):
+            raise ValueError("Living Wiki component projection profile is invalid")
+        if living_configuration.get("projection_profile_sha256") != sha256_bytes(
+            canonical_json(projection_profile).encode("utf-8")
+        ):
+            raise ValueError("Living Wiki component profile hash is invalid")
+        living_files = living_manifest.get("files")
+        if not isinstance(living_files, list):
+            raise ValueError("Living Wiki component file inventory is invalid")
+        if living_files != sorted(living_files, key=lambda item: item["path"]):
+            raise ValueError("Living Wiki component file inventory is not sorted")
+        component_inventory_sha256 = sha256_bytes(
+            canonical_json(living_files).encode("utf-8")
+        )
+        if (
+            component["file_count"] != len(living_files)
+            or component["file_inventory_sha256"] != component_inventory_sha256
+            or living_manifest.get("file_count", len(living_files)) != len(living_files)
+        ):
+            raise ValueError("Living Wiki component inventory binding is invalid")
+
+        component_paths: set[str] = set()
+        for item in living_files:
+            if not isinstance(item, dict) or set(item) != {"path", "byte_size", "sha256"}:
+                raise ValueError("Living Wiki component file manifest is invalid")
+            relative = _safe_derived_path(item["path"])
+            if (
+                not relative.startswith(("wiki/", "canvas/"))
+                or relative in component_paths
+                or relative in direct_paths
+                or not isinstance(item["byte_size"], int)
+                or isinstance(item["byte_size"], bool)
+                or not 0 <= item["byte_size"] <= _MAX_MARKDOWN_BYTES
+                or not isinstance(item["sha256"], str)
+                or not _SHA256.fullmatch(item["sha256"])
+            ):
+                raise ValueError("Living Wiki component file escaped its allowed workspace")
+            component_paths.add(relative)
+            path = self.root / relative
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.stat().st_size != item["byte_size"]
+                or sha256_file(path) != item["sha256"]
+            ):
+                raise ValueError("Living Wiki component file hash is invalid")
+        if direct_paths.intersection(component_paths):
+            raise ValueError("derived v2 direct and component ownership overlaps")
+
+        (
+            manifest_search,
+            manifest_relation_revisions,
+            manifest_revision_ids_sha256,
+        ) = self._derived_search_snapshot_at(manifest["generated_at"])
+        if not (
+            manifest.get("knowledge_revision_count")
+            == living_manifest.get("knowledge_revision_count")
+            and manifest.get("knowledge_revision_ids_sha256")
+            == living_manifest.get("knowledge_revision_ids_sha256")
+            and manifest.get("relation_revision_count")
+            == living_manifest.get("relation_revision_count")
+            and manifest.get("relation_revision_ids_sha256")
+            == living_manifest.get("relation_revision_ids_sha256")
+        ):
+            raise ValueError("derived v2 top and Living Wiki inputs disagree")
+        if not (
+            manifest.get("knowledge_revision_count") == len(manifest_search)
+            and manifest.get("knowledge_revision_ids_sha256")
+            == manifest_revision_ids_sha256
+            and manifest.get("relation_revision_count") == len(manifest_relation_revisions)
+            and manifest.get("relation_revision_ids_sha256")
+            == sha256_bytes(canonical_json(manifest_relation_revisions).encode("utf-8"))
+            and manifest.get("fts_rows_sha256")
+            == sha256_bytes(canonical_json(manifest_search).encode("utf-8"))
+        ):
+            raise ValueError("derived v2 manifest input digests are invalid")
+
+        current_revision_ids_sha256 = self._current_revision_ids_sha256(verification_time)
+        current_knowledge_revisions = [item[1] for item in expected_search]
+        current_knowledge_ids = {item[0] for item in expected_search}
+        current_relation_revisions = [
+            relation["relation_revision_id"]
+            for relation in self._current_relations()
+            if self.relation_provenance_admitted(relation)
+            and relation["subject_knowledge_id"] in current_knowledge_ids
+            and relation["object_knowledge_id"] in current_knowledge_ids
+            and _interval_admits(
+                reference_time=verification_time,
+                valid_from=relation["valid_from"],
+                valid_to=relation["valid_to"],
+            )
+        ]
+        inputs_match = (
+            manifest.get("knowledge_revision_count") == len(current_knowledge_revisions)
+            and manifest.get("knowledge_revision_ids_sha256")
+            == current_revision_ids_sha256
+            and manifest.get("relation_revision_count") == len(current_relation_revisions)
+            and manifest.get("relation_revision_ids_sha256")
+            == sha256_bytes(canonical_json(current_relation_revisions).encode("utf-8"))
+            and manifest.get("fts_rows_sha256")
+            == sha256_bytes(canonical_json(expected_search).encode("utf-8"))
+        )
+        return stale or not inputs_match
 
     @staticmethod
     def _communities(
@@ -10327,9 +10550,25 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             {row["knowledge_id"]: row["semantic_key"] for row in rows},
         )
 
-    def verify(self) -> dict[str, Any]:
+    def verify(
+        self,
+        *,
+        preverified_legacy_integrity: dict[str, Any] | None = None,
+        preverified_legacy_audit_head: str | None = None,
+    ) -> dict[str, Any]:
         failures: list[dict[str, str]] = []
         warnings: list[dict[str, str]] = []
+        derived_manifest_v2_failed = False
+
+        class _VerifiedDerivedManifestV2(Exception):
+            pass
+
+        class _StaleDerivedManifestV2(Exception):
+            pass
+
+        class _InvalidDerivedManifestV2(Exception):
+            pass
+
         verification_time = utc_now()
         event_payloads: dict[tuple[str, str], dict[str, Any]] = {}
         event_recorded_at: dict[tuple[str, str], str] = {}
@@ -10424,9 +10663,22 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
             )
         try:
-            with KnowledgeVault(self.root, read_only=True) as legacy:
-                legacy_integrity = legacy.verify_integrity()
-                legacy_audit_head = legacy.audit_head
+            if preverified_legacy_integrity is None and preverified_legacy_audit_head is None:
+                with KnowledgeVault(self.root, read_only=True) as legacy:
+                    legacy_integrity = legacy.verify_integrity()
+                    legacy_audit_head = legacy.audit_head
+            elif (
+                isinstance(preverified_legacy_integrity, dict)
+                and isinstance(preverified_legacy_audit_head, str)
+            ):
+                # The caller supplies the result from the same pinned legacy
+                # snapshot.  We still compare its audit head against this
+                # autonomous snapshot; only the nested legacy open/verify is
+                # skipped.
+                legacy_integrity = preverified_legacy_integrity
+                legacy_audit_head = preverified_legacy_audit_head
+            else:
+                raise RuntimeError("preverified legacy integrity is incomplete")
             if (
                 legacy_integrity.get("valid") is not True
                 or legacy_audit_head != self.legacy_audit_head
@@ -12432,12 +12684,44 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             if (
                 derived_manifest_path.is_symlink()
                 or not derived_manifest_path.is_file()
-                or derived_manifest_path.stat().st_size > 4 * 1024 * 1024
             ):
                 raise RuntimeError("derived manifest is missing or unsafe")
             derived_manifest = strict_json_loads(derived_manifest_path.read_bytes())
             if not isinstance(derived_manifest, dict):
                 raise ValueError("derived manifest must be an object")
+            if derived_manifest.get("schema_version") == DERIVED_MANIFEST_SCHEMA_V2:
+                try:
+                    manifest_is_stale = self._verify_derived_manifest_v2(
+                        derived_manifest,
+                        manifest_path=derived_manifest_path,
+                        expected_search=expected_search,
+                        verification_time=verification_time,
+                    )
+                except (
+                    KeyError,
+                    OSError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                ):
+                    derived_manifest_v2_failed = True
+                    failures.append(
+                        {
+                            "code": "derived_manifest_invalid",
+                            "object_id": self.vault_id,
+                        }
+                    )
+                    raise _InvalidDerivedManifestV2 from None
+                else:
+                    if manifest_is_stale:
+                        warnings.append(
+                            {"code": "derived_manifest_stale", "object_id": self.vault_id}
+                        )
+                        raise _StaleDerivedManifestV2
+                    raise _VerifiedDerivedManifestV2
+            elif derived_manifest_path.stat().st_size > 4 * 1024 * 1024:
+                raise RuntimeError("derived manifest is missing or unsafe")
             manifest_digest = derived_manifest.get("manifest_sha256")
             manifest_body = {
                 key: value for key, value in derived_manifest.items() if key != "manifest_sha256"
@@ -12474,7 +12758,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             }
             if (
                 set(derived_manifest) != expected_manifest_fields
-                or derived_manifest.get("schema_version") != DERIVED_MANIFEST_SCHEMA
+                or derived_manifest.get("schema_version") != DERIVED_MANIFEST_SCHEMA_V1
                 or derived_manifest.get("generator") != "deeplaw.knowledge-autonomy/v1"
                 or derived_manifest.get("generator_version") != "1"
                 or derived_manifest.get("configuration") != expected_configuration
@@ -12523,16 +12807,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     or sha256_file(path) != item["sha256"]
                 ):
                     raise ValueError("derived file hash is invalid")
-            dense_manifest_path = self.root / ".deeplaw" / "derived" / "vectors" / "manifest.json"
-            if (
-                dense_manifest_path.is_symlink()
-                or not dense_manifest_path.is_file()
-                or not 1 <= dense_manifest_path.stat().st_size <= _MAX_MARKDOWN_BYTES
-            ):
-                raise ValueError("dense manifest is missing or unsafe")
-            dense_manifest = strict_json_loads(dense_manifest_path.read_bytes())
-            if not isinstance(dense_manifest, dict):
-                raise ValueError("dense manifest must be an object")
+            dense_manifest = self._read_dense_manifest()
             dense_manifest_digest = dense_manifest.get("manifest_sha256")
             dense_manifest_body = {
                 key: value for key, value in dense_manifest.items() if key != "manifest_sha256"
@@ -12580,6 +12855,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 and derived_manifest.get("legacy_audit_head") == self.legacy_audit_head
             ):
                 raise ValueError("derived manifest inputs are stale")
+        except (_VerifiedDerivedManifestV2, _StaleDerivedManifestV2, _InvalidDerivedManifestV2):
+            pass
         except (
             KeyError,
             OSError,
@@ -12748,7 +13025,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "valid": not failures,
             "failures": failures,
             "warnings": warnings,
-            "derived_ready": not warnings,
+            "derived_ready": not warnings and not derived_manifest_v2_failed,
             "sequence": self.sequence,
             "audit_head": self.audit_head,
             "legacy_audit_head": self.legacy_audit_head,

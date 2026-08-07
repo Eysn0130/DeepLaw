@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-query-plan.v6.schema.json",
+  "title": "DeepLaw statement-selective Knowledge Query Plan v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "intent", "purpose", "policy_id", "scope", "max_sensitivity",
+    "as_of", "query_target", "applicable_duties", "budget", "projection",
+    "input_audit_head", "input_legacy_audit_head", "compiled_candidate_count",
+    "admitted_statement_count", "selected_statement_count", "evidence_selected_count",
+    "duties", "coverage_before", "coverage_after", "selection", "fallback",
+    "residual_gap_ids", "rejected_candidate_count", "suppressed_candidate_count",
+    "deduplicated_evidence_count", "ranking_authority_changed", "query_sha256", "receipt_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-query-plan/v6"},
+    "intent": {"const": "purpose_aware_knowledge_retrieval"},
+    "purpose": {"enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]},
+    "policy_id": {"enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private"]},
+    "as_of": {"type": ["string", "null"], "format": "date-time"},
+    "query_target": {
+      "type": "object", "additionalProperties": false,
+      "required": ["text", "normalized", "query_sha256", "terms"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "normalized": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "terms": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 200}},
+        "semantic_key": {"type": "string", "maxLength": 500},
+        "knowledge_id": {"type": "string", "maxLength": 500},
+        "revision_id": {"type": "string", "maxLength": 500},
+        "kind": {"type": "string", "maxLength": 500}
+      }
+    },
+    "applicable_duties": {"type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true, "items": {"enum": ["primary_answer", "identity", "definition", "current_state", "temporal_freshness", "procedure", "exception", "contradiction", "applicability", "limitation", "source_evidence", "unresolved_gap"]}},
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["items", "characters", "tokens", "sources", "provider_characters"],
+      "properties": {
+        "items": {"type": "integer", "minimum": 1, "maximum": 20},
+        "characters": {"type": "integer", "minimum": 200, "maximum": 20000},
+        "tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "sources": {"type": "integer", "minimum": 1, "maximum": 32},
+        "provider_characters": {"const": 65536}
+      }
+    },
+    "projection": {"enum": ["compact", "standard", "audit"]},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compiled_candidate_count": {"type": "integer", "minimum": 0},
+    "admitted_statement_count": {"type": "integer", "minimum": 0, "maximum": 5000},
+    "selected_statement_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "evidence_selected_count": {"type": "integer", "minimum": 0, "maximum": 32},
+    "duties": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"$ref": "#/$defs/duty"}},
+    "coverage_before": {"$ref": "#/$defs/coverage"},
+    "coverage_after": {"$ref": "#/$defs/coverage"},
+    "selection": {"type": "object", "additionalProperties": false, "required": ["statement_ids", "source_keys", "evidence_ids"], "properties": {"statement_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string"}}, "source_keys": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string"}}, "evidence_ids": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string"}}}},
+    "fallback": {"type": "object", "additionalProperties": false, "required": ["used", "duties", "events"], "properties": {"used": {"type": "boolean"}, "duties": {"type": "array", "maxItems": 12, "uniqueItems": true, "items": {"type": "string"}}, "events": {"type": "array", "maxItems": 12, "items": {"type": "object"}}}},
+    "residual_gap_ids": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string"}},
+    "rejected_candidate_count": {"type": "integer", "minimum": 0},
+    "suppressed_candidate_count": {"type": "integer", "minimum": 0},
+    "deduplicated_evidence_count": {"type": "integer", "minimum": 0},
+    "ranking_authority_changed": {"const": false},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_id": {"type": "string", "pattern": "^queryreceipt_[0-9a-f]{24}$"}
+  },
+  "$defs": {
+    "duty": {"type": "object", "additionalProperties": false, "required": ["duty", "applicable", "status", "selected_refs", "reason"], "properties": {"duty": {"enum": ["primary_answer", "identity", "definition", "current_state", "temporal_freshness", "procedure", "exception", "contradiction", "applicability", "limitation", "source_evidence", "unresolved_gap"]}, "applicable": {"type": "boolean"}, "status": {"enum": ["satisfied", "not_applicable", "unresolved"]}, "selected_refs": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "maxLength": 200}}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}},
+    "coverage": {"type": "object", "additionalProperties": false, "required": ["applicable_count", "satisfied_count", "unresolved_duties"], "properties": {"applicable_count": {"type": "integer", "minimum": 0, "maximum": 12}, "satisfied_count": {"type": "integer", "minimum": 0, "maximum": 12}, "unresolved_duties": {"type": "array", "maxItems": 12, "uniqueItems": true, "items": {"type": "string"}}}}
+  }
+}

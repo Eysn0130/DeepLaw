@@ -94,7 +94,7 @@ class CompilationRun:
         return dict(self._initial_receipt)
 
     def next_packet(self) -> dict[str, Any] | None:
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             return _invoke(
                 SemanticCompilationService(self._coordinator.root).next_observation_packet,
                 self.compilation_run_id,
@@ -180,7 +180,7 @@ class CompilationRun:
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
         target = self._coordinator.commit
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             target = SemanticCompilationService(self._coordinator.root).commit
         return _invoke(
             target,
@@ -218,13 +218,13 @@ class CompilationRun:
         )
 
     def status(self) -> dict[str, Any]:
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             service = _invoke(SemanticCompilationService, self._coordinator.root)
             return _invoke(service.status, self.compilation_run_id)
         return _invoke(self._coordinator.status, self.compilation_run_id)
 
     def explain(self) -> dict[str, Any]:
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             service = _invoke(SemanticCompilationService, self._coordinator.root)
             return _invoke(service.explain, self.compilation_run_id)
         return _invoke(self._coordinator.explain, self.compilation_run_id)
@@ -306,14 +306,14 @@ class _CompilationsAPI:
     def status(self, compilation_run_id: str) -> dict[str, Any]:
         coordinator = _invoke(CompilationCoordinator, self._root)
         status = _invoke(coordinator.status, compilation_run_id)
-        if status["compiler_profile_version"] == "2":
+        if status["compiler_profile_version"] in {"2", "3"}:
             return _invoke(SemanticCompilationService(self._root).status, compilation_run_id)
         return status
 
     def explain(self, compilation_run_id: str) -> dict[str, Any]:
         coordinator = _invoke(CompilationCoordinator, self._root)
         status = _invoke(coordinator.status, compilation_run_id)
-        if status["compiler_profile_version"] == "2":
+        if status["compiler_profile_version"] in {"2", "3"}:
             return _invoke(SemanticCompilationService(self._root).explain, compilation_run_id)
         return _invoke(coordinator.explain, compilation_run_id)
 

@@ -92,8 +92,8 @@ class ObservationStore:
     def next_packet(self, compilation_run_id: str) -> dict[str, Any] | None:
         with AutonomousKnowledgeStore(self.root, read_only=True) as store:
             run = CompilationCoordinator._run(store, compilation_run_id)
-            if run["compiler_profile_version"] != "2":
-                raise ValueError("semantic observations require compiler profile v2")
+            if run["compiler_profile_version"] not in {"2", "3"}:
+                raise ValueError("semantic observations require compiler profile v2 or v3")
             row = store.connection.execute(
                 """
                 SELECT packets.artifact_sha256
@@ -177,8 +177,8 @@ class ObservationStore:
         plan_sha256 = sha256_bytes(payload)
         with AutonomousKnowledgeStore(self.root, read_only=False) as store:
             run = CompilationCoordinator._run(store, compilation_run_id)
-            if run["compiler_profile_version"] != "2":
-                raise ValueError("semantic observations require compiler profile v2")
+            if run["compiler_profile_version"] not in {"2", "3"}:
+                raise ValueError("semantic observations require compiler profile v2 or v3")
             if run["grant_id"] != grant_id:
                 raise PermissionError("semantic compilation run is bound to another grant")
             grant = store._grant(

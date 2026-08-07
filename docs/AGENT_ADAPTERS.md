@@ -1,6 +1,6 @@
 # DeepLaw Agent Adapters
 
-DeepLaw provides local adapters for Codex, Claude Code, and OpenCode. The two default products are
+DeepLaw provides local adapters for Codex, Claude Code, OpenCode, Obsidian and Tolaria. The two default products are
 read-only; an autonomous mutation capability is a third, separately enabled process and must not be
 collapsed into either query surface:
 
@@ -25,12 +25,15 @@ governance, and retrieval internals are separate concerns.
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
+| Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; real desktop E2E pending |
+| Tolaria external MCP bridge | **`integration_limited`** | exact v2026-07-22 source contract and real local CLI harness; missing third-party product UI seam |
 | Real model/session tasks on all hosts | **External verification pending** | competitive evidence only; no-model lifecycle is not task acceptance |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
 must separately configure `knowledge_sink` with an owner-created grant limited to compilation
-operations, and the Agent must load the shared `compile-living-wiki` Skill. The opt-in real-host
+operations, and the Agent must load the applicable split Skill, normally `deeplaw-compile-source`.
+The scheduled `compile-living-wiki` wrapper is compatibility-only. The opt-in real-host
 harness records unavailable model tasks as `not_executed`.
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
@@ -327,11 +330,16 @@ Official references:
 ## Optional Knowledge Asset adapter
 
 The Knowledge Asset plugin is rooted at `plugins/deeplaw-knowledge-os` and must
-be installed separately. It is explicit-only:
+be installed separately. Its current split Skills are explicit-only:
 
-- Codex skill: `$use-knowledge-assets`
-- Claude Code skill: `/deeplaw-knowledge-os:use-knowledge-assets`
+- Codex Skills: `$deeplaw-query`, `$deeplaw-compile-source`,
+  `$deeplaw-verify-evidence`, `$deeplaw-refresh-synthesis`,
+  `$deeplaw-navigate-wiki`, and `$deeplaw-promote-draft`
+- Claude Code uses the same six packaged Skill names through its plugin namespace
 - OpenCode agent: `@deeplaw-knowledge`
+
+`use-knowledge-assets` and `compile-living-wiki` are scheduled compatibility
+wrappers, not the current default path.
 
 Codex development install:
 
@@ -355,36 +363,38 @@ Merge the sample rather than overwriting the user's configuration, then copy
 the skill and agent:
 
 ```bash
-mkdir -p .opencode/skills/use-knowledge-assets .opencode/agents
-cp plugins/deeplaw-knowledge-os/skills/use-knowledge-assets/SKILL.md \
-  .opencode/skills/use-knowledge-assets/SKILL.md
+mkdir -p .opencode/skills/deeplaw-query .opencode/agents
+cp plugins/deeplaw-knowledge-os/skills/deeplaw-query/SKILL.md \
+  .opencode/skills/deeplaw-query/SKILL.md
 cp adapters/opencode/agents/deeplaw-knowledge.md \
   .opencode/agents/deeplaw-knowledge.md
 ```
 
-After autonomous migration, `knowledge_support` routes twelve read operations:
+After autonomous migration, the recommended `knowledge_support` read path is:
 
 | Operation | Purpose |
 | --- | --- |
 | `search` / `recall` | return bounded source-derived and autonomous partitions without merging Authority |
 | `get` | read one exact active non-restricted `knowledge_id` or legacy `asset_id` |
-| `context` | compile a bounded Query Plan v5 Knowledge Capsule v2 through the shared domain service |
+| `query` | run default Query Plan v6 statement selection, duty coverage and targeted evidence completion |
+| `context` | compile the bounded compatibility Knowledge Capsule through the shared domain service |
+| `wiki` | read exact pages, indexed links, local graphs, kinds and recent changes |
+| `source` | read exact admitted Source Revisions and fragments |
 | `verify` | verify object/source binding, current usability, both event chains, and state reconciliation |
 | `inspect` | inspect sanitized readiness, scoped counts, integrity, and legacy compatibility state |
 | `lineage` | read bounded immutable revision metadata for one Knowledge Object |
 | `graph` | read bounded canonical relation revisions after endpoint admission |
-| `wiki_lookup` | discover through derived Wiki navigation while returning canonical revisions |
 | `explain` | return hashed query plans, admission/selection receipts, gaps, and budgets |
 | `identity_lookup` | return bounded Concept/Entity identity candidates without silently merging ambiguity |
 | `gaps` | return scope- and sensitivity-bounded semantic knowledge gaps without leaking other partitions |
 
-`context` requires `confirm_no_case_data=true` because its task and goal are
-persisted in the Capsule. A host may send that confirmation only after keeping
-Analytix case facts, chats, identifiers, and attachments out of the request.
+`context` requires `confirm_no_case_data=true` because task and goal text become
+provider-visible Capsule data. A host may send that confirmation only after keeping
+client/case facts, chats, identifiers, and attachments out of the request.
 
 The default plugin has no `remember`, relation mutation, feedback write,
 `approve`, `import`, delete, shell, web, or case operation. Host configuration
-is not permission to copy Analytix case data into a vault.
+is not permission to copy client or case data into a vault.
 
 This read-only guarantee covers the DeepLaw MCP surface. A host must not give
 the same Agent a separate same-owner shell or filesystem route to
@@ -431,10 +441,10 @@ server to the default plugin manifest. The server exposes exactly one
 `confirm_no_case_data=true`. A model, retrieved page, Skill, or router cannot
 run `sink enable`, choose a broader grant, or add owner-only operations.
 
-## Analytix remains outside DeepLaw
+## Client and case workspaces remain outside DeepLaw
 
-Do not modify Analytix merely to make DeepLaw globally visible. DeepLaw does not store Analytix case
-projects. Any separately authorized future host bridge would have to preserve these invariants:
+DeepLaw does not store client or case projects. Any separately authorized host bridge must
+preserve these invariants:
 
 1. Register an optional DeepLaw stdio MCP profile, disabled for normal tasks.
 2. Start `deeplaw mcp --stdio` only after an explicit legal-research action or
@@ -442,12 +452,12 @@ projects. Any separately authorized future host bridge would have to preserve th
    sole activation gate.
 3. During MCP initialization, allowlist exactly the `law_support` leaf tool and
    reject any other DeepLaw tool before its schema reaches the model.
-4. Add the tool schema only to the legal-research turn. Preserve Analytix's
+4. Add the tool schema only to the legal-research turn. Preserve the host's
    stable system prefix and ordinary data tools for every other turn.
 5. Keep private case documents, facts, chats, embeddings, SQLite state, and
    DuckDB data inside the case project. Send only a minimal de-identified legal
    issue to the official DeepLaw scope. The optional DeepLaw user-private scope
-   is for legal references, not an Analytix case store.
+   is for legal references, not a case store.
 6. Keep the two-stage pattern: bounded `search`, then exact `get` and selective
    `verify`. Do not place broad retrieval results in the main context.
 7. Fail closed. If the process, release, receipt, or version check fails, report
@@ -457,8 +467,8 @@ projects. Any separately authorized future host bridge would have to preserve th
    queries when they may encode case facts.
 
 This keeps DeepLaw additive: legal-source research becomes available when
-requested without changing Analytix's behavior, context size, or tool choice on
-non-legal data work.
+requested without changing the host's behavior, context size, or tool choice
+on non-legal data work.
 
 ## Adapter validation checklist
 

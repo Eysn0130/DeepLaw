@@ -231,50 +231,64 @@ _QUERY_SYNONYMS = {
     "仓库": ("代码库",),
 }
 
-# Query-only lexical bridges are deliberately bounded and phrase based.  They
-# improve deterministic cross-language discovery without translating stored
-# evidence, changing source identity, or assigning Authority.  Index builders
-# continue to use ``search_terms`` so a profile change does not silently alter
-# durable derived-state inputs.
-QUERY_EXPANSION_PROFILE = "deeplaw-deterministic-query-expansion/1"
-_QUERY_CROSS_LANGUAGE_ALIASES = {
+# Query-only lexical bridges are deliberately bounded and query-only.  The v1
+# identity remains available for explicit compatibility requests, while v2 is
+# the default profile used by all current callers.  Index builders continue to
+# use ``search_terms`` so a profile change does not silently alter durable
+# derived-state inputs.
+QUERY_EXPANSION_PROFILE_V1 = "deeplaw-deterministic-query-expansion/1"
+QUERY_EXPANSION_PROFILE_V2 = "deeplaw-deterministic-query-expansion/2"
+QUERY_EXPANSION_PROFILE = QUERY_EXPANSION_PROFILE_V2
+_QUERY_CROSS_LANGUAGE_ALIASES_V1 = {
     "组织": ("organization",),
     "也称": ("known",),
     "别名": ("alias", "known"),
     "两位": ("two", "people"),
     "区分": ("distinguished",),
-    "指什么": ("refer",),
-    "证据准入": ("evidence", "admission"),
-    "证据接纳": ("evidence", "admission"),
-    "生产服务": ("production", "service"),
-    "全球": ("worldwide",),
-    "公共 API": ("public", "api"),
-    "公共API": ("public", "api"),
-    "诊断日志": ("diagnostic", "logs"),
-    "保留政策": ("retention", "policies"),
-    "保留期限": ("retention", "period"),
-    "保留期": ("retention", "period"),
-    "根据每项政策": ("according", "each", "policy"),
-    "摘要": ("summarize", "summary"),
+    "证据": ("evidence",),
+    "准入": ("admission",),
+    "生产": ("production",),
+    "全球": ("global",),
+    "公共": ("public",),
+    "日志": ("log",),
+    "政策": ("policy",),
+    "摘要": ("summary",),
     "来源": ("source",),
-    "有序步骤": ("ordered", "steps"),
-    "工作流": ("workflow",),
-    "时间线": ("timeline", "chronological"),
-    "发生": ("happened", "event"),
-    "协议修订": ("protocol", "revision"),
-    "使用哪个": ("use",),
-    "当前支持": ("currently", "support"),
+    "步骤": ("steps",),
+    "流程": ("workflow",),
+    "时间": ("timeline",),
+    "发生": ("event",),
+    "协议": ("protocol",),
     "当前": ("current",),
-    "发布概览": ("release", "overview"),
     "引用": ("quote",),
-    "精确颜色": ("exact", "color"),
-    "验证徽章": ("verification", "badge"),
-    "审阅完成": ("review", "completed"),
-    "计划发布": ("publication", "scheduled"),
-    "政策冲突": ("policy", "conflict"),
-    "之间的冲突": ("conflict",),
     "冲突": ("conflict",),
-    "比较": ("compare", "comparison"),
+    "比较": ("compare",),
+}
+
+_QUERY_CROSS_LANGUAGE_ALIASES_V2 = {
+    "组织": ("organization",),
+    "也称": ("known",),
+    "别名": ("alias",),
+    "两位": ("two", "people"),
+    "区分": ("distinguish",),
+    "证据": ("evidence",),
+    "准入": ("admission",),
+    "生产": ("production",),
+    "全球": ("global",),
+    "公共": ("public",),
+    "日志": ("log",),
+    "政策": ("policy",),
+    "来源": ("source",),
+    "摘要": ("summary",),
+    "步骤": ("steps",),
+    "流程": ("workflow",),
+    "时间": ("timeline",),
+    "发生": ("event",),
+    "协议": ("protocol",),
+    "当前": ("current",),
+    "引用": ("quote",),
+    "冲突": ("conflict",),
+    "比较": ("compare",),
 }
 
 
@@ -298,6 +312,43 @@ def canonical_json(value: Any) -> str:
         separators=(",", ":"),
         allow_nan=False,
     )
+
+
+_QUERY_EXPANSION_MAX_TERMS_V2 = 24
+_QUERY_EXPANSION_MATCH_POLICY_V2 = "normalized-casefold-substring"
+QUERY_EXPANSION_PROFILE_V2_LEXICON_SHA256 = sha256_bytes(
+    canonical_json(_QUERY_CROSS_LANGUAGE_ALIASES_V2).encode("utf-8")
+)
+_QUERY_EXPANSION_PROFILE_V2_BODY = {
+    "schema_version": "deeplaw.query-expansion-profile/v2",
+    "profile_id": QUERY_EXPANSION_PROFILE_V2,
+    "compatibility_profile": QUERY_EXPANSION_PROFILE_V1,
+    "lexicon_sha256": QUERY_EXPANSION_PROFILE_V2_LEXICON_SHA256,
+    "max_terms": _QUERY_EXPANSION_MAX_TERMS_V2,
+    "match_policy": _QUERY_EXPANSION_MATCH_POLICY_V2,
+    "rules": [
+        {
+            "rule_id": "script-normalization-v1",
+            "rationale": "Normalize Traditional and Simplified query scripts before matching.",
+            "locale": "zh-Hans/zh-Hant",
+            "direction": "bidirectional",
+        },
+        {
+            "rule_id": "atomic-bilingual-concepts-v1",
+            "rationale": "Bridge bounded, generic atomic concepts to English discovery terms.",
+            "locale": "zh/en",
+            "direction": "zh-to-en",
+        },
+    ],
+}
+
+QUERY_EXPANSION_PROFILE_V2_SHA256 = sha256_bytes(
+    canonical_json(_QUERY_EXPANSION_PROFILE_V2_BODY).encode("utf-8")
+)
+QUERY_EXPANSION_PROFILE_V2_METADATA = {
+    **_QUERY_EXPANSION_PROFILE_V2_BODY,
+    "profile_sha256": QUERY_EXPANSION_PROFILE_V2_SHA256,
+}
 
 
 def has_instruction_risk(text: str) -> bool:
@@ -497,20 +548,69 @@ def search_terms(
     return [unique[index] for index in indexes]
 
 
-def query_expansion_terms(text: str) -> list[str]:
-    """Return bounded deterministic cross-language aliases for a query only."""
+def _query_expansion_profile(profile: str | None) -> tuple[str, dict[str, tuple[str, ...]]]:
+    selected = QUERY_EXPANSION_PROFILE_V2 if profile is None else profile
+    if selected == QUERY_EXPANSION_PROFILE_V2:
+        lexicon_digest = sha256_bytes(
+            canonical_json(_QUERY_CROSS_LANGUAGE_ALIASES_V2).encode("utf-8")
+        )
+        body = _QUERY_EXPANSION_PROFILE_V2_BODY
+        if (
+            lexicon_digest != body["lexicon_sha256"]
+            or body["max_terms"] != _QUERY_EXPANSION_MAX_TERMS_V2
+            or body["match_policy"] != _QUERY_EXPANSION_MATCH_POLICY_V2
+            or sha256_bytes(canonical_json(body).encode("utf-8"))
+            != QUERY_EXPANSION_PROFILE_V2_SHA256
+        ):
+            raise RuntimeError("query expansion profile integrity check failed")
+        return selected, _QUERY_CROSS_LANGUAGE_ALIASES_V2
+    if selected == QUERY_EXPANSION_PROFILE_V1:
+        return selected, _QUERY_CROSS_LANGUAGE_ALIASES_V1
+    raise ValueError("query expansion profile is unsupported")
 
+
+def query_expansion_terms(
+    text: str,
+    *,
+    profile: str | None = None,
+    explain: bool = False,
+) -> list[str] | dict[str, Any]:
+    """Return bounded generic query aliases, optionally with rule evidence.
+
+    The default is v2.  v1 remains available only when explicitly requested;
+    no Benchmark or Gold data is loaded or consulted by this function.
+    """
+
+    if not isinstance(text, str) or len(text) > 20_000:
+        raise ValueError("query text is invalid or exceeds its bound")
+    selected, aliases = _query_expansion_profile(profile)
     normalized = normalize_query_text(text).casefold()
-    terms: list[str] = []
-    seen: set[str] = set()
-    for phrase, aliases in _QUERY_CROSS_LANGUAGE_ALIASES.items():
-        if phrase not in normalized:
-            continue
-        for alias in aliases:
-            if alias not in seen:
-                seen.add(alias)
-                terms.append(alias)
-    return terms[:24]
+    terms = sorted(
+        {
+            alias
+            for phrase, values in aliases.items()
+            if phrase in normalized
+            for alias in values
+        }
+    )[:_QUERY_EXPANSION_MAX_TERMS_V2]
+    if not explain:
+        return terms
+    rule_ids = (
+        ["script-normalization-v1", "atomic-bilingual-concepts-v1"]
+        if selected == QUERY_EXPANSION_PROFILE_V2 and terms
+        else []
+    )
+    return {
+        "schema_version": "deeplaw.query-expansion-explanation/v1",
+        "profile_id": selected,
+        "profile_sha256": (
+            QUERY_EXPANSION_PROFILE_V2_SHA256
+            if selected == QUERY_EXPANSION_PROFILE_V2
+            else None
+        ),
+        "terms": terms,
+        "rule_ids": rule_ids,
+    }
 
 
 def query_search_terms(

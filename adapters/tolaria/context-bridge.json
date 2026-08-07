@@ -1,0 +1,33 @@
+{
+  "schema_version": "deeplaw.host-context-bridge/v1",
+  "host": "tolaria",
+  "agent_context_schema": "deeplaw.agent-context-envelope/v1",
+  "bridge_api": "host_context_envelope",
+  "domain_apis": [
+    {
+      "name": "knowledge_support",
+      "mode": "read_only",
+      "grant_required": false
+    },
+    {
+      "name": "knowledge_sink",
+      "mode": "mutation",
+      "grant_required": true
+    }
+  ],
+  "integration_status": "integration_limited",
+  "host_surface": "stdio_mcp_config_and_ui_only_open_note",
+  "exact_upstream": {
+    "name": "Tolaria",
+    "version": "v2026-07-22",
+    "commit": "e2cd718a518cc96d1081b6ec3aabefe3b6c77199",
+    "plugin_api_status": "not_available",
+    "stable_active_note_preview_promote": false
+  },
+  "ephemeral": true,
+  "persistence_allowed": false,
+  "persistence_performed": false,
+  "authority": "none",
+  "legal_authority": false,
+  "max_provider_characters": 65536
+}

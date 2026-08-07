@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.input.v6.schema.json",
+  "title": "DeepLaw Knowledge Support Input v6",
+  "oneOf": [
+    {"$ref": "knowledge-support.input.v5.schema.json"},
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "query", "query_plan_version"],
+      "properties": {
+        "operation": {"const": "query"},
+        "query": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "query_plan_version": {"const": "6"},
+        "purpose": {
+          "enum": [
+            "answer", "verify", "quote", "historical", "legal", "debug",
+            "freshness_check"
+          ]
+        },
+        "policy": {
+          "enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
+        },
+        "scope": {"enum": ["personal", "project", "domain"]},
+        "max_sensitivity": {"enum": ["public", "internal", "private"]},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_chars": {"type": "integer", "minimum": 200, "maximum": 20000},
+        "max_tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "max_sources": {"type": "integer", "minimum": 1, "maximum": 32},
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "retrieval_mode": {"enum": ["exact", "lexical", "dense", "graph", "hybrid"]},
+        "as_of": {"type": "string", "format": "date-time"},
+        "kinds": {
+          "type": "array", "maxItems": 12, "uniqueItems": true,
+          "items": {
+            "enum": [
+              "claim", "comparison", "concept", "decision", "entity", "event",
+              "experience", "memory", "preference", "procedure", "skill", "synthesis"
+            ]
+          }
+        },
+        "query_target": {
+          "oneOf": [
+            {"type": "string", "minLength": 1, "maxLength": 5000},
+            {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "text": {"type": "string", "minLength": 1, "maxLength": 5000},
+                "semantic_key": {"type": "string", "minLength": 1, "maxLength": 500},
+                "knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
+                "revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+                "kind": {
+                  "enum": [
+                    "claim", "comparison", "concept", "decision", "entity", "event",
+                    "experience", "memory", "preference", "procedure", "skill", "synthesis"
+                  ]
+                }
+              },
+              "minProperties": 1
+            }
+          ]
+        },
+        "applicable_duties": {
+          "type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true,
+          "items": {
+            "enum": [
+              "primary_answer", "identity", "definition", "current_state",
+              "temporal_freshness", "procedure", "exception", "contradiction",
+              "applicability", "limitation", "source_evidence", "unresolved_gap"
+            ]
+          }
+        },
+        "capsule_projection": {"enum": ["compact", "standard", "audit"]}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "receipt_id"],
+      "properties": {
+        "operation": {"const": "explain"},
+        "receipt_id": {"type": "string", "pattern": "^queryreceipt_[0-9a-f]{24}$"}
+      }
+    }
+  ]
+}

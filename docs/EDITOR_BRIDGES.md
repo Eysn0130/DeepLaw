@@ -4,7 +4,7 @@ Status: **vNext implementation candidate**, 2026-08-01. DeepLaw now includes an 
 Obsidian plugin and an executable Tolaria adapter. It still does not fork either editor or make an
 editor authoritative.
 
-## Shared Editor Context Envelope
+## Editor and Agent Context Envelopes
 
 Obsidian and Tolaria map transient UI state to
 [`editor-context-envelope.v1.schema.json`](../contracts/editor-context-envelope.v1.schema.json):
@@ -20,6 +20,15 @@ explicit routing policy; they are not silently dumped into provider context.
 The result is always `ephemeral_context=true` and `persistence_performed=false`. Even when the
 caller sets `persistence_allowed=true`, a separate backfill or Sink request is required to create
 durable knowledge.
+
+The v0.13 host-neutral
+[`agent-context-envelope.v1.schema.json`](../contracts/agent-context-envelope.v1.schema.json) is a
+separate provider-facing lifecycle contract. It binds a bounded task/goal, opaque workspace and
+repository identities, commit/branch identities, active/open/current files, explicit selection,
+tabs, note/tool digests, purpose, policy and token budget. Obsidian, OpenCode and Tolaria generate
+the same content hash for the same normalized host state. The Editor envelope remains a supported
+UI-state input; it is not silently relabelled as an Agent envelope. Both are ephemeral, contain no
+Grant, and perform no Ledger write.
 
 ## Ownership
 
@@ -48,7 +57,9 @@ sources/inbox/
 views. `.deeplaw/` is forbidden. The production bridge under `adapters/obsidian/plugin/` waits for
 `workspace.onLayoutReady` before registering file events, preventing startup enumeration from being
 mistaken for new uploads. It uses argument-array process spawning with hard output/time limits,
-exposes explicit commands only, and never performs background compilation or network access. Its
+exposes explicit commands only, and never performs background compilation or network access. The
+v0.13 operator flow uses source/run/page pickers and exact paginated link navigation rather than
+asking the user to type internal IDs. Its
 release bundle consists of `main.js`, `manifest.json` and `styles.css`; the mock remains a contract
 fixture.
 
@@ -84,8 +95,10 @@ proves the mapping remains ephemeral and does not mutate the Ledger.
 The flow is: Tolaria supplies explicit context → DeepLaw retrieves or compiles → an authorized Sink
 commits canonical state → Tolaria refreshes/opens the exact projected path. Tolaria's note tools
 never write canonical roots. This preserves its workspace/Agent abstractions without importing
-DeepLaw's governance into the frontend. The compatibility target is Tolaria `v2026-06-23`, commit
-`b00fefef3fd503f2853445e085a44a8a371c3437`. References:
+DeepLaw's governance into the frontend. The compatibility target is Tolaria `v2026-07-22`, commit
+`e2cd718a518cc96d1081b6ec3aabefe3b6c77199`. The exact upstream release exposes no stable
+third-party active-note preview or promotion UI extension point, so the executable harness reports
+the full product loop as `integration_limited` rather than simulating it. References:
 [Tolaria repository](https://github.com/refactoringhq/tolaria),
 [Tolaria abstractions](https://github.com/refactoringhq/tolaria/blob/main/docs/ABSTRACTIONS.md) and
 [Tolaria releases](https://tolaria.md/releases/).

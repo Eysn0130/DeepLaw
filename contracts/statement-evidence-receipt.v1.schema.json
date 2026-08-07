@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/statement-evidence-receipt.v1.schema.json",
+  "title": "DeepLaw Statement Evidence Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "receipt_sha256", "statement_id", "knowledge_revision_id",
+    "map_sha256", "statement_sha256", "statement_type", "support_status",
+    "valid_from", "valid_to", "limitation", "input_set_sha256", "source_refs",
+    "knowledge_revision_refs", "relation_revision_refs", "gaps", "compilation_run_id",
+    "transaction_audit_head", "commit_audit_head", "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.statement-evidence-receipt/v1"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "statement_id": {"type": "string", "pattern": "^statement_[0-9a-f]{24}$"},
+    "knowledge_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "map_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "statement_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "statement_type": {"enum": ["factual", "interpretation", "limitation", "unresolved"]},
+    "support_status": {"enum": ["supported", "contested", "unsupported", "not_applicable"]},
+    "valid_from": {"type": ["string", "null"], "format": "date-time"},
+    "valid_to": {"type": ["string", "null"], "format": "date-time"},
+    "limitation": {"type": ["string", "null"], "minLength": 1, "maxLength": 4000},
+    "input_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/sourceReference"}},
+    "knowledge_revision_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}},
+    "relation_revision_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"}},
+    "gaps": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/gap"}},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "transaction_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commit_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "sourceReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "gap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gap_id", "reason"],
+      "properties": {
+        "gap_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    }
+  }
+}

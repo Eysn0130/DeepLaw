@@ -161,7 +161,7 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
     assert len(canonical_json(response).encode("utf-8")) <= 65_536
 
 
-def test_knowledge_support_v5_extends_without_mutating_frozen_v2_to_v4() -> None:
+def test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4() -> None:
     repository = Path(__file__).resolve().parents[1]
     v2 = json.loads(
         (repository / "contracts/knowledge-support.input.v2.schema.json").read_text()
@@ -182,7 +182,7 @@ def test_knowledge_support_v5_extends_without_mutating_frozen_v2_to_v4() -> None
         "compilation",
     }
     assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
-        "knowledge-support.input.v5.schema.json"
+        "knowledge-support.input.v6.schema.json"
     )
     purpose_context = {
         "operation": "context",
@@ -1408,7 +1408,7 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_support"]
             assert listed.tools[0].inputSchema["$id"].endswith(
-                "knowledge-support.input.v5.schema.json"
+                "knowledge-support.input.v6.schema.json"
             )
             semantic = await session.call_tool(
                 "knowledge_support",

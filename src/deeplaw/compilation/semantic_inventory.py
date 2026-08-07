@@ -7,6 +7,14 @@ from typing import Any
 from ..knowledge_autonomy import AutonomousKnowledgeStore, _validate_contract
 from ..knowledge_intelligence import normalize_identity_text
 from ..util import canonical_json, sha256_bytes, stable_id, strict_json_loads
+from .applicability import (
+    admitted_knowledge_candidates,
+    applicability_digest,
+    collect_runtime_facts,
+    derive_applicability,
+    policy_digest,
+    run_reference_time,
+)
 from .coordinator import CompilationCoordinator, _artifact, _decoded_artifact
 from .profiles import REQUIRED_SEMANTIC_DUTIES, SEMANTIC_DUTIES
 
@@ -155,8 +163,8 @@ class SemanticInventoryBuilder:
                 """,
                 (compilation_run_id,),
             ).fetchone()
-            if semantic_run is None or run["compiler_profile_version"] != "2":
-                raise ValueError("semantic inventory requires compiler profile v2")
+            if semantic_run is None or run["compiler_profile_version"] not in {"2", "3"}:
+                raise ValueError("semantic inventory requires compiler profile v2 or v3")
             if run["grant_id"] != grant_id:
                 raise PermissionError("semantic compilation run is bound to another grant")
             grant = store._grant(
@@ -177,9 +185,7 @@ class SemanticInventoryBuilder:
                 ).fetchone()
                 if row is None:
                     raise RuntimeError("semantic inventory binding is missing")
-                return _decoded_artifact(
-                    store, row["artifact_sha256"], role="semantic_inventory"
-                )
+                return _decoded_artifact(store, row["artifact_sha256"], role="semantic_inventory")
             observations = self._observations(store, compilation_run_id)
             duplicates, alias_collisions = self._clusters(observations)
             batches = store.connection.execute(
@@ -193,17 +199,34 @@ class SemanticInventoryBuilder:
                 (compilation_run_id,),
             ).fetchall()
             covered = sum(
-                len(strict_json_loads(row["covered_fragment_ids_json"]))
-                for row in batches
+                len(strict_json_loads(row["covered_fragment_ids_json"])) for row in batches
             )
-            omitted = sum(
-                len(strict_json_loads(row["omitted_fragments_json"]))
-                for row in batches
-            )
+            omitted = sum(len(strict_json_loads(row["omitted_fragments_json"])) for row in batches)
             previous_outputs = self._previous_outputs(store, run)
-            affected_syntheses = self._affected_syntheses(
-                store, run["source_revision_id"]
-            )
+            affected_syntheses = self._affected_syntheses(store, run["source_revision_id"])
+            runtime_facts: dict[str, Any] | None = None
+            applicability: dict[str, dict[str, Any]] | None = None
+            admitted_candidates: list[dict[str, Any]] = []
+            admitted_candidates_sha256: str | None = None
+            if run["compiler_profile_version"] == "3":
+                reference_time = run_reference_time(store, run)
+                admitted_candidates, _ = admitted_knowledge_candidates(
+                    store,
+                    grant=grant,
+                    reference_time=reference_time,
+                )
+                admitted_candidates_sha256 = sha256_bytes(
+                    canonical_json(admitted_candidates).encode("utf-8")
+                )
+                runtime_facts = collect_runtime_facts(
+                    store,
+                    run,
+                    observations=observations,
+                    previous_outputs=previous_outputs,
+                    affected_syntheses=affected_syntheses,
+                    reference_time=reference_time,
+                )
+                applicability = derive_applicability(runtime_facts)
             inventory_id = stable_id(
                 "semanticinventory",
                 compilation_run_id,
@@ -220,9 +243,7 @@ class SemanticInventoryBuilder:
                 "duplicate_clusters": duplicates,
                 "alias_collisions": alias_collisions,
                 "contradiction_candidates": [
-                    item
-                    for item in observations
-                    if item["kind"] == "contradiction_candidate"
+                    item for item in observations if item["kind"] == "contradiction_candidate"
                 ],
                 "unresolved_identities": [
                     item
@@ -247,6 +268,15 @@ class SemanticInventoryBuilder:
                 "truncated": False,
                 "inventory_sha256": "0" * 64,
             }
+            if runtime_facts is not None and applicability is not None:
+                inventory["coverage"]["runtime_facts"] = runtime_facts
+                inventory["coverage"]["applicability"] = applicability
+                inventory["coverage"]["applicability_digest"] = applicability_digest(applicability)
+                inventory["coverage"]["applicability_policy_sha256"] = policy_digest()
+                inventory["coverage"]["existing_admitted_candidates"] = admitted_candidates
+                inventory["coverage"]["existing_admitted_candidates_sha256"] = (
+                    admitted_candidates_sha256
+                )
             inventory["inventory_sha256"] = _inventory_digest(inventory)
             _validate_contract("run-semantic-inventory.v1.schema.json", inventory)
             recorded_at = store._next_transaction_time()
@@ -264,8 +294,7 @@ class SemanticInventoryBuilder:
                 if (
                     locked is None
                     or locked["inventory_sha256"] is not None
-                    or locked["observed_packet_count"]
-                    != locked["observation_packet_count"]
+                    or locked["observed_packet_count"] != locked["observation_packet_count"]
                 ):
                     raise RuntimeError("semantic inventory precondition changed")
                 artifact_sha256, _ = _artifact(
@@ -331,12 +360,30 @@ class SemanticInventoryBuilder:
                 row["artifact_sha256"],
                 role="semantic_inventory",
             )
+            if run["compiler_profile_version"] == "3":
+                grant = store.connection.execute(
+                    """
+                    SELECT allowed_scope, max_sensitivity
+                    FROM knowledge_sink_grants_v3
+                    WHERE grant_id = ? AND revoked_at IS NULL
+                    """,
+                    (run["grant_id"],),
+                ).fetchone()
+                if grant is None:
+                    raise PermissionError("semantic compilation grant is unavailable")
+                return self._finalization_packet_v3(
+                    store,
+                    run=run,
+                    inventory=inventory,
+                    grant=grant,
+                )
             keys = sorted(
                 {
                     (item["kind"], normalize_identity_text(candidate))
                     for item in inventory["observations"]
                     if (candidate := item["semantic_key_candidate"]) is not None
-                    and item["kind"] not in {
+                    and item["kind"]
+                    not in {
                         "relation",
                         "identity_candidate",
                         "contradiction_candidate",
@@ -360,11 +407,7 @@ class SemanticInventoryBuilder:
                     (kind,),
                 ).fetchall()
                 row = next(
-                    (
-                        item
-                        for item in rows
-                        if normalize_identity_text(item["semantic_key"]) == key
-                    ),
+                    (item for item in rows if normalize_identity_text(item["semantic_key"]) == key),
                     None,
                 )
                 if row is not None:
@@ -426,3 +469,141 @@ class SemanticInventoryBuilder:
                 )
             _validate_contract("semantic-finalization-packet.v1.schema.json", packet)
             return packet
+
+    @staticmethod
+    def _finalization_packet_v3(
+        store: AutonomousKnowledgeStore,
+        *,
+        run: Any,
+        inventory: dict[str, Any],
+        grant: Any,
+    ) -> dict[str, Any]:
+        coverage = inventory.get("coverage")
+        if not isinstance(coverage, dict):
+            raise RuntimeError("v3 semantic inventory coverage is unavailable")
+        applicability = coverage.get("applicability")
+        runtime_facts = coverage.get("runtime_facts")
+        if not isinstance(applicability, dict) or not isinstance(runtime_facts, dict):
+            raise RuntimeError("v3 semantic inventory applicability facts are unavailable")
+        duties: list[dict[str, Any]] = []
+        for duty in SEMANTIC_DUTIES:
+            decision = applicability.get(duty)
+            if not isinstance(decision, dict):
+                raise RuntimeError("v3 semantic inventory duty applicability is incomplete")
+            value = decision.get("applicability")
+            basis = decision.get("deterministic_basis")
+            if value == "unknown":
+                status = "unresolved"
+                unresolved_items = [
+                    "DeepLaw could not prove duty applicability from closed runtime facts."
+                ]
+                omission_reason = None
+            elif value == "not_applicable":
+                status = "omitted_with_reason"
+                unresolved_items = []
+                omission_reason = (
+                    basis.get("reason")
+                    if isinstance(basis, dict)
+                    else "Closed profile rule proves not-applicable."
+                )
+            else:
+                status = "unresolved"
+                unresolved_items = ["The applicable duty requires a bounded host report."]
+                omission_reason = None
+            duties.append(
+                {
+                    "duty_id": stable_id("duty", run["compilation_run_id"], duty),
+                    "duty_type": duty,
+                    "required": duty in REQUIRED_SEMANTIC_DUTIES,
+                    "applicability": value,
+                    "status": status,
+                    "output_refs": [],
+                    "evidence_refs": [],
+                    "reason": basis.get("reason", "DeepLaw applicability decision.")
+                    if isinstance(basis, dict)
+                    else "DeepLaw applicability decision.",
+                    "unresolved_items": unresolved_items,
+                    "omission_reason": omission_reason,
+                    "deterministic_basis": basis,
+                }
+            )
+        digest = applicability_digest(applicability)
+        frozen_candidates = coverage.get("existing_admitted_candidates")
+        frozen_candidates_sha256 = coverage.get("existing_admitted_candidates_sha256")
+        if not isinstance(frozen_candidates, list) or not isinstance(
+            frozen_candidates_sha256, str
+        ):
+            raise RuntimeError("v3 semantic inventory admitted candidate freeze is unavailable")
+        if frozen_candidates_sha256 != sha256_bytes(
+            canonical_json(frozen_candidates).encode("utf-8")
+        ):
+            raise RuntimeError("v3 semantic inventory admitted candidate freeze is invalid")
+        packet = {
+            "schema_version": "deeplaw.semantic-finalization-packet/v2",
+            "compiler_profile_version": "3",
+            "finalization_packet_id": stable_id(
+                "finalization", run["compilation_run_id"], inventory["inventory_sha256"]
+            ),
+            "compilation_run_id": run["compilation_run_id"],
+            "source_revision_id": run["source_revision_id"],
+            "expected_audit_head": run["input_audit_head"],
+            "inventory_sha256": inventory["inventory_sha256"],
+            "applicability_policy_sha256": policy_digest(),
+            "applicability_digest": digest,
+            "inventory": {
+                key: inventory[key]
+                for key in (
+                    "inventory_id",
+                    "inventory_sha256",
+                    "observation_count",
+                    "packet_count",
+                    "duplicate_clusters",
+                    "alias_collisions",
+                    "contradiction_candidates",
+                    "unresolved_identities",
+                    "coverage",
+                )
+            },
+            "duties": duties,
+            "existing_canonical_knowledge": [],
+            "previous_outputs": inventory["previous_outputs"],
+            "affected_syntheses": inventory["affected_syntheses"],
+            "budgets": {
+                "provider_bytes": MAX_FINALIZATION_PROVIDER_BYTES,
+                "max_publications": 10_000,
+                "max_relations": 10_000,
+            },
+            "truncated": bool(inventory.get("truncated") or runtime_facts.get("truncated")),
+        }
+        keys = sorted(
+            {
+                (item["kind"], normalize_identity_text(candidate))
+                for item in inventory["observations"]
+                if (candidate := item["semantic_key_candidate"]) is not None
+                and item["kind"]
+                not in {
+                    "relation",
+                    "identity_candidate",
+                    "contradiction_candidate",
+                    "unresolved_item",
+                }
+            }
+        )
+        existing: list[dict[str, Any]] = []
+        candidates = {
+            (item["kind"], normalize_identity_text(item["semantic_key"])): item
+            for item in frozen_candidates
+            if item.get("semantic_key") is not None
+        }
+        for kind, key in keys[:256]:
+            row = candidates.get((kind, key))
+            if row is not None:
+                existing.append(row)
+        packet["existing_canonical_knowledge"] = existing
+        payload = canonical_json(packet).encode("utf-8")
+        if len(payload) > MAX_FINALIZATION_PROVIDER_BYTES:
+            raise ValueError(
+                "semantic finalization context exceeds its provider-visible byte bound"
+            )
+        _validate_contract("semantic-finalization-packet.v2.schema.json", packet)
+        return packet

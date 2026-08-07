@@ -80,6 +80,8 @@ def migrations_binding(repository: Path) -> dict[str, Any]:
         "deeplaw.autonomous-knowledge-core/v1",
         "deeplaw.autonomous-knowledge-core/v2",
         "deeplaw.source-compilation-core/v1",
+        "deeplaw.semantic-compilation-core/v1",
+        "deeplaw.statement-evidence-core/v1",
     ]
     relative_paths = [
         "src/deeplaw/knowledge_store.py",

@@ -578,7 +578,7 @@ def compile_context(
     if not confirm_no_case_data:
         raise ValueError(
             "context compilation requires confirmation that task and goal contain "
-            "no Analytix case material"
+            "no client or case material"
         )
     task = task.strip()
     goal = goal.strip() if goal else None

@@ -40,7 +40,7 @@ _DESCRIPTION = (
     "Explicitly enabled, local-only, scope-bound mutation capability for Agent-derived "
     "DeepLaw knowledge. Every call requires an idempotency key and produces an immutable "
     "revision and audit event. It cannot mutate Legal Pack evidence, elevate authority, "
-    "delete audit history, use arbitrary paths, or store Analytix case data."
+    "delete audit history, use arbitrary paths, or store client or case data."
 )
 _INSTRUCTIONS = (
     "Use only when the owner has explicitly enabled this separate Knowledge Sink server. "
@@ -798,7 +798,9 @@ def handle_knowledge_sink(
                     str | None,
                     request.get("expected_relation_revision_id"),
                 ),
-                evidence_refs=cast(list[dict[str, Any]] | None, request.get("evidence_refs")),
+                evidence_refs=cast(
+                    list[dict[str, Any]] | None, request.get("evidence_refs")
+                ),
                 valid_from=cast(str | None, request.get("valid_from")),
                 valid_to=cast(str | None, request.get("valid_to")),
                 confirm_no_case_data=True,
@@ -822,9 +824,7 @@ def handle_knowledge_sink(
                 action=str(request["action"]),
                 subject_knowledge_id=str(request["subject_knowledge_id"]),
                 object_knowledge_ids=cast(list[str], request["object_knowledge_ids"]),
-                evidence_refs=cast(
-                    list[dict[str, Any]] | None, request.get("evidence_refs")
-                ),
+                evidence_refs=cast(list[dict[str, Any]] | None, request.get("evidence_refs")),
                 run_id=cast(str | None, request.get("run_id")),
                 confirm_no_case_data=True,
             )
@@ -1108,8 +1108,8 @@ def _handle_extended_sink(
             compilation_run_id=str(request["compilation_run_id"]),
             grant_id=grant_id,
         )
-        if run.compiler_profile_version != "2":
-            raise ValueError("semantic operation requires compiler profile version 2")
+        if run.compiler_profile_version not in {"2", "3"}:
+            raise ValueError("semantic operation requires compiler profile version 2 or 3")
         if operation == "stage_semantic_observations":
             return run.stage_observations(
                 cast(dict[str, Any], request["plan"]),

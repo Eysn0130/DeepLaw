@@ -94,7 +94,7 @@ def test_context_compiler_requires_explicit_case_boundary_confirmation(
     root, _ = _ready_vault(tmp_path)
     with (
         KnowledgeVault(root, read_only=True) as vault,
-        pytest.raises(ValueError, match="no Analytix case material"),
+        pytest.raises(ValueError, match="no client or case material"),
     ):
         compile_context(
             vault,

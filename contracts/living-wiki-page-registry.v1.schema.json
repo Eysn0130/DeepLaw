@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-page-registry.v1.schema.json",
+  "title": "DeepLaw Living Wiki governed page registry v1",
+  "type": "object", "additionalProperties": false,
+  "required": [
+    "schema_version", "input_audit_head", "legacy_audit_head", "v2_manifest_sha256",
+    "generated_at", "page_count", "page_ids_sha256", "path_count", "paths_sha256",
+    "shard_count", "shards", "registry_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-page-registry/v1"},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "v2_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "page_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "anchor_count": {"type": "integer", "minimum": 0, "maximum": 51200000},
+    "anchors_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "page_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "paths_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "shard_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "shards": {"type": "array", "maxItems": 200000, "items": {"$ref": "#/$defs/shard"}},
+    "registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "shard": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256", "record_count", "records_sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^\\.deeplaw/derived/wiki/v3/registry/page-[0-9]{5}\\.json$"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "record_count": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "records_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "shard_document": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "records"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.living-wiki-page-registry/v1"},
+        "records": {"type": "array", "minItems": 1, "maxItems": 2000, "items": {"$ref": "#/$defs/page_record"}}
+      }
+    },
+    "page_record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["page_id", "namespace", "canonical_page_path", "kind", "audit_head", "byte_size", "sha256", "scope", "sensitivity", "lifecycle", "freshness", "authority", "input_refs"],
+      "properties": {
+        "page_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "namespace": {"enum": ["knowledge", "aggregate", "source", "system", "legal"]},
+        "canonical_page_path": {"type": "string", "minLength": 1, "maxLength": 2000, "pattern": "^[^/][^\\x00]*\\.md$"},
+        "kind": {"enum": ["aggregate", "concept", "claim", "comparison", "decision", "entity", "event", "experience", "memory", "preference", "procedure", "skill", "source", "synthesis", "system"]},
+        "revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "source_fragment": {"type": "object", "additionalProperties": false, "required": ["source_revision_id"], "properties": {"source_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "fragment_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "fragment_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}}, "oneOf": [{"required": ["fragment_id"], "not": {"required": ["fragment_revision_id"]}}, {"required": ["fragment_revision_id"], "not": {"required": ["fragment_id"]}}]},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "scope": {"enum": ["personal", "project", "domain"]},
+        "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+        "lifecycle": {"enum": ["active", "superseded", "revoked", "expired", "forgotten", "archived", "quarantined"]},
+        "freshness": {"enum": ["fresh", "stale", "unknown", "invalidated"]},
+        "authority": {"const": "none"},
+        "input_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f\\s](?:[^\\x00-\\x1f\\x7f]*[^\\x00-\\x1f\\x7f\\s])?$"}},
+        "anchors": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/anchor"}},
+        "knowledge_id": {"type": "string", "maxLength": 256, "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "semantic_key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "aliases": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"}},
+        "title": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "projection_id": {"type": "string", "maxLength": 256, "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}
+      },
+      "oneOf": [{"required": ["revision_id"], "not": {"required": ["source_fragment"]}}, {"required": ["source_fragment"], "not": {"required": ["revision_id"]}}]
+    },
+    "anchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["anchor_id", "anchor", "kind"],
+      "properties": {
+        "anchor_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "anchor": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "kind": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "source_fragment": {"$ref": "#/$defs/source_fragment"},
+        "statement_target": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+            {"type": "object", "additionalProperties": false, "minProperties": 1, "maxProperties": 1,
+              "properties": {
+                "statement_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+                "statement_key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+                "semantic_key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"}
+              }
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {"required": ["source_fragment"], "not": {"required": ["statement_target"]}},
+        {"required": ["statement_target"], "not": {"required": ["source_fragment"]}}
+      ]
+    },
+    "source_fragment": {
+      "type": "object", "additionalProperties": false, "required": ["source_revision_id"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "fragment_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "fragment_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}
+      },
+      "oneOf": [
+        {"required": ["fragment_id"], "not": {"required": ["fragment_revision_id"]}},
+        {"required": ["fragment_revision_id"], "not": {"required": ["fragment_id"]}}
+      ]
+    }
+  }
+}

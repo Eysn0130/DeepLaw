@@ -21,7 +21,7 @@ DeepLaw 2.0 是跨 Agent 使用的中国法律研究底座。它包含团队维�
 
 案件证据、案件聊天、工作笔记、身份信息、交易数据和案件项目私有文档不属于 DeepLaw
 任何语料，任何情况下都不得进入官方或用户私有 release、缓存、日志、评测集或派生专题页。
-用户私有库只接收法律参考资料，不能作为 Analytix 案件项目库的替代品。
+用户私有库只接收法律参考资料，不能作为任何客户或案件项目库的替代品。
 
 ## 权威层级
 
@@ -54,7 +54,7 @@ MCP 运行时不得拥有构建和发布权限。`build`、OCR、人工复核和
 | --- | --- | --- | --- |
 | 官方团队目录 | DeepLaw 发布团队 | 离线 `official install/update/enable/disable/uninstall` | catalog sequence 单调递增；每次更新新建不可变 release；用户可停用/卸载本机副本 |
 | 用户私有法律资料 | 当前本机 OS 用户 | 离线 `private add/delete` | owner-only 根目录；始终 `authorityRank=0`、`status=unknown`；不得进入官方目录 |
-| Analytix 案件项目 | 对应案件项目与 Analytix 宿主 | Analytix 自己的项目 API/SQLite/DuckDB | 完全不属于 DeepLaw；DeepLaw 不读取、不索引、不更新 |
+| 客户或案件项目 | 对应案件项目与宿主 | 宿主自己的项目 API/SQLite/DuckDB | 完全不属于 DeepLaw；DeepLaw 不读取、不索引、不更新 |
 
 官方与私有范围分别使用 ACTIVE 指针、source cache、release 目录和 MCP operation。不得通过
 同库 `scope` 字段、`case_id` filter 或统一候选排序模拟隔离。官方更新不能读取、删除、提升或

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepLaw Source Compiler"
+  short_description: "Compile admitted sources into governed knowledge"
+  default_prompt: "Use $deeplaw-compile-source to compile this admitted source with owner approval."

@@ -1,25 +1,46 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _atomic_owner_write,
+    _interval_admits,
     _validate_contract,
 )
 from ..knowledge_intelligence import detect_communities
 from ..util import canonical_json, sha256_bytes, sha256_file, stable_id, strict_json_loads
+from ..wiki import (
+    build_link_index,
+    build_living_wiki_manifest_v3,
+    build_page_registry,
+    build_resolver_index,
+)
+from .incremental import (
+    activate_projection,
+    begin_transaction,
+    build_change_set,
+    discard_transaction,
+    prepare_activation,
+    read_previous_manifest,
+    read_previous_v3,
+    recover_projection,
+)
+from .profiles import projection_profile as resolve_projection_profile
 
-LIVING_WIKI_SCHEMA = "deeplaw.living-wiki-manifest/v1"
-LIVING_WIKI_GENERATOR = "deeplaw.living-wiki-projector/1"
+LIVING_WIKI_SCHEMA = "deeplaw.living-wiki-manifest/v2"
+LIVING_WIKI_GENERATOR = "deeplaw.living-wiki-projector/2"
 INDEX_SHARD_SIZE = 200
 SOURCE_FRAGMENT_SHARD_SIZE = 64
 CANVAS_NODE_LIMIT = 200
 CANVAS_EDGE_LIMIT = 400
 MAX_DERIVED_FILE_BYTES = 256 * 1024
+V3_MANIFEST_PATH = ".deeplaw/derived/wiki/v3/manifest.json"
 
 _KIND_DIRECTORIES = {
     "claim": "claims",
@@ -41,19 +62,52 @@ def _frontmatter(
     *,
     schema: str,
     audit_head: str,
-    fields: dict[str, str] | None = None,
+    fields: dict[str, Any] | None = None,
 ) -> list[str]:
+    metadata: dict[str, Any] = {
+        "schema": schema,
+        "derived_view": "true",
+        "audit_head": audit_head,
+        "authority": "none",
+        "legal_authority": "false",
+        "verification": "projection_only",
+        "freshness": "not_applicable",
+        "lifecycle": "active",
+        "semantic_status": "not_applicable",
+        "revision": "not_applicable",
+    }
+    metadata.update(fields or {})
     lines = [
         "---",
-        f"schema: {schema}",
-        "derived_view: true",
-        f"audit_head: {audit_head}",
-        "authority: none",
-        "legal_authority: false",
+        *[f"{key}: {value}" for key, value in metadata.items()],
+        "---",
+        "",
+        "## Governance",
+        "",
+        f"- Authority: `{metadata['authority']}`",
+        f"- Verification: `{metadata['verification']}`",
+        f"- Freshness: `{metadata['freshness']}`",
+        f"- Lifecycle: `{metadata['lifecycle']}`",
+        f"- Semantic Status: `{metadata['semantic_status']}`",
+        f"- Revision: `{metadata['revision']}`",
+        "",
+        "### Evidence",
+        "",
+        "- Projection metadata only; consult the exact Source Evidence or Ledger record.",
+        "",
+        "### History",
+        "",
+        "- Projection history is bounded by the registered audit head and revision identity.",
+        "",
+        "### Gap",
+        "",
+        "- `not_applicable` for this projection view unless a page-specific gap is listed.",
+        "",
+        "### Contradiction",
+        "",
+        "- `not_applicable` for this projection view unless an admitted contradiction is listed.",
+        "",
     ]
-    for key, value in (fields or {}).items():
-        lines.append(f"{key}: {value}")
-    lines.extend(["---", ""])
     return lines
 
 
@@ -61,6 +115,12 @@ def _wiki_link(path: str, title: str) -> str:
     target = PurePosixPath(path).with_suffix("").as_posix()
     safe_title = title.replace("|", "¦").replace("]", "）")
     return f"[[{target}|{safe_title}]]"
+
+
+def _fragment_anchor(fragment_id: str) -> str:
+    """Return the stable, Obsidian-compatible HTML/heading anchor for a Source Fragment."""
+
+    return f"fragment-{fragment_id.replace(':', '-')}"
 
 
 def _write(
@@ -84,7 +144,59 @@ def _write(
     )
 
 
-def _current_rows(store: AutonomousKnowledgeStore) -> list[dict[str, Any]]:
+def _page_record(
+    *,
+    page_id: str,
+    namespace: str,
+    path: str,
+    kind: str,
+    revision_id: str,
+    audit_head: str,
+    payload: bytes,
+    scope: str,
+    sensitivity: str,
+    lifecycle: str = "active",
+    freshness: str = "fresh",
+    input_refs: list[str] | None = None,
+    knowledge_id: str | None = None,
+    semantic_key: str | None = None,
+    aliases: list[str] | None = None,
+    title: str | None = None,
+    anchors: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Create a caller-owned registry row from explicit identity/governance inputs."""
+
+    refs = sorted(set(input_refs or [audit_head]))
+    if len(refs) > 256:
+        refs = [*refs[:255], stable_id("input-set", canonical_json(refs))]
+    return {
+        "page_id": page_id,
+        "namespace": namespace,
+        "canonical_page_path": path,
+        "kind": kind,
+        "revision_id": revision_id,
+        "audit_head": audit_head,
+        "byte_size": len(payload),
+        "sha256": sha256_bytes(payload),
+        "scope": scope,
+        "sensitivity": sensitivity,
+        "lifecycle": lifecycle,
+        "freshness": freshness,
+        "authority": "none",
+        "input_refs": refs,
+        **({"knowledge_id": knowledge_id} if knowledge_id else {}),
+        **({"semantic_key": semantic_key} if semantic_key else {}),
+        "aliases": sorted(set(aliases or [])),
+        **({"title": title} if title else {}),
+        **({"anchors": anchors} if anchors else {}),
+    }
+
+
+def _current_rows(
+    store: AutonomousKnowledgeStore,
+    *,
+    reference_time: str,
+) -> list[dict[str, Any]]:
     candidates = store.connection.execute(
         """
         SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
@@ -101,6 +213,13 @@ def _current_rows(store: AutonomousKnowledgeStore) -> list[dict[str, Any]]:
     ).fetchall()
     rows: list[dict[str, Any]] = []
     for row in candidates:
+        if not _interval_admits(
+            reference_time=reference_time,
+            valid_from=row["valid_from"],
+            valid_to=row["valid_to"],
+            expires_at=row["expires_at"],
+        ):
+            continue
         revision = store._revision_row(row, include_body=True)
         if not store.revision_provenance_admitted(revision):
             continue
@@ -175,6 +294,27 @@ def _current_rows(store: AutonomousKnowledgeStore) -> list[dict[str, Any]]:
                     ),
                     "input_set_sha256": input_set["input_set_sha256"],
                 }
+        generation = revision.get("generation")
+        revision["semantic_status"] = "not_recorded"
+        compilation_run_id: str | None = None
+        if isinstance(generation, dict):
+            activity_id = generation.get("activity_id")
+            run_id = generation.get("run_id")
+            if isinstance(activity_id, str) and activity_id.startswith("compilationrun_"):
+                compilation_run_id = activity_id
+            elif isinstance(run_id, str) and run_id.startswith("compilationrun_"):
+                compilation_run_id = run_id
+        if compilation_run_id is not None:
+            semantic = store.connection.execute(
+                """
+                SELECT semantic_status
+                FROM semantic_compilation_runs_v2
+                WHERE compilation_run_id = ?
+                """,
+                (compilation_run_id,),
+            ).fetchone()
+            if semantic is not None and isinstance(semantic["semantic_status"], str):
+                revision["semantic_status"] = semantic["semantic_status"]
         rows.append(revision)
     return rows
 
@@ -183,14 +323,129 @@ def _current_relations(
     store: AutonomousKnowledgeStore,
     *,
     admitted_ids: set[str],
+    reference_time: str,
 ) -> list[dict[str, Any]]:
     return [
         relation
-        for relation in store._current_relations()
+        for relation in store._current_relations(reference_time=reference_time)
         if relation["subject_knowledge_id"] in admitted_ids
         and relation["object_knowledge_id"] in admitted_ids
         and store.relation_provenance_admitted(relation)
     ]
+
+
+def _statement_freshness(
+    store: AutonomousKnowledgeStore,
+    *,
+    knowledge_revision_id: str,
+    source_refs: list[dict[str, Any]],
+) -> str:
+    """Return the worst direct Source dependency freshness for a statement."""
+
+    order = {"fresh": 0, "unknown": 1, "stale": 2, "invalidated": 3}
+    freshness = "fresh"
+    for reference in source_refs:
+        row = store.connection.execute(
+            """
+            SELECT freshness
+            FROM knowledge_dependencies_v1
+            WHERE consumer_kind = 'knowledge_revision'
+              AND consumer_revision_id = ?
+              AND source_revision_id = ?
+              AND fragment_id = ?
+              AND dependency_kind = 'direct'
+            LIMIT 1
+            """,
+            (
+                knowledge_revision_id,
+                reference.get("source_revision_id"),
+                reference.get("fragment_id"),
+            ),
+        ).fetchone()
+        candidate = row["freshness"] if row is not None else "unknown"
+        if candidate not in order:
+            candidate = "unknown"
+        if order[candidate] > order[freshness]:
+            freshness = candidate
+    return freshness
+
+
+def _current_statements(
+    store: AutonomousKnowledgeStore,
+    *,
+    knowledge_revision_id: str,
+) -> list[dict[str, Any]]:
+    """Read persisted statement/map/receipt identities without changing Knowledge content."""
+
+    rows = store.connection.execute(
+        """
+        SELECT statements.statement_id, statements.knowledge_revision_id,
+               statements.ordinal, statements.statement_text,
+               statements.statement_sha256, statements.statement_type,
+               statements.support_status, statements.valid_from,
+               statements.valid_to, statements.limitation,
+               statements.input_set_sha256, statements.statement_json,
+               maps.map_sha256, maps.map_json, maps.char_start, maps.char_end,
+               receipts.receipt_sha256, receipts.artifact_sha256,
+               receipts.compilation_run_id, receipts.transaction_audit_head,
+               receipts.commit_audit_head, receipts.recorded_at
+        FROM knowledge_statements_v1 AS statements
+        LEFT JOIN statement_evidence_maps_v1 AS maps
+          ON maps.statement_id = statements.statement_id
+        LEFT JOIN statement_evidence_receipts_v1 AS receipts
+          ON receipts.statement_id = statements.statement_id
+        WHERE statements.knowledge_revision_id = ?
+        ORDER BY statements.ordinal, statements.statement_id
+        """,
+        (knowledge_revision_id,),
+    ).fetchall()
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        statement = strict_json_loads(row["statement_json"])
+        if not isinstance(statement, dict):
+            raise RuntimeError("persisted statement artifact is not an object")
+        source_refs = statement.get("source_refs", [])
+        if not isinstance(source_refs, list):
+            raise RuntimeError("persisted statement source references are invalid")
+        map_value = strict_json_loads(row["map_json"]) if row["map_json"] else None
+        if not isinstance(map_value, dict) or map_value.get("statement_id") != row["statement_id"]:
+            raise RuntimeError("persisted statement map is invalid")
+        if not isinstance(row["receipt_sha256"], str) or not row["receipt_sha256"]:
+            raise RuntimeError("persisted statement receipt is missing")
+        result.append(
+            {
+                "statement_id": row["statement_id"],
+                "knowledge_revision_id": row["knowledge_revision_id"],
+                "ordinal": row["ordinal"],
+                "statement_text": row["statement_text"],
+                "statement_sha256": row["statement_sha256"],
+                "statement_type": row["statement_type"],
+                "support_status": row["support_status"],
+                "valid_from": row["valid_from"],
+                "valid_to": row["valid_to"],
+                "limitation": row["limitation"],
+                "input_set_sha256": row["input_set_sha256"],
+                "source_refs": source_refs,
+                "knowledge_revision_refs": statement.get("knowledge_revision_refs", []),
+                "relation_revision_refs": statement.get("relation_revision_refs", []),
+                "gaps": statement.get("gaps", []),
+                "map_sha256": row["map_sha256"],
+                "char_start": row["char_start"],
+                "char_end": row["char_end"],
+                "receipt_sha256": row["receipt_sha256"],
+                "receipt_artifact_sha256": row["artifact_sha256"],
+                "compilation_run_id": row["compilation_run_id"],
+                "transaction_audit_head": row["transaction_audit_head"],
+                "commit_audit_head": row["commit_audit_head"],
+                "recorded_at": row["recorded_at"],
+                "freshness": _statement_freshness(
+                    store,
+                    knowledge_revision_id=knowledge_revision_id,
+                    source_refs=source_refs,
+                ),
+            }
+        )
+    return result
 
 
 def _object_page(
@@ -200,6 +455,8 @@ def _object_page(
     page_paths: dict[str, str],
     titles: dict[str, str],
     relations: list[dict[str, Any]],
+    statements: list[dict[str, Any]] | None = None,
+    source_fragment_links: dict[tuple[str, str], tuple[str, str]] | None = None,
 ) -> str:
     outgoing = [
         relation
@@ -220,6 +477,10 @@ def _object_page(
             "revision_id": row["revision_id"],
             "kind": row["kind"],
             "freshness": row["freshness"],
+            "verification": row["verification"],
+            "lifecycle": row["lifecycle"],
+            "semantic_status": row.get("semantic_status", "not_recorded"),
+            "revision": row["revision_id"],
         },
     )
     lines.extend(
@@ -290,6 +551,67 @@ def _object_page(
             )
     if not row["source_refs"]:
         lines.append("- Explicit gap: this revision has no Source binding.")
+    statement_rows = statements or []
+    lines.extend(["", "## Statement Evidence", ""])
+    if not statement_rows:
+        lines.append("- Explicit gap: no persisted Statement Evidence Map is registered.")
+    else:
+        links = source_fragment_links or {}
+        for statement in statement_rows:
+            statement_id = statement["statement_id"]
+            anchor = f"statement-{statement_id}"
+            lines.extend(
+                [
+                    f'<a id="{anchor}"></a>',
+                    f"### Statement {statement['ordinal']} · `{statement_id}`",
+                    "",
+                    f"- Statement type: `{statement['statement_type']}`",
+                    f"- Support status: `{statement['support_status']}`",
+                    f"- Freshness: `{statement['freshness']}`",
+                    f"- Statement SHA-256: `{statement['statement_sha256']}`",
+                    f"- Receipt ID: `receipt:{statement['receipt_sha256'] or 'missing'}`",
+                    f"- Receipt digest: `{statement['receipt_sha256'] or 'missing'}`",
+                    f"- Statement text (exact persisted text): {statement['statement_text']}",
+                ]
+            )
+            source_refs = statement.get("source_refs", [])
+            if source_refs:
+                lines.append("- Source Evidence:")
+                for reference in source_refs:
+                    source_revision_id = reference.get("source_revision_id")
+                    fragment_id = reference.get("fragment_id")
+                    locator = str(reference.get("locator", "locator omitted")).replace("`", "'")
+                    quote_sha = reference.get("quote_sha256", "missing")
+                    target = links.get((source_revision_id, fragment_id))
+                    if target is not None:
+                        page, fragment_anchor = target
+                        evidence_link = (
+                            f"[[{PurePosixPath(page).with_suffix('').as_posix()}"
+                            f"#{fragment_anchor}|Source fragment {fragment_id}]]"
+                        )
+                    else:
+                        evidence_link = f"`{fragment_id}`"
+                    lines.append(
+                        f"  - {evidence_link} · source revision `{source_revision_id}` · "
+                        f"locator `{locator}` · quote SHA-256 `{quote_sha}`"
+                    )
+            else:
+                lines.append("- Source Evidence: explicit gap; no exact Source Fragment reference.")
+            limitation = statement.get("limitation")
+            lines.append(
+                f"- Limitation: {limitation if limitation else 'none recorded.'}"
+            )
+            gaps = statement.get("gaps", [])
+            if gaps:
+                lines.append(
+                    "- Gaps: "
+                    + "; ".join(
+                        f"{item.get('gap_id', 'gap')}: {item.get('reason', 'unspecified')}"
+                        for item in gaps
+                    )
+                )
+            else:
+                lines.append("- Gaps: none recorded.")
     lines.extend(["", "## Relations", ""])
     for relation in sorted(
         outgoing,
@@ -355,6 +677,7 @@ def _object_page(
 def _source_pages(
     store: AutonomousKnowledgeStore,
     *,
+    output_root: Path,
     audit_head: str,
     generated: list[dict[str, Any]],
     rows: list[dict[str, Any]],
@@ -479,6 +802,7 @@ def _source_pages(
             (source["source_revision_id"],),
         ).fetchall()
         fragment_shards: list[tuple[str, int, int]] = []
+        fragment_anchor_pages: dict[str, list[dict[str, Any]]] = {}
         for start in range(0, len(fragments), SOURCE_FRAGMENT_SHARD_SIZE):
             shard = fragments[start : start + SOURCE_FRAGMENT_SHARD_SIZE]
             shard_ordinal = start // SOURCE_FRAGMENT_SHARD_SIZE + 1
@@ -504,14 +828,39 @@ def _source_pages(
             )
             for fragment in shard:
                 locator = str(fragment["locator"]).replace("`", "'")
+                shard_lines.append(f'<a id="{_fragment_anchor(fragment["fragment_id"])}"></a>')
                 shard_lines.append(
                     f"- {fragment['ordinal']}. `{fragment['fragment_id']}` · "
                     f"revision `{fragment['fragment_revision_id']}` · "
                     f"locator `{locator}` · quote SHA-256 "
                     f"`{fragment['text_sha256']}`"
                 )
+            fragment_anchor_pages[relative] = [
+                anchor
+                for fragment in shard
+                for anchor in (
+                    {
+                        "anchor_id": f"fragment-{fragment['fragment_id']}",
+                        "anchor": _fragment_anchor(fragment["fragment_id"]),
+                        "kind": "source_fragment",
+                        "source_fragment": {
+                            "source_revision_id": source["source_revision_id"],
+                            "fragment_id": fragment["fragment_id"],
+                        },
+                    },
+                    {
+                        "anchor_id": f"fragment-revision-{fragment['fragment_revision_id']}",
+                        "anchor": _fragment_anchor(fragment["fragment_id"]),
+                        "kind": "source_fragment",
+                        "source_fragment": {
+                            "source_revision_id": source["source_revision_id"],
+                            "fragment_revision_id": fragment["fragment_revision_id"],
+                        },
+                    },
+                )
+            ]
             _write(
-                store.root,
+                output_root,
                 relative=relative,
                 content="\n".join(shard_lines),
                 generated=generated,
@@ -557,21 +906,41 @@ def _source_pages(
         compiler = (
             strict_json_loads(source["compiler_json"]) if source["compiler_json"] else {}
         )
+        freshness_order = {"fresh": 0, "unknown": 1, "stale": 2, "invalidated": 3}
+        source_freshness = "unknown" if not dependencies else "fresh"
+        for dependency in dependencies:
+            candidate = dependency["freshness"]
+            if candidate not in freshness_order:
+                candidate = "unknown"
+            if freshness_order[candidate] > freshness_order[source_freshness]:
+                source_freshness = candidate
         title = source["title"] or source["source_revision_id"]
         lines = _frontmatter(
             schema="deeplaw.living-wiki-source/v1",
             audit_head=audit_head,
-            fields={"source_revision_id": source["source_revision_id"]},
+            fields={
+                "source_revision_id": source["source_revision_id"],
+                "revision": source["source_revision_id"],
+                "lifecycle": source["status"] or "active",
+                "freshness": source_freshness,
+                "semantic_status": (
+                    runs[0]["semantic_status"]
+                    if runs and runs[0]["semantic_status"]
+                    else "not_recorded"
+                ),
+            },
         )
         lines.extend(
             [
                 f"# {title}",
                 "",
-                "## Source Revision",
+                "## SOURCE EVIDENCE",
                 "",
-                f"- Source Revision: `{source['source_revision_id']}`",
-                f"- Source identity: `{source['source_key']}`",
-                f"- Content SHA-256: `{source['content_sha256']}`",
+                "The following fields are immutable Source Revision identity and evidence "
+                "coordinates. They are not an Agent-generated summary.",
+                f"- Source Revision ID: `{source['source_revision_id']}`",
+                f"- Canonical source identity: `{source['source_key']}`",
+                f"- Original content SHA-256: `{source['content_sha256']}`",
                 f"- Media identity: `{source['media_identity']}`",
                 f"- Source format: `{source['kind'] or 'unknown'}` / "
                 f"`{source['media_type'] or 'unknown'}`",
@@ -624,7 +993,18 @@ def _source_pages(
             lines.extend(f"- `{item['freshness']}`: {item['count']}" for item in dependencies)
         else:
             lines.append("- Explicit gap: no compiled Knowledge dependency.")
-        lines.extend(["", "## Source summary synthesis", ""])
+        lines.extend(
+            [
+                "",
+                "## AGENT-DERIVED SOURCE SUMMARY",
+                "",
+                "- origin=agent_derived",
+                "- authority=none",
+                "- legal_authority=false",
+                "- This section is a governed derived view and never replaces SOURCE EVIDENCE.",
+                "",
+            ]
+        )
         if source_summary is None:
             lines.append(
                 "- Explicit gap: no canonical synthesis with semantic key "
@@ -661,13 +1041,22 @@ def _source_pages(
         if runs:
             for item in runs:
                 lines.append(
-                    f"- `{item['compilation_run_id']}` · `{item['status']}` · "
+                    f"- Run `{item['compilation_run_id']}` · "
+                    f"`{item['compiler_profile']}@{item['compiler_profile_version']}`"
+                )
+                lines.append(
+                    f"  - Compatibility: `{item['compilation_run_id']}` · "
+                    f"`{item['status']}` · "
                     f"`{item['compiler_profile']}@{item['compiler_profile_version']}` · "
                     f"transaction `{item['status']}` · semantic "
                     f"`{item['semantic_status'] or 'not_recorded'}`"
                 )
-                if item["compiler_profile_version"] != "2":
-                    continue
+                lines.extend(
+                    [
+                        f"  - Run transaction status: `{item['status']}`",
+                        f"  - Semantic status: `{item['semantic_status'] or 'not_recorded'}`",
+                    ]
+                )
                 lines.extend(
                     [
                         f"  - Observed packets: `{item['observed_packet_count'] or 0}` / "
@@ -682,28 +1071,46 @@ def _source_pages(
                 )
                 if item["duty_reports"]:
                     lines.append("  - Semantic duties:")
-                    lines.extend(
-                        f"    - `{report['duty_type']}`: `{report['status']}`"
-                        f"{' (required)' if report['required'] else ''}"
-                        for report in item["duty_reports"]
-                    )
+                    for report in item["duty_reports"]:
+                        if not isinstance(report, dict):
+                            lines.append("    - Explicit gap: malformed Duty Report.")
+                            continue
+                        applicability = report.get("applicability")
+                        if not applicability and item["compiler_profile_version"] == "2":
+                            applicability = "not_recorded_in_v2"
+                        if not applicability:
+                            applicability = "unknown"
+                        lines.append(
+                            f"    - Compatibility: `{report.get('duty_type', 'unknown')}`: "
+                            f"`{report.get('status', 'unresolved')}`"
+                            f"{' (required)' if report.get('required') else ''}"
+                        )
+                        lines.append(
+                            f"    - `{report.get('duty_type', 'unknown')}`: "
+                            f"applicability=`{applicability}` · "
+                            f"status=`{report.get('status', 'unresolved')}`"
+                            f"{' (required)' if report.get('required') else ''}"
+                        )
                 else:
                     lines.append("  - Explicit gap: no semantic Duty Report is registered.")
         else:
             lines.append("- Explicit gap: Source Revision has not been compiled.")
         _write(
-            store.root,
+            output_root,
             relative=f"wiki/sources/{source['source_revision_id']}.md",
             content="\n".join(lines),
             generated=generated,
         )
-        result.append(dict(source))
+        source_result = dict(source)
+        source_result["_fragment_anchor_pages"] = fragment_anchor_pages
+        result.append(source_result)
     return result
 
 
 def _community_views(
     *,
     store: AutonomousKnowledgeStore,
+    output_root: Path,
     rows: list[dict[str, Any]],
     relations: list[dict[str, Any]],
     page_paths: dict[str, str],
@@ -777,7 +1184,7 @@ def _community_views(
                 for row in shard
             )
             _write(
-                store.root,
+                output_root,
                 relative=shard_path,
                 content="\n".join(lines),
                 generated=generated,
@@ -861,7 +1268,7 @@ def _community_views(
                 ]
             )
         _write(
-            store.root,
+            output_root,
             relative=f"wiki/communities/{community_id}.md",
             content="\n".join(lines),
             generated=generated,
@@ -933,6 +1340,7 @@ def _canvas(
 def _recent_change_pages(
     store: AutonomousKnowledgeStore,
     *,
+    output_root: Path,
     rows: list[dict[str, Any]],
     sources: list[dict[str, Any]],
     page_paths: dict[str, str],
@@ -1056,7 +1464,7 @@ def _recent_change_pages(
             for event in shard
         )
         _write(
-            store.root,
+            output_root,
             relative=path,
             content="\n".join(lines),
             generated=generated,
@@ -1075,7 +1483,7 @@ def _recent_change_pages(
     )
     index_lines.extend(["# Recent changes", "", *shard_links])
     if not events:
-        index_lines.append("- No Ledger event has been recorded.")
+        index_lines.append("- Explicit gap: no Ledger event has been recorded.")
     if history_truncated:
         index_lines.extend(
             [
@@ -1085,25 +1493,70 @@ def _recent_change_pages(
             ]
         )
     _write(
-        store.root,
+        output_root,
         relative="wiki/recent-changes/index.md",
         content="\n".join(index_lines),
         generated=generated,
     )
 
 
-def rebuild_living_wiki(
+def _navigation_page(
+    *,
+    output_root: Path,
+    relative: str,
+    title: str,
+    audit_head: str,
+    generated: list[dict[str, Any]],
+    links: list[str],
+    gap: str,
+) -> None:
+    lines = _frontmatter(
+        schema="deeplaw.living-wiki-navigation/v1",
+        audit_head=audit_head,
+        fields={
+            "semantic_status": "projection",
+            "revision": "not_applicable",
+        },
+    )
+    lines.extend([f"# {title}", "", *links])
+    if not links:
+        lines.append(f"- Explicit gap: {gap}")
+    _write(
+        output_root,
+        relative=relative,
+        content="\n".join(lines),
+        generated=generated,
+    )
+
+
+def _generate_living_wiki(
     store: AutonomousKnowledgeStore,
     *,
+    output_root: Path,
     input_audit_head: str | None = None,
     run_status_overrides: dict[str, str] | None = None,
+    projection_profile: str = "standard",
+    reference_time: str | None = None,
+    lint: dict[str, Any] | None = None,
+    gaps: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build complete, sharded, deterministic views from admitted current revisions."""
+    """Build one profile-selected, sharded, deterministic Living Wiki projection."""
 
     store._require_write()
+    profile = resolve_projection_profile(projection_profile)
+    _validate_contract("projection-profile.v1.schema.json", profile)
     audit_head = input_audit_head or store.audit_head
     if audit_head != store.audit_head:
         raise RuntimeError("Living Wiki projection audit input changed")
+    audit_event = store.connection.execute(
+        "SELECT recorded_at FROM autonomous_events_v3 WHERE event_hash = ?",
+        (audit_head,),
+    ).fetchone()
+    if audit_event is None:
+        raise RuntimeError("Living Wiki projection audit input is not registered")
+    selected_reference_time = reference_time or audit_event["recorded_at"]
+    if selected_reference_time != audit_event["recorded_at"]:
+        raise RuntimeError("Living Wiki projection reference time is not deterministic")
     effective_run_statuses = dict(run_status_overrides or {})
     known_run_statuses = {
         "planned",
@@ -1147,18 +1600,50 @@ def rebuild_living_wiki(
         }
         for run in stored_run_states
     ]
-    rows = _current_rows(store)
+    rows = _current_rows(store, reference_time=selected_reference_time)
     admitted_ids = {row["knowledge_id"] for row in rows}
-    relations = _current_relations(store, admitted_ids=admitted_ids)
+    relations = _current_relations(
+        store,
+        admitted_ids=admitted_ids,
+        reference_time=selected_reference_time,
+    )
     generated: list[dict[str, Any]] = []
     page_paths = {
         row["knowledge_id"]: (f"wiki/{_KIND_DIRECTORIES[row['kind']]}/{row['knowledge_id']}.md")
         for row in rows
     }
     titles = {row["knowledge_id"]: row["title"] for row in rows}
+    sources: list[dict[str, Any]] = []
+    source_index = "wiki/sources/index.md"
+    if profile["source_pages"]:
+        # Source pages are generated before Knowledge pages so exact fragment anchors can be
+        # wired into Statement Evidence drill-down links without rereading source bytes.
+        sources = _source_pages(
+            store,
+            output_root=output_root,
+            audit_head=audit_head,
+            generated=generated,
+            rows=rows,
+            page_paths=page_paths,
+            run_status_overrides=effective_run_statuses,
+        )
+    source_fragment_links: dict[tuple[str, str], tuple[str, str]] = {}
+    for source in sources:
+        for path, anchors in source.get("_fragment_anchor_pages", {}).items():
+            for anchor in anchors:
+                fragment = anchor.get("source_fragment", {})
+                source_revision_id = fragment.get("source_revision_id")
+                fragment_id = fragment.get("fragment_id", fragment.get("fragment_revision_id"))
+                if isinstance(source_revision_id, str) and isinstance(fragment_id, str):
+                    source_fragment_links[(source_revision_id, fragment_id)] = (
+                        path,
+                        anchor["anchor"],
+                    )
     for row in rows:
+        statements = _current_statements(store, knowledge_revision_id=row["revision_id"])
+        row["_statements"] = statements
         _write(
-            store.root,
+            output_root,
             relative=page_paths[row["knowledge_id"]],
             content=_object_page(
                 row=row,
@@ -1166,6 +1651,8 @@ def rebuild_living_wiki(
                 page_paths=page_paths,
                 titles=titles,
                 relations=relations,
+                statements=statements,
+                source_fragment_links=source_fragment_links,
             ),
             generated=generated,
         )
@@ -1173,80 +1660,133 @@ def rebuild_living_wiki(
     for row in rows:
         by_kind[row["kind"]].append(row)
     index_links: list[str] = []
-    for kind in _KIND_DIRECTORIES:
-        members = by_kind.get(kind, [])
-        shard_links: list[str] = []
-        for shard_index, start in enumerate(range(0, len(members), INDEX_SHARD_SIZE), start=1):
-            shard = members[start : start + INDEX_SHARD_SIZE]
-            shard_path = f"wiki/indexes/{kind}-{shard_index:04d}.md"
+    if profile["kind_shards"] and profile["kind_indexes"]:
+        for kind in _KIND_DIRECTORIES:
+            members = by_kind.get(kind, [])
+            shard_links: list[str] = []
+            for shard_index, start in enumerate(
+                range(0, len(members), INDEX_SHARD_SIZE), start=1
+            ):
+                shard = members[start : start + INDEX_SHARD_SIZE]
+                shard_path = f"wiki/indexes/{kind}-{shard_index:04d}.md"
+                lines = _frontmatter(
+                    schema="deeplaw.living-wiki-index-shard/v1",
+                    audit_head=audit_head,
+                    fields={
+                        "kind": kind,
+                        "shard": str(shard_index),
+                        "item_count": str(len(shard)),
+                    },
+                )
+                lines.extend([f"# {kind.title()} index · {shard_index:04d}", ""])
+                lines.extend(
+                    f"- {_wiki_link(page_paths[row['knowledge_id']], row['title'])} "
+                    f"(`{row['knowledge_id']}`, `{row['freshness']}`)"
+                    for row in shard
+                )
+                _write(
+                    output_root,
+                    relative=shard_path,
+                    content="\n".join(lines),
+                    generated=generated,
+                )
+                shard_links.append(
+                    f"- {_wiki_link(shard_path, f'{kind.title()} {shard_index:04d}')} "
+                    f"({len(shard)} objects)"
+                )
+            kind_index = f"wiki/indexes/{kind}.md"
             lines = _frontmatter(
-                schema="deeplaw.living-wiki-index-shard/v1",
+                schema="deeplaw.living-wiki-kind-index/v1",
                 audit_head=audit_head,
-                fields={
-                    "kind": kind,
-                    "shard": str(shard_index),
-                    "item_count": str(len(shard)),
-                },
+                fields={"kind": kind, "item_count": str(len(members))},
             )
-            lines.extend([f"# {kind.title()} index · {shard_index:04d}", ""])
-            lines.extend(
-                f"- {_wiki_link(page_paths[row['knowledge_id']], row['title'])} "
-                f"(`{row['knowledge_id']}`, `{row['freshness']}`)"
-                for row in shard
-            )
+            lines.extend([f"# {kind.title()} index", "", *shard_links])
+            if not shard_links:
+                lines.append("- Explicit gap: no admitted current object.")
             _write(
-                store.root,
-                relative=shard_path,
+                output_root,
+                relative=kind_index,
                 content="\n".join(lines),
                 generated=generated,
             )
-            shard_links.append(
-                f"- {_wiki_link(shard_path, f'{kind.title()} {shard_index:04d}')} "
-                f"({len(shard)} objects)"
-            )
-        kind_index = f"wiki/indexes/{kind}.md"
-        lines = _frontmatter(
-            schema="deeplaw.living-wiki-kind-index/v1",
+            index_links.append(f"- {_wiki_link(kind_index, kind.title())}: {len(members)}")
+    if profile["source_pages"]:
+        source_lines = _frontmatter(
+            schema="deeplaw.living-wiki-source-index/v1",
             audit_head=audit_head,
-            fields={"kind": kind, "item_count": str(len(members))},
+            fields={"item_count": str(len(sources))},
         )
-        lines.extend([f"# {kind.title()} index", "", *shard_links])
-        if not shard_links:
-            lines.append("- No admitted current object.")
+        source_lines.extend(["# Source Revision index", ""])
+        source_lines.extend(
+            f"- [[wiki/sources/{source['source_revision_id']}|"
+            f"{source['title'] or source['source_revision_id']}]] "
+            f"(`{source['source_revision_id']}`, `{source['status'] or 'unbound'}`)"
+            for source in sources
+        )
+        if not sources:
+            source_lines.append("- Explicit gap: no admitted Source Revision is available.")
         _write(
-            store.root,
-            relative=kind_index,
-            content="\n".join(lines),
+            output_root,
+            relative=source_index,
+            content="\n".join(source_lines),
             generated=generated,
         )
-        index_links.append(f"- {_wiki_link(kind_index, kind.title())}: {len(members)}")
-    sources = _source_pages(
-        store,
+    else:
+        _navigation_page(
+            output_root=output_root,
+            relative=source_index,
+            title="Source Revision index",
+            audit_head=audit_head,
+            generated=generated,
+            links=[],
+            gap="Source pages are disabled by the selected projection profile.",
+        )
+    _navigation_page(
+        output_root=output_root,
+        relative="wiki/guides/index.md",
+        title="Guides",
         audit_head=audit_head,
         generated=generated,
-        rows=rows,
-        page_paths=page_paths,
-        run_status_overrides=effective_run_statuses,
+        links=[],
+        gap="no governed guide coverage is registered for this projection.",
     )
-    source_index = "wiki/indexes/sources.md"
-    source_lines = _frontmatter(
-        schema="deeplaw.living-wiki-source-index/v1",
-        audit_head=audit_head,
-        fields={"item_count": str(len(sources))},
+    lint_report = (
+        lint
+        if isinstance(lint, dict)
+        else store.semantic_lint(reference_time=selected_reference_time)
     )
-    source_lines.extend(["# Source Revision index", ""])
-    source_lines.extend(
-        f"- [[wiki/sources/{source['source_revision_id']}|"
-        f"{source['title'] or source['source_revision_id']}]] "
-        f"(`{source['source_revision_id']}`, `{source['status'] or 'unbound'}`)"
-        for source in sources
+    gaps_report = (
+        gaps
+        if isinstance(gaps, dict)
+        else store.discover_gaps(reference_time=selected_reference_time)
     )
-    _write(
-        store.root,
-        relative=source_index,
-        content="\n".join(source_lines),
-        generated=generated,
-    )
+    if profile["gaps"]:
+        lint_json = json.dumps(lint_report, ensure_ascii=False, indent=2, sort_keys=True)
+        lint_lines = _frontmatter(
+            schema="deeplaw.semantic-lint-view/v1",
+            audit_head=audit_head,
+            fields={"semantic_status": "projection"},
+        )
+        lint_lines.extend(["# Semantic Lint", "", "```json", lint_json, "```"])
+        _write(
+            output_root,
+            relative="wiki/gaps/semantic-lint.md",
+            content="\n".join(lint_lines),
+            generated=generated,
+        )
+        gaps_json = json.dumps(gaps_report, ensure_ascii=False, indent=2, sort_keys=True)
+        gaps_lines = _frontmatter(
+            schema="deeplaw.knowledge-gap-view/v1",
+            audit_head=audit_head,
+            fields={"semantic_status": "projection"},
+        )
+        gaps_lines.extend(["# Knowledge Gaps", "", "```json", gaps_json, "```"])
+        _write(
+            output_root,
+            relative="wiki/gaps/knowledge-gaps.md",
+            content="\n".join(gaps_lines),
+            generated=generated,
+        )
     overview_synthesis = next(
         (
             row
@@ -1307,6 +1847,9 @@ def rebuild_living_wiki(
             "",
             *index_links,
             f"- {_wiki_link(source_index, 'Source Revisions')}: {len(sources)}",
+            "- [[wiki/guides/index|Guides]]",
+            "- [[wiki/communities/index|Communities]]",
+            "- [[wiki/gaps/index|Gaps]]",
             "- [[wiki/recent-changes/index|Recent changes]]",
             "- [[wiki/contradictions/index|Contradictions]]",
             "- [[wiki/gaps/compilation|Compilation gaps]]",
@@ -1316,19 +1859,36 @@ def rebuild_living_wiki(
         ]
     )
     _write(
-        store.root,
+        output_root,
         relative="wiki/overview.md",
         content="\n".join(overview_lines),
         generated=generated,
     )
-    communities, community_members = _community_views(
-        store=store,
-        rows=rows,
-        relations=relations,
-        page_paths=page_paths,
-        titles=titles,
+    if profile["communities"]:
+        communities, community_members = _community_views(
+            store=store,
+            output_root=output_root,
+            rows=rows,
+            relations=relations,
+            page_paths=page_paths,
+            titles=titles,
+            audit_head=audit_head,
+            generated=generated,
+        )
+    else:
+        communities, community_members = [], {}
+    community_links = [
+        f"- {_wiki_link(f'wiki/communities/{community_id}.md', f'Community {community_id}')}"
+        for community_id in sorted(community_members)
+    ]
+    _navigation_page(
+        output_root=output_root,
+        relative="wiki/communities/index.md",
+        title="Communities",
         audit_head=audit_head,
         generated=generated,
+        links=community_links,
+        gap="no deterministic admitted community is available.",
     )
     root_index_lines = _frontmatter(
         schema="deeplaw.living-wiki-root-index/v1",
@@ -1340,22 +1900,29 @@ def rebuild_living_wiki(
             "",
             *index_links,
             f"- {_wiki_link(source_index, 'Source Revisions')}",
+            "- [[wiki/guides/index|Guides]]",
+            "- [[wiki/communities/index|Communities]]",
+            "- [[wiki/gaps/index|Gaps]]",
+            "- [[wiki/recent-changes/index|Recent changes]]",
+            "- [[wiki/contradictions/index|Contradictions]]",
         ]
     )
     _write(
-        store.root,
+        output_root,
         relative="wiki/index.md",
         content="\n".join(root_index_lines),
         generated=generated,
     )
-    _recent_change_pages(
-        store,
-        rows=rows,
-        sources=sources,
-        page_paths=page_paths,
-        audit_head=audit_head,
-        generated=generated,
-    )
+    if profile["recent_changes"]:
+        _recent_change_pages(
+            store,
+            output_root=output_root,
+            rows=rows,
+            sources=sources,
+            page_paths=page_paths,
+            audit_head=audit_head,
+            generated=generated,
+        )
     contradiction_relations = [
         relation for relation in relations if relation["predicate"] == "contradicts"
     ]
@@ -1380,9 +1947,9 @@ def rebuild_living_wiki(
         for item in contradiction_relations
     )
     if not contradiction_relations:
-        contradiction_lines.append("- No admitted contradiction relation.")
+        contradiction_lines.append("- Explicit gap: no admitted contradiction relation.")
     _write(
-        store.root,
+        output_root,
         relative="wiki/contradictions/index.md",
         content="\n".join(contradiction_lines),
         generated=generated,
@@ -1422,39 +1989,67 @@ def rebuild_living_wiki(
         f"{source['title'] or source['source_revision_id']}]]"
         for source in uncompiled_sources
     )
+    if not unresolved and not uncompiled_sources:
+        gap_lines.append("- Explicit gap: no unresolved compilation Gap is recorded.")
     _write(
-        store.root,
+        output_root,
         relative="wiki/gaps/compilation.md",
         content="\n".join(gap_lines),
         generated=generated,
     )
+    gap_links = [
+        "- [[wiki/gaps/compilation|Compilation gaps]]",
+    ]
+    if profile["gaps"]:
+        gap_links.extend(
+            [
+                "- [[wiki/gaps/semantic-lint|Semantic lint]]",
+                "- [[wiki/gaps/knowledge-gaps|Knowledge gaps]]",
+            ]
+        )
+    _navigation_page(
+        output_root=output_root,
+        relative="wiki/gaps/index.md",
+        title="Gaps",
+        audit_head=audit_head,
+        generated=generated,
+        links=gap_links,
+        gap="no governed Gap report is available.",
+    )
     canvas_manifests: list[dict[str, Any]] = []
-    canvas_groups = {"knowledge-overview": rows}
-    canvas_groups.update(
-        {f"knowledge-{kind}": members for kind, members in by_kind.items() if members}
-    )
-    canvas_groups.update(
-        {
-            f"community-{community_id}": members
-            for community_id, members in community_members.items()
-        }
-    )
-    relation_neighbors: dict[str, set[str]] = defaultdict(set)
-    for relation in relations:
-        relation_neighbors[relation["subject_knowledge_id"]].add(
-            relation["object_knowledge_id"]
+    canvas_groups: dict[str, list[dict[str, Any]]] = {}
+    if profile["global_canvas"]:
+        # This path is a long-standing public surface; keep it stable even
+        # though the builder now owns the only write.
+        canvas_groups["knowledge-graph"] = rows
+    if profile["kind_canvas"]:
+        canvas_groups.update(
+            {f"knowledge-{kind}": members for kind, members in by_kind.items() if members}
         )
-        relation_neighbors[relation["object_knowledge_id"]].add(
-            relation["subject_knowledge_id"]
+    if profile["community_canvas"]:
+        canvas_groups.update(
+            {
+                f"community-{community_id}": members
+                for community_id, members in community_members.items()
+            }
         )
-    rows_by_id = {row["knowledge_id"]: row for row in rows}
-    for row in rows:
-        neighbors = [
-            rows_by_id[item]
-            for item in sorted(relation_neighbors[row["knowledge_id"]])
-            if item in rows_by_id
-        ][: CANVAS_NODE_LIMIT - 1]
-        canvas_groups[f"object-{row['knowledge_id']}"] = [row, *neighbors]
+    if profile["per_object_canvas"]:
+        relation_neighbors: dict[str, set[str]] = defaultdict(set)
+        for relation in relations:
+            relation_neighbors[relation["subject_knowledge_id"]].add(
+                relation["object_knowledge_id"]
+            )
+            relation_neighbors[relation["object_knowledge_id"]].add(
+                relation["subject_knowledge_id"]
+            )
+        rows_by_id = {row["knowledge_id"]: row for row in rows}
+        for row in rows:
+            neighbors = [
+                rows_by_id[item]
+                for item in sorted(relation_neighbors[row["knowledge_id"]])
+                if item in rows_by_id
+            ][: CANVAS_NODE_LIMIT - 1]
+            canvas_groups[f"object-{row['knowledge_id']}"] = [row, *neighbors]
     for name, members in sorted(canvas_groups.items()):
         canvas_payload, canvas_manifest = _canvas(
             rows=members,
@@ -1464,42 +2059,37 @@ def rebuild_living_wiki(
         )
         canvas_path = f"canvas/{name}.canvas"
         _write(
-            store.root,
+            output_root,
             relative=canvas_path,
             content=canvas_payload,
             generated=generated,
         )
         canvas_manifest["path"] = canvas_path
-        canvas_manifest["sha256"] = sha256_file(store.root / canvas_path)
+        canvas_manifest["sha256"] = sha256_file(output_root / canvas_path)
         canvas_manifests.append(canvas_manifest)
     configuration = {
+        "projection_profile": profile,
+        "projection_profile_sha256": sha256_bytes(
+            canonical_json(profile).encode("utf-8")
+        ),
         "index_shard_size": INDEX_SHARD_SIZE,
         "source_fragment_shard_size": SOURCE_FRAGMENT_SHARD_SIZE,
         "canvas_node_limit": CANVAS_NODE_LIMIT,
         "canvas_edge_limit": CANVAS_EDGE_LIMIT,
         "page_kinds": sorted(_KIND_DIRECTORIES),
         "community_algorithm": "weighted-label-propagation+semantic-bridges/1",
-        "local_canvas_per_object": True,
+        "local_canvas_per_object": profile["local_canvas_per_object"],
         "compilation_state_sha256": sha256_bytes(
             canonical_json(compilation_state).encode("utf-8")
         ),
     }
-    audit_event = store.connection.execute(
-        """
-        SELECT recorded_at FROM autonomous_events_v3
-        WHERE event_hash = ?
-        """,
-        (audit_head,),
-    ).fetchone()
-    if audit_event is None:
-        raise RuntimeError("Living Wiki projection audit input is not registered")
     generated_at = audit_event["recorded_at"]
     manifest = {
         "schema_version": LIVING_WIKI_SCHEMA,
         "input_audit_head": audit_head,
         "legacy_audit_head": store.legacy_audit_head,
         "generator": LIVING_WIKI_GENERATOR,
-        "generator_version": "1",
+        "generator_version": "2",
         "configuration": configuration,
         "configuration_sha256": sha256_bytes(canonical_json(configuration).encode("utf-8")),
         "knowledge_revision_count": len(rows),
@@ -1519,27 +2109,183 @@ def rebuild_living_wiki(
         "generated_at": generated_at,
     }
     manifest["manifest_sha256"] = sha256_bytes(canonical_json(manifest).encode("utf-8"))
-    _validate_contract("living-wiki-manifest.v1.schema.json", manifest)
-    manifest_path = store.root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json"
-    previous_paths: set[str] = set()
-    if manifest_path.is_file() and not manifest_path.is_symlink():
-        previous = strict_json_loads(manifest_path.read_bytes())
-        if isinstance(previous, dict) and isinstance(previous.get("files"), list):
-            previous_paths = {
-                item["path"]
-                for item in previous["files"]
-                if isinstance(item, dict)
-                and isinstance(item.get("path"), str)
-                and item["path"].startswith(("wiki/", "canvas/"))
-            }
-    current_paths = {item["path"] for item in generated}
-    for relative in sorted(previous_paths - current_paths):
-        stale = store.root / relative
-        if stale.is_symlink() or (stale.exists() and not stale.is_file()):
-            raise RuntimeError("Living Wiki stale projection target is unsafe")
-        stale.unlink(missing_ok=True)
+    _validate_contract("living-wiki-manifest.v2.schema.json", manifest)
+    output_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+    # Build the additive v3 bundle from the exact finalized v2 bytes.  Identity and governance
+    # inputs are supplied by the projection branches above; the registry never derives them from
+    # a filename, title, or frontmatter.
+    payload_by_path = {
+        item["path"]: (output_root / item["path"]).read_bytes()
+        for item in manifest["files"]
+        if item["path"].endswith(".md")
+    }
+    page_records: list[dict[str, Any]] = []
+    rows_by_path = {page_paths[row["knowledge_id"]]: row for row in rows}
+    source_by_path = {
+        f"wiki/sources/{source['source_revision_id']}.md": source for source in sources
+    }
+    fragment_by_path = {
+        path: anchors
+        for source in sources
+        for path, anchors in source.get("_fragment_anchor_pages", {}).items()
+    }
+    for item in manifest["files"]:
+        path = item["path"]
+        if not path.endswith(".md"):
+            continue
+        payload = payload_by_path[path]
+        row = rows_by_path.get(path)
+        if row is not None:
+            page_records.append(
+                _page_record(
+                    page_id=row["knowledge_id"],
+                    namespace="knowledge",
+                    path=path,
+                    kind=row["kind"],
+                    revision_id=row["revision_id"],
+                    audit_head=audit_head,
+                    payload=payload,
+                    scope=row["scope"],
+                    sensitivity=row["sensitivity"],
+                    lifecycle=row["lifecycle"],
+                    freshness=row["freshness"],
+                    input_refs=[
+                        row["revision_id"],
+                        *[
+                            str(statement["statement_id"])
+                            for statement in row.get("_statements", [])
+                        ],
+                        *[
+                            str(reference.get("source_revision_id"))
+                            for reference in row.get("source_refs", [])
+                            if reference.get("source_revision_id")
+                        ],
+                    ],
+                    knowledge_id=row["knowledge_id"],
+                    semantic_key=row.get("semantic_key"),
+                    aliases=row.get("aliases", []),
+                    title=row.get("title"),
+                    anchors=[
+                        {
+                            "anchor_id": f"statement-{statement['statement_id']}",
+                            "anchor": f"statement-{statement['statement_id']}",
+                            "kind": "statement_evidence",
+                            "statement_target": {
+                                "statement_id": statement["statement_id"]
+                            },
+                        }
+                        for statement in row.get("_statements", [])
+                    ],
+                )
+            )
+            continue
+        source = source_by_path.get(path)
+        if source is not None:
+            source_sensitivity = source["sensitivity"] if source["sensitivity"] in {
+                "public", "internal", "private", "restricted"
+            } else "private"
+            page_records.append(
+                _page_record(
+                    page_id=stable_id("source-page", source["source_revision_id"]),
+                    namespace="source",
+                    path=path,
+                    kind="source",
+                    revision_id=source["source_revision_id"],
+                    audit_head=audit_head,
+                    payload=payload,
+                    scope=store.vault_scope,
+                    sensitivity=source_sensitivity,
+                    input_refs=[source["source_revision_id"]],
+                    title=source.get("title") or source["source_revision_id"],
+                )
+            )
+            continue
+        anchors = fragment_by_path.get(path)
+        if anchors is not None:
+            source_revision_id = next(
+                anchor["source_fragment"]["source_revision_id"] for anchor in anchors
+            )
+            shard_revision = stable_id("source-fragment-index-revision", path, audit_head)
+            page_records.append(
+                _page_record(
+                    page_id=stable_id("source-fragment-index", path),
+                    namespace="aggregate",
+                    path=path,
+                    kind="aggregate",
+                    revision_id=shard_revision,
+                    audit_head=audit_head,
+                    payload=payload,
+                    scope=store.vault_scope,
+                    sensitivity="private",
+                    input_refs=[
+                        source_revision_id,
+                        *[
+                            anchor["source_fragment"].get(
+                                "fragment_id", anchor["source_fragment"].get("fragment_revision_id")
+                            )
+                            for anchor in anchors
+                        ],
+                    ],
+                    anchors=anchors,
+                    title="Source fragments",
+                )
+            )
+            continue
+        # Every remaining Markdown page is an explicit aggregate/system projection.  Its stable
+        # identity is bound to the declared projection role (path) and the audit input, not user
+        # editable text or frontmatter.
+        page_records.append(
+            _page_record(
+                page_id=stable_id("projection-page", path),
+                namespace="aggregate",
+                path=path,
+                kind="aggregate",
+                revision_id=stable_id("projection-page-revision", path, audit_head),
+                audit_head=audit_head,
+                payload=payload,
+                scope=store.vault_scope,
+                sensitivity="private",
+                input_refs=[audit_head],
+                title=Path(path).stem.replace("-", " ").title(),
+            )
+        )
+    page_registry = build_page_registry(
+        page_records,
+        v2_file_inventory=manifest["files"],
+        input_audit_head=audit_head,
+        legacy_audit_head=store.legacy_audit_head,
+        v2_manifest_sha256=manifest["manifest_sha256"],
+        generated_at=generated_at,
+    )
+    resolver_artifact = build_resolver_index(page_registry)
+    link_artifact = build_link_index(
+        page_registry,
+        payload_by_path,
+        v2_manifest_sha256=manifest["manifest_sha256"],
+        input_audit_head=audit_head,
+        legacy_audit_head=store.legacy_audit_head,
+        generated_at=generated_at,
+        resolver=resolver_artifact["resolver"],
+    )
+    v3_artifact = build_living_wiki_manifest_v3(
+        input_audit_head=audit_head,
+        legacy_audit_head=store.legacy_audit_head,
+        generated_at=generated_at,
+        v2_manifest_sha256=manifest["manifest_sha256"],
+        configuration={"profile": profile["name"]},
+        page_registry=page_registry,
+        link_index=link_artifact,
+        resolver=resolver_artifact,
+    )
+    v3_payloads: dict[str, bytes] = {}
+    for artifact in (page_registry, link_artifact, resolver_artifact):
+        v3_payloads.update({path: bytes(payload) for path, payload in artifact["payloads"].items()})
+    v3_payloads[V3_MANIFEST_PATH] = bytes(v3_artifact["manifest_bytes"])
+    for relative, payload in v3_payloads.items():
+        _atomic_owner_write(output_root / relative, payload)
     _atomic_owner_write(
-        manifest_path,
+        output_root / "living-wiki-manifest.json",
         (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
     return {
@@ -1555,9 +2301,136 @@ def rebuild_living_wiki(
                 (len(members) + INDEX_SHARD_SIZE - 1) // INDEX_SHARD_SIZE
                 for members in by_kind.values()
             ]
-        ),
+        )
+        if profile["kind_shards"]
+        else 0,
         "canvas_count": len(canvas_manifests),
         "community_count": len(communities),
         "input_audit_head": audit_head,
+        "projection_profile_name": profile["name"],
+        "projection_profile_version": profile["version"],
         "files": manifest["files"],
+        "v3_manifest_sha256": v3_artifact["manifest_sha256"],
+        "v3_page_count": page_registry["component"]["page_count"],
+        "v3_edge_count": link_artifact["component"]["edge_count"],
+        "v3_candidate_count": resolver_artifact["component"]["candidate_count"],
+        "v3_inventory": {
+            "manifest": v3_artifact["manifest"],
+            "manifest_sha256": v3_artifact["manifest_sha256"],
+            "files": [
+                {
+                    "path": path,
+                    "byte_size": len(payload),
+                    "sha256": sha256_bytes(payload),
+                }
+                for path, payload in sorted(v3_payloads.items())
+            ],
+        },
     }
+
+
+def rebuild_living_wiki(
+    store: AutonomousKnowledgeStore,
+    *,
+    input_audit_head: str | None = None,
+    run_status_overrides: dict[str, str] | None = None,
+    projection_profile: str = "standard",
+    reference_time: str | None = None,
+    lint: dict[str, Any] | None = None,
+    gaps: dict[str, Any] | None = None,
+    dry_run: bool = False,
+    _fault_hook: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Recompute a projection and atomically activate only changed bytes.
+
+    ``dry_run`` performs the same generation and hash diff in a temporary
+    directory outside the Vault.  It intentionally refuses to recover an
+    existing transaction because recovery itself is a Vault mutation.
+    """
+
+    store._require_write()
+    if not isinstance(dry_run, bool):
+        raise TypeError("dry_run must be a bool")
+    journal_path = store.root / ".deeplaw/derived/tree/living-wiki-projection.journal.json"
+    if dry_run:
+        if journal_path.exists() or journal_path.is_symlink():
+            raise RuntimeError("Living Wiki projection has an unresolved transaction")
+    else:
+        recover_projection(store.root)
+    previous = read_previous_manifest(store.root)
+    previous_v3 = read_previous_v3(store.root)
+
+    if dry_run:
+        with tempfile.TemporaryDirectory(prefix="deeplaw-projection-") as temporary:
+            result = _generate_living_wiki(
+                store,
+                output_root=Path(temporary),
+                input_audit_head=input_audit_head,
+                run_status_overrides=run_status_overrides,
+                projection_profile=projection_profile,
+                reference_time=reference_time,
+                lint=lint,
+                gaps=gaps,
+            )
+            staged_manifest = strict_json_loads(
+                (Path(temporary) / "living-wiki-manifest.json").read_bytes()
+            )
+            if not isinstance(staged_manifest, dict):
+                raise RuntimeError("Living Wiki generated manifest is invalid")
+            staged_v3 = read_previous_v3(Path(temporary))
+            change_set = build_change_set(
+                previous,
+                staged_manifest,
+                previous_v3=previous_v3,
+                current_v3=staged_v3,
+            )
+            return {**result, "dry_run": True, "change_set": change_set}
+
+    txn_id, staging, backup = begin_transaction(store.root)
+    prepared = False
+    try:
+        result = _generate_living_wiki(
+            store,
+            output_root=staging,
+            input_audit_head=input_audit_head,
+            run_status_overrides=run_status_overrides,
+            projection_profile=projection_profile,
+            reference_time=reference_time,
+            lint=lint,
+            gaps=gaps,
+        )
+        staged_manifest = strict_json_loads((staging / "living-wiki-manifest.json").read_bytes())
+        if not isinstance(staged_manifest, dict):
+            raise RuntimeError("Living Wiki generated manifest is invalid")
+        staged_v3 = read_previous_v3(staging)
+        change_set = build_change_set(
+            previous,
+            staged_manifest,
+            previous_v3=previous_v3,
+            current_v3=staged_v3,
+        )
+        journal = prepare_activation(
+            store.root,
+            txn_id=txn_id,
+            staging=staging,
+            backup=backup,
+            previous=previous,
+            current=staged_manifest,
+            change_set=change_set,
+            previous_v3=previous_v3,
+            current_v3=staged_v3,
+        )
+        prepared = True
+        if _fault_hook is not None:
+            _fault_hook("after_prepare")
+        activate_projection(
+            store.root,
+            journal=journal,
+            current=staged_manifest,
+            fault_hook=_fault_hook,
+        )
+        return {**result, "dry_run": False, "change_set": change_set}
+    except BaseException:
+        if not prepared:
+            discard_transaction(store.root, staging=staging, backup=backup)
+        raise

@@ -267,14 +267,17 @@ both current audit heads and has no pending rebuild. When it is stale or unavail
 uses a scope-filtered canonical Markdown scan capped at 500 current objects, records the fallback
 channel, and emits an explicit gap if that scan truncates; stale FTS is never silently presented as
 complete.
-Once a Vault contains an autonomous compilation run or governed Knowledge Object, the default
-Capsule path uses the same purpose-aware Query Plan v5 service for CLI `query`, CLI `context`, the
-Python API, and MCP. An untouched v0.7 compatibility Vault with neither remains on the retained v1
-context compiler until it enters the autonomous compilation workflow. The v5 plan binds both the
+Once a Vault contains an autonomous compilation run or governed Knowledge Object, released v0.12
+uses the same purpose-aware Query Plan v5 service for CLI `query`, CLI `context`, the Python API,
+and MCP. The v0.13 source candidate changes the current default to additive Query Plan v6:
+statement-level selection, dynamic duty coverage, targeted evidence completion, exact suppression
+receipts and bounded `compact`/`standard`/`audit` projections. v5 remains explicitly selectable.
+An untouched v0.7 compatibility Vault with neither remains on the retained v1 context compiler
+until it enters the autonomous compilation workflow. Both v5 and v6 bind the
 autonomous audit head and the legacy evidence/Inbox audit head, plus the
 admitted-candidate state and derived-manifest digests, so lifecycle changes outside the autonomous
 event stream cannot masquerade as the same replay input.
-It also binds autonomous kind/tag filters, retrieval mode, token/source/hop budgets, dense model,
+They also bind autonomous kind/tag filters, retrieval mode, token/source/hop budgets, dense model,
 reranker profile and dense-manifest digest. The source-derived partition emits its own hashed compact
 plan binding query, compatible kind/memory-tier filters, scope, sensitivity, budget, Vault revision,
 legacy audit head, and historical intent when that compatibility partition is explicitly selected.

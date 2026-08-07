@@ -8,6 +8,11 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from deeplaw.api import KnowledgeOS
+from deeplaw.compilation.finalization import (
+    CONTENT_DUTY_OBSERVATION_KINDS,
+    CONTENT_OUTPUT_DUTIES,
+    RELATION_OUTPUT_DUTY,
+)
 from deeplaw.compilation.profiles import REQUIRED_SEMANTIC_DUTIES, SEMANTIC_DUTIES
 from deeplaw.compilation.semantic import SemanticCompilationService
 from deeplaw.util import canonical_json, sha256_bytes
@@ -620,38 +625,53 @@ def compile_source(
                 "reason": "Resolve the frozen observation to its one stable semantic identity.",
             }
         )
-    kinds = {spec["kind"] for spec in specs}
-    duty_by_kind = {
-        "entities": "entity",
-        "concepts": "concept",
-        "events": "event",
-        "procedures": "procedure",
-        "comparisons": "comparison",
-    }
+    observations_by_kind: dict[str, list[dict[str, Any]]] = {}
+    for observation in observations:
+        observations_by_kind.setdefault(observation["kind"], []).append(observation)
+    relation_evidence_refs = [
+        reference
+        for action in relation_actions
+        for reference in action["evidence_refs"]
+    ]
     duty_reports = []
     duty_ids = {item["duty_type"]: item["duty_id"] for item in finalization["duties"]}
     for duty in SEMANTIC_DUTIES:
-        applicable = duty in REQUIRED_SEMANTIC_DUTIES or duty in {
-            "source_summary",
-            "key_claims",
-            "source_coverage",
-        }
-        if duty in duty_by_kind:
-            applicable = duty_by_kind[duty] in kinds
-        elif duty == "typed_relations":
+        output_refs: list[str] = []
+        evidence_refs: list[dict[str, Any]] = []
+        unresolved_items: list[str] = []
+        if duty in CONTENT_DUTY_OBSERVATION_KINDS:
+            matching = observations_by_kind.get(CONTENT_DUTY_OBSERVATION_KINDS[duty], [])
+            applicable = bool(matching)
+            output_refs = [item["observation_id"] for item in matching]
+            evidence_refs = [
+                reference
+                for item in matching
+                for reference in item["source_refs"]
+            ]
+        elif duty == RELATION_OUTPUT_DUTY:
             applicable = bool(relation_actions)
+            evidence_refs = relation_evidence_refs
         elif duty == "overview_impact":
             applicable = source_key in {"update-v1", "update-v2"}
+        else:
+            applicable = duty in REQUIRED_SEMANTIC_DUTIES or duty == "source_summary"
+        if duty == "source_summary":
+            evidence_refs = all_current_refs
+        status = "satisfied" if applicable else "not_applicable"
         duty_reports.append(
             {
                 "duty_id": duty_ids[duty],
                 "duty_type": duty,
                 "required": duty in REQUIRED_SEMANTIC_DUTIES,
-                "status": "satisfied" if applicable else "not_applicable",
-                "output_refs": [],
-                "evidence_refs": [],
-                "reason": "Deterministic frozen semantic duty disposition.",
-                "unresolved_items": [],
+                "status": status,
+                "output_refs": output_refs,
+                "evidence_refs": evidence_refs,
+                "reason": (
+                    "Deterministic frozen semantic content disposition."
+                    if duty in CONTENT_OUTPUT_DUTIES or duty == RELATION_OUTPUT_DUTY
+                    else "Deterministic frozen semantic control/scan disposition."
+                ),
+                "unresolved_items": unresolved_items,
                 "omission_reason": None,
             }
         )

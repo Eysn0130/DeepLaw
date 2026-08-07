@@ -179,7 +179,7 @@ The optional `knowledge_sink` server:
   used by the CLI;
 - cannot mutate official or private Legal Pack data, source evidence, Authority, audit history,
   filesystem paths, exports, signing keys, or host permissions;
-- requires explicit confirmation that no Analytix case material is present.
+- requires explicit confirmation that no client or case material is present.
 
 Read-only is the `law_support`/`knowledge_support` boundary and grants are the
 `knowledge_sink` boundary; neither is an operating-system sandbox. A host that separately grants
@@ -237,7 +237,7 @@ identity. Stale or damaged derived state fails closed and current recall uses a 
 fallback. The older model-backed discovery path remains operator/research CLI functionality until held-out
 task-success, noise, provenance, lifecycle, poisoning, resource, and cost gates
 pass. Its case-data confirmation is an explicit operator boundary, not a
-personal-data classifier. Analytix case material remains forbidden.
+personal-data classifier. Client and case material remains forbidden.
 
 The SQLite event chain plus current-state replay detects accidental or partial
 tampering, including a status-only edit or forged FTS projection. Stable
