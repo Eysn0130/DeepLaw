@@ -41,7 +41,11 @@ from .knowledge_store import (
 from .knowledge_store import (
     _database_path as _knowledge_database_path,
 )
-from .task_context import normalize_task_context_binding
+from .task_context import (
+    normalize_task_context_binding,
+    task_route_sha256,
+    task_snapshot_sha256,
+)
 from .util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
@@ -267,6 +271,20 @@ _MAX_RUN_METADATA_BYTES = 64 * 1024
 _MAX_LEASE_SECONDS = 300
 _MAX_CONTENT_GC_OBJECTS = 10_000
 _ORPHAN_GC_GRACE_SECONDS = _MAX_LEASE_SECONDS * 2
+_MAX_CHECKPOINT_ROUTE_LOOKUP = 64
+_MAX_CHECKPOINT_ROUTE_ROWS = 1_000_000
+_CHECKPOINT_ROUTE_COLUMNS = (
+    "route_sha256",
+    "task_sha256",
+    "snapshot_sha256",
+    "knowledge_id",
+    "revision_id",
+    "run_id",
+    "canonical_binding_json",
+    "scope",
+    "sensitivity",
+    "recorded_at",
+)
 _SOURCE_REFERENCE_FIELDS = {
     "source_id": 200,
     "source_revision_id": 200,
@@ -1304,6 +1322,10 @@ def _tables_sql() -> str:
     """
 
 
+def _checkpoint_route_values(row: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(row[column] for column in _CHECKPOINT_ROUTE_COLUMNS)
+
+
 def _register_content_object(
     connection: sqlite3.Connection,
     *,
@@ -1637,6 +1659,7 @@ def initialize_autonomous_core(
         (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
     with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_checkpoint_route_projection()
         evidence = store.evidence_sync
         recovery = store.recovery_sync
         verification = store.verify()
@@ -2314,6 +2337,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if metadata.get("vault_id") != self.vault_id:
             self.connection.close()
             raise RuntimeError("autonomous knowledge core Vault identity mismatch")
+        projection_missing = not self._checkpoint_route_projection_exists()
+        if not read_only:
+            self._ensure_checkpoint_route_projection()
+            if projection_missing:
+                self.rebuild_checkpoint_route_projection()
         if self.legacy_audit_head != opened_legacy_audit_head:
             self.connection.close()
             raise RuntimeError("knowledge read planes changed while opening a consistent snapshot")
@@ -3634,6 +3662,406 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return None
 
+    def _checkpoint_route_projection_exists(self) -> bool:
+        """Return whether the rebuildable route index exists in this Vault."""
+
+        row = self.connection.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'knowledge_checkpoint_routes_v1'
+            """
+        ).fetchone()
+        return row is not None
+
+    def _ensure_checkpoint_route_projection(self) -> None:
+        """Create only the additive derived route projection when writable."""
+
+        self._require_write()
+        self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS knowledge_checkpoint_routes_v1 (
+                route_sha256 TEXT NOT NULL,
+                task_sha256 TEXT NOT NULL,
+                snapshot_sha256 TEXT NOT NULL,
+                knowledge_id TEXT NOT NULL REFERENCES knowledge_objects_v3(knowledge_id),
+                revision_id TEXT NOT NULL REFERENCES knowledge_revisions_v3(revision_id),
+                run_id TEXT NOT NULL REFERENCES knowledge_run_records_v4(run_id),
+                canonical_binding_json TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                sensitivity TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                PRIMARY KEY(route_sha256, task_sha256, knowledge_id)
+            ) STRICT
+            """
+        )
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS knowledge_checkpoint_routes_v1_route
+                ON knowledge_checkpoint_routes_v1(route_sha256, task_sha256, snapshot_sha256)
+            """
+        )
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS knowledge_checkpoint_routes_v1_task
+                ON knowledge_checkpoint_routes_v1(task_sha256, route_sha256)
+            """
+        )
+        self.connection.commit()
+
+    def _checkpoint_route_projection_candidate(
+        self,
+        row: sqlite3.Row,
+    ) -> dict[str, Any] | None:
+        """Derive one bounded route row from a current working revision."""
+
+        if (
+            row["kind"] != "memory"
+            or row["lifecycle"] != "active"
+            or row["current_revision_id"] != row["revision_id"]
+        ):
+            return None
+        try:
+            metadata = strict_json_loads(row["metadata_json"])
+            generation = strict_json_loads(row["generation_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get("memory_type") != "working"
+            or not isinstance(generation, dict)
+        ):
+            return None
+        run_id = generation.get("run_id")
+        if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
+            return None
+        binding = self.run_task_context_binding(run_id)
+        if binding is None:
+            return None
+        run = self.connection.execute(
+            """
+            SELECT task_sha256, writer_id, scope, sensitivity, status
+            FROM knowledge_run_records_v4
+            WHERE run_id = ?
+            LIMIT 1
+            """,
+            (run_id,),
+        ).fetchone()
+        if (
+            run is None
+            or run["status"] != "succeeded"
+            or run["writer_id"] != row["writer_id"]
+            or run["scope"] not in SCOPES
+            or row["scope"] not in SCOPES
+            or run["sensitivity"] not in SENSITIVITIES
+            or row["sensitivity"] not in SENSITIVITIES
+            or run["scope"] != row["scope"]
+            or SENSITIVITY_ORDER.index(run["sensitivity"])
+            > SENSITIVITY_ORDER.index(row["sensitivity"])
+            or not _SHA256.fullmatch(run["task_sha256"])
+        ):
+            return None
+        return {
+            "route_sha256": task_route_sha256(binding),
+            "task_sha256": run["task_sha256"],
+            "snapshot_sha256": task_snapshot_sha256(binding),
+            "knowledge_id": row["knowledge_id"],
+            "revision_id": row["revision_id"],
+            "run_id": run_id,
+            "canonical_binding_json": canonical_json(binding),
+            "scope": row["scope"],
+            "sensitivity": row["sensitivity"],
+            "recorded_at": row["recorded_at"],
+        }
+
+    def _upsert_checkpoint_route_projection(
+        self,
+        *,
+        knowledge_id: str,
+        revision_id: str,
+    ) -> None:
+        """Keep one current route row per Knowledge identity inside a mutation."""
+
+        if not self._checkpoint_route_projection_exists():
+            raise RuntimeError("checkpoint route projection is unavailable")
+        # A successor always retires every previous route row for the same
+        # Knowledge identity, including a binding-less legacy successor.
+        self.connection.execute(
+            "DELETE FROM knowledge_checkpoint_routes_v1 WHERE knowledge_id = ?",
+            (knowledge_id,),
+        )
+        row = self.connection.execute(
+            """
+            SELECT revisions.*, objects.current_revision_id
+            FROM knowledge_revisions_v3 AS revisions
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = revisions.knowledge_id
+            WHERE revisions.knowledge_id = ? AND revisions.revision_id = ?
+            LIMIT 1
+            """,
+            (knowledge_id, revision_id),
+        ).fetchone()
+        if row is None:
+            return
+        projection = self._checkpoint_route_projection_candidate(row)
+        if projection is None:
+            return
+        self.connection.execute(
+            """
+            INSERT INTO knowledge_checkpoint_routes_v1 (
+                route_sha256, task_sha256, snapshot_sha256,
+                knowledge_id, revision_id, run_id, canonical_binding_json,
+                scope, sensitivity, recorded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(route_sha256, task_sha256, knowledge_id) DO UPDATE SET
+                snapshot_sha256 = excluded.snapshot_sha256,
+                revision_id = excluded.revision_id,
+                run_id = excluded.run_id,
+                canonical_binding_json = excluded.canonical_binding_json,
+                scope = excluded.scope,
+                sensitivity = excluded.sensitivity,
+                recorded_at = excluded.recorded_at
+            """,
+            _checkpoint_route_values(projection),
+        )
+
+    def _checkpoint_route_projection_row_is_current(self, row: sqlite3.Row) -> bool:
+        """Fail closed when a bounded lookup encounters stale derived state."""
+
+        revision = self.connection.execute(
+            """
+            SELECT revisions.*, objects.current_revision_id
+            FROM knowledge_revisions_v3 AS revisions
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = revisions.knowledge_id
+            WHERE revisions.knowledge_id = ? AND revisions.revision_id = ?
+            LIMIT 1
+            """,
+            (row["knowledge_id"], row["revision_id"]),
+        ).fetchone()
+        if revision is None:
+            return False
+        expected = self._checkpoint_route_projection_candidate(revision)
+        return bool(
+            expected is not None
+            and all(row[column] == expected[column] for column in _CHECKPOINT_ROUTE_COLUMNS)
+        )
+
+    def rebuild_checkpoint_route_projection(self) -> dict[str, Any]:
+        """Rebuild the derived route projection from current governed state."""
+
+        self._require_write()
+        self._ensure_checkpoint_route_projection()
+        rows = self.connection.execute(
+            """
+            SELECT revisions.*, objects.current_revision_id
+            FROM knowledge_revisions_v3 AS revisions
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = revisions.knowledge_id
+            WHERE revisions.lifecycle = 'active'
+              AND revisions.kind = 'memory'
+              AND revisions.revision_id = objects.current_revision_id
+            ORDER BY revisions.knowledge_id
+            LIMIT ?
+            """,
+            (_MAX_CHECKPOINT_ROUTE_ROWS + 1,),
+        ).fetchall()
+        if len(rows) > _MAX_CHECKPOINT_ROUTE_ROWS:
+            raise RuntimeError("checkpoint route projection exceeds its rebuild bound")
+        projections = [
+            projection
+            for row in rows
+            if (projection := self._checkpoint_route_projection_candidate(row)) is not None
+        ]
+        with self.connection:
+            self.connection.execute("DELETE FROM knowledge_checkpoint_routes_v1")
+            self.connection.executemany(
+                """
+                INSERT INTO knowledge_checkpoint_routes_v1 (
+                    route_sha256, task_sha256, snapshot_sha256,
+                    knowledge_id, revision_id, run_id, canonical_binding_json,
+                    scope, sensitivity, recorded_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    _checkpoint_route_values(projection)
+                    for projection in projections
+                ],
+            )
+        return {
+            "schema_version": "deeplaw.checkpoint-route-projection/v1",
+            "projection": "knowledge_checkpoint_routes_v1",
+            "row_count": len(projections),
+            "rebuildable": True,
+        }
+
+    def lookup_checkpoint_route_projection(
+        self,
+        *,
+        task_sha256: str,
+        task_binding: dict[str, Any] | None = None,
+        limit: int = _MAX_CHECKPOINT_ROUTE_LOOKUP,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Perform a bounded exact route lookup without returning checkpoint text."""
+
+        if not _SHA256.fullmatch(task_sha256):
+            raise ValueError("task_sha256 is invalid")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("checkpoint route lookup limit is invalid")
+        limit = min(limit, _MAX_CHECKPOINT_ROUTE_LOOKUP)
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("checkpoint route lookup scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("checkpoint route lookup sensitivity is invalid")
+        normalized_binding = normalize_task_context_binding(task_binding, allow_none=True)
+        base_response = {
+            "schema_version": "deeplaw.checkpoint-route-lookup/v1",
+            "task_sha256": task_sha256,
+            "limit": limit,
+        }
+        if not self._checkpoint_route_projection_exists():
+            return {**base_response, "status": "index_unavailable", "scanned": 0}
+        boundary = ""
+        boundary_args: list[Any] = []
+        if scope is not None:
+            boundary = " AND scope = ?"
+            boundary_args.append(scope)
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in range(sensitivity_limit + 1))})"
+        )
+        sensitivity_args = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        if normalized_binding is not None:
+            route_sha256 = task_route_sha256(normalized_binding)
+            snapshot_sha256 = task_snapshot_sha256(normalized_binding)
+            rows = self.connection.execute(
+                """
+                SELECT route_sha256, task_sha256, snapshot_sha256,
+                       knowledge_id, revision_id, run_id, canonical_binding_json,
+                       scope, sensitivity, recorded_at
+                FROM knowledge_checkpoint_routes_v1
+                WHERE route_sha256 = ?
+                """ + boundary + sensitivity_clause + " ORDER BY knowledge_id LIMIT ?",
+                (
+                    route_sha256,
+                    *boundary_args,
+                    *sensitivity_args,
+                    limit + 1,
+                ),
+            ).fetchall()
+            scanned = len(rows)
+            truncated = scanned > limit
+            rows = rows[:limit]
+            if any(not self._checkpoint_route_projection_row_is_current(row) for row in rows):
+                return {
+                    **base_response,
+                    "status": "index_unavailable",
+                    "scanned": scanned,
+                }
+            if rows and all(row["snapshot_sha256"] == snapshot_sha256 for row in rows):
+                return {
+                    **base_response,
+                    "status": "limit_exceeded" if truncated else "exact",
+                    "route_sha256": route_sha256,
+                    "snapshot_sha256": snapshot_sha256,
+                    "revision_ids": [] if truncated else [row["revision_id"] for row in rows],
+                    "knowledge_ids": [] if truncated else [row["knowledge_id"] for row in rows],
+                    "scanned": scanned,
+                    "truncated": truncated,
+                }
+            if rows:
+                return {
+                    **base_response,
+                    "status": "workspace_diverged",
+                    "route_sha256": route_sha256,
+                    "snapshot_sha256": snapshot_sha256,
+                    "scanned": scanned,
+                    "truncated": truncated,
+                }
+            return {
+                **base_response,
+                "status": "not_found",
+                "route_sha256": route_sha256,
+                "snapshot_sha256": snapshot_sha256,
+                "scanned": scanned,
+            }
+
+        route_rows = self.connection.execute(
+            """
+            SELECT DISTINCT route_sha256
+            FROM knowledge_checkpoint_routes_v1
+            WHERE task_sha256 = ?
+            """ + boundary + sensitivity_clause + " ORDER BY route_sha256 LIMIT ?",
+            (task_sha256, *boundary_args, *sensitivity_args, limit + 1),
+        ).fetchall()
+        scanned = len(route_rows)
+        if len(route_rows) == 0:
+            return {**base_response, "status": "not_found", "scanned": scanned}
+        if len(route_rows) > 1:
+            return {
+                **base_response,
+                "status": "ambiguous",
+                "scanned": scanned,
+                "truncated": len(route_rows) > limit,
+            }
+        route_sha256 = route_rows[0]["route_sha256"]
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ? AND task_sha256 = ?
+            """ + boundary + sensitivity_clause + " ORDER BY knowledge_id LIMIT ?",
+            (route_sha256, task_sha256, *boundary_args, *sensitivity_args, limit + 1),
+        ).fetchall()
+        truncated = len(rows) > limit
+        rows = rows[:limit]
+        if truncated or not rows:
+            return {
+                **base_response,
+                "status": "ambiguous" if truncated else "not_found",
+                "scanned": scanned + len(rows),
+                "truncated": truncated,
+            }
+        if any(not self._checkpoint_route_projection_row_is_current(row) for row in rows):
+            return {**base_response, "status": "index_unavailable", "scanned": scanned}
+        binding: Any = None
+        try:
+            binding = strict_json_loads(rows[0]["canonical_binding_json"])
+            normalized_binding = normalize_task_context_binding(binding, allow_none=False)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            normalized_binding = None
+        if (
+            not isinstance(binding, dict)
+            or normalized_binding is None
+            or canonical_json(binding) != canonical_json(normalized_binding)
+            or task_route_sha256(normalized_binding) != route_sha256
+            or task_snapshot_sha256(normalized_binding) != rows[0]["snapshot_sha256"]
+        ):
+            return {**base_response, "status": "index_unavailable", "scanned": scanned}
+        if len({row["snapshot_sha256"] for row in rows}) != 1:
+            return {
+                **base_response,
+                "status": "workspace_diverged",
+                "route_sha256": route_sha256,
+                "scanned": scanned + len(rows),
+                "truncated": False,
+            }
+        return {
+            **base_response,
+            "status": "exact",
+            "route_sha256": route_sha256,
+            "snapshot_sha256": rows[0]["snapshot_sha256"],
+            "canonical_binding": binding,
+            "revision_ids": [row["revision_id"] for row in rows],
+            "knowledge_ids": [row["knowledge_id"] for row in rows],
+            "scanned": scanned + len(rows),
+            "truncated": False,
+        }
+
     def _run_binding_admitted(
         self,
         run_id: str | None,
@@ -4279,13 +4707,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             sensitivity=sensitivity,
             writer_id=grant["writer_id"],
         )
-        run_task_binding = (
-            self.run_task_context_binding(run_id) if run_binding_valid else None
-        )
         if (
             kind == "memory"
             and memory_type == "working"
-            and (run_id is None or not run_binding_valid or run_task_binding is None)
+            and (run_id is None or not run_binding_valid)
         ):
             raise ValueError("working memory requires a successful task-bound Run Record")
         if kind == "claim" and not selected_refs and run_id is None:
@@ -4847,6 +5272,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 self.connection.execute(
                     "INSERT INTO pending_materializations_v3 VALUES (?, ?, ?, ?, ?)",
                     (revision_id, workspace_path, markdown_sha256, action, recorded_at),
+                )
+                self._upsert_checkpoint_route_projection(
+                    knowledge_id=knowledge_id,
+                    revision_id=revision_id,
                 )
             mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
@@ -10143,6 +10572,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         from .projection.profiles import projection_profile as resolve_projection_profile
 
         resolve_projection_profile(projection_profile)
+        self.rebuild_checkpoint_route_projection()
         for relative in _DERIVED_REBUILD_DIRECTORIES:
             _restore_owner_subdirectory(self.root, relative)
         input_audit_head = self.audit_head
@@ -12849,6 +13279,135 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             if not valid_workspace:
                 failures.append(
                     {"code": "workspace_revision_mismatch", "object_id": row["revision_id"]}
+                )
+        if not self._checkpoint_route_projection_exists():
+            failures.append(
+                {
+                    "code": "checkpoint_route_projection_unavailable",
+                    "object_id": self.vault_id,
+                }
+            )
+        else:
+            projection_rows = self.connection.execute(
+                """
+                SELECT projection.*,
+                       runs.task_sha256 AS run_task_sha256,
+                       objects.current_revision_id AS object_current_revision_id
+                FROM knowledge_checkpoint_routes_v1 AS projection
+                LEFT JOIN knowledge_run_records_v4 AS runs
+                  ON runs.run_id = projection.run_id
+                LEFT JOIN knowledge_objects_v3 AS objects
+                  ON objects.knowledge_id = projection.knowledge_id
+                ORDER BY route_sha256, task_sha256, knowledge_id
+                LIMIT ?
+                """,
+                (_MAX_CHECKPOINT_ROUTE_ROWS + 1,),
+            ).fetchall()
+            if len(projection_rows) > _MAX_CHECKPOINT_ROUTE_ROWS:
+                failures.append(
+                    {
+                        "code": "checkpoint_route_projection_capacity_exceeded",
+                        "object_id": self.vault_id,
+                    }
+                )
+            expected_projection_rows = self.connection.execute(
+                """
+                SELECT revisions.*, objects.current_revision_id
+                FROM knowledge_revisions_v3 AS revisions
+                JOIN knowledge_objects_v3 AS objects
+                  ON objects.knowledge_id = revisions.knowledge_id
+                WHERE revisions.lifecycle = 'active'
+                  AND revisions.kind = 'memory'
+                  AND revisions.revision_id = objects.current_revision_id
+                ORDER BY revisions.knowledge_id
+                LIMIT ?
+                """,
+                (_MAX_CHECKPOINT_ROUTE_ROWS + 1,),
+            ).fetchall()
+            expected_projection: dict[tuple[str, str, str], dict[str, Any]] = {}
+            for row in expected_projection_rows[:_MAX_CHECKPOINT_ROUTE_ROWS]:
+                projection = self._checkpoint_route_projection_candidate(row)
+                if projection is not None:
+                    expected_projection[
+                        (
+                            projection["route_sha256"],
+                            projection["task_sha256"],
+                            projection["knowledge_id"],
+                        )
+                    ] = projection
+            actual_projection: dict[tuple[str, str, str], dict[str, Any]] = {}
+            for row in projection_rows[:_MAX_CHECKPOINT_ROUTE_ROWS]:
+                try:
+                    binding = strict_json_loads(row["canonical_binding_json"])
+                    normalized_binding = normalize_task_context_binding(
+                        binding,
+                        allow_none=False,
+                    )
+                    if (
+                        not isinstance(binding, dict)
+                        or normalized_binding is None
+                        or canonical_json(binding) != canonical_json(normalized_binding)
+                        or row["route_sha256"] != task_route_sha256(normalized_binding)
+                        or row["snapshot_sha256"] != task_snapshot_sha256(normalized_binding)
+                        or row["task_sha256"] != row["run_task_sha256"]
+                        or row["revision_id"] != row["object_current_revision_id"]
+                        or canonical_timestamp(
+                            row["recorded_at"], field="checkpoint route recorded_at"
+                        )
+                        != row["recorded_at"]
+                    ):
+                        raise ValueError("checkpoint route projection binding is invalid")
+                    key = (row["route_sha256"], row["task_sha256"], row["knowledge_id"])
+                    actual_projection[key] = dict(row)
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                    sqlite3.DatabaseError,
+                ):
+                    failures.append(
+                        {
+                            "code": "checkpoint_route_projection_invalid",
+                            "object_id": str(row["knowledge_id"]),
+                        }
+                    )
+            expected_projection_set = {
+                (
+                    key[0],
+                    key[1],
+                    key[2],
+                    value["snapshot_sha256"],
+                    value["revision_id"],
+                    value["run_id"],
+                    value["canonical_binding_json"],
+                    value["scope"],
+                    value["sensitivity"],
+                    value["recorded_at"],
+                )
+                for key, value in expected_projection.items()
+            }
+            actual_projection_set = {
+                (
+                    key[0],
+                    key[1],
+                    key[2],
+                    value["snapshot_sha256"],
+                    value["revision_id"],
+                    value["run_id"],
+                    value["canonical_binding_json"],
+                    value["scope"],
+                    value["sensitivity"],
+                    value["recorded_at"],
+                )
+                for key, value in actual_projection.items()
+            }
+            if actual_projection_set != expected_projection_set:
+                failures.append(
+                    {
+                        "code": "checkpoint_route_projection_stale",
+                        "object_id": self.vault_id,
+                    }
                 )
         expected_search: list[tuple[str, str, str, str, str, str]] = []
         for row in self.connection.execute(

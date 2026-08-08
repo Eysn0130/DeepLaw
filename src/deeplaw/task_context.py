@@ -35,6 +35,17 @@ _WORKTREE_FIELDS = (
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _BASE_REVISION = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
+_ROUTE_FIELDS = (
+    "project_sha256",
+    "task_lineage_sha256",
+    "repository_sha256",
+    "worktree_sha256",
+)
+_SNAPSHOT_FIELDS = (
+    "base_revision",
+    "dirty_state_sha256",
+)
+
 
 def _canonical_json(value: Mapping[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -170,8 +181,48 @@ def normalize_task_context_binding(
     return normalized
 
 
+def task_route_identity(value: Mapping[str, Any]) -> dict[str, str | None]:
+    """Return the canonical task-line routing identity.
+
+    Route equality intentionally excludes the parent lineage and workspace
+    snapshot fields.  The input is normalized through the same closed binding
+    validator used by Run Records, so callers cannot derive a route from an
+    unverified or host-specific object.
+    """
+
+    normalized = normalize_task_context_binding(value, allow_none=False)
+    assert normalized is not None  # ``allow_none=False`` is an invariant.
+    return {field: normalized[field] for field in _ROUTE_FIELDS}
+
+
+def task_snapshot_identity(value: Mapping[str, Any]) -> dict[str, str | None]:
+    """Return the canonical base/dirty workspace snapshot identity."""
+
+    normalized = normalize_task_context_binding(value, allow_none=False)
+    assert normalized is not None  # ``allow_none=False`` is an invariant.
+    return {field: normalized[field] for field in _SNAPSHOT_FIELDS}
+
+
+def task_route_sha256(value: Mapping[str, Any]) -> str:
+    """Hash only the canonical task-line routing identity."""
+
+    return hashlib.sha256(_canonical_json(task_route_identity(value)).encode("utf-8")).hexdigest()
+
+
+def task_snapshot_sha256(value: Mapping[str, Any]) -> str:
+    """Hash only the canonical workspace snapshot identity."""
+
+    return hashlib.sha256(
+        _canonical_json(task_snapshot_identity(value)).encode("utf-8")
+    ).hexdigest()
+
+
 __all__ = [
     "SCHEMA_VERSION",
     "build_task_context_binding",
     "normalize_task_context_binding",
+    "task_route_identity",
+    "task_route_sha256",
+    "task_snapshot_identity",
+    "task_snapshot_sha256",
 ]
