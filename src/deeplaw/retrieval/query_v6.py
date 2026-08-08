@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from typing import Any
 
-from ..evidence.statements import validate_statement
+from ..evidence.statements import (
+    MAX_STATEMENT_TEXT_CHARS,
+    build_input_set_sha256,
+    statement_id,
+    statement_sha256,
+    validate_statement,
+)
 from ..knowledge_autonomy import (
     KNOWLEDGE_KINDS,
     AutonomousKnowledgeStore,
@@ -11,6 +18,7 @@ from ..knowledge_autonomy import (
     _validate_contract,
 )
 from ..knowledge_intelligence import normalize_identity_text
+from ..knowledge_models import utc_now
 from ..knowledge_store import KnowledgeVault
 from ..util import (
     canonical_json,
@@ -45,6 +53,27 @@ _MAX_CANDIDATE_RECEIPTS = 512
 _MAX_EVIDENCE_TEXT = 12_000
 _MAX_PROJECTION_BYTES = 65_536
 _MAX_EMBEDDED_PROJECTION_BYTES = 60_000
+_CHECKPOINT_REQUIRED_LABELS = frozenset(
+    {
+        "GOAL",
+        "CONFIRMED_DECISION",
+        "CONSTRAINT",
+        "VERIFIED_FACT",
+        "OPEN_GAP",
+        "NEXT_ACTION",
+        "ARTIFACT_REF",
+    }
+)
+_CHECKPOINT_LINE = re.compile(r"^([A-Z_]+): ([^\r\n]{1,500})$")
+_CHECKPOINT_PATH = re.compile(
+    r"(?:^|[\s=:])/(?:Users|home|tmp|private|var)(?:[\s/]|$)|[A-Za-z]:[\\/]"
+)
+_CHECKPOINT_SECRET = re.compile(
+    r"(?i)(?:api[_-]?key|access[_-]?token|authorization|secret)"
+    r"\s*[\"']?\s*(?::|=|\bis\b)\s*\S+"
+    r"|\bbearer\s+[A-Za-z0-9._~-]{8,}\b"
+    r"|\b(?:sk[-_]|ghp_)[A-Za-z0-9_-]{8,}\b"
+)
 
 
 def _bounded(value: Any, *, field: str, maximum: int) -> str:
@@ -69,6 +98,33 @@ def _source_key(reference: dict[str, Any]) -> str:
             "quote_sha256": reference.get("quote_sha256"),
         }
     )
+
+
+def _task_checkpoint_admitted(revision: dict[str, Any], body: str) -> bool:
+    """Admit only bounded structured checkpoints, never generic working-memory bodies."""
+
+    semantic_key = revision.get("semantic_key")
+    tags = revision.get("tags")
+    if (
+        not isinstance(semantic_key, str)
+        or not semantic_key.startswith(("checkpoint:", "task-checkpoint:"))
+        or not isinstance(tags, list)
+        or "checkpoint" not in tags
+        or len(body) > MAX_STATEMENT_TEXT_CHARS
+        or _CHECKPOINT_PATH.search(body)
+        or _CHECKPOINT_SECRET.search(body)
+    ):
+        return False
+    labels: set[str] = set()
+    lines = body.splitlines()
+    if not 7 <= len(lines) <= 64:
+        return False
+    for line in lines:
+        match = _CHECKPOINT_LINE.fullmatch(line)
+        if match is None or match.group(1) not in _CHECKPOINT_REQUIRED_LABELS:
+            return False
+        labels.add(match.group(1))
+    return labels == _CHECKPOINT_REQUIRED_LABELS
 
 
 def _artifact_value(store: AutonomousKnowledgeStore, digest: str, role: str) -> dict[str, Any]:
@@ -639,7 +695,195 @@ def _load_statement_candidates(
             )
         except (TypeError, KeyError):
             rejections.append({**item_ref, "reason": "invalid_statement_evidence"})
+    working_candidates, working_rejections, working_scanned, working_truncated = (
+        _load_working_memory_candidates(
+            store,
+            target=target,
+            revision_ids=revision_ids,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            purpose=purpose,
+            as_of=as_of,
+            kinds=kinds,
+        )
+    )
+    candidates.extend(working_candidates)
+    rejections.extend(working_rejections)
     candidates.sort(key=lambda item: item["_score"])
+    combined_truncated = (
+        truncated
+        or working_truncated
+        or len(candidates) > _MAX_STATEMENT_CANDIDATES
+    )
+    candidates = candidates[:_MAX_STATEMENT_CANDIDATES]
+    return candidates, rejections, len(rows) + working_scanned, combined_truncated
+
+
+def _load_working_memory_candidates(
+    store: AutonomousKnowledgeStore,
+    *,
+    target: dict[str, Any],
+    revision_ids: tuple[str, ...],
+    scope: str,
+    max_sensitivity: str,
+    purpose: str,
+    as_of: str | None,
+    kinds: tuple[str, ...],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], int, bool]:
+    """Project current run-bound working memory into bounded v6 interpretations."""
+
+    if purpose not in {"answer", "debug", "freshness_check"} or as_of is not None:
+        return [], [], 0, False
+    placeholders = ",".join("?" for _ in revision_ids)
+    rows = store.connection.execute(
+        f"""
+        SELECT revisions.*, objects.current_revision_id,
+               objects.workspace_path AS current_workspace_path
+        FROM knowledge_revisions_v3 AS revisions
+        JOIN knowledge_objects_v3 AS objects
+          ON objects.knowledge_id = revisions.knowledge_id
+        WHERE revisions.revision_id IN ({placeholders})
+          AND revisions.kind = 'memory'
+        ORDER BY revisions.revision_id
+        LIMIT ?
+        """,
+        (*revision_ids, _MAX_DISCOVERED_REVISIONS + 1),
+    ).fetchall()
+    truncated = len(rows) > _MAX_DISCOVERED_REVISIONS
+    rows = rows[:_MAX_DISCOVERED_REVISIONS]
+    candidates: list[dict[str, Any]] = []
+    rejections: list[dict[str, str]] = []
+    query_terms = set(target["terms"])
+    has_identity_target = any(
+        target.get(field) is not None
+        for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
+    )
+    reference_time = utc_now()
+    for row in rows:
+        candidate_ref = {
+            "candidate_id": sha256_bytes(str(row["revision_id"]).encode("utf-8"))
+        }
+        try:
+            revision = store._revision_row(row, include_body=True)
+            inside_boundary, reasons = store._knowledge_admission_reasons(
+                revision,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                reference_time=reference_time,
+                kinds=kinds,
+            )
+            if not inside_boundary:
+                continue
+            if reasons:
+                rejections.append({**candidate_ref, "reason": ",".join(reasons)})
+                continue
+            metadata = revision.get("metadata", {})
+            if not isinstance(metadata, dict) or metadata.get("memory_type") != "working":
+                continue
+            if row["current_revision_id"] != revision["revision_id"]:
+                rejections.append({**candidate_ref, "reason": "historical_working_memory"})
+                continue
+            if (
+                revision.get("origin") != "agent_derived"
+                or revision.get("authority") != "agent_derived"
+                or revision.get("verification") != "run_bound"
+                or revision.get("epistemic_state") != "supported"
+                or revision.get("source_refs")
+            ):
+                rejections.append({**candidate_ref, "reason": "working_memory_not_run_bound"})
+                continue
+            target_values = {
+                "semantic_key": revision.get("semantic_key"),
+                "knowledge_id": revision["knowledge_id"],
+                "revision_id": revision["revision_id"],
+                "kind": revision["kind"],
+            }
+            if any(
+                target.get(field) is not None and target_values[field] != target[field]
+                for field in target_values
+            ):
+                rejections.append({**candidate_ref, "reason": "query_target_mismatch"})
+                continue
+            body = revision.get("body")
+            if not isinstance(body, str) or not body:
+                rejections.append({**candidate_ref, "reason": "working_memory_unavailable"})
+                continue
+            if not _task_checkpoint_admitted(revision, body):
+                rejections.append({**candidate_ref, "reason": "working_memory_not_checkpoint"})
+                continue
+            text = body
+            searchable = set(
+                query_search_terms(
+                    " ".join(
+                        (
+                            str(revision["title"]),
+                            str(revision.get("semantic_key") or ""),
+                            text,
+                        )
+                    ),
+                    limit=128,
+                    cover_tail=True,
+                )
+            )
+            if query_terms and not query_terms.intersection(searchable) and not has_identity_target:
+                rejections.append({**candidate_ref, "reason": "query_mismatch"})
+                continue
+            limitation = (
+                "Agent-derived working memory; not exact Source evidence or legal Authority."
+            )
+            text_sha256 = statement_sha256(text)
+            statement = validate_statement(
+                {
+                    "schema_version": "deeplaw.knowledge-statement/v1",
+                    "statement_id": statement_id(revision["revision_id"], 1, text_sha256),
+                    "knowledge_revision_id": revision["revision_id"],
+                    "ordinal": 1,
+                    "statement_text": text,
+                    "statement_sha256": text_sha256,
+                    "statement_type": "interpretation",
+                    "support_status": "supported",
+                    "source_refs": [],
+                    "knowledge_revision_refs": [],
+                    "relation_revision_refs": [],
+                    "valid_from": revision.get("valid_from"),
+                    "valid_to": revision.get("valid_to"),
+                    "limitation": limitation,
+                    "gaps": [],
+                    "input_set_sha256": build_input_set_sha256(
+                        source_refs=[],
+                        knowledge_revision_refs=[],
+                        relation_revision_refs=[],
+                        valid_from=revision.get("valid_from"),
+                        valid_to=revision.get("valid_to"),
+                        statement_type="interpretation",
+                        support_status="supported",
+                        limitation=limitation,
+                        gaps=[],
+                    ),
+                },
+                require_statement_id=True,
+            )
+            candidate = {
+                **statement,
+                "knowledge_id": revision["knowledge_id"],
+                "current_supported": True,
+                "freshness": "fresh",
+                "partition": "run_bound_working_memory",
+                "title": revision["title"],
+                "kind": revision["kind"],
+                "semantic_key": revision.get("semantic_key"),
+                "epistemic_state": revision["epistemic_state"],
+                "origin": revision["origin"],
+                "authority": revision["authority"],
+                "verification": revision["verification"],
+                "legal_authority": False,
+                "source_free": bool(revision["source_free"]),
+                "applicability": "working_memory",
+            }
+            candidate["_score"] = _candidate_score(candidate, target)
+            candidates.append(candidate)
+        except (TypeError, KeyError, ValueError):
+            rejections.append({**candidate_ref, "reason": "invalid_working_memory"})
     return candidates, rejections, len(rows), truncated
 
 
@@ -801,6 +1045,13 @@ def _duty_reports(
     residual_gaps: list[dict[str, Any]],
     before: bool,
 ) -> list[dict[str, Any]]:
+    working_memory_ids = [
+        str(item["statement_id"])
+        for item in statements
+        if item.get("partition") == "run_bound_working_memory"
+        and item.get("statement_type") == "interpretation"
+        and item.get("support_status") == "supported"
+    ]
     supported_factual_ids = [
         str(item["statement_id"])
         for item in statements
@@ -826,6 +1077,7 @@ def _duty_reports(
         and item.get("support_status") == "supported"
         and item.get("current_supported") is True
     ]
+    current_state_ids.extend(working_memory_ids)
     temporal_ids = [
         str(item["statement_id"])
         for item in statements
@@ -878,7 +1130,7 @@ def _duty_reports(
         is_applicable = duty in applicable
         refs: list[str]
         if duty == "primary_answer":
-            refs = [*supported_factual_ids, *source_ids]
+            refs = [*supported_factual_ids, *working_memory_ids, *source_ids]
         elif duty == "identity":
             refs = identity_ids
         elif duty == "definition":
@@ -1570,8 +1822,15 @@ def execute_v6(
     answerable = bool(
         evidence
         or any(
-            item.get("statement_type") == "factual"
-            and item.get("support_status") in {"supported", "contested"}
+            (
+                item.get("statement_type") == "factual"
+                and item.get("support_status") in {"supported", "contested"}
+            )
+            or (
+                item.get("partition") == "run_bound_working_memory"
+                and item.get("statement_type") == "interpretation"
+                and item.get("support_status") == "supported"
+            )
             for item in selected
         )
     )
