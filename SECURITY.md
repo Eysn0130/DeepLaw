@@ -10,12 +10,17 @@ documents, generated vault/release databases, or OCR corpora.
 ## Supported versions
 
 Security fixes are evaluated for the current software release, `v0.12.0`, and the `main` branch.
-The release manifest records `commercial_release_eligible=true` and
-`quality_protocol_eligible=true`; comparative leadership remains separate with
-`competitive_claim_eligible=false`. The quality decision is produced by the public, time-frozen
-DeepLaw Evaluation Protocol and does not require external institution certification. Older
-versions, local knowledge-release artifacts, and third-party packages are not separately supported
-unless a release notice says otherwise.
+Historical v0.12 release artifacts retain their manifest-v5 contract. Every future `0.13.x`
+release is fail-closed on commercial manifest v6; an old v5 manifest, repository-visible
+development Gold, or no-model Host smoke cannot satisfy model-task acceptance. The v6 manifest
+binds exact candidate artifacts and hashed repository-external Human Gold, Host, Legal Pack,
+scale, cross-platform, supply-chain, provenance, and public-redownload evidence. Unknown later
+versions have no implicit manifest downgrade. Comparative leadership remains separately gated with
+`competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
+third-party packages are not separately supported unless a release notice says otherwise.
+The published v0.12 manifest records `commercial_release_eligible=true` and
+`quality_protocol_eligible=true`; those historical flags do not qualify this v0.13 source
+candidate or bypass manifest v6.
 
 ## Report a vulnerability privately
 
@@ -160,14 +165,23 @@ The optional `knowledge_support` server:
 - opens exactly one selected vault read-only;
 - advertises v1 compatibility for untouched v0.7 Vaults or the v3 read contract after autonomous
   migration; the frozen v2 autonomous seam remains a compatibility contract;
-- exposes only twelve bounded read operations: search/recall, get, context, explain, verify,
-  inspect, lineage, graph, Wiki discovery, identity lookup, and gap discovery;
+- exposes only the closed bounded read operations declared by its MCP schema, including
+  search/recall, get, query, context, explain, verify, inspect, lineage, graph, Wiki discovery,
+  identity lookup, and gap discovery;
 - excludes inactive and restricted revisions and strips local filesystem paths;
 - fails closed without echoing the matched value if any bounded response still contains a local
   absolute path or recognized secret-like material;
 - reconciles both event histories with current object/source/relation/workspace state and verifies
   selected source/CAS bytes;
 - returns bounded task context and never writes feedback or memory.
+
+Working-checkpoint routing is an admission selector, not a capability. The derived route index is
+queried before ordinary content discovery, remains bounded and rebuildable, and is revalidated
+against canonical Run/Revision/Ledger state. Routing identity excludes paths, branch names, current
+commits, Host sessions, and credentials; checkpoint base/dirty state is a separate snapshot.
+Route mismatch fails closed without an existence oracle, while a same-route snapshot divergence
+returns only a sanitized Gap and opaque receipt. Provider projection recursively strips binding,
+route, snapshot, Host-hint, and local-path fields.
 
 The optional `knowledge_sink` server:
 
@@ -180,6 +194,10 @@ The optional `knowledge_sink` server:
 - cannot mutate official or private Legal Pack data, source evidence, Authority, audit history,
   filesystem paths, exports, signing keys, or host permissions;
 - requires explicit confirmation that no client or case material is present.
+
+The frozen `knowledge-sink.input/v2` contract still accepts legacy unbound `record_run`. New bound
+working-state writes use additive input v5. Legacy reconciliation is an owner operation that writes
+a new bound Run and successor Revision; it never mutates historical rows in place.
 
 Read-only is the `law_support`/`knowledge_support` boundary and grants are the
 `knowledge_sink` boundary; neither is an operating-system sandbox. A host that separately grants

@@ -1,8 +1,7 @@
 # DeepLaw PRD 1.2 traceability matrix
 
-Status: **current source-candidate mapping**, audited 2026-08-08 from
-`8465b99af31467a744db0814b5df2c39d51aa2fb` plus the uncommitted, reviewed task-line remediation
-listed below. This document adopts PRD 1.2 into the development
+Status: **current source-candidate mapping**, re-audited 2026-08-09 through implementation commit
+`ceaaa8e417098e92efcca064604e63945833726e`. This document adopts PRD 1.2 into the development
 and acceptance process. It is not a release note, qualification result, or permission to implement
 every Target.
 
@@ -12,12 +11,13 @@ every Target.
   `daa524d62471801ca79699948ebca52ab194e14adcdf0bc1d332850fd7a12fb8`.
 - Upstream research SHA-256:
   `00dfab0dfed139f5d81982061a75896f29552f56a125aa83bec57f0c6a860967`.
-- Branch: `codex/semantic-evidence-package-fix`; HEAD and upstream:
-  `8465b99af31467a744db0814b5df2c39d51aa2fb`.
-- Preserved pre-audit worktree: modified `docs/V0_13_UPSTREAM_RESEARCH.md` and untracked
-  `docs/PRODUCT_REQUIREMENTS.md`. No runtime, contract, test, package, or migration file was dirty
-  at the audit boundary. Later changes are the isolated, post-reproduction task-line remediation
-  and its documentation/tests; the two pre-existing documentation changes remain preserved.
+- Branch: `codex/semantic-evidence-package-fix`; reviewed implementation commit/tree:
+  `ceaaa8e417098e92efcca064604e63945833726e` /
+  `e2ca644e23fc01a3026350982b4a781711f29c0d`.
+- The Owner's prior work was preserved. The remediation is split into failure reproductions,
+  routing/snapshot correction, sink compatibility, route-first retrieval, bounded diagnostics,
+  repository-development protocol rotation, and the v0.13 release gate. No reset, force push,
+  version bump, tag, or publication occurred.
 - Package version: `0.12.0`. Legal release/storage schemas: `deeplaw.release/v3` and
   `deeplaw.sqlite/v6`. Knowledge Vault/storage schemas: `deeplaw.knowledge-vault/v1` and
   `deeplaw.knowledge-sqlite/v1`. Autonomous migration head:
@@ -25,15 +25,17 @@ every Target.
   Semantic, and Statement Evidence compilation cores remain additive v1 migrations. There is no
   standalone `migrations/` directory; migration, verified backup, recovery, and rollback are
   implemented in the domain stores.
-- Pre-remediation full test baseline:
-  `uv run --frozen pytest --strict-markers` → `1177 passed, 9 skipped in 289.14s`.
-- Repository Gold freeze inputs are inventoried by
+- Current implementation baseline before this documentation rotation:
+  `uv run --frozen pytest --strict-markers` → `1253 passed, 9 skipped in 328.52s`.
+- Historical repository Gold freeze inputs are inventoried by
   `benchmarks/quality/repository-gold-v1.json`: `README.md`, `AGENTS.md`, `README_EN.md`,
   `docs/AGENT_ADAPTERS.md`, `src/deeplaw/knowledge_autonomy.py`,
   `src/deeplaw/knowledge_intelligence.py`, `docs/DEEPLAW_2.md`,
   `contracts/law-federated-context.v1.schema.json`, `docs/ARCHITECTURE.md`, and
-  `docs/AUTONOMOUS_KNOWLEDGE_OS.md`. Their audited bytes match the frozen hashes. They are not
-  modified to add PRD links.
+  `docs/AUTONOMOUS_KNOWLEDGE_OS.md`. v1 remains byte-for-byte historical and correctly rejects the
+  current changed runtime/docs boundary. The current default uses explicit repository-visible
+  development Gold v3 and evaluation protocol v2; neither is external, independent, blind, or
+  claim eligible.
 - The v0.12 repository temporal holdout is public and label-visible. The v0.13 qualification and
   final-blind holdout hashes, candidate wheel hash, and source-candidate binding remain unset.
   Repository-external Gold content was not read in this audit.
@@ -56,6 +58,8 @@ Evidence abbreviations in the table are repository-relative paths:
   `KMCP`: `src/deeplaw/knowledge_mcp_server.py`.
 - `TC`: `src/deeplaw/task_context.py` and
   `contracts/task-context-binding.v1.schema.json`.
+- `TR`: the rebuildable `knowledge_checkpoint_routes_v1` projection in `KA`; `SINK5`:
+  `contracts/knowledge-sink.input.v5.schema.json` with frozen v2 compatibility.
 - `WIKI`: `src/deeplaw/projection/`, `src/deeplaw/wiki/`, and
   `src/deeplaw/wiki_coverage.py`; `LEGAL`: `src/deeplaw/store.py`,
   `src/deeplaw/search.py`, and `src/deeplaw/mcp_server.py`.
@@ -72,13 +76,13 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-PROBLEM-003 | Compile reusable knowledge instead of repeated raw-fragment RAG | Target | KC, CS, Q6 | compilation/Statement v1 contracts | `test_source_compilation.py` | None independent | Candidate implementation is not external task proof | Run source-update and reuse holdout tasks |
 | PRD-PROBLEM-004 | Human and Agent share an evidence-linked Wiki | Target | WIKI, KMCP | registry/link/manifest contracts | `test_v013_evidence_wiki_benchmark.py` | DISP Wiki development pass | No independent human usability run | Execute frozen human Wiki task without new UI |
 | PRD-PROBLEM-005 | Keep evidence, interpretation, provenance, and Authority distinct | Target | KA, LEGAL | Knowledge v3; legal evidence v2 | autonomy and legal tests | Legal development qualification failed | Exact signed Pack and independent legal Gold absent | Obtain verified Pack and legal Gold |
-| PRD-PROBLEM-006 | Reject poisoning, false state, scope escape, and secret persistence | Target | KA, KMCP, host harnesses | sink v1; provider gates | security and host-isolation tests | Fake-host canary only | Real isolated Hosts not executed | Run preflight and real Hosts only after Owner prerequisites |
+| PRD-PROBLEM-006 | Reject poisoning, false state, scope escape, and secret persistence | Target | KA, KMCP, host harnesses | SINK5 with frozen v2; provider gates | security and host-isolation tests | Fake-host canary only | Real isolated Hosts not executed | Run preflight and real Hosts only after Owner prerequisites |
 | PRD-PROBLEM-007 | Preserve temporal change, supersession, and stale-state gaps | Target | KA, KC, Q6 | revision/relation/query-plan contracts | temporal/freshness tests | None independent | Semantic restore and stale-head user tasks unqualified | Freeze temporal and restore tasks |
 | PRD-PROBLEM-008 | Fail closed across Vault, project, worktree, and task lines | Target | KA, KOS, Q6, TC | task binding v1 plus existing Vault/scope contracts | PRD 1.2 binding/lineage/worktree/Vault regressions | Same-Vault wrong-line reproduced then remediated in development; default physical cross-Vault leak not reproduced | Explicit cross-Vault references and full fork/conflict lifecycle remain unqualified | Freeze external lineage and explicit cross-Vault tasks |
 | PRD-PRINCIPLE-001 | Minimum sufficient context | Target | Q6, CAP | Capsule v3/provider v2 | quality/context tests | Continuity development score | Context-density threshold failed | Fresh holdout and task-success comparison |
 | PRD-PRINCIPLE-002 | Evidence before interpretation | Implemented | KA, KC, LEGAL | evidence/Statement/legal contracts | source, Statement, legal tests | Wiki development chain | Legal qualification failed | Exact-Pack and legal Human Gold qualification |
 | PRD-PRINCIPLE-003 | One governed system with isolated policy planes | Implemented | KS, KA, KC, LEGAL | shared identity/revision contracts | autonomy/source/legal tests | None independent | Physical-plane parity not externally qualified | Keep shared semantics in every future repair |
-| PRD-PRINCIPLE-004 | Knowledge never grants control authority | Implemented | KA, sink/read MCP split | sink v1 and read schemas | sink/security tests | None independent | Same-owner shell remains outside MCP boundary | Preserve host/OS isolation in real runs |
+| PRD-PRINCIPLE-004 | Knowledge never grants control authority | Implemented | KA, sink/read MCP split | SINK5/frozen v2 and read schemas | sink/security tests | None independent | Same-owner shell remains outside MCP boundary | Preserve Host/OS isolation in real runs |
 | PRD-PRINCIPLE-005 | Progressive disclosure and drill-down | Implemented | Q6, CAP, KMCP | provider v2, source read schemas | context/source tests | Wiki development chain | Real provider task evidence absent | Measure task correctness and provider bytes |
 | PRD-PRINCIPLE-006 | Open work surface over a trusted kernel | Implemented | KA, WIKI | Knowledge v3, manifest/registry | projection/ownership tests | Local-only adapter evidence | Obsidian/Tolaria product E2E pending | Run human/editor tasks before widening surface |
 | PRD-PRINCIPLE-007 | Derived state is replaceable | Implemented | CS, WIKI, knowledge intelligence | derived manifest v2 | rebuild/recovery tests | Local synthetic only | Current-candidate scale and 3-OS evidence absent | Qualify rebuild equivalence and resource bounds later |
@@ -92,20 +96,20 @@ Evidence abbreviations in the table are repository-relative paths:
 
 | PRD ID | Capability | Current status | Runtime code | Contract/Schema | Tests | External evidence | Limitation | Required next action |
 |---|---|---|---|---|---|---|---|---|
-| PRD-CONT-001 | Bounded current Task Checkpoint with TTL and exact Run/task binding | Implemented | KA, Q6, CAP, TC | Knowledge v3; task binding v1; Capsule v3 | core continuity + task binding regressions | Development continuity candidate | No independent Gold/Host | Freeze repository-external continuity Gold |
+| PRD-CONT-001 | Bounded current Task Checkpoint with TTL and exact Run/task binding | Implemented | KA, Q6, CAP, TC, TR | Knowledge v3; task binding v1; SINK5; Capsule v3 | core continuity + route-first/task-binding regressions | Development kernel only | No independent Gold/Host | Freeze repository-external continuity Gold |
 | PRD-CONT-002 | Exclude transcript, hidden reasoning, raw logs, credentials, tokens, paths | Implemented | KA, CAP, projection gate | sink/provider schemas | continuity/security tests | Canary on fake hosts | Real-host proof absent | Repeat canary on isolated real Hosts |
 | PRD-CONT-003 | Exclude inactive, mismatched, or unbound checkpoints | Implemented | KA admission, Q6, TC | lifecycle/task-binding/query-plan schemas | autonomy/core-continuity/task-line tests | Exact mismatch and absent binding pass development regressions | Full state-trajectory holdout absent | Add expired/failed/aborted external task cases |
 | PRD-CONT-004 | Checkpoints remain Agent-derived and non-authoritative | Implemented | KA | Knowledge Object v3 | authority tests | None independent | No real Host measurement | Retain zero Authority elevation gate |
-| PRD-CONT-005 | Hooks cannot mint grants or hide writes | Implemented | adapter envelopes; sink split | Agent Context v1; sink v1 | agent-context/sink tests | Static/local-only adapters | Real host lifecycle not executed | Verify resolved host configuration |
-| PRD-CONT-006 | Cold thread restores through one Context seam | Implemented | KOS, KMCP, CAP | Capsule v3/provider v2 | context parity/core continuity | Development pass with efficiency failure | No Human Gold/real Host | Compare Host-only, Host Memory, Host+DeepLaw |
+| PRD-CONT-005 | Hooks cannot mint grants or hide writes | Implemented | adapter envelopes; sink split | Agent Context v1; SINK5 with frozen v2 | agent-context/sink tests | Static/local-only adapters | Real Host lifecycle not executed | Verify resolved Host configuration |
+| PRD-CONT-006 | Cold thread restores through one Context seam | Target | KOS, KMCP, CAP, TR exact-task kernel | Capsule v3/provider v2 | context parity, exact unique/ambiguous cold-start regressions | Repository-visible development only | No semantic resolver, stable real-Host derivation, Human Gold, or real Host | Compare Host-only, Host Memory, Host+DeepLaw on a frozen external task set |
 | PRD-CONT-007 | Complement Host memory without scraping or copying it | Implemented | adapter and Context boundaries | Agent Context v1 | cross-host context tests | Static/local-only | Host memory comparison not executed | Freeze equal-budget native-memory experiment |
-| PRD-CONT-008 | Ground continuity in durable project state and artifact references | Implemented | KA, TC | Run Record metadata/event plus task binding v1 | core continuity + real-worktree regression | Opaque project/repo/worktree/base/dirty binding passes development regression | Host-derived stable lineage and independent task evidence absent | Qualify with real concurrent Hosts/worktrees |
+| PRD-CONT-008 | Ground continuity in durable project state and artifact references | Target | KA, TC, TR kernel | Run Record/event plus task binding v1 and SINK5 | core continuity + real-worktree/reconciliation regressions | Opaque route and snapshot kernel pass development regression | Stable Host-neutral ID enrollment, real Artifact lifecycle, and independent task evidence absent | Qualify with real concurrent Hosts/worktrees |
 | PRD-CONT-009 | Optional future intention, never a scheduler | Deferred | None | None | None | None | No admitted user failure; not core v0.13 | Revisit only through feature admission |
-| PRD-CONT-010 | Bind Vault/project/task lineage/repo/worktree/base/dirty state | Implemented | KA, Q6, CAP, TC | task binding v1; Query Plan v6; Capsule v3 | task binding/lineage/real-worktree regressions | Pre-fix wrong-line admission reproduced from installed wheel; exact binding now selects one line in development | Independent external Gold and real Host derivation remain absent | Run a fresh unseen concurrent-worktree holdout |
+| PRD-CONT-010 | Bind Vault/project/task lineage/repo/worktree/base/dirty state | Target | KA, Q6, CAP, TC, TR kernel | route/snapshot binding v1; Query Plan v6; Capsule v3 | task routing, divergence, lineage, real-worktree regressions | Top-20 loss and silent divergence reproduced; bounded route-first kernel passes development regressions | Real Host-neutral identity derivation, fork reconciliation, independent Gold, and full scale remain absent | Run a fresh unseen concurrent-worktree holdout |
 | PRD-CONT-011 | Independent concurrent/fork task-line current state and explicit conflicts | Target | Exact-line read isolation only; no merge coordinator | task binding v1 preserves optional opaque parent only | two-line regressions | Concurrent current lines no longer cross-admit in development | Fork/merge/conflict reconciliation lifecycle remains not_executed | Freeze external fork/conflict Gold before any coordinator |
 | PRD-CONT-012 | Content-minimized searchable Run Timeline | Not Implemented | Run records/events are primitives only | No Timeline schema/API | `test_prd12_run_timeline_reproduction.py` | `reproduced_missing_public_seam` | No owner filtering/search/deletion surface | Freeze external time-to-locate and forget Gold |
 | PRD-CONT-013 | Treat Host/session/memory references as untrusted hints | Implemented | adapter envelope/admission | Agent Context v1 | cross-host/context tests | Static adapter evidence | No real Host malicious-hint run | Include wrong Host reference in holdout |
-| PRD-CONT-014 | Bounded bootstrap → drill-down → explicit Checkpoint lifecycle | Implemented | KMCP, KOS, sink split | Context/Capsule/sink contracts | context and sink tests | Development only | No real lifecycle task | Measure provider bytes and first correct action |
+| PRD-CONT-014 | Bounded bootstrap → drill-down → explicit Checkpoint lifecycle | Target | KMCP, KOS, TR, sink split kernel | Context/Capsule/SINK5 contracts | context, route-first, legacy reconciliation tests | Repository-visible development only | No owner UI/real Host lifecycle/Human Gold; Timeline absent | Measure provider bytes and First Correct Action end to end |
 
 ## Source and governed knowledge mapping
 
@@ -122,7 +126,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-SRC-009 | Bounded owner-visible source acquisition manifest | Implemented | `source_connectors.py`, `source_adapters.py` | source snapshot contracts | source connector/security tests | Local-only | No external connector qualification | Run allowlist/exclusion/provenance task |
 | PRD-SRC-010 | Connector cannot create identity or Authority | Implemented | source connectors, KS admission | snapshot/source identity schemas | connector/authority tests | Local-only | No adversarial external acquisition | Test alias/path/URL collisions |
 | PRD-KNOW-001 | Every mutation creates revision and audit event | Implemented | KA coordinator | Knowledge revision/event schemas | autonomous/audit tests | None independent | Same-owner OS compromise out of scope | Retain replay/integrity hard gate |
-| PRD-KNOW-002 | Separate owner-granted knowledge_sink | Implemented | sink server, KA | sink v1 | sink MCP tests | Local stdio only | Real host grant isolation pending | Verify resolved tool set and OS isolation |
+| PRD-KNOW-002 | Separate owner-granted knowledge_sink | Implemented | sink server, KA | SINK5 with frozen v2 compatibility | sink MCP/contract tests | Local stdio only | Real Host grant isolation pending | Verify resolved tool set and OS isolation |
 | PRD-KNOW-003 | Read/query/context/Wiki/law surfaces contain no hidden writes | Implemented | KMCP, KOS, LEGAL | read MCP schemas | MCP/no-write tests | Local stdio only | Real host not executed | Repeat Ledger-head no-write checks in Hosts |
 | PRD-KNOW-004 | Reuse semantic identity and preserve merge/split/contested lineage | Implemented | KA identity resolution | identity/relation contracts | identity/alias tests | Local only | Cross-Vault disambiguation incomplete | Freeze wrong-merge and alias-collision Gold |
 | PRD-KNOW-005 | Keep origin, verification, Authority, lifecycle, scope, and time separate | Implemented | KA | Knowledge Object/Revision/Relation v3/v2 | authority/temporal tests | None independent | No external governance audit | Retain dimension parity tests |
@@ -163,11 +167,11 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-CTX-007 | Missing, contested, temporal, or out-of-scope evidence becomes Gap | Implemented | Q6, CAP | plan/capsule schemas | temporal/legal/context tests | Legal development Gap | Exact Pack qualification failed | Run verified temporal legal Gold |
 | PRD-CTX-008 | Query Trace is bounded, redacted, verified, deletable, non-canonical | Implemented | persistent read runtime/KMCP | process-local trace contract | query-trace tests | Local only | No durable trace by design | Keep process-local unless external need is proven |
 | PRD-CTX-009 | Receipt enables local re-resolution without provider expansion | Implemented | Q6, CAP, KMCP | statement evidence/provider receipt | receipt/verify tests | Local only | Real Host join flow absent | Run receipt drill-down task |
-| PRD-CTX-010 | Judge context by downstream success, evidence duties, and efficiency | Target | benchmark/scorer tools only | qualification protocol v1 | quality metric tests | Continuity density failed | Independent Gold and model tasks absent | Freeze equal-budget outcome protocol |
+| PRD-CTX-010 | Judge context by downstream success, evidence duties, and efficiency | Target | benchmark/scorer tools only | repository development protocol v2; external protocol absent | quality metric tests | Visible development fixture only; prior continuity density failed | Independent Gold and model tasks absent | Freeze equal-budget external outcome protocol |
 | PRD-CTX-011 | Stateless retry binds explicit version/scope/task/budgets/truncation | Implemented | Q6, TC | plan v6 + task binding v1 | plan parity + task binding regressions | Local deterministic development only | Real Host retry/expiry evidence absent | Run equal-input retry and changed-head Host task |
 | PRD-CTX-012 | Capability discovery distinguishes read, diagnostics, and granted mutation | Implemented | KMCP/sink MCP/LEGAL | closed MCP schemas | stdio schema tests | Local no-model lifecycle | Resolved real-host config pending | Verify exact tool list in isolated Hosts |
 | PRD-CTX-013 | Eligibility is independent of row/file/import/ID order | Target | Q6 revision discovery then bounded statements | plan v6 | tail/P0/scale tests | 5,001 regression executed; current 10k/100k lanes are `not_executed` | Order invariance is not mapped at every public seam | Run 10k/100k and complete public-seam mapping before implementation status |
-| PRD-CTX-014 | Capsule binds Vault/project/task-line/head/revisions/policy and detects stale head | Implemented | CAP, Q6, TC | Capsule v3/plan v6/task binding v1 | stale-runtime + task binding/lineage tests | Wrong-line admission reproduced then remediated across real worktree states | Fresh external stale-head/lineage Gold absent | Run changed-head re-resolution holdout |
+| PRD-CTX-014 | Capsule binds Vault/project/task-line/head/revisions/policy and detects stale head | Target | CAP, Q6, TC, TR kernel | Capsule v3/plan v6/task binding v1 | stale-runtime, route-first, snapshot-divergence tests | Local exact-route/snapshot kernel passes; stale Gap is bounded and redacted | Full changed-head re-resolution, real Host derivation, and fresh external Gold absent | Run changed-head re-resolution holdout |
 | PRD-CTX-015 | Ambiguity fails closed and exposes only admitted disambiguation | Target | identity admission, partial target checks | identity/plan schemas | identity/query tests | Local only | Cross-Vault/project/task ambiguity not complete | Freeze ambiguity matrix |
 
 ## Protected/legal evidence and security mapping
@@ -209,11 +213,11 @@ Evidence abbreviations in the table are repository-relative paths:
 
 | Capability | Current | Qualification boundary |
 |---|---|---|
-| Continuity/Context | Implemented, partial development result with exact task-line admission | Density threshold failed; fork lifecycle, Human Gold, native-memory comparison, and real Hosts pending |
+| Continuity/Context | Target workflow with implemented route/snapshot/admission kernel | Semantic cold-start, density, fork lifecycle, Human Gold, native-memory comparison, and real Hosts pending |
 | Living Wiki | Implemented development chain | Independent human usability, ownership classes, typed path task, and current scale pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
-| Host Integration | Local-only implementation evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
-| Portability/Operations | Implemented local primitives | Semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
+| Host Integration | Target with local static/thin-adapter evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
+| Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
 
 Current disposition remains:
 

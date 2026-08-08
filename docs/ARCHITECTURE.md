@@ -250,6 +250,12 @@ a universal hard-coded ranking by object kind:
   candidate pool. It never selects a fixed global prefix of the Statement table. Discovery and
   Statement truncation are plan/receipt-bound, and a resource-bound truncation is a provider-visible
   Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
+- working checkpoints use a separate bounded, indexed, rebuildable task-route projection before
+  ordinary content discovery. Route identity binds opaque project, repository, stable-worktree,
+  and task-line identifiers; checkpoint base/dirty state is a separate snapshot. Exact-route
+  admission cannot be displaced by the ordinary Top-20 and cannot widen its public selected count.
+  Same-route snapshot divergence produces a sanitized Gap; route mismatch fails closed without an
+  existence oracle. Every route row is revalidated against canonical Run/Revision/Ledger state;
 - bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
   stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v6 binds
   the expansion profile/count/digest and validates it as part of the query/audit receipt; v5
@@ -350,8 +356,8 @@ non-persistent; it is not Canonical Knowledge or a Ledger mutation.
 
 | Surface | Boundary |
 | --- | --- |
-| `knowledge_support` | One read-only stdio leaf; v3 exposes twelve bounded read operations, including explain, identity, and gaps |
-| `knowledge_sink` | Separate stdio leaf; explicit owner token, writer, scope, sensitivity, operation allowlist, byte/rate/capacity limits, idempotency, and audit |
+| `knowledge_support` | One read-only stdio leaf; v3 exposes only its closed bounded read operations, including query, context, explain, identity, and gaps |
+| `knowledge_sink` | Separate stdio leaf; additive input v5 for bound writes, frozen v2 legacy compatibility, explicit owner token, writer, scope, sensitivity, operation allowlist, byte/rate/capacity limits, idempotency, and audit |
 | `law_support` | Separate read-only process and storage for signed official and owner-private legal evidence |
 | CLI | Owner administration, source ingestion, grants, migration, rollback, snapshot, rebuild, official/private Legal operations |
 | Watcher | Explicit foreground polling adapter over the same reconcile/coordinator service; no background daemon |

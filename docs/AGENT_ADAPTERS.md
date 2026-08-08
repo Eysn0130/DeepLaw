@@ -399,6 +399,26 @@ Python/CLI retain local Capsule v2, and MCP retains output/v3 with Capsule v2/Qu
 semantics. The legacy `deeplaw recall` command remains the `retrieval_fabric` path and is not a v6
 Context alias. Ordinary query/context calls are read-only and never append the Canonical Ledger.
 
+`deeplaw knowledge context` is the single recommended Agent entry. `knowledge query` remains an
+owner/operator diagnostic surface; `deeplaw recall`, `knowledge recall`, and autonomy aliases stay
+compatibility or operator surfaces pending a consumer inventory. Working checkpoints are routed
+through the shared Host-neutral identity normalizer before ordinary content discovery. The route
+uses owner-registered opaque project, repository, stable-worktree, and task-line identifiers;
+checkpoint base/dirty state is a separate snapshot. Absolute paths, branch names, current commits,
+task text alone, and Host session/thread/memory references cannot create an identity, grant, or
+authorization. Adapters may only map available Host hints into this shared seam.
+
+For a binding-free cold request, exact task text can recover only when it resolves to one admitted
+task line in the selected Vault. Multiple admitted lines return `task_line_ambiguous`; selecting
+the newest is forbidden. The Provider sees neither candidate identities nor routing fields. This
+local exact-match development path and static Codex/Claude/OpenCode adapter parity are implemented;
+stable identity derivation and three-run real-Host cold-start qualification remain not executed.
+
+New bound mutations use additive `knowledge-sink.input/v5`. Frozen input v2 remains accepted for
+legacy `record_run`, but an unbound legacy Run cannot silently ground a new default-v6 working
+checkpoint. Owner reconciliation creates a new bound Run and successor Revision; adapters must not
+rewrite history or implement a second identity/reconciliation path.
+
 `context` requires `confirm_no_case_data=true` because task and goal text become
 provider-visible Capsule data. A host may send that confirmation only after keeping
 client/case facts, chats, identifiers, and attachments out of the request.

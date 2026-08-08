@@ -1,327 +1,268 @@
-# DeepLaw PRD 1.2 implementation and release disposition
+# DeepLaw PRD 1.2 continuity P0 and release disposition
 
-Status: **source candidate, not released** (2026-08-08).
+Status: **source candidate, not released** (2026-08-09).
 
 Final disposition:
 
 ```text
-blocked_by_external_credential_or_infrastructure
+source_candidate_remains_not_released
 release_gate_passed=false
 claim_eligible=false
 competitive_claim_eligible=false
 package_version=0.12.0
 ```
 
-This report closes the authorized local PRD 1.2 audit and one reproduced minimum remediation. It
-does not close the repository-external Human Gold, real-Host, exact Legal Pack, current-candidate
-scale, 3-OS, SBOM/provenance, or publication gates. No version, tag, signature, registry upload,
+This report records the local PRD 1.2 continuity P0 remediation, development-protocol rotation,
+and v0.13 release-gate correction. It is not a qualification report and does not close the Human
+Gold, real-Host, Legal Pack, full current-candidate scale, Timeline, semantic restore,
+cross-platform, supply-chain, or publication gates. No version, tag, signature, registry upload,
 RC, or GA was created.
 
-## 1. Exact candidate boundary
+## 1. Reviewed implementation boundary
 
 | Item | Value |
 | --- | --- |
 | Branch | `codex/semantic-evidence-package-fix` |
-| PRD adoption commit | `a0a2a26c456fb553490cbe517d8d7d799ae137ea` |
-| Reviewed implementation commit | `eb36b948eb8d43e3bc556a78220375774a95d95d` |
-| Implementation tree | `f9ce4e793873d45680c44df1ed71e7145699be72` |
+| Task baseline | `72440618cce1a93be8a767d08104e4260c3ee868` |
+| Reviewed implementation commit | `ceaaa8e417098e92efcca064604e63945833726e` |
+| Reviewed implementation tree | `e2ca644e23fc01a3026350982b4a781711f29c0d` |
 | Package version | `0.12.0` |
-| Development wheel SHA-256 | `45b6ba427f1c73eebaeb2f93da232def8b2992ec68f251980128791ef616ddc4` |
 | PRD 1.2 SHA-256 | `daa524d62471801ca79699948ebca52ab194e14adcdf0bc1d332850fd7a12fb8` |
 | Upstream research SHA-256 | `00dfab0dfed139f5d81982061a75896f29552f56a125aa83bec57f0c6a860967` |
-| Traceability matrix SHA-256 | `4f790eaa8f1dcfbf10798d34039426aff560f6d892ae110ae9ee866ee33e25c1` |
-| Development reproduction report SHA-256 | `3d37d4c51fa096da40f6fdbee0dff1097ef53ee4a15663cc3efd5efbd19e5a0d` |
-| Task-binding contract report SHA-256 | `16c285fd993026814f00a7951b44ada111a238bac0be16d91229ce77bf5d08b2` |
+| Historical evaluation protocol v1 | `470242a11c4f58a5975c1b576298fcf311bda95af1ebf8f0bfcd4529a4262c8c` |
+| Historical repository Gold v1 | `ffce55aabd36738589abc979c903f830baaf18fb6943e218c430079d33de9e97` |
+| Frozen sink input v2 | `b3c5c100471cec3a8ecdce115255ae3e4d0d7053800936e5a611fe103527019a` |
 
-The wheel was built twice from the clean implementation commit on the same machine; both builds
-had the recorded hash. An isolated Python 3.13 environment installed the exact wheel, found the
-packaged task-binding Schema, wrote a task-bound checkpoint, and passed store integrity
-verification. The wheel scan found no owner-local path marker, `.env`, or `auth.json` filename.
-This is a local reproducibility smoke test, not multi-platform release provenance.
+The tracked report cannot bind the hash of its own final commit. The final handoff records the
+post-report commit/tree and fresh wheel hash. The implementation boundary above is the last runtime,
+contract, test, and CI commit reviewed before documentation rotation.
 
-Environment for the final local checks:
+## 2. Core-scope and surface disposition
 
-```text
-OS=Darwin 26.5.2
-kernel=25.5.0
-architecture=arm64
-Python=3.12.13
-SQLite=3.50.4
-```
-
-## 2. PRD adoption and traceability
-
-`docs/PRD_TRACEABILITY_MATRIX.md` maps all 107 unique PRD IDs. Its status vocabulary is limited to
-`Target`, `Implemented`, `Qualified`, `Released`, `Deferred`, and `Not Implemented`; it contains no
-`Qualified` or `Released` row.
-
-The PRD and upstream research bytes match the Owner-provided reference hashes. Frozen repository
-Gold files and hashes were not rewritten to make the modified runtime appear unchanged. The
-pre-remediation `repository-gold-v1` therefore correctly rejects the new
-`src/deeplaw/knowledge_autonomy.py` bytes. Starting a new Gold freeze requires an explicit new
-protocol version and new fixture; it is not performed or implied here.
-
-## 3. Deletion/addition and duplicated-surface disposition
-
-No command, compatibility contract, Knowledge kind, Relation predicate, Authority dimension,
-database, page family, Host adapter, or connector was deleted or added beyond the reproduced
-task-binding seam.
-
-The existing scope audit remains the product disposition:
-
-| Surface | Disposition |
+| Surface | Decision |
 | --- | --- |
-| `knowledge context` across Python/CLI/MCP | **KEEP** as the single recommended Agent entry |
-| `knowledge query` | **KEEP** as the operator diagnostic surface |
+| `deeplaw knowledge context`, Python `context.compile`, MCP `context` | **KEEP** as the one recommended Agent seam |
+| `knowledge query` | **KEEP** as the operator diagnostic seam |
 | `knowledge autonomy context` | **SIMPLIFY** as a compatibility/operator alias |
-| `deeplaw recall` and `deeplaw knowledge recall` | **DEFER** removal pending consumer inventory |
-| `knowledge autonomy recall` | **SIMPLIFY** as internal/operator discovery |
-| explicit v5 / Capsule v2 and MCP recall | **DEPRECATE** for new consumers, retain compatibility |
-| Run Timeline, semantic restore, typed Relation Path | **DEFER** until their external task/Gold gates |
-| Guides, Codemap, new UI/page families/connectors | **DEFER** outside the v0.13 core freeze |
+| `deeplaw recall`, `knowledge recall` | **DEFER** removal until consumer inventory and compatibility review |
+| `knowledge autonomy recall` | **SIMPLIFY** as operator discovery |
+| Query Plan v5 / Capsule v2 | **DEPRECATE** for new consumers; retain explicit compatibility |
+| Run Timeline, semantic restore, typed Relation Path | **DEFER** pending external user-task Gold |
+| Guides, Codemap, new page families, connectors, Host runtime | **DEFER** outside v0.13 core freeze |
 
-No compatibility surface was physically removed in this candidate.
+No Knowledge kind, Relation predicate, Authority dimension, database, Host adapter family, Graph
+engine, connector, or UI was added. The only new persistent structure is a derived, rebuildable,
+bounded route projection inside the existing Knowledge store.
 
-## 4. Reproductions and minimum remediation
+## 3. P0 reproductions, root causes, risks, and repairs
 
-### Task-line/worktree contamination
+### P0-A — task binding filtered after global Top-20
 
-`PRD12-REPRO-CONT-010-001` reproduced wrong current-state admission through the public Python
-Context seam with two same-task current checkpoints. A second fixture used real linked Git
-worktrees with different base revisions and dirty-state digests. An isolated installation of the
-exact pre-remediation wheel reproduced the same defect, closing source-tree import ambiguity.
+The public Python/CLI/MCP v6 path reproduced a missing exact working checkpoint when 25 or more
+same-project, similar-task lines competed in ordinary Revision discovery. The requested route could
+fall outside the ordinary `recall(limit=20)` set before binding admission ran.
 
-Root cause:
+- Root cause: task-line routing was treated as a late content filter instead of a separate
+  eligibility route.
+- Impact: first correct action and decision preservation could depend on row/import/rank order.
+- Authority/privacy risk: raising the global limit would still be position-dependent and could
+  expose more unrelated candidates.
+- Minimum repair: `knowledge_checkpoint_routes_v1` is a derived indexed projection queried before
+  ordinary discovery. It has explicit route/task/snapshot indexes, bounded lookups, bounded rebuild,
+  canonical Run/Revision/Event revalidation, and integrity checks. Exact checkpoint admission does
+  not widen the ordinary public selected-Revision count or admit other task-line content.
+
+Development diagnostics cover 25 exact task lines and indexed 10k/100k route-table shapes with
+`EXPLAIN QUERY PLAN` plus bounded `LIMIT 20`. These are index/bounded-query diagnostics, not full
+100k product or commercial qualification.
+
+### P0-B — workspace evolution silently became `no_answer`
+
+A checkpoint bound to route R and snapshot S1 was reproduced as silently absent after the same
+route advanced to S2.
+
+- Root cause: one exact binding digest conflated stable routing identity with mutable workspace
+  snapshot.
+- Impact: normal commit/dirty-state evolution looked like another task line and erased continuity
+  without a stale-state signal.
+- Privacy risk: naive mismatch diagnostics could reveal branch, path, diff, or another task line.
+- Minimum repair: route identity now binds Vault plus opaque project, repository,
+  stable-worktree, and task-line identifiers; snapshot separately binds base revision and
+  dirty-state digest. Same route/same snapshot may admit current working state. Same route/different
+  snapshot withholds it and emits bounded `workspace_diverged`. Different route fails closed
+  without an existence oracle. Parent/fork identity is not derived from exact binding-JSON equality.
+
+Absolute paths, branch names, current commits, remote URLs, Host session IDs, Secrets, and binding
+objects are recursively removed from Provider output. A binding is neither identity authority nor
+a capability.
+
+### P0-C — ordinary cold-thread entry required manual canonical JSON
+
+The audit confirmed that the prior adapters did not derive/inject task binding, the CLI required
+manual opaque values, and task text alone could not restore a checkpoint through the recommended
+entry.
+
+- Root cause: the kernel had a closed binding contract but no shared cold-request resolver.
+- Minimum repair: the Host-neutral task-context module owns normalization and route/snapshot
+  derivation. Thin adapters do not duplicate identity business logic. Without a binding, an exact
+  task-text digest can recover only one uniquely admitted route in the selected Vault; multiple
+  routes return `task_line_ambiguous`, and newest-wins is prohibited.
+- Remaining boundary: this is an exact-match development resolver, not semantic Timeline search or
+  real-Host stable-identity enrollment. Therefore the complete cold-thread workflow remains
+  `Target`, not `Implemented` or `Qualified`.
+
+## 4. Identity and admission invariant
 
 ```text
-Run identity != task-line identity != repository/worktree state
+task-line routing identity
+  != workspace/checkpoint snapshot
+  != Run identity
+  != Host session/thread/memory reference
+  != capability/authorization
 ```
 
-The existing Run Record and Query v6 admission could prove writer/scope/sensitivity/lifecycle but
-had no exact current project/task/worktree selector. The minimum correction adds one closed,
-opaque `deeplaw.task-context-binding/v1` object and reuses the existing Run metadata, receipt,
-event, Query Plan, and Capsule primitives. It adds no table or mutation coordinator.
+Project/repository/worktree/task-line values must be owner-registered portable opaque identities.
+Absolute path hashes, branch names, current commits, remote URLs, task text alone, and embedding
+similarity are not sufficient identities. Host references are untrusted hints and must be rebound
+through Vault/project/worktree admission. A branch rename, commit, or dirty-state change does not
+create a new task line, but snapshot divergence prevents stale state from being asserted as current.
 
-Post-fix behavior:
+## 5. Sink compatibility and reconciliation
 
-- new working memory requires an immutable successful, task-bound Run Record;
-- `failed`, `partial`, and `aborted` Run statuses were separately reproduced as incorrectly
-  accepted and are now rejected for current working state;
-- Query Plan v6 and local Capsule v3 bind the exact selector or explicit absence;
-- no selector withholds working checkpoints and returns `task_binding_required`;
-- legacy-unbound state is withheld; an exact selector admits only the matching line;
-- a mismatched line remains a local rejection and does not create a Provider-visible existence
-  oracle;
-- Provider v2 is unchanged, excludes all binding fields, and retains the 65,536-byte hard limit;
-- Python, CLI, and MCP v6 query/context use the same domain path; v4/v5 reject rather than discard
-  a binding;
-- ordinary reads remain Ledger-write-free.
+The released `knowledge-sink.input/v2` bytes and SHA remain unchanged. A legacy v2 client may still
+record an unbound Run. The additive `knowledge-sink.input/v5` contract is the current bound-write
+seam; v3 and v4 remain frozen.
 
-Luna workers changed only Task Card-owned files. The Sol integrator read every candidate diff,
-corrected integration and privacy issues, and independently reran the public-seam, contract,
-continuity, CLI/MCP/Python parity, integrity, tamper, and full repository tests. No credential,
-external Host, Git decision, migration disposition, or release decision was delegated.
+An unbound legacy Run/checkpoint stays immutable and verifiable but is withheld from default v6
+current working context. Owner-controlled reconciliation records a new bound Run and an
+attributable successor Revision using the existing coordinator. Tests prove old Run, Revision,
+event, and content bytes are not rewritten, and an old snapshot produces a divergence Gap. This is
+a semantic migration boundary even though it needs no new canonical table.
 
-### Run Timeline
+## 6. Repository Gold rotation
 
-`PRD12-REPRO-CONT-012-001` reproduced a missing owner public seam for finding an older Run by task
-meaning, time, status, and Artifact without knowing its Run ID. Existing Run Records, events,
-Checkpoints, Artifacts, and Query Trace are useful primitives, but there is no unified owner-only
-Timeline with semantic/status/time/Artifact filters, cursor pagination, and forget linkage.
+Repository Gold v1 and evaluation protocol v1 remain historical and immutable. v1 is expected to
+reject current changed source bytes; that rejection is tested as a historical boundary.
 
-No Timeline was implemented because repository-external time-to-locate Gold and disclosure/
-deletion expectations are absent. Full transcript storage remains forbidden.
+The default local runner now uses repository-visible development Gold v3 and evaluation protocol
+v2. Their labels, answers, hashes, and scorers are visible in the repository. Every v2 report is
+fail-closed with `quality_protocol_eligible=false`; a clean tree or candidate wheel cannot turn it
+into external Human Gold, a qualification holdout, or a release artifact. The rotation did not
+skip, xfail, weaken, or overwrite a v1 expected answer.
 
-### Vault isolation
+## 7. v0.13 commercial release gate
 
-`PRD12-REPRO-KNOW-010-001` did not reproduce default physical cross-Vault query, identity merge,
-or CWD-based disclosure. Two Vaults with the same semantic key and task-line digest remained
-isolated when each request used its explicit Vault root and project binding. No cross-Vault feature
-or fix was manufactured. Explicit cross-Vault imports/references and independent backup/forget
-operations remain unqualified.
+Release policy is version-conditional and fail closed:
 
-## 5. Capability status
+- versions below 0.13 retain historical manifest-v5 compatibility;
+- every `0.13.x` release requires commercial manifest v6;
+- an unknown later version has no implicit fallback.
 
-| Capability | Current status | Local evidence | Qualification blocker |
-| --- | --- | --- | --- |
-| Continuity/Context | `Implemented` in part | exact-line admission, successful Run gate, Python/CLI/MCP parity, Provider redaction | prior context-density gate failed; no independent Gold, native-memory comparison, fork reconciliation, or real Host |
-| Living Wiki | `Implemented` development chain | Source→Revision/Fragment/Locator→Knowledge/Relation→Ledger→Registry/Link/Resolver→Wiki→Context focused tests exit 0 | three explicit Wiki skips, no independent human task, typed Relation Path and current-candidate scale absent |
-| Protected/Legal Evidence | `Implemented` local read boundary | focused legal/evidence tests exit 0; hard Authority/version/quote rules remain contracts | exact signed 28-source Pack and independent legal Gold absent; prior development qualification admitted no current/exception primary evidence |
-| Host integration | local deterministic only | closed-environment canary suite exit 0 | evaluation-only identities/keys, blind source and three runs per Host absent |
-| Portability/operations | partial local implementation | clean wheel smoke, same-machine repeat hash, existing snapshot/recovery tests | semantic restore absent; current SBOM/provenance/redownload, migration install, 3 OS/Python matrix absent |
+Manifest v6 binds the exact commit/tree/version/wheel/sdist; PRD, traceability, acceptance, and
+frozen protocol hashes; repository-external Human Gold and Compiler/Evaluator isolation receipts;
+real Codex/Claude/OpenCode three-run evidence when support is claimed; equal-budget Host-only,
+Host-native Memory, and Host-native Memory + DeepLaw results; exact signed/verified 28-source Legal
+Pack results with zero critical violations; independent current-candidate Statement/Relation/Wiki
+scale artifacts; RSS/readers/cache results; Timeline/semantic-restore/selective-forget evidence;
+the Linux/macOS/Windows × Python 3.11/3.12/3.13 matrix with zero mandatory skips; and reproducible
+wheel/sdist, SBOM, licenses, OpenVEX, provenance, and public-redownload hashes.
 
-One capability being implemented does not qualify the product or another capability.
+Workflow tests prove 0.13 cannot submit manifest v5, no-model smoke cannot satisfy model task
+acceptance, evidence references must be unique safe relative paths with exact hashes, and public
+release is not made visible until uploaded manifest bytes are verified. No v6 evidence manifest was
+generated for this candidate.
 
-## 6. Wiki, Relation, Context, and legal boundary
+## 8. Local verification
 
-The focused Wiki/legal command completed with exit 0 and three explicit Wiki skips. It covers the
-existing human/Agent evidence chain, page identity, links, resolver, rebuild/ownership and local
-legal exact-evidence contracts. The result remains development evidence:
-
-- Wikilinks/backlinks are navigation and do not create typed Relations or Authority;
-- Source bytes remain immutable; governed edits create revisions;
-- Agent legal interpretation remains `origin=agent_derived` and `legal_authority=false`;
-- local regressions retain zero-tolerance rules for false Authority, wrong-version primary
-  evidence, invalid Quote/Locator primary evidence, Source mutation, and private-path disclosure;
-- the exact signed Pack did not run, so those exact-Pack observed counts are `not_executed`, not
-  reported as zero;
-- Guides, Codemap, materialized path pages, complete `as_of` Wiki, and single-Revision pointer
-  rewind were not implemented;
-- semantic restore by a new attributable revision remains `Not Implemented` pending an external
-  rollback task and dependency/recovery contract.
-
-The current-candidate 5k/10k/100k Statement, 10k/100k Relation, Wiki scale, 10,000-request RSS, and
-8-reader gates were intentionally not substituted for missing Human Gold. Historical reports bind
-older commits and are not relabelled as evidence for `eb36b948...`.
-
-## 7. Credential, Host, and repository safety
-
-No project `.env`, DeepSeek key, current Codex Desktop authentication, or `auth.json` was read,
-copied, mounted, printed, or used. No real Provider or network model call occurred. The focused
-closed-environment Host tests passed 13 local tests and keep ambient/provider canaries out of Host,
-MCP, argv, prompt, stdout, stderr, report, and Artifact surfaces.
-
-The repository secret-candidate scan explicitly excluded `.env` and inspected 821 tracked or
-candidate files. It classified three existing synthetic test canaries and found zero unclassified
-secret candidates. This is a bounded pattern scan, not a substitute for release security review.
-
-OpenCode/DeepSeek remains `blocked_not_executed` until the Owner revokes the previously exposed key
-and provides a new repository-external owner-only evaluation secret. Real Codex/Claude/OpenCode
-also require isolated evaluation identities, blind source, frozen Human Gold, exact versions, and
-resolved-config/tool/egress proof.
-
-## 8. Exact local commands and results
-
-Executed from the repository root on the implementation commit unless stated otherwise:
+The reviewed implementation commit produced:
 
 ```text
 uv lock --check
-  PASS — Resolved 140 packages
-
-uv run --frozen ruff check .
-  PASS — All checks passed
-
-git diff --check
   PASS
 
 uv run --frozen pytest --strict-markers
-  FAIL — 1185 passed, 9 skipped, 4 failed in 254.10s
+  PASS — 1253 passed, 9 skipped in 328.52s
+
+uv run --frozen ruff check .
+  PASS
+
+git diff --check
+  PASS
 ```
 
-All four failures are the same intentional frozen-Gold boundary:
+Focused development evidence includes route-first public-seam parity, 25-line exact retrieval,
+snapshot divergence, recursive Provider redaction, v2 legacy reconciliation, thin-adapter parity,
+repository-development protocol rotation, and version-conditional release negative tests. The nine
+skips remain visible and cannot satisfy the v0.13 zero-mandatory-skip gate. Final documentation and
+fresh-wheel verification are recorded in the final handoff after this report's commit boundary.
 
-```text
-repository Gold Set source hash changed: src/deeplaw/knowledge_autonomy.py
-```
+## 9. Capability status
 
-Affected tests are two evaluation-protocol report-package cases and two repository-Gold quality
-cases. The old expected hash was not changed, and the failures were not skipped, weakened, or
-relabelled as passes. All other tests in the run passed.
+| Capability | Current | Qualification boundary |
+| --- | --- | --- |
+| Continuity/Context | `Target` workflow; route/snapshot/admission kernel implemented in development | Semantic cold-start, Human Gold, First Correct Action, native-memory comparison, fork lifecycle, real Hosts absent |
+| Living Wiki | Implemented development chain | Independent human usability, current-candidate scale, typed path task absent |
+| Protected/Legal Evidence | Implemented local read boundary | Exact signed/verified Pack, independent legal Gold, temporal/exception primary-evidence run absent |
+| Host Integration | Target with static/thin-adapter tests | Real isolated Codex/Claude/OpenCode and canary/model acceptance absent |
+| Portability/Operations | Target with local primitives | Timeline, semantic restore, full migration/recovery, 3 OS, supply chain, public redownload absent |
 
-Additional focused results:
+No capability is `Qualified` or `Released`.
 
-```text
-task-binding + task-line + real-worktree + v6 parity: PASS
-autonomy + sink MCP + read MCP + CLI + v6 contracts: PASS
-core continuity + continuity development benchmark: PASS
-Wiki + evidence + legal focused suite: PASS with 3 explicit Wiki skips
-Host environment/cross-host deterministic suite: 13 passed
-installed Python 3.13 wheel smoke: PASS
-same-machine two-wheel hash equality: PASS
-wheel private-path/auth-filename scan: PASS
-```
-
-Protocol/scorer bindings:
-
-| Artifact | SHA-256 |
-| --- | --- |
-| evaluation protocol v1 | `470242a11c4f58a5975c1b576298fcf311bda95af1ebf8f0bfcd4529a4262c8c` |
-| v0.13 qualification protocol v1 | `95283e2d1fdd60a429941c6ab718cebd739ad414ddc38d58b3f2fcc14f4cffb5` |
-| continuity scorer | `96e1520f80e2115cf36a3ec951c1ab1103549236a4b10896944d1e64dee95941` |
-| Evidence Wiki scorer | `4f70cc2558280b29567bcdef948c188fd52de3a48bb9cd45ea723821936e1849` |
-| legal exact-evidence scorer | `e4ec93d11a638faafc6137724459d6695c5702649cda6f1284aa2943d6ba4a2d` |
-
-No qualification/final-blind corpus, Human Gold, Host/model result, peak RSS, current SBOM, current
-provenance statement, or public-redownload hash exists for this candidate.
-
-## 9. Required delivery inventory
+## 10. Delivery inventory
 
 | Requested delivery | Disposition |
 | --- | --- |
-| 1. PRD traceability matrix | Delivered: `docs/PRD_TRACEABILITY_MATRIX.md` |
-| 2. deletion/addition audit | Delivered by PRD research plus this report; no extra runtime surface admitted |
-| 3. capability matrix | Delivered above; no `Qualified`/`Released` capability |
-| 4. task-lineage/concurrency report | Development reproduction and minimum exact-line remediation delivered; fork merge not executed |
-| 5. Run Timeline report | Missing seam reproduced; implementation deferred |
-| 6. Vault isolation report | Default physical leak not reproduced; explicit cross-Vault lifecycle not executed |
-| 7. Wiki ownership/reconciliation report | Existing local reports and focused regression pass; independent human task absent |
-| 8. graph/path/relation report | Existing smoke evidence only; true path API and current 10k/100k Relation not executed |
-| 9. Context tail/stale/disambiguation report | Historical old-commit reports retained; exact task-line disambiguation added; current scale not executed |
-| 10. semantic restore/recovery report | Semantic single-Revision restore not implemented; snapshot recovery remains distinct |
-| 11. source acquisition report | Existing explicit allowlist/snapshot primitives pass local tests; external acquisition task absent |
-| 12. credential/Host isolation report | Deterministic canary pass; real Hosts blocked/not executed |
-| 13. poisoning/selective-forget report | Existing local regressions pass; lifecycle Human Gold absent |
-| 14. legal retrieval report | Local regression report retained; exact Pack/Human Gold not executed |
-| 15. real Codex/Claude/OpenCode reports | `not_executed` |
-| 16. Human Gold manifest | `not_executed`; no repository-external approved Gold provided |
-| 17. scale/RSS/concurrency report | Historical older-commit reports retained; current candidate not executed |
-| 18. migration/backup/restore report | No physical task-binding migration; local existing tests pass; release-wheel migration matrix not executed |
-| 19. exact commands/environment | Delivered above |
-| 20. commit/wheel/SBOM/provenance hashes | Commit/tree/wheel delivered; current SBOM/provenance/public-redownload `not_executed` |
-| 21. not_executed | Listed below |
-| 22. known limitations | Listed below |
-| 23. final release disposition | `blocked_by_external_credential_or_infrastructure` |
+| PRD traceability and Current/Target/Qualified/Released matrix | Updated in `docs/PRD_TRACEABILITY_MATRIX.md` |
+| deletion/addition and duplicate-surface audit | Delivered in section 2 |
+| task-lineage/concurrency and Context stale/disambiguation | P0 reproductions and bounded development repair delivered; external qualification absent |
+| Run Timeline | Missing owner public seam already reproduced; deferred pending external Gold |
+| Vault isolation | Existing default physical isolation development evidence retained; explicit cross-Vault lifecycle not executed |
+| Wiki ownership/reconciliation/typed relation | Existing local chain retained; independent human task not executed |
+| semantic restore/recovery | Not implemented; snapshot rollback is not semantic Revision restore |
+| source acquisition | Existing allowlist/snapshot primitives only; external acquisition task not executed |
+| credential/Host isolation | Deterministic canaries retained; real Hosts blocked/not executed |
+| poisoning/selective forgetting | Local regressions retained; Human Gold and release artifact lane not executed |
+| legal retrieval | Local boundary retained; exact Pack/Human Gold not executed |
+| Human Gold, real Hosts, full scale/RSS/concurrency, 3 OS | `not_executed` |
+| migration/backup/restore | Local legacy reconciliation passed; full release-artifact matrix not executed |
+| wheel/SBOM/provenance/public hashes | Fresh local wheel deferred to final handoff; release SBOM/provenance/public redownload not executed |
 
-## 10. Not executed
+## 11. Not executed and known limitations
 
 - repository-external independent continuity/Wiki/legal Human Gold;
 - qualification and fresh final-blind holdouts;
-- Host-native Memory three-lane comparison;
+- Host-only / Host-native Memory / Host-native Memory + DeepLaw equal-budget comparison;
 - real Codex, Claude Code, and OpenCode/DeepSeek, three runs each;
-- DeepSeek model/config/tool/JSON/timeout/rate/receipt/secret preflight;
 - exact signed and verified 28-source Legal Pack;
-- current-candidate 5k/10k/100k Statement, 10k/100k Relation, Wiki scale, RSS, 8-reader,
-  current cache-invalidation and Timeline rotation lanes;
-- fork merge/conflict reconciliation, Run Timeline, semantic restore, and authorized cross-Vault
-  import/reference/export lifecycle;
-- clean first install/uninstall, existing-Vault migration matrix, and failed-migration recovery
-  from the release artifact;
-- Linux and Windows runners; complete Python 3.11/3.12/3.13 matrix;
-- release SBOM, provenance, signed artifact, public upload/redownload, and external hash verification;
-- tag, signing, registry publication, RC, and GA.
+- full current-candidate Statement/Relation/Wiki scale, 10,000-request RSS, eight-reader, and cache
+  lanes (only bounded route-index diagnostics ran);
+- Run Timeline, semantic restore, fork merge/conflict reconciliation, and authorized cross-Vault
+  lifecycle;
+- clean install/uninstall and full existing/failed migration recovery from a release artifact;
+- Linux and Windows and the full 3 OS × Python 3.11/3.12/3.13 matrix;
+- release SBOM, license/OpenVEX review, provenance, public upload/redownload, tag, signature,
+  registry publish, RC, and GA.
 
-## 11. Known limitations and not claimed
+The exact task-text resolver does not perform semantic task lookup. Stable portable route-ID
+enrollment is not real-Host qualified. The derived route table has bounded synthetic index evidence,
+not full product-scale evidence. Legacy unbound state is historical only until the Owner creates a
+new bound Run and successor Revision. Timeline and semantic single-Revision restore remain absent.
 
-- The task binding is an admission selector, not a capability or authorization token. Stable
-  project/task/worktree digest derivation is a Host/owner integration responsibility and is not
-  real-Host qualified.
-- `parent_task_lineage_sha256` preserves an opaque parent reference but does not implement fork
-  merge, conflict reconciliation, or scheduling.
-- Legacy unbound Run Records remain verifiable history but cannot ground current working context.
-- The content-minimized Run Timeline and semantic single-Revision restore remain absent.
-- The old repository Gold correctly fails against changed runtime bytes; no new protocol freeze
-  was created after observing current results.
-- Prior continuity density, legal primary-evidence, Wiki skip, scale, and portability limitations
-  remain in force.
+No project `.env`, current `~/.codex/auth.json`, Codex Desktop login state, or old DeepSeek key was
+read, copied, printed, mounted, or used. No real Provider call occurred. OpenCode/DeepSeek remains
+`blocked_not_executed` until the Owner revokes the old key and supplies repository-external,
+owner-only, evaluation-only credentials. Internal correctness, Gold, workflow, Timeline, restore,
+and qualification work also remains, so the overall disposition is not
+`blocked_by_external_credential_or_infrastructure`.
+
+## 12. Not claimed and next sequence
 
 Not claimed: complete PRD implementation, complete cross-thread continuity, complete Wiki
-usability, legal correctness, exact-Pack success, real-Host success, cross-platform support,
-commercial readiness, competitive advantage, SOTA, RC, GA, or release.
+usability, legal correctness, exact-Pack success, real-Host success, full scale, cross-platform
+support, commercial readiness, competitive advantage, SOTA, RC, GA, or release.
 
-## 12. Next authorized sequence
-
-1. Owner revokes the exposed DeepSeek key and supplies repository-external evaluation-only
-   credentials/identities through owner-only files; no repository or Desktop auth reuse.
-2. Independent authors freeze continuity, Wiki and legal Human Gold plus qualification/final-blind
-   corpora before candidate output is read.
-3. Run equal-budget Host-only, Host-native Memory, and Host-native Memory + DeepLaw on isolated
-   Codex/Claude/OpenCode, three times each, with deterministic scoring.
-4. Only if product tasks pass, run the exact current-candidate scale, migration, recovery,
-   cross-platform, SBOM/provenance and public-redownload gates.
-5. Rotate frozen repository Gold only through an explicit new protocol version and fixture; never
-   edit v1 hashes to conceal changed inputs.
-6. Submit the complete evidence package and wait for the Owner's separate explicit publish
-   approval before any tag, signature, or registry upload.
-
-Until then, the correct decision is to keep the committed implementation as a non-released source
-candidate and stop scope expansion.
+The next admissible sequence is: independent authors freeze external Human Gold and isolation
+boundaries; run the three equal-budget Host lanes only after Owner credentials and canary preflight;
+qualify human Wiki and exact legal evidence; then, and only if core tasks pass, execute current
+candidate scale, migration/recovery, cross-platform, supply-chain, and reproducible-public-artifact
+gates. Formal publication still requires a separate final Owner approval.

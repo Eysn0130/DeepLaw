@@ -272,10 +272,15 @@ candidate defaults Python `KnowledgeOS.context.compile`, `deeplaw knowledge cont
 `deeplaw knowledge autonomy context`, and autonomous-core MCP `operation=context` to additive
 Query Plan v6: statement-level selection, dynamic duty coverage, targeted evidence completion,
 exact suppression receipts and bounded local projections. `deeplaw recall` remains the legacy
-`retrieval_fabric` path and is not a v6 Context alias. v6 first discovers at most 20 governed
-revisions through the requested lexical/dense/graph controls, then matches a maximum of 512
-Statement candidates only within those revisions; a fixed global Statement prefix is not a
-retrieval channel. The shared domain assembler emits local
+`retrieval_fabric` path and is not a v6 Context alias. Ordinary content discovery first selects at
+most 20 governed revisions through the requested lexical/dense/graph controls, then matches a
+maximum of 512 Statement candidates only within those revisions; a fixed global Statement prefix
+is not a retrieval channel. Working checkpoints use a separate bounded, indexed task-route
+admission projection before ordinary content discovery. An exact route therefore cannot be
+displaced by the ordinary Top-20, but it also cannot widen the public ordinary-revision count or
+admit non-checkpoint content. Every projected row is revalidated against its immutable Run,
+Knowledge Revision, and Ledger event; the projection is derived, rebuildable, and capped. The
+shared domain assembler emits local
 `deeplaw.knowledge-capsule/v3` (maximum 262,144 bytes) and its nested
 `deeplaw.provider-knowledge-capsule/v2` projection (Provider content maximum 65,536 bytes). The
 Provider receives only bounded Statements/evidence, authority/verification/freshness,
@@ -298,6 +303,25 @@ plan binding query, compatible kind/memory-tier filters, scope, sensitivity, bud
 legacy audit head, and historical intent when that compatibility partition is explicitly selected.
 Target identity admission applies before a raw-evidence fallback, so a stale or withdrawn named
 policy cannot be replaced by another policy merely because it is the nearest remaining hit.
+
+Task-line routing identity is distinct from checkpoint snapshot, Run identity, Host session, and
+capability. The route binds the selected Vault plus owner-registered opaque project, repository,
+stable-worktree, and task-line identifiers. It excludes absolute paths, branch names, current
+commit, remote URL, and Host session identifiers. The snapshot separately binds the checkpoint's
+base revision and dirty-state digest. A branch rename, normal commit, or dirty-state change does
+not create another task line; a snapshot change makes the prior checkpoint stale until a new
+checkpoint succeeds. Exact route plus exact snapshot may admit the checkpoint. Exact route plus a
+different snapshot emits a bounded `workspace_diverged` Gap and does not inject stale state. A
+different route fails closed without revealing whether another task line exists.
+
+When no explicit binding is supplied, the current development resolver may use the exact task-text
+digest only to find one uniquely admitted route in the selected Vault. Multiple routes emit
+`task_line_ambiguous`; choosing the newest is forbidden. This is exact matching, not a semantic
+resolver and not proof of the ordinary real-Host cold-start workflow. Host thread/session/memory
+references remain untrusted hints that must be rebound through Vault/project/worktree admission;
+they create neither identity nor authorization. Provider projection recursively removes routing,
+snapshot, binding, branch, path, and Host-hint fields while retaining only a sanitized Gap and
+opaque receipt.
 
 The retained v0.7 source-derived partition currently has no transaction-time history contract.
 Consequently an `as_of` query does not silently substitute its current assets: that partition is
@@ -339,6 +363,14 @@ gate fails closed on local absolute paths or recognized secret material; it neve
 matched value in its error. Unsafe invisible/bidirectional Unicode is rejected at the same gate,
 and MCP exception text crosses the same projection rather than reflecting sensitive failure
 details.
+
+The published `knowledge-sink.input/v2` bytes remain a historical compatibility contract: an old
+client may still record an unbound Run. The additive `knowledge-sink.input/v5` contract is the
+current bound-write seam for new working checkpoints. An unbound legacy Run and checkpoint remain
+immutable, verifiable history but are withheld from default v6 Context. Owner-controlled
+reconciliation creates a new bound Run and an attributable successor Knowledge Revision; it never
+rewrites the historical Run or checkpoint in place. This is a semantic compatibility boundary
+even though no new canonical table is required.
 
 Query receipts have three distinct roles. The provider receipt receives only an opaque `receipt_id`.
 The current source candidate keeps a process-local, non-persistent Query Trace with
