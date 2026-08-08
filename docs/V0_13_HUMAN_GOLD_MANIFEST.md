@@ -5,6 +5,19 @@ Human Gold artifact and does not create a reviewer identity.
 
 ## Current evidence
 
+Core Scope Freeze addendum: three repository-external owner-task Gold files were frozen before
+their final candidate runs, but none has the required second independent human review. They are
+development annotations, not confirmed Human Gold:
+
+| Lane | Gold SHA-256 | Status |
+| --- | --- | --- |
+| Continuity | `434d167b8f88b1741f3ab24536ac875a8a13c48ff6e64a0d59c64584b732ee81` | owner task spec; second human review not executed |
+| Evidence Wiki | `e5dd6aa3e391bcecb991163dd1b791ed7fdb90137367aeee22dc5762a7cce6d9` | owner task spec; second human review not executed |
+| Legal exact evidence | `fd37c1a517fad92d46d648593725108ad5536b6dc814969af271e1898d559a6c` | owner task spec; second legal human review not executed |
+
+The continuity and legal development thresholds did not fully pass. These files therefore cannot
+be promoted by later reviewer confirmation without a new candidate/holdout boundary.
+
 | Item | Exact value |
 | --- | --- |
 | Semantic candidate | `benchmarks/semantic/semantic-gold-candidate-v1.json` |

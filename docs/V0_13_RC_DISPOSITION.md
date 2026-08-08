@@ -1,10 +1,17 @@
 # DeepLaw v0.13 source-candidate disposition
 
-Decision: **local source-candidate requalification complete; external gates unmet; not released**.
+Decision: **superseded by Core Scope Freeze; local core qualification is partial; not released**.
 
 DeepLaw remains package version `0.12.0`. No v0.13 tag, RC, GA, catalog, public release, or
 published artifact is authorized. `release_gate_passed=false`, `claim_eligible=false`, and
 `competitive_claim_eligible=false`.
+
+The later Core Scope Freeze is authoritative for the current working candidate. Continuity missed
+its frozen context-efficiency threshold; the Evidence Wiki development task passed with a deferred
+Statement resolver; and the legal exact-evidence development task failed to admit current primary
+evidence from an unsigned Pack. See `V0_13_CORE_SCOPE_DISPOSITION.md`. Any language below saying
+that local requalification is complete is historical evidence for commit `ee06bb3`, not the
+current disposition.
 
 This document records the release-safe disposition after the 2026-08-08 qualification and
 remediation pass. The implementation candidate is commit

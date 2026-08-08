@@ -4,6 +4,15 @@ Status: **source candidate only**. This report is evidence for the working tree 
 default-drift remediation; it is not a release, RC, GA, superiority, or completeness statement.
 The package version remains `0.12.0`.
 
+Core Scope Freeze addendum: a later public-seam reproduction showed that a current, TTL-bound,
+run-bound working Task Checkpoint was absent from Statement Evidence and therefore returned
+`no_answer`. Default v6 now admits only a closed structured checkpoint projection as a
+non-authoritative interpretation. Generic source-free memory, unbound working memory, raw-log
+text, historical/expired revisions, legal purposes, credentials, and local absolute paths remain
+inadmissible. See `V0_13_CROSS_THREAD_CONTINUITY_REPORT.md`. The earlier sentence below about
+source-free memory remains true for unbound or unstructured memory and must not be read as a ban on
+the narrow run-bound checkpoint seam.
+
 ## Finding and scope
 
 The evidence baseline `ddfcc36669236716700e49816fb29b05532020e9` documented v6 defaults for
