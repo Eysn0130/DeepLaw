@@ -346,6 +346,57 @@ def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
         )
 
 
+def test_audit_context_recursively_redacts_owner_local_route_metadata(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    binding = build_task_context_binding(
+        sha256_bytes(b"v013-recursive-redaction-project"),
+        sha256_bytes(b"v013-recursive-redaction-task-line"),
+        repository_sha256=sha256_bytes(b"v013-recursive-redaction-repository"),
+        worktree_sha256=sha256_bytes(b"v013-recursive-redaction-worktree"),
+        base_revision="a" * 40,
+        dirty_state_sha256=sha256_bytes(b"v013-recursive-redaction-dirty-state"),
+    )
+    with KnowledgeOS.open(root) as knowledge_os:
+        local = knowledge_os.context.compile(
+            task=_TASK,
+            task_binding=binding,
+            projection="audit",
+            confirm_no_case_data=True,
+        )
+
+    provider = local["provider_capsule"]
+    private_keys = {
+        "task_binding",
+        "canonical_binding",
+        "binding_sha256",
+        "project_sha256",
+        "task_lineage_sha256",
+        "repository_sha256",
+        "worktree_sha256",
+        "base_revision",
+        "dirty_state_sha256",
+        "task_route_sha256",
+        "task_snapshot_sha256",
+        "route_revision_ids",
+    }
+
+    def assert_redacted(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                assert_redacted(item)
+        elif isinstance(value, dict):
+            assert not private_keys.intersection(value)
+            for item in value.values():
+                assert_redacted(item)
+
+    assert_redacted(provider)
+    serialized = canonical_json(provider)
+    assert all(item not in serialized for item in binding.values() if isinstance(item, str))
+    assert str(root) not in serialized
+
+
 def test_mcp_context_v5_is_available_only_when_explicitly_requested(
     tmp_path: Path,
 ) -> None:

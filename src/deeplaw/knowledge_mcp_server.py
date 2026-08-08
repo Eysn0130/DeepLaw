@@ -261,6 +261,11 @@ _TRACE_SAFE_LABELS = frozenset(
         "source_free_factual",
         "provenance_not_admitted",
         "invalid_statement_evidence",
+        "workspace_diverged",
+        "stale_checkpoint",
+        "task_line_ambiguous",
+        "checkpoint_route_limit_exceeded",
+        "checkpoint_route_projection_unavailable",
     }
 )
 

@@ -1,9 +1,9 @@
 """Deterministic repository-visible development reproductions for P0 routing.
 
-These tests intentionally assert the required fail-closed product behaviour and
-therefore remain failing until discovery is binding-aware, workspace divergence
-is explicit, and a cold task-text-only thread has an ambiguity-safe recovery
-path.  They are not Human Gold, holdout, host, or release qualification.
+These tests freeze the initially failing public behaviour and now assert the
+minimum remediation: binding-aware routing, explicit workspace divergence, and
+an ambiguity-safe cold task-text-only path.  They are not Human Gold, holdout,
+host, or release qualification.
 """
 
 from __future__ import annotations
@@ -194,7 +194,7 @@ def _run_cli_context(root: Path) -> dict[str, Any]:
 
 
 def test_p0a_top20_discovery_must_route_before_task_binding_filter(tmp_path: Path) -> None:
-    """At least one of 25 exact routes currently misses after Top-20 discovery."""
+    """Each of 25 exact routes must bypass the ordinary Top-20 ranking cut."""
 
     root, grant_id = _new_vault(tmp_path, name="p0a-top20")
     checkpoint_ids = {
@@ -217,9 +217,7 @@ def test_p0a_top20_discovery_must_route_before_task_binding_filter(tmp_path: Pat
         if selected != {knowledge_id}:
             failures.append(line)
 
-    # This is intentionally the required product contract, not current
-    # candidate behaviour.  A global Top-20 candidate cut must never precede
-    # exact task-line routing.
+    # A global Top-20 candidate cut must never precede exact task-line routing.
     assert not failures, f"P0-A reproduced Top-20 post-filter miss: {failures}"
 
 

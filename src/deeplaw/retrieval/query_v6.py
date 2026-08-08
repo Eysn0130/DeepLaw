@@ -20,7 +20,11 @@ from ..knowledge_autonomy import (
 from ..knowledge_intelligence import normalize_identity_text
 from ..knowledge_models import utc_now
 from ..knowledge_store import KnowledgeVault
-from ..task_context import normalize_task_context_binding
+from ..task_context import (
+    normalize_task_context_binding,
+    task_route_sha256,
+    task_snapshot_sha256,
+)
 from ..util import (
     canonical_json,
     query_search_terms,
@@ -47,6 +51,10 @@ V6_PROJECTIONS = frozenset({"compact", "standard", "audit"})
 _SENSITIVITY_ORDER = ("public", "internal", "private", "restricted")
 _FRESHNESS_ORDER = {"fresh": 0, "unknown": 1, "stale": 2, "invalidated": 3}
 _MAX_DISCOVERED_REVISIONS = 20
+# Task-route lookup is a separate, explicitly bounded admission path.  Keep
+# the route budget at the public v6 revision bound so the existing query-plan
+# contract never has to widen its global Top-20 discovery field.
+_MAX_ROUTE_REVISIONS = 20
 _MAX_STATEMENT_CANDIDATES = 512
 _MAX_STATEMENT_ARTIFACT_BYTES = 256 * 1024
 _MAX_LOCAL_AUDIT_BYTES = 256 * 1024
@@ -154,8 +162,8 @@ def _run_task_binding(
 def _task_binding_gap_message(code: str) -> str:
     return {
         "task_binding_required": (
-            "A working Checkpoint was withheld because the request did not provide "
-            "an exact task binding."
+            "No unique admitted task line was resolved; working Checkpoint context "
+            "remains withheld unless an exact task binding is provided."
         ),
         "task_binding_unbound": (
             "A working Checkpoint was withheld because its Run Record has no exact "
@@ -430,6 +438,50 @@ def _empty_discovery(
     }
 
 
+def _with_route_discovery(
+    *,
+    discovery: dict[str, Any],
+    revision_ids: tuple[str, ...],
+) -> dict[str, Any]:
+    """Bind one bounded task-route lookup to ordinary content discovery."""
+
+    body = {
+        "content_query_plan_sha256": discovery["query_plan_sha256"],
+        "task_route_revision_ids": revision_ids,
+    }
+    # The ordinary discovery receipt intentionally exposes only a digest of its
+    # selected content IDs. Route candidates are a separate admission pool:
+    # bind their exact tuple into the planner digest and candidate count without
+    # widening or misrepresenting the v6 Top-20 content-selection contract.
+    return {
+        **discovery,
+        "query_plan_sha256": sha256_bytes(canonical_json(body).encode("utf-8")),
+        "candidate_revision_count": discovery["candidate_revision_count"]
+        + len(revision_ids),
+        "channels": sorted({*discovery["channels"], "task_route"}),
+    }
+
+
+_ROUTE_GAP_DETAILS: dict[str, tuple[str, str]] = {
+    "workspace_diverged": (
+        "workspace_diverged",
+        "The requested workspace snapshot differs from the admitted task checkpoint.",
+    ),
+    "ambiguous": (
+        "task_line_ambiguous",
+        "More than one admitted task line could satisfy this cold-thread request.",
+    ),
+    "limit_exceeded": (
+        "checkpoint_route_limit_exceeded",
+        "The bounded task checkpoint route exceeded its selection limit.",
+    ),
+    "index_unavailable": (
+        "checkpoint_route_projection_unavailable",
+        "The bounded task checkpoint route index is unavailable or stale.",
+    ),
+}
+
+
 def _discover_statement_revisions(
     store: AutonomousKnowledgeStore,
     *,
@@ -518,6 +570,7 @@ def _load_statement_candidates(
     *,
     target: dict[str, Any],
     task_binding: dict[str, Any] | None,
+    route_revision_ids: tuple[str, ...] = (),
     revision_ids: tuple[str, ...],
     graph_revision_ids: tuple[str, ...],
     scope: str,
@@ -527,7 +580,18 @@ def _load_statement_candidates(
     kinds: tuple[str, ...],
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], int, bool]:
     if not revision_ids:
-        return [], [], 0, False
+        return _load_working_memory_candidates(
+            store,
+            target=target,
+            task_binding=task_binding,
+            route_revision_ids=route_revision_ids,
+            revision_ids=route_revision_ids,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            purpose=purpose,
+            as_of=as_of,
+            kinds=kinds,
+        )
     revision_placeholders = ",".join("?" for _ in revision_ids)
     filters = [f"statements.knowledge_revision_id IN ({revision_placeholders})"]
     parameters: list[Any] = list(revision_ids)
@@ -742,7 +806,8 @@ def _load_statement_candidates(
             store,
             target=target,
             task_binding=task_binding,
-            revision_ids=revision_ids,
+            route_revision_ids=route_revision_ids,
+            revision_ids=route_revision_ids,
             scope=scope,
             max_sensitivity=max_sensitivity,
             purpose=purpose,
@@ -767,6 +832,7 @@ def _load_working_memory_candidates(
     *,
     target: dict[str, Any],
     task_binding: dict[str, Any] | None,
+    route_revision_ids: tuple[str, ...] = (),
     revision_ids: tuple[str, ...],
     scope: str,
     max_sensitivity: str,
@@ -776,7 +842,11 @@ def _load_working_memory_candidates(
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], int, bool]:
     """Project current run-bound working memory into bounded v6 interpretations."""
 
-    if purpose not in {"answer", "debug", "freshness_check"} or as_of is not None:
+    if (
+        purpose not in {"answer", "debug", "freshness_check"}
+        or as_of is not None
+        or not revision_ids
+    ):
         return [], [], 0, False
     placeholders = ",".join("?" for _ in revision_ids)
     rows = store.connection.execute(
@@ -849,7 +919,11 @@ def _load_working_memory_candidates(
             if stored_binding is None:
                 rejections.append({**candidate_ref, "reason": "task_binding_unbound"})
                 continue
-            if canonical_json(stored_binding) != canonical_json(task_binding):
+            if (
+                task_route_sha256(stored_binding) != task_route_sha256(task_binding)
+                or task_snapshot_sha256(stored_binding)
+                != task_snapshot_sha256(task_binding)
+            ):
                 rejections.append({**candidate_ref, "reason": "task_binding_mismatch"})
                 continue
             target_values = {
@@ -885,7 +959,12 @@ def _load_working_memory_candidates(
                     cover_tail=True,
                 )
             )
-            if query_terms and not query_terms.intersection(searchable) and not has_identity_target:
+            if (
+                query_terms
+                and not query_terms.intersection(searchable)
+                and not has_identity_target
+                and row["revision_id"] not in route_revision_ids
+            ):
                 rejections.append({**candidate_ref, "reason": "query_mismatch"})
                 continue
             limitation = (
@@ -1402,6 +1481,52 @@ def execute_v6(
         purpose=purpose,
         requested=applicable_duties,
     )
+    effective_task_binding = normalized_task_binding
+    route_revision_ids: tuple[str, ...] = ()
+    route_status: str | None = None
+    route_gap_status: str | None = None
+    if purpose != "legal":
+        # Route admission is deliberately the first discovery operation.  The
+        # route projection is a bounded exact index and therefore cannot be
+        # displaced by the global Top-20 recall/ranking cut.
+        route_lookup = knowledge_store.lookup_checkpoint_route_projection(
+            task_sha256=sha256_bytes(query.encode("utf-8")),
+            task_binding=normalized_task_binding,
+            limit=_MAX_ROUTE_REVISIONS,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+        )
+        route_status = route_lookup.get("status")
+        if route_status == "exact":
+            raw_revision_ids = route_lookup.get("revision_ids")
+            if (
+                not isinstance(raw_revision_ids, list)
+                or not raw_revision_ids
+                or len(raw_revision_ids) > _MAX_ROUTE_REVISIONS
+                or any(not isinstance(item, str) or not item for item in raw_revision_ids)
+            ):
+                route_status = "index_unavailable"
+                route_gap_status = route_status
+            else:
+                route_revision_ids = tuple(raw_revision_ids)
+                if normalized_task_binding is None:
+                    recovered_binding = route_lookup.get("canonical_binding")
+                    try:
+                        effective_task_binding = normalize_task_context_binding(
+                            recovered_binding,
+                            allow_none=False,
+                        )
+                    except (TypeError, ValueError):
+                        effective_task_binding = None
+                    if effective_task_binding is None:
+                        route_status = "index_unavailable"
+                        route_gap_status = route_status
+                if route_status == "exact":
+                    route_gap_status = None
+        elif route_status in _ROUTE_GAP_DETAILS:
+            route_gap_status = route_status
+    if route_gap_status is not None:
+        route_revision_ids = ()
     if purpose == "legal":
         # The general Knowledge OS cannot satisfy legal evidence duties.  Do not
         # even discover general Statements for this purpose: the separate
@@ -1417,6 +1542,10 @@ def execute_v6(
             reason="general knowledge discovery is disabled for legal queries",
         )
     else:
+        # Ordinary compiled-content discovery remains available even when task
+        # continuity cannot be resolved.  The fail-closed boundary applies to
+        # working checkpoints only; it must not suppress unrelated admitted
+        # Statements or exact evidence needed by the same task.
         revision_ids, graph_revision_ids, discovery = _discover_statement_revisions(
             knowledge_store,
             target=target,
@@ -1428,11 +1557,17 @@ def execute_v6(
             kinds=kinds,
             force_canonical_lexical=force_canonical_lexical,
         )
+        if route_status == "exact" and route_gap_status is None:
+            discovery = _with_route_discovery(
+                discovery=discovery,
+                revision_ids=route_revision_ids,
+            )
         candidates, rejections, scanned_count, scan_truncated = (
             _load_statement_candidates(
                 knowledge_store,
                 target=target,
-                task_binding=normalized_task_binding,
+                task_binding=effective_task_binding,
+                route_revision_ids=route_revision_ids,
                 revision_ids=revision_ids,
                 graph_revision_ids=graph_revision_ids,
                 scope=scope,
@@ -1777,6 +1912,21 @@ def execute_v6(
             }
         )
     residual_gaps: list[dict[str, Any]] = []
+    if route_gap_status in _ROUTE_GAP_DETAILS:
+        route_code, route_message = _ROUTE_GAP_DETAILS[route_gap_status]
+        residual_gaps.append(
+            {
+                "gap_id": stable_id(
+                    "querygap",
+                    target["query_sha256"],
+                    route_code,
+                    knowledge_store.audit_head,
+                ),
+                "code": route_code,
+                "duty": "current_state",
+                "message": route_message,
+            }
+        )
     binding_gap_codes = {
         str(item.get("reason"))
         for item in rejections
@@ -1787,6 +1937,17 @@ def execute_v6(
             "task_binding_mismatch",
         }
     }
+    if (
+        normalized_task_binding is None
+        and route_status == "not_found"
+        and purpose in {"answer", "debug", "freshness_check"}
+        and as_of is None
+        and (not kinds or "memory" in kinds)
+    ):
+        # A generic missing-binding Gap does not reveal whether any other task
+        # line exists.  It only records that no unique route was admitted for
+        # this request and that working state was therefore withheld.
+        binding_gap_codes.add("task_binding_required")
     for code in (
         "task_binding_required",
         "task_binding_unbound",
@@ -2010,7 +2171,7 @@ def execute_v6(
             "provider_characters": _MAX_PROJECTION_BYTES,
         },
         "projection": projection,
-        "task_binding": normalized_task_binding,
+        "task_binding": effective_task_binding,
         "input_audit_head": knowledge_store.audit_head,
         "input_legacy_audit_head": knowledge_store.legacy_audit_head,
         "compiled_candidate_count": scanned_count,

@@ -20,6 +20,31 @@ PROVIDER_CAPSULE_SCHEMA = "deeplaw.provider-knowledge-capsule/v2"
 LOCAL_CAPSULE_HARD_LIMIT = 256 * 1024
 PROVIDER_CAPSULE_HARD_LIMIT = 65_536
 
+_PRIVATE_ROUTE_FIELDS = frozenset(
+    {
+        "task_binding",
+        "canonical_binding",
+        "binding_sha256",
+        "project_sha256",
+        "task_lineage_sha256",
+        "parent_task_lineage_sha256",
+        "repository_sha256",
+        "worktree_sha256",
+        "base_revision",
+        "dirty_state_sha256",
+        "task_sha256",
+        "task_route_sha256",
+        "task_snapshot_sha256",
+        "route_sha256",
+        "snapshot_sha256",
+        "route_status",
+        "route_revision_ids",
+        "route_knowledge_ids",
+        "route_metadata",
+        "checkpoint_route",
+    }
+)
+
 
 def _validate_contract(name: str, value: dict[str, Any]) -> None:
     # Keep this dependency lazy to avoid the knowledge_autonomy/query_v6 import
@@ -27,6 +52,20 @@ def _validate_contract(name: str, value: dict[str, Any]) -> None:
     from ..knowledge_autonomy import _validate_contract as validate
 
     validate(name, value)
+
+
+def _strip_private_route_metadata(value: Any) -> Any:
+    """Recursively remove owner-local task binding and route metadata."""
+
+    if isinstance(value, list):
+        return [_strip_private_route_metadata(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    return {
+        key: _strip_private_route_metadata(item)
+        for key, item in value.items()
+        if key not in _PRIVATE_ROUTE_FIELDS
+    }
 
 
 def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
@@ -41,7 +80,7 @@ def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Query Plan v6 provider projection is invalid")
     if not isinstance(receipt_id, str):
         raise RuntimeError("Query Plan v6 receipt identity is invalid")
-    provider_capsule = deepcopy(capsule)
+    provider_capsule = _strip_private_route_metadata(deepcopy(capsule))
     # Task-line bindings remain owner-local admission input.  The provider
     # surface carries only the bounded Gap/receipt result and never the
     # binding's opaque identity fields.
@@ -195,6 +234,12 @@ def assemble_v6_context(
     local_audit = retrieval.get("local_audit")
     if not isinstance(receipt_id, str) or not isinstance(local_audit, dict):
         raise RuntimeError("Query Plan v6 context receipt is invalid")
+    effective_task_binding = retrieval.get("query_plan", {}).get("task_binding")
+    if effective_task_binding is not None:
+        effective_task_binding = normalize_task_context_binding(
+            effective_task_binding,
+            allow_none=False,
+        )
     provider = provider_capsule_from_v6(retrieval)
     capsule = {
         "schema_version": LOCAL_CAPSULE_SCHEMA,
@@ -204,7 +249,7 @@ def assemble_v6_context(
         "as_of": as_of,
         "purpose": purpose,
         "policy_id": retrieval["policy_id"],
-        "task_binding": normalized_task_binding,
+        "task_binding": effective_task_binding,
         "query_plan": retrieval["query_plan"],
         "query_plan_sha256": retrieval["query_plan_sha256"],
         "statements": retrieval["statements"],
