@@ -1,0 +1,464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-release-manifest.v6.schema.json",
+  "title": "DeepLaw release manifest v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "environment",
+    "release",
+    "bindings",
+    "artifacts",
+    "qualification",
+    "host_acceptance",
+    "real_codex",
+    "real_claude",
+    "real_opencode",
+    "comparison",
+    "legal",
+    "scale",
+    "operations",
+    "platform_gates",
+    "supply_chain",
+    "commercial_release_eligible",
+    "quality_protocol_eligible",
+    "competitive_claim_eligible",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.commercial-release-manifest/v6"
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform_system": {"type": "string"},
+        "platform_release": {"type": "string"},
+        "platform_version": {"type": "string"},
+        "machine": {"type": "string"},
+        "python_implementation": {"type": "string"},
+        "python_version": {"type": "string"},
+        "python_executable_name": {"type": "string"},
+        "uv_version": {"type": "string"},
+        "ci": {"type": "boolean"},
+        "github_actions": {"type": "boolean"},
+        "github_runner_os": {"type": ["string", "null"]},
+        "github_runner_arch": {"type": ["string", "null"]}
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "tag", "commit", "tree"],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prd_path",
+        "prd_sha256",
+        "traceability_path",
+        "traceability_sha256",
+        "qualification_protocol_path",
+        "qualification_protocol_sha256",
+        "candidate_commit",
+        "candidate_tree",
+        "candidate_wheel_sha256",
+        "candidate_sdist_sha256",
+        "candidate_version"
+      ],
+      "properties": {
+        "prd_path": {"$ref": "#/$defs/safe-path"},
+        "prd_sha256": {"$ref": "#/$defs/sha256"},
+        "traceability_path": {"$ref": "#/$defs/safe-path"},
+        "traceability_sha256": {"$ref": "#/$defs/sha256"},
+        "qualification_protocol_path": {"$ref": "#/$defs/safe-path"},
+        "qualification_protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "byte_size"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+          },
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "byte_size": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_gold_manifest_path",
+        "human_gold_manifest_sha256",
+        "human_gold_origin",
+        "human_gold_model_output",
+        "compiler_evaluator_isolation_receipt_path",
+        "compiler_evaluator_isolation_receipt_sha256",
+        "compiler_evaluator_isolated"
+      ],
+      "properties": {
+        "human_gold_manifest_path": {"$ref": "#/$defs/safe-path"},
+        "human_gold_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "human_gold_origin": {"const": "repository_external"},
+        "human_gold_model_output": {"const": false},
+        "compiler_evaluator_isolation_receipt_path": {"$ref": "#/$defs/safe-path"},
+        "compiler_evaluator_isolation_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "compiler_evaluator_isolated": {"const": true}
+      }
+    },
+    "host_acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_path",
+        "report_sha256",
+        "model_task_acceptance",
+        "model_task_results_claimed",
+        "model_or_api_call_attempted",
+        "declared_supported_hosts"
+      ],
+      "properties": {
+        "report_path": {"$ref": "#/$defs/safe-path"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "model_task_acceptance": {"const": true},
+        "model_task_results_claimed": {"const": true},
+        "model_or_api_call_attempted": {"const": true},
+        "declared_supported_hosts": {
+          "const": ["claude_code", "codex", "opencode"]
+        }
+      }
+    },
+    "real_codex": {"$ref": "#/$defs/real-host"},
+    "real_claude": {"$ref": "#/$defs/real-host"},
+    "real_opencode": {"$ref": "#/$defs/real-host"},
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_only",
+        "host_native_memory",
+        "host_native_memory_plus_deeplaw",
+        "equal_budget",
+        "equal_budget_report_path",
+        "equal_budget_report_sha256"
+      ],
+      "properties": {
+        "host_only": {"$ref": "#/$defs/comparison-lane"},
+        "host_native_memory": {"$ref": "#/$defs/comparison-lane"},
+        "host_native_memory_plus_deeplaw": {
+          "allOf": [
+            {"$ref": "#/$defs/comparison-lane"},
+            {
+              "required": ["incremental_benefit"],
+              "properties": {"incremental_benefit": {"const": true}}
+            }
+          ]
+        },
+        "equal_budget": {"const": true},
+        "equal_budget_report_path": {"$ref": "#/$defs/safe-path"},
+        "equal_budget_report_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "legal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_path",
+        "report_sha256",
+        "pack_manifest_path",
+        "pack_manifest_sha256",
+        "catalog_path",
+        "catalog_sha256",
+        "release_path",
+        "release_sha256",
+        "source_count",
+        "signed_and_verified",
+        "critical_failures",
+        "false_authority",
+        "wrong_version_primary",
+        "invalid_quote",
+        "invalid_locator",
+        "cross_boundary_disclosure",
+        "secret_leak"
+      ],
+      "properties": {
+        "report_path": {"$ref": "#/$defs/safe-path"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "pack_manifest_path": {"$ref": "#/$defs/safe-path"},
+        "pack_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "catalog_path": {"$ref": "#/$defs/safe-path"},
+        "catalog_sha256": {"$ref": "#/$defs/sha256"},
+        "release_path": {"$ref": "#/$defs/safe-path"},
+        "release_sha256": {"$ref": "#/$defs/sha256"},
+        "source_count": {"const": 28},
+        "signed_and_verified": {"const": true},
+        "critical_failures": {"const": 0},
+        "false_authority": {"const": 0},
+        "wrong_version_primary": {"const": 0},
+        "invalid_quote": {"const": 0},
+        "invalid_locator": {"const": 0},
+        "cross_boundary_disclosure": {"const": 0},
+        "secret_leak": {"const": 0}
+      }
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_candidate",
+        "current_candidate_report_path",
+        "current_candidate_report_sha256",
+        "statement_5k",
+        "statement_5k_report_path",
+        "statement_5k_report_sha256",
+        "statement_10k",
+        "statement_10k_report_path",
+        "statement_10k_report_sha256",
+        "statement_100k",
+        "statement_100k_report_path",
+        "statement_100k_report_sha256",
+        "relation_10k",
+        "relation_10k_report_path",
+        "relation_10k_report_sha256",
+        "relation_100k",
+        "relation_100k_report_path",
+        "relation_100k_report_sha256",
+        "wiki_10k",
+        "wiki_10k_report_path",
+        "wiki_10k_report_sha256",
+        "wiki_100k",
+        "wiki_100k_report_path",
+        "wiki_100k_report_sha256",
+        "requests_10000_rss",
+        "requests_10000_rss_report_path",
+        "requests_10000_rss_report_sha256",
+        "readers_8",
+        "readers_8_report_path",
+        "readers_8_report_sha256",
+        "cache_invalidation",
+        "cache_invalidation_report_path",
+        "cache_invalidation_report_sha256"
+      ],
+      "properties": {
+        "current_candidate": {"const": true},
+        "current_candidate_report_path": {"$ref": "#/$defs/safe-path"},
+        "current_candidate_report_sha256": {"$ref": "#/$defs/sha256"},
+        "statement_5k": {"const": true},
+        "statement_5k_report_path": {"$ref": "#/$defs/safe-path"},
+        "statement_5k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "statement_10k": {"const": true},
+        "statement_10k_report_path": {"$ref": "#/$defs/safe-path"},
+        "statement_10k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "statement_100k": {"const": true},
+        "statement_100k_report_path": {"$ref": "#/$defs/safe-path"},
+        "statement_100k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "relation_10k": {"const": true},
+        "relation_10k_report_path": {"$ref": "#/$defs/safe-path"},
+        "relation_10k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "relation_100k": {"const": true},
+        "relation_100k_report_path": {"$ref": "#/$defs/safe-path"},
+        "relation_100k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "wiki_10k": {"const": true},
+        "wiki_10k_report_path": {"$ref": "#/$defs/safe-path"},
+        "wiki_10k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "wiki_100k": {"const": true},
+        "wiki_100k_report_path": {"$ref": "#/$defs/safe-path"},
+        "wiki_100k_report_sha256": {"$ref": "#/$defs/sha256"},
+        "requests_10000_rss": {"const": true},
+        "requests_10000_rss_report_path": {"$ref": "#/$defs/safe-path"},
+        "requests_10000_rss_report_sha256": {"$ref": "#/$defs/sha256"},
+        "readers_8": {"const": true},
+        "readers_8_report_path": {"$ref": "#/$defs/safe-path"},
+        "readers_8_report_sha256": {"$ref": "#/$defs/sha256"},
+        "cache_invalidation": {"const": true},
+        "cache_invalidation_report_path": {"$ref": "#/$defs/safe-path"},
+        "cache_invalidation_report_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeline",
+        "timeline_report_path",
+        "timeline_report_sha256",
+        "semantic_restore",
+        "semantic_restore_report_path",
+        "semantic_restore_report_sha256",
+        "selective_forget",
+        "selective_forget_report_path",
+        "selective_forget_report_sha256"
+      ],
+      "properties": {
+        "timeline": {"const": true},
+        "timeline_report_path": {"$ref": "#/$defs/safe-path"},
+        "timeline_report_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_restore": {"const": true},
+        "semantic_restore_report_path": {"$ref": "#/$defs/safe-path"},
+        "semantic_restore_report_sha256": {"$ref": "#/$defs/sha256"},
+        "selective_forget": {"const": true},
+        "selective_forget_report_path": {"$ref": "#/$defs/safe-path"},
+        "selective_forget_report_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "platform_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "systems",
+        "python_versions",
+        "matrix",
+        "mandatory_skips",
+        "matrix_complete",
+        "report_path",
+        "report_sha256"
+      ],
+      "properties": {
+        "systems": {"const": ["Darwin", "Linux", "Windows"]},
+        "python_versions": {"const": ["3.11", "3.12", "3.13"]},
+        "report_path": {"$ref": "#/$defs/safe-path"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "matrix": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["system", "python_version", "report_path", "report_sha256"],
+            "properties": {
+              "system": {"enum": ["Darwin", "Linux", "Windows"]},
+              "python_version": {"enum": ["3.11", "3.12", "3.13"]},
+              "report_path": {"$ref": "#/$defs/safe-path"},
+              "report_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        },
+        "mandatory_skips": {"const": 0},
+        "matrix_complete": {"const": true}
+      }
+    },
+    "supply_chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reproducible_wheel_sdist",
+        "reproducible_wheel_sdist_path",
+        "reproducible_wheel_sdist_sha256",
+        "sbom",
+        "sbom_path",
+        "sbom_sha256",
+        "licenses",
+        "licenses_path",
+        "licenses_sha256",
+        "openvex",
+        "openvex_path",
+        "openvex_sha256",
+        "provenance",
+        "provenance_path",
+        "provenance_sha256",
+        "public_redownload",
+        "public_redownload_path",
+        "public_redownload_sha256"
+      ],
+      "properties": {
+        "reproducible_wheel_sdist": {"const": true},
+        "reproducible_wheel_sdist_path": {"$ref": "#/$defs/safe-path"},
+        "reproducible_wheel_sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "sbom": {"const": true},
+        "sbom_path": {"$ref": "#/$defs/safe-path"},
+        "sbom_sha256": {"$ref": "#/$defs/sha256"},
+        "licenses": {"const": true},
+        "licenses_path": {"$ref": "#/$defs/safe-path"},
+        "licenses_sha256": {"$ref": "#/$defs/sha256"},
+        "openvex": {"const": true},
+        "openvex_path": {"$ref": "#/$defs/safe-path"},
+        "openvex_sha256": {"$ref": "#/$defs/sha256"},
+        "provenance": {"const": true},
+        "provenance_path": {"$ref": "#/$defs/safe-path"},
+        "provenance_sha256": {"$ref": "#/$defs/sha256"},
+        "public_redownload": {"const": true},
+        "public_redownload_path": {"$ref": "#/$defs/safe-path"},
+        "public_redownload_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "commercial_release_eligible": {"const": true},
+    "quality_protocol_eligible": {"const": true},
+    "competitive_claim_eligible": {"const": false},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "safe-path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "real-host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_runs",
+        "model_task_acceptance",
+        "model_or_api_call_attempted",
+        "evidence_path",
+        "evidence_sha256"
+      ],
+      "properties": {
+        "independent_runs": {"type": "integer", "minimum": 3},
+        "model_task_acceptance": {"const": true},
+        "model_or_api_call_attempted": {"const": true},
+        "evidence_path": {"$ref": "#/$defs/safe-path"},
+        "evidence_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "comparison-lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "first_correct_action",
+        "report_path",
+        "report_sha256",
+        "incremental_benefit"
+      ],
+      "properties": {
+        "passed": {"const": true},
+        "first_correct_action": {"type": "number", "minimum": 0},
+        "report_path": {"$ref": "#/$defs/safe-path"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "incremental_benefit": {"type": "boolean"}
+      }
+    }
+  }
+}

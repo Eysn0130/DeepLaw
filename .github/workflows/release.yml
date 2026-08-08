@@ -33,6 +33,7 @@ jobs:
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       commit: ${{ steps.release.outputs.commit }}
+      tree: ${{ steps.release.outputs.tree }}
       version: ${{ steps.release.outputs.version }}
       semantic_evidence_run_id: ${{ steps.release.outputs.semantic_evidence_run_id }}
 
@@ -55,6 +56,7 @@ jobs:
           set -euo pipefail
           [[ "${TARGET_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           commit=$(git rev-parse HEAD)
+          tree=$(git rev-parse "${commit}^{tree}")
           tag_commit=$(git rev-list -n 1 "${TARGET_TAG}")
           [[ "${commit}" == "${tag_commit}" ]]
           version=$(python - "${TARGET_TAG}" <<'PY'
@@ -88,6 +90,7 @@ jobs:
           [[ "${semantic_artifact_count}" -eq 1 ]]
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
           echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
+          echo "tree=${tree}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "semantic_evidence_run_id=${semantic_run_id}" >> "${GITHUB_OUTPUT}"
 
@@ -131,10 +134,22 @@ jobs:
           name: commercial-release-assets
           path: ${{ runner.temp }}/release-assets
 
+      - name: Validate version-conditional commercial manifest
+        env:
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.release_policy \
+            --manifest "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
+            --release-version "${RELEASE_VERSION}"
+
       - name: Validate the frozen commercial decision
         env:
           RELEASE_COMMIT: ${{ needs.release-context.outputs.commit }}
+          RELEASE_TREE: ${{ needs.release-context.outputs.tree }}
           RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -149,45 +164,30 @@ jobs:
           assets_root = manifest_path.parent
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           release = manifest.get("release", {})
-          if (
-              manifest.get("schema_version")
-              != "deeplaw.commercial-release-manifest/v5"
-              or manifest.get("commercial_release_eligible") is not True
-              or manifest.get("quality_protocol_eligible") is not True
-              or manifest.get("competitive_claim_eligible") is not False
-              or manifest.get("evaluation_protocol", {}).get(
-                  "quality_gate_passed"
-              )
-              is not True
-              or manifest.get("evaluation_protocol", {}).get("freeze_valid")
-              is not True
-              or manifest.get("living_wiki_quality", {}).get("passed")
-              is not True
-              or manifest.get("living_wiki_quality", {}).get(
-                  "quality_regression"
-              )
-              is not False
-              or manifest.get("living_wiki_quality", {}).get(
-                  "performance_regression"
-              )
-              is not False
-              or manifest.get("authoritative_source_quality", {}).get("passed")
-              is not True
-              or manifest.get("authoritative_source_quality", {}).get(
-                  "source_count"
-              )
-              != 28
-              or manifest.get("semantic_living_wiki_quality", {}).get("passed")
-              is not True
-              or manifest.get("semantic_living_wiki_quality", {}).get(
-                  "formal_release_eligible"
-              )
+          major, minor, _patch = (int(part) for part in os.environ["RELEASE_VERSION"].split("."))
+          legacy_v5 = (major, minor) < (0, 13)
+          legacy_failed = legacy_v5 and (
+              manifest.get("evaluation_protocol", {}).get("quality_gate_passed") is not True
+              or manifest.get("evaluation_protocol", {}).get("freeze_valid") is not True
+              or manifest.get("living_wiki_quality", {}).get("passed") is not True
+              or manifest.get("living_wiki_quality", {}).get("quality_regression") is not False
+              or manifest.get("living_wiki_quality", {}).get("performance_regression") is not False
+              or manifest.get("authoritative_source_quality", {}).get("passed") is not True
+              or manifest.get("authoritative_source_quality", {}).get("source_count") != 28
+              or manifest.get("semantic_living_wiki_quality", {}).get("passed") is not True
+              or manifest.get("semantic_living_wiki_quality", {}).get("formal_release_eligible")
               is not True
               or manifest.get("editor_integrations", {}).get("passed") is not True
-              or manifest.get("authoritative_evidence_quality", {}).get("passed")
-              is not True
+              or manifest.get("authoritative_evidence_quality", {}).get("passed") is not True
+          )
+          if (
+              manifest.get("commercial_release_eligible") is not True
+              or manifest.get("quality_protocol_eligible") is not True
+              or manifest.get("competitive_claim_eligible") is not False
+              or legacy_failed
               or release.get("tag") != os.environ["RELEASE_TAG"]
               or release.get("commit") != os.environ["RELEASE_COMMIT"]
+              or release.get("tree") != os.environ["RELEASE_TREE"]
           ):
               raise SystemExit("commercial release decision does not bind the exact tag")
 
@@ -222,6 +222,23 @@ jobs:
           expected_names = set(files_by_name) - {checksum_path.name}
           if listed_names != expected_names:
               raise SystemExit("release checksum inventory is incomplete")
+          manifest_asset_names = set()
+          for record in manifest.get("artifacts", []):
+              logical_path = record.get("path")
+              if not isinstance(logical_path, str) or not logical_path:
+                  raise SystemExit("commercial manifest contains an invalid artifact path")
+              name = pathlib.PurePosixPath(logical_path).name
+              if not name or name in manifest_asset_names:
+                  raise SystemExit("commercial manifest artifact basenames must be unique")
+              manifest_asset_names.add(name)
+              path = files_by_name.get(name)
+              if path is None:
+                  raise SystemExit(f"commercial manifest asset is missing: {logical_path}")
+              observed = hashlib.sha256(path.read_bytes()).hexdigest()
+              if observed != record.get("sha256") or path.stat().st_size != record.get(
+                  "byte_size"
+              ):
+                  raise SystemExit(f"commercial manifest bytes differ: {logical_path}")
           PY
 
       - name: Create and verify Sigstore OIDC bundles
@@ -427,6 +444,16 @@ jobs:
             --json isDraft,url --jq 'select(.isDraft == false) | .url')
           test -n "${release_url}"
           echo "RELEASE_URL=${release_url}" >> "${GITHUB_ENV}"
+
+      - name: Validate version-conditional downloaded manifest
+        env:
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.release_policy \
+            --manifest "${RUNNER_TEMP}/downloads/commercial-release-manifest.json" \
+            --release-version "${RELEASE_VERSION}"
 
       - name: Verify SHA-256 checksums
         shell: bash

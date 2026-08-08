@@ -308,7 +308,11 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert 'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in gate
     assert "--evaluation" in gate
     assert "evaluation/EVALUATION_SHA256SUMS" in release
-    assert "deeplaw.commercial-release-manifest/v5" in release
+    assert "python -m benchmarks.release.release_policy" in release
+    publish = release.split("\n  publish:", maxsplit=1)[1].split("\n  post-release:", maxsplit=1)[0]
+    post_release = release.split("\n  post-release:", maxsplit=1)[1]
+    assert "deeplaw.commercial-release-manifest/v5" not in publish
+    assert "deeplaw.commercial-release-manifest/v5" not in post_release
     assert "semantic_evidence_run_id" in release
     assert "semantic-release-evidence" in gate
     assert "--semantic-consensus" in gate
