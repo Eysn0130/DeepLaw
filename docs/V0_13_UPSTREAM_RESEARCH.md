@@ -1,8 +1,9 @@
 # DeepLaw v0.13 bounded upstream research
 
-Status: **design evidence**, researched 2026-08-07. This report records concepts considered for
+Status: **design evidence**, researched 2026-08-08. This report records concepts considered for
 v0.13; it is not evidence that any target capability is shipped. DeepLaw does not vendor or copy
-upstream implementation code in this work.
+upstream implementation code in this work. The exact commits below are frozen research anchors,
+not dependency pins or release inputs.
 
 ## Frozen references
 
@@ -15,9 +16,13 @@ upstream implementation code in this work.
 | OpenDeepWiki | [`a71a441a017bb3b8d1a0064afbdf22a3ad9d5383`](https://github.com/AIDotNet/OpenDeepWiki/tree/a71a441a017bb3b8d1a0064afbdf22a3ad9d5383) on `main` | MIT; concepts only in this change | Guided page families, hierarchy and navigation planning |
 | Guanlan | [`1394a41454559f2f5373719c808fed9fe872dd88`](https://github.com/jin-bo/guanlan/tree/1394a41454559f2f5373719c808fed9fe872dd88) on `main` | Apache-2.0; concepts only in this change | Local incremental Markdown Wiki, immutable raw inputs, link checks, maintenance commands and read-only MCP |
 | Obsidian Help | `067a3b99f6d24da95bf8dafcbe1c39e3ee71b10a` on `master` | no repository-wide SPDX license asserted; reference only | Open Markdown, properties, Wikilinks, backlinks, graph and Canvas user surfaces |
-| Obsidian API | [`cc1744324150c632416857c98964f87b1574a5fc`](https://github.com/obsidianmd/obsidian-api/tree/cc1744324150c632416857c98964f87b1574a5fc) on `master`; local package `obsidian@1.13.1` | MIT declarations/API surface; no application implementation reuse | Supported plugin types and APIs used by the local adapter |
-| Tolaria | tag `v2026-07-22`, commit `e2cd718a518cc96d1081b6ec3aabefe3b6c77199` | AGPL-3.0; no code reuse | Mounted-workspace context, filesystem convergence, deep links, MCP registration and Agent UI boundary |
+| OpenWiki | [`7531d615216e8cbccf464f66cfbbae3668871c84`](https://github.com/langchain-ai/openwiki/tree/7531d615216e8cbccf464f66cfbbae3668871c84) on `main` | MIT (`LICENSE` at the exact commit); no code reuse | Layered CLI/agent/provider/connector architecture and bounded read-only MCP connector policy |
+| Google OKF / Knowledge Catalog | [`374e0bc4c644310ff56cdf9c0fe81eccdec862b0`](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/374e0bc4c644310ff56cdf9c0fe81eccdec862b0) on `main` | Apache-2.0 (`LICENSE.md` and `okf/LICENSE.md`); no code reuse | OKF v0.2 Markdown/YAML interchange and catalog `EntryLink` projection |
+| Obsidian API | [`cc1744324150c632416857c98964f87b1574a5fc`](https://github.com/obsidianmd/obsidian-api/tree/cc1744324150c632416857c98964f87b1574a5fc) on `master`; exact package `obsidian@1.13.2` | MIT (`LICENSE.md`/`package.json`); no application implementation reuse | Public plugin type surface (`App`, `Vault`, `Workspace`, `MetadataCache`) and Canvas data types |
+| Tolaria | [`4cced2027998c4affdf65385f9683b7e8a03c041`](https://github.com/refactoringhq/tolaria/tree/4cced2027998c4affdf65385f9683b7e8a03c041) on `main` | AGPL-3.0 (`LICENSE`); no code reuse | Files-first Markdown vault, dynamic Wikilink relationships, and external MCP/editor boundary |
+| MCP specification | [`9d4a9115126f1356f4b189af3266c1839a4e9bbb`](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/9d4a9115126f1356f4b189af3266c1839a4e9bbb) on `main` | Mixed transition in root `LICENSE`: new code/spec contributions Apache-2.0, non-spec docs CC-BY-4.0, unrelicensed legacy contributions MIT; do not reduce to one SPDX | `resources/list/read`, `tools/list/call`, capability declarations, and opaque-cursor pagination |
 | Graphiti | [`425bf2481b51437e43455e09d241c5f46e3d95f3`](https://github.com/getzep/graphiti/tree/425bf2481b51437e43455e09d241c5f46e3d95f3) on `main` | Apache-2.0; concepts only in this change | Episode provenance, valid time and incremental temporal-graph lessons |
+| GraphRAG | [`14a00ad88fc33cf2b52f4f113f25807556f8e25e`](https://github.com/microsoft/graphrag/tree/14a00ad88fc33cf2b52f4f113f25807556f8e25e) on `main` | MIT (`LICENSE`); concepts only in this change | Configurable graph-based indexing/query pipeline and explicit context/source reporting |
 | Mem0 | [`4debc58a83377b18be81ae1e5969a300736b2fac`](https://github.com/mem0ai/mem0/tree/4debc58a83377b18be81ae1e5969a300736b2fac) on `main` | Apache-2.0; concepts only in this change | Small memory API and memory-quality/evaluation lessons |
 | Cognee | [`38eece5bbb0cb9f5706fed908abd16dba0f5505e`](https://github.com/topoteretes/cognee/tree/38eece5bbb0cb9f5706fed908abd16dba0f5505e) on `main` | Apache-2.0; concepts only in this change | Pipeline/job concepts and graph/vector memory evaluation surface |
 | Letta | [`ff19ffeafeb54bd2a7dc5d4a552f10191732a235`](https://github.com/letta-ai/letta/tree/ff19ffeafeb54bd2a7dc5d4a552f10191732a235) on `main` | Apache-2.0; concepts only in this change | Persistent Agent state, memory-block and context-efficiency lessons |
@@ -25,6 +30,94 @@ upstream implementation code in this work.
 
 The existing `docs/UPSTREAM_CAPABILITY_MATRIX.md` remains the broader retrieval, graph and memory
 comparison. This report is a v0.13 delta rather than a replacement.
+
+## Exact-commit evidence and audit notes
+
+Each commit link below resolves to a public GitHub commit object with the stated full SHA. License
+and interface links use the same SHA; they are research evidence only and are not copied into the
+DeepLaw package.
+
+- **OpenWiki — `langchain-ai/openwiki@7531d615216e8cbccf464f66cfbbae3668871c84`.** The exact
+  [`commit`](https://github.com/langchain-ai/openwiki/commit/7531d615216e8cbccf464f66cfbbae3668871c84)
+  contains an MIT `LICENSE`. Its
+  [`architecture/overview.md`](https://raw.githubusercontent.com/langchain-ai/openwiki/7531d615216e8cbccf464f66cfbbae3668871c84/openwiki/architecture/overview.md)
+  documents the CLI/agent/provider/connector layers, while
+  [`integrations/connectors.md`](https://raw.githubusercontent.com/langchain-ai/openwiki/7531d615216e8cbccf464f66cfbbae3668871c84/openwiki/integrations/connectors.md)
+  documents connector state and a read-only MCP connector policy. OpenWiki's own wiki/cache and
+  credential lifecycle are not DeepLaw canonical state.
+- **Google OKF — `GoogleCloudPlatform/knowledge-catalog@374e0bc4c644310ff56cdf9c0fe81eccdec862b0`.**
+  The exact [`commit`](https://github.com/GoogleCloudPlatform/knowledge-catalog/commit/374e0bc4c644310ff56cdf9c0fe81eccdec862b0)
+  carries Apache-2.0 in both root [`LICENSE.md`](https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/374e0bc4c644310ff56cdf9c0fe81eccdec862b0/LICENSE.md)
+  and [`okf/LICENSE.md`](https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/374e0bc4c644310ff56cdf9c0fe81eccdec862b0/okf/LICENSE.md).
+  [`okf/SPEC.md`](https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/374e0bc4c644310ff56cdf9c0fe81eccdec862b0/okf/SPEC.md)
+  defines OKF v0.2 as plain Markdown/YAML with provenance and trust signals but no central
+  authority; the commit's `dataplex.ts` adds catalog `EntryLink` projection APIs. These are
+  interchange/catalog surfaces, not an Authority source or a replacement for the Ledger.
+- **Obsidian API — `obsidianmd/obsidian-api@cc1744324150c632416857c98964f87b1574a5fc`.** The exact
+  [`commit`](https://github.com/obsidianmd/obsidian-api/commit/cc1744324150c632416857c98964f87b1574a5fc)
+  contains MIT [`LICENSE.md`](https://raw.githubusercontent.com/obsidianmd/obsidian-api/cc1744324150c632416857c98964f87b1574a5fc/LICENSE.md)
+  and `package.json` declares `obsidian@1.13.2`. The public
+  [`README.md`](https://raw.githubusercontent.com/obsidianmd/obsidian-api/cc1744324150c632416857c98964f87b1574a5fc/README.md)
+  and [`obsidian.d.ts`](https://raw.githubusercontent.com/obsidianmd/obsidian-api/cc1744324150c632416857c98964f87b1574a5fc/obsidian.d.ts)
+  expose plugin types, not the desktop implementation; [`canvas.d.ts`](https://raw.githubusercontent.com/obsidianmd/obsidian-api/cc1744324150c632416857c98964f87b1574a5fc/canvas.d.ts)
+  is a derived Canvas data surface. The repository's prior `obsidian@1.13.1` wording is an audit
+  dependency drift; this research does not upgrade v0.13 and real desktop E2E remains unexecuted.
+- **Tolaria — `refactoringhq/tolaria@4cced2027998c4affdf65385f9683b7e8a03c041`.** The exact
+  [`commit`](https://github.com/refactoringhq/tolaria/commit/4cced2027998c4affdf65385f9683b7e8a03c041)
+  carries AGPL-3.0 in [`LICENSE`](https://raw.githubusercontent.com/refactoringhq/tolaria/4cced2027998c4affdf65385f9683b7e8a03c041/LICENSE).
+  Its [`README.md`](https://raw.githubusercontent.com/refactoringhq/tolaria/4cced2027998c4affdf65385f9683b7e8a03c041/README.md)
+  and [`docs/ARCHITECTURE.md`](https://raw.githubusercontent.com/refactoringhq/tolaria/4cced2027998c4affdf65385f9683b7e8a03c041/docs/ARCHITECTURE.md)
+  describe a files-first Markdown vault; ADR 0011 documents stdio/WebSocket MCP note tools,
+  including mutation. AGPL and application-local filesystem authority require an editor/host
+  adapter boundary, not copied code or canonical writes.
+- **MCP specification — `modelcontextprotocol/modelcontextprotocol@9d4a9115126f1356f4b189af3266c1839a4e9bbb`.**
+  The exact [`commit`](https://github.com/modelcontextprotocol/modelcontextprotocol/commit/9d4a9115126f1356f4b189af3266c1839a4e9bbb)
+  root [`LICENSE`](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/9d4a9115126f1356f4b189af3266c1839a4e9bbb/LICENSE)
+  explicitly records an MIT-to-Apache-2.0 transition: new code/spec contributions are Apache-2.0,
+  non-spec documentation is CC-BY-4.0, and unrelicensed legacy contributions remain MIT. The
+  [`resources`](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/9d4a9115126f1356f4b189af3266c1839a4e9bbb/docs/specification/2026-07-28/server/resources.mdx),
+  [`tools`](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/9d4a9115126f1356f4b189af3266c1839a4e9bbb/docs/specification/2026-07-28/server/tools.mdx)
+  and [`pagination`](https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/9d4a9115126f1356f4b189af3266c1839a4e9bbb/docs/specification/2026-07-28/server/utilities/pagination.mdx)
+  specifications define separate resource/tool capabilities and opaque cursors. License status
+  must remain file/contribution-specific rather than being compressed to one SPDX label.
+- **Graphiti — `getzep/graphiti@425bf2481b51437e43455e09d241c5f46e3d95f3`.** The exact
+  [`commit`](https://github.com/getzep/graphiti/commit/425bf2481b51437e43455e09d241c5f46e3d95f3)
+  carries Apache-2.0 [`LICENSE`](https://raw.githubusercontent.com/getzep/graphiti/425bf2481b51437e43455e09d241c5f46e3d95f3/LICENSE).
+  Its [`README.md`](https://raw.githubusercontent.com/getzep/graphiti/425bf2481b51437e43455e09d241c5f46e3d95f3/README.md)
+  and [`graphiti.py`](https://raw.githubusercontent.com/getzep/graphiti/425bf2481b51437e43455e09d241c5f46e3d95f3/graphiti_core/graphiti.py)
+  describe temporal entities/facts/episodes and pluggable graph/LLM/embedding clients; the
+  experimental [`MCP server`](https://raw.githubusercontent.com/getzep/graphiti/425bf2481b51437e43455e09d241c5f46e3d95f3/mcp_server/README.md)
+  includes graph mutations. It can inform bounded discovery experiments only and cannot supply
+  DeepLaw Authority or canonical graph state.
+- **GraphRAG — `microsoft/graphrag@14a00ad88fc33cf2b52f4f113f25807556f8e25e`.** The exact
+  [`commit`](https://github.com/microsoft/graphrag/commit/14a00ad88fc33cf2b52f4f113f25807556f8e25e)
+  carries Microsoft MIT [`LICENSE`](https://raw.githubusercontent.com/microsoft/graphrag/14a00ad88fc33cf2b52f4f113f25807556f8e25e/LICENSE).
+  [`README.md`](https://raw.githubusercontent.com/microsoft/graphrag/14a00ad88fc33cf2b52f4f113f25807556f8e25e/README.md)
+  identifies a graph-based indexing/transformation pipeline and warns that it is a demonstration,
+  not an officially supported Microsoft offering; the API notebook shows `build_index` and
+  `global_search` returning context/source material. Its summaries, communities and rankings are
+  discovery aids, not Authority or evidence.
+
+## v0.14/v0.15 interoperability route (not v0.13 implementation)
+
+The frozen references support documentation-only research and future adapter qualification. They
+do not expand the v0.13 source-candidate contract:
+
+- OKF is an **interchange projection only**. Frontmatter provenance, credibility, trust signals,
+  links and catalog entry links cannot create DeepLaw identity, Authority, verification or scope.
+- MCP **Resources remain read-only** for Wiki, Source and Schema views. Any mutation remains behind
+  the owner-granted `knowledge_sink`; MCP tool discovery, pagination and transport do not widen a
+  grant or establish Authority.
+- Obsidian API, Bases and Canvas are **derived editor views**. Tolaria is an **editor/host surface**
+  only; OpenWiki is an isolated docs/connector reference. Neither owns the DeepLaw Ledger or
+  canonical identity, and the AGPL Tolaria implementation is not copied.
+- Graphiti and GraphRAG graph traversal, communities, centrality, summaries and rerankers are
+  **discovery/navigation aids only**. They cannot establish trust, legal Authority, current
+  pointers or mutation permission.
+- Stable identity, provenance, Authority, lifecycle, temporal state and capability grants remain
+  solely in DeepLaw's governed domain services. Each future adapter needs a pinned-commit/license
+  manifest, closed environment, secret-canary proof and independent E2E evidence before any status
+  can change; none of these routes is `shipped` in v0.13.
 
 ## Adopted design principles
 

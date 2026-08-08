@@ -17,12 +17,14 @@ was preceded by a public-seam or deterministic reproduction. Unreproduced cases 
 | Host credential inheritance | An ambient canary entered all three old Host paths through `os.environ.copy()` and was inherited by a fake MCP child. | Whole-process environment inheritance could disclose an unrelated ambient or Provider Secret. P0 confidentiality boundary failure. | Fixed with a closed allowlist and isolated per-invocation HOME/XDG/temp/cwd. |
 | Query v6 Statement tail | A public Profile-v3 fixture with 5,001 Statements missed the exact final Statement. | `_MAX_STATEMENT_SCAN=5000` selected a global ordered prefix before matching, making table position a retrieval signal. | Fixed: governed discovery selects at most 20 revisions; SQL matches only those revisions into a 512-candidate pool and orders an exact phrase first. |
 | Query v6 controls | Changing `graph_hops`, `retrieval_mode` and `force_canonical_lexical` did not change v6 because the executor deleted them. Invalid retrieval modes could reach the shared Python seam. | Public inputs were silently accepted and discarded; plan/receipt could not explain actual discovery. | Fixed and retained in v6: shared validation, effective recall controls and plan/receipt-bound discovery. |
+| Context default drift | Public Python, both CLI Context commands and autonomous MCP Context returned Query Plan v5/Capsule v2 while documentation qualified them as default v6. | `AutonomousKnowledgeStore.build_capsule` hard-coded the object-level v5 assembler; a version-literal change could not preserve v6 Statement/evidence/receipt semantics. | Fixed with one shared domain v6 assembler and additive local Capsule v3/Provider v2. Explicit v5 preserves the prior Capsule v2 compatibility contract. |
 | Relation predicate parity | The v3 JSON Schema accepted any non-empty predicate while runtime allowed a closed 15-value enum. | Schema-valid input could be runtime-invalid; host/contract drift. | Fixed by making the contract enum exactly equal to the runtime set, with parity regression. |
 | Query receipt lifetime | MCP held only the last 16 full audit receipts in memory with no TTL, byte budget, redaction or integrity binding. | Diagnostic metadata had incomplete lifecycle/privacy controls and provider receipt metadata was noisy. | Fixed as a three-role model described below. |
 | 100k qualification fixture | First real runner attempt exceeded the production 120/min grant limit; a second layout produced 100,100 Statements because 17-character lines crossed the 12,000-character extraction chunk boundary. | The benchmark, not the product boundary, used too many governed revisions and then split synthetic Statements. | Fixed without weakening the grant/chunk limits: seeded short unique Statements, 1,000 per source section, four fragments per packet, at most 100 governed mutations. |
 | 100k Living Wiki rebuild | The corrected 100,000-Statement fixture recalled every target but `rebuild_derived` failed closed with `Living Wiki file exceeds its byte bound`. | The projector rendered all 1,000 Statements of one Knowledge Revision inline, exceeding the 256 KiB Wiki page/read boundary. This prevented a rebuildable Wiki at the requested scale; raising the bound would also violate the persistent read contract. | Fixed by deterministic Statement Evidence shards: more than 64 Statements are split into registry-indexed pages of at most 64, the canonical Knowledge page links every shard, and stable Statement anchors/receipts remain registered. The clean 100k rerun completed. |
 | Source-page compilation summary at 100k | The exact 100k construction run remained inside one SQLite statement for more than two hours. A minimal trace regression showed the query joined Source IR nodes and fragments before counting both. | One 200k-node table and one 100k-fragment table were joined on the same Compilation, creating an approximately 20-billion-row intermediate result. This made Wiki projection position-independent but effectively quadratic in source size. | Fixed by three independently indexed scalar aggregates. The regression forbids the dual one-to-many join and checks exact rendered counts; the clean 100k Asset construction and rebuild completed. |
 | Python/scale warm integrity | `KnowledgeOS.open(...).context.compile()` performed the startup checks and then opened another store and ran full autonomous verification on every call. The construction runner hard-coded `per_request_full_verify=true`, while the Query/Graph runner opened and fully verified the 100k store once per target; four queries consumed 1,197,515 ms. | Repeated context and qualification reads bypassed the already implemented persistent read lifespan, so cost grew with canonical state and the frozen no-per-request-full-verify gate could not be measured honestly. | Fixed without a second cache: one `KnowledgeOS` handle lazily owns the existing `PersistentReadRuntime`, passes its snapshot to the canonical Capsule builder and closes explicitly. Both runners warm one verified runtime and instrument actual `AutonomousKnowledgeStore.verify` calls; unchanged warm requests must record `per_request_full_verify=false`. |
+| Wiki Recent Changes read drift | Python, CLI and MCP `recent_changes` returned the current-object browse contract instead of the generated event index/shards. | The public action reused the wrong read service, hiding revision/event chronology and truncation. | Fixed through verified Bundle → Resolver → Page Registry → bounded `read_page`, with index/shard hash, size, event count, audit-head, admission and truncation validation. Complete history beyond the projector's newest 10,000 events remains unimplemented. |
 
 ## Query v6 bounded retrieval
 
@@ -94,6 +96,8 @@ The local evidence commands include:
 ```bash
 uv run --frozen pytest -q tests/test_v013_query_graph_p0_reproductions.py
 uv run --frozen pytest -q tests/test_v013_query_graph_scale.py
+uv run --frozen pytest -q tests/test_v013_query_v6_context_parity.py
+uv run --frozen pytest -q tests/test_v013_wiki_recent_changes_parity.py
 uv run --frozen pytest -q \
   tests/test_v013_query_trace_store.py \
   tests/test_v013_persistent_runtime.py \
@@ -101,25 +105,37 @@ uv run --frozen pytest -q \
   tests/test_knowledge_mcp.py \
   tests/test_v013_runtime_retrieval_regressions.py
 uv run --frozen pytest -q tests/test_v013_host_environment_isolation.py
+uv lock --check
+uv run --frozen pytest --strict-markers
 ```
+
+The final frozen repository run for this continuation produced **1,165 passed and 9 explicitly
+skipped**. Skips and external gates are not counted as pass.
 
 The generated Query/Graph reports bind their exact runner, Schema, Query v6 and autonomy source
 hashes. Scale results and environment measurements are reported in
 `docs/V0_13_SCALE_RSS_QUALIFICATION_REPORT.md`; they are synthetic construction evidence only.
 
-The final clean reports bind implementation commit
-`bb6a942970186f03ea41e108a2eceaaca54e3bcb`. Their file SHA-256 values are
-`ad16d230360610e40037808ad9efdd75ccd5b8b02eda7f51bec15c0a753c185a` for the
+The post-Context-remediation clean reports bind implementation commit
+`ee06bb3ef9989c671638deda95968690d628f8ca` (tree
+`5fe2895a7c50f496a23612969844cd390b3cafad`). Their file SHA-256 values are
+`70f5d551a4bdcc9cbcf1a2210652577068afa9bf8168eae40b002757b2c3e424` for the
 5,001/10,000 report and
-`ec362bb5d57c4b702668d0a5f4098996ad8f88746f455e80a47393fb3cb6b1eb` for the 100,000
-report. Every exact Statement target was selected; each target had one candidate, provider output
-stayed below 64 KiB, the derived rebuild completed and warm queries recorded no per-request full
-verification.
+`e69d2f6eb7115db45a56137d224a2320b3f7633b06cae86185fe9248fa3bca5f` for the
+100,000 report; the internal report hashes are
+`224093a14cea7bf57f1e1013f243d3eeb2efa9638c0c1db65adcb27c72b82332` and
+`0e07c85741446fd658d754b4acea08ed5f73966db5b3d25bf0f1101695188a41`.
+Every exact Statement target was selected; each target had one candidate, Provider content stayed
+below 64 KiB, the derived rebuild completed and warm queries recorded no per-request full
+verification. The reports' Relation/truncation lanes remain `not_executed`, so their overall lane
+status is not relabelled as a full pass.
 
 ## Remaining P0/qualification boundaries
 
 - 500/5,000 relation truncation and 10k/100k governed Relation scale: `not_executed`.
 - Durable cross-process Query Trace: not implemented; process-local lifecycle is explicit.
+- Complete Recent Changes history pagination, object diff, `as_of` Wiki and single-revision revert:
+  not implemented.
 - Real Codex, OpenCode/DeepSeek, Human Gold and exact signed 28-source Pack: `not_executed` or
   `review_pending`.
 - Three OS × Python 3.11/3.12/3.13 and public artifact redownload: `not_executed`.

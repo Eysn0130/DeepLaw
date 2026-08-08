@@ -892,6 +892,7 @@ def test_graph_wiki_lint_capsule_and_forgetting_close_the_runtime_loop(
 
         capsule = store.build_capsule(
             task="Explain why ranking cannot establish authority",
+            query_plan_version="5",
             confirm_no_case_data=True,
         )
         assert capsule["sections"]["agent_memory"]

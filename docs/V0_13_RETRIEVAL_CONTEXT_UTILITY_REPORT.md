@@ -23,6 +23,12 @@ does not contain rejected candidate bodies, candidate scores, SQL/cache/parser d
 graph neighborhood, local paths, credentials, full sessions or hidden reasoning. An `audit`
 projection request is kept local and provider delivery is reduced to `standard`.
 
+Default Python, both CLI Context commands and autonomous MCP Context now use this same v6
+selection path through a shared domain assembler. The owner-local response is additive
+`deeplaw.knowledge-capsule/v3` (maximum 262,144 bytes) and embeds the independently validated
+Provider v2 projection. Explicit v5/Capsule v2 remains compatibility-only; source-free object
+memory is not silently admitted into the v6 Statement surface.
+
 Ordinary queries do not append Canonical Ledger events. The MCP runtime retains at most 16
 redacted process-local Query Traces for 900 seconds, with a 256 KiB per-entry and 1 MiB aggregate
 payload bound, TTL/LRU rotation, identity binding, read-time integrity checks and runtime-owner
@@ -34,13 +40,14 @@ The focused command was:
 ```bash
 uv run --frozen pytest -q \
   tests/test_v013_query_v6.py \
+  tests/test_v013_query_v6_context_parity.py \
   tests/test_v013_query_trace_store.py \
   tests/test_v013_runtime_retrieval_regressions.py \
   tests/test_v013_query_ablation.py
 ```
 
-Result: **32 passed**. These are contract and development-fixture regressions, not Human Gold
-quality evidence.
+Result: **passed** on the current continuation. These are contract and development-fixture
+regressions, not Human Gold quality evidence.
 
 ## Repository-visible development ablation
 
@@ -81,6 +88,10 @@ classified as removable noise merely to improve compression.
 
 Current bindings include `contracts/provider-knowledge-capsule.v2.schema.json` at
 `f5d848df17a4429f468725b49f2a9466535c9e19044e1caefa61e7369f5600f5` and
+`contracts/knowledge-capsule.v3.schema.json` at
+`97a5833d104cacf45f8f4d0d479027697f1cc821fc73bfcde25b1c6d7d10b7da`,
+`contracts/knowledge-capsule-verification.v3.schema.json` at
+`373942f9be4adc542d498f7d6f2a4d5b0da63aface33340651b8e0b014c23df1`, and
 `contracts/query-audit-read.v1.schema.json` at
 `c85294edf8630df26c851c1366d2036ca4f1bb5b2b78b4e7515b384bc219c60d`.
 

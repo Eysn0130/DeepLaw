@@ -261,6 +261,20 @@ a universal hard-coded ranking by object kind:
   represented evidence and reports residual gaps. Query Plan v5 remains explicitly selectable. An exact
   policy/entity designator cannot be silently replaced by a different designator when the target
   revision is stale or withdrawn; the Capsule stays empty and preserves the explicit gap;
+- The autonomous Context entry points share one domain assembler: Python
+  `KnowledgeOS.context.compile`, `deeplaw knowledge context`,
+  `deeplaw knowledge autonomy context`, and MCP `operation=context` default to Query Plan v6.
+  The owner-local response is additive `deeplaw.knowledge-capsule/v3`, bounded to 262,144 bytes,
+  and retains the complete v6 plan/hash, selected Statements, evidence, contradiction/gap state,
+  receipt, budget, audit head, and `write_performed=false`. Its nested
+  `deeplaw.provider-knowledge-capsule/v2` projection is independently bounded to 65,536 bytes;
+  the provider receives only the bounded Statement/evidence projection and opaque `receipt_id`.
+  The v3 local audit summary has no candidate scores, rejected-candidate text, query debug data,
+  paths, or secrets. Explicit `query_plan_version=5` is compatibility-only: Python and CLI retain
+  local Capsule v2, while MCP retains its output/v3 plus Capsule v2 compatibility envelope. The
+  legacy `deeplaw recall` command remains the `retrieval_fabric` path and is not a Query Plan v6
+  Context alias. Ordinary query and Context operations never append the canonical Knowledge Ledger;
+  the bounded Query Trace is process-local and deletable by runtime-owner lifecycle actions;
 - ordinary queries do not append to the canonical Knowledge Ledger. MCP keeps only a 16-entry,
   15-minute, 1 MiB aggregate ephemeral Query Trace after successful provider validation. The trace
   stores query hashes and redacted receipt metadata, verifies its hash on read, rotates by TTL/LRU,
@@ -326,8 +340,11 @@ The Capsule partitions official evidence, user-private evidence, source-derived 
 Agent-derived knowledge, Agent memory, contradictions, limitations, gaps, and receipts. The general
 Knowledge server leaves legal-evidence partitions empty; `law_support` owns them. Every plan binds
 filters, budgets, selected revisions, both audit heads, derived manifests, candidate-state digest,
-and selection digest. Provider-visible payloads have hard bounds, and restricted content never
-crosses MCP.
+and selection digest. Autonomous Context uses local Capsule v3 plus the nested Provider v2
+projection described above; Provider content is capped at 65,536 bytes and contains no full plan,
+candidate scores, rejected-candidate text, SQL, cache/parser diagnostics, paths, or secrets.
+Restricted content never crosses MCP. The local Query Trace remains bounded, redacted and
+non-persistent; it is not Canonical Knowledge or a Ledger mutation.
 
 ## Interface and process isolation
 
@@ -407,3 +424,6 @@ tasks, actual named third-party results, paired confidence intervals, and retain
 failures/resources remain governed by
 [`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md). Until those comparative facts
 exist, `competitive_claim_eligible=false` is mandatory.
+For the current v0.13 source candidate, `release_gate_passed=false`,
+`claim_eligible=false`, and `competitive_claim_eligible=false`; no release or superiority
+conclusion follows from the local Context parity work.

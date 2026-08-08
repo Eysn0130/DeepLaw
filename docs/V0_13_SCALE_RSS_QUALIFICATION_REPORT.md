@@ -21,6 +21,21 @@ Python `3.12.13`, SQLite `3.50.4`; package version remained `0.12.0`.
 The runners make an expensive requested lane either execute at its exact size or record
 `not_executed`; they never substitute a smaller fixture.
 
+The Context default-drift continuation created two additional clean-worktree Query reports bound
+to implementation commit `ee06bb3ef9989c671638deda95968690d628f8ca` (tree
+`5fe2895a7c50f496a23612969844cd390b3cafad`). They re-executed Statement tail recall after the
+Context v6 fix; they did not rerun the construction/RSS suites above:
+
+| Post-remediation report | File SHA-256 | Internal report SHA-256 |
+| --- | --- | --- |
+| `benchmarks/v013/query-graph-scale-context-v6-5k-10k-2026-08-08.json` | `70f5d551a4bdcc9cbcf1a2210652577068afa9bf8168eae40b002757b2c3e424` | `224093a14cea7bf57f1e1013f243d3eeb2efa9638c0c1db65adcb27c72b82332` |
+| `benchmarks/v013/query-graph-scale-context-v6-100k-2026-08-08.json` | `e69d2f6eb7115db45a56137d224a2320b3f7633b06cae86185fe9248fa3bca5f` | `0e07c85741446fd658d754b4acea08ed5f73966db5b3d25bf0f1101695188a41` |
+
+The 5,001/10,000/100,000 Statement sub-lanes selected every exact target with one candidate and
+maximum Provider content of 6,037 bytes. Derived rebuilds executed and the reports recorded
+`working_tree_dirty=false`. The governed Relation/truncation sub-lanes remained `not_executed`, so
+the report's aggregate scale-lane status remains fail-closed rather than being promoted to pass.
+
 ## Query v6 Statement scale
 
 The Profile-v3 fixture randomizes order and stable identities, targets the beginning, middle,

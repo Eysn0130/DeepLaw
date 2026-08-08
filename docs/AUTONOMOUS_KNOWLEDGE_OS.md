@@ -267,16 +267,26 @@ both current audit heads and has no pending rebuild. When it is stale or unavail
 uses a scope-filtered canonical Markdown scan capped at 500 current objects, records the fallback
 channel, and emits an explicit gap if that scan truncates; stale FTS is never silently presented as
 complete.
-Once a Vault contains an autonomous compilation run or governed Knowledge Object, released v0.12
-uses the same purpose-aware Query Plan v5 service for CLI `query`, CLI `context`, the Python API,
-and MCP. The v0.13 source candidate changes the current default to additive Query Plan v6:
-statement-level selection, dynamic duty coverage, targeted evidence completion, exact suppression
-receipts and bounded local `compact`/`standard`/`audit` projections. v6 first discovers at most 20
-governed revisions through the requested lexical/dense/graph controls, then matches a maximum of
-512 Statement candidates only within those revisions; a fixed global Statement prefix is not a
-retrieval channel. The MCP provider surface emits only `compact` or `standard`: an `audit` request
-is reduced to `standard`, with a redacted bounded trace available by `receipt_id`. v5 remains
-explicitly selectable.
+Once a Vault contains an autonomous compilation run or governed Knowledge Object, the v0.13 source
+candidate defaults Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`,
+`deeplaw knowledge autonomy context`, and autonomous-core MCP `operation=context` to additive
+Query Plan v6: statement-level selection, dynamic duty coverage, targeted evidence completion,
+exact suppression receipts and bounded local projections. `deeplaw recall` remains the legacy
+`retrieval_fabric` path and is not a v6 Context alias. v6 first discovers at most 20 governed
+revisions through the requested lexical/dense/graph controls, then matches a maximum of 512
+Statement candidates only within those revisions; a fixed global Statement prefix is not a
+retrieval channel. The shared domain assembler emits local
+`deeplaw.knowledge-capsule/v3` (maximum 262,144 bytes) and its nested
+`deeplaw.provider-knowledge-capsule/v2` projection (Provider content maximum 65,536 bytes). The
+Provider receives only bounded Statements/evidence, authority/verification/freshness,
+contradiction/limitation/gap state, delivery metadata, and opaque `receipt_id`; it never receives
+the full Query Plan, candidate scores, rejected-candidate text, SQL/cache/parser diagnostics,
+local paths, or secrets. An `audit` request is reduced to the Provider's `standard` projection;
+the redacted bounded local Query Trace is retained only after successful Provider and outer
+validation. Explicit `query_plan_version=5` remains compatibility-only: Python and CLI retain
+local Capsule v2, while MCP retains output/v3 plus Capsule v2/Query Plan v5 compatibility.
+`query_target`, `applicable_duties`, `projection`, `graph_hops`, `retrieval_mode`, and integrity-
+selected canonical lexical fallback are explicit v6 plan controls; they are not silently dropped.
 An untouched v0.7 compatibility Vault with neither remains on the retained v1 context compiler
 until it enters the autonomous compilation workflow. Both v5 and v6 bind the
 autonomous audit head and the legacy evidence/Inbox audit head, plus the
@@ -306,7 +316,7 @@ rechecked against current immutable source bytes. Changed or missing bytes fail 
 interval, and bounded evidence references; an endpoint-only contested marker is used only when no
 admitted typed relation represents the selected object.
 
-Knowledge Capsule v2 partitions:
+Local Knowledge Capsule v3 partitions (with explicit v2 compatibility):
 
 - official evidence (empty in `knowledge_support`; use `law_support`);
 - user-private legal evidence (empty in `knowledge_support`; use `law_support`);
@@ -315,8 +325,15 @@ Knowledge Capsule v2 partitions:
 - Agent memory;
 - contradictions, limitations, gaps, and receipts.
 
-The provider-visible response has a hard 64 KiB limit. Source metadata, tags, bodies, graph edges,
-and histories are bounded independently. `restricted` content is never available to MCP hosts.
+The local v3 capsule also retains the complete v6 plan/hash, selected Statement and evidence
+surfaces, budget, audit head, sealed identity/digest, and `write_performed=false`. Its local audit
+summary contains counts and hashed identities only; candidate scores, rejected-candidate text,
+query plaintext beyond the task/plan contract, hidden reasoning, SQL, cache/parser diagnostics,
+paths, credentials, and secrets are excluded. The nested Provider v2 projection has a hard 64 KiB
+content limit and an opaque `receipt_id`; Source metadata, tags, bodies, graph edges, and histories
+are bounded independently. `restricted` content is never available to MCP hosts. Explicit v5
+compatibility preserves local Capsule v2 for Python/CLI and MCP output/v3 with Capsule v2/Query
+Plan v5 semantics; it is never the default v6 Context path.
 Before either v1 or v3 `knowledge_support` response leaves the process, a recursive projection
 gate fails closed on local absolute paths or recognized secret material; it never reports the
 matched value in its error. Unsafe invisible/bidirectional Unicode is rejected at the same gate,

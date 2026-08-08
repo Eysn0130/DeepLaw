@@ -183,6 +183,8 @@ def run_diagnostic(
         "context",
         "--vault",
         str(vault_root),
+        "--query-plan-version",
+        "5",
         "--task",
         cli_query,
         "--max-items",

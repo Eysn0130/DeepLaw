@@ -377,7 +377,7 @@ After autonomous migration, the recommended `knowledge_support` read path is:
 | `search` / `recall` | return bounded source-derived and autonomous partitions without merging Authority |
 | `get` | read one exact active non-restricted `knowledge_id` or legacy `asset_id` |
 | `query` | run default Query Plan v6 statement selection, duty coverage and targeted evidence completion |
-| `context` | compile the bounded compatibility Knowledge Capsule through the shared domain service |
+| `context` | compile default Query Plan v6 through the shared domain assembler into local Capsule v3 plus bounded Provider v2 |
 | `wiki` | read exact pages, indexed links, local graphs, kinds and recent changes |
 | `source` | read exact admitted Source Revisions and fragments |
 | `verify` | verify object/source binding, current usability, both event chains, and state reconciliation |
@@ -387,6 +387,17 @@ After autonomous migration, the recommended `knowledge_support` read path is:
 | `explain` | return hashed query plans, admission/selection receipts, gaps, and budgets |
 | `identity_lookup` | return bounded Concept/Entity identity candidates without silently merging ambiguity |
 | `gaps` | return scope- and sensitivity-bounded semantic knowledge gaps without leaking other partitions |
+
+Autonomous `context` defaults to Query Plan v6 for Python, both Knowledge CLI Context commands,
+and MCP `operation=context`. `query_target`, `applicable_duties`, `projection`, `graph_hops`,
+`retrieval_mode`, and integrity-selected canonical lexical fallback are explicit v6 plan controls;
+they are not silently discarded. The local Capsule v3 is capped at 262,144 bytes, while Provider
+v2 content is capped at 65,536 bytes and receives only bounded Statement/evidence data plus the
+opaque `receipt_id`. The local Query Trace is bounded, redacted, non-persistent, and retained only
+after Provider and outer response validation. Explicit `query_plan_version=5` is compatibility-only:
+Python/CLI retain local Capsule v2, and MCP retains output/v3 with Capsule v2/Query Plan v5
+semantics. The legacy `deeplaw recall` command remains the `retrieval_fabric` path and is not a v6
+Context alias. Ordinary query/context calls are read-only and never append the Canonical Ledger.
 
 `context` requires `confirm_no_case_data=true` because task and goal text become
 provider-visible Capsule data. A host may send that confirmation only after keeping
