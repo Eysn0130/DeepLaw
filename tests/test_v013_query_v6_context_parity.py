@@ -8,9 +8,10 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+import pytest
 from jsonschema import Draft202012Validator
 
-from deeplaw.api import KnowledgeOS
+from deeplaw.api import KnowledgeOS, KnowledgeOSValidationError
 from deeplaw.context_compiler import verify_capsule
 from deeplaw.knowledge_autonomy import (
     SINK_OPERATIONS,
@@ -19,6 +20,7 @@ from deeplaw.knowledge_autonomy import (
 )
 from deeplaw.knowledge_mcp_server import handle_knowledge_support, knowledge_tool_definition
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.task_context import build_task_context_binding
 from deeplaw.util import canonical_json, sha256_bytes, stable_id
 
 _QUERY_RECEIPT = re.compile(r"^queryreceipt_[0-9a-f]{24}$")
@@ -257,6 +259,91 @@ def test_mcp_query_and_context_default_to_v6(
     )
     assert context["schema_version"] == "deeplaw.knowledge-support-output/v6"
     assert context["result"]["schema_version"] == "deeplaw.provider-knowledge-capsule/v2"
+
+
+def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    binding = build_task_context_binding(
+        sha256_bytes(b"v013-context-parity-project"),
+        sha256_bytes(b"v013-context-parity-task-line"),
+    )
+    encoded_binding = canonical_json(binding)
+
+    with KnowledgeOS.open(root) as knowledge_os:
+        python_query = knowledge_os.retrieval.query(_TASK, task_binding=binding)
+        python_context = knowledge_os.context.compile(
+            task=_TASK,
+            task_binding=binding,
+            confirm_no_case_data=True,
+        )
+        with pytest.raises(KnowledgeOSValidationError) as error:
+            knowledge_os.retrieval.query(
+                _TASK,
+                query_plan_version="5",
+                task_binding=binding,
+            )
+        assert error.value.code == "invalid_request"
+    assert python_query["query_plan"]["task_binding"] == binding
+    assert python_context["task_binding"] == binding
+    assert python_context["query_plan"]["task_binding"] == binding
+    assert binding["binding_sha256"] not in canonical_json(
+        python_context["provider_capsule"]
+    )
+
+    cli_query = _run_cli(
+        root,
+        "query",
+        "--vault",
+        str(root),
+        "--query",
+        _TASK,
+        "--task-binding",
+        encoded_binding,
+    )
+    cli_context = _run_cli(
+        root,
+        "context",
+        "--vault",
+        str(root),
+        "--task",
+        _TASK,
+        "--task-binding",
+        encoded_binding,
+        "--confirm-no-case-data",
+    )
+    assert cli_query["query_plan"]["task_binding"] == binding
+    assert cli_context["task_binding"] == binding
+    assert cli_context["query_plan"]["task_binding"] == binding
+    assert binding["binding_sha256"] not in canonical_json(
+        cli_context["provider_capsule"]
+    )
+
+    for operation, fields in (
+        ("query", {"query": _TASK}),
+        ("context", {"task": _TASK, "confirm_no_case_data": True}),
+    ):
+        response = handle_knowledge_support(
+            operation=operation,
+            task_binding=binding,
+            vault_path=root,
+            **fields,
+        )
+        assert response["schema_version"] == "deeplaw.knowledge-support-output/v6"
+        assert response["result"]["schema_version"] == (
+            "deeplaw.provider-knowledge-capsule/v2"
+        )
+        assert binding["binding_sha256"] not in canonical_json(response["result"])
+    with pytest.raises(ValueError, match="query_plan_version=6"):
+        handle_knowledge_support(
+            operation="context",
+            task=_TASK,
+            query_plan_version="5",
+            task_binding=binding,
+            confirm_no_case_data=True,
+            vault_path=root,
+        )
 
 
 def test_mcp_context_v5_is_available_only_when_explicitly_requested(

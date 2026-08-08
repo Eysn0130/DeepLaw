@@ -461,6 +461,13 @@ def _hydrated_v2_input_schema() -> dict[str, Any]:
     schema["$defs"]["skill_manifest"] = deepcopy(
         _contract("knowledge-skill.v1.schema.json")
     )
+    task_binding = deepcopy(_contract("task-context-binding.v1.schema.json"))
+    task_binding.pop("$schema", None)
+    task_binding.pop("$id", None)
+    schema["$defs"]["task_binding"] = task_binding
+    schema["properties"]["run_metadata"]["properties"]["task_binding"] = {
+        "$ref": "#/$defs/task_binding"
+    }
     return schema
 
 
@@ -654,6 +661,8 @@ def _validate(name: str, value: dict[str, Any]) -> None:
         if name == "knowledge-sink.input.v4.schema.json"
         else _v3_input_schema()
         if name == "knowledge-sink.input.v3.schema.json"
+        else _hydrated_v2_input_schema()
+        if name == "knowledge-sink.input.v2.schema.json"
         else _contract(name)
     )
     error = next(

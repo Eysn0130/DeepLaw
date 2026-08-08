@@ -20,6 +20,7 @@ from ..knowledge_autonomy import (
 from ..knowledge_intelligence import normalize_identity_text
 from ..knowledge_models import utc_now
 from ..knowledge_store import KnowledgeVault
+from ..task_context import normalize_task_context_binding
 from ..util import (
     canonical_json,
     query_search_terms,
@@ -125,6 +126,46 @@ def _task_checkpoint_admitted(revision: dict[str, Any], body: str) -> bool:
             return False
         labels.add(match.group(1))
     return labels == _CHECKPOINT_REQUIRED_LABELS
+
+
+def _run_task_binding(
+    store: AutonomousKnowledgeStore,
+    run_id: Any,
+) -> dict[str, Any] | None:
+    """Read and normalize the exact binding recorded for one task run.
+
+    The canonical Run Record helper is owned by the autonomous store.  Query
+    v6 treats an absent helper/result as an unbound legacy run rather than
+    falling back to a broader or newest-memory admission.
+    """
+
+    if not isinstance(run_id, str) or not run_id:
+        return None
+    reader = getattr(store, "run_task_context_binding", None)
+    if not callable(reader):
+        return None
+    try:
+        value = reader(run_id)
+        return normalize_task_context_binding(value, allow_none=True)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _task_binding_gap_message(code: str) -> str:
+    return {
+        "task_binding_required": (
+            "A working Checkpoint was withheld because the request did not provide "
+            "an exact task binding."
+        ),
+        "task_binding_unbound": (
+            "A working Checkpoint was withheld because its Run Record has no exact "
+            "task binding."
+        ),
+        "task_binding_mismatch": (
+            "A working Checkpoint was withheld because its Run Record task binding "
+            "does not exactly match the request."
+        ),
+    }[code]
 
 
 def _artifact_value(store: AutonomousKnowledgeStore, digest: str, role: str) -> dict[str, Any]:
@@ -476,6 +517,7 @@ def _load_statement_candidates(
     store: AutonomousKnowledgeStore,
     *,
     target: dict[str, Any],
+    task_binding: dict[str, Any] | None,
     revision_ids: tuple[str, ...],
     graph_revision_ids: tuple[str, ...],
     scope: str,
@@ -699,6 +741,7 @@ def _load_statement_candidates(
         _load_working_memory_candidates(
             store,
             target=target,
+            task_binding=task_binding,
             revision_ids=revision_ids,
             scope=scope,
             max_sensitivity=max_sensitivity,
@@ -723,6 +766,7 @@ def _load_working_memory_candidates(
     store: AutonomousKnowledgeStore,
     *,
     target: dict[str, Any],
+    task_binding: dict[str, Any] | None,
     revision_ids: tuple[str, ...],
     scope: str,
     max_sensitivity: str,
@@ -791,6 +835,22 @@ def _load_working_memory_candidates(
                 or revision.get("source_refs")
             ):
                 rejections.append({**candidate_ref, "reason": "working_memory_not_run_bound"})
+                continue
+            generation = revision.get("generation")
+            run_id = (
+                generation.get("run_id")
+                if isinstance(generation, dict)
+                else metadata.get("run_id")
+            )
+            if task_binding is None:
+                rejections.append({**candidate_ref, "reason": "task_binding_required"})
+                continue
+            stored_binding = _run_task_binding(store, run_id)
+            if stored_binding is None:
+                rejections.append({**candidate_ref, "reason": "task_binding_unbound"})
+                continue
+            if canonical_json(stored_binding) != canonical_json(task_binding):
+                rejections.append({**candidate_ref, "reason": "task_binding_mismatch"})
                 continue
             target_values = {
                 "semantic_key": revision.get("semantic_key"),
@@ -1328,9 +1388,14 @@ def execute_v6(
     query_target: str | dict[str, Any] | None,
     applicable_duties: tuple[str, ...] | list[str] | None,
     projection: str,
+    task_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if projection not in V6_PROJECTIONS:
         raise ValueError("query projection is invalid")
+    normalized_task_binding = normalize_task_context_binding(
+        task_binding,
+        allow_none=True,
+    )
     target = _target(query, query_target)
     applicable = _applicable_duties(
         query=query,
@@ -1367,6 +1432,7 @@ def execute_v6(
             _load_statement_candidates(
                 knowledge_store,
                 target=target,
+                task_binding=normalized_task_binding,
                 revision_ids=revision_ids,
                 graph_revision_ids=graph_revision_ids,
                 scope=scope,
@@ -1711,6 +1777,36 @@ def execute_v6(
             }
         )
     residual_gaps: list[dict[str, Any]] = []
+    binding_gap_codes = {
+        str(item.get("reason"))
+        for item in rejections
+        if item.get("reason")
+        in {
+            "task_binding_required",
+            "task_binding_unbound",
+            "task_binding_mismatch",
+        }
+    }
+    for code in (
+        "task_binding_required",
+        "task_binding_unbound",
+    ):
+        if code not in binding_gap_codes:
+            continue
+        residual_gaps.append(
+            {
+                "gap_id": stable_id(
+                    "querygap",
+                    target["query_sha256"],
+                    code,
+                    knowledge_store.audit_head,
+                ),
+                "code": code,
+                "duty": "current_state",
+                "message": _task_binding_gap_message(code),
+            }
+        )
+        break
     if scan_truncated:
         residual_gaps.append(
             {
@@ -1914,6 +2010,7 @@ def execute_v6(
             "provider_characters": _MAX_PROJECTION_BYTES,
         },
         "projection": projection,
+        "task_binding": normalized_task_binding,
         "input_audit_head": knowledge_store.audit_head,
         "input_legacy_audit_head": knowledge_store.legacy_audit_head,
         "compiled_candidate_count": scanned_count,

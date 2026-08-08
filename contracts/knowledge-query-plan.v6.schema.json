@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "intent", "purpose", "policy_id", "scope", "max_sensitivity",
+    "schema_version", "task_binding", "intent", "purpose", "policy_id", "scope", "max_sensitivity",
     "as_of", "query_target", "applicable_duties", "retrieval_controls", "discovery",
     "budget", "projection",
     "input_audit_head", "input_legacy_audit_head", "compiled_candidate_count",
@@ -16,6 +16,12 @@
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.knowledge-query-plan/v6"},
+    "task_binding": {
+      "oneOf": [
+        {"$ref": "task-context-binding.v1.schema.json"},
+        {"type": "null"}
+      ]
+    },
     "intent": {"const": "purpose_aware_knowledge_retrieval"},
     "purpose": {"enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]},
     "policy_id": {"enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]},

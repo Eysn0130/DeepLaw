@@ -17,6 +17,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
+from referencing import Registry, Resource
 
 from .knowledge_intelligence import (
     LOCAL_DENSE_MODEL,
@@ -40,6 +41,7 @@ from .knowledge_store import (
 from .knowledge_store import (
     _database_path as _knowledge_database_path,
 )
+from .task_context import normalize_task_context_binding
 from .util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
@@ -437,10 +439,25 @@ def _contract_path(name: str) -> Path:
 
 
 @cache
+def _contract_registry(directory: Path) -> Registry:
+    resources = []
+    for path in directory.glob("*.schema.json"):
+        value = strict_json_loads(path.read_bytes())
+        if isinstance(value, dict) and isinstance(value.get("$id"), str):
+            resources.append((value["$id"], Resource.from_contents(value)))
+    return Registry().with_resources(resources)
+
+
+@cache
 def _contract_validator(name: str) -> Draft202012Validator:
-    schema = strict_json_loads(_contract_path(name).read_bytes())
+    path = _contract_path(name)
+    schema = strict_json_loads(path.read_bytes())
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    return Draft202012Validator(
+        schema,
+        registry=_contract_registry(path.parent),
+        format_checker=FormatChecker(),
+    )
 
 
 def _validate_contract(name: str, value: dict[str, Any]) -> None:
@@ -3351,9 +3368,21 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if ended_at < started_at:
             raise ValueError("run ended_at precedes started_at")
         selected_metadata = metadata or {}
-        allowed_metadata = {"task_kind", "tool_ids", "artifact_ids", "notes_sha256"}
+        allowed_metadata = {
+            "task_kind",
+            "tool_ids",
+            "artifact_ids",
+            "notes_sha256",
+            "task_binding",
+        }
         if not isinstance(selected_metadata, dict) or set(selected_metadata) - allowed_metadata:
             raise ValueError("run metadata does not match its closed contract")
+        selected_metadata = dict(selected_metadata)
+        if "task_binding" in selected_metadata:
+            selected_metadata["task_binding"] = normalize_task_context_binding(
+                selected_metadata["task_binding"],
+                allow_none=False,
+            )
         metadata_bytes = canonical_json(selected_metadata).encode("utf-8")
         if len(metadata_bytes) > _MAX_RUN_METADATA_BYTES or has_instruction_risk(
             metadata_bytes.decode("utf-8")
@@ -3426,6 +3455,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "recorded_at": recorded_at,
         }
         receipt_sha256 = sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
+        task_binding_sha256 = (
+            selected_metadata["task_binding"].get("binding_sha256")
+            if isinstance(selected_metadata.get("task_binding"), dict)
+            else None
+        )
         response = {
             **receipt_body,
             "receipt_sha256": receipt_sha256,
@@ -3498,6 +3532,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "scope": scope,
                     "sensitivity": sensitivity,
                     "status": status,
+                    "task_binding_sha256": task_binding_sha256,
                     "receipt_sha256": receipt_sha256,
                 },
                 recorded_at=recorded_at,
@@ -3535,6 +3570,70 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "legal_authority": False,
         }
 
+    def run_task_context_binding(self, run_id: str | None) -> dict[str, Any] | None:
+        """Return a verified task binding for one successful Run Record."""
+
+        if run_id is None or not _RUN_ID.fullmatch(run_id):
+            return None
+        row = self.connection.execute(
+            "SELECT * FROM knowledge_run_records_v4 WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row is None or row["status"] != "succeeded":
+            return None
+        try:
+            metadata = strict_json_loads(row["metadata_json"])
+            if not isinstance(metadata, dict) or "task_binding" not in metadata:
+                return None
+            raw_binding = metadata["task_binding"]
+            binding = normalize_task_context_binding(raw_binding, allow_none=True)
+            if binding is None or canonical_json(raw_binding) != canonical_json(binding):
+                return None
+            if row["receipt_sha256"] != sha256_bytes(
+                canonical_json(
+                    {
+                        "schema_version": "deeplaw.knowledge-run-record/v1",
+                        "run_id": row["run_id"],
+                        "writer_id": row["writer_id"],
+                        "host_id": row["host_id"],
+                        "model_id": row["model_id"],
+                        "task_sha256": row["task_sha256"],
+                        "input_sha256": row["input_sha256"],
+                        "output_sha256": row["output_sha256"],
+                        "tool_results_sha256": row["tool_results_sha256"],
+                        "scope": row["scope"],
+                        "sensitivity": row["sensitivity"],
+                        "status": row["status"],
+                        "started_at": row["started_at"],
+                        "ended_at": row["ended_at"],
+                        "metadata": metadata,
+                        "recorded_at": row["recorded_at"],
+                    }
+                ).encode("utf-8")
+            ):
+                return None
+            event = self.connection.execute(
+                """
+                SELECT payload_json
+                FROM autonomous_events_v3
+                WHERE event_type = 'knowledge_run_recorded' AND object_id = ?
+                ORDER BY sequence DESC
+                LIMIT 1
+                """,
+                (run_id,),
+            ).fetchone()
+            if event is None:
+                return None
+            event_payload = strict_json_loads(event["payload_json"])
+            if (
+                not isinstance(event_payload, dict)
+                or event_payload.get("task_binding_sha256") != binding["binding_sha256"]
+            ):
+                return None
+            return binding
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+
     def _run_binding_admitted(
         self,
         run_id: str | None,
@@ -3546,13 +3645,18 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if run_id is None or not _RUN_ID.fullmatch(run_id):
             return False
         row = self.connection.execute(
-            "SELECT writer_id, scope, sensitivity FROM knowledge_run_records_v4 WHERE run_id = ?",
+            """
+            SELECT writer_id, scope, sensitivity, status
+            FROM knowledge_run_records_v4
+            WHERE run_id = ?
+            """,
             (run_id,),
         ).fetchone()
         return bool(
             row is not None
             and row["writer_id"] == writer_id
             and row["scope"] == scope
+            and row["status"] == "succeeded"
             and SENSITIVITY_ORDER.index(row["sensitivity"]) <= SENSITIVITY_ORDER.index(sensitivity)
         )
 
@@ -4175,6 +4279,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             sensitivity=sensitivity,
             writer_id=grant["writer_id"],
         )
+        run_task_binding = (
+            self.run_task_context_binding(run_id) if run_binding_valid else None
+        )
+        if (
+            kind == "memory"
+            and memory_type == "working"
+            and (run_id is None or not run_binding_valid or run_task_binding is None)
+        ):
+            raise ValueError("working memory requires a successful task-bound Run Record")
         if kind == "claim" and not selected_refs and run_id is None:
             raise ValueError("Claim knowledge requires a Source or immutable Run Record binding")
         source_free = not selected_refs and not run_binding_valid
@@ -9108,6 +9221,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         query_target: str | dict[str, Any] | None = None,
         applicable_duties: tuple[str, ...] | list[str] | None = None,
         projection: str = "standard",
+        task_binding: dict[str, Any] | None = None,
         _runtime_snapshot: Any | None = None,
     ) -> dict[str, Any]:
         """Compile a v6 local capsule; v5 is explicit compatibility only."""
@@ -9119,6 +9233,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 query_target is not None
                 or applicable_duties is not None
                 or projection != "standard"
+                or task_binding is not None
             ):
                 raise ValueError("v6 context controls require query_plan_version=6")
             return self._build_capsule_v5(
@@ -9176,6 +9291,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             query_target=query_target,
             applicable_duties=applicable_duties,
             projection=projection,
+            task_binding=task_binding,
             confirm_no_case_data=confirm_no_case_data,
             runtime_snapshot=_runtime_snapshot,
         )
@@ -11944,10 +12060,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 metadata = strict_json_loads(row["metadata_json"])
                 if (
                     not isinstance(metadata, dict)
-                    or set(metadata) - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256"}
+                    or set(metadata)
+                    - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256", "task_binding"}
                     or len(canonical_json(metadata).encode("utf-8")) > _MAX_RUN_METADATA_BYTES
                 ):
                     raise ValueError("Run Record metadata is invalid")
+                task_binding = None
+                if "task_binding" in metadata:
+                    raw_task_binding = metadata["task_binding"]
+                    task_binding = normalize_task_context_binding(
+                        raw_task_binding,
+                        allow_none=False,
+                    )
+                    if canonical_json(raw_task_binding) != canonical_json(task_binding):
+                        raise ValueError("Run Record task binding is not canonical")
+                task_binding_sha256 = (
+                    task_binding.get("binding_sha256") if task_binding is not None else None
+                )
                 for list_field in ("tool_ids", "artifact_ids"):
                     values = metadata.get(list_field, [])
                     if (
@@ -12015,6 +12144,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and committed.get("scope") == row["scope"]
                     and committed.get("sensitivity") == row["sensitivity"]
                     and committed.get("status") == row["status"]
+                    and committed.get("task_binding_sha256") == task_binding_sha256
                     and committed.get("receipt_sha256") == row["receipt_sha256"]
                     and event_recorded_at.get(("knowledge_run_recorded", row["run_id"]))
                     == row["recorded_at"]

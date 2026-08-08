@@ -371,6 +371,7 @@ class _ContextAPI:
         query_target: str | dict[str, Any] | None = None,
         applicable_duties: tuple[str, ...] | list[str] | None = None,
         projection: str = "standard",
+        task_binding: dict[str, Any] | None = None,
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
         runtime = _invoke(self._runtime_factory)
@@ -400,6 +401,7 @@ class _ContextAPI:
             projection=projection,
             force_canonical_lexical=force_canonical_lexical,
             confirm_no_case_data=confirm_no_case_data,
+            task_binding=task_binding,
             _runtime_snapshot=snapshot,
         )
 

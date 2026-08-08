@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/task-context-binding.v1.schema.json",
+  "title": "DeepLaw Task Context Binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_sha256",
+    "task_lineage_sha256",
+    "parent_task_lineage_sha256",
+    "repository_sha256",
+    "worktree_sha256",
+    "base_revision",
+    "dirty_state_sha256",
+    "binding_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.task-context-binding/v1"},
+    "project_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_lineage_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parent_task_lineage_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "repository_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "worktree_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "base_revision": {
+      "type": ["string", "null"],
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "dirty_state_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "repository_sha256": {"type": "null"},
+          "worktree_sha256": {"type": "null"},
+          "base_revision": {"type": "null"},
+          "dirty_state_sha256": {"type": "null"}
+        },
+        "required": [
+          "repository_sha256",
+          "worktree_sha256",
+          "base_revision",
+          "dirty_state_sha256"
+        ]
+      },
+      "then": {},
+      "else": {
+        "required": [
+          "repository_sha256",
+          "worktree_sha256",
+          "base_revision",
+          "dirty_state_sha256"
+        ],
+        "properties": {
+          "repository_sha256": {"type": "string"},
+          "worktree_sha256": {"type": "string"},
+          "base_revision": {"type": "string"},
+          "dirty_state_sha256": {"type": "string"}
+        }
+      }
+    }
+  ]
+}

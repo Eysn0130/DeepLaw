@@ -280,22 +280,9 @@ def _verify_autonomous_capsule(
 
 @cache
 def _autonomous_v3_capsule_contract_validator() -> Draft202012Validator:
-    packaged = (
-        Path(__file__).resolve().parent
-        / "contracts"
-        / "knowledge-capsule.v3.schema.json"
-    )
-    repository = (
-        Path(__file__).resolve().parents[2]
-        / "contracts"
-        / "knowledge-capsule.v3.schema.json"
-    )
-    contract = packaged if packaged.is_file() else repository
-    if not contract.is_file():
-        raise RuntimeError("DeepLaw autonomous Knowledge Capsule v3 contract is missing")
-    schema = strict_json_loads(contract.read_bytes())
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    from .knowledge_autonomy import _contract_validator
+
+    return _contract_validator("knowledge-capsule.v3.schema.json")
 
 
 def _verify_autonomous_capsule_v3(

@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "vault_id", "task", "goal", "as_of", "purpose", "policy_id",
+    "schema_version", "vault_id", "task", "goal", "task_binding", "as_of", "purpose", "policy_id",
     "query_plan", "query_plan_sha256", "statements", "evidence", "contradictions",
     "gaps", "receipt_id", "budget", "audit", "audit_head", "created_at",
     "write_performed", "provider_capsule", "capsule_id", "capsule_digest"
@@ -15,6 +15,12 @@
     "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
     "task": {"type": "string", "minLength": 1, "maxLength": 5000},
     "goal": {"type": ["string", "null"], "maxLength": 2000},
+    "task_binding": {
+      "oneOf": [
+        {"$ref": "task-context-binding.v1.schema.json"},
+        {"type": "null"}
+      ]
+    },
     "as_of": {"type": ["string", "null"], "format": "date-time"},
     "purpose": {
       "enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]

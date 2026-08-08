@@ -20,6 +20,7 @@ from typing import Any
 from deeplaw.api import KnowledgeOS
 from deeplaw.knowledge_sink_mcp_server import handle_knowledge_sink
 from deeplaw.knowledge_store import initialize_knowledge_vault
+from deeplaw.task_context import build_task_context_binding
 from deeplaw.util import canonical_json, sha256_bytes
 
 knowledge_autonomy = importlib.import_module("deeplaw.knowledge_autonomy")
@@ -91,6 +92,32 @@ def _task(value: dict[str, Any]) -> tuple[str, str]:
     case_id = _safe_id(value.get("case_id", "continuity-development-case"), field="case_id")
     task = _safe_text(value.get("task"), field="thread task", maximum=MAX_TASK_CHARS)
     return case_id, task
+
+
+def _development_task_binding(*, case_id: str) -> dict[str, Any]:
+    """Derive one opaque, deterministic binding for this bounded dev case."""
+
+    project_sha256 = sha256_bytes(
+        canonical_json(
+            {
+                "purpose": "continuity-development",
+                "case_id": case_id,
+            }
+        ).encode("utf-8")
+    )
+    task_lineage_sha256 = sha256_bytes(
+        canonical_json(
+            {
+                "project_sha256": project_sha256,
+                "purpose": "continuity-development-task-line",
+                "case_id": case_id,
+            }
+        ).encode("utf-8")
+    )
+    return build_task_context_binding(
+        project_sha256=project_sha256,
+        task_lineage_sha256=task_lineage_sha256,
+    )
 
 
 def _tags(value: Any, *, field: str) -> list[str]:
@@ -316,6 +343,7 @@ def build_host_plus_deeplaw(
     if case_a != case_b:
         raise ValueError("Thread A and Thread B case_id values do not match")
     checkpoint = _checkpoint(thread_a)
+    task_binding = _development_task_binding(case_id=case_b)
     result = _base_result(
         mode="host-plus-deeplaw",
         case_id=case_b,
@@ -344,6 +372,7 @@ def build_host_plus_deeplaw(
                 "status": "succeeded",
                 "scope": "project",
                 "sensitivity": "private",
+                "run_metadata": {"task_binding": task_binding},
             },
             grant_id=grant_id,
             vault_path=vault_path,
@@ -422,6 +451,7 @@ def build_host_plus_deeplaw(
                 context = knowledge_os.context.compile(
                     task=task,
                     purpose="answer",
+                    task_binding=task_binding,
                     confirm_no_case_data=True,
                 )
         except (KeyError, RuntimeError, ValueError) as error:

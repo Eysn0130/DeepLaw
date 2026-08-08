@@ -41,6 +41,7 @@ from .read_services import SourceReadService, WikiReadService
 from .retrieval import PurposeAwareRetrievalService
 from .retrieval.purpose import _policy_designator_conflicts, _policy_designators
 from .retrieval_fabric import retrieve
+from .task_context import normalize_task_context_binding
 from .util import (
     QUERY_EXPANSION_PROFILE,
     assert_provider_output_safe,
@@ -158,6 +159,7 @@ READ_CACHE_REQUIRED_FIELDS = frozenset(
         "policy",
         "query_plan_version",
         "query_target",
+        "task_binding",
         "applicable_duties",
         "capsule_projection",
         # Source/wiki selectors and pagination are operation-specific but still
@@ -199,6 +201,7 @@ _READ_CACHE_DEFAULTS: dict[str, Any] = {
     "policy": None,
     "query_plan_version": "6",
     "query_target": None,
+    "task_binding": None,
     "applicable_duties": None,
     "capsule_projection": "standard",
     "source_action": None,
@@ -843,6 +846,18 @@ def _v6_input_schema() -> dict[str, Any]:
     legacy.pop("$id", None)
     schema["$defs"] = legacy.pop("$defs")
     schema["oneOf"][0] = legacy
+    # MCP tool schemas must be self-contained; inline the canonical binding
+    # contract while semantic hash validation remains in task_context.
+    task_binding_schema = deepcopy(_load_contract("task-context-binding.v1.schema.json"))
+    task_binding_schema.pop("$schema", None)
+    task_binding_schema.pop("$id", None)
+    for branch in schema["oneOf"]:
+        properties = branch.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        operation = properties.get("operation", {}).get("const")
+        if operation in {"query", "context"}:
+            properties["task_binding"] = deepcopy(task_binding_schema)
     Draft202012Validator.check_schema(schema)
     return schema
 
@@ -1968,6 +1983,7 @@ def _handle_purpose_query(
     kinds: list[str] | None,
     query_plan_version: str,
     query_target: str | dict[str, Any] | None,
+    task_binding: dict[str, Any] | None,
     applicable_duties: list[str] | None,
     capsule_projection: str,
     vault_path: Path,
@@ -1990,6 +2006,7 @@ def _handle_purpose_query(
         kinds=tuple(kinds or ()),
         query_plan_version=query_plan_version,
         query_target=query_target,
+        task_binding=task_binding,
         applicable_duties=applicable_duties,
         projection=capsule_projection,
         _runtime_snapshot=runtime_snapshot,
@@ -2371,6 +2388,7 @@ def _handle_autonomous_knowledge_support(
     compiler_profile_version: str | None,
     query_plan_version: str,
     query_target: str | dict[str, Any] | None,
+    task_binding: dict[str, Any] | None,
     applicable_duties: list[str] | None,
     capsule_projection: str,
     receipt_id: str | None,
@@ -2392,6 +2410,11 @@ def _handle_autonomous_knowledge_support(
     runtime_snapshot: PersistentReadSnapshot | None = None,
     runtime: _KnowledgeRuntime | None = None,
 ) -> dict[str, Any]:
+    task_binding = normalize_task_context_binding(task_binding, allow_none=True)
+    if operation not in {"query", "context"} and task_binding is not None:
+        raise ValueError("task_binding is only supported by v6 query/context")
+    if query_plan_version != "6" and task_binding is not None:
+        raise ValueError("task_binding requires query_plan_version=6")
     if plane not in {"all", "source_derived", "autonomous"}:
         raise ValueError("knowledge plane is invalid")
     if (
@@ -2498,6 +2521,7 @@ def _handle_autonomous_knowledge_support(
             kinds=kinds,
             query_plan_version=query_plan_version,
             query_target=query_target,
+            task_binding=task_binding,
             applicable_duties=applicable_duties,
             capsule_projection=capsule_projection,
             vault_path=vault_path,
@@ -2912,6 +2936,7 @@ def _handle_autonomous_knowledge_support(
                     kinds=autonomous_kinds,
                     force_canonical_lexical=not autonomous_integrity["derived_ready"],
                     query_target=query_target,
+                    task_binding=task_binding,
                     applicable_duties=applicable_duties,
                     projection=capsule_projection,
                     confirm_no_case_data=True,
@@ -3104,6 +3129,7 @@ def handle_knowledge_support(
     compiler_profile_version: str | None = None,
     query_plan_version: str = "6",
     query_target: str | dict[str, Any] | None = None,
+    task_binding: dict[str, Any] | None = None,
     applicable_duties: list[str] | None = None,
     capsule_projection: str = "standard",
     receipt_id: str | None = None,
@@ -3125,6 +3151,7 @@ def handle_knowledge_support(
     _runtime_snapshot: PersistentReadSnapshot | None = None,
     _runtime: _KnowledgeRuntime | None = None,
 ) -> dict[str, Any]:
+    task_binding = normalize_task_context_binding(task_binding, allow_none=True)
     selected_path = (
         Path(vault_path).expanduser().absolute()
         if vault_path is not None
@@ -3160,6 +3187,7 @@ def handle_knowledge_support(
             compiler_profile_version=compiler_profile_version,
             query_plan_version=query_plan_version,
             query_target=query_target,
+            task_binding=task_binding,
             applicable_duties=applicable_duties,
             capsule_projection=capsule_projection,
             receipt_id=receipt_id,
@@ -3181,6 +3209,8 @@ def handle_knowledge_support(
             runtime_snapshot=_runtime_snapshot,
             runtime=_runtime,
         )
+    if task_binding is not None:
+        raise ValueError("task_binding requires an autonomous v6 knowledge plane")
     with _open_agent_vault(selected_path) as vault:
         if operation != "inspect" and not vault.verify_integrity()["valid"]:
             raise RuntimeError("knowledge vault integrity is invalid; Agent reads stopped")
@@ -3318,6 +3348,12 @@ def create_knowledge_mcp_server(
                     KnowledgeOperation,
                     arguments.get("operation", "search"),
                 )
+                if "task_binding" in arguments:
+                    arguments = dict(arguments)
+                    arguments["task_binding"] = normalize_task_context_binding(
+                        arguments["task_binding"],
+                        allow_none=True,
+                    )
                 try:
                     observed_snapshot = (
                         runtime.persistent.get_snapshot(operation=operation)
@@ -3433,6 +3469,10 @@ def create_knowledge_mcp_server(
                     query_target=cast(
                         str | dict[str, Any] | None,
                         arguments.get("query_target"),
+                    ),
+                    task_binding=cast(
+                        dict[str, Any] | None,
+                        arguments.get("task_binding"),
                     ),
                     applicable_duties=cast(
                         list[str] | None,

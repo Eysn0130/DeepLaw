@@ -12,6 +12,7 @@ from copy import deepcopy
 from typing import Any
 
 from ..knowledge_models import utc_now
+from ..task_context import normalize_task_context_binding
 from ..util import canonical_json, sha256_bytes, stable_id
 
 LOCAL_CAPSULE_SCHEMA = "deeplaw.knowledge-capsule/v3"
@@ -41,6 +42,13 @@ def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(receipt_id, str):
         raise RuntimeError("Query Plan v6 receipt identity is invalid")
     provider_capsule = deepcopy(capsule)
+    # Task-line bindings remain owner-local admission input.  The provider
+    # surface carries only the bounded Gap/receipt result and never the
+    # binding's opaque identity fields.
+    provider_capsule.pop("task_binding", None)
+    provider_plan = provider_capsule.get("query_plan")
+    if isinstance(provider_plan, dict):
+        provider_plan.pop("task_binding", None)
     if provider_capsule.get("projection") == "audit":
         # Candidate scores and planner diagnostics remain local-only.  An audit
         # request is represented by a standard provider projection plus its
@@ -140,6 +148,7 @@ def assemble_v6_context(
     applicable_duties: tuple[str, ...] | list[str] | None,
     projection: str,
     confirm_no_case_data: bool,
+    task_binding: dict[str, Any] | None = None,
     runtime_snapshot: Any | None = None,
 ) -> dict[str, Any]:
     """Return local v3, provider v2, and one local trace for a v6 query."""
@@ -148,6 +157,10 @@ def assemble_v6_context(
         raise ValueError("Knowledge Capsule requires confirmation that no case data is present")
     from .purpose import PurposeAwareRetrievalService
 
+    normalized_task_binding = normalize_task_context_binding(
+        task_binding,
+        allow_none=True,
+    )
     selected_goal = goal
     query = f"{task} {selected_goal or ''}".strip()
     retrieval = PurposeAwareRetrievalService(store.root).query(
@@ -169,6 +182,7 @@ def assemble_v6_context(
         query_target=query_target,
         applicable_duties=applicable_duties,
         projection=projection,
+        task_binding=normalized_task_binding,
         _runtime_snapshot=runtime_snapshot,
     )
     if (
@@ -190,6 +204,7 @@ def assemble_v6_context(
         "as_of": as_of,
         "purpose": purpose,
         "policy_id": retrieval["policy_id"],
+        "task_binding": normalized_task_binding,
         "query_plan": retrieval["query_plan"],
         "query_plan_sha256": retrieval["query_plan_sha256"],
         "statements": retrieval["statements"],

@@ -135,7 +135,8 @@ from .skill_factory import (
     install_skill_bundle,
     verify_skill_bundle,
 )
-from .util import excerpt, strict_json_loads
+from .task_context import normalize_task_context_binding
+from .util import canonical_json, excerpt, strict_json_loads
 
 
 @contextmanager
@@ -826,6 +827,10 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     context.add_argument(
         "--query-plan-version", choices=("5", "6"), default="6"
     )
+    context.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding JSON object (max 8 KiB)",
+    )
     context.add_argument("--query-target")
     context.add_argument(
         "--applicable-duty",
@@ -1376,6 +1381,10 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     autonomy_context.add_argument(
         "--query-plan-version", choices=("5", "6"), default="6"
     )
+    autonomy_context.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding JSON object (max 8 KiB)",
+    )
     autonomy_context.add_argument("--query-target")
     autonomy_context.add_argument(
         "--applicable-duty",
@@ -1693,6 +1702,10 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         "--query-plan-version",
         choices=("4", "5", "6"),
         default="6",
+    )
+    purpose_query.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding JSON object (max 8 KiB)",
     )
     purpose_query.add_argument("--query-target")
     purpose_query.add_argument(
@@ -2089,6 +2102,29 @@ def _read_bounded_json_object(path: Path, *, label: str, max_bytes: int) -> dict
     return value
 
 
+def _parse_task_binding_argument(value: str | None) -> dict[str, Any] | None:
+    """Parse one bounded canonical task-binding JSON argument.
+
+    The CLI accepts only the opaque digest form defined by
+    ``normalize_task_context_binding``.  Paths, branch names, diffs, and raw
+    task content therefore fail before any retrieval seam is opened.
+    """
+
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError("--task-binding must be one canonical JSON object string")
+    encoded = value.encode("utf-8")
+    if len(encoded) > 8 * 1024:
+        raise ValueError("--task-binding exceeds its 8 KiB bound")
+    parsed = strict_json_loads(encoded)
+    if not isinstance(parsed, dict):
+        raise ValueError("--task-binding must contain one JSON object")
+    if canonical_json(parsed) != value:
+        raise ValueError("--task-binding must use canonical JSON")
+    return normalize_task_context_binding(parsed, allow_none=False)
+
+
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "init":
@@ -2347,6 +2383,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             as_of=args.as_of,
             kinds=tuple(args.kind),
             query_plan_version=args.query_plan_version,
+            task_binding=_parse_task_binding_argument(args.task_binding),
             query_target=args.query_target,
             applicable_duties=(
                 tuple(args.applicable_duty) if args.applicable_duty else None
@@ -2601,6 +2638,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             if action == "conflicts":
                 return store.list_conflicts(limit=args.limit)
             if action == "context":
+                task_binding = _parse_task_binding_argument(args.task_binding)
                 return store.build_capsule(
                     task=args.task,
                     goal=args.goal,
@@ -2621,6 +2659,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                         tuple(args.applicable_duty) if args.applicable_duty else None
                     ),
                     projection=args.capsule_projection,
+                    task_binding=task_binding,
                     confirm_no_case_data=args.confirm_no_case_data,
                     force_canonical_lexical=bool(
                         agent_read_integrity and not agent_read_integrity["derived_ready"]
@@ -3619,6 +3658,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 )
             return asset.to_dict()
         if command == "context":
+            task_binding = _parse_task_binding_argument(args.task_binding)
             has_autonomous_core = autonomous_core_installed(args.vault)
             use_autonomous_context = False
             if has_autonomous_core:
@@ -3646,6 +3686,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 raise ValueError(
                     "purpose-aware context requires an autonomous compilation workspace"
                 )
+            if not use_autonomous_context and task_binding is not None:
+                raise ValueError("task_binding requires query_plan_version=6")
             if use_autonomous_context and args.include_restricted:
                 raise ValueError("Knowledge Capsules cannot expose restricted content")
             if use_autonomous_context:
@@ -3667,6 +3709,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                         kind for kind in args.kind if kind in KNOWLEDGE_KINDS
                     ),
                     query_plan_version=args.query_plan_version,
+                    task_binding=task_binding,
                     query_target=args.query_target,
                     applicable_duties=(
                         tuple(args.applicable_duty) if args.applicable_duty else None

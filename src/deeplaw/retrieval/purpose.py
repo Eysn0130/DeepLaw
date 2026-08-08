@@ -21,6 +21,7 @@ from ..knowledge_intelligence import (
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
 from ..retrieval_fabric import retrieve
+from ..task_context import normalize_task_context_binding
 from ..util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
@@ -305,6 +306,7 @@ class PurposeAwareRetrievalService:
         query_target: str | dict[str, Any] | None = None,
         applicable_duties: tuple[str, ...] | list[str] | None = None,
         projection: str = "standard",
+        task_binding: dict[str, Any] | None = None,
         _runtime_snapshot: Any | None = None,
     ) -> dict[str, Any]:
         selected_query = self._bounded_query(query)
@@ -312,6 +314,12 @@ class PurposeAwareRetrievalService:
             raise ValueError("query purpose is invalid")
         if query_plan_version not in {"4", "5", "6"}:
             raise ValueError("query plan version is invalid")
+        normalized_task_binding = normalize_task_context_binding(
+            task_binding,
+            allow_none=True,
+        )
+        if query_plan_version != "6" and normalized_task_binding is not None:
+            raise ValueError("task_binding requires query_plan_version=6")
         if query_plan_version == "6" and projection not in {
             "compact",
             "standard",
@@ -376,6 +384,7 @@ class PurposeAwareRetrievalService:
                         query_target=query_target,
                         applicable_duties=applicable_duties,
                         projection=projection,
+                        task_binding=normalized_task_binding,
                     )
                 result = self._legal_boundary_result(
                     query=selected_query,
@@ -426,6 +435,7 @@ class PurposeAwareRetrievalService:
                     query_target=query_target,
                     applicable_duties=applicable_duties,
                     projection=projection,
+                    task_binding=normalized_task_binding,
                 )
 
             compiled_budget, evidence_budget = self._partition_budget(

@@ -7,14 +7,24 @@ from deeplaw.api import KnowledgeOS
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
 from deeplaw.knowledge_sink_mcp_server import handle_knowledge_sink
 from deeplaw.knowledge_store import initialize_knowledge_vault
-from deeplaw.util import canonical_json
+from deeplaw.task_context import build_task_context_binding
+from deeplaw.util import canonical_json, sha256_bytes
 
 knowledge_autonomy = importlib.import_module("deeplaw.knowledge_autonomy")
 
 
 _RUN_ID = "run-checkpoint-continuity"
+_MISMATCHED_RUN_ID = "run-checkpoint-other-task"
 _SEMANTIC_KEY = "checkpoint:task-4f3a:slot-0"
 _EXPIRES_AT = "2099-01-01T00:00:00Z"
+_TASK_BINDING = build_task_context_binding(
+    sha256_bytes(b"v013-checkpoint-project"),
+    sha256_bytes(b"v013-checkpoint-task-line"),
+)
+_MISMATCHED_TASK_BINDING = build_task_context_binding(
+    sha256_bytes(b"v013-checkpoint-project"),
+    sha256_bytes(b"v013-checkpoint-other-task-line"),
+)
 _OLD_BODY = """GOAL: Preserve the old task state.
 CONFIRMED_DECISION: Use the old cursor.
 CONSTRAINT: Keep the checkpoint bounded.
@@ -36,13 +46,13 @@ VERIFIED_FACT: The unrelated cursor is ninety-nine.
 OPEN_GAP: The unrelated result is absent.
 NEXT_ACTION: Discard the unrelated task.
 ARTIFACT_REF: commit:distractor."""
-_UNBOUND_BODY = """GOAL: Preserve an unbound task.
-CONFIRMED_DECISION: Use an unbound cursor.
-CONSTRAINT: Keep the unbound memory bounded.
-VERIFIED_FACT: The unbound cursor is unavailable.
-OPEN_GAP: Immutable Run binding is absent.
-NEXT_ACTION: Reject the unbound task.
-ARTIFACT_REF: commit:unbound."""
+_MISMATCHED_BODY = """GOAL: Preserve another task line.
+CONFIRMED_DECISION: Use another task-line cursor.
+CONSTRAINT: Keep the mismatched memory bounded.
+VERIFIED_FACT: The other task-line cursor is unavailable.
+OPEN_GAP: It must never enter current context.
+NEXT_ACTION: Reject the mismatched task line.
+ARTIFACT_REF: commit:mismatched."""
 _RAW_LOG_BODY = "tool stdout: full raw tool transcript must not become a Task Checkpoint"
 
 
@@ -69,6 +79,24 @@ def _checkpoint_vault(tmp_path: Path) -> tuple[Path, str, str, str, str, str, st
             "status": "succeeded",
             "scope": "project",
             "sensitivity": "private",
+            "run_metadata": {"task_binding": _TASK_BINDING},
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    handle_knowledge_sink(
+        {
+            "operation": "record_run",
+            "idempotency_key": "checkpoint-mismatched-run-record",
+            "confirm_no_case_data": True,
+            "run_id": _MISMATCHED_RUN_ID,
+            "task": "Resume a deterministic checkpoint for another task line.",
+            "host_id": "pytest-checkpoint-continuity-other-task",
+            "model_id": "deterministic-test-model",
+            "status": "succeeded",
+            "scope": "project",
+            "sensitivity": "private",
+            "run_metadata": {"task_binding": _MISMATCHED_TASK_BINDING},
         },
         grant_id=grant_id,
         vault_path=root,
@@ -139,20 +167,23 @@ def _checkpoint_vault(tmp_path: Path) -> tuple[Path, str, str, str, str, str, st
         grant_id=grant_id,
         vault_path=root,
     )["result"]
-    unbound = handle_knowledge_sink(
+    mismatched = handle_knowledge_sink(
         {
             "operation": "remember",
-            "idempotency_key": "checkpoint-unbound",
+            "idempotency_key": "checkpoint-mismatched",
             "confirm_no_case_data": True,
-            "title": "Unbound state",
-            "body": _UNBOUND_BODY,
+            "title": "Mismatched task-line state",
+            "body": _MISMATCHED_BODY,
             "kind": "memory",
             "memory_type": "working",
-            "semantic_key": "checkpoint:unbound-task:slot-0",
+            "semantic_key": "checkpoint:mismatched-task:slot-0",
             "expires_at": _EXPIRES_AT,
             "scope": "project",
             "sensitivity": "private",
-            "tags": ["checkpoint", "unbound-task"],
+            "run_id": _MISMATCHED_RUN_ID,
+            "model_id": "deterministic-test-model",
+            "tool_id": "pytest-checkpoint-continuity",
+            "tags": ["checkpoint", "mismatched-task"],
         },
         grant_id=grant_id,
         vault_path=root,
@@ -184,7 +215,7 @@ def _checkpoint_vault(tmp_path: Path) -> tuple[Path, str, str, str, str, str, st
         first["revision_id"],
         current["knowledge_id"],
         current["revision_id"],
-        unbound["knowledge_id"],
+        mismatched["knowledge_id"],
         raw_log["knowledge_id"],
     )
 
@@ -196,7 +227,7 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
         old_revision_id,
         knowledge_id,
         current_revision_id,
-        unbound_knowledge_id,
+        mismatched_knowledge_id,
         raw_log_knowledge_id,
     ) = _checkpoint_vault(tmp_path)
     with knowledge_autonomy.AutonomousKnowledgeStore(root, read_only=True) as store:
@@ -207,6 +238,7 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
             task=f"Resume {_SEMANTIC_KEY} at the saved cursor.",
             query_target={"knowledge_id": knowledge_id},
             purpose="answer",
+            task_binding=_TASK_BINDING,
             confirm_no_case_data=True,
         )
 
@@ -257,21 +289,28 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
     assert _DISTRACTOR_BODY not in serialized_provider
 
     with KnowledgeOS.open(root) as knowledge_os:
-        unbound = knowledge_os.context.compile(
-            task="Resume the unbound checkpoint.",
-            query_target={"knowledge_id": unbound_knowledge_id},
+        mismatched = knowledge_os.context.compile(
+            task="Resume the mismatched checkpoint.",
+            query_target={"knowledge_id": mismatched_knowledge_id},
             purpose="answer",
+            task_binding=_TASK_BINDING,
             confirm_no_case_data=True,
         )
-    assert unbound["statements"] == []
-    assert any(gap.get("code") == "no_answer" for gap in unbound["gaps"])
-    assert _UNBOUND_BODY not in canonical_json(unbound["provider_capsule"])
+    assert mismatched["statements"] == []
+    assert any(gap.get("code") == "no_answer" for gap in mismatched["gaps"])
+    assert _MISMATCHED_BODY not in canonical_json(mismatched["provider_capsule"])
+    assert "task_binding_mismatch" not in canonical_json(mismatched["provider_capsule"])
+    assert (
+        _MISMATCHED_TASK_BINDING["binding_sha256"]
+        not in canonical_json(mismatched["provider_capsule"])
+    )
 
     with KnowledgeOS.open(root) as knowledge_os:
         raw_log = knowledge_os.context.compile(
             task="Resume the raw tool log.",
             query_target={"knowledge_id": raw_log_knowledge_id},
             purpose="answer",
+            task_binding=_TASK_BINDING,
             confirm_no_case_data=True,
         )
     assert raw_log["statements"] == []
@@ -287,6 +326,7 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
         task=f"Resume {_SEMANTIC_KEY} at the saved cursor.",
         query_target={"knowledge_id": knowledge_id},
         purpose="answer",
+        task_binding=_TASK_BINDING,
         confirm_no_case_data=True,
         vault_path=root,
     )

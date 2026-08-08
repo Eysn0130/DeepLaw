@@ -12,6 +12,7 @@
         "operation": {"const": "query"},
         "query": {"type": "string", "minLength": 1, "maxLength": 5000},
         "query_plan_version": {"const": "6"},
+        "task_binding": {"$ref": "task-context-binding.v1.schema.json"},
         "purpose": {
           "enum": [
             "answer", "verify", "quote", "historical", "legal", "debug",
@@ -83,6 +84,7 @@
         "goal": {"type": "string", "minLength": 1, "maxLength": 2000},
         "confirm_no_case_data": {"const": true},
         "query_plan_version": {"const": "6"},
+        "task_binding": {"$ref": "task-context-binding.v1.schema.json"},
         "purpose": {
           "enum": [
             "answer", "verify", "quote", "historical", "legal", "debug",

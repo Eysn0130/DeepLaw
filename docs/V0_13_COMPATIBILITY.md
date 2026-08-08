@@ -8,8 +8,8 @@ the additive v0.13 working-tree contract and must not be read as a published ver
 | Surface | Current default in the source candidate | Compatibility retained | Boundary |
 | --- | --- | --- | --- |
 | Semantic compilation | `living-wiki-agent/v3` | Profile v1 and v2 inputs/status remain readable | v3 adds dynamic applicability, Statements and exact freshness/verification status |
-| Query | Query Plan v6 for `knowledge query`/Python retrieval query | Query Plan v5 remains explicitly selectable | v6 honors and receipts `retrieval_mode`/`graph_hops`/canonical fallback, discovers ≤20 revisions, then admits ≤512 Statements from only those revisions; it no-answers legacy content without admitted Statements |
-| Context | Query Plan v6 for Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`, `deeplaw knowledge autonomy context`, and autonomous MCP `operation=context` | Explicit `query_plan_version=5` only | v6 uses the shared domain assembler and additive local Capsule v3 (≤262,144 bytes) with nested Provider v2 content (≤65,536 bytes); no ordinary query/context writes the Canonical Ledger |
+| Query | Query Plan v6 for `knowledge query`/Python retrieval query | Query Plan v5 remains explicitly selectable | v6 honors and receipts `retrieval_mode`/`graph_hops`/canonical fallback and an optional opaque task binding, discovers ≤20 revisions, then admits ≤512 Statements from only those revisions; it no-answers legacy content without admitted Statements |
+| Context | Query Plan v6 for Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`, `deeplaw knowledge autonomy context`, and autonomous MCP `operation=context` | Explicit `query_plan_version=5` only; a task binding is rejected instead of discarded on v5 | v6 uses the shared domain assembler and additive local Capsule v3 (≤262,144 bytes); exact task binding gates working checkpoints, while nested Provider v2 (≤65,536 bytes) excludes the binding; no ordinary query/context writes the Canonical Ledger |
 | Expansion | expansion Profile v2 | v1 receipts remain valid | v2 removes benchmark-shaped aliases and binds a generic lexicon digest |
 | Projection | `standard` Profile, Living Wiki manifest v2 paired with Registry/Link/Resolver manifest v3 | aggregate manifest v1 and Profile `full` remain readable | `standard` removes per-object Canvas; profile changes clean only verified owned files; revisions above 64 Statements use derived Statement Evidence shards without changing canonical identity |
 | Evidence grounding | Statement/Evidence core v1 | source/object references remain readable | statement-bearing Profile v3 content must pass exact map/receipt verification |
@@ -33,6 +33,11 @@ The candidate adds tables and markers in place; it does not rewrite v1/v2 record
   request/response contracts and add no canonical persistence. The local Query Trace is bounded,
   redacted, process-local, TTL/LRU managed, integrity-checked, and owner/runtime deletable; it is
   not a durable receipt database.
+- The additive `deeplaw.task-context-binding/v1` object is stored only in existing Run Record
+  metadata and its receipt/event binding; no physical migration is needed. Legacy unbound Runs
+  remain verifiable but cannot establish current working-checkpoint lineage. New working memory
+  requires a task-bound Run. Query Plan v6 and local Capsule v3 bind the exact selector or explicit
+  absence, while Provider v2 excludes it. See `docs/V0_13_TASK_CONTEXT_BINDING.md`.
 
 Query Plan v6 narrows a previously defective behavior: accepted retrieval controls can no longer
 be ignored, and Statement discovery no longer scans the first 5,000 globally ordered rows before
