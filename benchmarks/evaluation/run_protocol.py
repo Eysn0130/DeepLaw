@@ -24,7 +24,9 @@ from benchmarks.quality.run_repository_gold import run_suite as run_repository_g
 from deeplaw.util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
 
 PROTOCOL_SCHEMA = "deeplaw.evaluation-protocol/v1"
+PROTOCOL_SCHEMA_V2 = "deeplaw.evaluation-protocol/v2"
 REPORT_SCHEMA = "deeplaw.evaluation-report/v1"
+REPORT_SCHEMA_V2 = "deeplaw.evaluation-report/v2"
 _COMPONENTS = (
     "repository_development",
     "repository_temporal_holdout",
@@ -78,21 +80,39 @@ def _load_protocol(path: Path, *, repository: Path) -> dict[str, Any]:
     if resolved.is_symlink() or not 1 <= resolved.stat().st_size <= _MAX_PROTOCOL_BYTES:
         raise EvaluationProtocolError("Evaluation Protocol is not a bounded regular file")
     protocol = strict_json_loads(resolved.read_bytes())
-    schema_path = repository / "contracts/evaluation-protocol.v1.schema.json"
+    schema_version = protocol.get("schema_version")
+    schema_name = {
+        PROTOCOL_SCHEMA: "evaluation-protocol.v1.schema.json",
+        PROTOCOL_SCHEMA_V2: "evaluation-protocol.v2.schema.json",
+    }.get(schema_version)
+    if schema_name is None:
+        raise EvaluationProtocolError("Evaluation Protocol schema is unsupported")
+    schema_path = repository / "contracts" / schema_name
     schema = strict_json_loads(schema_path.read_bytes())
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(
         schema,
         format_checker=FormatChecker(),
     ).validate(protocol)
-    if protocol["schema_version"] != PROTOCOL_SCHEMA:
-        raise EvaluationProtocolError("Evaluation Protocol schema is unsupported")
     if abs(sum(protocol["scoring"]["weights"].values()) - 1.0) > 1e-12:
         raise EvaluationProtocolError("Evaluation Protocol weights do not sum to one")
     for relative in protocol["freeze_policy"]["freeze_paths"]:
         _safe_repository_path(repository, relative)
     for suite in protocol["suites"].values():
         _safe_repository_path(repository, suite["path"])
+    if schema_version == PROTOCOL_SCHEMA_V2:
+        for suite in protocol["suites"].values():
+            if (
+                suite["labels_visible"] is not True
+                or suite["secret"] is not False
+                or suite["external_holdout"] is not False
+                or suite["independently_evaluated"] is not False
+                or suite["claim_eligible"] is not False
+                or suite["contamination_claim_eligible"] is not False
+            ):
+                raise EvaluationProtocolError(
+                    "Evaluation Protocol suite governance is invalid"
+                )
     return protocol
 
 
@@ -448,8 +468,9 @@ def _hard_failures(
 def _markdown_report(report: dict[str, Any]) -> str:
     status = "PASS" if report["scoring"]["quality_gate_passed"] else "FAIL"
     eligible = "yes" if report["claims"]["quality_protocol_eligible"] else "no"
+    protocol_version = report["protocol_version"]
     lines = [
-        "# DeepLaw Evaluation Protocol v1 Report",
+        f"# DeepLaw Evaluation Protocol v{protocol_version} Report",
         "",
         f"- Candidate: `v{report['candidate']['version']}` / "
         f"`{report['candidate']['commit']}`",
@@ -475,19 +496,29 @@ def _markdown_report(report: dict[str, Any]) -> str:
             "",
             "## Claim boundary",
             "",
-            "This report supports only the published DeepLaw Evaluation Protocol quality "
-            "claim. The public holdout is maintainer-visible, so it is neither secret nor "
-            "contamination-free. No named competing system was executed by this report; "
-            "`comparative_superiority_claim_eligible` remains `false`.",
+            (
+                "This report supports only the published DeepLaw Evaluation Protocol quality "
+                "claim. The public holdout is maintainer-visible, so it is neither secret nor "
+                "contamination-free. No named competing system was executed by this report; "
+                "`comparative_superiority_claim_eligible` remains `false`."
+            ),
             "",
             "External institutional certification is not a protocol requirement. Independent "
             "replication is welcome and may attach its own provenance without becoming a source "
             "of product Authority.",
-            "",
-            "## Hard failures",
-            "",
         ]
     )
+    if protocol_version == 2:
+        lines.extend(
+            [
+                "",
+                "## Development fixture boundary",
+                "",
+                "The repository development suite is visible, non-external, non-secret, "
+                "not independently evaluated, and not claim eligible.",
+            ]
+        )
+    lines.extend(["", "## Hard failures", ""])
     lines.extend(
         [f"- `{item}`" for item in report["hard_failures"]]
         or ["- None."]
@@ -650,7 +681,11 @@ def run_protocol(
         and candidate["worktree_clean"]
         and freeze["freeze_valid"]
     )
-    quality_protocol_eligible = quality_gate_passed and release_binding_valid
+    quality_protocol_eligible = (
+        quality_gate_passed and release_binding_valid
+        if protocol["schema_version"] == PROTOCOL_SCHEMA
+        else False
+    )
     timestamp = datetime.fromtimestamp(source_date_epoch, tz=UTC).isoformat().replace(
         "+00:00", "Z"
     )
@@ -677,7 +712,11 @@ def run_protocol(
         ).encode("utf-8")
     )
     report = {
-        "schema_version": REPORT_SCHEMA,
+        "schema_version": (
+            REPORT_SCHEMA_V2
+            if protocol["schema_version"] == PROTOCOL_SCHEMA_V2
+            else REPORT_SCHEMA
+        ),
         "protocol_id": protocol["protocol_id"],
         "protocol_version": protocol["protocol_version"],
         "protocol_sha256": sha256_file(protocol_path),
@@ -749,10 +788,46 @@ def run_protocol(
         ],
         "scoring_digest": scoring_digest,
     }
+    if protocol["schema_version"] == PROTOCOL_SCHEMA_V2:
+        def suite_boundary(component: str) -> dict[str, Any]:
+            definition = protocol["suites"][component]
+            return {
+                "suite_id": definition["suite_id"],
+                "kind": definition["kind"],
+                "path": definition["path"],
+                "visibility": definition["visibility"],
+                "labels_visible": definition["labels_visible"],
+                "secret": definition["secret"],
+                "external_holdout": definition["external_holdout"],
+                "independently_evaluated": definition["independently_evaluated"],
+                "claim_eligible": definition["claim_eligible"],
+                "contamination_claim_eligible": definition[
+                    "contamination_claim_eligible"
+                ],
+            }
+
+        report.update(
+            {
+                "development_fixture": suite_boundary("repository_development"),
+                "suite_boundaries": {
+                    component: suite_boundary(component) for component in _COMPONENTS
+                },
+            }
+        )
+        report["limitations"] = [
+            *report["limitations"],
+            (
+                "The repository development fixture is visible, non-external, non-secret, "
+                "not independently evaluated, and not claim eligible."
+            ),
+        ]
     report["report_sha256"] = sha256_bytes(canonical_json(report).encode("utf-8"))
-    schema = strict_json_loads(
-        (repository / "contracts/evaluation-report.v1.schema.json").read_bytes()
+    report_schema_name = (
+        "evaluation-report.v2.schema.json"
+        if protocol["schema_version"] == PROTOCOL_SCHEMA_V2
+        else "evaluation-report.v1.schema.json"
     )
+    schema = strict_json_loads((repository / "contracts" / report_schema_name).read_bytes())
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
     summary_path = output_dir / "evaluation-report.json"
@@ -790,8 +865,14 @@ def verify_report_directory(
     ):
         raise EvaluationProtocolError("Evaluation summary is missing or unbounded")
     report = strict_json_loads(summary_path.read_bytes())
+    report_schema_name = {
+        REPORT_SCHEMA: "evaluation-report.v1.schema.json",
+        REPORT_SCHEMA_V2: "evaluation-report.v2.schema.json",
+    }.get(report.get("schema_version"))
+    if report_schema_name is None:
+        raise EvaluationProtocolError("Evaluation report schema is unsupported")
     schema = strict_json_loads(
-        (repository / "contracts/evaluation-report.v1.schema.json").read_bytes()
+        (repository / "contracts" / report_schema_name).read_bytes()
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
@@ -850,12 +931,12 @@ def verify_report_directory(
 def main() -> int:
     repository_default = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(
-        description="Run or verify DeepLaw Evaluation Protocol v1."
+        description="Run or verify DeepLaw Evaluation Protocol v2."
     )
     parser.add_argument(
         "--protocol",
         type=Path,
-        default=Path("benchmarks/evaluation/protocol-v1.json"),
+        default=Path("benchmarks/evaluation/protocol-v2.json"),
     )
     parser.add_argument("--repository", type=Path, default=repository_default)
     parser.add_argument("--output-dir", type=Path)

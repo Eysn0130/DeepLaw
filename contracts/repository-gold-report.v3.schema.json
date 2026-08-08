@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/repository-gold-report.v3.schema.json",
+  "title": "DeepLaw repository-visible development Gold report v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite_schema_version",
+    "suite_sha256",
+    "source_inventory_sha256",
+    "categories",
+    "document_count",
+    "case_count",
+    "models",
+    "modes",
+    "quality_gate",
+    "development_fixture",
+    "secret_held_out",
+    "independently_evaluated",
+    "competitive_claim_eligible",
+    "visibility",
+    "labels_visible",
+    "secret",
+    "external_holdout",
+    "claim_eligible",
+    "contamination_claim_eligible",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.repository-gold-report/v3"},
+    "suite_schema_version": {"const": "deeplaw.repository-gold-set/v3"},
+    "suite_sha256": {"$ref": "#/$defs/sha256"},
+    "source_inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "categories": {
+      "const": ["chinese", "english", "code", "legal", "long_document"]
+    },
+    "document_count": {"type": "integer", "minimum": 5, "maximum": 100},
+    "case_count": {"type": "integer", "minimum": 10, "maximum": 1000},
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dense", "reranker", "network_policy"],
+      "properties": {
+        "dense": {"const": "deeplaw-multilingual-hash-dense/1"},
+        "reranker": {"const": "deeplaw-evidence-duty-reranker/1"},
+        "network_policy": {"const": "offline"}
+      }
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lexical", "dense", "hybrid"],
+      "properties": {
+        "lexical": {"$ref": "#/$defs/mode"},
+        "dense": {"$ref": "#/$defs/mode"},
+        "hybrid": {"$ref": "#/$defs/mode"}
+      }
+    },
+    "quality_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thresholds", "mode_results", "passed"],
+      "properties": {
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lexical", "dense", "hybrid"],
+          "properties": {
+            "lexical": {"$ref": "#/$defs/gate"},
+            "dense": {"$ref": "#/$defs/gate"},
+            "hybrid": {"$ref": "#/$defs/gate"}
+          }
+        },
+        "mode_results": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lexical", "dense", "hybrid"],
+          "properties": {
+            "lexical": {"$ref": "#/$defs/gate_result"},
+            "dense": {"$ref": "#/$defs/gate_result"},
+            "hybrid": {"$ref": "#/$defs/gate_result"}
+          }
+        },
+        "passed": {"type": "boolean"}
+      }
+    },
+    "development_fixture": {"const": true},
+    "secret_held_out": {"const": false},
+    "independently_evaluated": {"const": false},
+    "competitive_claim_eligible": {"const": false},
+    "visibility": {"const": "repository"},
+    "labels_visible": {"const": true},
+    "secret": {"const": false},
+    "external_holdout": {"const": false},
+    "claim_eligible": {"const": false},
+    "contamination_claim_eligible": {"const": false},
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_hit_at_1",
+        "minimum_useful_context_recall",
+        "maximum_irrelevant_context_rate",
+        "maximum_forbidden_admission_count"
+      ],
+      "properties": {
+        "minimum_hit_at_1": {"$ref": "#/$defs/ratio"},
+        "minimum_useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "maximum_irrelevant_context_rate": {"$ref": "#/$defs/ratio"},
+        "maximum_forbidden_admission_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "gate_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "checks"],
+      "properties": {
+        "passed": {"type": "boolean"},
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hit_at_1",
+            "useful_context_recall",
+            "irrelevant_context_rate",
+            "forbidden_admission_count"
+          ],
+          "properties": {
+            "hit_at_1": {"type": "boolean"},
+            "useful_context_recall": {"type": "boolean"},
+            "irrelevant_context_rate": {"type": "boolean"},
+            "forbidden_admission_count": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_count",
+        "hit_at_1",
+        "useful_context_recall",
+        "irrelevant_context_rate"
+      ],
+      "properties": {
+        "case_count": {"type": "integer", "minimum": 1},
+        "hit_at_1": {"$ref": "#/$defs/ratio"},
+        "useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "irrelevant_context_rate": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "category",
+        "selected_document_ids",
+        "hit_at_1",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "forbidden_admission_count"
+      ],
+      "properties": {
+        "case_id": {"type": "string"},
+        "category": {
+          "enum": ["chinese", "english", "code", "legal", "long_document"]
+        },
+        "selected_document_ids": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {"type": "string"}
+        },
+        "hit_at_1": {"type": "boolean"},
+        "useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "irrelevant_context_rate": {"$ref": "#/$defs/ratio"},
+        "forbidden_admission_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_count",
+        "hit_at_1",
+        "useful_context_recall",
+        "irrelevant_context_rate",
+        "forbidden_admission_count",
+        "latency_ms_p50",
+        "latency_ms_p95",
+        "category_metrics",
+        "failures",
+        "case_results"
+      ],
+      "properties": {
+        "case_count": {"type": "integer", "minimum": 10},
+        "hit_at_1": {"$ref": "#/$defs/ratio"},
+        "useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "irrelevant_context_rate": {"$ref": "#/$defs/ratio"},
+        "forbidden_admission_count": {"type": "integer", "minimum": 0},
+        "latency_ms_p50": {"type": "number", "minimum": 0},
+        "latency_ms_p95": {"type": "number", "minimum": 0},
+        "category_metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["chinese", "english", "code", "legal", "long_document"],
+          "properties": {
+            "chinese": {"$ref": "#/$defs/category"},
+            "english": {"$ref": "#/$defs/category"},
+            "code": {"$ref": "#/$defs/category"},
+            "legal": {"$ref": "#/$defs/category"},
+            "long_document": {"$ref": "#/$defs/category"}
+          }
+        },
+        "failures": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {"$ref": "#/$defs/case"}
+        },
+        "case_results": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 1000,
+          "items": {"$ref": "#/$defs/case"}
+        }
+      }
+    }
+  }
+}

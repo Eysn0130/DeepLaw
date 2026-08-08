@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/evaluation-report.v2.schema.json",
+  "title": "DeepLaw Evaluation Protocol v2 summary report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_id",
+    "protocol_version",
+    "protocol_sha256",
+    "report_timestamp",
+    "candidate",
+    "freeze",
+    "environment",
+    "suites",
+    "scoring",
+    "hard_failures",
+    "claims",
+    "comparative_track",
+    "host_task_track",
+    "limitations",
+    "scoring_digest",
+    "development_fixture",
+    "suite_boundaries",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.evaluation-report/v2"},
+    "protocol_id": {"const": "deeplaw-evaluation-v2"},
+    "protocol_version": {"const": 2},
+    "protocol_sha256": {"$ref": "#/$defs/sha256"},
+    "report_timestamp": {"type": "string", "format": "date-time"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "freeze": {"$ref": "#/$defs/freeze"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "suites": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_development",
+        "repository_temporal_holdout",
+        "autonomy_safety",
+        "typed_compiler_quality"
+      ],
+      "properties": {
+        "repository_development": {"$ref": "#/$defs/suiteResult"},
+        "repository_temporal_holdout": {"$ref": "#/$defs/suiteResult"},
+        "autonomy_safety": {"$ref": "#/$defs/suiteResult"},
+        "typed_compiler_quality": {"$ref": "#/$defs/suiteResult"}
+      }
+    },
+    "scoring": {"$ref": "#/$defs/scoring"},
+    "hard_failures": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 300}
+    },
+    "claims": {"$ref": "#/$defs/claims"},
+    "comparative_track": {"$ref": "#/$defs/comparativeTrack"},
+    "host_task_track": {"$ref": "#/$defs/hostTaskTrack"},
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "scoring_digest": {"$ref": "#/$defs/sha256"},
+    "development_fixture": {"$ref": "#/$defs/suiteBoundary"},
+    "suite_boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_development",
+        "repository_temporal_holdout",
+        "autonomy_safety",
+        "typed_compiler_quality"
+      ],
+      "properties": {
+        "repository_development": {"$ref": "#/$defs/suiteBoundary"},
+        "repository_temporal_holdout": {"$ref": "#/$defs/suiteBoundary"},
+        "autonomy_safety": {"$ref": "#/$defs/suiteBoundary"},
+        "typed_compiler_quality": {"$ref": "#/$defs/suiteBoundary"}
+      }
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "version",
+        "commit",
+        "tree",
+        "worktree_clean",
+        "artifact_type",
+        "artifact_name",
+        "artifact_sha256"
+      ],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "worktree_clean": {"type": "boolean"},
+        "artifact_type": {"enum": ["source_tree", "wheel"]},
+        "artifact_name": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "artifact_sha256": {
+          "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        }
+      }
+    },
+    "freeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "freeze_commit",
+        "freeze_tree",
+        "candidate_descends_from_freeze",
+        "candidate_postdates_freeze",
+        "freeze_valid",
+        "public_holdout",
+        "labels_visible",
+        "secret",
+        "contamination_claim_eligible"
+      ],
+      "properties": {
+        "freeze_commit": {
+          "anyOf": [{"$ref": "#/$defs/git"}, {"type": "null"}]
+        },
+        "freeze_tree": {
+          "anyOf": [{"$ref": "#/$defs/git"}, {"type": "null"}]
+        },
+        "candidate_descends_from_freeze": {"type": "boolean"},
+        "candidate_postdates_freeze": {"type": "boolean"},
+        "freeze_valid": {"type": "boolean"},
+        "public_holdout": {"const": true},
+        "labels_visible": {"const": true},
+        "secret": {"const": false},
+        "contamination_claim_eligible": {"const": false}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "machine",
+        "python_implementation",
+        "python_version",
+        "network_policy"
+      ],
+      "properties": {
+        "system": {"type": "string", "minLength": 1, "maxLength": 100},
+        "machine": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_implementation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "python_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "network_policy": {"const": "offline"}
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_development",
+        "repository_temporal_holdout",
+        "autonomy_safety",
+        "typed_compiler_quality"
+      ],
+      "properties": {
+        "repository_development": {"$ref": "#/$defs/ratio"},
+        "repository_temporal_holdout": {"$ref": "#/$defs/ratio"},
+        "autonomy_safety": {"$ref": "#/$defs/ratio"},
+        "typed_compiler_quality": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formula",
+        "weights",
+        "component_scores",
+        "minimum_component_scores",
+        "component_checks",
+        "overall_score",
+        "minimum_overall_score",
+        "overall_check",
+        "quality_gate_passed"
+      ],
+      "properties": {
+        "formula": {"const": "weighted_component_score_v1"},
+        "weights": {"$ref": "#/$defs/components"},
+        "component_scores": {"$ref": "#/$defs/components"},
+        "minimum_component_scores": {"$ref": "#/$defs/components"},
+        "component_checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository_development",
+            "repository_temporal_holdout",
+            "autonomy_safety",
+            "typed_compiler_quality"
+          ],
+          "properties": {
+            "repository_development": {"type": "boolean"},
+            "repository_temporal_holdout": {"type": "boolean"},
+            "autonomy_safety": {"type": "boolean"},
+            "typed_compiler_quality": {"type": "boolean"}
+          }
+        },
+        "overall_score": {"$ref": "#/$defs/ratio"},
+        "minimum_overall_score": {"const": 0.85},
+        "overall_check": {"type": "boolean"},
+        "quality_gate_passed": {"type": "boolean"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "quality_protocol_eligible",
+        "comparative_superiority_claim_eligible",
+        "external_institution_certification_required",
+        "allowed_quality_claim",
+        "forbidden_without_comparative_evidence"
+      ],
+      "properties": {
+        "quality_protocol_eligible": {"const": false},
+        "comparative_superiority_claim_eligible": {"const": false},
+        "external_institution_certification_required": {"const": false},
+        "allowed_quality_claim": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "forbidden_without_comparative_evidence": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "comparativeTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "required_named_systems", "evidence_missing"],
+      "properties": {
+        "status": {"const": "not_executed"},
+        "required_named_systems": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "evidence_missing": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "hostTaskTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "hosts", "evidence_missing"],
+      "properties": {
+        "status": {"const": "partial_or_not_executed"},
+        "hosts": {"const": ["codex", "claude_code", "opencode"]},
+        "evidence_missing": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "suiteResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "kind",
+        "artifact",
+        "artifact_sha256",
+        "artifact_bytes",
+        "report_sha256",
+        "case_count",
+        "score",
+        "minimum_score",
+        "passed",
+        "metrics"
+      ],
+      "properties": {
+        "suite_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "kind": {"type": "string", "minLength": 1, "maxLength": 100},
+        "artifact": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,99}\\.json$"
+        },
+        "artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "case_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "score": {"$ref": "#/$defs/ratio"},
+        "minimum_score": {"$ref": "#/$defs/ratio"},
+        "passed": {"type": "boolean"},
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 30,
+          "additionalProperties": {
+            "type": ["number", "integer", "boolean", "string"],
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "suiteBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "kind",
+        "path",
+        "visibility",
+        "labels_visible",
+        "secret",
+        "external_holdout",
+        "independently_evaluated",
+        "claim_eligible",
+        "contamination_claim_eligible"
+      ],
+      "properties": {
+        "suite_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "kind": {"type": "string", "minLength": 1, "maxLength": 100},
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "visibility": {"enum": ["repository", "public"]},
+        "labels_visible": {"const": true},
+        "secret": {"const": false},
+        "external_holdout": {"const": false},
+        "independently_evaluated": {"const": false},
+        "claim_eligible": {"const": false},
+        "contamination_claim_eligible": {"const": false}
+      }
+    }
+  }
+}

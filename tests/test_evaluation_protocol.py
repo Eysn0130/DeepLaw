@@ -19,7 +19,7 @@ from benchmarks.evaluation.run_typed_compiler_quality import (
     run_suite as run_typed_compiler,
 )
 from benchmarks.quality.run_repository_gold import run_suite as run_repository_gold
-from deeplaw.util import canonical_json, sha256_bytes
+from deeplaw.util import canonical_json, sha256_bytes, sha256_file
 
 
 def _repository() -> Path:
@@ -49,6 +49,10 @@ def test_protocol_and_public_suites_are_closed_and_time_frozen() -> None:
         (repository / "benchmarks/evaluation/protocol-v1.json").read_text(
             encoding="utf-8"
         )
+    )
+    assert (
+        sha256_file(repository / "benchmarks/evaluation/protocol-v1.json")
+        == "470242a11c4f58a5975c1b576298fcf311bda95af1ebf8f0bfcd4529a4262c8c"
     )
     _validator("evaluation-protocol.v1.schema.json").validate(protocol)
 
@@ -85,6 +89,29 @@ def test_protocol_and_public_suites_are_closed_and_time_frozen() -> None:
             )
         )
         _validator(contract).validate(suite)
+
+    protocol_v2 = json.loads(
+        (repository / "benchmarks/evaluation/protocol-v2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    _validator("evaluation-protocol.v2.schema.json").validate(protocol_v2)
+    assert protocol_v2["suites"]["repository_development"]["path"] == (
+        "benchmarks/quality/repository-gold-development-v3.json"
+    )
+    assert (
+        protocol_v2["claim_policy"][
+            "quality_protocol_eligible_when_release_binding_and_all_gates_pass"
+        ]
+        is False
+    )
+    for suite in protocol_v2["suites"].values():
+        assert suite["labels_visible"] is True
+        assert suite["secret"] is False
+        assert suite["external_holdout"] is False
+        assert suite["independently_evaluated"] is False
+        assert suite["claim_eligible"] is False
+        assert suite["contamination_claim_eligible"] is False
 
 
 def test_every_protocol_component_runs_actual_candidate_code() -> None:
@@ -126,12 +153,12 @@ def test_protocol_generates_and_verifies_complete_report_package(
     output = tmp_path / "evaluation"
 
     report = run_protocol(
-        repository / "benchmarks/evaluation/protocol-v1.json",
+        repository / "benchmarks/evaluation/protocol-v2.json",
         repository=repository,
         output_dir=output,
     )
 
-    _validator("evaluation-report.v1.schema.json").validate(report)
+    _validator("evaluation-report.v2.schema.json").validate(report)
     assert report["scoring"]["quality_gate_passed"] is True
     assert report["scoring"]["overall_score"] >= 0.85
     assert report["hard_failures"] == []
@@ -139,6 +166,9 @@ def test_protocol_generates_and_verifies_complete_report_package(
     assert report["claims"]["quality_protocol_eligible"] is False
     assert report["candidate"]["artifact_type"] == "source_tree"
     assert report["freeze"]["secret"] is False
+    assert report["development_fixture"]["visibility"] == "repository"
+    assert report["development_fixture"]["external_holdout"] is False
+    assert report["development_fixture"]["claim_eligible"] is False
     assert {
         "evaluation-report.json",
         "repository-development.json",
@@ -174,7 +204,7 @@ def test_report_verifier_rejects_component_tampering(tmp_path: Path) -> None:
     repository = _repository()
     output = tmp_path / "evaluation"
     run_protocol(
-        repository / "benchmarks/evaluation/protocol-v1.json",
+        repository / "benchmarks/evaluation/protocol-v2.json",
         repository=repository,
         output_dir=output,
     )
@@ -183,6 +213,16 @@ def test_report_verifier_rejects_component_tampering(tmp_path: Path) -> None:
 
     with pytest.raises(EvaluationProtocolError, match="artifact is invalid"):
         verify_report_directory(output, repository=repository)
+
+
+def test_v1_protocol_rejects_current_source_drift(tmp_path: Path) -> None:
+    repository = _repository()
+    with pytest.raises(ValueError, match="source hash changed"):
+        run_protocol(
+            repository / "benchmarks/evaluation/protocol-v1.json",
+            repository=repository,
+            output_dir=tmp_path / "evaluation",
+        )
 
 
 def test_component_report_digests_are_canonical() -> None:

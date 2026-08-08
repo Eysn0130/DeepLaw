@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/evaluation-protocol.v2.schema.json",
+  "title": "DeepLaw Evaluation Protocol v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_id",
+    "protocol_version",
+    "status",
+    "frozen_at",
+    "objective",
+    "execution_policy",
+    "freeze_policy",
+    "suites",
+    "scoring",
+    "claim_policy",
+    "comparative_track",
+    "host_task_track"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.evaluation-protocol/v2"},
+    "protocol_id": {"const": "deeplaw-evaluation-v2"},
+    "protocol_version": {"const": 2},
+    "status": {"const": "active"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "objective": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "execution_policy": {
+      "const": {
+        "network_policy": "offline",
+        "random_seed": 20260730,
+        "candidate_artifact_required_for_release": true,
+        "clean_worktree_required_for_release": true,
+        "case_level_results_retained": true,
+        "failure_samples_retained": true,
+        "private_content_forbidden": true
+      }
+    },
+    "freeze_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_must_descend_from_freeze_commit",
+        "candidate_must_postdate_freeze_commit",
+        "public_holdout",
+        "labels_visible",
+        "secret",
+        "contamination_claim_eligible",
+        "freeze_paths"
+      ],
+      "properties": {
+        "candidate_must_descend_from_freeze_commit": {"const": true},
+        "candidate_must_postdate_freeze_commit": {"const": true},
+        "public_holdout": {"const": true},
+        "labels_visible": {"const": true},
+        "secret": {"const": false},
+        "contamination_claim_eligible": {"const": false},
+        "freeze_paths": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 150,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          }
+        }
+      }
+    },
+    "suites": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_development",
+        "repository_temporal_holdout",
+        "autonomy_safety",
+        "typed_compiler_quality"
+      ],
+      "properties": {
+        "repository_development": {"$ref": "#/$defs/suite"},
+        "repository_temporal_holdout": {"$ref": "#/$defs/suite"},
+        "autonomy_safety": {"$ref": "#/$defs/suite"},
+        "typed_compiler_quality": {"$ref": "#/$defs/suite"}
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formula",
+        "repository_component_formula",
+        "autonomy_component_formula",
+        "typed_compiler_component_formula",
+        "weights",
+        "minimum_component_scores",
+        "minimum_overall_score",
+        "hard_failure_policy"
+      ],
+      "properties": {
+        "formula": {"const": "weighted_component_score_v1"},
+        "repository_component_formula": {"type": "string", "minLength": 1},
+        "autonomy_component_formula": {"type": "string", "minLength": 1},
+        "typed_compiler_component_formula": {"type": "string", "minLength": 1},
+        "weights": {"$ref": "#/$defs/componentRatios"},
+        "minimum_component_scores": {"$ref": "#/$defs/componentRatios"},
+        "minimum_overall_score": {"const": 0.85},
+        "hard_failure_policy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "claim_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_institution_certification_required",
+        "independent_replication_optional",
+        "quality_protocol_eligible_when_release_binding_and_all_gates_pass",
+        "comparative_superiority_requires_actual_named_baseline_reports",
+        "public_holdout_supports_secret_or_contamination_free_claim",
+        "allowed_quality_claim",
+        "forbidden_without_comparative_evidence"
+      ],
+      "properties": {
+        "external_institution_certification_required": {"const": false},
+        "independent_replication_optional": {"const": true},
+        "quality_protocol_eligible_when_release_binding_and_all_gates_pass": {
+          "const": false
+        },
+        "comparative_superiority_requires_actual_named_baseline_reports": {
+          "const": true
+        },
+        "public_holdout_supports_secret_or_contamination_free_claim": {
+          "const": false
+        },
+        "allowed_quality_claim": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "forbidden_without_comparative_evidence": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "comparative_track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "required_named_systems", "required_evidence"],
+      "properties": {
+        "status": {"const": "not_executed"},
+        "required_named_systems": {
+          "const": [
+            "ragflow",
+            "graphiti",
+            "pageindex",
+            "mem0",
+            "openkb",
+            "llm_wiki",
+            "obsidian",
+            "tolaria"
+          ]
+        },
+        "required_evidence": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "host_task_track": {
+      "const": {
+        "status": "partial_or_not_executed",
+        "hosts": ["codex", "claude_code", "opencode"],
+        "model_task_claim_requires_real_session_receipts": true,
+        "no_model_lifecycle_is_not_model_task_evidence": true
+      }
+    }
+  },
+  "$defs": {
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "kind",
+        "path",
+        "artifact",
+        "visibility",
+        "labels_visible",
+        "secret",
+        "external_holdout",
+        "independently_evaluated",
+        "claim_eligible",
+        "contamination_claim_eligible"
+      ],
+      "properties": {
+        "suite_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "kind": {"type": "string", "minLength": 1, "maxLength": 100},
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "artifact": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,99}\\.json$"
+        },
+        "visibility": {"enum": ["repository", "public"]},
+        "labels_visible": {"const": true},
+        "secret": {"const": false},
+        "external_holdout": {"const": false},
+        "independently_evaluated": {"const": false},
+        "claim_eligible": {"const": false},
+        "contamination_claim_eligible": {"const": false}
+      }
+    },
+    "componentRatios": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_development",
+        "repository_temporal_holdout",
+        "autonomy_safety",
+        "typed_compiler_quality"
+      ],
+      "properties": {
+        "repository_development": {"$ref": "#/$defs/ratio"},
+        "repository_temporal_holdout": {"$ref": "#/$defs/ratio"},
+        "autonomy_safety": {"$ref": "#/$defs/ratio"},
+        "typed_compiler_quality": {"$ref": "#/$defs/ratio"}
+      }
+    }
+  }
+}
