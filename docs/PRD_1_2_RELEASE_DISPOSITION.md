@@ -193,8 +193,33 @@ git diff --check
 Focused development evidence includes route-first public-seam parity, 25-line exact retrieval,
 snapshot divergence, recursive Provider redaction, v2 legacy reconciliation, thin-adapter parity,
 repository-development protocol rotation, and version-conditional release negative tests. The nine
-skips remain visible and cannot satisfy the v0.13 zero-mandatory-skip gate. Final documentation and
-fresh-wheel verification are recorded in the final handoff after this report's commit boundary.
+skips remain visible and cannot satisfy the v0.13 zero-mandatory-skip gate.
+
+The documentation/development-freeze commit
+`cf88b55d35a93280475692fbfc3bc8c0201b7f9f` (tree
+`d555c13f44656f4ef5765e5629169326fae22ebf`) independently produced:
+
+```text
+uv lock --check
+  PASS — Resolved 140 packages
+uv run --frozen pytest --strict-markers
+  PASS — 1253 passed, 9 skipped in 334.18s
+uv run --frozen ruff check .
+  PASS
+git diff --check
+  PASS
+```
+
+Two builds with `SOURCE_DATE_EPOCH=1786219200` were byte-identical. The local reproducibility
+record SHA-256 was `af9969d4bc89896c36a9ce665cba44d30452b641a745aeaf8a73efaaa282e5ce`;
+the wheel SHA-256 was `959cfebadeebba3599083de20cf4ff6c02ecb40f731f8a946239dbf3aee534f0`
+and the sdist SHA-256 was
+`610181e3eb8d3258eb7dcecd3e6ddd8e403e4f03d902f94892ce09b5ac7f6515`.
+An isolated Python 3.13 environment installed that wheel, imported DeepLaw, found packaged sink
+input v5, and passed the wheel filename/private-path-marker scan. This is same-machine local build
+evidence, not SBOM/provenance/public-redownload or cross-platform release qualification. Final
+post-report commit/tree and fresh artifact hashes remain part of the external handoff because a
+tracked report cannot bind its own bytes.
 
 ## 9. Capability status
 
