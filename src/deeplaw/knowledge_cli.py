@@ -823,6 +823,23 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     context.add_argument("--as-of")
     context.add_argument("--kind", action="append", default=[])
     context.add_argument("--memory-tier", action="append", default=[])
+    context.add_argument(
+        "--query-plan-version", choices=("5", "6"), default="6"
+    )
+    context.add_argument("--query-target")
+    context.add_argument(
+        "--applicable-duty",
+        choices=(
+            "primary_answer", "identity", "definition", "current_state",
+            "temporal_freshness", "procedure", "exception", "contradiction",
+            "applicability", "limitation", "source_evidence", "unresolved_gap",
+        ),
+        action="append",
+        default=[],
+    )
+    context.add_argument(
+        "--capsule-projection", choices=("compact", "standard", "audit"), default="standard"
+    )
     context.add_argument("--include-restricted", action="store_true")
     context.add_argument("--confirm-no-case-data", action="store_true")
     context.add_argument("--output", type=Path)
@@ -1356,6 +1373,23 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="hybrid",
     )
     autonomy_context.add_argument("--as-of")
+    autonomy_context.add_argument(
+        "--query-plan-version", choices=("5", "6"), default="6"
+    )
+    autonomy_context.add_argument("--query-target")
+    autonomy_context.add_argument(
+        "--applicable-duty",
+        choices=(
+            "primary_answer", "identity", "definition", "current_state",
+            "temporal_freshness", "procedure", "exception", "contradiction",
+            "applicability", "limitation", "source_evidence", "unresolved_gap",
+        ),
+        action="append",
+        default=[],
+    )
+    autonomy_context.add_argument(
+        "--capsule-projection", choices=("compact", "standard", "audit"), default="standard"
+    )
     autonomy_context.add_argument("--confirm-no-case-data", action="store_true")
     autonomy_identity = autonomy_commands.add_parser(
         "identity",
@@ -2581,6 +2615,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     graph_hops=args.graph_hops,
                     retrieval_mode=args.retrieval_mode,
                     as_of=args.as_of,
+                    query_plan_version=args.query_plan_version,
+                    query_target=args.query_target,
+                    applicable_duties=(
+                        tuple(args.applicable_duty) if args.applicable_duty else None
+                    ),
+                    projection=args.capsule_projection,
                     confirm_no_case_data=args.confirm_no_case_data,
                     force_canonical_lexical=bool(
                         agent_read_integrity and not agent_read_integrity["derived_ready"]
@@ -3594,7 +3634,11 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             if (
                 not use_autonomous_context
                 and (
-                    args.purpose != "answer"
+                    args.query_plan_version == "6"
+                    or args.query_target is not None
+                    or args.applicable_duty
+                    or args.capsule_projection != "standard"
+                    or args.purpose != "answer"
                     or args.policy is not None
                     or args.as_of is not None
                 )
@@ -3622,6 +3666,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     kinds=tuple(
                         kind for kind in args.kind if kind in KNOWLEDGE_KINDS
                     ),
+                    query_plan_version=args.query_plan_version,
+                    query_target=args.query_target,
+                    applicable_duties=(
+                        tuple(args.applicable_duty) if args.applicable_duty else None
+                    ),
+                    projection=args.capsule_projection,
                     confirm_no_case_data=args.confirm_no_case_data,
                 )
             else:

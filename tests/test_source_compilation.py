@@ -2498,25 +2498,24 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "authority_changed": False,
         "stored_evidence_changed": False,
     }
-    assert {
-        api_capsule["query_plan"]["schema_version"],
-        cli_capsule["query_plan"]["schema_version"],
-        mcp_capsule["query_plan"]["schema_version"],
-    } == {"deeplaw.knowledge-query-plan/v5"}
-    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v2"
-    expected_revision_ids = [
-        item["revision_id"]
-        for item in api_capsule["sections"]["agent_derived_knowledge"]
-    ]
-    assert expected_revision_ids
-    assert [
-        item["revision_id"]
-        for item in cli_capsule["sections"]["agent_derived_knowledge"]
-    ] == expected_revision_ids
-    assert [
-        item["revision_id"]
-        for item in mcp_capsule["sections"]["agent_derived_knowledge"]
-    ] == expected_revision_ids
+    assert api_capsule["schema_version"] == "deeplaw.knowledge-capsule/v3"
+    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v3"
+    assert api_capsule["query_plan"]["schema_version"] == (
+        "deeplaw.knowledge-query-plan/v6"
+    )
+    assert cli_capsule["query_plan"]["schema_version"] == (
+        "deeplaw.knowledge-query-plan/v6"
+    )
+    assert api_capsule["write_performed"] is False
+    assert cli_capsule["write_performed"] is False
+    assert api_capsule["statements"] == cli_capsule["statements"]
+    assert any(gap["code"] == "no_answer" for gap in api_capsule["gaps"])
+    assert mcp_capsule["schema_version"] == "deeplaw.provider-knowledge-capsule/v2"
+    assert mcp_capsule["capsule"]["schema_version"] == (
+        "deeplaw.knowledge-capsule-projection/v1"
+    )
+    assert mcp_capsule["delivery"]["hard_limit_bytes"] == 65_536
+    assert mcp_capsule["delivery"]["provider_content_bytes"] <= 65_536
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (

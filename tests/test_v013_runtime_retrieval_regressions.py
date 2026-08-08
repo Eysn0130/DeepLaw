@@ -332,6 +332,7 @@ def test_withdrawal_first_read_does_not_return_a_cached_revision(tmp_path: Path)
     grant_id, public, _ = _seed_memory(root, writer_id="withdrawal-regression")
     arguments = {
         "operation": "context",
+        "query_plan_version": "5",
         "task": "needle",
         "confirm_no_case_data": True,
         "scope": "project",
@@ -374,6 +375,7 @@ def test_sensitivity_upgrade_never_reuses_a_lower_sensitivity_response(tmp_path:
                 1,
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "needle",
                     "confirm_no_case_data": True,
                     "scope": "project",
@@ -386,6 +388,7 @@ def test_sensitivity_upgrade_never_reuses_a_lower_sensitivity_response(tmp_path:
                 2,
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "needle",
                     "confirm_no_case_data": True,
                     "scope": "project",
@@ -415,6 +418,7 @@ def test_sensitivity_upgrade_never_reuses_a_lower_sensitivity_response(tmp_path:
                 3,
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "needle",
                     "confirm_no_case_data": True,
                     "scope": "project",
@@ -458,6 +462,7 @@ def test_scope_request_cache_partition_does_not_cross_vault_scope(tmp_path: Path
                 1,
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "needle",
                     "confirm_no_case_data": True,
                     "scope": "project",
@@ -470,6 +475,7 @@ def test_scope_request_cache_partition_does_not_cross_vault_scope(tmp_path: Path
                 2,
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "needle",
                     "confirm_no_case_data": True,
                     "scope": "domain",

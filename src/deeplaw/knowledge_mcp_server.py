@@ -815,7 +815,16 @@ def _v5_input_schema() -> dict[str, Any]:
     legacy.pop("$id", None)
     legacy_defs = legacy.pop("$defs")
     schema["$defs"].update(legacy_defs)
-    schema["oneOf"][0] = legacy
+    schema["oneOf"][0] = {
+        "allOf": [
+            legacy,
+            {
+                "properties": {
+                    "operation": {"not": {"enum": ["query", "context"]}}
+                }
+            },
+        ]
+    }
     editor = deepcopy(_load_contract("editor-context-envelope.v1.schema.json"))
     editor.pop("$schema", None)
     editor.pop("$id", None)
@@ -1754,45 +1763,9 @@ def _autonomous_v6_response(
 
 
 def _v6_provider_capsule(result: dict[str, Any]) -> dict[str, Any]:
-    if result.get("schema_version") != "deeplaw.purpose-aware-retrieval/v3":
-        raise RuntimeError("Query Plan v6 result is invalid")
-    plan = result.get("query_plan")
-    capsule = result.get("capsule")
-    if not isinstance(plan, dict) or not isinstance(capsule, dict):
-        raise RuntimeError("Query Plan v6 provider projection is invalid")
-    receipt_id = result.get("receipt_id")
-    if not isinstance(receipt_id, str):
-        raise RuntimeError("Query Plan v6 receipt identity is invalid")
-    provider_capsule = deepcopy(capsule)
-    if provider_capsule.get("projection") == "audit":
-        # Candidate scores and local planner diagnostics never cross the MCP
-        # provider boundary. An explicit audit request remains available only
-        # through the bounded, redacted receipt lookup.
-        provider_capsule.pop("audit", None)
-        provider_capsule["projection"] = "standard"
-    provider = {
-        "schema_version": "deeplaw.provider-knowledge-capsule/v2",
-        "purpose": result["purpose"],
-        "policy_id": result["policy_id"],
-        "capsule": provider_capsule,
-        # Provider-visible receipt metadata is deliberately just the opaque
-        # join key. Planner counts, audit heads and lookup internals remain in
-        # the bounded local Query Trace.
-        "receipt": {"receipt_id": receipt_id},
-        "delivery": {
-            "hard_limit_bytes": _MAX_MCP_OUTPUT_CHARS,
-            "provider_content_bytes": len(canonical_json(provider_capsule).encode("utf-8")),
-            "projection": provider_capsule["projection"],
-            "write_performed": False,
-        },
-    }
-    try:
-        Draft202012Validator(_load_contract("provider-knowledge-capsule.v2.schema.json")).validate(
-            provider
-        )
-    except Exception as error:
-        raise RuntimeError("Query Plan v6 provider projection is invalid") from error
-    return provider
+    from .retrieval.capsule import provider_capsule_from_v6
+
+    return provider_capsule_from_v6(result)
 
 
 def _handle_source_support(
@@ -2507,6 +2480,8 @@ def _handle_autonomous_knowledge_support(
             vault_path=vault_path,
         )
     if operation == "query":
+        if plane != "all":
+            raise ValueError("Query Plan query does not accept a compatibility plane")
         return _handle_purpose_query(
             query=query,
             purpose=purpose,
@@ -2914,124 +2889,176 @@ def _handle_autonomous_knowledge_support(
                     "context compilation requires confirmation that task and goal "
                     "contain no client or case material"
                 )
-            partitions = _federated_budgets(
-                operation="context",
-                plane=plane,
-                limit=min(limit, 13),
-                max_chars=min(max_chars, 8_000),
-                autonomous_compatible=autonomous_filters_compatible,
-                source_derived_compatible=source_filters_compatible,
-            )
-            autonomous_limit = partitions["autonomous"]["items"]
-            autonomous_chars = partitions["autonomous"]["characters"]
-            source_limit = partitions["source_derived"]["items"]
-            source_chars = partitions["source_derived"]["characters"]
-            scratch_autonomous = autonomous_limit == 0
-            capsule = (
-                _empty_autonomous_capsule(
+            if query_plan_version == "6":
+                if plane != "all":
+                    raise ValueError("Query Plan v6 context does not accept a compatibility plane")
+                from .retrieval.capsule import assemble_v6_context
+
+                context_details = assemble_v6_context(
                     store,
-                    task=task,
-                    goal=goal,
-                    scope=scope,
-                    max_sensitivity=max_sensitivity,
-                    as_of=as_of,
-                    kinds=autonomous_kinds,
-                )
-                if scratch_autonomous
-                else store.build_capsule(
                     task=task,
                     goal=goal,
                     purpose=purpose,
                     policy=policy,
-                    scope=cast(Any, scope),
-                    max_sensitivity=cast(Any, max_sensitivity),
-                    limit=autonomous_limit,
-                    max_chars=autonomous_chars,
+                    scope=cast(str, scope),
+                    max_sensitivity=cast(str, max_sensitivity),
+                    limit=min(limit, 13),
+                    max_chars=min(max_chars, 8_000),
                     max_tokens=max_tokens,
                     max_sources=max_sources,
                     graph_hops=graph_hops,
                     retrieval_mode=retrieval_mode,
                     as_of=as_of,
                     kinds=autonomous_kinds,
-                    confirm_no_case_data=True,
                     force_canonical_lexical=not autonomous_integrity["derived_ready"],
+                    query_target=query_target,
+                    applicable_duties=applicable_duties,
+                    projection=capsule_projection,
+                    confirm_no_case_data=True,
+                    runtime_snapshot=runtime_snapshot,
                 )
-            )
-            source_result = None
-            if source_limit:
-                context_query = f"{task} {goal or ''}".strip()
-                source_result = (
-                    _historical_source_derived_gap(
-                        legacy,
-                        query=context_query,
-                        limit=source_limit,
-                        max_chars=source_chars,
-                        kinds=source_kinds,
-                        memory_tiers=memory_tiers,
+                response = _autonomous_v6_response(
+                    operation="context",
+                    result=context_details["provider_capsule"],
+                )
+                if runtime is not None:
+                    # Trace retention is deliberately after provider and outer
+                    # response validation, matching the query path.
+                    runtime.retain_query_receipt(context_details["local_audit"])
+                return response
+            if query_plan_version == "5":
+                if (
+                    query_target is not None
+                    or applicable_duties is not None
+                    or capsule_projection != "standard"
+                ):
+                    raise ValueError("v6 context controls require query_plan_version=6")
+                partitions = _federated_budgets(
+                    operation="context",
+                    plane=plane,
+                    limit=min(limit, 13),
+                    max_chars=min(max_chars, 8_000),
+                    autonomous_compatible=autonomous_filters_compatible,
+                    source_derived_compatible=source_filters_compatible,
+                )
+                autonomous_limit = partitions["autonomous"]["items"]
+                autonomous_chars = partitions["autonomous"]["characters"]
+                source_limit = partitions["source_derived"]["items"]
+                source_chars = partitions["source_derived"]["characters"]
+                scratch_autonomous = autonomous_limit == 0
+                capsule = (
+                    _empty_autonomous_capsule(
+                        store,
+                        task=task,
+                        goal=goal,
                         scope=scope,
                         max_sensitivity=max_sensitivity,
                         as_of=as_of,
+                        kinds=autonomous_kinds,
                     )
-                    if as_of is not None
-                    else _source_derived_search(
-                        legacy,
-                        query=context_query,
-                        limit=source_limit,
-                        max_chars=source_chars,
-                        kinds=source_kinds,
-                        memory_tiers=memory_tiers,
-                        scope=scope,
-                        max_sensitivity=max_sensitivity,
+                    if scratch_autonomous
+                    else store.build_capsule(
+                        task=task,
+                        goal=goal,
+                        purpose=purpose,
+                        policy=policy,
+                        scope=cast(Any, scope),
+                        max_sensitivity=cast(Any, max_sensitivity),
+                        limit=autonomous_limit,
+                        max_chars=autonomous_chars,
+                        max_tokens=max_tokens,
+                        max_sources=max_sources,
+                        graph_hops=graph_hops,
+                        retrieval_mode=retrieval_mode,
+                        as_of=as_of,
+                        kinds=autonomous_kinds,
+                        query_plan_version="5",
+                        confirm_no_case_data=True,
+                        force_canonical_lexical=not autonomous_integrity["derived_ready"],
+                        _runtime_snapshot=runtime_snapshot,
                     )
                 )
-                capsule["sections"]["source_derived_knowledge"] = source_result["results"]
-                capsule["sections"]["gaps"].extend(source_result["gaps"])
-                capsule["query_plan"]["source_derived"] = source_result["query_plan"]
-                capsule["budget"] = {
-                    "max_items": autonomous_limit + source_limit,
-                    "selected_items": (
-                        len(capsule["sections"]["agent_derived_knowledge"])
-                        + len(capsule["sections"]["agent_memory"])
-                        + len(source_result["results"])
-                    ),
-                    "max_characters": autonomous_chars + source_chars,
-                    "selected_characters": (
-                        capsule["budget"]["selected_characters"]
-                        + source_result["total_excerpt_chars"]
-                    ),
-                    "partitions": {
-                        "autonomous": {
-                            "items": autonomous_limit,
-                            "characters": autonomous_chars,
+                source_result = None
+                if source_limit:
+                    context_query = f"{task} {goal or ''}".strip()
+                    source_result = (
+                        _historical_source_derived_gap(
+                            legacy,
+                            query=context_query,
+                            limit=source_limit,
+                            max_chars=source_chars,
+                            kinds=source_kinds,
+                            memory_tiers=memory_tiers,
+                            scope=scope,
+                            max_sensitivity=max_sensitivity,
+                            as_of=as_of,
+                        )
+                        if as_of is not None
+                        else _source_derived_search(
+                            legacy,
+                            query=context_query,
+                            limit=source_limit,
+                            max_chars=source_chars,
+                            kinds=source_kinds,
+                            memory_tiers=memory_tiers,
+                            scope=scope,
+                            max_sensitivity=max_sensitivity,
+                        )
+                    )
+                    capsule["sections"]["source_derived_knowledge"] = source_result[
+                        "results"
+                    ]
+                    capsule["sections"]["gaps"].extend(source_result["gaps"])
+                    capsule["query_plan"]["source_derived"] = source_result["query_plan"]
+                    capsule["budget"] = {
+                        "max_items": autonomous_limit + source_limit,
+                        "selected_items": (
+                            len(capsule["sections"]["agent_derived_knowledge"])
+                            + len(capsule["sections"]["agent_memory"])
+                            + len(source_result["results"])
+                        ),
+                        "max_characters": autonomous_chars + source_chars,
+                        "selected_characters": (
+                            capsule["budget"]["selected_characters"]
+                            + source_result["total_excerpt_chars"]
+                        ),
+                        "partitions": {
+                            "autonomous": {
+                                "items": autonomous_limit,
+                                "characters": autonomous_chars,
+                            },
+                            "source_derived": {
+                                "items": source_limit,
+                                "characters": source_chars,
+                            },
                         },
-                        "source_derived": {
-                            "items": source_limit,
-                            "characters": source_chars,
-                        },
-                    },
-                }
-                _redigest_capsule(capsule)
-            if "partitions" not in capsule["budget"]:
-                capsule["budget"]["max_items"] = autonomous_limit + source_limit
-                capsule["budget"]["max_characters"] = autonomous_chars + source_chars
-                capsule["budget"]["partitions"] = partitions
-                _redigest_capsule(capsule)
-            if scratch_autonomous:
-                capsule["budget"]["selected_items"] = (
-                    len(source_result["results"]) if source_result is not None else 0
-                )
-                capsule["budget"]["selected_characters"] = (
-                    source_result["total_excerpt_chars"] if source_result is not None else 0
-                )
-                capsule["budget"]["max_items"] = source_limit
-                capsule["budget"]["max_characters"] = source_chars
-                capsule["budget"]["partitions"]["autonomous"] = {
-                    "items": 0,
-                    "characters": 0,
-                }
-                _redigest_capsule(capsule)
-            _validate_autonomous_capsule(capsule)
-            result = capsule
+                    }
+                    _redigest_capsule(capsule)
+                if "partitions" not in capsule["budget"]:
+                    capsule["budget"]["max_items"] = autonomous_limit + source_limit
+                    capsule["budget"]["max_characters"] = autonomous_chars + source_chars
+                    capsule["budget"]["partitions"] = partitions
+                    _redigest_capsule(capsule)
+                if scratch_autonomous:
+                    capsule["budget"]["selected_items"] = (
+                        len(source_result["results"]) if source_result is not None else 0
+                    )
+                    capsule["budget"]["selected_characters"] = (
+                        source_result["total_excerpt_chars"]
+                        if source_result is not None
+                        else 0
+                    )
+                    capsule["budget"]["max_items"] = source_limit
+                    capsule["budget"]["max_characters"] = source_chars
+                    capsule["budget"]["partitions"]["autonomous"] = {
+                        "items": 0,
+                        "characters": 0,
+                    }
+                    _redigest_capsule(capsule)
+                _validate_autonomous_capsule(capsule)
+                result = capsule
+            if query_plan_version != "5":
+                raise ValueError("context query plan version is invalid")
         else:
             raise ValueError(f"unsupported knowledge operation: {operation}")
     response = {
@@ -3341,7 +3368,7 @@ def create_knowledge_mcp_server(
                         arguments=arguments,
                     )
                     cached = runtime.read_cached_result(cache_key)
-                    if cached is not None and operation == "query":
+                    if cached is not None and operation in {"query", "context"}:
                         query_version = str(arguments.get("query_plan_version", "6"))
                         if query_version == "6":
                             receipt = cached.get("result", {}).get("receipt")

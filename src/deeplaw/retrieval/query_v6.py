@@ -5,6 +5,7 @@ from typing import Any
 
 from ..evidence.statements import validate_statement
 from ..knowledge_autonomy import (
+    KNOWLEDGE_KINDS,
     AutonomousKnowledgeStore,
     _read_object,
     _validate_contract,
@@ -180,7 +181,7 @@ def _target(query: str, value: str | dict[str, Any] | None) -> dict[str, Any]:
         extras = {}
     elif isinstance(value, dict):
         allowed = {"text", "semantic_key", "knowledge_id", "revision_id", "kind"}
-        if set(value) - allowed:
+        if not value or set(value) - allowed:
             raise ValueError("query_target contains unknown fields")
         text = value.get("text", query)
         if not isinstance(text, str):
@@ -195,6 +196,22 @@ def _target(query: str, value: str | dict[str, Any] | None) -> dict[str, Any]:
             if not isinstance(item, str):
                 raise ValueError(f"query_target.{key} is invalid")
             _bounded(item, field=f"query_target.{key}", maximum=500)
+        if "kind" in extras and extras["kind"] not in KNOWLEDGE_KINDS:
+            raise ValueError("query_target.kind is invalid")
+        for field, prefix in (
+            ("knowledge_id", "knowledge_"),
+            ("revision_id", "knowledgerev_"),
+        ):
+            identifier = extras.get(field)
+            if identifier is not None and (
+                not identifier.startswith(prefix)
+                or len(identifier) != len(prefix) + 24
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in identifier[len(prefix) :]
+                )
+            ):
+                raise ValueError(f"query_target.{field} is invalid")
     else:
         raise ValueError("query_target is invalid")
     normalized = normalize_identity_text(text) or text.casefold()
@@ -218,7 +235,7 @@ def _applicable_duties(
         if not isinstance(requested, (tuple, list)):
             raise ValueError("applicable_duties is invalid")
         selected = list(requested)
-        if len(selected) != len(set(selected)) or any(
+        if not selected or len(selected) != len(set(selected)) or any(
             duty not in V6_DUTIES for duty in selected
         ):
             raise ValueError("applicable_duties contains an invalid duty")

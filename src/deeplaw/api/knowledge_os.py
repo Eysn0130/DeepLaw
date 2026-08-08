@@ -367,10 +367,17 @@ class _ContextAPI:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
+        query_plan_version: str = "6",
+        query_target: str | dict[str, Any] | None = None,
+        applicable_duties: tuple[str, ...] | list[str] | None = None,
+        projection: str = "standard",
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
         runtime = _invoke(self._runtime_factory)
         snapshot = _invoke(runtime.get_snapshot, operation="context")
+        force_canonical_lexical = not bool(
+            snapshot.autonomous_integrity.get("derived_ready")
+        )
         return _invoke(
             snapshot.store.build_capsule,
             task=task,
@@ -387,6 +394,11 @@ class _ContextAPI:
             retrieval_mode=retrieval_mode,
             as_of=as_of,
             kinds=kinds,
+            query_plan_version=query_plan_version,
+            query_target=query_target,
+            applicable_duties=applicable_duties,
+            projection=projection,
+            force_canonical_lexical=force_canonical_lexical,
             confirm_no_case_data=confirm_no_case_data,
             _runtime_snapshot=snapshot,
         )

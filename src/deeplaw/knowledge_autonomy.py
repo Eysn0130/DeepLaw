@@ -8935,7 +8935,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "audit_head": self.audit_head,
         }
 
-    def build_capsule(
+    def _build_capsule_v5(
         self,
         *,
         task: str,
@@ -9083,6 +9083,102 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             raise RuntimeError("Knowledge Capsule exceeds its hard 64 KiB provider budget")
         _validate_contract("knowledge-capsule.v2.schema.json", capsule)
         return capsule
+
+    def build_capsule(
+        self,
+        *,
+        task: str,
+        goal: str | None = None,
+        purpose: str = "answer",
+        policy: str | None = None,
+        scope: Scope = "project",
+        max_sensitivity: Sensitivity = "private",
+        limit: int = 8,
+        max_chars: int = 8_000,
+        max_tokens: int = 6_000,
+        max_sources: int = 12,
+        graph_hops: int = 1,
+        retrieval_mode: str = "hybrid",
+        as_of: str | None = None,
+        kinds: tuple[str, ...] = (),
+        required_tags: tuple[str, ...] = (),
+        confirm_no_case_data: bool = False,
+        force_canonical_lexical: bool = False,
+        query_plan_version: str = "6",
+        query_target: str | dict[str, Any] | None = None,
+        applicable_duties: tuple[str, ...] | list[str] | None = None,
+        projection: str = "standard",
+        _runtime_snapshot: Any | None = None,
+    ) -> dict[str, Any]:
+        """Compile a v6 local capsule; v5 is explicit compatibility only."""
+
+        if query_plan_version not in {"5", "6"}:
+            raise ValueError("Knowledge Capsule query plan version is invalid")
+        if query_plan_version == "5":
+            if (
+                query_target is not None
+                or applicable_duties is not None
+                or projection != "standard"
+            ):
+                raise ValueError("v6 context controls require query_plan_version=6")
+            return self._build_capsule_v5(
+                task=task,
+                goal=goal,
+                purpose=purpose,
+                policy=policy,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                limit=limit,
+                max_chars=max_chars,
+                max_tokens=max_tokens,
+                max_sources=max_sources,
+                graph_hops=graph_hops,
+                retrieval_mode=retrieval_mode,
+                as_of=as_of,
+                kinds=kinds,
+                required_tags=required_tags,
+                confirm_no_case_data=confirm_no_case_data,
+                force_canonical_lexical=force_canonical_lexical,
+                _runtime_snapshot=_runtime_snapshot,
+            )
+        if required_tags:
+            raise ValueError(
+                "purpose-aware Knowledge Capsules do not support required-tag filters"
+            )
+        task = _bounded_string(task, field="Capsule task", maximum=5_000)
+        selected_goal = (
+            _bounded_string(goal, field="Capsule goal", maximum=2_000)
+            if goal is not None
+            else None
+        )
+        selected_as_of = (
+            canonical_timestamp(as_of, field="Capsule as_of") if as_of is not None else None
+        )
+        from .retrieval.capsule import build_v6_capsule
+
+        return build_v6_capsule(
+            self,
+            task=task,
+            goal=selected_goal,
+            purpose=purpose,
+            policy=policy,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            max_chars=max_chars,
+            max_tokens=max_tokens,
+            max_sources=max_sources,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            as_of=selected_as_of,
+            kinds=kinds,
+            force_canonical_lexical=force_canonical_lexical,
+            query_target=query_target,
+            applicable_duties=applicable_duties,
+            projection=projection,
+            confirm_no_case_data=confirm_no_case_data,
+            runtime_snapshot=_runtime_snapshot,
+        )
 
     def semantic_lint(
         self,

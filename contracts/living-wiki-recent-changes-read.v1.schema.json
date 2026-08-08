@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-recent-changes-read.v1.schema.json",
+  "title": "DeepLaw Living Wiki Recent Changes Read",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action",
+    "index_path",
+    "index_content",
+    "index_content_sha256",
+    "index_byte_size",
+    "shards",
+    "returned_shard_count",
+    "total_shard_count",
+    "history_truncated",
+    "truncated",
+    "truncation_reason",
+    "write_performed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.living-wiki-recent-changes-read/v1"
+    },
+    "action": {
+      "const": "recent_changes"
+    },
+    "index_path": {
+      "const": "wiki/recent-changes/index.md"
+    },
+    "index_content": {
+      "type": "string",
+      "maxLength": 262144
+    },
+    "index_content_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "index_byte_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 262144
+    },
+    "shards": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "event_count",
+          "content_sha256",
+          "byte_size",
+          "page_id",
+          "revision_id"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^wiki/recent-changes/[0-9]{4}\\.md$"
+          },
+          "event_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "content_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 262144
+          },
+          "page_id": {
+            "type": ["string", "null"],
+            "maxLength": 256
+          },
+          "revision_id": {
+            "type": ["string", "null"],
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "returned_shard_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20
+    },
+    "total_shard_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2000
+    },
+    "history_truncated": {
+      "type": "boolean"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "truncation_reason": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "limit",
+        "history_retention",
+        "limit_and_history_retention"
+      ]
+    },
+    "write_performed": {
+      "const": false
+    },
+    "deprecation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deprecated", "replacement", "removal_version"],
+      "properties": {
+        "deprecated": {
+          "const": true
+        },
+        "replacement": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "removal_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "truncated": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "truncation_reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "truncated": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "truncation_reason": {
+            "const": null
+          }
+        }
+      }
+    }
+  ]
+}

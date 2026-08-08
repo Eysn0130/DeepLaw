@@ -402,6 +402,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
     )
     capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the authority and context boundaries",
         confirm_no_case_data=True,
         vault_path=root,
@@ -474,6 +475,7 @@ def test_source_derived_context_does_not_probe_or_report_autonomous_candidates(
 
     capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the source authority partition boundary",
         plane="source_derived",
         confirm_no_case_data=True,
@@ -639,6 +641,7 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
 
     source_capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the source-derived fact boundary",
         plane="all",
         kinds=["fact"],
@@ -656,6 +659,7 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
 
     autonomous_capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the autonomous concept boundary",
         plane="all",
         kinds=["concept"],
@@ -1426,6 +1430,7 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
                 "knowledge_support",
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "Quote the admission boundary.",
                     "confirm_no_case_data": True,
                     "purpose": "quote",

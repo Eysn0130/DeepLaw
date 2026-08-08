@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, cast
 
-from .knowledge_autonomy import SENSITIVITY_ORDER, AutonomousKnowledgeStore
+from .knowledge_autonomy import SENSITIVITY_ORDER, AutonomousKnowledgeStore, _validate_contract
 from .knowledge_store import KnowledgeVault
 from .util import sha256_bytes
 
@@ -330,6 +330,123 @@ def _wiki_path(root: Path, relative: str) -> Path:
     return path
 
 
+_RECENT_INDEX_PATH = "wiki/recent-changes/index.md"
+_RECENT_PAGE_BYTES = 256 * 1024
+_RECENT_INDEX_SHARD_LIMIT = 2_000
+_RECENT_SHARD_EVENTS = 200
+_RECENT_INDEX_LINK = re.compile(
+    r"^- \[\[(wiki/recent-changes/[0-9]{4})\|Recent changes ([0-9]{4})\]\] "
+    r"\(([0-9]{1,3}) events\)$"
+)
+_RECENT_EVENT_LINE = re.compile(
+    r"^- `[^`\r\n]+` · `[^`\r\n]+` · .+ · `[^`\r\n]+`$"
+)
+_RECENT_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _recent_frontmatter(
+    payload: bytes,
+    *,
+    expected_schema: str,
+    required: tuple[str, ...],
+) -> tuple[dict[str, str], str]:
+    """Parse the small generated frontmatter envelope without accepting YAML syntax."""
+
+    if not 1 <= len(payload) <= _RECENT_PAGE_BYTES:
+        raise RuntimeError("Recent Changes page exceeds its byte bound")
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise RuntimeError("Recent Changes page is not valid UTF-8") from error
+    if not text.startswith("---\n"):
+        raise RuntimeError("Recent Changes page frontmatter is missing")
+    marker = text.find("\n---\n", 4)
+    if marker < 0 or marker > 16 * 1024:
+        raise RuntimeError("Recent Changes page frontmatter is invalid")
+    values: dict[str, str] = {}
+    for line in text[4:marker].split("\n"):
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*: [^\r\n]+", line):
+            raise RuntimeError("Recent Changes page frontmatter is invalid")
+        key, value = line.split(": ", 1)
+        if key in values:
+            raise RuntimeError("Recent Changes page frontmatter is duplicated")
+        values[key] = value
+    invariant_fields = (
+        "audit_head",
+        "derived_view",
+        "authority",
+        "verification",
+        "lifecycle",
+    )
+    if values.get("schema") != expected_schema or any(
+        key not in values for key in (*invariant_fields, *required)
+    ):
+        raise RuntimeError("Recent Changes page frontmatter is incomplete")
+    if values.get("derived_view") != "true":
+        raise RuntimeError("Recent Changes page is not a derived projection")
+    if values.get("authority") != "none" or values.get("verification") != "projection_only":
+        raise RuntimeError("Recent Changes page authority metadata is invalid")
+    if values.get("lifecycle") != "active":
+        raise RuntimeError("Recent Changes page lifecycle is invalid")
+    audit_head = values.get("audit_head")
+    if audit_head is not None and not _RECENT_SHA256.fullmatch(audit_head):
+        raise RuntimeError("Recent Changes page audit binding is invalid")
+    return values, text[marker + len("\n---\n") :]
+
+
+def _recent_integer(values: Mapping[str, str], key: str, *, maximum: int) -> int:
+    value = values.get(key)
+    if value is None or not re.fullmatch(r"[0-9]+", value):
+        raise RuntimeError(f"Recent Changes frontmatter {key} is invalid")
+    parsed = int(value)
+    if parsed > maximum:
+        raise RuntimeError(f"Recent Changes frontmatter {key} exceeds its bound")
+    return parsed
+
+
+def _recent_boolean(values: Mapping[str, str], key: str) -> bool:
+    value = values.get(key)
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise RuntimeError(f"Recent Changes frontmatter {key} is invalid")
+
+
+def _recent_shard_links(body: str) -> list[tuple[str, int]]:
+    links: list[tuple[str, int]] = []
+    seen: set[str] = set()
+    for line in body.split("\n"):
+        if not line.startswith("- [[wiki/recent-changes/"):
+            continue
+        match = _RECENT_INDEX_LINK.fullmatch(line)
+        if match is None or match.group(1)[-4:] != match.group(2):
+            raise RuntimeError("Recent Changes index contains an invalid shard link")
+        path = f"{match.group(1)}.md"
+        if path in seen:
+            raise RuntimeError("Recent Changes index contains a duplicate shard")
+        seen.add(path)
+        event_count = int(match.group(3))
+        if not 1 <= event_count <= _RECENT_SHARD_EVENTS:
+            raise RuntimeError("Recent Changes shard event count exceeds its bound")
+        links.append((path, event_count))
+        if len(links) > _RECENT_INDEX_SHARD_LIMIT:
+            raise RuntimeError("Recent Changes shard count exceeds its bound")
+    return links
+
+
+def _recent_event_count(body: str) -> int:
+    heading = re.search(r"(?m)^# Recent changes · [0-9]{4}\n", body)
+    if heading is None:
+        raise RuntimeError("Recent Changes shard heading is invalid")
+    lines = [line for line in body[heading.end() :].split("\n") if line.startswith("- ")]
+    if any(_RECENT_EVENT_LINE.fullmatch(line) is None for line in lines):
+        raise RuntimeError("Recent Changes shard contains an invalid event line")
+    if not lines:
+        raise RuntimeError("Recent Changes shard has no Ledger events")
+    return len(lines)
+
+
 class WikiReadService:
     """Bounded admitted reads over rebuildable Living Wiki projections."""
 
@@ -538,6 +655,250 @@ class WikiReadService:
             raise RuntimeError("Living Wiki resolver returned an invalid page")
         return candidates[0]
 
+    @staticmethod
+    def _projection_page_record(
+        bundle: WikiProjectionBundle,
+        *,
+        path: str,
+        candidate: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        records = bundle.page_registry.get("records")
+        if not isinstance(records, (list, tuple)):
+            raise RuntimeError("Living Wiki page registry is unavailable")
+        for record in records:
+            if not isinstance(record, Mapping) or record.get("canonical_page_path") != path:
+                continue
+            if (
+                record.get("page_id") != candidate.get("page_id")
+                or record.get("namespace") != "aggregate"
+                or record.get("lifecycle") != "active"
+            ):
+                raise RuntimeError("Recent Changes page registry admission is invalid")
+            return record
+        raise RuntimeError("Recent Changes page is not registered")
+
+    def _read_projection_recent_page(
+        self,
+        bundle: WikiProjectionBundle,
+        *,
+        path: str,
+        selected_scope: str,
+        max_sensitivity: str,
+    ) -> tuple[Mapping[str, Any], bytes]:
+        candidate = self._resolve_projection_page(
+            bundle,
+            wiki_path=path,
+            knowledge_id=None,
+            selected_scope=selected_scope,
+            max_sensitivity=max_sensitivity,
+        )
+        record = self._projection_page_record(bundle, path=path, candidate=candidate)
+        payload = bundle.read_page(path)
+        expected_size = record.get("byte_size")
+        expected_hash = record.get("sha256")
+        if (
+            not isinstance(expected_size, int)
+            or expected_size != len(payload)
+            or not isinstance(expected_hash, str)
+            or not _RECENT_SHA256.fullmatch(expected_hash)
+            or sha256_bytes(payload) != expected_hash
+        ):
+            raise RuntimeError("Recent Changes page registry hash/size mismatch")
+        return record, payload
+
+    def _recent_changes_result(
+        self,
+        *,
+        index_content: str,
+        index_payload: bytes,
+        index_record: Mapping[str, Any] | None,
+        shard_records: list[dict[str, Any]],
+        total_shard_count: int,
+        history_truncated: bool,
+        deprecation: bool = False,
+    ) -> dict[str, Any]:
+        returned_shard_count = len(shard_records)
+        by_limit = returned_shard_count < total_shard_count
+        truncated = by_limit or history_truncated
+        if by_limit and history_truncated:
+            truncation_reason: str | None = "limit_and_history_retention"
+        elif by_limit:
+            truncation_reason = "limit"
+        elif history_truncated:
+            truncation_reason = "history_retention"
+        else:
+            truncation_reason = None
+        result: dict[str, Any] = {
+            "schema_version": "deeplaw.living-wiki-recent-changes-read/v1",
+            "action": "recent_changes",
+            "index_path": _RECENT_INDEX_PATH,
+            "index_content": index_content,
+            "index_content_sha256": sha256_bytes(index_payload),
+            "index_byte_size": len(index_payload),
+            "shards": shard_records,
+            "returned_shard_count": returned_shard_count,
+            "total_shard_count": total_shard_count,
+            "history_truncated": history_truncated,
+            "truncated": truncated,
+            "truncation_reason": truncation_reason,
+            "write_performed": False,
+        }
+        if deprecation:
+            result["deprecation"] = {
+                "deprecated": True,
+                "replacement": "living-wiki-v3",
+                "removal_version": "0.15.0",
+            }
+        if index_record is not None and (
+            index_record.get("canonical_page_path") != _RECENT_INDEX_PATH
+            or not isinstance(index_record.get("byte_size"), int)
+            or index_record["byte_size"] != len(index_payload)
+        ):
+            # A registry record is intentionally not echoed wholesale.  The response binds the
+            # exact bytes while keeping local registry internals out of the public payload.
+            raise RuntimeError("Recent Changes index registry binding is invalid")
+        _validate_contract("living-wiki-recent-changes-read.v1.schema.json", result)
+        return result
+
+    def _recent_changes_projection(
+        self,
+        bundle: WikiProjectionBundle,
+        *,
+        selected_scope: str,
+        max_sensitivity: str,
+        limit: int,
+    ) -> dict[str, Any]:
+        index_record, index_payload = self._read_projection_recent_page(
+            bundle,
+            path=_RECENT_INDEX_PATH,
+            selected_scope=selected_scope,
+            max_sensitivity=max_sensitivity,
+        )
+        index_values, index_body = _recent_frontmatter(
+            index_payload,
+            expected_schema="deeplaw.living-wiki-recent-changes-index/v1",
+            required=("event_count", "history_truncated"),
+        )
+        expected_events = _recent_integer(index_values, "event_count", maximum=10_000)
+        history_truncated = _recent_boolean(index_values, "history_truncated")
+        links = _recent_shard_links(index_body)
+        if len(links) > _RECENT_INDEX_SHARD_LIMIT:
+            raise RuntimeError("Recent Changes index shard count exceeds its bound")
+        if sum(event_count for _, event_count in links) != expected_events:
+            raise RuntimeError("Recent Changes index/shard event counts are inconsistent")
+        shard_records: list[dict[str, Any]] = []
+        for path, expected_count in links:
+            if len(shard_records) >= limit:
+                break
+            record, payload = self._read_projection_recent_page(
+                bundle,
+                path=path,
+                selected_scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+            )
+            values, body = _recent_frontmatter(
+                payload,
+                expected_schema="deeplaw.living-wiki-recent-changes/v1",
+                required=("shard", "event_count"),
+            )
+            if values["audit_head"] != index_values["audit_head"]:
+                raise RuntimeError("Recent Changes shard audit binding is inconsistent")
+            shard_number = _recent_integer(values, "shard", maximum=_RECENT_INDEX_SHARD_LIMIT)
+            if path[-7:-3] != f"{shard_number:04d}":
+                raise RuntimeError("Recent Changes shard identity is invalid")
+            event_count = _recent_integer(
+                values,
+                "event_count",
+                maximum=_RECENT_SHARD_EVENTS,
+            )
+            if event_count != expected_count or _recent_event_count(body) != event_count:
+                raise RuntimeError("Recent Changes shard event count is inconsistent")
+            shard_records.append(
+                {
+                    "path": path,
+                    "event_count": event_count,
+                    "content_sha256": sha256_bytes(payload),
+                    "byte_size": len(payload),
+                    "page_id": record.get("page_id"),
+                    "revision_id": record.get("revision_id"),
+                }
+            )
+        return self._recent_changes_result(
+            index_content=index_payload.decode("utf-8"),
+            index_payload=index_payload,
+            index_record=index_record,
+            shard_records=shard_records,
+            total_shard_count=len(links),
+            history_truncated=history_truncated,
+        )
+
+    def _recent_changes_legacy(
+        self,
+        *,
+        selected_scope: str,
+        max_sensitivity: str,
+        limit: int,
+    ) -> dict[str, Any]:
+        # Legacy projections have no registry admission metadata.  Their aggregate pages are
+        # private-only compatibility views; fixed paths and explicit index links are the only
+        # permitted discovery mechanism.
+        if max_sensitivity != "private":
+            raise PermissionError("Recent Changes legacy projection requires private admission")
+        index_path = _wiki_path(self.root, _RECENT_INDEX_PATH)
+        index_payload = index_path.read_bytes()
+        index_values, index_body = _recent_frontmatter(
+            index_payload,
+            expected_schema="deeplaw.living-wiki-recent-changes-index/v1",
+            required=("event_count", "history_truncated"),
+        )
+        expected_events = _recent_integer(index_values, "event_count", maximum=10_000)
+        history_truncated = _recent_boolean(index_values, "history_truncated")
+        links = _recent_shard_links(index_body)
+        if sum(event_count for _, event_count in links) != expected_events:
+            raise RuntimeError("Recent Changes index/shard event counts are inconsistent")
+        shard_records: list[dict[str, Any]] = []
+        for path, expected_count in links:
+            if len(shard_records) >= limit:
+                break
+            shard_path = _wiki_path(self.root, path)
+            payload = shard_path.read_bytes()
+            values, body = _recent_frontmatter(
+                payload,
+                expected_schema="deeplaw.living-wiki-recent-changes/v1",
+                required=("shard", "event_count"),
+            )
+            if values["audit_head"] != index_values["audit_head"]:
+                raise RuntimeError("Recent Changes shard audit binding is inconsistent")
+            shard_number = _recent_integer(values, "shard", maximum=_RECENT_INDEX_SHARD_LIMIT)
+            if path[-7:-3] != f"{shard_number:04d}":
+                raise RuntimeError("Recent Changes shard identity is invalid")
+            event_count = _recent_integer(
+                values,
+                "event_count",
+                maximum=_RECENT_SHARD_EVENTS,
+            )
+            if event_count != expected_count or _recent_event_count(body) != event_count:
+                raise RuntimeError("Recent Changes shard event count is inconsistent")
+            shard_records.append(
+                {
+                    "path": path,
+                    "event_count": event_count,
+                    "content_sha256": sha256_bytes(payload),
+                    "byte_size": len(payload),
+                    "page_id": None,
+                    "revision_id": None,
+                }
+            )
+        return self._recent_changes_result(
+            index_content=index_payload.decode("utf-8"),
+            index_payload=index_payload,
+            index_record=None,
+            shard_records=shard_records,
+            total_shard_count=len(links),
+            history_truncated=history_truncated,
+            deprecation=True,
+        )
+
     def _execute_projection(
         self,
         store: AutonomousKnowledgeStore,
@@ -564,7 +925,14 @@ class WikiReadService:
                 limit=limit,
                 )
             )
-        if action in {"browse_kind", "recent_changes"}:
+        if action == "recent_changes":
+            return self._recent_changes_projection(
+                bundle,
+                selected_scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+                limit=limit,
+            )
+        if action == "browse_kind":
             return self._legacy_deprecation(
                 self._browse(
                     store,
@@ -681,7 +1049,13 @@ class WikiReadService:
                 max_sensitivity=cast(Any, max_sensitivity),
                 limit=limit,
             )
-        if action in {"browse_kind", "recent_changes"}:
+        if action == "recent_changes":
+            return self._recent_changes_legacy(
+                selected_scope=selected_scope,
+                max_sensitivity=max_sensitivity,
+                limit=limit,
+            )
+        if action == "browse_kind":
             return self._browse(
                 store,
                 action=action,
