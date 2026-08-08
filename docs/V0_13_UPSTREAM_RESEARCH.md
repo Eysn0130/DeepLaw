@@ -209,6 +209,114 @@ context contracts. Named comparative quality remains `not_executed`, so
 - Copying Tolaria AGPL code or Obsidian proprietary implementation behavior into DeepLaw.
 - Claiming a real Tolaria/Obsidian product integration from a deterministic substitute.
 
+## PRD 1.1 evidence review
+
+The 2026-08-08 PRD review added product-level constraints without expanding the v0.13 candidate:
+
+- [C2PA's official explainer](https://c2pa.org/specifications/specifications/2.2/explainer/Explainer.html)
+  states that valid provenance does not by itself establish factual truth. DeepLaw therefore keeps
+  integrity, provenance, Authority, verification, corroboration and applicability separate.
+- [WiCER](https://arxiv.org/abs/2605.07068) reports a compilation gap in blindly generated LLM
+  Wikis and motivates coverage probes, explicit evidence fallback and targeted refinement. It is a
+  research result, not proof that one compiler strategy generalizes to DeepLaw or legal material.
+- [Mem2ActBench](https://arxiv.org/abs/2601.19935) evaluates whether recalled memory changes tool
+  use and parameter grounding, while
+  [MemSecBench](https://arxiv.org/abs/2607.27080) follows a write-execute-forget security
+  lifecycle. These motivate end-task and lifecycle gates beyond Recall@K.
+- [Governed Evolving Memory](https://arxiv.org/abs/2605.26252) frames memory correctness as a state
+  trajectory across ingestion, revision, forgetting and retrieval. DeepLaw adopts that evaluation
+  question without adopting its property-graph prototype.
+- The [MCP 2026-07-28 release](https://blog.modelcontextprotocol.io/posts/2026-07-28/) is
+  stateless-first. DeepLaw therefore does not bind durable continuity or knowledge identity to an
+  MCP connection and treats capability discovery as an adapter surface only.
+- [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/374e0bc4c644310ff56cdf9c0fe81eccdec862b0/okf/SPEC.md)
+  distinguishes provenance from attested computation and leaves runtime packaging open. DeepLaw
+  may project this pattern later but remains outside the execution and capability-grant role.
+
+These sources support PRD invariants and evaluation design only. The papers are recent research,
+not release evidence, and no competitive or implementation claim follows from citing them.
+
+## PRD 1.2 adversarial scope review
+
+The second 2026-08-08 review challenged both deletions and additions instead of assuming that a
+smaller PRD was automatically better.
+
+### Updated external evidence
+
+- Current [Codex Memories](https://learn.chatgpt.com/docs/customization/memories) and
+  [Claude Code memory](https://code.claude.com/docs/en/memory) both provide generated local
+  cross-session recall. This invalidates any product thesis that Host memory is simply absent.
+  DeepLaw's defensible job is portable, project- and task-lineage-specific state plus governed
+  evidence, not duplicating preference or transcript recall.
+- [OpenWiki at `7531d615216e8cbccf464f66cfbbae3668871c84`](https://github.com/langchain-ai/openwiki/tree/7531d615216e8cbccf464f66cfbbae3668871c84)
+  now demonstrates self-maintaining code/personal Wikis, source connectors, CI updates, a graph
+  viewer and OKF output. Those features validate open Wiki demand but do not prove generated pages
+  are complete, authoritative or safe to promote. DeepLaw does not copy its broad connector,
+  credential, telemetry or root-instruction mutation choices by default.
+- [obsidian-wiki at `5ef66b6bec8b26bab6594ac37fb4d8371469fbab`](https://github.com/Ar9av/obsidian-wiki/tree/5ef66b6bec8b26bab6594ac37fb4d8371469fbab)
+  demonstrates manifest-based incremental compilation, progressive page loading, session search,
+  lint and cross-agent Markdown Skills. Its full session-history ingestion is deliberately not a
+  DeepLaw default; the useful user outcome is recovered through a content-minimized Run Timeline.
+- [Graphiti at `425bf2481b51437e43455e09d241c5f46e3d95f3`](https://github.com/getzep/graphiti/tree/425bf2481b51437e43455e09d241c5f46e3d95f3),
+  [Letta at `ff19ffeafeb54bd2a7dc5d4a552f10191732a235`](https://github.com/letta-ai/letta/tree/ff19ffeafeb54bd2a7dc5d4a552f10191732a235),
+  and [Mem0 at `4debc58a83377b18be81ae1e5969a300736b2fac`](https://github.com/mem0ai/mem0/tree/4debc58a83377b18be81ae1e5969a300736b2fac)
+  validate temporal graphs, stateful agents and multi-level memory. They do not justify making
+  DeepLaw an Agent runtime, personal-profile service, external graph database, or automatic memory
+  writer.
+- [MemOps](https://arxiv.org/abs/2607.12893) requires operation traces for remember, update,
+  forget and reflect; [MemoryArena](https://arxiv.org/abs/2602.16313) shows that high recall scores
+  do not imply success on interdependent multi-session tasks. These findings require task-lineage,
+  wrong-target, concurrency and action-level evaluation.
+
+These repositories are reference-only under their recorded licenses; no code or dependency was
+imported.
+
+### Deletion audit
+
+| Earlier deletion or simplification | Verdict | PRD 1.2 disposition |
+| --- | --- | --- |
+| Fixed seven-field Checkpoint taxonomy | Correct deletion | Required semantic contents remain; exact enums and field names stay in versioned contracts |
+| Package version, candidate status and benchmark constants | Correct deletion | Mutable facts remain in disposition and evaluation documents |
+| One version-specific Gate A/B/C/D ladder | Correct deletion | Capabilities qualify independently as Target, Implemented, Qualified or Released |
+| Full transcript and Host-memory ingestion | Correct safety boundary, but incomplete user outcome | Keep raw transcripts out; add an owner-searchable, content-minimized Run Timeline with optional opaque Host reference |
+| Default Canvas, community and relation-path page generation | Correct for materialized views | Restore bounded typed-relation traversal as core; keep per-object presentation optional |
+| Single-Revision revert | Earlier wording was too broad | Require semantic restore by a new revision/recovery event; continue to forbid audit rewind and dependency-blind pointer rollback |
+| Root `AGENTS.md`/README PRD links during this review | Correct temporary deletion | Those files are frozen Gold inputs; Task Cards cite the PRD until a deliberate protocol-version rotation |
+| Attested procedural knowledge as a differentiator | Speculative and non-core | Remove from stable PRD; retain attestation only as research or an interchange projection subject to feature admission |
+
+### Addition audit
+
+The review retains provenance-versus-truth separation, Wiki compilation gaps, lifecycle memory,
+selective forgetting, maintenance-debt metrics, stateless MCP requests and capability separation.
+It also adds requirements that were previously missing: concurrent task/worktree lineage,
+cross-Vault isolation, source-acquisition manifests, content-minimized Run discovery, Wiki ownership
+classes, Wikilink-versus-typed-Relation separation, bounded relation paths, order-independent tail
+retrieval, stale-head detection, disambiguation and semantic restore.
+
+These are requirements, not claims that the current v0.13 candidate implements them. Each new
+contract remains behind the PRD feature-admission gate and requires a failing external task before
+runtime migration.
+
+### Current candidate impact
+
+- `knowledge_run_records_v4` currently binds writer, Host, task hash, scope, sensitivity, outcome
+  hashes and time, but it has no canonical parent task-line, repository/worktree binding or
+  conflict-aware concurrent-Checkpoint contract. `PRD-CONT-010` through `PRD-CONT-012` are therefore
+  `Target`, not current behavior.
+- The Page Registry, Link Index, Resolver, projection manifest and typed Relation store provide
+  reusable primitives for `PRD-WIKI-010` through `PRD-WIKI-013`; editor ownership classes,
+  end-to-end reconciliation and bounded path-task acceptance still require explicit mapping and
+  external evidence.
+- Query plans already bind audit heads and the candidate includes tail-recall remediation tests,
+  but order invariance, stale-head handling and cross-Vault disambiguation must be mapped at every
+  public seam before `PRD-CTX-013` through `PRD-CTX-015` can be called implemented.
+- Revision history, lifecycle and recovery primitives exist, but semantic restore by a new revision
+  with dependent-state validation is not claimed until its public contract, migration/recovery and
+  external rollback task are demonstrated.
+
+No runtime code, package version, release status, benchmark Gold, or competitive claim changes as
+part of this PRD review.
+
 ## Consequences for v0.13 acceptance
 
 The research supports the Page Registry/Link Index/Resolver, Coverage Specification, projection
