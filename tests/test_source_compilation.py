@@ -3578,7 +3578,8 @@ def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) 
     )
     assert query["result"]["policy_id"] == "compiled-first-v1"
     assert query["schema_version"] == "deeplaw.knowledge-support-output/v6"
-    assert query["result"]["receipt"]["query_plan_version"] == "6"
+    assert set(query["result"]["receipt"]) == {"receipt_id"}
+    assert query["result"]["receipt"]["receipt_id"].startswith("queryreceipt_")
     assert query["result"]["capsule"]["schema_version"] == (
         "deeplaw.knowledge-capsule-projection/v1"
     )

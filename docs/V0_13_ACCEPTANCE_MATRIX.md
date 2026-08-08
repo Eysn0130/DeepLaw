@@ -70,7 +70,7 @@ version changes only after implementation and local acceptance are complete.
 | I03 | `wiki_lookup` no longer masquerades as Wiki page reading; current Skills do not select it by default | Skill and stdio tests |
 | B01 | Query expansion is versioned, explainable and independent from Benchmark/Gold data | import-boundary and profile tests |
 | B02 | Exact Benchmark phrase mappings are removed or generalized; Benchmark questions are not generated from product aliases | static comparison test |
-| B03 | Frozen ablations cover expansion on/off, lexical, dense, graph, hybrid, compiled-first and evidence fallback with recall, precision, false positive, latency and token reporting | ablation report and held-out paraphrases |
+| B03 | Development ablations cover expansion on/off, lexical, dense, graph, hybrid, compiled-first and evidence fallback with recall, precision, false positive, latency and token reporting; they do not qualify as an external holdout | ablation report and repository-visible development paraphrases |
 | L01 | All five Authoritative Pack parser warnings are independently verified or receive an explicit Evidence Capability downgrade | warning-specific receipts and quality report |
 | L02 | Authoritative Navigator exposes document/version/effective-date/segment/definition/cross-reference/warning/gap/receipt navigation without generating Official prose | derived-view and read-only tests |
 | L03 | The 28-source gate separately reports retrieval, evidence-duty, citation/temporal and interpretation metrics; no citation fallback or false Authority is admitted | exact Pack gate and held-out report |

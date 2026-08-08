@@ -8955,6 +8955,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         required_tags: tuple[str, ...] = (),
         confirm_no_case_data: bool = False,
         force_canonical_lexical: bool = False,
+        _runtime_snapshot: Any | None = None,
     ) -> dict[str, Any]:
         if not confirm_no_case_data:
             raise ValueError("Knowledge Capsule requires confirmation that no case data is present")
@@ -8988,6 +8989,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             kinds=kinds,
             query_plan_version="5",
             force_canonical_lexical=force_canonical_lexical,
+            _runtime_snapshot=_runtime_snapshot,
         )
         if (
             retrieval.get("audit_head") != self.audit_head

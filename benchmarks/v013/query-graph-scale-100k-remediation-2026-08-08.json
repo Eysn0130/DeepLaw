@@ -1,0 +1,232 @@
+{
+  "candidate": {
+    "package_version": "0.12.0",
+    "runner": "benchmarks/v013/query_graph_scale.py",
+    "runner_sha256": "6c2f702ab02bddd23231b5fcc01591be4b03feca5ac3788e633c72fca1bfd2f8",
+    "source_hashes": {
+      "benchmarks/v013/query_graph_scale.py": "6c2f702ab02bddd23231b5fcc01591be4b03feca5ac3788e633c72fca1bfd2f8",
+      "contracts/v013-query-graph-scale-report.v1.schema.json": "704ed1835d4d0d1f1442b928f8bf78edccfede076751b1ad109abacc04c9aa36",
+      "src/deeplaw/knowledge_autonomy.py": "56be77a4aab17b1fc1e26bcdaa4f349e652c978b148e976346ca260335978b28",
+      "src/deeplaw/retrieval/query_v6.py": "339566f68b977a9d52b46d9b611776f87a70101589eaa82d7dad3ce6992ea96b"
+    }
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Synthetic construction diagnostic; no Gold, legal Pack, real host, or user corpus is read.",
+  "competitive_claim_eligible": false,
+  "configuration": {
+    "execute_expensive": true,
+    "graph_admitted_bound": 500,
+    "graph_hops": [
+      0,
+      1,
+      2
+    ],
+    "graph_scanned_bound": 5000,
+    "legacy_global_prefix_scan_removed": true,
+    "max_provider_statements": 8,
+    "packet_max_fragments": 4,
+    "provider_hard_limit_bytes": 65536,
+    "scales": [
+      100000
+    ],
+    "seed": 221507603,
+    "statement_candidate_bound": 512,
+    "statements_per_revision": 1000
+  },
+  "environment": {
+    "cpu": {
+      "logical_count": 12,
+      "model": "arm"
+    },
+    "git_commit": "2fc308daa3bc319b23ed31c5e02aa630fd42c164",
+    "git_reason": null,
+    "os": {
+      "machine": "arm64",
+      "name": "Darwin",
+      "release": "25.5.0"
+    },
+    "python": "3.12.13",
+    "ram_total_bytes": 25769803776,
+    "sqlite": "3.50.4",
+    "working_tree_dirty": true
+  },
+  "generated_at_utc": "2026-08-08T04:02:13Z",
+  "limitations": [
+    "Synthetic, temporary, claim-ineligible diagnostic; never a competitive, RC, GA, or SOTA claim.",
+    "Expensive lanes are never replaced by the 101-statement smoke lane.",
+    "The runner does not read credentials, network data, Gold/scorer material, or private Vaults.",
+    "No truncation check is passable without explicit bound evidence and an emitted Gap/Receipt."
+  ],
+  "overall": {
+    "executed_count": 0,
+    "fail_count": 0,
+    "not_executed": [
+      {
+        "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+        "scale": 100000
+      }
+    ],
+    "not_executed_count": 1,
+    "release_gate_passed": false,
+    "status": "not_released"
+  },
+  "profile": "construction_diagnostic",
+  "release_gate_passed": false,
+  "report_sha256": "97d206594cc778f018ec101976a924423063e40e1e9b338837565e42e439dfd8",
+  "rerun_commands": [
+    "uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 101",
+    "uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 10000 --execute-expensive",
+    "uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 100000 --execute-expensive"
+  ],
+  "scale_reports": [
+    {
+      "construction": "public_profile_v3_compilation",
+      "derived_rebuild": {
+        "reason": "RuntimeError: Living Wiki file exceeds its byte bound: <local-path>",
+        "status": "fail"
+      },
+      "fixture": {
+        "audit_head": null,
+        "compilation_run_id": "compilationrun_d47b83f93a6bff28e27d4d5b",
+        "packet_count": 34,
+        "source_revision_id": "sourcerev_07535b6967984f503a916b04",
+        "statement_count": 100000
+      },
+      "graph": {
+        "checks": {},
+        "executed_relation_count": 0,
+        "graph_hops": {},
+        "nodes": [],
+        "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+        "requested_relation_count": 100000,
+        "seed": null,
+        "status": "not_executed",
+        "truncation": {
+          "admitted_bound": 500,
+          "gap_or_receipt_evidence": false,
+          "scanned_bound": 5000,
+          "status": "not_executed"
+        }
+      },
+      "graph_status": "not_executed",
+      "limitations": [
+        "Synthetic, source-free quality diagnostic; not eligible for a release or competitive claim.",
+        "500/5000 relation truncation is not passable unless the bound and an explicit Gap/Receipt are observed."
+      ],
+      "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+      "resource": {
+        "build_elapsed_ms": 1379981.233,
+        "process_peak_rss_after_bytes": 661716992,
+        "process_peak_rss_before_bytes": 60309504,
+        "storage": {
+          "bytes": 908626684,
+          "file_count": 300321
+        }
+      },
+      "scale": 100000,
+      "source_sha256": "4e3ef34440f05e1931d20ca9aa8f64a2b38be55c477d7532e7a3b7caa96ce923",
+      "statement": {
+        "candidate_bound": 512,
+        "legacy_global_prefix_scan_removed": true,
+        "max_provider_bytes": 6117,
+        "position_independent": true,
+        "provider_hard_limit_bytes": 65536,
+        "query_elapsed_ms": 1172158.738,
+        "scan_strategy_bounded": true,
+        "statement_count": 100000,
+        "tail_recall": true,
+        "target_positions": [
+          0,
+          5001,
+          50000,
+          99999
+        ],
+        "targets": [
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets",
+              "derived lexical state was stale; bounded canonical fallback was used"
+            ],
+            "gaps": [],
+            "position": 0,
+            "provider_bytes": 6114,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "7809d2f6220d4c73235a1974911fbd4c3f5063ccb321a97602e80bd70c8162cc",
+            "receipt_id": "queryreceipt_ea6afe9744f567916519867b",
+            "selected": true,
+            "selected_ids": [
+              "statement_1a125a1a6c0ed345fdbdd886"
+            ],
+            "statement_id": "statement_1a125a1a6c0ed345fdbdd886",
+            "statement_text_sha256": "749a1295c7e56fdea23382ee397583b1fa1d4098c387d2a9047dff7eb8b06abd"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets",
+              "derived lexical state was stale; bounded canonical fallback was used"
+            ],
+            "gaps": [],
+            "position": 5001,
+            "provider_bytes": 6106,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "a78bebd79b83654720726a8a99090796e1e2f65c0660ce360f99cab0c4ae700f",
+            "receipt_id": "queryreceipt_5373e4abcde1a84627ae7bcd",
+            "selected": true,
+            "selected_ids": [
+              "statement_035182219f26fb0d7a13160b"
+            ],
+            "statement_id": "statement_035182219f26fb0d7a13160b",
+            "statement_text_sha256": "f2003552eeb3d809a8374fe9a67c7c00670049e84b55b3dcd0a564baf35784f3"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets",
+              "derived lexical state was stale; bounded canonical fallback was used"
+            ],
+            "gaps": [],
+            "position": 50000,
+            "provider_bytes": 6114,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "0ca528519423d2621643a236de49f575ef94a88461c8ba0328a0e0f12aea0dd8",
+            "receipt_id": "queryreceipt_c8dbd993956c335a30467df4",
+            "selected": true,
+            "selected_ids": [
+              "statement_8514b26455aaeaeac938fc58"
+            ],
+            "statement_id": "statement_8514b26455aaeaeac938fc58",
+            "statement_text_sha256": "47cf15a5f16ac0842a374789f289b28bf4ac88bdb8821f30af88ed4afce8cdcd"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets",
+              "derived lexical state was stale; bounded canonical fallback was used"
+            ],
+            "gaps": [],
+            "position": 99999,
+            "provider_bytes": 6117,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "50030d3d64064c7d91d300dc81ee9a61ceeccebe701f8ac56d0894122b2543c3",
+            "receipt_id": "queryreceipt_de2c44f2f55b9870a998467c",
+            "selected": true,
+            "selected_ids": [
+              "statement_f9638d2fe049e44dee9c8aed"
+            ],
+            "statement_id": "statement_f9638d2fe049e44dee9c8aed",
+            "statement_text_sha256": "51c874b97e8da8792b9473d7d3bd8077119b73f93985d6033a630177b251a8cf"
+          }
+        ]
+      },
+      "statement_status": "executed",
+      "status": "not_executed"
+    }
+  ],
+  "schema_version": "deeplaw.v013-query-graph-scale-report/v1"
+}

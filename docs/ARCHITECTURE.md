@@ -223,9 +223,12 @@ The v0.13 source candidate adds four bound layers without changing those authori
 - Living Wiki projection Profile `standard` (the default) produces no per-object Canvas and pairs
   its file manifest with a v3 Page Registry, Link Index and Stable Resolver. All files are published
   through one crash-recoverable ownership transaction.
-- The knowledge MCP lifespan owns one verified persistent read snapshot. Warm requests compare
-  cheap database/audit/manifest identities before reuse; a changed identity invalidates the old
-  snapshot before reopening and verification. Explicit `verify` always performs full verification.
+- The knowledge MCP lifespan owns one verified persistent read snapshot. A long-lived Python
+  `KnowledgeOS` handle lazily uses the same runtime for `context.compile`; it does not create a
+  second cache or duplicate Capsule assembly. Warm requests compare cheap
+  database/audit/manifest identities before reuse; a changed identity invalidates the old
+  snapshot before reopening and verification. Explicit `verify` always performs full verification,
+  and Python callers can close the handle directly or with a context manager.
 
 ### Compiled-first retrieval policy
 
@@ -241,7 +244,12 @@ a universal hard-coded ranking by object kind:
 - Query Plan v6 selects admitted statement identities and projects independent Statement Evidence
   receipts. Each receipt binds the statement hash and frozen input set to exact provider-visible
   Source Revision, fragment, locator and quote hashes; incomplete cross-source coverage remains an
-  explicit Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
+  explicit Gap. Discovery first uses the governed current/historical Knowledge indexes with the
+  requested `retrieval_mode`, `graph_hops`, and integrity-selected canonical lexical fallback;
+  Statement matching is then restricted to at most 20 discovered revisions and a 512-item
+  candidate pool. It never selects a fixed global prefix of the Statement table. Discovery and
+  Statement truncation are plan/receipt-bound, and a resource-bound truncation is a provider-visible
+  Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
 - bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
   stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v6 binds
   the expansion profile/count/digest and validates it as part of the query/audit receipt; v5
@@ -253,6 +261,16 @@ a universal hard-coded ranking by object kind:
   represented evidence and reports residual gaps. Query Plan v5 remains explicitly selectable. An exact
   policy/entity designator cannot be silently replaced by a different designator when the target
   revision is stale or withdrawn; the Capsule stays empty and preserves the explicit gap;
+- ordinary queries do not append to the canonical Knowledge Ledger. MCP keeps only a 16-entry,
+  15-minute, 1 MiB aggregate ephemeral Query Trace after successful provider validation. The trace
+  stores query hashes and redacted receipt metadata, verifies its hash on read, rotates by TTL/LRU,
+  clears on identity change/close, and disappears on process exit. Candidate scores and audit
+  projection internals do not cross the provider boundary; the provider-visible receipt contains
+  only the opaque `receipt_id` join key;
+- Living Wiki object pages retain inline Statement Evidence for small revisions. Revisions with
+  more than 64 Statements project deterministic, registry-indexed Statement Evidence shards of at
+  most 64 Statements each. The canonical object page links every shard, each Statement keeps its
+  stable anchor and receipt metadata, and every generated page stays under the 256 KiB page bound;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.
 
 The closed loop is:

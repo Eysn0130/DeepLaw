@@ -37,6 +37,7 @@ LIVING_WIKI_SCHEMA = "deeplaw.living-wiki-manifest/v2"
 LIVING_WIKI_GENERATOR = "deeplaw.living-wiki-projector/2"
 INDEX_SHARD_SIZE = 200
 SOURCE_FRAGMENT_SHARD_SIZE = 64
+STATEMENT_EVIDENCE_SHARD_SIZE = 64
 CANVAS_NODE_LIMIT = 200
 CANVAS_EDGE_LIMIT = 400
 MAX_DERIVED_FILE_BYTES = 256 * 1024
@@ -448,6 +449,106 @@ def _current_statements(
     return result
 
 
+def _statement_evidence_lines(
+    statements: list[dict[str, Any]],
+    source_fragment_links: dict[tuple[str, str], tuple[str, str]] | None,
+) -> list[str]:
+    lines: list[str] = []
+    links = source_fragment_links or {}
+    for statement in statements:
+        statement_id = statement["statement_id"]
+        anchor = f"statement-{statement_id}"
+        lines.extend(
+            [
+                f'<a id="{anchor}"></a>',
+                f"### Statement {statement['ordinal']} · `{statement_id}`",
+                "",
+                f"- Statement type: `{statement['statement_type']}`",
+                f"- Support status: `{statement['support_status']}`",
+                f"- Freshness: `{statement['freshness']}`",
+                f"- Statement SHA-256: `{statement['statement_sha256']}`",
+                f"- Receipt ID: `receipt:{statement['receipt_sha256'] or 'missing'}`",
+                f"- Receipt digest: `{statement['receipt_sha256'] or 'missing'}`",
+                f"- Statement text (exact persisted text): {statement['statement_text']}",
+            ]
+        )
+        source_refs = statement.get("source_refs", [])
+        if source_refs:
+            lines.append("- Source Evidence:")
+            for reference in source_refs:
+                source_revision_id = reference.get("source_revision_id")
+                fragment_id = reference.get("fragment_id")
+                locator = str(reference.get("locator", "locator omitted")).replace("`", "'")
+                quote_sha = reference.get("quote_sha256", "missing")
+                target = links.get((source_revision_id, fragment_id))
+                if target is not None:
+                    page, fragment_anchor = target
+                    evidence_link = (
+                        f"[[{PurePosixPath(page).with_suffix('').as_posix()}"
+                        f"#{fragment_anchor}|Source fragment {fragment_id}]]"
+                    )
+                else:
+                    evidence_link = f"`{fragment_id}`"
+                lines.append(
+                    f"  - {evidence_link} · source revision `{source_revision_id}` · "
+                    f"locator `{locator}` · quote SHA-256 `{quote_sha}`"
+                )
+        else:
+            lines.append("- Source Evidence: explicit gap; no exact Source Fragment reference.")
+        limitation = statement.get("limitation")
+        lines.append(f"- Limitation: {limitation if limitation else 'none recorded.'}")
+        gaps = statement.get("gaps", [])
+        if gaps:
+            lines.append(
+                "- Gaps: "
+                + "; ".join(
+                    f"{item.get('gap_id', 'gap')}: {item.get('reason', 'unspecified')}"
+                    for item in gaps
+                )
+            )
+        else:
+            lines.append("- Gaps: none recorded.")
+    return lines
+
+
+def _statement_evidence_page(
+    *,
+    row: dict[str, Any],
+    audit_head: str,
+    statements: list[dict[str, Any]],
+    shard_index: int,
+    shard_count: int,
+    source_fragment_links: dict[tuple[str, str], tuple[str, str]] | None,
+) -> str:
+    lines = _frontmatter(
+        schema="deeplaw.living-wiki-statement-evidence-shard/v1",
+        audit_head=audit_head,
+        fields={
+            "knowledge_id": row["knowledge_id"],
+            "revision_id": row["revision_id"],
+            "shard": str(shard_index),
+            "shard_count": str(shard_count),
+            "statement_count": str(len(statements)),
+            "freshness": row["freshness"],
+            "lifecycle": row["lifecycle"],
+            "revision": row["revision_id"],
+        },
+    )
+    lines.extend(
+        [
+            f"# {row['title']} · Statement Evidence {shard_index:04d}",
+            "",
+            f"- Canonical Knowledge page: {_wiki_link(row['_page_path'], row['title'])}",
+            f"- Bounded shard: {shard_index} of {shard_count}",
+            "",
+            "## Statement Evidence",
+            "",
+        ]
+    )
+    lines.extend(_statement_evidence_lines(statements, source_fragment_links))
+    return "\n".join(lines)
+
+
 def _object_page(
     *,
     row: dict[str, Any],
@@ -456,6 +557,7 @@ def _object_page(
     titles: dict[str, str],
     relations: list[dict[str, Any]],
     statements: list[dict[str, Any]] | None = None,
+    statement_shards: list[dict[str, Any]] | None = None,
     source_fragment_links: dict[tuple[str, str], tuple[str, str]] | None = None,
 ) -> str:
     outgoing = [
@@ -555,63 +657,21 @@ def _object_page(
     lines.extend(["", "## Statement Evidence", ""])
     if not statement_rows:
         lines.append("- Explicit gap: no persisted Statement Evidence Map is registered.")
-    else:
-        links = source_fragment_links or {}
-        for statement in statement_rows:
-            statement_id = statement["statement_id"]
-            anchor = f"statement-{statement_id}"
-            lines.extend(
-                [
-                    f'<a id="{anchor}"></a>',
-                    f"### Statement {statement['ordinal']} · `{statement_id}`",
-                    "",
-                    f"- Statement type: `{statement['statement_type']}`",
-                    f"- Support status: `{statement['support_status']}`",
-                    f"- Freshness: `{statement['freshness']}`",
-                    f"- Statement SHA-256: `{statement['statement_sha256']}`",
-                    f"- Receipt ID: `receipt:{statement['receipt_sha256'] or 'missing'}`",
-                    f"- Receipt digest: `{statement['receipt_sha256'] or 'missing'}`",
-                    f"- Statement text (exact persisted text): {statement['statement_text']}",
-                ]
+    elif statement_shards:
+        lines.append(
+            f"- {len(statement_rows)} persisted Statements are retained in bounded evidence "
+            "shards; this canonical page remains below the Wiki page byte limit."
+        )
+        for shard in statement_shards:
+            shard_label = (
+                f"Statements {shard['first_ordinal']}-{shard['last_ordinal']}"
             )
-            source_refs = statement.get("source_refs", [])
-            if source_refs:
-                lines.append("- Source Evidence:")
-                for reference in source_refs:
-                    source_revision_id = reference.get("source_revision_id")
-                    fragment_id = reference.get("fragment_id")
-                    locator = str(reference.get("locator", "locator omitted")).replace("`", "'")
-                    quote_sha = reference.get("quote_sha256", "missing")
-                    target = links.get((source_revision_id, fragment_id))
-                    if target is not None:
-                        page, fragment_anchor = target
-                        evidence_link = (
-                            f"[[{PurePosixPath(page).with_suffix('').as_posix()}"
-                            f"#{fragment_anchor}|Source fragment {fragment_id}]]"
-                        )
-                    else:
-                        evidence_link = f"`{fragment_id}`"
-                    lines.append(
-                        f"  - {evidence_link} · source revision `{source_revision_id}` · "
-                        f"locator `{locator}` · quote SHA-256 `{quote_sha}`"
-                    )
-            else:
-                lines.append("- Source Evidence: explicit gap; no exact Source Fragment reference.")
-            limitation = statement.get("limitation")
             lines.append(
-                f"- Limitation: {limitation if limitation else 'none recorded.'}"
+                f"- {_wiki_link(shard['path'], shard_label)} "
+                f"({shard['count']} Statements)"
             )
-            gaps = statement.get("gaps", [])
-            if gaps:
-                lines.append(
-                    "- Gaps: "
-                    + "; ".join(
-                        f"{item.get('gap_id', 'gap')}: {item.get('reason', 'unspecified')}"
-                        for item in gaps
-                    )
-                )
-            else:
-                lines.append("- Gaps: none recorded.")
+    else:
+        lines.extend(_statement_evidence_lines(statement_rows, source_fragment_links))
     lines.extend(["", "## Relations", ""])
     for relation in sorted(
         outgoing,
@@ -766,21 +826,24 @@ def _source_pages(
                    compilations_v2.adapter_version,
                    compilations_v2.configuration_sha256,
                    compilations_v2.fragment_inventory_sha256,
-                   COUNT(DISTINCT source_ir_nodes_v2.node_id) AS node_count,
-                   COUNT(DISTINCT fragments_v2.fragment_revision_id) AS fragment_count,
-                   COUNT(
-                       DISTINCT CASE
-                           WHEN fragments_v2.instruction_risk = 1
-                           THEN fragments_v2.fragment_revision_id
-                       END
+                   (
+                       SELECT COUNT(*) FROM source_ir_nodes_v2
+                       WHERE source_ir_nodes_v2.compilation_id =
+                             compilations_v2.compilation_id
+                   ) AS node_count,
+                   (
+                       SELECT COUNT(*) FROM fragments_v2
+                       WHERE fragments_v2.compilation_id =
+                             compilations_v2.compilation_id
+                   ) AS fragment_count,
+                   (
+                       SELECT COUNT(*) FROM fragments_v2
+                       WHERE fragments_v2.compilation_id =
+                             compilations_v2.compilation_id
+                         AND fragments_v2.instruction_risk = 1
                    ) AS risky_fragment_count
             FROM compilations_v2
-            LEFT JOIN source_ir_nodes_v2
-              ON source_ir_nodes_v2.compilation_id = compilations_v2.compilation_id
-            LEFT JOIN fragments_v2
-              ON fragments_v2.compilation_id = compilations_v2.compilation_id
             WHERE compilations_v2.source_revision_id = ?
-            GROUP BY compilations_v2.compilation_id
             ORDER BY compilations_v2.compilation_id
             LIMIT 1
             """,
@@ -1639,9 +1702,49 @@ def _generate_living_wiki(
                         path,
                         anchor["anchor"],
                     )
+    statement_shard_by_path: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     for row in rows:
         statements = _current_statements(store, knowledge_revision_id=row["revision_id"])
         row["_statements"] = statements
+        row["_page_path"] = page_paths[row["knowledge_id"]]
+        statement_shards: list[dict[str, Any]] = []
+        if len(statements) > STATEMENT_EVIDENCE_SHARD_SIZE:
+            shard_count = (
+                len(statements) + STATEMENT_EVIDENCE_SHARD_SIZE - 1
+            ) // STATEMENT_EVIDENCE_SHARD_SIZE
+            for shard_index, start in enumerate(
+                range(0, len(statements), STATEMENT_EVIDENCE_SHARD_SIZE), start=1
+            ):
+                shard_statements = statements[
+                    start : start + STATEMENT_EVIDENCE_SHARD_SIZE
+                ]
+                shard_path = (
+                    f"wiki/statements/{row['knowledge_id']}-{shard_index:04d}.md"
+                )
+                shard = {
+                    "path": shard_path,
+                    "index": shard_index,
+                    "count": len(shard_statements),
+                    "first_ordinal": shard_statements[0]["ordinal"],
+                    "last_ordinal": shard_statements[-1]["ordinal"],
+                    "statements": shard_statements,
+                }
+                _write(
+                    output_root,
+                    relative=shard_path,
+                    content=_statement_evidence_page(
+                        row=row,
+                        audit_head=audit_head,
+                        statements=shard_statements,
+                        shard_index=shard_index,
+                        shard_count=shard_count,
+                        source_fragment_links=source_fragment_links,
+                    ),
+                    generated=generated,
+                )
+                statement_shards.append(shard)
+                statement_shard_by_path[shard_path] = (row, shard)
+        row["_statement_shards"] = statement_shards
         _write(
             output_root,
             relative=page_paths[row["knowledge_id"]],
@@ -1652,6 +1755,7 @@ def _generate_living_wiki(
                 titles=titles,
                 relations=relations,
                 statements=statements,
+                statement_shards=statement_shards,
                 source_fragment_links=source_fragment_links,
             ),
             generated=generated,
@@ -2175,8 +2279,60 @@ def _generate_living_wiki(
                                 "statement_id": statement["statement_id"]
                             },
                         }
-                        for statement in row.get("_statements", [])
+                        for statement in (
+                            [] if row.get("_statement_shards") else row.get("_statements", [])
+                        )
                     ],
+                )
+            )
+            continue
+        statement_shard = statement_shard_by_path.get(path)
+        if statement_shard is not None:
+            shard_row, shard = statement_shard
+            shard_statements = shard["statements"]
+            page_records.append(
+                _page_record(
+                    page_id=stable_id(
+                        "statement-evidence-page",
+                        shard_row["knowledge_id"],
+                        str(shard["index"]),
+                    ),
+                    namespace="aggregate",
+                    path=path,
+                    kind="aggregate",
+                    revision_id=stable_id(
+                        "statement-evidence-page-revision",
+                        shard_row["revision_id"],
+                        str(shard["index"]),
+                    ),
+                    audit_head=audit_head,
+                    payload=payload,
+                    scope=shard_row["scope"],
+                    sensitivity=shard_row["sensitivity"],
+                    lifecycle=shard_row["lifecycle"],
+                    freshness=shard_row["freshness"],
+                    input_refs=[
+                        shard_row["revision_id"],
+                        *[
+                            str(statement["statement_id"])
+                            for statement in shard_statements
+                        ],
+                    ],
+                    anchors=[
+                        {
+                            "anchor_id": f"statement-{statement['statement_id']}",
+                            "anchor": f"statement-{statement['statement_id']}",
+                            "kind": "statement_evidence",
+                            "statement_target": {
+                                "statement_id": statement["statement_id"]
+                            },
+                        }
+                        for statement in shard_statements
+                    ],
+                    title=(
+                        f"{shard_row['title']} · Statement Evidence "
+                        f"{shard['index']:04d}"
+                    ),
                 )
             )
             continue

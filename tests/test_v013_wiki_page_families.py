@@ -83,6 +83,54 @@ def test_source_page_separates_evidence_and_derived_summary(tmp_path: Path) -> N
     assert "Original content SHA-256:" in text
 
 
+def test_source_compilation_summary_avoids_node_fragment_cross_product(
+    tmp_path: Path,
+) -> None:
+    """A source summary must aggregate nodes and fragments independently.
+
+    Joining both one-to-many tables before ``COUNT(DISTINCT ...)`` creates an
+    O(nodes * fragments) intermediate result.  At 100k fragments that made a
+    deterministic Wiki rebuild spend hours inside one SQLite statement.
+    """
+
+    root = _vault(tmp_path)
+    source = tmp_path / "source-scale.md"
+    source.write_text(
+        "".join(
+            f"# Synthetic heading {index:04d}\nSynthetic body {index:04d}.\n"
+            for index in range(128)
+        ),
+        encoding="utf-8",
+    )
+    from deeplaw.knowledge_compiler import compile_source
+    from deeplaw.knowledge_store import KnowledgeVault
+
+    with KnowledgeVault(root, read_only=False) as vault:
+        compile_source(vault, source, source_kind="document", confirm_no_case_data=True)
+
+    statements: list[str] = []
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.connection.set_trace_callback(statements.append)
+        try:
+            rebuild_living_wiki(store)
+        finally:
+            store.connection.set_trace_callback(None)
+
+    summary_queries = [
+        " ".join(statement.split())
+        for statement in statements
+        if "AS node_count" in statement and "AS fragment_count" in statement
+    ]
+    assert len(summary_queries) == 1
+    summary_query = summary_queries[0]
+    assert "LEFT JOIN source_ir_nodes_v2" not in summary_query
+    assert "LEFT JOIN fragments_v2" not in summary_query
+
+    source_page = next((root / "wiki" / "sources").glob("sourcerev_*.md"))
+    text = source_page.read_text(encoding="utf-8")
+    assert "- Source IR nodes / fragments: 256 / 128" in text
+
+
 def test_current_statement_has_stable_anchor_and_receipt_metadata(tmp_path: Path) -> None:
     # Reuse the repository's exact v3 commit-boundary fixture; this does not synthesize or edit
     # semantic content and therefore exercises the builder's read-only rendering seam.

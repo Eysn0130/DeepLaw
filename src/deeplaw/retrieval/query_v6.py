@@ -36,7 +36,8 @@ V6_DUTIES = (
 V6_PROJECTIONS = frozenset({"compact", "standard", "audit"})
 _SENSITIVITY_ORDER = ("public", "internal", "private", "restricted")
 _FRESHNESS_ORDER = {"fresh": 0, "unknown": 1, "stale": 2, "invalidated": 3}
-_MAX_STATEMENT_SCAN = 5_000
+_MAX_DISCOVERED_REVISIONS = 20
+_MAX_STATEMENT_CANDIDATES = 512
 _MAX_STATEMENT_ARTIFACT_BYTES = 256 * 1024
 _MAX_LOCAL_AUDIT_BYTES = 256 * 1024
 _MAX_CANDIDATE_RECEIPTS = 512
@@ -289,19 +290,161 @@ def _candidate_score(item: dict[str, Any], target: dict[str, Any]) -> tuple[int,
     return (-exact, -overlap, -factual, str(item["statement_id"]))
 
 
+def _empty_discovery(
+    *,
+    graph_hops: int,
+    retrieval_mode: str,
+    force_canonical_lexical: bool,
+    reason: str,
+) -> dict[str, Any]:
+    body = {
+        "graph_hops": graph_hops,
+        "retrieval_mode": retrieval_mode,
+        "force_canonical_lexical": force_canonical_lexical,
+        "reason": reason,
+    }
+    return {
+        "query_plan_sha256": sha256_bytes(canonical_json(body).encode("utf-8")),
+        "recall_digest": None,
+        "candidate_revision_count": 0,
+        "selected_revision_count": 0,
+        "selected_revision_ids_sha256": sha256_bytes(b"[]"),
+        "channels": [],
+        "limitations": [reason],
+        "statement_candidate_limit": _MAX_STATEMENT_CANDIDATES,
+        "statement_candidate_truncated": False,
+    }
+
+
+def _discover_statement_revisions(
+    store: AutonomousKnowledgeStore,
+    *,
+    target: dict[str, Any],
+    scope: str,
+    max_sensitivity: str,
+    graph_hops: int,
+    retrieval_mode: str,
+    as_of: str | None,
+    kinds: tuple[str, ...],
+    force_canonical_lexical: bool,
+) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, Any]]:
+    discovery_query = str(target.get("knowledge_id") or target["text"])
+    target_revision_id = target.get("revision_id")
+    if isinstance(target_revision_id, str):
+        row = store.connection.execute(
+            "SELECT knowledge_id FROM knowledge_revisions_v3 WHERE revision_id = ?",
+            (target_revision_id,),
+        ).fetchone()
+        if row is not None:
+            discovery_query = str(row["knowledge_id"])
+    selected_kinds = kinds
+    target_kind = target.get("kind")
+    if isinstance(target_kind, str) and not kinds:
+        selected_kinds = (target_kind,)
+    raw = store.recall(
+        discovery_query,
+        scope=scope,
+        max_sensitivity=max_sensitivity,
+        limit=_MAX_DISCOVERED_REVISIONS,
+        max_chars=20_000,
+        max_tokens=32_000,
+        max_sources=32,
+        graph_hops=graph_hops,
+        retrieval_mode=retrieval_mode,
+        as_of=as_of,
+        kinds=selected_kinds,
+        force_canonical_lexical=force_canonical_lexical,
+    )
+    revision_ids = tuple(
+        dict.fromkeys(
+            str(item["revision_id"])
+            for item in raw["results"]
+            if isinstance(item.get("revision_id"), str)
+        )
+    )
+    graph_revision_ids = tuple(
+        dict.fromkeys(
+            str(item["revision_id"])
+            for item in raw["results"]
+            if isinstance(item.get("revision_id"), str)
+            and "graph" in item.get("channels", [])
+        )
+    )
+    channels = sorted(
+        {
+            str(channel)
+            for item in raw["results"]
+            for channel in item.get("channels", [])
+            if isinstance(channel, str)
+        }
+    )
+    limitations = [
+        _bounded(message, field="discovery limitation", maximum=500)
+        for message in raw.get("gaps", [])[:16]
+        if isinstance(message, str) and message
+    ]
+    summary = {
+        "query_plan_sha256": raw["query_plan_sha256"],
+        "recall_digest": raw["recall_digest"],
+        "candidate_revision_count": raw["query_plan"]["candidate_count"],
+        "selected_revision_count": len(revision_ids),
+        "selected_revision_ids_sha256": sha256_bytes(
+            canonical_json(revision_ids).encode("utf-8")
+        ),
+        "channels": channels,
+        "limitations": limitations,
+        "statement_candidate_limit": _MAX_STATEMENT_CANDIDATES,
+        "statement_candidate_truncated": False,
+    }
+    return revision_ids, graph_revision_ids, summary
+
+
 def _load_statement_candidates(
     store: AutonomousKnowledgeStore,
     *,
     target: dict[str, Any],
-    query: str,
+    revision_ids: tuple[str, ...],
+    graph_revision_ids: tuple[str, ...],
     scope: str,
     max_sensitivity: str,
     purpose: str,
     as_of: str | None,
     kinds: tuple[str, ...],
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], int, bool]:
+    if not revision_ids:
+        return [], [], 0, False
+    revision_placeholders = ",".join("?" for _ in revision_ids)
+    filters = [f"statements.knowledge_revision_id IN ({revision_placeholders})"]
+    parameters: list[Any] = list(revision_ids)
+    has_identity_target = any(
+        target.get(field) is not None
+        for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
+    )
+    match_clauses: list[str] = []
+    match_parameters: list[str] = []
+    for term in target["terms"]:
+        match_clauses.extend(
+            (
+                "instr(lower(statements.statement_text), lower(?)) > 0",
+                "instr(lower(revisions.title), lower(?)) > 0",
+                "instr(lower(COALESCE(revisions.semantic_key, '')), lower(?)) > 0",
+            )
+        )
+        match_parameters.extend((term, term, term))
+    if not has_identity_target and match_clauses:
+        discovery_clauses = [*match_clauses]
+        discovery_parameters = [*match_parameters]
+        if graph_revision_ids:
+            graph_placeholders = ",".join("?" for _ in graph_revision_ids)
+            discovery_clauses.append(
+                f"statements.knowledge_revision_id IN ({graph_placeholders})"
+            )
+            discovery_parameters.extend(graph_revision_ids)
+        filters.append(f"({' OR '.join(discovery_clauses)})")
+        parameters.extend(discovery_parameters)
+    parameters.extend((target["text"], target["text"], _MAX_STATEMENT_CANDIDATES + 1))
     rows = store.connection.execute(
-        """
+        f"""
         SELECT statements.*, revisions.*, objects.current_revision_id,
                objects.workspace_path AS current_workspace_path
         FROM knowledge_statements_v1 AS statements
@@ -309,13 +452,20 @@ def _load_statement_candidates(
           ON revisions.revision_id = statements.knowledge_revision_id
         JOIN knowledge_objects_v3 AS objects
           ON objects.knowledge_id = revisions.knowledge_id
-        ORDER BY statements.knowledge_revision_id, statements.ordinal, statements.statement_id
+        WHERE {' AND '.join(filters)}
+        ORDER BY
+          CASE
+            WHEN lower(statements.statement_text) = lower(?) THEN 0
+            WHEN instr(lower(statements.statement_text), lower(?)) > 0 THEN 1
+            ELSE 2
+          END,
+          statements.knowledge_revision_id, statements.ordinal, statements.statement_id
         LIMIT ?
         """,
-        (_MAX_STATEMENT_SCAN + 1,),
+        tuple(parameters),
     ).fetchall()
-    truncated = len(rows) > _MAX_STATEMENT_SCAN
-    rows = rows[:_MAX_STATEMENT_SCAN]
+    truncated = len(rows) > _MAX_STATEMENT_CANDIDATES
+    rows = rows[:_MAX_STATEMENT_CANDIDATES]
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
     query_terms = set(target["terms"])
@@ -409,10 +559,6 @@ def _load_statement_candidates(
                 limit=128,
                 cover_tail=True,
             ))
-            has_identity_target = any(
-                target.get(field) is not None
-                for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
-            )
             if query_terms and not query_terms.intersection(searchable) and not has_identity_target:
                 rejections.append({**item_ref, "reason": "query_mismatch"})
                 continue
@@ -914,7 +1060,6 @@ def execute_v6(
     applicable_duties: tuple[str, ...] | list[str] | None,
     projection: str,
 ) -> dict[str, Any]:
-    del graph_hops, retrieval_mode, force_canonical_lexical
     if projection not in V6_PROJECTIONS:
         raise ValueError("query projection is invalid")
     target = _target(query, query_target)
@@ -931,12 +1076,30 @@ def execute_v6(
         rejections: list[dict[str, str]] = []
         scanned_count = 0
         scan_truncated = False
+        discovery = _empty_discovery(
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            force_canonical_lexical=force_canonical_lexical,
+            reason="general knowledge discovery is disabled for legal queries",
+        )
     else:
+        revision_ids, graph_revision_ids, discovery = _discover_statement_revisions(
+            knowledge_store,
+            target=target,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            as_of=as_of,
+            kinds=kinds,
+            force_canonical_lexical=force_canonical_lexical,
+        )
         candidates, rejections, scanned_count, scan_truncated = (
             _load_statement_candidates(
                 knowledge_store,
                 target=target,
-                query=query,
+                revision_ids=revision_ids,
+                graph_revision_ids=graph_revision_ids,
                 scope=scope,
                 max_sensitivity=max_sensitivity,
                 purpose=purpose,
@@ -944,6 +1107,7 @@ def execute_v6(
                 kinds=kinds,
             )
         )
+        discovery["statement_candidate_truncated"] = scan_truncated
     statement_budget, evidence_budget = service._partition_budget(
         policy,
         limit=limit,
@@ -980,7 +1144,12 @@ def execute_v6(
     ][:_MAX_CANDIDATE_RECEIPTS]
     suppressions.extend(budget_suppressions)
     if scan_truncated:
-        suppressions.append({"candidate_id": "statement_scan", "reason": "scan_bound"})
+        suppressions.append(
+            {
+                "candidate_id": "statement_candidates",
+                "reason": "discovered_revision_candidate_bound",
+            }
+        )
     deduplications: list[dict[str, str]] = []
     evidence_seen: dict[str, dict[str, Any]] = {}
     citation_seen: set[str] = set()
@@ -1273,6 +1442,41 @@ def execute_v6(
             }
         )
     residual_gaps: list[dict[str, Any]] = []
+    if scan_truncated:
+        residual_gaps.append(
+            {
+                "gap_id": stable_id(
+                    "querygap",
+                    target["query_sha256"],
+                    "statement_candidate_bound",
+                    knowledge_store.audit_head,
+                ),
+                "code": "statement_candidate_bound",
+                "duty": "unresolved_gap",
+                "message": (
+                    "Statement selection reached its bounded candidate pool inside "
+                    "the discovered Knowledge Revisions."
+                ),
+                "limit": _MAX_STATEMENT_CANDIDATES,
+            }
+        )
+    for index, message in enumerate(discovery["limitations"]):
+        if "reached" not in message or "bound" not in message:
+            continue
+        residual_gaps.append(
+            {
+                "gap_id": stable_id(
+                    "querygap",
+                    target["query_sha256"],
+                    "compiled_discovery_bound",
+                    str(index),
+                    knowledge_store.audit_head,
+                ),
+                "code": "compiled_discovery_bound",
+                "duty": "unresolved_gap",
+                "message": message,
+            }
+        )
     stale_gaps = service._stale_knowledge_gaps(
         knowledge_store,
         query=query,
@@ -1420,6 +1624,12 @@ def execute_v6(
         "as_of": as_of,
         "query_target": target,
         "applicable_duties": applicable,
+        "retrieval_controls": {
+            "graph_hops": graph_hops,
+            "retrieval_mode": retrieval_mode,
+            "force_canonical_lexical": force_canonical_lexical,
+        },
+        "discovery": discovery,
         "budget": {
             "items": limit,
             "characters": max_chars,

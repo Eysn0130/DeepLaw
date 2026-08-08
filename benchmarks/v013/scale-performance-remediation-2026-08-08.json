@@ -1,0 +1,2035 @@
+{
+  "candidate": {
+    "package_version": "0.12.0",
+    "runner": "benchmarks/v013/scale_performance.py",
+    "runner_sha256": "3660b45b1c46fa58d0384dd109279ea160eb4a3140c8ad92d9ecb502bd69bf1e"
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Deterministic synthetic temporary Vault construction diagnostic; it is not real-user quality evidence, a competitor run, or a release claim.",
+  "configuration": {
+    "execute_expensive": true,
+    "max_latency_samples": 1000,
+    "projection_profile": "standard",
+    "query_plan_version": "6",
+    "query_runs": 1,
+    "rss_requests": 10000,
+    "scales": [
+      10000,
+      100000
+    ],
+    "semantic_profile": "not_executed",
+    "warmup_runs": 0
+  },
+  "environment": {
+    "cpu": {
+      "logical_count": 12,
+      "model": "arm"
+    },
+    "filesystem": {
+      "block_size": 4096,
+      "kind": "unknown",
+      "reason": "Python statvfs does not expose a portable filesystem type"
+    },
+    "git_commit": "2fc308daa3bc319b23ed31c5e02aa630fd42c164",
+    "git_reason": null,
+    "os": {
+      "machine": "arm64",
+      "name": "Darwin",
+      "release": "25.5.0"
+    },
+    "python": "3.12.13",
+    "ram": {
+      "reason": null,
+      "total_bytes": 25769803776
+    },
+    "working_tree_dirty": true
+  },
+  "generated_at_utc": "2026-08-08T02:41:35Z",
+  "limitations": [
+    "No network, model, Gold/scorer, user Vault, legal source, or case data is read.",
+    "Deterministic synthetic identifiers measure mechanics only and are claim-ineligible.",
+    "Scale counts are synthetic source-derived Asset records; autonomous probes are bounded separately and do not represent real-user knowledge quality.",
+    "not_executed, degraded, and fail outcomes are retained and never converted to pass.",
+    "10k/100k reruns require --execute-expensive; no smaller substitute is used."
+  ],
+  "operation_inventory": [
+    "exact_get",
+    "wiki_page",
+    "backlinks",
+    "outlinks",
+    "compiled_first",
+    "evidence_first",
+    "context",
+    "verify",
+    "source_update",
+    "incremental_projection",
+    "full_rebuild",
+    "mcp_cold",
+    "mcp_warm",
+    "concurrent_read",
+    "rss_stability_10000_requests",
+    "cache_invalidation_after_source_update",
+    "storage_sqlite_bytes",
+    "storage_file_count",
+    "storage_canvas_count",
+    "provider_payload_bytes"
+  ],
+  "overall": {
+    "degraded_count": 0,
+    "executed_count": 15,
+    "fail_count": 0,
+    "limitations": [
+      "This construction diagnostic cannot satisfy the v0.13 release gate.",
+      "Any not_executed operation remains an unmet gate and is never counted as pass."
+    ],
+    "not_executed": [
+      {
+        "operation": "source_update",
+        "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+        "scale": 10000
+      },
+      {
+        "operation": "mcp_cold",
+        "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+        "scale": 10000
+      },
+      {
+        "operation": "mcp_warm",
+        "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+        "scale": 10000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "RSS process isolation requires a dedicated child-process harness; this local construction runner does not claim a substitute measurement",
+        "scale": 10000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+        "scale": 10000
+      },
+      {
+        "operation": "exact_get",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "wiki_page",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "backlinks",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "outlinks",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "compiled_first",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "evidence_first",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "context",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "verify",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "source_update",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "incremental_projection",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "full_rebuild",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "mcp_cold",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "mcp_warm",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "concurrent_read",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "storage_sqlite_bytes",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "storage_file_count",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "storage_canvas_count",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      },
+      {
+        "operation": "provider_payload_bytes",
+        "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+        "scale": 100000
+      }
+    ],
+    "not_executed_count": 25,
+    "operation_count": 40,
+    "pass_count": 5,
+    "release_gate_passed": false,
+    "status": "not_released"
+  },
+  "profile": "construction_diagnostic",
+  "reference_targets": {
+    "cache_invalidation_after_source_update": {
+      "stale_cache_served": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      }
+    },
+    "concurrent_readers": {
+      "successful_readers": {
+        "operator": ">=",
+        "unit": "readers",
+        "value": 8
+      }
+    },
+    "provider_hard_limit_violations": {
+      "violations": {
+        "operator": "==",
+        "unit": "count",
+        "value": 0
+      }
+    },
+    "rss_stability_10000_requests": {
+      "rss_growth_percent": {
+        "operator": "<=",
+        "unit": "%",
+        "value": 10
+      }
+    },
+    "scale_1000": {
+      "backlinks_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 150
+      },
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 500
+      },
+      "wiki_page_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 150
+      }
+    },
+    "scale_10000": {
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 1000
+      },
+      "context_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 1200
+      },
+      "exact_get_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 100
+      }
+    },
+    "scale_100000": {
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 2000
+      },
+      "no_full_filesystem_scan": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      },
+      "no_per_request_full_verify": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      }
+    }
+  },
+  "release_gate_passed": false,
+  "report_sha256": "224ce9b9b7d289711bff7f93487bd0496a53177d710162d877b45ad2161f6ad2",
+  "rerun_commands": [
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 10000 --query-runs 1 --warmup-runs 0 --rss-requests 10000 --execute-expensive",
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 100000 --query-runs 1 --warmup-runs 0 --rss-requests 10000 --execute-expensive"
+  ],
+  "scale_reports": [
+    {
+      "fixture_reason": "real temporary synthetic Vault created and torn down by the harness",
+      "fixture_status": "executed",
+      "object_count": 10000,
+      "operations": [
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 1.397625,
+            "p50": 1.397625,
+            "p95": 1.397625,
+            "p99": 1.397625,
+            "samples": [
+              1.397625
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 1.397625,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.exact_get_p95_ms",
+            "unit": "ms",
+            "value": 100
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 2286.033167,
+            "p50": 2286.033167,
+            "p95": 2286.033167,
+            "p99": 2286.033167,
+            "samples": [
+              2286.033167
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 701.993083,
+            "p50": 701.993083,
+            "p95": 701.993083,
+            "p99": 701.993083,
+            "samples": [
+              701.993083
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 710.042416,
+            "p50": 710.042416,
+            "p95": 710.042416,
+            "p99": 710.042416,
+            "samples": [
+              710.042416
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 722.733542,
+            "p50": 722.733542,
+            "p95": 722.733542,
+            "p99": 722.733542,
+            "samples": [
+              722.733542
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 722.733542,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 1000
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 702.596333,
+            "p50": 702.596333,
+            "p95": 702.596333,
+            "p99": 702.596333,
+            "samples": [
+              702.596333
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 706.347916,
+            "p50": 706.347916,
+            "p95": 706.347916,
+            "p99": 706.347916,
+            "samples": [
+              706.347916
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 706.347916,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.context_p95_ms",
+            "unit": "ms",
+            "value": 1200
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 988.99375,
+            "p50": 988.99375,
+            "p95": 988.99375,
+            "p99": 988.99375,
+            "samples": [
+              988.99375
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": true,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": true,
+            "value": 1
+          },
+          "operation": "verify",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 160152.456708,
+            "p50": 160152.456708,
+            "p95": 160152.456708,
+            "p99": 160152.456708,
+            "samples": [
+              160152.456708
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 160236.705,
+            "p50": 160236.705,
+            "p95": 160236.705,
+            "p99": 160236.705,
+            "samples": [
+              160236.705
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": true,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 88411.715042,
+            "p50": 88411.715042,
+            "p95": 88411.715042,
+            "p99": 88411.715042,
+            "samples": [
+              88411.715042
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 8,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": 8,
+            "unit": "readers",
+            "valid": null,
+            "value": 8
+          },
+          "operation": "concurrent_read",
+          "reason": "",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "RSS process isolation requires a dedicated child-process harness; this local construction runner does not claim a substitute measurement",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": null,
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.040958,
+            "p50": 0.040958,
+            "p95": 0.040958,
+            "p99": 0.040958,
+            "samples": [
+              0.040958
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 74653696
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 5.513709,
+            "p50": 5.513709,
+            "p95": 5.513709,
+            "p99": 5.513709,
+            "samples": [
+              5.513709
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": 300,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "files",
+            "valid": null,
+            "value": 300
+          },
+          "operation": "storage_file_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.132208,
+            "p50": 0.132208,
+            "p95": 0.132208,
+            "p99": 0.132208,
+            "samples": [
+              0.132208
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": 5,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "canvas_files",
+            "valid": null,
+            "value": 5
+          },
+          "operation": "storage_canvas_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 704.533,
+            "p50": 704.533,
+            "p95": 704.533,
+            "p99": 704.533,
+            "samples": [
+              704.533
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 0,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": 0,
+            "provider_payload_bytes": 7605,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 7605
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "",
+          "run_count": 1,
+          "sample_count": 1,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 0
+        }
+      ],
+      "scale": 10000
+    },
+    {
+      "fixture_reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+      "fixture_status": "not_executed",
+      "object_count": 100000,
+      "operations": [
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_100000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 2000
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "verify",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "per_request_full_verify",
+            "operator": "==",
+            "reason": null,
+            "reference": "scale_100000.per_request_full_verify",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "full_filesystem_scan",
+            "operator": "==",
+            "reason": null,
+            "reference": "scale_100000.full_filesystem_scan",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "concurrent_read",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": "RSS target is frozen for the 10k scale report",
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_file_count",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_canvas_count",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "fixture construction failed closed: ExtractionError: knowledge text source exceeds the line-count limit",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 0
+        }
+      ],
+      "scale": 100000
+    }
+  ],
+  "schema_version": "deeplaw.v013-scale-performance-report/v1"
+}

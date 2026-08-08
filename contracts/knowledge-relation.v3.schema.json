@@ -20,7 +20,11 @@
       "pattern": "^relationrev_[0-9a-f]{24}$"
     },
     "subject_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
-    "predicate": {"type": "string", "minLength": 1, "maxLength": 100},
+    "predicate": {"enum": [
+      "alias_of", "applies_to", "consolidates", "contradicts", "contributes_to",
+      "depends_on", "derived_from", "describes", "implements", "mentions",
+      "related_to", "reports", "same_as", "split_from", "supports"
+    ]},
     "object_knowledge_id": {"type": "string", "pattern": "^knowledge_[0-9a-f]{24}$"},
     "origin": {"const": "agent_derived"},
     "authority": {"const": "agent_derived"},

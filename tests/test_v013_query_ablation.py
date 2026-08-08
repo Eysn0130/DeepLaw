@@ -32,7 +32,7 @@ def test_source_free_corpus_is_closed_and_has_no_v2_alias_terms() -> None:
     receipt = verify_query_ablation_corpus(corpus)
 
     assert receipt == {
-        "corpus_id": "v013-heldout-query-ablation-v1",
+        "corpus_id": "v013-development-query-ablation-v1",
         "corpus_sha256": corpus["corpus_sha256"],
         "query_count": 8,
         "positive_query_count": 5,
@@ -42,7 +42,7 @@ def test_source_free_corpus_is_closed_and_has_no_v2_alias_terms() -> None:
     assert all(item["negative"] is (not item["expected_ids"]) for item in corpus["queries"])
 
 
-def test_held_out_queries_are_paraphrases_not_fixture_text_substrings() -> None:
+def test_development_queries_are_paraphrases_not_fixture_text_substrings() -> None:
     corpus = _read_json(CORPUS_PATH)
     fixture_texts = {
         normalize_query_text(text).casefold()

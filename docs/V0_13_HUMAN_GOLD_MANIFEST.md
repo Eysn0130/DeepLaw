@@ -49,4 +49,4 @@ may be committed as a confirmation.
 
 `human_gold_confirmed=false`, `expert_review_confirmed=false`, `reviewer_id=null`,
 `claim_eligible=false`, and `competitive_claim_eligible=false`. The Human Gold portion of G01 and
-the Human/Expert quality gates remain unmet; v0.13.0 GA is forbidden.
+the Human/Expert quality gates remain unmet; a v0.13.0 RC or GA is forbidden.

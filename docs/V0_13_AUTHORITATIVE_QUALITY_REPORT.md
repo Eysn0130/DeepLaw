@@ -100,4 +100,5 @@ invalidate the gate.
 L01 is closed through an explicit, tested Evidence Capability downgrade; L02 and L04 have
 source-free executable coverage. L03 remains `not_executed`/`review_pending`. No citation fallback,
 false Authority, human review, expert review, Pack mutation, or competitive-quality claim is
-asserted. This state is compatible with an RC decision, not v0.13.0 GA.
+asserted. Under the v0.13 qualification protocol this state is compatible only with continued
+source-candidate review; it does not authorize an RC or v0.13.0 GA.

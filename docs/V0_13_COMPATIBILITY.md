@@ -8,13 +8,14 @@ the additive v0.13 working-tree contract and must not be read as a published ver
 | Surface | Current default in the source candidate | Compatibility retained | Boundary |
 | --- | --- | --- | --- |
 | Semantic compilation | `living-wiki-agent/v3` | Profile v1 and v2 inputs/status remain readable | v3 adds dynamic applicability, Statements and exact freshness/verification status |
-| Query | Query Plan v6 | Query Plan v5 remains explicitly selectable | v6 no-answers legacy content without admitted Statements; callers needing the old object-level result must request v5 |
+| Query | Query Plan v6 | Query Plan v5 remains explicitly selectable | v6 honors and receipts `retrieval_mode`/`graph_hops`/canonical fallback, discovers ≤20 revisions, then admits ≤512 Statements from only those revisions; it no-answers legacy content without admitted Statements |
 | Expansion | expansion Profile v2 | v1 receipts remain valid | v2 removes benchmark-shaped aliases and binds a generic lexicon digest |
-| Projection | `standard` Profile, Living Wiki manifest v2 paired with Registry/Link/Resolver manifest v3 | aggregate manifest v1 and Profile `full` remain readable | `standard` removes per-object Canvas; profile changes clean only verified owned files |
+| Projection | `standard` Profile, Living Wiki manifest v2 paired with Registry/Link/Resolver manifest v3 | aggregate manifest v1 and Profile `full` remain readable | `standard` removes per-object Canvas; profile changes clean only verified owned files; revisions above 64 Statements use derived Statement Evidence shards without changing canonical identity |
 | Evidence grounding | Statement/Evidence core v1 | source/object references remain readable | statement-bearing Profile v3 content must pass exact map/receipt verification |
-| MCP read surface | default `query_plan_version=6`; recommended `query/context/wiki/source/verify` | v5 query and scheduled `search`/`recall`/`wiki_lookup` routes remain | `knowledge_support` stays read-only and provider output stays hard-bounded |
+| MCP read surface | default `query_plan_version=6`; recommended `query/context/wiki/source/verify` | v5 query and scheduled `search`/`recall`/`wiki_lookup` routes remain | `knowledge_support` stays read-only; provider output is ≤64 KiB and never carries candidate scores/local audit internals |
 | MCP mutation surface | unchanged separate `knowledge_sink` | existing owner grants remain subject to their exact allowlist | no read operation hides a write or widens a Grant |
 | Agent context | host-neutral Agent Context Envelope v1 | Editor Context Envelope v1 remains accepted for editor-specific context | both are ephemeral; neither is evidence or canonical knowledge |
+| Python context lifecycle | lazy persistent snapshot for repeated `KnowledgeOS.context.compile` calls on one handle | startup verification and one-shot retrieval/source/wiki behavior remain | warm context checks bounded identities; state change reopens fail-closed; `close`/context manager releases the snapshot |
 | Legal Pack | unchanged isolated `law_support` store/process | current signed release and private-reference compatibility remain | v0.13 Navigator is a source-free read-only view and never creates Official prose |
 
 ## Persistence and forward migration
@@ -29,6 +30,18 @@ The candidate adds tables and markers in place; it does not rewrite v1/v2 record
   second canonical database;
 - Query Plan v6 and Agent Context Envelope v1 are request/artifact contracts and add no canonical
   persistence.
+
+Query Plan v6 narrows a previously defective behavior: accepted retrieval controls can no longer
+be ignored, and Statement discovery no longer scans the first 5,000 globally ordered rows before
+matching. The plan and receipt bind effective controls, upstream discovery digests/channels,
+limitations and the 512-candidate bound. Invalid retrieval modes fail at the shared Python seam,
+which also covers CLI/MCP calls after their own closed validation.
+
+The MCP `audit` capsule projection is local-only. Provider delivery is reduced to `standard` and
+uses `receipt_id` for a redacted explain lookup. The runtime trace is ephemeral (16 entries,
+15-minute TTL, 256 KiB per entry, 1 MiB total), integrity-checked and cleared on Vault identity
+change or process close. It is not a new persistent database, does not write the canonical Ledger,
+and intentionally does not promise cross-process receipt retention.
 
 The executable migration regression simulates a pre-Statement v0.12 database, reopens it through
 the additive installer, verifies preserved audit heads, verifies both stores, snapshots the Vault,

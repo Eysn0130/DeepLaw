@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
+import time
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager, contextmanager
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from dataclasses import field as dataclass_field
 from functools import cache
 from pathlib import Path
@@ -106,6 +107,12 @@ _AUTONOMOUS_INSTRUCTIONS = (
 _MAX_MCP_OUTPUT_CHARS = 65_536
 _MAX_READ_CACHE_ENTRIES = 16
 _MAX_READ_CACHE_BYTES = 1 * 1024 * 1024
+_MAX_QUERY_TRACE_ENTRIES = 16
+_MAX_QUERY_TRACE_ENTRY_BYTES = 256 * 1024
+_MAX_QUERY_TRACE_BYTES = 1 * 1024 * 1024
+# Ephemeral traces are diagnostic context, not durable memory; never slide this
+# expiry on reads so a hot MCP lifespan cannot retain query metadata indefinitely.
+_QUERY_TRACE_TTL_SECONDS = 15 * 60
 _MAX_MCP_SOURCE_REFS = 4
 _MAX_MCP_TAGS = 8
 _MAX_MCP_VERIFICATION_CHECKS = 8
@@ -207,6 +214,52 @@ _READ_CACHE_DEFAULTS: dict[str, Any] = {
 }
 
 _RESTRICTED_CACHE_MARKER = re.compile(r"(?i)(?:^|[\s:;/,_-])restricted(?:$|[\s:;/,_-])")
+_QUERY_RECEIPT_ID = re.compile(r"^queryreceipt_[0-9a-f]{24}$")
+_TRACE_HASH = re.compile(r"^[0-9a-f]{64}$")
+_TRACE_LABEL = re.compile(r"^[A-Za-z0-9_.:-]{1,120}$")
+_TRACE_IDENTIFIER = re.compile(
+    r"^(?:statement|querygap|knowledge|knowledgerev|relationrev|sourcerev|fragment|queryreceipt)_[0-9a-f]{24,64}$"
+)
+_TRACE_SAFE_LABELS = frozenset(
+    {
+        "primary_answer",
+        "identity",
+        "definition",
+        "current_state",
+        "temporal_freshness",
+        "procedure",
+        "exception",
+        "contradiction",
+        "applicability",
+        "limitation",
+        "source_evidence",
+        "unresolved_gap",
+        "duplicate_source_reference",
+        "represented_source_reference",
+        "invalid_source_ref",
+        "fragment_unavailable",
+        "source_budget",
+        "source_not_admitted",
+        "character_budget",
+        "selection_budget",
+        "scan_bound",
+        "duplicate_statement_citation",
+        "statement_citation_also_evidence",
+        "query_mismatch",
+        "historical_statement",
+        "outside_as_of",
+        "withdrawn_or_inactive",
+        "denied_scope",
+        "denied_sensitivity",
+        "kind_filter",
+        "query_target_mismatch",
+        "unsupported_statement",
+        "factual_statement_map_missing",
+        "source_free_factual",
+        "provenance_not_admitted",
+        "invalid_statement_evidence",
+    }
+)
 
 
 def _normalize_read_cache_value(value: Any) -> Any:
@@ -279,6 +332,144 @@ def _read_result_cache_key(
     )
 
 
+def _identity_digest(identity: Any) -> str | None:
+    """Return a non-reversible binding for the current read identity."""
+
+    if identity is None:
+        return None
+    try:
+        serializable = asdict(identity) if is_dataclass(identity) else identity
+        payload = canonical_json(serializable)
+    except (TypeError, ValueError):
+        # A custom test/runtime identity is still bound deterministically without
+        # retaining the object (which may contain a private path or connection).
+        payload = repr(identity)
+    return sha256_bytes(payload.encode("utf-8"))
+
+
+def _trace_identifier(value: Any) -> str:
+    """Keep stable identifiers, hashing all free-form candidate/source values."""
+
+    if not isinstance(value, str):
+        raise RuntimeError("query audit identifier is invalid")
+    if _TRACE_IDENTIFIER.fullmatch(value) or value in {"unknown", "statement_scan"}:
+        return value
+    if value.startswith("fallback:") and _TRACE_LABEL.fullmatch(value):
+        return value
+    return f"sha256:{sha256_bytes(value.encode('utf-8'))}"
+
+
+def _trace_label(value: Any) -> str:
+    if isinstance(value, str) and value in _TRACE_SAFE_LABELS:
+        return value
+    if isinstance(value, str):
+        return f"sha256:{sha256_bytes(value.encode('utf-8'))}"
+    raise RuntimeError("query audit label is invalid")
+
+
+def _trace_hash(value: Any, *, field: str) -> str:
+    if not isinstance(value, str) or not _TRACE_HASH.fullmatch(value):
+        raise RuntimeError(f"query audit {field} is invalid")
+    return value
+
+
+def _source_key_digest(value: Any) -> str:
+    if not isinstance(value, str):
+        raise RuntimeError("query audit source key is invalid")
+    return sha256_bytes(value.encode("utf-8"))
+
+
+def _redact_query_audit_item(value: Any) -> dict[str, Any]:
+    """Whitelist receipt metadata and remove free-form source/query material."""
+
+    if not isinstance(value, Mapping):
+        raise RuntimeError("query audit detail is invalid")
+    redacted: dict[str, Any] = {}
+    for key, item in value.items():
+        if key in {"reason", "duty"}:
+            redacted[key] = _trace_label(item)
+        elif key in {"statement_id", "candidate_id"}:
+            redacted[key] = _trace_identifier(item)
+        elif key == "source_key":
+            redacted["source_key_sha256"] = _source_key_digest(item)
+        elif key == "source_keys":
+            if not isinstance(item, list):
+                raise RuntimeError("query audit source keys are invalid")
+            redacted["source_key_sha256"] = [
+                _source_key_digest(source_key) for source_key in item[:16]
+            ]
+        elif key == "query_sha256":
+            redacted[key] = _trace_hash(item, field=key)
+        elif key in {"candidate_count", "selected_source_count"}:
+            if not isinstance(item, int) or isinstance(item, bool) or item < 0:
+                raise RuntimeError(f"query audit {key} is invalid")
+            redacted[key] = item
+    return redacted
+
+
+def _validate_query_audit_receipt(value: Mapping[str, Any]) -> None:
+    try:
+        Draft202012Validator(_load_contract("query-audit-receipt.v1.schema.json")).validate(
+            value
+        )
+    except Exception as error:
+        raise RuntimeError("query audit receipt is invalid") from error
+
+
+def _redact_query_audit(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    """Create the bounded local trace copy without query/source plaintext."""
+
+    original = deepcopy(dict(receipt))
+    original_digest = original.pop("receipt_sha256", None)
+    if not isinstance(original_digest, str) or original_digest != sha256_bytes(
+        canonical_json(original).encode("utf-8")
+    ):
+        raise RuntimeError("query audit receipt integrity is invalid")
+    _validate_query_audit_receipt(receipt)
+
+    redacted: dict[str, Any] = {
+        "schema_version": receipt["schema_version"],
+        "receipt_id": receipt["receipt_id"],
+        "query_plan_sha256": _trace_hash(receipt["query_plan_sha256"], field="query plan hash"),
+        "query_sha256": _trace_hash(receipt["query_sha256"], field="query hash"),
+        "input_audit_head": _trace_hash(receipt["input_audit_head"], field="audit head"),
+        "input_legacy_audit_head": _trace_hash(
+            receipt["input_legacy_audit_head"], field="legacy audit head"
+        ),
+        "candidate_count": receipt["candidate_count"],
+        "admitted_statement_count": receipt["admitted_statement_count"],
+        "selected_statement_ids": [
+            _trace_identifier(item) for item in receipt["selected_statement_ids"]
+        ],
+        "fallback": [
+            _redact_query_audit_item(item) for item in receipt["fallback"][:12]
+        ],
+        "deduplications": [
+            _redact_query_audit_item(item) for item in receipt["deduplications"][:256]
+        ],
+        "suppressions": [
+            _redact_query_audit_item(item) for item in receipt["suppressions"][:512]
+        ],
+        "rejections": [
+            _redact_query_audit_item(item) for item in receipt["rejections"][:512]
+        ],
+        "residual_gap_ids": [
+            _trace_identifier(item) for item in receipt["residual_gap_ids"]
+        ],
+        "ranking_authority_changed": False,
+        "write_performed": False,
+    }
+    body = dict(redacted)
+    redacted["receipt_sha256"] = sha256_bytes(canonical_json(body).encode("utf-8"))
+    _validate_query_audit_receipt(redacted)
+    return redacted
+
+
+def _query_trace_digest(entry: Mapping[str, Any]) -> str:
+    body = {key: value for key, value in entry.items() if key != "trace_sha256"}
+    return sha256_bytes(canonical_json(body).encode("utf-8"))
+
+
 @dataclass
 class _KnowledgeRuntime:
     vault_path: Path
@@ -292,20 +483,117 @@ class _KnowledgeRuntime:
     )
     read_result_cache_bytes: int = 0
     read_cache_identity: Any = None
+    read_cache_identity_digest: str | None = None
+    query_receipts_bytes: int = 0
 
     def retain_query_receipt(self, receipt: dict[str, Any]) -> None:
         receipt_id = receipt.get("receipt_id")
-        if not isinstance(receipt_id, str):
+        if not isinstance(receipt_id, str) or not _QUERY_RECEIPT_ID.fullmatch(receipt_id):
             raise RuntimeError("query audit receipt identity is invalid")
-        self.query_receipts[receipt_id] = deepcopy(receipt)
+        redacted = _redact_query_audit(receipt)
+        self._validate_query_trace_identity(redacted)
+        payload_size = len(canonical_json(redacted).encode("utf-8"))
+        if payload_size > _MAX_QUERY_TRACE_ENTRY_BYTES:
+            raise RuntimeError("query audit trace exceeds its per-entry byte budget")
+        if payload_size > _MAX_QUERY_TRACE_BYTES:
+            raise RuntimeError("query audit trace exceeds its total byte budget")
+        now = time.monotonic()
+        self._purge_query_receipts(now)
+        previous = self.query_receipts.pop(receipt_id, None)
+        if previous is not None:
+            self.query_receipts_bytes -= int(previous.get("byte_size", 0))
+        while self.query_receipts and (
+            len(self.query_receipts) >= _MAX_QUERY_TRACE_ENTRIES
+            or self.query_receipts_bytes + payload_size > _MAX_QUERY_TRACE_BYTES
+        ):
+            _, evicted = self.query_receipts.popitem(last=False)
+            self.query_receipts_bytes -= int(evicted.get("byte_size", 0))
+        entry: dict[str, Any] = {
+            "receipt_id": receipt_id,
+            "audit": deepcopy(redacted),
+            "identity_digest": self.read_cache_identity_digest,
+            "created_at": now,
+            "expires_at": now + _QUERY_TRACE_TTL_SECONDS,
+            "byte_size": payload_size,
+        }
+        entry["trace_sha256"] = _query_trace_digest(entry)
+        self.query_receipts[receipt_id] = entry
+        self.query_receipts_bytes += payload_size
         self.query_receipts.move_to_end(receipt_id)
-        while len(self.query_receipts) > 16:
-            self.query_receipts.popitem(last=False)
+
+    def _purge_query_receipts(self, now: float | None = None) -> None:
+        current = time.monotonic() if now is None else now
+        expired = [
+            receipt_id
+            for receipt_id, entry in self.query_receipts.items()
+            if not isinstance(entry, Mapping)
+            or not isinstance(entry.get("expires_at"), (int, float))
+            or entry["expires_at"] <= current
+        ]
+        for receipt_id in expired:
+            entry = self.query_receipts.pop(receipt_id, None)
+            if entry is not None and isinstance(entry, Mapping):
+                self.query_receipts_bytes -= int(entry.get("byte_size", 0))
+
+    def clear_query_traces(self) -> None:
+        """Owner/runtime lifecycle deletion; never exposed as an MCP operation."""
+
+        self.query_receipts.clear()
+        self.query_receipts_bytes = 0
+
+    def _validate_query_trace_identity(
+        self,
+        receipt: Mapping[str, Any],
+    ) -> None:
+        identity = self.read_cache_identity
+        if identity is None:
+            return
+        expected_audit_head = getattr(identity, "autonomous_audit_head", None)
+        expected_legacy_head = getattr(identity, "legacy_audit_head", None)
+        if (
+            isinstance(expected_audit_head, str)
+            and receipt.get("input_audit_head") != expected_audit_head
+        ) or (
+            isinstance(expected_legacy_head, str)
+            and receipt.get("input_legacy_audit_head") != expected_legacy_head
+        ):
+            raise RuntimeError("query audit receipt identity is stale")
 
     def read_query_receipt(self, receipt_id: str) -> dict[str, Any]:
-        receipt = self.query_receipts.get(receipt_id)
-        if receipt is None:
+        self._purge_query_receipts()
+        entry = self.query_receipts.get(receipt_id)
+        if entry is None:
             raise KeyError("query audit receipt is unavailable in this MCP lifespan")
+        if not isinstance(entry, Mapping):
+            self.clear_query_traces()
+            raise RuntimeError("query audit trace is invalid")
+        if entry.get("identity_digest") != self.read_cache_identity_digest:
+            self.query_receipts.pop(receipt_id, None)
+            self.query_receipts_bytes -= int(entry.get("byte_size", 0))
+            raise KeyError("query audit receipt is unavailable in this MCP lifespan")
+        receipt = entry.get("audit")
+        if (
+            not isinstance(receipt, Mapping)
+            or entry.get("receipt_id") != receipt_id
+            or receipt.get("receipt_id") != receipt_id
+            or not isinstance(entry.get("trace_sha256"), str)
+            or entry["trace_sha256"]
+            != _query_trace_digest(entry)
+        ):
+            self.query_receipts.pop(receipt_id, None)
+            self.query_receipts_bytes -= int(entry.get("byte_size", 0))
+            raise RuntimeError("query audit trace integrity is invalid")
+        try:
+            _validate_query_audit_receipt(receipt)
+            body = dict(receipt)
+            receipt_digest = body.pop("receipt_sha256", None)
+            if receipt_digest != sha256_bytes(canonical_json(body).encode("utf-8")):
+                raise RuntimeError("query audit receipt integrity is invalid")
+            self._validate_query_trace_identity(receipt)
+        except Exception:
+            self.query_receipts.pop(receipt_id, None)
+            self.query_receipts_bytes -= int(entry.get("byte_size", 0))
+            raise
         self.query_receipts.move_to_end(receipt_id)
         return deepcopy(receipt)
 
@@ -314,11 +602,13 @@ class _KnowledgeRuntime:
 
         if self.read_cache_identity is None:
             self.read_cache_identity = identity
+            self.read_cache_identity_digest = _identity_digest(identity)
             return
         if self.read_cache_identity != identity:
             self.clear_read_cache()
-            self.query_receipts.clear()
+            self.clear_query_traces()
             self.read_cache_identity = identity
+            self.read_cache_identity_digest = _identity_digest(identity)
 
     def clear_read_cache(self) -> None:
         self.read_result_cache.clear()
@@ -377,9 +667,10 @@ class _KnowledgeRuntime:
         return True
 
     def close(self) -> None:
-        self.query_receipts.clear()
+        self.clear_query_traces()
         self.clear_read_cache()
         self.read_cache_identity = None
+        self.read_cache_identity_digest = None
         if self.persistent is not None:
             self.persistent.close()
 
@@ -1462,11 +1753,7 @@ def _autonomous_v6_response(
     return response
 
 
-def _v6_provider_capsule(
-    result: dict[str, Any],
-    *,
-    local_audit_available: bool,
-) -> dict[str, Any]:
+def _v6_provider_capsule(result: dict[str, Any]) -> dict[str, Any]:
     if result.get("schema_version") != "deeplaw.purpose-aware-retrieval/v3":
         raise RuntimeError("Query Plan v6 result is invalid")
     plan = result.get("query_plan")
@@ -1476,36 +1763,36 @@ def _v6_provider_capsule(
     receipt_id = result.get("receipt_id")
     if not isinstance(receipt_id, str):
         raise RuntimeError("Query Plan v6 receipt identity is invalid")
-    return {
+    provider_capsule = deepcopy(capsule)
+    if provider_capsule.get("projection") == "audit":
+        # Candidate scores and local planner diagnostics never cross the MCP
+        # provider boundary. An explicit audit request remains available only
+        # through the bounded, redacted receipt lookup.
+        provider_capsule.pop("audit", None)
+        provider_capsule["projection"] = "standard"
+    provider = {
         "schema_version": "deeplaw.provider-knowledge-capsule/v2",
         "purpose": result["purpose"],
         "policy_id": result["policy_id"],
-        "capsule": capsule,
-        "receipt": {
-            "receipt_id": receipt_id,
-            "query_plan_version": "6",
-            "query_plan_sha256": result["query_plan_sha256"],
-            "audit_head": result["audit_head"],
-            "fallback_used": bool(plan["fallback"]["used"]),
-            "fallback_duty_count": len(plan["fallback"]["duties"]),
-            "rejected_candidate_count": plan["rejected_candidate_count"],
-            "suppressed_candidate_count": plan["suppressed_candidate_count"],
-            "deduplicated_evidence_count": plan["deduplicated_evidence_count"],
-            "residual_gap_count": len(plan["residual_gap_ids"]),
-            "local_audit_available": local_audit_available,
-            "audit_lookup": (
-                {"operation": "explain", "receipt_id": receipt_id}
-                if local_audit_available
-                else None
-            ),
-        },
+        "capsule": provider_capsule,
+        # Provider-visible receipt metadata is deliberately just the opaque
+        # join key. Planner counts, audit heads and lookup internals remain in
+        # the bounded local Query Trace.
+        "receipt": {"receipt_id": receipt_id},
         "delivery": {
             "hard_limit_bytes": _MAX_MCP_OUTPUT_CHARS,
-            "provider_content_bytes": len(canonical_json(capsule).encode("utf-8")),
-            "projection": result["projection"],
+            "provider_content_bytes": len(canonical_json(provider_capsule).encode("utf-8")),
+            "projection": provider_capsule["projection"],
             "write_performed": False,
         },
     }
+    try:
+        Draft202012Validator(_load_contract("provider-knowledge-capsule.v2.schema.json")).validate(
+            provider
+        )
+    except Exception as error:
+        raise RuntimeError("Query Plan v6 provider projection is invalid") from error
+    return provider
 
 
 def _handle_source_support(
@@ -1735,15 +2022,15 @@ def _handle_purpose_query(
         _runtime_snapshot=runtime_snapshot,
     )
     if query_plan_version == "6":
-        if runtime is not None:
-            runtime.retain_query_receipt(result["local_audit"])
-        return _autonomous_v6_response(
+        response = _autonomous_v6_response(
             operation="query",
-            result=_v6_provider_capsule(
-                result,
-                local_audit_available=runtime is not None,
-            ),
+            result=_v6_provider_capsule(result),
         )
+        if runtime is not None:
+            # Retain only after provider projection and outer output validation;
+            # a failed response must not leave an orphan trace.
+            runtime.retain_query_receipt(result["local_audit"])
+        return response
     if query_plan_version == "5":
         return _autonomous_v5_response(
             operation="query",
@@ -2152,15 +2439,21 @@ def _handle_autonomous_knowledge_support(
         if runtime is None:
             raise KeyError("query audit receipt is unavailable outside an MCP lifespan")
         receipt = runtime.read_query_receipt(receipt_id)
-        return _autonomous_v6_response(
-            operation="explain",
-            result={
-                "schema_version": "deeplaw.query-audit-read/v1",
-                "receipt_id": receipt_id,
-                "audit": receipt,
-                "write_performed": False,
-            },
-        )
+        result = {
+            "schema_version": "deeplaw.query-audit-read/v1",
+            "receipt_id": receipt_id,
+            "audit": receipt,
+            "write_performed": False,
+        }
+        try:
+            Draft202012Validator(_load_contract("query-audit-read.v1.schema.json")).validate(
+                result
+            )
+        except Exception as error:
+            raise RuntimeError("query audit read is invalid") from error
+        # `_autonomous_v6_response` enforces the provider-visible 64 KiB bound;
+        # oversized traces fail closed without returning any audit payload.
+        return _autonomous_v6_response(operation="explain", result=result)
     if operation == "source":
         return _handle_source_support(
             action=source_action,
@@ -3008,8 +3301,9 @@ def create_knowledge_mcp_server(
                     # A failed reopen must not leave a prior provider response or
                     # receipt available for a later request.
                     runtime.clear_read_cache()
-                    runtime.query_receipts.clear()
+                    runtime.clear_query_traces()
                     runtime.read_cache_identity = None
+                    runtime.read_cache_identity_digest = None
                     raise
                 if observed_snapshot is not None:
                     runtime.sync_read_identity(observed_snapshot.identity)

@@ -338,6 +338,10 @@ class PurposeAwareRetrievalService:
             raise ValueError("purpose-aware query token or source budget is invalid")
         if graph_hops not in {0, 1, 2}:
             raise ValueError("purpose-aware query graph-hop budget is invalid")
+        if retrieval_mode not in {"exact", "lexical", "dense", "graph", "hybrid"}:
+            raise ValueError("purpose-aware query retrieval mode is invalid")
+        if not isinstance(force_canonical_lexical, bool):
+            raise ValueError("purpose-aware canonical lexical control is invalid")
 
         with _purpose_read_stores(self.root, _runtime_snapshot) as (
             evidence_store,

@@ -271,7 +271,12 @@ Once a Vault contains an autonomous compilation run or governed Knowledge Object
 uses the same purpose-aware Query Plan v5 service for CLI `query`, CLI `context`, the Python API,
 and MCP. The v0.13 source candidate changes the current default to additive Query Plan v6:
 statement-level selection, dynamic duty coverage, targeted evidence completion, exact suppression
-receipts and bounded `compact`/`standard`/`audit` projections. v5 remains explicitly selectable.
+receipts and bounded local `compact`/`standard`/`audit` projections. v6 first discovers at most 20
+governed revisions through the requested lexical/dense/graph controls, then matches a maximum of
+512 Statement candidates only within those revisions; a fixed global Statement prefix is not a
+retrieval channel. The MCP provider surface emits only `compact` or `standard`: an `audit` request
+is reduced to `standard`, with a redacted bounded trace available by `receipt_id`. v5 remains
+explicitly selectable.
 An untouched v0.7 compatibility Vault with neither remains on the retained v1 context compiler
 until it enters the autonomous compilation workflow. Both v5 and v6 bind the
 autonomous audit head and the legacy evidence/Inbox audit head, plus the
@@ -317,6 +322,31 @@ gate fails closed on local absolute paths or recognized secret material; it neve
 matched value in its error. Unsafe invisible/bidirectional Unicode is rejected at the same gate,
 and MCP exception text crosses the same projection rather than reflecting sensitive failure
 details.
+
+Query receipts have three distinct roles. The provider receipt receives only an opaque `receipt_id`.
+The current source candidate keeps a process-local, non-persistent Query Trace with
+fixed TTL, entry/aggregate capacity, rotation, redaction, read-time integrity verification and
+runtime-owner deletion on identity change or close. It never stores query plaintext, Source body,
+hidden reasoning, credentials, or local paths. Canonical mutation receipts remain exclusively in
+the Knowledge Ledger; an ordinary query never appends a Ledger event. Durable Query Trace storage
+is not implemented because it would require an independent versioned store, migration, recovery,
+rollback and deletion contract rather than a hidden write inside `knowledge_support`.
+
+The stable Python facade preserves its existing startup integrity check. For repeated
+`KnowledgeOS.context.compile` calls on the same handle, it then lazily reuses the same
+`PersistentReadRuntime` as the MCP read plane and routes the verified snapshot into the canonical
+`AutonomousKnowledgeStore.build_capsule` implementation. Unchanged warm calls perform only the
+bounded live-identity check; an audit/database/manifest change closes the old snapshot and requires
+a verified reopen. `KnowledgeOS.verify` remains an explicit full verification. Retrieval, Source,
+Wiki and compatibility APIs retain their existing short-lived behavior rather than silently
+changing their fallback semantics.
+
+The Living Wiki keeps each Markdown page within its 256 KiB read boundary. A current Knowledge
+Revision with at most 64 Statements renders those anchors inline. A larger revision renders
+deterministic Statement Evidence shard pages (64 Statements per shard), links them from the stable
+Knowledge page, and registers every shard and Statement anchor in the same v3 Page Registry and
+Link Index. Sharding is derived state only; it does not change Statement, Knowledge Revision,
+evidence, Ledger identity, or Authority.
 
 ## 7. MCP and capability separation
 

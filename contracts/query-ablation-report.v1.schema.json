@@ -59,7 +59,7 @@
         "fixture_sha256"
       ],
       "properties": {
-        "corpus_id": {"const": "v013-heldout-query-ablation-v1"},
+        "corpus_id": {"const": "v013-development-query-ablation-v1"},
         "corpus_sha256": {"$ref": "#/$defs/sha256"},
         "query_count": {"const": 8},
         "positive_query_count": {"const": 5},

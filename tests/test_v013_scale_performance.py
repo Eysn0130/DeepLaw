@@ -9,6 +9,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 from benchmarks.v013.scale_performance import (
     OPERATION_INVENTORY,
     SCHEMA_VERSION,
+    _Fixture,
+    _fixture_operation_runners,
+    _full_vault_scan_monitor,
+    _synthetic_source_text,
     build_parser,
     build_scale_performance_report,
     verify_scale_performance_report,
@@ -16,6 +20,44 @@ from benchmarks.v013.scale_performance import (
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = REPOSITORY / "contracts/v013-scale-performance-report.v1.schema.json"
+
+
+def test_exact_100k_source_fixture_stays_within_line_count_ceiling() -> None:
+    source = _synthetic_source_text(100_000)
+
+    assert len(source.splitlines()) == 200_000
+    assert source.startswith("# Synthetic object 000000\n")
+    assert source.endswith("for construction diagnostics.\n")
+
+
+def test_full_vault_scan_monitor_distinguishes_owner_subtree_traversal(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    owner_subtree = root / ".deeplaw" / "derived" / "staging"
+    owner_subtree.mkdir(parents=True)
+
+    with _full_vault_scan_monitor(root) as bounded:
+        list(owner_subtree.rglob("*"))
+    assert bounded["full_filesystem_scan"] is False
+
+    with _full_vault_scan_monitor(root) as broad:
+        list(root.rglob("*"))
+    assert broad["full_filesystem_scan"] is True
+
+
+def test_python_capsule_verify_reports_observed_warm_full_verify_calls(
+    tmp_path: Path,
+) -> None:
+    fixture = _Fixture(tmp_path / "fixture", 1_000)
+    fixture.create()
+    try:
+        result = _fixture_operation_runners(fixture)["verify"]()
+    finally:
+        fixture.close()
+
+    assert result["valid"] is True
+    assert result["per_request_full_verify"] is False
 
 
 def test_scale_report_schema_and_closed_inventory_use_a_real_temporary_vault() -> None:

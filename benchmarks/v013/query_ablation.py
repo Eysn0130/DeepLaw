@@ -42,7 +42,7 @@ from deeplaw.util import (
 SCHEMA_VERSION = "deeplaw.query-ablation-report/v1"
 CORPUS_SCHEMA_VERSION = "deeplaw.query-ablation-corpus/v1"
 CORPUS_FILENAME = "query-ablation-corpus-v1.json"
-EXPECTED_CORPUS_SHA256 = "e2c8ef7a13f87b6c3aff92c1abfb31cfbb5d852e25c766f62b7a46953f9a65c7"
+EXPECTED_CORPUS_SHA256 = "791660e0c9e402ec07f2f48dc3a3045ba396517e70700bf6a6607e35a44b199d"
 K = 3
 MAX_CHARS = 2_000
 MAX_TOKENS = 512
@@ -140,7 +140,7 @@ _VARIANT_CONFIGS: tuple[dict[str, Any], ...] = (
         "mode": "purpose_aware",
         "expansion_mode": "not_applicable",
         "reason": (
-            "the held-out denominator is source-free by contract; purpose-aware compiled-first "
+            "the development denominator is source-free by contract; purpose-aware compiled-first "
             "execution is recorded separately against a synthetic source-bound autonomous "
             "fixture"
         ),
@@ -152,7 +152,7 @@ _VARIANT_CONFIGS: tuple[dict[str, Any], ...] = (
         "mode": "purpose_aware",
         "expansion_mode": "not_applicable",
         "reason": (
-            "the held-out denominator is source-free by contract; targeted evidence fallback "
+            "the development denominator is source-free by contract; targeted evidence fallback "
             "execution is recorded separately against a synthetic Source Revision fixture"
         ),
     },
@@ -231,7 +231,10 @@ def verify_query_ablation_corpus(value: Any) -> dict[str, Any]:
     }
     if set(corpus) != required or corpus["schema_version"] != CORPUS_SCHEMA_VERSION:
         raise ValueError("query ablation corpus shape is not closed")
-    if corpus["corpus_id"] != "v013-heldout-query-ablation-v1" or corpus["source_free"] is not True:
+    if (
+        corpus["corpus_id"] != "v013-development-query-ablation-v1"
+        or corpus["source_free"] is not True
+    ):
         raise ValueError("query ablation corpus identity or source-free flag is invalid")
     if (
         corpus["corpus_sha256"] != EXPECTED_CORPUS_SHA256
@@ -276,7 +279,7 @@ def verify_query_ablation_corpus(value: Any) -> dict[str, Any]:
             raise ValueError("query ablation negative label does not match expected IDs")
         expansions = query_expansion_terms(query)
         if expansions:
-            raise ValueError("held-out paraphrase unexpectedly appears in v2 expansion lexicon")
+            raise ValueError("development paraphrase unexpectedly appears in v2 expansion lexicon")
         normalized_query = normalize_query_text(query).casefold()
         fixture_texts = [
             normalize_query_text(text).casefold()
@@ -284,9 +287,9 @@ def verify_query_ablation_corpus(value: Any) -> dict[str, Any]:
             for text in (fixture["title"], fixture["statement"])
         ]
         if any(normalized_query == text for text in fixture_texts):
-            raise ValueError("held-out query is an exact fixture title or statement")
+            raise ValueError("development query is an exact fixture title or statement")
         if any(normalized_query and normalized_query in text for text in fixture_texts):
-            raise ValueError("held-out query is a fixture-text substring, not a paraphrase")
+            raise ValueError("development query is a fixture-text substring, not a paraphrase")
         if expected_ids:
             positives += 1
         else:
@@ -349,7 +352,7 @@ def _synthetic_vault() -> Iterator[tuple[Path, dict[str, str]]]:
 def _synthetic_purpose_fixture() -> Iterator[tuple[Path, dict[str, str]]]:
     """Build a bounded source/evidence plus source-bound autonomous fixture.
 
-    This fixture is deliberately separate from the source-free held-out Vault so
+    This fixture is deliberately separate from the source-free development Vault so
     mechanism calibration cannot change the headline denominator.  IDs are
     retained only in-process for integrity checks and are never emitted into the
     report; stable semantic fixture IDs are used for the calibration metrics.
@@ -825,8 +828,8 @@ def build_query_ablation_report(corpus: Mapping[str, Any] | None = None) -> dict
         "limitations": [
             "This is source-free synthetic fixture evidence, not a semantic Gold evaluation.",
             (
-                "The frozen held-out corpus contains no v2 expansion aliases; expansion_on "
-                "versus expansion_off headline metric deltas are zero."
+                "The repository-visible development corpus contains no v2 expansion aliases; "
+                "expansion_on versus expansion_off headline metric deltas are zero."
             ),
             (
                 "Dense and graph-only modes are explicitly not executed when their required "
@@ -836,7 +839,7 @@ def build_query_ablation_report(corpus: Mapping[str, Any] | None = None) -> dict
             (
                 "Compiled-first and targeted evidence fallback are calibrated separately on a "
                 "synthetic Source Revision plus source-bound autonomous claim; those results "
-                "are excluded from the source-free held-out denominator."
+                "are excluded from the source-free development denominator."
             ),
             "Latency is one-run wall-clock observation and token_proxy is not model tokenization.",
             "Throughput is one-run aggregate queries per second; it is not a capacity claim.",

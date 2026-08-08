@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from ..backfill import BackfillService
 from ..compilation import (
@@ -21,6 +21,7 @@ from ..knowledge_autonomy import (
     autonomous_core_installed,
 )
 from ..knowledge_store import KnowledgeVault
+from ..persistent_read_runtime import PersistentReadRuntime
 from ..read_services import SourceReadService, WikiReadService
 from ..retrieval import PurposeAwareRetrievalService
 
@@ -347,6 +348,7 @@ class _RetrievalAPI:
 @dataclass(frozen=True)
 class _ContextAPI:
     _root: Path
+    _runtime_factory: Callable[[], PersistentReadRuntime]
 
     def compile(
         self,
@@ -367,29 +369,27 @@ class _ContextAPI:
         kinds: tuple[str, ...] = (),
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
-        def build() -> dict[str, Any]:
-            with AutonomousKnowledgeStore(self._root, read_only=True) as store:
-                if not store.verify()["valid"]:
-                    raise RuntimeError("Knowledge OS integrity is invalid")
-                return store.build_capsule(
-                    task=task,
-                    goal=goal,
-                    purpose=purpose,
-                    policy=policy,
-                    scope=cast(Any, scope),
-                    max_sensitivity=cast(Any, max_sensitivity),
-                    limit=limit,
-                    max_chars=max_chars,
-                    max_tokens=max_tokens,
-                    max_sources=max_sources,
-                    graph_hops=graph_hops,
-                    retrieval_mode=retrieval_mode,
-                    as_of=as_of,
-                    kinds=kinds,
-                    confirm_no_case_data=confirm_no_case_data,
-                )
-
-        return _invoke(build)
+        runtime = _invoke(self._runtime_factory)
+        snapshot = _invoke(runtime.get_snapshot, operation="context")
+        return _invoke(
+            snapshot.store.build_capsule,
+            task=task,
+            goal=goal,
+            purpose=purpose,
+            policy=policy,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            max_chars=max_chars,
+            max_tokens=max_tokens,
+            max_sources=max_sources,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            as_of=as_of,
+            kinds=kinds,
+            confirm_no_case_data=confirm_no_case_data,
+            _runtime_snapshot=snapshot,
+        )
 
 
 @dataclass(frozen=True)
@@ -596,6 +596,8 @@ class KnowledgeOS:
     """Stable public facade; persistence internals are intentionally hidden."""
 
     _root: Path
+    _runtime: PersistentReadRuntime | None = None
+    _closed: bool = False
 
     @classmethod
     def open(cls, path: str | Path) -> KnowledgeOS:
@@ -618,6 +620,35 @@ class KnowledgeOS:
         _invoke(verify)
         return cls(root)
 
+    def _ensure_runtime(self) -> PersistentReadRuntime:
+        if self._closed:
+            raise RuntimeError("Knowledge OS is closed")
+        runtime = self._runtime
+        if runtime is None:
+            runtime = _invoke(PersistentReadRuntime, self._root)
+            object.__setattr__(self, "_runtime", runtime)
+        return runtime
+
+    def close(self) -> None:
+        """Close the verified read snapshot and its bounded identity observer."""
+
+        runtime = self._runtime
+        if runtime is not None:
+            runtime.close()
+        object.__setattr__(self, "_closed", True)
+
+    def __enter__(self) -> KnowledgeOS:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: Any,
+    ) -> bool:
+        self.close()
+        return False
+
     @property
     def compilations(self) -> _CompilationsAPI:
         return _CompilationsAPI(self._root)
@@ -632,7 +663,7 @@ class KnowledgeOS:
 
     @property
     def context(self) -> _ContextAPI:
-        return _ContextAPI(self._root)
+        return _ContextAPI(self._root, self._ensure_runtime)
 
     @property
     def sources(self) -> _SourcesAPI:

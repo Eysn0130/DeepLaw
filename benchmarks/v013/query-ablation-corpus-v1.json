@@ -1,6 +1,6 @@
 {
   "schema_version": "deeplaw.query-ablation-corpus/v1",
-  "corpus_id": "v013-heldout-query-ablation-v1",
+  "corpus_id": "v013-development-query-ablation-v1",
   "source_free": true,
   "query_count": 8,
   "queries": [
@@ -77,5 +77,5 @@
     "max_tokens": 512,
     "repeats": 1
   },
-  "corpus_sha256": "e2c8ef7a13f87b6c3aff92c1abfb31cfbb5d852e25c766f62b7a46953f9a65c7"
+  "corpus_sha256": "791660e0c9e402ec07f2f48dc3a3045ba396517e70700bf6a6607e35a44b199d"
 }

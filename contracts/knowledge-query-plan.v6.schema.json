@@ -6,7 +6,8 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "intent", "purpose", "policy_id", "scope", "max_sensitivity",
-    "as_of", "query_target", "applicable_duties", "budget", "projection",
+    "as_of", "query_target", "applicable_duties", "retrieval_controls", "discovery",
+    "budget", "projection",
     "input_audit_head", "input_legacy_audit_head", "compiled_candidate_count",
     "admitted_statement_count", "selected_statement_count", "evidence_selected_count",
     "duties", "coverage_before", "coverage_after", "selection", "fallback",
@@ -36,6 +37,30 @@
       }
     },
     "applicable_duties": {"type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true, "items": {"enum": ["primary_answer", "identity", "definition", "current_state", "temporal_freshness", "procedure", "exception", "contradiction", "applicability", "limitation", "source_evidence", "unresolved_gap"]}},
+    "retrieval_controls": {
+      "type": "object", "additionalProperties": false,
+      "required": ["graph_hops", "retrieval_mode", "force_canonical_lexical"],
+      "properties": {
+        "graph_hops": {"type": "integer", "minimum": 0, "maximum": 2},
+        "retrieval_mode": {"enum": ["exact", "lexical", "dense", "graph", "hybrid"]},
+        "force_canonical_lexical": {"type": "boolean"}
+      }
+    },
+    "discovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["query_plan_sha256", "recall_digest", "candidate_revision_count", "selected_revision_count", "selected_revision_ids_sha256", "channels", "limitations", "statement_candidate_limit", "statement_candidate_truncated"],
+      "properties": {
+        "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "recall_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "candidate_revision_count": {"type": "integer", "minimum": 0},
+        "selected_revision_count": {"type": "integer", "minimum": 0, "maximum": 20},
+        "selected_revision_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "channels": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+        "limitations": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "statement_candidate_limit": {"const": 512},
+        "statement_candidate_truncated": {"type": "boolean"}
+      }
+    },
     "budget": {
       "type": "object", "additionalProperties": false,
       "required": ["items", "characters", "tokens", "sources", "provider_characters"],
@@ -51,7 +76,7 @@
     "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "input_legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "compiled_candidate_count": {"type": "integer", "minimum": 0},
-    "admitted_statement_count": {"type": "integer", "minimum": 0, "maximum": 5000},
+    "admitted_statement_count": {"type": "integer", "minimum": 0, "maximum": 512},
     "selected_statement_count": {"type": "integer", "minimum": 0, "maximum": 20},
     "evidence_selected_count": {"type": "integer", "minimum": 0, "maximum": 32},
     "duties": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"$ref": "#/$defs/duty"}},

@@ -197,7 +197,9 @@ def test_query_without_explicit_plan_version_uses_v6_provider_receipt(
     )
 
     assert response["operation"] == "query"
-    assert response.get("result", {}).get("receipt", {}).get("query_plan_version") == "6"
+    result = response.get("result", {})
+    assert result.get("schema_version") == "deeplaw.provider-knowledge-capsule/v2"
+    assert set(result.get("receipt", {})) == {"receipt_id"}
 
 
 def test_v6_tool_contract_and_instructions_recommend_one_read_path(
