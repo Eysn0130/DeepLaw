@@ -1,93 +1,88 @@
 # DeepLaw v0.13 scale, latency, concurrency and RSS qualification
 
-Status: **development diagnostics executed; final clean-commit requalification pending and
-release gates unmet** (2026-08-08). All measurements are source-free local construction evidence.
+Status: **clean implementation-commit development diagnostics executed; external release gates
+remain unmet** (2026-08-08). These measurements are source-free synthetic construction evidence,
+not real-user quality or release evidence.
 
-## Frozen environment and boundaries
+## Candidate and report bindings
 
-The executed host is Darwin `25.5.0`, arm64, 12 logical CPUs, Python `3.12.13`, SQLite `3.50.4`,
-and 25,769,803,776 reported RAM bytes. Package version remains `0.12.0`. Reports hard-code
-`claim_eligible=false`, `competitive_claim_eligible=false` where applicable, and
-`release_gate_passed=false`.
+All committed final reports bind clean implementation commit
+`bb6a942970186f03ea41e108a2eceaaca54e3bcb` and tree
+`8817db9349b504784b95690844ee10f43769cbdd`. The host was Darwin `25.5.0`, arm64,
+Python `3.12.13`, SQLite `3.50.4`; package version remained `0.12.0`.
 
-No expensive request is silently replaced by a smaller fixture. A requested lane is either
-executed at its exact size, fails with the retained reason, or is `not_executed`.
+| Report | File SHA-256 | Internal report SHA-256 |
+| --- | --- | --- |
+| `benchmarks/v013/query-graph-scale-final-5k-10k-2026-08-08.json` | `ad16d230360610e40037808ad9efdd75ccd5b8b02eda7f51bec15c0a753c185a` | `ea2d235907613979f97fb7b91e4b4377e963e0132c9a940441b2dbd4437f147d` |
+| `benchmarks/v013/query-graph-scale-final-100k-2026-08-08.json` | `ec362bb5d57c4b702668d0a5f4098996ad8f88746f455e80a47393fb3cb6b1eb` | `3f632601de455a439106cc9f1be0a59ada58c90d496b0abfe5c520e01f3ab4e9` |
+| `benchmarks/v013/scale-performance-final-2026-08-08.json` | `e905c2c228b78abcdb917018316d2b07adc8c708050da0e7c3bda9a1eb36830a` | `e0d15a421678eaa4f12bae7f1923233432aed948a766cb232b8a70a6fe0f59b7` |
+| `benchmarks/v013/runtime-stability-final-10000-2026-08-08.json` | `0430b3fb31a7377d7d48b1525aa48972ec4e70ed839679b2fc54e1f46799268e` | `9d168fe849fbaf8d33b1ad7dd62850049365a3fabf70d650329db7066a796d72` |
+
+The runners make an expensive requested lane either execute at its exact size or record
+`not_executed`; they never substitute a smaller fixture.
 
 ## Query v6 Statement scale
 
-The current public Profile-v3 fixture randomizes source order and stable identities, queries
-positions at the beginning, middle, beyond 5,000 and tail, and retains a 512-Statement candidate
-bound plus 64 KiB provider hard limit.
+The Profile-v3 fixture randomizes order and stable identities, targets the beginning, middle,
+position 5,001 and tail, retains a 512-Statement candidate bound and enforces the 64 KiB provider
+limit. One timed `PersistentReadRuntime` verification is reused by every warm query.
 
-| Statements | Positions | Exact targets selected | Candidate count per query | Max provider bytes | Query elapsed |
-| ---: | --- | --- | --- | ---: | ---: |
-| 5,001 | `0, 2500, 5000` | 3/3 | `1,1,1` | 5,962 | 35,489.395 ms |
-| 10,000 | `0, 5000, 5001, 9999` | 4/4 | `1,1,1,1` | 6,026 | 95,361.180 ms |
-| 100,000 | `0, 5001, 50000, 99999` | 4/4 | `1,1,1,1` | 6,037 | 1,603.206 ms warm queries + 302,168.088 ms startup verification |
+| Statements | Positions | Selected | Candidates/query | Max provider bytes | Startup verify | Warm queries | Build |
+| ---: | --- | ---: | --- | ---: | ---: | ---: | ---: |
+| 5,001 | `0,2500,5000` | 3/3 | `1,1,1` | 5,963 | 11,946.590 ms | 131.598 ms | 21,461.240 ms |
+| 10,000 | `0,5000,5001,9999` | 4/4 | `1,1,1,1` | 6,029 | 23,912.870 ms | 269.383 ms | 43,950.764 ms |
+| 100,000 | `0,5001,50000,99999` | 4/4 | `1,1,1,1` | 6,037 | 320,286.464 ms | 1,830.675 ms | 567,038.207 ms |
 
-The first 100k observation reproduced the Wiki page-bound failure and is retained as a failure
-witness. The post-remediation dirty-tree development run built exactly 100,000 Statements,
-completed the derived rebuild, selected all four targets through one persistent verified snapshot,
-and observed exactly one full verification. Query time above excludes the separately reported
-startup verification. It is not final candidate evidence; a clean implementation-commit rerun must
-replace it.
+All three exact lanes completed the derived rebuild, observed one full verification, recorded
+`per_request_full_verify=false`, and selected every exact target independent of position. The 100k
+fixture used 1,116,682,853 bytes and 302,486 files; process peak RSS observed by the runner rose
+from 62,685,184 to 1,866,104,832 bytes during construction. These are host-local construction
+measurements, not a production capacity promise.
 
 ## Living Wiki and construction scale
 
-The corrected current 10k construction fixture recorded 10,000 Assets, 74,518,528 SQLite bytes,
-300 files, 5 bounded aggregate Canvas files and a 7,605-byte provider payload with zero hard-limit
-violations. `compiled_first` measured 9.637 ms against the frozen 1,000 ms target; `context`
-measured 10.042 ms against 1,200 ms; startup verification measured 15.738 ms and was not repeated
-per request; eight readers succeeded in 1.450 s. Incremental and full rebuild measured 2.121 s and
-1.798 s. These are dirty-tree development observations pending clean candidate binding.
+The 60-operation scale report contains 47 executed observations, 15 frozen-threshold passes,
+zero failures, zero degraded outcomes and 13 explicit `not_executed` outcomes.
 
-The first 100k construction attempt failed before qualification because the benchmark produced
-300,000 lines and crossed the Source line-count ceiling. The runner now generates exactly 200,000
-lines (one heading and one body line per Asset) and has a regression for that exact count. A second
-benchmark defect unconditionally labelled every full rebuild as a whole-Vault filesystem scan;
-the runner now observes `Path.rglob` and distinguishes the Vault root from projector-owned
-staging/backup subtrees.
+| Assets | compiled/context p95 | Wiki/backlinks/outlinks p95 | Incremental/full rebuild p95 | 8 readers | SQLite / files / Canvas | Provider bytes |
+| ---: | --- | --- | --- | ---: | --- | ---: |
+| 1,000 | 7.297 / 9.023 ms | 61.410 / 76.523 / 75.799 ms | 347.178 / 274.185 ms | 399.274 ms | 8,400,896 / 97 / 5 | 7,665 |
+| 10,000 | 9.556 / 10.322 ms | 547.061 / 522.522 / 542.241 ms | 2,174.390 / 1,797.805 ms | 1,600.195 ms | 74,498,048 / 306 / 5 | 7,665 |
+| 100,000 | 26.604 / 26.455 ms | 6,460.966 / 6,245.596 / 6,409.959 ms | 18,826.020 / 16,229.254 ms | 25,977.414 ms | 740,503,552 / 1,951 / 5 | 7,665 |
 
-The post-remediation dirty-tree 100k development run executed the exact workload: 100,000 Assets,
-739,852,288 SQLite bytes, 1,945 files, 5 Canvas files and a 7,605-byte provider projection.
-`compiled_first`/`context` measured 25.894/25.945 ms, startup verification 33.580 ms with
-`per_request_full_verify=false`, incremental/full rebuild 19.118/16.445 s, and eight readers
-24.614 s. Full rebuild observed no whole-Vault scan. Wiki page/backlinks/outlinks measured about
-6.4–6.7 s; no 100k threshold was frozen for those operations, so no pass/fail is invented. The
-pre-fix artifact remains a reproduction and the current figures remain development observations
-until the clean implementation-commit report is generated.
+Every full rebuild observed `full_filesystem_scan=false`, every verified warm path recorded
+`per_request_full_verify=false`, and provider hard-limit violations were zero. The five Canvas
+files are bounded aggregate views rather than one file per object. Wiki/backlink/outlink operations
+at 10k/100k have no frozen latency threshold, so their execution is not relabelled as a pass.
+
+Source-update timing and the corresponding scale-runner cache invalidation observation were
+`not_executed` because the construction fixture does not fabricate a canonical source mutation.
+Functional first-read invalidation was independently exercised by 18 persistent-runtime/cache
+regressions.
 
 ## 10,000-request RSS and eight readers
 
-The dedicated child-process runtime diagnostic uses one real `knowledge_support` MCP lifespan for
-10,000 Query v6 reads, samples current RSS using macOS `ps`, and checks Canonical Ledger event
-counts before/after. Its executed pre-final observation was:
+The dedicated child process kept one real `knowledge_support` MCP lifespan open for all requests.
 
-| Measurement | Observation |
+| Measurement | Clean candidate observation |
 | --- | ---: |
-| Attempted / successful / failed requests | 10,000 / 10,000 / 0 |
-| Start / end RSS | 81,297,408 / 88,260,608 bytes |
-| Relative RSS growth | 8.565095% |
+| Attempted / successful / failed | 10,000 / 10,000 / 0 |
+| Start / end current RSS | 81,264,640 / 88,260,608 bytes |
+| Current RSS growth | 8.608871% |
 | Frozen growth limit | 10.0% |
 | Independent readers | 8/8 |
-| Ledger events before / after | 9 / 9 |
+| Canonical Ledger events before / after | 9 / 9 |
 
-The runner records the 10% threshold and an explicit boolean judgment, binds Query v6, Persistent
-Runtime and MCP server source hashes, and must be rerun against the clean implementation commit.
-The measurement is current RSS before/after, not peak RSS; that limitation remains explicit.
+The frozen current-RSS criterion passed on this Darwin host. The report explicitly does not claim
+peak-RSS or cross-platform stability.
 
 ## Not executed / not claimed
 
-- 10k/100k governed Relations and the 500/5,000 Relation truncation boundary: `not_executed`.
-- Source-update timing in the construction runner: `not_executed`; functional first-read cache
-  invalidation is tested separately and not relabelled as timing evidence.
-- Linux and Windows: `not_executed`; local Darwin Python-version evidence is reported separately
-  and cannot satisfy the 3-OS matrix.
-- Real-user latency/RSS, model token use, final blind holdout and competitive comparison:
-  `not_executed`.
-- Exact signed 28-source Pack, Human Gold, real Codex, OpenCode/DeepSeek and public artifact
-  redownload: `not_executed` or `review_pending`.
+- 10k/100k governed Relations and the 500/5,000 Relation truncation-position gate:
+  `not_executed`; the owner grant limit of 120 mutations/minute was not weakened.
+- Linux and Windows scale/RSS evidence: `not_executed`.
+- Real-user corpus latency/RSS, final blind quality, exact signed legal Pack, Human Gold, real
+  Codex, OpenCode/DeepSeek and competitive comparators: `not_executed`.
 
-Therefore the local observations do not authorize a scale-complete, production-readiness, RC, GA,
-quality or superiority claim. `scale_gate_passed=false` until clean-commit post-fix reports are
-generated and every mandatory external gate is separately satisfied.
+Therefore `scale_gate_passed=false`, `release_gate_passed=false`, and
+`competitive_claim_eligible=false` despite the completed local synthetic lanes.

@@ -1,7 +1,7 @@
 # DeepLaw v0.13 Living Wiki and knowledge-network qualification
 
-Status: **local deterministic network regressions passed; scale requalification and external
-quality gates remain separate** (2026-08-08). This is development evidence, not RC/GA or a
+Status: **local deterministic network regressions and clean 1k/10k/100k construction passed;
+external quality gates remain separate** (2026-08-08). This is development evidence, not RC/GA or a
 competitive claim.
 
 ## Executed network chain
@@ -70,7 +70,7 @@ as one synthetic Wiki test.
 | Graph cycle/contradiction/temporal/dangling/self-loop | `pass` at smoke scale | Governed Relation fixture only. |
 | Wrong merge / duplicate identity / cross-language alias quality | `not_executed` as a Wiki qualification metric | Existing negative identity tests exist, but no frozen external identity Gold was supplied. |
 | 500/5,000 Relation truncation and 10k/100k Relations | `not_executed` | No safe audited bulk Relation constructor; the 120 mutations/minute owner grant was not weakened. |
-| 100k derived Wiki rebuild after Statement sharding | `pass` as dirty-tree development evidence; clean binding pending | Exact 100,000-Statement development run completed `rebuild_derived`; clean implementation-commit report must replace the retained pre-fix failure witness for candidate binding. |
+| 100k derived Wiki rebuild after Statement sharding | `pass` as clean-commit development evidence | Exact 100,000-Statement and 100,000-Asset lanes completed derived/full/incremental rebuilds at implementation commit `bb6a942970186f03ea41e108a2eceaaca54e3bcb`; report hashes are bound in `V0_13_SCALE_RSS_QUALIFICATION_REPORT.md`. |
 
 FTS, Dense, Graph, Wiki and Canvas remain derived and rebuildable. None of their scores, links,
 centrality, communities or usage counts alter canonical origin, verification, Authority, scope,
@@ -80,8 +80,8 @@ sensitivity or lifecycle.
 
 The deterministic Wiki network is materially covered and both reproduced scale blockers—the
 unbounded Statement page and quadratic Source Summary aggregation—have minimal
-derived-projection fixes. The exact dirty-tree 100k development run completed derived rebuild and
-kept five aggregate Canvas files, but external identity Gold, large Relation lanes and final clean
-candidate binding are still mandatory for their respective claims. Until those specific gates
-execute, `wiki_scale_gate_passed=false`, `release_gate_passed=false`, and
+derived-projection fixes. Clean-commit 100k Statement and Asset runs completed derived rebuilds,
+avoided a whole-Vault filesystem scan and kept five aggregate Canvas files. External identity Gold
+and large Relation lanes are still mandatory for their respective claims. Until those gates
+execute, `wiki_release_gate_passed=false`, `release_gate_passed=false`, and
 `competitive_claim_eligible=false`.

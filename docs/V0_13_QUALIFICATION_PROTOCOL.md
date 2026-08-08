@@ -1,7 +1,8 @@
 # DeepLaw v0.13 Source-Candidate Qualification Protocol
 
-Status: **protocol-frozen candidate binding pending** (2026-08-08). The package remains
-`0.12.0`; this document does not authorize a release, RC, GA, or a competitive claim.
+Status: **protocol frozen; external qualification candidate binding pending** (2026-08-08). The
+local reproducible source-candidate package is recorded separately, package version remains
+`0.12.0`, and this document does not authorize a release, RC, GA, or a competitive claim.
 
 The machine-readable contract is
 `contracts/v013-qualification-protocol.v1.schema.json`. The frozen candidate protocol is
@@ -12,9 +13,12 @@ JSON bytes as stored, including its final newline.
 ## Why this is not a result
 
 The protocol fixes the measurement design and the failure rules before any final result is read.
-It deliberately has no candidate wheel, commit, external holdout, Gold, scorer, host receipt, or
-result hash bound yet. Every metric and external gate therefore has status `not_executed`; this is
-not a score of zero and cannot be converted into a pass by an empty denominator.
+It deliberately has no external qualification candidate, holdout, Gold, scorer, host receipt, or
+result hash bound yet. A clean local wheel was constructed and hash-bound in
+`V0_13_PLATFORM_ARTIFACT_QUALIFICATION_REPORT.md`, but it was not run against a qualification or
+final-blind holdout and therefore is not written into the protocol as if that external binding had
+occurred. Every metric and external gate remains `not_executed`; this is not a score of zero and
+cannot be converted into a pass by an empty denominator.
 
 The repository-visible v0.13 fixtures are development material. A repository fixture, including a
 fixture whose filename says `holdout`, is not a qualification holdout or a final blind holdout under
@@ -86,11 +90,12 @@ statement/graph scans, provider overflow, blind contamination, and query-trace s
 exposure are also hard failures with maximum allowed count zero. A hard failure fails the gate even
 if an aggregate metric would otherwise pass.
 
-Real Codex (three isolated runs), OpenCode/DeepSeek (three isolated runs), Human Gold scoring, the
-exact signed 28-source legal pack, 10k/100k statement/relation/Wiki scale, 10,000-request RSS,
-eight-reader concurrency, the three-OS/Python matrix, and fresh wheel/SBOM/provenance/redownload
-checks are all `not_executed` until their independently reproducible prerequisites are attached.
-No ambient credential or current desktop session is an admissible substitute.
+Real Codex (three isolated runs), OpenCode/DeepSeek (three isolated runs), Human Gold scoring and
+the exact signed 28-source legal pack remain `not_executed`. Local Statement/Wiki 10k/100k,
+10,000-request current-RSS, eight-reader, Darwin Python 3.11/3.12/3.13 and reproducible wheel/SBOM
+evidence is recorded in focused development reports, but cannot satisfy the missing large-Relation,
+three-OS, provenance/public-redownload or external quality gates. No ambient credential or current
+desktop session is an admissible substitute.
 
 Until every required gate has real evidence, `quality_protocol_eligible` and
 `competitive_claim_eligible` remain false and the release disposition remains
