@@ -40,6 +40,7 @@ _FIXTURE_DIAGNOSTIC_FRAMES = {
 
 def _closed_fixture_diagnostic(workspace: Path) -> str:
     try:
+        workspace.mkdir(parents=True, exist_ok=False)
         runtime_stability._build_fixture_report(workspace)
     except BaseException as error:
         seen: set[int] = set()
