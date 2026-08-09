@@ -43,7 +43,7 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -
     assert report["configuration"]["query_plan_version"] == "6"
     assert report["configuration"]["rss_growth_limit_percent"] == 10.0
     assert report["fixture"]["construction"] == "public_profile_v3_compilation"
-    assert report["fixture"]["statement_count"] == 1
+    assert report["fixture"]["statement_count"] == 1, report["rss_stability"]["reason"]
     assert report["rss_stability"]["request_count"] == 2
     assert report["rss_stability"]["attempted_requests"] == 2
     assert report["rss_stability"]["successful_requests"] == 2

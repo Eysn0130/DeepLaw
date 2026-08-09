@@ -60,6 +60,7 @@ jobs:
           uv run --frozen pytest --strict-markers -vv --maxfail=1
           tests/test_prd12_goal_route_identity_reproduction.py::test_prd12_goal_is_retrieval_only_and_not_route_identity
           tests/test_prd12_task_routing_reproduction.py::test_p0c_cli_cold_thread_task_text_only_recovery
+          tests/test_v013_runtime_stability.py::test_runtime_stability_smoke_is_schema_bound_and_read_only
 
       - name: Candidate current-source regression (not release readiness)
         shell: bash

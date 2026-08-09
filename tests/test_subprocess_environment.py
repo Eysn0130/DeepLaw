@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from deeplaw import subprocess_environment
@@ -33,11 +35,14 @@ def test_closed_environment_copies_only_portable_allowlist(
         overrides={"HOME": "/isolated/home", "PYTHONPATH": "/isolated/src"}
     )
 
-    assert environment == {
+    expected = {
         **{name: values[name] for name in subprocess_environment._INHERITED_NAMES},
         "HOME": "/isolated/home",
         "PYTHONPATH": "/isolated/src",
     }
+    if os.name == "nt":
+        expected["USERPROFILE"] = "/isolated/home"
+    assert environment == expected
     assert "DEEPLAW_TEST_AMBIENT_SECRET" not in environment
     assert "TEST_PROVIDER_TOKEN" not in environment
     assert "XDG_CONFIG_HOME" not in environment
