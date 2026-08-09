@@ -22,6 +22,28 @@ SCHEMA_PATH = REPOSITORY / "contracts/v013-runtime-stability-report.v1.schema.js
 _LOCAL_PATH = re.compile(
     r"(?:/Users/|/home/|/tmp/|/private/var/|/var/folders/|[A-Za-z]:[\\/])"
 )
+_FIXTURE_DIAGNOSTIC_MESSAGES = {
+    "source compilation artifact metadata is inconsistent": "artifact_metadata_mismatch",
+    "content-addressed object path is unsafe": "object_path_unsafe",
+    "content-addressed object failed exact-byte verification": "object_byte_mismatch",
+    "autonomous event transaction time moved backwards": "transaction_time_regression",
+}
+
+
+def _closed_fixture_diagnostic(workspace: Path) -> str:
+    try:
+        runtime_stability._build_fixture_report(workspace)
+    except BaseException as error:
+        seen: set[int] = set()
+        current: BaseException | None = error
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            code = _FIXTURE_DIAGNOSTIC_MESSAGES.get(str(current))
+            if code is not None:
+                return code
+            current = current.__cause__ or current.__context__
+        return f"unmapped_{runtime_stability._failure_type(error)}"
+    return "not_reproduced"
 
 
 def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -> None:
@@ -43,7 +65,10 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -
     assert report["configuration"]["query_plan_version"] == "6"
     assert report["configuration"]["rss_growth_limit_percent"] == 10.0
     assert report["fixture"]["construction"] == "public_profile_v3_compilation"
-    assert report["fixture"]["statement_count"] == 1, report["rss_stability"]["reason"]
+    assert report["fixture"]["statement_count"] == 1, (
+        report["rss_stability"]["reason"],
+        _closed_fixture_diagnostic(tmp_path / "diagnostic-workspace"),
+    )
     assert report["rss_stability"]["request_count"] == 2
     assert report["rss_stability"]["attempted_requests"] == 2
     assert report["rss_stability"]["successful_requests"] == 2
