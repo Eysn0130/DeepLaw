@@ -86,8 +86,14 @@ def _redacted_argv(arguments: list[str]) -> list[str]:
 
 
 class Cli:
-    def __init__(self, executable: Path) -> None:
+    def __init__(
+        self,
+        executable: Path,
+        *,
+        query_plan_version: str | None,
+    ) -> None:
         self.executable = executable.resolve(strict=True)
+        self.query_plan_version = query_plan_version
         self.records: list[dict[str, Any]] = []
         self.environment = os.environ.copy()
         self.environment.update(
@@ -797,9 +803,31 @@ def _query(
     ]
     if as_of is not None:
         arguments.extend(["--as-of", as_of])
+    if cli.query_plan_version is not None:
+        arguments.extend(["--query-plan-version", cli.query_plan_version])
     value, elapsed = cli.run(*arguments, label=label)
     if len(_canonical_json(value).encode("utf-8")) > MAX_PROVIDER_BYTES:
         raise QualityGateError("purpose-aware query exceeded 64 KiB")
+    expected_contract = (
+        (
+            "deeplaw.purpose-aware-retrieval/v1",
+            "deeplaw.knowledge-query-plan/v4",
+        )
+        if cli.query_plan_version is None
+        else (
+            "deeplaw.purpose-aware-retrieval/v2",
+            "deeplaw.knowledge-query-plan/v5",
+        )
+    )
+    plan = value.get("query_plan") if isinstance(value, dict) else None
+    actual_contract = (
+        value.get("schema_version") if isinstance(value, dict) else None,
+        plan.get("schema_version") if isinstance(plan, dict) else None,
+    )
+    if actual_contract != expected_contract:
+        raise QualityGateError(
+            "Living Wiki quality query returned an unexpected retrieval contract"
+        )
     return value, elapsed
 
 
@@ -847,7 +875,14 @@ def run_gate(
     )
     Draft202012Validator.check_schema(suite_schema)
     Draft202012Validator(suite_schema).validate(suite)
-    cli = Cli(deeplaw)
+    # Suite v1 compares the v0.10 baseline with the published Query Plan v5
+    # compatibility surface.  Pin the current candidate instead of following
+    # the mutable product default (v6 has a different Statement-first corpus
+    # and scorer).  This report is not Query Plan v6 qualification evidence.
+    cli = Cli(
+        deeplaw,
+        query_plan_version=None if candidate_role == "baseline" else "5",
+    )
     version_line, _elapsed = cli.run("--version", parse_json=False, label="version")
     version = version_line.rsplit(" ", 1)[-1]
     failures: list[dict[str, Any]] = []
