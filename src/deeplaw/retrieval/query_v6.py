@@ -109,6 +109,59 @@ def _source_key(reference: dict[str, Any]) -> str:
     )
 
 
+def _canonical_source_reference(
+    store: AutonomousKnowledgeStore,
+    reference: dict[str, Any],
+) -> tuple[dict[str, str], Any] | None:
+    """Resolve one source reference through the bound Fragment row.
+
+    Source references can arrive through separate discovery paths and may use a
+    legacy fragment revision alias or omit a locator.  The immutable
+    Fragment row is the authority for the canonical fragment identity, locator,
+    and quote digest used by v6 evidence admission.
+    """
+
+    source_revision_id = reference.get("source_revision_id")
+    fragment_identity = reference.get("fragment_id") or reference.get(
+        "fragment_revision_id"
+    )
+    if not isinstance(source_revision_id, str) or not isinstance(
+        fragment_identity, str
+    ):
+        return None
+    row = store.connection.execute(
+        """
+        SELECT bindings.fragment_id, bindings.fragment_revision_id,
+               fragments.text, fragments.text_sha256, fragments.locator,
+               source_binding.source_revision_id
+        FROM legacy_fragment_bindings_v2 AS bindings
+        JOIN source_fragments AS fragments
+          ON fragments.fragment_id = bindings.fragment_id
+        JOIN source_revision_bindings_v2 AS source_binding
+          ON source_binding.legacy_source_id = bindings.legacy_source_id
+        WHERE source_binding.source_revision_id = ?
+          AND (bindings.fragment_id = ? OR bindings.fragment_revision_id = ?)
+        LIMIT 1
+        """,
+        (source_revision_id, fragment_identity, fragment_identity),
+    ).fetchone()
+    if row is None:
+        return None
+    if reference.get("locator") not in {None, row["locator"]}:
+        raise RuntimeError("statement source locator does not match its fragment")
+    if reference.get("quote_sha256") != row["text_sha256"]:
+        raise RuntimeError("statement source reference does not match its fragment")
+    return (
+        {
+            "source_revision_id": source_revision_id,
+            "fragment_id": row["fragment_id"],
+            "locator": row["locator"],
+            "quote_sha256": row["text_sha256"],
+        },
+        row,
+    )
+
+
 def _task_checkpoint_admitted(revision: dict[str, Any], body: str) -> bool:
     """Admit only bounded structured checkpoints, never generic working-memory bodies."""
 
@@ -1056,27 +1109,34 @@ def _source_evidence(
             suppressions.append({"candidate_id": "unknown", "reason": "invalid_source_ref"})
             continue
         source_revision_id = reference.get("source_revision_id")
-        fragment_id = reference.get("fragment_id") or reference.get("fragment_revision_id")
-        if not isinstance(source_revision_id, str) or not isinstance(fragment_id, str):
+        fragment_identity = reference.get("fragment_id") or reference.get(
+            "fragment_revision_id"
+        )
+        if not isinstance(source_revision_id, str) or not isinstance(
+            fragment_identity, str
+        ):
             suppressions.append({"candidate_id": "unknown", "reason": "invalid_source_ref"})
             continue
-        normalized = dict(reference)
-        if "fragment_id" not in normalized:
-            binding = knowledge_store.connection.execute(
-                """
-                SELECT fragment_id
-                FROM legacy_fragment_bindings_v2
-                WHERE fragment_revision_id = ?
-                LIMIT 1
-                """,
-                (fragment_id,),
-            ).fetchone()
-            if binding is None:
-                suppressions.append({"candidate_id": fragment_id, "reason": "fragment_unavailable"})
-                continue
-            normalized["fragment_id"] = binding["fragment_id"]
+        canonical = _canonical_source_reference(knowledge_store, reference)
+        if canonical is None:
+            suppressions.append(
+                {"candidate_id": fragment_identity, "reason": "fragment_unavailable"}
+            )
+            continue
+        normalized, row = canonical
         key = _source_key(normalized)
-        if key in seen:
+        if not knowledge_store._source_reference_is_bound(
+            normalized,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            require_active=True,
+        ):
+            suppressions.append({"candidate_id": key, "reason": "source_not_admitted"})
+            continue
+        evidence_id = stable_id(
+            "queryevidence", source_revision_id, normalized["fragment_id"]
+        )
+        if evidence_id in seen:
             deduplications.append({"source_key": key, "reason": "duplicate_source_reference"})
             continue
         if key in represented_keys:
@@ -1087,41 +1147,13 @@ def _source_evidence(
         if len(seen) >= max_sources:
             suppressions.append({"candidate_id": key, "reason": "source_budget"})
             continue
-        if not knowledge_store._source_reference_is_bound(
-            normalized,
-            scope=scope,
-            max_sensitivity=max_sensitivity,
-            require_active=True,
-        ):
-            suppressions.append({"candidate_id": key, "reason": "source_not_admitted"})
-            continue
-        row = knowledge_store.connection.execute(
-            """
-            SELECT fragments.text, fragments.text_sha256, fragments.locator,
-                   source_binding.source_revision_id
-            FROM legacy_fragment_bindings_v2 AS bindings
-            JOIN source_fragments AS fragments USING(fragment_id)
-            JOIN source_revision_bindings_v2 AS source_binding
-              ON source_binding.legacy_source_id = bindings.legacy_source_id
-            WHERE source_binding.source_revision_id = ?
-              AND (bindings.fragment_id = ? OR bindings.fragment_revision_id = ?)
-            LIMIT 1
-            """,
-            (source_revision_id, normalized["fragment_id"], fragment_id),
-        ).fetchone()
-        if row is None or row["text_sha256"] != normalized.get("quote_sha256"):
-            raise RuntimeError("statement source reference does not match its fragment")
-        if normalized.get("locator") not in {None, row["locator"]}:
-            raise RuntimeError("statement source locator does not match its fragment")
         remaining = max_chars - selected_chars
         if remaining <= 0:
             suppressions.append({"candidate_id": key, "reason": "character_budget"})
             continue
         excerpt = str(row["text"])[: min(remaining, _MAX_EVIDENCE_TEXT)]
         item = {
-            "evidence_id": stable_id(
-                "queryevidence", source_revision_id, normalized["fragment_id"]
-            ),
+            "evidence_id": evidence_id,
             "source_revision_id": source_revision_id,
             "fragment_id": normalized["fragment_id"],
             "excerpt": excerpt,
@@ -1130,7 +1162,7 @@ def _source_evidence(
             "selection_reason": reason,
             "verification": "verified_source",
         }
-        seen[key] = item
+        seen[evidence_id] = item
         represented_keys.add(key)
         selected.append(item)
         selected_chars += len(excerpt)
@@ -1138,7 +1170,11 @@ def _source_evidence(
 
 
 def _historical_evidence_cards(
-    cards: Iterable[dict[str, Any]], *, reason: str
+    knowledge_store: AutonomousKnowledgeStore,
+    cards: Iterable[dict[str, Any]],
+    *,
+    reason: str,
+    deduplications: list[dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Normalize the already as-of-admitted cards without current-state rechecking."""
     selected: list[dict[str, Any]] = []
@@ -1151,30 +1187,46 @@ def _historical_evidence_cards(
         if not isinstance(reference, dict):
             continue
         source_revision_id = reference.get("source_revision_id")
-        fragment_id = reference.get("fragment_id") or reference.get(
+        fragment_identity = reference.get("fragment_id") or reference.get(
             "fragment_revision_id"
         ) or card.get("fragment_id")
-        if not isinstance(source_revision_id, str) or not isinstance(fragment_id, str):
+        if not isinstance(source_revision_id, str) or not isinstance(
+            fragment_identity, str
+        ):
             continue
-        normalized = {
-            "source_revision_id": source_revision_id,
-            "fragment_id": fragment_id,
-            "locator": reference.get("locator") or str(card.get("locator", "historical")),
-            "quote_sha256": reference.get("quote_sha256") or card.get("content_sha256"),
-        }
-        key = _source_key(normalized)
-        if key in seen:
+        canonical = _canonical_source_reference(
+            knowledge_store,
+            {
+                "source_revision_id": source_revision_id,
+                "fragment_id": fragment_identity,
+                "locator": reference.get("locator"),
+                "quote_sha256": reference.get("quote_sha256")
+                or card.get("content_sha256"),
+            },
+        )
+        if canonical is None:
             continue
-        seen.add(key)
+        normalized, row = canonical
+        evidence_id = stable_id(
+            "queryevidence", source_revision_id, normalized["fragment_id"]
+        )
+        if evidence_id in seen:
+            if deduplications is not None:
+                deduplications.append(
+                    {
+                        "source_key": _source_key(normalized),
+                        "reason": "duplicate_source_reference",
+                    }
+                )
+            continue
+        seen.add(evidence_id)
         selected.append(
             {
-                "evidence_id": stable_id(
-                    "queryevidence", source_revision_id, fragment_id
-                ),
+                "evidence_id": evidence_id,
                 "source_revision_id": source_revision_id,
-                "fragment_id": fragment_id,
+                "fragment_id": normalized["fragment_id"],
                 "excerpt": str(card.get("excerpt", "")),
-                "content_sha256": card.get("content_sha256"),
+                "content_sha256": row["text_sha256"],
                 "source_refs": [normalized],
                 "selection_reason": reason,
                 "verification": "verified_source",
@@ -1736,7 +1788,10 @@ def execute_v6(
             initial = None
         if initial is not None and as_of is not None:
             evidence = _historical_evidence_cards(
-                initial.cards, reason="historical_evidence_first"
+                knowledge_store,
+                initial.cards,
+                reason="historical_evidence_first",
+                deduplications=deduplications,
             )[:evidence_item_limit]
             historical_characters = 0
             for item in evidence:
@@ -1753,7 +1808,7 @@ def execute_v6(
                             "reason": "statement_citation_also_evidence",
                         }
                     )
-                evidence_seen[key] = item
+                evidence_seen[item["evidence_id"]] = item
                 citation_seen.add(key)
         elif initial is not None:
             initial_refs = [
@@ -1877,24 +1932,39 @@ def execute_v6(
         ]
         before_count = len(evidence)
         if as_of is not None:
-            extra = _historical_evidence_cards(
-                cards, reason=f"targeted_source_fallback:{duty}"
-            )[:remaining_items]
+            historical_candidates = _historical_evidence_cards(
+                knowledge_store,
+                cards,
+                reason=f"targeted_source_fallback:{duty}",
+                deduplications=deduplications,
+            )
+            extra = []
             selected_historical_characters = 0
-            for item in extra:
-                excerpt = str(item.get("excerpt", ""))
-                remaining = remaining_characters - selected_historical_characters
-                item["excerpt"] = excerpt[:remaining]
-                selected_historical_characters += len(item["excerpt"])
-            for item in extra:
+            for item in historical_candidates:
                 key = _source_key(item["source_refs"][0])
-                if key in evidence_seen:
+                evidence_id = item["evidence_id"]
+                if evidence_id in evidence_seen:
                     deduplications.append(
                         {"source_key": key, "reason": "duplicate_source_reference"}
                     )
                     continue
-                evidence_seen[key] = item
+                if len(extra) >= remaining_items:
+                    suppressions.append(
+                        {"candidate_id": key, "reason": "source_budget"}
+                    )
+                    continue
+                excerpt = str(item.get("excerpt", ""))
+                remaining = remaining_characters - selected_historical_characters
+                if remaining <= 0:
+                    suppressions.append(
+                        {"candidate_id": key, "reason": "character_budget"}
+                    )
+                    continue
+                item["excerpt"] = excerpt[:remaining]
+                selected_historical_characters += len(item["excerpt"])
+                evidence_seen[evidence_id] = item
                 citation_seen.add(key)
+                extra.append(item)
         else:
             extra, _ = _source_evidence(
                 evidence_store,
