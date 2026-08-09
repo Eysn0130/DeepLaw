@@ -45,8 +45,16 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -
     assert report["fixture"]["construction"] == "public_profile_v3_compilation"
     assert report["fixture"]["statement_count"] == 1, report["rss_stability"]["reason"]
     assert report["rss_stability"]["request_count"] == 2
-    assert report["rss_stability"]["attempted_requests"] == 2
-    assert report["rss_stability"]["successful_requests"] == 2
+    if runtime_stability._rss_method() is None:
+        assert report["rss_stability"]["status"] == "not_executed"
+        assert report["rss_stability"]["attempted_requests"] == 0
+        assert report["rss_stability"]["successful_requests"] == 0
+        assert report["rss_stability"]["reason"] == (
+            "current RSS measurement is supported only on macOS and Linux"
+        )
+    else:
+        assert report["rss_stability"]["attempted_requests"] == 2
+        assert report["rss_stability"]["successful_requests"] == 2
     assert report["rss_stability"]["target_10k_executed"] is False
     assert report["rss_stability"]["growth_limit_percent"] == 10.0
     assert report["rss_stability"]["growth_limit_passed"] is None
