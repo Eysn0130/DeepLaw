@@ -336,6 +336,33 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert 'manifest.get("quality_protocol_eligible") is not True' in release
 
 
+def test_living_wiki_quality_uploads_partial_evidence_after_scorer_failure() -> None:
+    workflow = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    quality = workflow.split("  living-wiki-quality:", maxsplit=1)[1].split(
+        "  assemble:", maxsplit=1
+    )[0]
+    upload = quality.split(
+        "      - name: Upload Living Wiki quality evidence", maxsplit=1
+    )[1]
+    scorer = quality.split(
+        "      - name: Run same-condition baseline and exact-wheel quality suites",
+        maxsplit=1,
+    )[1].split("      - name: Upload Living Wiki quality evidence", maxsplit=1)[0]
+
+    assert "if: ${{ always() }}" in upload
+    assert "if-no-files-found: error" in upload
+    assert "living-wiki-quality-baseline.json" in upload
+    assert "living-wiki-quality-report.json" in upload
+    assert "living-wiki-quality-comparison.json" in upload
+    # The quality scorer and comparison remain fail-closed; only evidence
+    # publication is unconditional after a failure.
+    candidate_scorer = scorer.split("          candidate_runtime=", maxsplit=1)[1]
+    assert "continue-on-error: true" not in scorer
+    assert "--allow-fail" not in candidate_scorer
+
+
 def test_semantic_release_evidence_uses_deterministic_machine_consensus() -> None:
     workflow = (REPOSITORY / ".github/workflows/semantic-evidence.yml").read_text(encoding="utf-8")
     release = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
