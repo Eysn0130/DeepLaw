@@ -40,6 +40,31 @@ every Target.
   final-blind holdout hashes, candidate wheel hash, and source-candidate binding remain unset.
   Repository-external Gold content was not read in this audit.
 
+## Continuity Pass 2 development boundary
+
+Pass 2 is a follow-up to the retained **Pass 1** implementation boundary above. Pass 1 hashes,
+historical Gold/protocol inputs, and local evidence remain historical and are not rewritten. The
+continuity correction is commit `2f31bff4069e6cf01edf017134e5a760becb5360`; the semantic
+release-evidence correction is commit `d7da1869287fd590d820f7dd60506abdcb826ad4`.
+This tracked matrix cannot bind its own final tree, and no qualification wheel or external report
+hash exists. The commits are development evidence only and are not a release or qualification
+result.
+
+Three reproduced defects and minimum repairs are mapped here before the row-level status matrix:
+
+| Root cause | Minimum repair and invariant | Evidence/status boundary |
+|---|---|---|
+| Exact route candidate could be displaced by ordinary selection | Reserve one exact route candidate as a separate bounded admission partition; the no-route ceiling remains `512`, one reservation leaves at most `511` ordinary candidates, and the combined/global budget is unchanged | Development kernel only; E2E `Target`; external qualification `not_executed` |
+| Retrieval goal changed route identity | Retrieval query is `task + goal`; route digest is generated only from canonical task text inside the domain | Development kernel only; adapters do not derive route identity; external qualification `not_executed` |
+| One route could have multiple current heads | First route write creates one Knowledge Object; later writes create a new revision with `expected_revision` CAS; stale/concurrent writes are `checkpoint_head_conflict`; pre-fix multi-head reads are a sanitized Gap and Owner `forget`/withdraw + projection rebuild reconciles them, never LWW | Development kernel only; E2E `Target`; external qualification `not_executed` |
+
+The route projection is derived/rebuildable. The continuity correction introduces no new
+canonical Knowledge table, migration, or sink schema, and `knowledge-sink.input/v2` bytes remain
+unchanged. This is a semantic compatibility boundary only. Core gates are not lowered; deferred
+Capability gates may remain `not_claimed` when
+not declared (Timeline, semantic restore, and Claude/OpenCode), while the Competitive Claim gate is
+independent of kernel evidence.
+
 ## Status and evidence rules
 
 Only the PRD states `Target`, `Implemented`, `Qualified`, `Released`, `Deferred`, and
@@ -101,15 +126,15 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-CONT-003 | Exclude inactive, mismatched, or unbound checkpoints | Implemented | KA admission, Q6, TC | lifecycle/task-binding/query-plan schemas | autonomy/core-continuity/task-line tests | Exact mismatch and absent binding pass development regressions | Full state-trajectory holdout absent | Add expired/failed/aborted external task cases |
 | PRD-CONT-004 | Checkpoints remain Agent-derived and non-authoritative | Implemented | KA | Knowledge Object v3 | authority tests | None independent | No real Host measurement | Retain zero Authority elevation gate |
 | PRD-CONT-005 | Hooks cannot mint grants or hide writes | Implemented | adapter envelopes; sink split | Agent Context v1; SINK5 with frozen v2 | agent-context/sink tests | Static/local-only adapters | Real Host lifecycle not executed | Verify resolved Host configuration |
-| PRD-CONT-006 | Cold thread restores through one Context seam | Target | KOS, KMCP, CAP, TR exact-task kernel | Capsule v3/provider v2 | context parity, exact unique/ambiguous cold-start regressions | Repository-visible development only | No semantic resolver, stable real-Host derivation, Human Gold, or real Host | Compare Host-only, Host Memory, Host+DeepLaw on a frozen external task set |
+| PRD-CONT-006 | Cold thread restores through one Context seam | Target | KOS, KMCP, CAP, TR exact-task kernel | Capsule v3/provider v2 | context parity, exact unique/ambiguous cold-start regressions, Pass 2 route/goal regressions | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | No semantic resolver, stable real-Host derivation, Human Gold, or real Host | Compare Host-only, Host Memory, Host+DeepLaw on a frozen external task set |
 | PRD-CONT-007 | Complement Host memory without scraping or copying it | Implemented | adapter and Context boundaries | Agent Context v1 | cross-host context tests | Static/local-only | Host memory comparison not executed | Freeze equal-budget native-memory experiment |
-| PRD-CONT-008 | Ground continuity in durable project state and artifact references | Target | KA, TC, TR kernel | Run Record/event plus task binding v1 and SINK5 | core continuity + real-worktree/reconciliation regressions | Opaque route and snapshot kernel pass development regression | Stable Host-neutral ID enrollment, real Artifact lifecycle, and independent task evidence absent | Qualify with real concurrent Hosts/worktrees |
+| PRD-CONT-008 | Ground continuity in durable project state and artifact references | Target | KA, TC, TR kernel | Run Record/event plus task binding v1 and SINK5 | core continuity + real-worktree/reconciliation regressions, Pass 2 route/CAS recovery regressions | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | Stable Host-neutral ID enrollment, real Artifact lifecycle, and independent task evidence absent | Qualify with real concurrent Hosts/worktrees |
 | PRD-CONT-009 | Optional future intention, never a scheduler | Deferred | None | None | None | None | No admitted user failure; not core v0.13 | Revisit only through feature admission |
-| PRD-CONT-010 | Bind Vault/project/task lineage/repo/worktree/base/dirty state | Target | KA, Q6, CAP, TC, TR kernel | route/snapshot binding v1; Query Plan v6; Capsule v3 | task routing, divergence, lineage, real-worktree regressions | Top-20 loss and silent divergence reproduced; bounded route-first kernel passes development regressions | Real Host-neutral identity derivation, fork reconciliation, independent Gold, and full scale remain absent | Run a fresh unseen concurrent-worktree holdout |
+| PRD-CONT-010 | Bind Vault/project/task lineage/repo/worktree/base/dirty state | Target | KA, Q6, CAP, TC, TR kernel | route/snapshot binding v1; Query Plan v6; Capsule v3 | task routing, divergence, lineage, real-worktree regressions, Pass 2 route reservation/goal identity/head-conflict regressions | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | Top-20 loss and silent divergence reproduced; exact route reservation keeps a combined ceiling of `512` (`511` ordinary plus one exact route); real Host-neutral identity derivation, fork reconciliation, independent Gold, and full external scale remain absent | Run a fresh unseen concurrent-worktree holdout |
 | PRD-CONT-011 | Independent concurrent/fork task-line current state and explicit conflicts | Target | Exact-line read isolation only; no merge coordinator | task binding v1 preserves optional opaque parent only | two-line regressions | Concurrent current lines no longer cross-admit in development | Fork/merge/conflict reconciliation lifecycle remains not_executed | Freeze external fork/conflict Gold before any coordinator |
 | PRD-CONT-012 | Content-minimized searchable Run Timeline | Not Implemented | Run records/events are primitives only | No Timeline schema/API | `test_prd12_run_timeline_reproduction.py` | `reproduced_missing_public_seam` | No owner filtering/search/deletion surface | Freeze external time-to-locate and forget Gold |
 | PRD-CONT-013 | Treat Host/session/memory references as untrusted hints | Implemented | adapter envelope/admission | Agent Context v1 | cross-host/context tests | Static adapter evidence | No real Host malicious-hint run | Include wrong Host reference in holdout |
-| PRD-CONT-014 | Bounded bootstrap → drill-down → explicit Checkpoint lifecycle | Target | KMCP, KOS, TR, sink split kernel | Context/Capsule/SINK5 contracts | context, route-first, legacy reconciliation tests | Repository-visible development only | No owner UI/real Host lifecycle/Human Gold; Timeline absent | Measure provider bytes and First Correct Action end to end |
+| PRD-CONT-014 | Bounded bootstrap → drill-down → explicit Checkpoint lifecycle | Target | KMCP, KOS, TR, sink split kernel | Context/Capsule/SINK5 contracts | context, route-first, legacy reconciliation, Pass 2 single-head/CAS/recovery tests | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | No owner UI/real Host lifecycle/Human Gold; Timeline absent; pre-fix multi-head reads are sanitized Gaps and Owner reconciliation is not LWW | Measure provider bytes and First Correct Action end to end |
 
 ## Source and governed knowledge mapping
 
@@ -171,7 +196,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-CTX-011 | Stateless retry binds explicit version/scope/task/budgets/truncation | Implemented | Q6, TC | plan v6 + task binding v1 | plan parity + task binding regressions | Local deterministic development only | Real Host retry/expiry evidence absent | Run equal-input retry and changed-head Host task |
 | PRD-CTX-012 | Capability discovery distinguishes read, diagnostics, and granted mutation | Implemented | KMCP/sink MCP/LEGAL | closed MCP schemas | stdio schema tests | Local no-model lifecycle | Resolved real-host config pending | Verify exact tool list in isolated Hosts |
 | PRD-CTX-013 | Eligibility is independent of row/file/import/ID order | Target | Q6 revision discovery then bounded statements | plan v6 | tail/P0/scale tests | 5,001 regression executed; current 10k/100k lanes are `not_executed` | Order invariance is not mapped at every public seam | Run 10k/100k and complete public-seam mapping before implementation status |
-| PRD-CTX-014 | Capsule binds Vault/project/task-line/head/revisions/policy and detects stale head | Target | CAP, Q6, TC, TR kernel | Capsule v3/plan v6/task binding v1 | stale-runtime, route-first, snapshot-divergence tests | Local exact-route/snapshot kernel passes; stale Gap is bounded and redacted | Full changed-head re-resolution, real Host derivation, and fresh external Gold absent | Run changed-head re-resolution holdout |
+| PRD-CTX-014 | Capsule binds Vault/project/task-line/head/revisions/policy and detects stale head | Target | CAP, Q6, TC, TR kernel | Capsule v3/plan v6/task binding v1 | stale-runtime, route-first, snapshot-divergence, Pass 2 reservation/goal/head-conflict tests | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | Local exact-route/snapshot kernel passes; stale/head-conflict Gaps are bounded and redacted; full changed-head re-resolution, real Host derivation, and fresh external Gold absent | Run changed-head re-resolution holdout |
 | PRD-CTX-015 | Ambiguity fails closed and exposes only admitted disambiguation | Target | identity admission, partial target checks | identity/plan schemas | identity/query tests | Local only | Cross-Vault/project/task ambiguity not complete | Freeze ambiguity matrix |
 
 ## Protected/legal evidence and security mapping
@@ -218,6 +243,28 @@ Evidence abbreviations in the table are repository-relative paths:
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
 | Host Integration | Target with local static/thin-adapter evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
 | Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
+
+## Pass 2 gate classification and skip disposition
+
+| Gate class | Rule | Pass 2 status |
+|---|---|---|
+| **Core** | Required; no core safety, integrity, legal, boundary, scale, platform, or supply-chain gate may be lowered | Kernel correction does not lower a Core gate; required external evidence remains `not_executed` |
+| **Capability** | May remain `not_claimed` when the capability is not declared | Run Timeline and semantic restore remain deferred; Claude/OpenCode remain `not_claimed` unless support is explicitly declared; E2E continuity remains `Target` |
+| **Competitive Claim** | Independent named-comparator/host evidence; kernel evidence cannot satisfy it | Independent gate remains false and `not_executed`; no superiority/SOTA claim |
+
+The nine skip dispositions below are explicit non-results, not passes or silent omissions:
+
+| Required lane | Disposition |
+|---|---|
+| Statement scale 10k | `required not_executed` |
+| Statement scale 100k | `required not_executed` |
+| Relation truncation 500/5000 | `required not_executed` |
+| Wiki wrong merge | `required not_executed` |
+| Wiki alias collision | `required not_executed` |
+| Wiki cycle | `required not_executed` |
+| Historical v0.6 wheel | `separate compatibility not_executed` |
+| Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
+| Windows native junction | `macOS not_applicable`; Windows evidence remains required |
 
 Current disposition remains:
 

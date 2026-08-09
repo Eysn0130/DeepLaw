@@ -18,6 +18,14 @@ Gold, real-Host, Legal Pack, full current-candidate scale, Timeline, semantic re
 cross-platform, supply-chain, or publication gates. No version, tag, signature, registry upload,
 RC, or GA was created.
 
+Continuity Pass 2 is a narrow correction after the retained **Pass 1** boundary. Pass 1
+implementation, historical Gold/protocol inputs, and local evidence remain preserved and
+explicitly historical. The continuity correction is commit
+`2f31bff4069e6cf01edf017134e5a760becb5360`; the semantic release-evidence correction is commit
+`d7da1869287fd590d820f7dd60506abdcb826ad4`. This tracked disposition cannot bind its own final
+tree, and no qualification wheel or external report hash exists. The disposition remains not
+released.
+
 ## 1. Reviewed implementation boundary
 
 | Item | Value |
@@ -111,6 +119,27 @@ entry.
   real-Host stable-identity enrollment. Therefore the complete cold-thread workflow remains
   `Target`, not `Implemented` or `Qualified`.
 
+### Continuity Pass 2 — three reproduced defects and minimum repairs
+
+Pass 2 keeps the Pass 1 scope and compatibility boundary and records only kernel-level
+development evidence:
+
+| Root cause | Minimum repair | Boundary |
+| --- | --- | --- |
+| Exact route candidate could be displaced by ordinary selection | Reserve one exact route candidate as an independent bounded admission partition. The no-route ceiling remains `512`; one reservation leaves at most `511` ordinary candidates, and the combined/global and final Capsule budgets do not increase. | Kernel `Implemented`; E2E `Target`; external qualification `not_executed` |
+| Retrieval `goal` changed route identity | Retrieval query is `task + goal`; the route digest is generated only from canonical task text inside the domain, never by an adapter or caller. | Kernel `Implemented`; E2E `Target`; external qualification `not_executed` |
+| One route could expose multiple current heads | First route write creates one Knowledge Object. Later writes create a new revision with `expected_revision` CAS; stale/concurrent writes fail as `checkpoint_head_conflict`. A pre-fix multi-head read returns only a sanitized Gap. Owner reconciliation uses existing `forget`/withdraw plus derived projection rebuild; LWW is forbidden. | Kernel `Implemented`; E2E `Target`; external qualification `not_executed` |
+
+The route projection remains derived/rebuildable. The continuity correction adds no new canonical
+Knowledge table, migration, or sink schema, and `knowledge-sink.input/v2` bytes remain unchanged.
+This is a semantic compatibility
+boundary only: legacy bytes/history remain immutable and verifiable while new checkpoint writes
+enforce one route/one current head.
+
+Core gates are not lowered. Capability gates may remain `not_claimed` when not declared (Run
+Timeline, semantic restore, and Claude/OpenCode remain deferred unless support is explicitly
+declared). The Competitive Claim gate is independent of this kernel evidence and remains false.
+
 ## 4. Identity and admission invariant
 
 ```text
@@ -158,21 +187,29 @@ Release policy is version-conditional and fail closed:
 - every `0.13.x` release requires commercial manifest v6;
 - an unknown later version has no implicit fallback.
 
-Manifest v6 binds the exact commit/tree/version/wheel/sdist; PRD, traceability, acceptance, and
-frozen protocol hashes; repository-external Human Gold and Compiler/Evaluator isolation receipts;
-real Codex/Claude/OpenCode three-run evidence when support is claimed; equal-budget Host-only,
-Host-native Memory, and Host-native Memory + DeepLaw results; exact signed/verified 28-source Legal
-Pack results with zero critical violations; independent current-candidate Statement/Relation/Wiki
-scale artifacts; RSS/readers/cache results; Timeline/semantic-restore/selective-forget evidence;
-the Linux/macOS/Windows × Python 3.11/3.12/3.13 matrix with zero mandatory skips; and reproducible
-wheel/sdist, SBOM, licenses, OpenVEX, provenance, and public-redownload hashes.
+Pass 2 replaces the old hash-only v6 decision shape with three layers:
 
-Workflow tests prove 0.13 cannot submit manifest v5, no-model smoke cannot satisfy model task
-acceptance, evidence references must be unique safe relative paths with exact hashes, and public
-release is not made visible until uploaded manifest bytes are verified. No v6 evidence manifest was
-generated for this candidate.
+1. `commercial-evidence-report/v1` contains closed observations, exact candidate/protocol/
+   threshold/Gold bindings, exact command/environment/run count, metrics, frozen hard-zero
+   counters, failure inventory, redaction counters, and independently hashed observation content.
+   It contains no caller-supplied `passed`, release, or claim decision.
+2. `v013-release-gate-classification/v1` freezes Core, Capability, and Competitive Claim gate IDs,
+   minimum run counts, model requirements, metric bounds, and exact hard-zero inventories. The
+   deterministic semantic validator rejects weakened thresholds, omitted counters, stale wheel or
+   protocol bindings, development-as-blind claims, canaries, and private absolute paths.
+3. `v013_commercial_release` derives manifest v6 only after semantic validation. `release_policy`
+   then checks the closed envelope, exact asset bindings, candidate invariants, and derived gate
+   statuses; it does not reinterpret caller booleans as evidence. Publish and public-redownload
+   paths rerun semantic validation before envelope admission.
 
-## 8. Local verification
+Core gates cover canonical integrity, migration/recovery, host/secret isolation, bounded Context,
+legal Evidence/Authority and exact source/citation/locator, required scale/performance, supported
+platforms, reproducible supply chain, external Human Gold isolation, real Codex acceptance, and
+selective forget. Timeline, semantic restore, Claude, and OpenCode are Capability gates and may be
+`not_claimed` only when support is not declared. Competitive comparisons remain separately
+`not_claimed`. No v6 evidence manifest was generated for this source candidate.
+
+## 8. Pass 1 local verification (historical boundary)
 
 The reviewed implementation commit produced:
 
@@ -219,7 +256,34 @@ An isolated Python 3.13 environment installed that wheel, imported DeepLaw, foun
 input v5, and passed the wheel filename/private-path-marker scan. This is same-machine local build
 evidence, not SBOM/provenance/public-redownload or cross-platform release qualification. Final
 post-report commit/tree and fresh artifact hashes remain part of the external handoff because a
-tracked report cannot bind its own bytes.
+tracked report cannot bind its own bytes. These are Pass 1 historical handoff references.
+
+### Pass 2 local verification
+
+The pre-documentation Pass 2 working tree, containing the two commits above plus the explicit
+repository-visible development-Gold hash rotation, produced:
+
+```text
+uv lock --check
+  PASS
+
+uv run --frozen pytest --strict-markers -rs
+  PASS — 1270 passed, 9 skipped in 344.31s
+
+uv run --frozen ruff check .
+  PASS
+
+git diff --check
+  PASS
+```
+
+Focused Continuity tests covered the 520-Statement route reservation, task with/without goal at
+Python/CLI/MCP seams, S1→S2 progression, same-snapshot successor revision, stale CAS conflict,
+projection rebuild, withdrawal, multi-head fail-closed Gap, and Provider redaction. Focused release
+tests covered actual report-byte validation, exact candidate/protocol/threshold/Gold bindings,
+frozen metric/hard-zero inventories, development-as-blind rejection, canary/path rejection,
+decision-free assembly, and publish/public-redownload semantic revalidation. These are local
+development results, not external qualification.
 
 ## 9. Capability status
 
@@ -231,6 +295,14 @@ tracked report cannot bind its own bytes.
 | Host Integration | Target with static/thin-adapter tests | Real isolated Codex/Claude/OpenCode and canary/model acceptance absent |
 | Portability/Operations | Target with local primitives | Timeline, semantic restore, full migration/recovery, 3 OS, supply chain, public redownload absent |
 
+### Gate classification
+
+| Gate class | Rule | Pass 2 disposition |
+| --- | --- | --- |
+| **Core** | Required; no safety, integrity, legal, boundary, scale, platform, or supply-chain gate may be lowered | Unchanged and not lowered; required external evidence remains `not_executed` |
+| **Capability** | May remain `not_claimed` when not declared | Run Timeline, semantic restore, and Claude/OpenCode remain deferred/not_claimed unless explicitly supported; continuity E2E remains `Target` |
+| **Competitive Claim** | Independent named-comparator/host evidence; separate from Core and Capability | `competitive_claim_eligible=false`; no local kernel evidence satisfies this gate |
+
 No capability is `Qualified` or `Released`.
 
 ## 10. Delivery inventory
@@ -239,7 +311,7 @@ No capability is `Qualified` or `Released`.
 | --- | --- |
 | PRD traceability and Current/Target/Qualified/Released matrix | Updated in `docs/PRD_TRACEABILITY_MATRIX.md` |
 | deletion/addition and duplicate-surface audit | Delivered in section 2 |
-| task-lineage/concurrency and Context stale/disambiguation | P0 reproductions and bounded development repair delivered; external qualification absent |
+| task-lineage/concurrency and Context stale/disambiguation | Pass 1 plus Pass 2 bounded kernel repairs delivered (route reservation, task/goal identity separation, one route/one current head CAS/recovery); external qualification absent |
 | Run Timeline | Missing owner public seam already reproduced; deferred pending external Gold |
 | Vault isolation | Existing default physical isolation development evidence retained; explicit cross-Vault lifecycle not executed |
 | Wiki ownership/reconciliation/typed relation | Existing local chain retained; independent human task not executed |
@@ -254,6 +326,22 @@ No capability is `Qualified` or `Released`.
 
 ## 11. Not executed and known limitations
 
+### Pass 2 skip disposition
+
+These nine lanes are explicit non-results; a skip is never treated as a pass:
+
+| Required lane | Disposition |
+| --- | --- |
+| Statement scale 10k | `required not_executed` |
+| Statement scale 100k | `required not_executed` |
+| Relation truncation 500/5000 | `required not_executed` |
+| Wiki wrong merge | `required not_executed` |
+| Wiki alias collision | `required not_executed` |
+| Wiki cycle | `required not_executed` |
+| Historical v0.6 wheel | `separate compatibility not_executed` |
+| Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
+| Windows native junction | `macOS not_applicable`; Windows evidence remains required |
+
 - repository-external independent continuity/Wiki/legal Human Gold;
 - qualification and fresh final-blind holdouts;
 - Host-only / Host-native Memory / Host-native Memory + DeepLaw equal-budget comparison;
@@ -267,6 +355,10 @@ No capability is `Qualified` or `Released`.
 - Linux and Windows and the full 3 OS × Python 3.11/3.12/3.13 matrix;
 - release SBOM, license/OpenVEX review, provenance, public upload/redownload, tag, signature,
   registry publish, RC, and GA.
+
+Accordingly, repository-external Human Gold, the exact signed/verified Legal Pack, real Host
+evidence, current-candidate scale, the full three-OS matrix, and supply-chain qualification are all
+`not_executed`; none is inferred from the Pass 1 or Pass 2 development regressions.
 
 The exact task-text resolver does not perform semantic task lookup. Stable portable route-ID
 enrollment is not real-Host qualified. The derived route table has bounded synthetic index evidence,

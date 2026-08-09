@@ -6,6 +6,48 @@ proposal/review, parser, and Legal Pack details remain in
 [`DEEPLAW_2.md`](DEEPLAW_2.md). They are compatibility components, not the activation policy for
 new Agent-derived knowledge.
 
+## Continuity Pass 2 boundary (source candidate; not released)
+
+Continuity Pass 2 is a narrow development correction after the retained **Pass 1** continuity
+remediation. Pass 1's reviewed implementation boundary, historical Gold/protocol inputs, and local
+verification evidence remain immutable evidence. The continuity correction is commit
+`2f31bff4069e6cf01edf017134e5a760becb5360`; the semantic release-evidence correction is commit
+`d7da1869287fd590d820f7dd60506abdcb826ad4`. This tracked note cannot bind its own final tree, and
+no qualification wheel/report hash exists. The correction is kernel evidence only. It does not
+lower any Core gate, qualify an end-to-end (E2E) workflow, or make a capability or competitive
+claim.
+
+The three reproduced defects and their minimum repairs are:
+
+1. **Route candidates were still vulnerable to the ordinary candidate cut.** An exact route hit is
+   an independent, bounded reservation before ordinary content selection. The no-route discovery
+   ceiling remains `512`; an exact route reserves one slot and leaves at most `511` ordinary
+   candidates, so the combined/global candidate and final Capsule budgets remain unchanged.
+2. **Goal text could change task-route identity.** Retrieval uses `task + goal` as its query when a
+   goal is supplied. The route digest is derived only from the canonical task text inside the
+   domain coordinator; adapters and callers do not manufacture a route digest. A goal therefore
+   enriches discovery without selecting a different checkpoint route.
+3. **A route could expose multiple current checkpoint heads.** The first write for a route creates
+   one Knowledge Object. A later write for that same object creates a new Knowledge Revision and
+   must supply the current `expected_revision` compare-and-swap (CAS). A stale or concurrent write
+   fails as `checkpoint_head_conflict`. A pre-fix multi-head projection is read as a sanitized
+   Gap, never as a best-effort or last-writer-wins (LWW) result. The Owner reconciles it through the
+   existing `forget`/withdraw lifecycle and projection rebuild; no historical revision is rewritten
+   and no LWW choice is made.
+
+The route projection is derived and rebuildable. The continuity correction adds no canonical
+Knowledge table, migration, or sink schema, and the published `knowledge-sink.input/v2` bytes
+remain unchanged. The resulting
+compatibility boundary is semantic (new writes use the single-head/CAS policy; legacy bytes and
+history remain readable and immutable), not a persistence-contract expansion.
+
+The gate classification is explicit: **Core** gates remain required and are not lowered;
+**Capability** gates may remain `not_claimed` when not declared (Run Timeline, semantic restore,
+and Claude/OpenCode support remain deferred unless explicitly supported); the **Competitive Claim**
+gate is independent and cannot be satisfied by local kernel or development evidence. Pass 2 records
+`kernel=Implemented`, `E2E=Target`, and `external qualification=not_executed` for the affected
+continuity/context rows only.
+
 ## Product boundary
 
 DeepLaw is a local-first Agent Knowledge OS that compiles source materials into a governed Living
@@ -252,10 +294,14 @@ a universal hard-coded ranking by object kind:
   Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
 - working checkpoints use a separate bounded, indexed, rebuildable task-route projection before
   ordinary content discovery. Route identity binds opaque project, repository, stable-worktree,
-  and task-line identifiers; checkpoint base/dirty state is a separate snapshot. Exact-route
-  admission cannot be displaced by the ordinary Top-20 and cannot widen its public selected count.
-  Same-route snapshot divergence produces a sanitized Gap; route mismatch fails closed without an
-  existence oracle. Every route row is revalidated against canonical Run/Revision/Ledger state;
+  and task-line identifiers; checkpoint base/dirty state is a separate snapshot. An exact route
+  candidate is an independent bounded reservation: it is admitted before ordinary content
+  selection. With no route the ceiling remains `512`; reserving one route slot leaves at most
+  `511` ordinary candidates, so the combined/global budget is unchanged. Exact-route admission
+  cannot be displaced by the ordinary Top-20 and cannot widen
+  its public selected count. Same-route snapshot divergence produces a sanitized Gap; route
+  mismatch fails closed without an existence oracle. Every route row is revalidated against
+  canonical Run/Revision/Ledger state; the projection is derived, rebuildable, and capped.
 - bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
   stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v6 binds
   the expansion profile/count/digest and validates it as part of the query/audit receipt; v5
@@ -433,3 +479,19 @@ exist, `competitive_claim_eligible=false` is mandatory.
 For the current v0.13 source candidate, `release_gate_passed=false`,
 `claim_eligible=false`, and `competitive_claim_eligible=false`; no release or superiority
 conclusion follows from the local Context parity work.
+
+## Pass 2 skip disposition
+
+Pass 2 keeps these lanes explicit so a development skip cannot be mistaken for qualification:
+
+| Lane | Disposition |
+| --- | --- |
+| Statement scale 10k | `required not_executed` |
+| Statement scale 100k | `required not_executed` |
+| Relation truncation 500/5000 | `required not_executed` |
+| Wiki wrong merge | `required not_executed` |
+| Wiki alias collision | `required not_executed` |
+| Wiki cycle | `required not_executed` |
+| Historical v0.6 wheel | `separate compatibility not_executed` |
+| Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
+| Windows native junction | `macOS not_applicable`; Windows evidence remains required |

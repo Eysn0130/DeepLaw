@@ -39,6 +39,61 @@ participate, are not public, or do not share the same task boundary.
 Q is the release quality gate. C1 and C2 are required for comparative claims. C3 is welcome but
 optional. None of the levels grants legal Authority or proves a universal ranking.
 
+## Continuity Pass 2 disposition (development evidence only)
+
+Pass 2 follows the retained **Pass 1** implementation boundary. Pass 1 Gold/protocol inputs and
+local reports remain historical. The continuity correction is commit
+`2f31bff4069e6cf01edf017134e5a760becb5360`, and the semantic release-evidence correction is commit
+`d7da1869287fd590d820f7dd60506abdcb826ad4`. This tracked protocol cannot bind its own final tree;
+no qualification wheel or external report hash is recorded. The three reproduced kernel defects
+have these bounded repairs:
+
+- an exact task-route hit is an independent bounded reservation before ordinary selection; the
+  no-route ceiling remains `512`, one reserved route slot leaves at most `511` ordinary
+  candidates, and the combined/global budget is unchanged;
+- retrieval uses `task + goal`, while the route digest is generated only from canonical task text
+  inside the domain; and
+- one route has one current checkpoint head: the first write creates one Knowledge Object, later
+  writes create a new revision with `expected_revision` CAS, stale/concurrent writes return
+  `checkpoint_head_conflict`, and a pre-fix multi-head read returns only a sanitized Gap for Owner
+  `forget`/withdraw plus projection-rebuild reconciliation. LWW is forbidden.
+
+The route projection is derived/rebuildable; the continuity correction adds no canonical
+Knowledge table, migration, or sink schema, and `knowledge-sink.input/v2` bytes are unchanged.
+These are kernel observations, not Q, C1, C2, or C3 evidence. Core gates are not lowered.
+Capability gates may remain `not_claimed` when not
+declared (Timeline, semantic restore, and Claude/OpenCode); the Competitive Claim gate is
+independent and cannot be satisfied by local kernel evidence. For the affected PRD rows:
+`kernel=Implemented`, `E2E=Target`, `external qualification=not_executed`.
+
+Pass 2 also closes the v0.13 release-evidence semantic boundary. The closed
+`commercial-evidence-report/v1` records observations and content hashes but no `passed` or release
+decision. The closed `v013-release-gate-classification/v1` freezes gate categories, minimum runs,
+model requirements, metric bounds, and exact hard-zero counter inventories. A deterministic
+validator reads those bytes and rejects weakened thresholds, missing counters, stale candidate or
+protocol bindings, development-as-blind claims, secret canaries, and private absolute paths. Only
+`v013_commercial_release` may derive manifest v6; `release_policy` then validates the envelope and
+asset invariants. Publish and public-redownload paths rerun the semantic validator first. No such
+report or manifest was generated for this candidate, so every external gate remains
+`not_executed`.
+
+### Explicit skip disposition
+
+The following nine lanes are recorded as non-results and remain required where marked; a skip is
+never a pass:
+
+| Lane | Disposition |
+|---|---|
+| Statement scale 10k | `required not_executed` |
+| Statement scale 100k | `required not_executed` |
+| Relation truncation 500/5000 | `required not_executed` |
+| Wiki wrong merge | `required not_executed` |
+| Wiki alias collision | `required not_executed` |
+| Wiki cycle | `required not_executed` |
+| Historical v0.6 wheel | `separate compatibility not_executed` |
+| Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
+| Windows native junction | `macOS not_applicable`; Windows evidence remains required |
+
 ## Same-condition comparative contract
 
 The registry and tools under [`benchmarks/baselines`](../benchmarks/baselines) require every
@@ -133,6 +188,12 @@ For v0.11:
 
 Therefore `quality_protocol_eligible` can be true for the exact release while
 `competitive_claim_eligible=false` remains mandatory.
+
+For the current Continuity Pass 2 source candidate, the disposition remains
+`source_candidate_remains_not_released` with `package_version=0.12.0`,
+`release_gate_passed=false`, `claim_eligible=false`, and
+`competitive_claim_eligible=false`. Real Gold, Legal Pack, Host, scale, three-OS, and supply-chain
+evidence remain `not_executed`; this protocol records no final artifact hash for Pass 2.
 
 ## External evaluator checklist
 

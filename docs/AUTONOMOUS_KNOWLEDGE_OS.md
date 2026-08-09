@@ -5,6 +5,43 @@ Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence implementation. Hist
 proposal/review documents remain source-governance and migration evidence, not the default policy
 for new Agent-derived knowledge.
 
+## Continuity Pass 2 (development kernel; source candidate, not released)
+
+Pass 2 is the follow-up to the retained **Pass 1** continuity remediation. Pass 1's reviewed
+implementation, historical Gold/protocol inputs, and local evidence remain intact; this section
+binds the continuity correction commit `2f31bff4069e6cf01edf017134e5a760becb5360` and semantic
+release-evidence commit `d7da1869287fd590d820f7dd60506abdcb826ad4`. A tracked note cannot
+bind its own final tree, and no qualification wheel/report hash exists. The correction is not
+external qualification and does not lower a Core gate.
+
+Three reproduced root causes have bounded repairs:
+
+- **Route reservation:** an exact task-route candidate is a separate, bounded admission partition
+  reserved before ordinary Statement selection. The no-route ceiling remains `512`; with one
+  reserved route slot at most `511` ordinary candidates remain, so the final global/combined
+  budget is unchanged and unrelated task-line content is not admitted.
+- **Task/goal identity:** retrieval query text is `task + goal` when a goal is present. The task
+  route digest is generated only from the canonical task inside this domain, not by a Host adapter
+  or caller, so adding a goal never changes the route key.
+- **Single current head:** the first checkpoint on a route creates one Knowledge Object. A later
+  checkpoint for that object creates a new Knowledge Revision and requires the current
+  `expected_revision` CAS. Stale or concurrent writes fail as `checkpoint_head_conflict`. If a
+  pre-fix projection contains multiple current heads, reads fail closed with only a sanitized Gap;
+  the Owner uses the existing `forget`/withdraw lifecycle and projection rebuild to reconcile the
+  state. There is no last-writer-wins path and no historical in-place rewrite.
+
+No new canonical Knowledge table, migration, or sink schema is introduced by the continuity
+correction. The route projection is derived and rebuildable, while `knowledge-sink.input/v2` bytes
+remain unchanged. This is a semantic
+compatibility boundary: new writes enforce one route/one current head, and legacy bytes/history
+remain immutable and verifiable.
+
+Gate labels stay separate: **Core** gates remain required and are not reduced; **Capability** gates
+may be `not_claimed` when not declared (Run Timeline, semantic restore, and Claude/OpenCode remain
+deferred unless support is explicitly declared); and the **Competitive Claim** gate is independent
+of kernel evidence. For the affected rows, Pass 2 records `kernel=Implemented`, `E2E=Target`, and
+`external qualification=not_executed`.
+
 ## 1. Product boundary
 
 DeepLaw is a local, single-user, owner-controlled knowledge layer for Agent runtimes. It does not
@@ -126,8 +163,11 @@ The `knowledge_sink` domain path applies this sequence:
    the existing stable ID with an immutable resolution/event and idempotent receipt. Semantic
    candidates may produce aliases or explicit same-as/merge/split decisions; high-precision
    contradictions remain independent contested objects/relations instead of being silently merged.
-   Existing Knowledge Object and relation updates require their exact parent revision. A direct
-   mutation refuses to overwrite a workspace body that has not first been reconciled.
+   Existing Knowledge Object and relation updates require their exact parent revision. For a
+   working checkpoint, the first write for a task route creates one Knowledge Object; every later
+   revision of that object requires `expected_revision` CAS, and stale/concurrent writes fail
+   closed as `checkpoint_head_conflict`. A direct mutation refuses to overwrite a workspace body
+   that has not first been reconciled.
 5. **Gate risk**. Unknown provenance, origin/authority elevation, direct-user-statement
    misclassification, stored prompt injection, or governance metadata edits are quarantined.
 6. **Commit** the CAS Markdown bytes, immutable Ledger revision, event, usage, idempotent response,
@@ -232,6 +272,12 @@ automation/test boundary.
 
 This is intentionally not last-writer-wins.
 
+If a legacy/pre-fix route projection already contains multiple current heads, route lookup returns
+only a sanitized `checkpoint_head_conflict` Gap and no revision or object identifiers. The Owner
+resolves the anomaly with the existing `forget`/withdraw operation followed by a rebuild of the
+derived route projection; this reconciliation never rewrites historical bytes and never chooses
+an LWW winner.
+
 ## 6. Query and Capsule contract
 
 The query pipeline keeps these stages distinct:
@@ -312,7 +358,15 @@ base revision and dirty-state digest. A branch rename, normal commit, or dirty-s
 not create another task line; a snapshot change makes the prior checkpoint stale until a new
 checkpoint succeeds. Exact route plus exact snapshot may admit the checkpoint. Exact route plus a
 different snapshot emits a bounded `workspace_diverged` Gap and does not inject stale state. A
-different route fails closed without revealing whether another task line exists.
+different route fails closed without revealing whether another task line exists. The retrieval
+query may combine `task + goal` for discovery, but the route digest is always derived from the
+canonical task text inside the domain.
+
+The exact route hit is a reserved bounded candidate, not an addition to the combined pool: the
+no-route discovery ceiling remains `512`, and reserving one route slot leaves at most `511`
+ordinary candidates. Projection rows are revalidated against canonical Run/Revision/Ledger state
+before admission. The projection is derived/rebuildable and does not add a canonical Knowledge
+table, migration, or sink schema.
 
 When no explicit binding is supplied, the current development resolver may use the exact task-text
 digest only to find one uniquely admitted route in the selected Vault. Multiple routes emit
