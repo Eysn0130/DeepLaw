@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -28,135 +27,48 @@ _GIT_RE = re.compile(r"^[0-9a-f]{40}$")
 # a missing model run, a critical legal failure, or a supply-chain verification omission.
 V013_REQUIRED_EVIDENCE_PATHS: tuple[str, ...] = (
     "bindings.prd_path",
-    "bindings.traceability_path",
-    "bindings.qualification_protocol_path",
     "bindings.prd_sha256",
+    "bindings.traceability_path",
     "bindings.traceability_sha256",
+    "bindings.qualification_protocol_path",
     "bindings.qualification_protocol_sha256",
+    "bindings.thresholds_path",
+    "bindings.thresholds_sha256",
+    "bindings.human_gold_manifest_path",
+    "bindings.human_gold_manifest_sha256",
+    "bindings.compiler_evaluator_isolation_path",
+    "bindings.compiler_evaluator_isolation_sha256",
+    "bindings.gate_classification_path",
+    "bindings.gate_classification_sha256",
     "bindings.candidate_commit",
     "bindings.candidate_tree",
     "bindings.candidate_wheel_sha256",
     "bindings.candidate_sdist_sha256",
-    "qualification.human_gold_manifest_sha256",
-    "qualification.human_gold_manifest_path",
-    "qualification.compiler_evaluator_isolation_receipt_sha256",
-    "qualification.compiler_evaluator_isolation_receipt_path",
-    "host_acceptance.report_path",
-    "host_acceptance.report_sha256",
-    "host_acceptance.model_task_acceptance",
-    "host_acceptance.model_task_results_claimed",
-    "host_acceptance.model_or_api_call_attempted",
-    "real_codex.evidence_path",
-    "real_codex.evidence_sha256",
-    "real_claude.evidence_path",
-    "real_claude.evidence_sha256",
-    "real_opencode.evidence_path",
-    "real_opencode.evidence_sha256",
-    "real_codex.independent_runs",
-    "real_claude.independent_runs",
-    "real_opencode.independent_runs",
-    "real_codex.model_task_acceptance",
-    "real_claude.model_task_acceptance",
-    "real_opencode.model_task_acceptance",
-    "real_codex.model_or_api_call_attempted",
-    "real_claude.model_or_api_call_attempted",
-    "real_opencode.model_or_api_call_attempted",
-    "host_acceptance.declared_supported_hosts",
-    "comparison.host_only",
-    "comparison.host_native_memory",
-    "comparison.host_native_memory_plus_deeplaw",
-    "comparison.equal_budget",
-    "comparison.equal_budget_report_path",
-    "comparison.equal_budget_report_sha256",
-    "comparison.host_only.report_path",
-    "comparison.host_only.report_sha256",
-    "comparison.host_native_memory.report_path",
-    "comparison.host_native_memory.report_sha256",
-    "comparison.host_native_memory_plus_deeplaw.report_path",
-    "comparison.host_native_memory_plus_deeplaw.report_sha256",
-    "legal.source_count",
-    "legal.signed_and_verified",
-    "legal.critical_failures",
-    "legal.report_path",
-    "legal.report_sha256",
-    "legal.pack_manifest_path",
-    "legal.pack_manifest_sha256",
-    "legal.catalog_path",
-    "legal.catalog_sha256",
-    "legal.release_path",
-    "legal.release_sha256",
-    "legal.false_authority",
-    "legal.wrong_version_primary",
-    "legal.invalid_quote",
-    "legal.invalid_locator",
-    "legal.cross_boundary_disclosure",
-    "legal.secret_leak",
-    "scale.statement_100k",
-    "scale.statement_5k",
-    "scale.statement_10k",
-    "scale.relation_100k",
-    "scale.relation_10k",
-    "scale.wiki_100k",
-    "scale.wiki_10k",
-    "scale.requests_10000_rss",
-    "scale.readers_8",
-    "scale.cache_invalidation",
-    "scale.current_candidate_report_path",
-    "scale.current_candidate_report_sha256",
-    "scale.statement_5k_report_path",
-    "scale.statement_5k_report_sha256",
-    "scale.statement_10k_report_path",
-    "scale.statement_10k_report_sha256",
-    "scale.statement_100k_report_path",
-    "scale.statement_100k_report_sha256",
-    "scale.relation_10k_report_path",
-    "scale.relation_10k_report_sha256",
-    "scale.relation_100k_report_path",
-    "scale.relation_100k_report_sha256",
-    "scale.wiki_10k_report_path",
-    "scale.wiki_10k_report_sha256",
-    "scale.wiki_100k_report_path",
-    "scale.wiki_100k_report_sha256",
-    "scale.requests_10000_rss_report_path",
-    "scale.requests_10000_rss_report_sha256",
-    "scale.readers_8_report_path",
-    "scale.readers_8_report_sha256",
-    "scale.cache_invalidation_report_path",
-    "scale.cache_invalidation_report_sha256",
-    "operations.timeline",
-    "operations.semantic_restore",
-    "operations.selective_forget",
-    "operations.timeline_report_path",
-    "operations.timeline_report_sha256",
-    "operations.semantic_restore_report_path",
-    "operations.semantic_restore_report_sha256",
-    "operations.selective_forget_report_path",
-    "operations.selective_forget_report_sha256",
-    "platform_gates.systems",
-    "platform_gates.python_versions",
-    "platform_gates.mandatory_skips",
-    "platform_gates.report_path",
-    "platform_gates.report_sha256",
-    "platform_gates.matrix[].report_path",
-    "platform_gates.matrix[].report_sha256",
-    "supply_chain.reproducible_wheel_sdist",
-    "supply_chain.sbom",
-    "supply_chain.licenses",
-    "supply_chain.openvex",
-    "supply_chain.provenance",
-    "supply_chain.public_redownload",
-    "supply_chain.reproducible_wheel_sdist_path",
-    "supply_chain.reproducible_wheel_sdist_sha256",
-    "supply_chain.sbom_path",
-    "supply_chain.sbom_sha256",
-    "supply_chain.licenses_path",
-    "supply_chain.licenses_sha256",
-    "supply_chain.openvex_path",
-    "supply_chain.openvex_sha256",
-    "supply_chain.provenance_path",
-    "supply_chain.provenance_sha256",
-    "supply_chain.public_redownload_path",
-    "supply_chain.public_redownload_sha256",
+    "semantic_evidence.report_path",
+    "semantic_evidence.report_artifact_sha256",
+    "semantic_evidence.report_record_sha256",
+    "semantic_evidence.gate_statuses[]",
+)
+
+V013_CORE_GATE_IDS = frozenset(
+    {
+        "canonical_integrity",
+        "migration_recovery",
+        "secret_host_isolation",
+        "bounded_context",
+        "legal_evidence",
+        "source_citation_locator",
+        "scale_performance",
+        "supported_platforms",
+        "reproducible_supply_chain",
+        "human_gold_isolation",
+        "codex",
+        "selective_forget",
+    }
+)
+V013_CAPABILITY_GATE_IDS = frozenset({"timeline", "semantic_restore", "claude", "opencode"})
+V013_COMPETITIVE_GATE_IDS = frozenset(
+    {"comparative_incremental_benefit", "superiority", "sota"}
 )
 
 _V5_REQUIRED_TOP_LEVEL = frozenset(
@@ -193,17 +105,7 @@ _V6_REQUIRED_TOP_LEVEL = frozenset(
         "release",
         "bindings",
         "artifacts",
-        "qualification",
-        "host_acceptance",
-        "real_codex",
-        "real_claude",
-        "real_opencode",
-        "comparison",
-        "legal",
-        "scale",
-        "operations",
-        "platform_gates",
-        "supply_chain",
+        "semantic_evidence",
         "commercial_release_eligible",
         "quality_protocol_eligible",
         "competitive_claim_eligible",
@@ -261,15 +163,6 @@ def _mapping(value: Any, path: str) -> Mapping[str, Any]:
     return value
 
 
-def _required(value: Mapping[str, Any], path: str) -> Any:
-    current: Any = value
-    for component in path.split("."):
-        if not isinstance(current, Mapping) or component not in current:
-            _fail(f"required release evidence is missing: {path}")
-        current = current[component]
-    return current
-
-
 def _sha256(value: Any, path: str) -> str:
     if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
         _fail(f"{path} must be a lowercase SHA-256 digest")
@@ -306,24 +199,6 @@ def _safe_relative_path(value: Any, path: str) -> str:
     return value
 
 
-def _evidence_ref(
-    manifest: Mapping[str, Any],
-    artifact_index: Mapping[str, Mapping[str, Any]],
-    *,
-    path: str,
-    hash_path: str,
-    seen: set[str],
-) -> tuple[str, str]:
-    return _evidence_ref_values(
-        artifact_index,
-        path_value=_required(manifest, path),
-        hash_value=_required(manifest, hash_path),
-        path=path,
-        hash_path=hash_path,
-        seen=seen,
-    )
-
-
 def _evidence_ref_values(
     artifact_index: Mapping[str, Mapping[str, Any]],
     *,
@@ -355,12 +230,6 @@ def _git(value: Any, path: str) -> str:
 def _exact(value: Any, expected: Any, path: str) -> None:
     if value != expected:
         _fail(f"{path} does not match the release policy")
-
-
-def _nonnegative_integer(value: Any, path: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        _fail(f"{path} must be a non-negative integer")
-    return value
 
 
 def _true(value: Any, path: str) -> None:
@@ -396,6 +265,13 @@ def _v5_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
 
 
 def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
+    """Validate only the v6 envelope, artifact bindings, and derived gate invariants.
+
+    Semantic report content is deliberately validated by ``semantic_evidence`` before this
+    envelope may reach publish.  Keeping that boundary explicit prevents this policy from treating
+    a caller-authored pass boolean as evidence.
+    """
+
     missing = sorted(_V6_REQUIRED_TOP_LEVEL - set(manifest))
     if missing:
         _fail(f"v6 manifest is incomplete; missing fields: {', '.join(missing)}")
@@ -435,6 +311,14 @@ def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
             "traceability_sha256",
             "qualification_protocol_path",
             "qualification_protocol_sha256",
+            "thresholds_path",
+            "thresholds_sha256",
+            "human_gold_manifest_path",
+            "human_gold_manifest_sha256",
+            "compiler_evaluator_isolation_path",
+            "compiler_evaluator_isolation_sha256",
+            "gate_classification_path",
+            "gate_classification_sha256",
             "candidate_commit",
             "candidate_tree",
             "candidate_wheel_sha256",
@@ -445,14 +329,18 @@ def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
     _exact(bindings["candidate_commit"], release_commit, "bindings.candidate_commit")
     _exact(bindings["candidate_tree"], release_tree, "bindings.candidate_tree")
     _exact(bindings["candidate_version"], release_version, "bindings.candidate_version")
-    for path in (
-        "bindings.prd_sha256",
-        "bindings.traceability_sha256",
-        "bindings.qualification_protocol_sha256",
-        "bindings.candidate_wheel_sha256",
-        "bindings.candidate_sdist_sha256",
+    for name in (
+        "prd_sha256",
+        "traceability_sha256",
+        "qualification_protocol_sha256",
+        "thresholds_sha256",
+        "human_gold_manifest_sha256",
+        "compiler_evaluator_isolation_sha256",
+        "gate_classification_sha256",
+        "candidate_wheel_sha256",
+        "candidate_sdist_sha256",
     ):
-        _sha256(_required(manifest, path), path)
+        _sha256(bindings[name], f"bindings.{name}")
 
     artifacts = manifest["artifacts"]
     if not isinstance(artifacts, list) or not artifacts:
@@ -461,427 +349,125 @@ def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
     wheel_assets: list[Mapping[str, Any]] = []
     sdist_assets: list[Mapping[str, Any]] = []
     for index, artifact in enumerate(artifacts):
-        item = closed(
-            artifact,
-            f"artifacts[{index}]",
-            {"path", "sha256", "byte_size"},
-        )
+        item = closed(artifact, f"artifacts[{index}]", {"path", "sha256", "byte_size"})
         path = _safe_relative_path(item["path"], f"artifacts[{index}].path")
         if path in artifact_index:
             _fail(f"artifacts contains duplicate path: {path}")
-        artifact_index[path] = item
         _sha256(item["sha256"], f"artifacts[{index}].sha256")
-        if not isinstance(item["byte_size"], int) or isinstance(item["byte_size"], bool):
+        if isinstance(item["byte_size"], bool) or not isinstance(item["byte_size"], int):
             _fail(f"artifacts[{index}].byte_size must be a positive integer")
         if item["byte_size"] < 1:
             _fail(f"artifacts[{index}].byte_size must be positive")
+        artifact_index[path] = item
         if path.endswith(".whl"):
             if not Path(path).name.startswith(f"deeplaw-{release_version}-"):
                 _fail(f"artifacts[{index}].path is not bound to the release version")
             wheel_assets.append(item)
-        if path.endswith(".tar.gz"):
+        elif path.endswith(".tar.gz"):
             if Path(path).name != f"deeplaw-{release_version}.tar.gz":
                 _fail(f"artifacts[{index}].path is not bound to the release version")
             sdist_assets.append(item)
     if len(wheel_assets) != 1 or len(sdist_assets) != 1:
         _fail("artifacts must bind exactly one wheel and one sdist")
-    _exact(wheel_assets[0]["sha256"], bindings["candidate_wheel_sha256"], "artifacts.wheel.sha256")
-    _exact(sdist_assets[0]["sha256"], bindings["candidate_sdist_sha256"], "artifacts.sdist.sha256")
+    _exact(wheel_assets[0]["sha256"], bindings["candidate_wheel_sha256"], "wheel sha256")
+    _exact(sdist_assets[0]["sha256"], bindings["candidate_sdist_sha256"], "sdist sha256")
 
-    seen_evidence: set[str] = set()
-    for path, hash_path in (
-        ("bindings.prd_path", "bindings.prd_sha256"),
-        ("bindings.traceability_path", "bindings.traceability_sha256"),
-        ("bindings.qualification_protocol_path", "bindings.qualification_protocol_sha256"),
+    seen: set[str] = set()
+    for path_name, hash_name in (
+        ("prd_path", "prd_sha256"),
+        ("traceability_path", "traceability_sha256"),
+        ("qualification_protocol_path", "qualification_protocol_sha256"),
+        ("thresholds_path", "thresholds_sha256"),
+        ("human_gold_manifest_path", "human_gold_manifest_sha256"),
+        ("compiler_evaluator_isolation_path", "compiler_evaluator_isolation_sha256"),
+        ("gate_classification_path", "gate_classification_sha256"),
     ):
-        _evidence_ref(
-            manifest,
-            artifact_index,
-            path=path,
-            hash_path=hash_path,
-            seen=seen_evidence,
-        )
-
-    qualification = closed(
-        manifest["qualification"],
-        "qualification",
-        {
-            "human_gold_manifest_path",
-            "human_gold_manifest_sha256",
-            "human_gold_origin",
-            "human_gold_model_output",
-            "compiler_evaluator_isolation_receipt_path",
-            "compiler_evaluator_isolation_receipt_sha256",
-            "compiler_evaluator_isolated",
-        },
-    )
-    _evidence_ref(
-        manifest,
-        artifact_index,
-        path="qualification.human_gold_manifest_path",
-        hash_path="qualification.human_gold_manifest_sha256",
-        seen=seen_evidence,
-    )
-    _evidence_ref(
-        manifest,
-        artifact_index,
-        path="qualification.compiler_evaluator_isolation_receipt_path",
-        hash_path="qualification.compiler_evaluator_isolation_receipt_sha256",
-        seen=seen_evidence,
-    )
-    _exact(
-        qualification["human_gold_origin"],
-        "repository_external",
-        "qualification.human_gold_origin",
-    )
-    _exact(
-        qualification["human_gold_model_output"],
-        False,
-        "qualification.human_gold_model_output",
-    )
-    _exact(
-        qualification["compiler_evaluator_isolated"],
-        True,
-        "qualification.compiler_evaluator_isolated",
-    )
-
-    host_acceptance = closed(
-        manifest["host_acceptance"],
-        "host_acceptance",
-        {
-            "report_path",
-            "report_sha256",
-            "model_task_acceptance",
-            "model_task_results_claimed",
-            "model_or_api_call_attempted",
-            "declared_supported_hosts",
-        },
-    )
-    _evidence_ref(
-        manifest,
-        artifact_index,
-        path="host_acceptance.report_path",
-        hash_path="host_acceptance.report_sha256",
-        seen=seen_evidence,
-    )
-    _true(host_acceptance["model_task_acceptance"], "host_acceptance.model_task_acceptance")
-    _true(
-        host_acceptance["model_task_results_claimed"],
-        "host_acceptance.model_task_results_claimed",
-    )
-    _true(
-        host_acceptance["model_or_api_call_attempted"],
-        "host_acceptance.model_or_api_call_attempted",
-    )
-    _exact(
-        host_acceptance["declared_supported_hosts"],
-        ["claude_code", "codex", "opencode"],
-        "host_acceptance.declared_supported_hosts",
-    )
-
-    for host_name in ("real_codex", "real_claude", "real_opencode"):
-        host = closed(
-            manifest[host_name],
-            host_name,
-            {
-                "independent_runs",
-                "model_task_acceptance",
-                "model_or_api_call_attempted",
-                "evidence_path",
-                "evidence_sha256",
-            },
-        )
-        runs = _nonnegative_integer(host["independent_runs"], f"{host_name}.independent_runs")
-        if runs < 3:
-            _fail(f"{host_name}.independent_runs must be at least three")
-        _true(host["model_task_acceptance"], f"{host_name}.model_task_acceptance")
-        _true(host["model_or_api_call_attempted"], f"{host_name}.model_or_api_call_attempted")
-        _evidence_ref(
-            manifest,
-            artifact_index,
-            path=f"{host_name}.evidence_path",
-            hash_path=f"{host_name}.evidence_sha256",
-            seen=seen_evidence,
-        )
-
-    comparison = closed(
-        manifest["comparison"],
-        "comparison",
-        {
-            "host_only",
-            "host_native_memory",
-            "host_native_memory_plus_deeplaw",
-            "equal_budget",
-            "equal_budget_report_path",
-            "equal_budget_report_sha256",
-        },
-    )
-    lanes: dict[str, Mapping[str, Any]] = {}
-    for lane in ("host_only", "host_native_memory", "host_native_memory_plus_deeplaw"):
-        lanes[lane] = closed(
-            comparison[lane],
-            f"comparison.{lane}",
-            {
-                "passed",
-                "first_correct_action",
-                "report_path",
-                "report_sha256",
-                "incremental_benefit",
-            },
-        )
-        _true(lanes[lane]["passed"], f"comparison.{lane}.passed")
-        if isinstance(lanes[lane]["first_correct_action"], bool) or not isinstance(
-            lanes[lane]["first_correct_action"], (int, float)
-        ):
-            _fail(f"comparison.{lane}.first_correct_action must be numeric")
-        if not math.isfinite(float(lanes[lane]["first_correct_action"])):
-            _fail(f"comparison.{lane}.first_correct_action must be finite")
-        if lanes[lane]["first_correct_action"] < 0:
-            _fail(f"comparison.{lane}.first_correct_action must be non-negative")
-        _evidence_ref(
-            manifest,
-            artifact_index,
-            path=f"comparison.{lane}.report_path",
-            hash_path=f"comparison.{lane}.report_sha256",
-            seen=seen_evidence,
-        )
-    _true(comparison["equal_budget"], "comparison.equal_budget")
-    _evidence_ref(
-        manifest,
-        artifact_index,
-        path="comparison.equal_budget_report_path",
-        hash_path="comparison.equal_budget_report_sha256",
-        seen=seen_evidence,
-    )
-    candidate_action = lanes["host_native_memory_plus_deeplaw"]["first_correct_action"]
-    for lane in ("host_only", "host_native_memory"):
-        if candidate_action < lanes[lane]["first_correct_action"]:
-            _fail("DeepLaw comparison lowers First Correct Action")
-    _true(
-        lanes["host_native_memory_plus_deeplaw"]["incremental_benefit"],
-        "comparison.host_native_memory_plus_deeplaw.incremental_benefit",
-    )
-
-    legal = closed(
-        manifest["legal"],
-        "legal",
-        {
-            "report_path",
-            "report_sha256",
-            "pack_manifest_path",
-            "pack_manifest_sha256",
-            "catalog_path",
-            "catalog_sha256",
-            "release_path",
-            "release_sha256",
-            "source_count",
-            "signed_and_verified",
-            "critical_failures",
-            "false_authority",
-            "wrong_version_primary",
-            "invalid_quote",
-            "invalid_locator",
-            "cross_boundary_disclosure",
-            "secret_leak",
-        },
-    )
-    for path, hash_path in (
-        ("legal.report_path", "legal.report_sha256"),
-        ("legal.pack_manifest_path", "legal.pack_manifest_sha256"),
-        ("legal.catalog_path", "legal.catalog_sha256"),
-        ("legal.release_path", "legal.release_sha256"),
-    ):
-        _evidence_ref(manifest, artifact_index, path=path, hash_path=hash_path, seen=seen_evidence)
-    _exact(legal["source_count"], 28, "legal.source_count")
-    _true(legal["signed_and_verified"], "legal.signed_and_verified")
-    _exact(legal["critical_failures"], 0, "legal.critical_failures")
-    for path in (
-        "legal.false_authority",
-        "legal.wrong_version_primary",
-        "legal.invalid_quote",
-        "legal.invalid_locator",
-        "legal.cross_boundary_disclosure",
-        "legal.secret_leak",
-    ):
-        _exact(_required(manifest, path), 0, path)
-
-    scale = closed(
-        manifest["scale"],
-        "scale",
-        {
-            "current_candidate",
-            "current_candidate_report_path",
-            "current_candidate_report_sha256",
-            "statement_5k",
-            "statement_5k_report_path",
-            "statement_5k_report_sha256",
-            "statement_10k",
-            "statement_10k_report_path",
-            "statement_10k_report_sha256",
-            "statement_100k",
-            "statement_100k_report_path",
-            "statement_100k_report_sha256",
-            "relation_10k",
-            "relation_10k_report_path",
-            "relation_10k_report_sha256",
-            "relation_100k",
-            "relation_100k_report_path",
-            "relation_100k_report_sha256",
-            "wiki_10k",
-            "wiki_10k_report_path",
-            "wiki_10k_report_sha256",
-            "wiki_100k",
-            "wiki_100k_report_path",
-            "wiki_100k_report_sha256",
-            "requests_10000_rss",
-            "requests_10000_rss_report_path",
-            "requests_10000_rss_report_sha256",
-            "readers_8",
-            "readers_8_report_path",
-            "readers_8_report_sha256",
-            "cache_invalidation",
-            "cache_invalidation_report_path",
-            "cache_invalidation_report_sha256",
-        },
-    )
-    for name in (
-        "current_candidate",
-        "statement_5k",
-        "statement_10k",
-        "statement_100k",
-        "relation_10k",
-        "relation_100k",
-        "wiki_10k",
-        "wiki_100k",
-        "requests_10000_rss",
-        "readers_8",
-        "cache_invalidation",
-    ):
-        _true(scale[name], f"scale.{name}")
-        _evidence_ref(
-            manifest,
-            artifact_index,
-            path=f"scale.{name}_report_path",
-            hash_path=f"scale.{name}_report_sha256",
-            seen=seen_evidence,
-        )
-
-    operations = closed(
-        manifest["operations"],
-        "operations",
-        {
-            "timeline",
-            "timeline_report_path",
-            "timeline_report_sha256",
-            "semantic_restore",
-            "semantic_restore_report_path",
-            "semantic_restore_report_sha256",
-            "selective_forget",
-            "selective_forget_report_path",
-            "selective_forget_report_sha256",
-        },
-    )
-    for name in ("timeline", "semantic_restore", "selective_forget"):
-        _true(operations[name], f"operations.{name}")
-        _evidence_ref(
-            manifest,
-            artifact_index,
-            path=f"operations.{name}_report_path",
-            hash_path=f"operations.{name}_report_sha256",
-            seen=seen_evidence,
-        )
-
-    platform = closed(
-        manifest["platform_gates"],
-        "platform_gates",
-        {
-            "systems",
-            "python_versions",
-            "matrix",
-            "mandatory_skips",
-            "matrix_complete",
-            "report_path",
-            "report_sha256",
-        },
-    )
-    _exact(platform["systems"], ["Darwin", "Linux", "Windows"], "platform_gates.systems")
-    _exact(platform["python_versions"], ["3.11", "3.12", "3.13"], "platform_gates.python_versions")
-    _evidence_ref(
-        manifest,
-        artifact_index,
-        path="platform_gates.report_path",
-        hash_path="platform_gates.report_sha256",
-        seen=seen_evidence,
-    )
-    matrix = platform["matrix"]
-    expected_matrix = [
-        {"system": system, "python_version": python_version}
-        for system in ("Darwin", "Linux", "Windows")
-        for python_version in ("3.11", "3.12", "3.13")
-    ]
-    if not isinstance(matrix, list) or len(matrix) != 9:
-        _fail("platform_gates.matrix must contain exactly nine rows")
-    observed_matrix: list[dict[str, Any]] = []
-    for index, row in enumerate(matrix):
-        item = closed(
-            row,
-            f"platform_gates.matrix[{index}]",
-            {"system", "python_version", "report_path", "report_sha256"},
-        )
-        observed_matrix.append({"system": item["system"], "python_version": item["python_version"]})
         _evidence_ref_values(
             artifact_index,
-            path_value=item["report_path"],
-            hash_value=item["report_sha256"],
-            path=f"platform_gates.matrix[{index}].report_path",
-            hash_path=f"platform_gates.matrix[{index}].report_sha256",
-            seen=seen_evidence,
+            path_value=bindings[path_name],
+            hash_value=bindings[hash_name],
+            path=f"bindings.{path_name}",
+            hash_path=f"bindings.{hash_name}",
+            seen=seen,
         )
-    if observed_matrix != expected_matrix:
-        _fail("platform_gates.matrix must cover exactly three systems and three Python versions")
-    _exact(platform["mandatory_skips"], 0, "platform_gates.mandatory_skips")
-    _true(platform["matrix_complete"], "platform_gates.matrix_complete")
 
-    supply_chain = closed(
-        manifest["supply_chain"],
-        "supply_chain",
+    semantic = closed(
+        manifest["semantic_evidence"],
+        "semantic_evidence",
         {
-            "reproducible_wheel_sdist",
-            "reproducible_wheel_sdist_path",
-            "reproducible_wheel_sdist_sha256",
-            "sbom",
-            "sbom_path",
-            "sbom_sha256",
-            "licenses",
-            "licenses_path",
-            "licenses_sha256",
-            "openvex",
-            "openvex_path",
-            "openvex_sha256",
-            "provenance",
-            "provenance_path",
-            "provenance_sha256",
-            "public_redownload",
-            "public_redownload_path",
-            "public_redownload_sha256",
+            "report_path",
+            "report_artifact_sha256",
+            "report_record_sha256",
+            "report_kind",
+            "status",
+            "hard_zero",
+            "release_ready",
+            "claim_eligible",
+            "competitive_claim_eligible",
+            "gate_statuses",
         },
     )
-    for name in (
-        "reproducible_wheel_sdist",
-        "sbom",
-        "licenses",
-        "openvex",
-        "provenance",
-        "public_redownload",
+    _evidence_ref_values(
+        artifact_index,
+        path_value=semantic["report_path"],
+        hash_value=semantic["report_artifact_sha256"],
+        path="semantic_evidence.report_path",
+        hash_path="semantic_evidence.report_artifact_sha256",
+        seen=seen,
+    )
+    _sha256(semantic["report_record_sha256"], "semantic_evidence.report_record_sha256")
+    _exact(
+        semantic["report_kind"],
+        "v013_commercial_gate_collection",
+        "semantic_evidence.report_kind",
+    )
+    _exact(semantic["status"], "passed", "semantic_evidence.status")
+    _true(semantic["hard_zero"], "semantic_evidence.hard_zero")
+    _true(semantic["release_ready"], "semantic_evidence.release_ready")
+    _true(semantic["claim_eligible"], "semantic_evidence.claim_eligible")
+    _exact(
+        semantic["competitive_claim_eligible"],
+        False,
+        "semantic_evidence.competitive_claim_eligible",
+    )
+    statuses = semantic["gate_statuses"]
+    if not isinstance(statuses, list) or len(statuses) != (
+        len(V013_CORE_GATE_IDS) + len(V013_CAPABILITY_GATE_IDS) + len(V013_COMPETITIVE_GATE_IDS)
     ):
-        _true(supply_chain[name], f"supply_chain.{name}")
-        _evidence_ref(
-            manifest,
-            artifact_index,
-            path=f"supply_chain.{name}_path",
-            hash_path=f"supply_chain.{name}_sha256",
-            seen=seen_evidence,
+        _fail("semantic_evidence.gate_statuses is incomplete")
+    observed: dict[str, tuple[str, str]] = {}
+    for index, status in enumerate(statuses):
+        item = closed(
+            status,
+            f"semantic_evidence.gate_statuses[{index}]",
+            {"gate_id", "category", "status"},
         )
+        gate_id = item["gate_id"]
+        if not isinstance(gate_id, str) or gate_id in observed:
+            _fail("semantic_evidence.gate_statuses contains an invalid or duplicate gate")
+        if item["status"] not in {
+            "passed",
+            "failed",
+            "not_applicable",
+            "not_executed",
+            "not_claimed",
+        }:
+            _fail(f"semantic_evidence.gate_statuses[{index}].status is invalid")
+        observed[gate_id] = (item["category"], item["status"])
+    if set(observed) != V013_CORE_GATE_IDS | V013_CAPABILITY_GATE_IDS | V013_COMPETITIVE_GATE_IDS:
+        _fail("semantic_evidence.gate_statuses does not match the frozen v0.13 gate inventory")
+    if any(observed[gate] != ("Core", "passed") for gate in V013_CORE_GATE_IDS):
+        _fail("every v0.13 Core gate must be semantically passed")
+    if any(
+        observed[gate][0] != "Capability" or observed[gate][1] not in {"passed", "not_claimed"}
+        for gate in V013_CAPABILITY_GATE_IDS
+    ):
+        _fail("v0.13 Capability gates must be passed or explicitly not_claimed")
+    if any(
+        observed[gate] != ("Competitive Claim", "not_claimed")
+        for gate in V013_COMPETITIVE_GATE_IDS
+    ):
+        _fail("v0.13 competitive claims must remain not_claimed")
 
     _exact(manifest["commercial_release_eligible"], True, "commercial_release_eligible")
     _exact(manifest["quality_protocol_eligible"], True, "quality_protocol_eligible")

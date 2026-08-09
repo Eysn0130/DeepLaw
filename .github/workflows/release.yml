@@ -134,12 +134,24 @@ jobs:
           name: commercial-release-assets
           path: ${{ runner.temp }}/release-assets
 
+      - name: Install uv for semantic evidence validation
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
       - name: Validate version-conditional commercial manifest
         env:
           RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "${RELEASE_VERSION}" == 0.13.* ]]; then
+            uv run --frozen python -m benchmarks.release.semantic_evidence \
+              --manifest "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
+              --assets-root "${RUNNER_TEMP}/release-assets"
+          fi
           python -m benchmarks.release.release_policy \
             --manifest "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
             --release-version "${RELEASE_VERSION}"
@@ -451,6 +463,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "${RELEASE_VERSION}" == 0.13.* ]]; then
+            uv run --frozen python -m benchmarks.release.semantic_evidence \
+              --manifest "${RUNNER_TEMP}/downloads/commercial-release-manifest.json" \
+              --assets-root "${RUNNER_TEMP}/downloads"
+          fi
           python -m benchmarks.release.release_policy \
             --manifest "${RUNNER_TEMP}/downloads/commercial-release-manifest.json" \
             --release-version "${RELEASE_VERSION}"

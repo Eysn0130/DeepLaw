@@ -707,7 +707,8 @@ def assemble(
     if required_schema != V5_MANIFEST_SCHEMA:
         raise CommercialReleaseError(
             f"release {version} requires {required_schema}; "
-            "the historical v5/no-model assembler is closed, provide external v6 evidence"
+            "the historical v5/no-model assembler is closed; use "
+            "benchmarks.release.v013_commercial_release with semantically validated v6 evidence"
         )
     versions = _unified_versions(repository)
     platform_reports = [

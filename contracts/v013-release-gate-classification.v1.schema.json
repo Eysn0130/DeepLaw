@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-release-gate-classification.v1.schema.json",
+  "title": "DeepLaw v0.13 release gate classification v1",
+  "description": "Closed classification of release gates. Core gates are required; Capability and Competitive Claim gates may remain not_claimed only when they are not declared.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "classification_id", "categories", "gates"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-release-gate-classification/v1"},
+    "classification_id": {"const": "deeplaw-v013-commercial-gates"},
+    "categories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/category"}
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/gate"}
+    }
+  },
+  "$defs": {
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "category_id", "required", "not_claimed_allowed", "gate_ids"],
+      "properties": {
+        "category": {"enum": ["Core", "Capability", "Competitive Claim"]},
+        "category_id": {"enum": ["core", "capability", "competitive_claim"]},
+        "required": {"type": "boolean"},
+        "not_claimed_allowed": {"type": "boolean"},
+        "gate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gateId"}
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id", "category", "category_id", "minimum_runs", "required",
+        "model_required", "thresholds", "hard_zero_ids"
+      ],
+      "properties": {
+        "gate_id": {"$ref": "#/$defs/gateId"},
+        "category": {"enum": ["Core", "Capability", "Competitive Claim"]},
+        "category_id": {"enum": ["core", "capability", "competitive_claim"]},
+        "minimum_runs": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "required": {"type": "boolean"},
+        "model_required": {"type": "boolean"},
+        "thresholds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/threshold"}
+        },
+        "hard_zero_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gateId"}
+        }
+      }
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "minimum", "maximum"],
+      "properties": {
+        "metric": {"$ref": "#/$defs/gateId"},
+        "minimum": {"type": ["number", "null"]},
+        "maximum": {"type": ["number", "null"]}
+      }
+    },
+    "gateId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    }
+  }
+}
