@@ -28,6 +28,14 @@ _FIXTURE_DIAGNOSTIC_MESSAGES = {
     "content-addressed object failed exact-byte verification": "object_byte_mismatch",
     "autonomous event transaction time moved backwards": "transaction_time_regression",
 }
+_FIXTURE_DIAGNOSTIC_FRAMES = {
+    "_artifact": "artifact",
+    "_write_object": "write_object",
+    "_atomic_owner_write": "atomic_write",
+    "_owner_directory": "owner_directory",
+    "_next_transaction_time": "transaction_time",
+    "_commit_statement_fixture": "fixture_commit",
+}
 
 
 def _closed_fixture_diagnostic(workspace: Path) -> str:
@@ -36,13 +44,23 @@ def _closed_fixture_diagnostic(workspace: Path) -> str:
     except BaseException as error:
         seen: set[int] = set()
         current: BaseException | None = error
+        frames: list[str] = []
         while current is not None and id(current) not in seen:
             seen.add(id(current))
             code = _FIXTURE_DIAGNOSTIC_MESSAGES.get(str(current))
             if code is not None:
                 return code
+            traceback = current.__traceback__
+            while traceback is not None:
+                frame = _FIXTURE_DIAGNOSTIC_FRAMES.get(
+                    traceback.tb_frame.f_code.co_name
+                )
+                if frame is not None and frame not in frames:
+                    frames.append(frame)
+                traceback = traceback.tb_next
             current = current.__cause__ or current.__context__
-        return f"unmapped_{runtime_stability._failure_type(error)}"
+        suffix = "_".join(frames) if frames else "no_known_frame"
+        return f"unmapped_{runtime_stability._failure_type(error)}_{suffix}"
     return "not_reproduced"
 
 
