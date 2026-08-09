@@ -1,8 +1,9 @@
-"""Assemble a v0.13 release manifest from semantically validated evidence.
+"""Assemble a v0.13 release manifest from provenance-bound evidence.
 
-The caller supplies only the decision-free envelope, artifact inventory, and the logical path of
-the evidence report.  Release and claim decisions are derived from the report observations; they
-cannot be supplied or overridden by the caller.
+The historical ``commercial-evidence-report/v1`` observation format is deliberately rejected: its
+hashes do not prove that the reported command, model, runs, metrics, or scans exist.  The assembler
+remains fail closed until the additive provenance-bound report/classification contracts and every
+Core Gate's dedicated raw-artifact validator are complete.
 """
 
 from __future__ import annotations
@@ -27,6 +28,14 @@ from benchmarks.release.semantic_evidence import (
 
 MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / (
     "commercial-release-manifest.v6.schema.json"
+)
+CLASSIFICATION_V2_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / (
+    "v013-release-gate-classification.v2.schema.json"
+)
+LEGACY_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v1"
+PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v2"
+PROVENANCE_CLASSIFICATION_SCHEMA_VERSION = (
+    "deeplaw.v013-release-gate-classification/v2"
 )
 _INPUT_FIELDS = {"schema_version", "environment", "release", "bindings", "artifacts"}
 _DERIVED_FIELDS = {
@@ -107,6 +116,26 @@ def _verify_inventory(document: Mapping[str, Any], assets_root: Path) -> None:
             )
 
 
+def _validate_provenance_classification(classification: Mapping[str, Any]) -> None:
+    try:
+        schema = _load_json(CLASSIFICATION_V2_SCHEMA_PATH)
+        Draft202012Validator.check_schema(schema)
+        errors = sorted(
+            Draft202012Validator(schema).iter_errors(classification),
+            key=lambda error: list(error.path),
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise V013CommercialReleaseError(
+            f"provenance gate classification is unavailable: {error}"
+        ) from error
+    if errors:
+        first = errors[0]
+        location = ".".join(str(part) for part in first.path) or "$"
+        raise V013CommercialReleaseError(
+            f"provenance gate classification violation at {location}: {first.message}"
+        )
+
+
 def assemble_manifest(
     template: Mapping[str, Any] | str | Path,
     *,
@@ -144,6 +173,27 @@ def assemble_manifest(
     classification_path = _safe_asset(root, bindings.get("gate_classification_path"))
     report = _load_json(report_path)
     classification = _load_json(classification_path)
+    report_schema_version = report.get("schema_version")
+    if report_schema_version == LEGACY_REPORT_SCHEMA_VERSION:
+        raise V013CommercialReleaseError(
+            "commercial-evidence-report/v1 contains self-reported observations and cannot "
+            "assemble a v0.13 release"
+        )
+    if report_schema_version != PROVENANCE_REPORT_SCHEMA_VERSION:
+        raise V013CommercialReleaseError(
+            "v0.13 assembler requires provenance-bound commercial evidence report v2"
+        )
+    if classification.get("schema_version") != PROVENANCE_CLASSIFICATION_SCHEMA_VERSION:
+        raise V013CommercialReleaseError(
+            "v0.13 assembler requires provenance-bound gate classification v2"
+        )
+    _validate_provenance_classification(classification)
+    assembly_policy = classification["assembly_policy"]
+    if assembly_policy["assembly_enabled"] is not True:
+        raise V013CommercialReleaseError(
+            "v0.13 provenance assembly remains disabled: "
+            f"{assembly_policy['reason_code']}"
+        )
     try:
         result = validate_report(
             report,

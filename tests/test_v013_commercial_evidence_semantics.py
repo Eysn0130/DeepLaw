@@ -237,11 +237,16 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
     } == release_policy.V013_COMPETITIVE_GATE_IDS
 
 
-def test_semantic_status_is_derived_and_deferred_capabilities_are_not_claimed() -> None:
+def test_legacy_self_report_cannot_pass_and_deferred_capabilities_are_not_claimed() -> None:
     result = _validate(_report())
-    assert result["status"] == "passed"
-    assert result["release_ready"] is True
-    assert result["gate_statuses"]["codex"] == "passed"
+    assert result["status"] == "failed"
+    assert result["release_ready"] is False
+    assert result["claim_eligible"] is False
+    assert result["hard_zero"] is False
+    assert result["gate_statuses"]["codex"] == "failed"
+    assert "legacy_self_report_not_provenance_bound" in result["computed"]["codex"][
+        "issues"
+    ]
     assert result["gate_statuses"]["timeline"] == "not_claimed"
     assert result["gate_statuses"]["semantic_restore"] == "not_claimed"
     assert result["gate_statuses"]["claude"] == "not_claimed"
@@ -399,7 +404,8 @@ def test_path_validator_reads_the_json_bytes_and_keeps_status_deterministic(tmp_
     report_path = tmp_path / "commercial-evidence.json"
     report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
     result = validate_report_file(report_path, expected=_expected())
-    assert result["status"] == "passed"
+    assert result["status"] == "failed"
+    assert result["release_ready"] is False
 
 
 def _write_asset(root: Path, logical_path: str, content: bytes) -> dict[str, Any]:
@@ -521,18 +527,46 @@ def _manifest_record_sha256(manifest: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def test_v013_assembler_derives_decisions_from_actual_report_bytes(tmp_path: Path) -> None:
+def test_v013_assembler_rejects_legacy_self_report_bytes(tmp_path: Path) -> None:
     template, _report_value, root = _release_inputs(tmp_path)
-    manifest = assemble_manifest(
-        template,
-        semantic_report_path="evidence/semantic-report.json",
-        assets_root=root,
+    with pytest.raises(V013CommercialReleaseError, match="self-reported observations"):
+        assemble_manifest(
+            template,
+            semantic_report_path="evidence/semantic-report.json",
+            assets_root=root,
+        )
+
+
+def test_v013_provenance_assembler_remains_disabled_until_core_validators_exist(
+    tmp_path: Path,
+) -> None:
+    template, _report_value, root = _release_inputs(tmp_path)
+    report_path = root / "evidence/semantic-report.json"
+    report_path.write_text(
+        json.dumps({"schema_version": "deeplaw.commercial-evidence-report/v2"}),
+        encoding="utf-8",
     )
-    assert manifest["semantic_evidence"]["status"] == "passed"
-    assert manifest["commercial_release_eligible"] is True
-    assert manifest["competitive_claim_eligible"] is False
-    result = validate_release_manifest_semantics(manifest, assets_root=root)
-    assert result["release_ready"] is True
+    classification_path = root / "evidence/classification.json"
+    classification_path.write_bytes(
+        (REPOSITORY / "benchmarks/release/v013-gate-classification-v2.json").read_bytes()
+    )
+    for logical_path, path in (
+        ("evidence/semantic-report.json", report_path),
+        ("evidence/classification.json", classification_path),
+    ):
+        record = next(item for item in template["artifacts"] if item["path"] == logical_path)
+        record["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        record["byte_size"] = path.stat().st_size
+    template["bindings"]["gate_classification_sha256"] = hashlib.sha256(
+        classification_path.read_bytes()
+    ).hexdigest()
+
+    with pytest.raises(V013CommercialReleaseError, match="assembly remains disabled"):
+        assemble_manifest(
+            template,
+            semantic_report_path="evidence/semantic-report.json",
+            assets_root=root,
+        )
 
 
 def test_v013_assembler_rejects_caller_supplied_pass_decisions(tmp_path: Path) -> None:
@@ -548,11 +582,6 @@ def test_v013_assembler_rejects_caller_supplied_pass_decisions(tmp_path: Path) -
 
 def test_manifest_pass_claim_is_rejected_when_actual_report_fails(tmp_path: Path) -> None:
     template, report, root = _release_inputs(tmp_path)
-    manifest = assemble_manifest(
-        template,
-        semantic_report_path="evidence/semantic-report.json",
-        assets_root=root,
-    )
     report["artifacts"][0]["content"]["command"]["exit_code"] = 1
     _refresh(report)
     report_path = root / "evidence/semantic-report.json"
@@ -560,15 +589,61 @@ def test_manifest_pass_claim_is_rejected_when_actual_report_fails(tmp_path: Path
         json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
-    actual_sha = hashlib.sha256(report_path.read_bytes()).hexdigest()
     report_record = next(
-        item for item in manifest["artifacts"] if item["path"] == "evidence/semantic-report.json"
+        item for item in template["artifacts"] if item["path"] == "evidence/semantic-report.json"
     )
-    report_record["sha256"] = actual_sha
+    report_record["sha256"] = hashlib.sha256(report_path.read_bytes()).hexdigest()
     report_record["byte_size"] = report_path.stat().st_size
-    manifest["semantic_evidence"]["report_artifact_sha256"] = actual_sha
-    manifest["semantic_evidence"]["report_record_sha256"] = report["report_sha256"]
+    with pytest.raises(V013CommercialReleaseError, match="self-reported observations"):
+        assemble_manifest(
+            template,
+            semantic_report_path="evidence/semantic-report.json",
+            assets_root=root,
+        )
+
+
+def test_publish_validator_rejects_forged_pass_receipt_for_legacy_report(
+    tmp_path: Path,
+) -> None:
+    manifest, report, root = _release_inputs(tmp_path)
+    category_by_gate = {
+        item["gate_id"]: item["category"] for item in CLASSIFICATION["gates"]
+    }
+    statuses = [
+        {
+            "gate_id": gate_id,
+            "category": category_by_gate[gate_id],
+            "status": "passed",
+        }
+        for gate_id in CORE_GATES
+    ]
+    statuses.extend(
+        {
+            "gate_id": item["gate_id"],
+            "category": item["category"],
+            "status": "not_claimed",
+        }
+        for item in CLASSIFICATION["gates"]
+        if item["category"] != "Core"
+    )
+    report_path = root / "evidence/semantic-report.json"
+    manifest["semantic_evidence"] = {
+        "report_path": "evidence/semantic-report.json",
+        "report_artifact_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+        "report_record_sha256": report["report_sha256"],
+        "report_kind": report["report_kind"],
+        "status": "passed",
+        "hard_zero": True,
+        "release_ready": True,
+        "claim_eligible": True,
+        "competitive_claim_eligible": False,
+        "gate_statuses": sorted(statuses, key=lambda item: item["gate_id"]),
+    }
+    manifest["commercial_release_eligible"] = True
+    manifest["quality_protocol_eligible"] = True
+    manifest["competitive_claim_eligible"] = False
     manifest["record_sha256"] = _manifest_record_sha256(manifest)
+
     with pytest.raises(SemanticEvidenceError, match="receipt differs"):
         validate_release_manifest_semantics(manifest, assets_root=root)
 
@@ -586,12 +661,28 @@ def test_assembler_rejects_hash_correct_inventory_for_different_wheel_bytes(
         )
 
 
+def test_self_consistent_arbitrary_protocol_gold_and_distribution_bytes_cannot_qualify(
+    tmp_path: Path,
+) -> None:
+    """Inventory self-consistency must not turn arbitrary bytes into release evidence."""
+
+    # Reuse the existing shape-only fixture: its wheel, sdist, protocol, and
+    # external-Gold files are arbitrary bytes whose inventory hashes agree.
+    template, _report_value, root = _release_inputs(tmp_path)
+    with pytest.raises(V013CommercialReleaseError, match="self-reported observations"):
+        assemble_manifest(
+            template,
+            semantic_report_path="evidence/semantic-report.json",
+            assets_root=root,
+        )
+
+
 def test_missing_core_is_not_claimed_and_is_not_a_pass() -> None:
     report = _report(declared_core=CORE_GATES[1:])
     result = _validate(report)
     assert result["gate_statuses"]["canonical_integrity"] == "not_executed"
     assert result["gate_statuses"]["canonical_integrity"] != "not_claimed"
-    assert result["status"] == "not_executed"
+    assert result["status"] == "failed"
 
 
 def test_caller_supplied_passed_flag_is_rejected_by_closed_report() -> None:
@@ -624,6 +715,58 @@ def test_model_required_gate_fails_without_exact_model_id() -> None:
     result = _validate(report)
     assert result["gate_statuses"]["codex"] == "failed"
     assert "exact_model_identity_missing" in result["computed"]["codex"]["issues"]
+
+
+def test_fake_model_and_runner_cannot_make_a_closed_report_release_ready() -> None:
+    """A self-consistent report must not certify a made-up model or runner."""
+
+    report = _report()
+    codex = next(item for item in report["artifacts"] if item["gate_id"] == "codex")
+    assert codex["content"]["gate_id"] == "codex"
+    codex["content"]["command"]["argv"] = [
+        "definitely-not-a-real-runner",
+        "claimed-codex-run",
+    ]
+    codex["content"]["environment"]["model_id"] = "made-up-model"
+    _refresh(report)
+
+    result = _validate(report)
+    assert (result["release_ready"], result["claim_eligible"]) == (False, False), (
+        "reproduced A: closed self-report with made-up model/argv was accepted as release "
+        f"evidence ({result!r})"
+    )
+
+
+def test_one_observation_cannot_self_report_three_runs_and_clean_metrics() -> None:
+    """run_count/threshold/hard-zero/redaction fields need independent raw evidence."""
+
+    report = _report()
+    codex_artifacts = [item for item in report["artifacts"] if item["gate_id"] == "codex"]
+    assert len(codex_artifacts) == 1
+    observation = codex_artifacts[0]["content"]
+    observation["command"]["run_count"] = 3
+    # This one Codex observation has no three distinct run IDs, host reports,
+    # or scorer rows.  Thresholds, hard-zero counters, and redaction remain
+    # self-reported fields in the same single artifact.
+    assert "run_id" not in observation
+    assert "run_ids" not in observation
+    assert "raw_run_ids" not in observation
+    assert "host_reports" not in observation
+    assert "raw_runs" not in observation
+    assert "scorer_rows" not in observation
+    assert all(item["count"] == 0 for item in observation["hard_failures"])
+    assert observation["redaction"] == {
+        "secret_canary_count": 0,
+        "private_path_count": 0,
+        "output_redacted": True,
+    }
+    _refresh(report)
+
+    result = _validate(report)
+    assert result["release_ready"] is False, (
+        "reproduced C: one observation self-reported run_count=3, passing thresholds, "
+        f"zero hard failures, and clean redaction but remained release-ready ({result!r})"
+    )
 
 
 def test_input_bound_rejects_overlarge_arbitrary_text() -> None:

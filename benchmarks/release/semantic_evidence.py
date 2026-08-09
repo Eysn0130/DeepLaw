@@ -1,9 +1,11 @@
-"""Deterministic semantic validation for the v0.13 commercial evidence report.
+"""Fail-closed validation for v0.13 commercial evidence.
 
-The closed report contains observations, not caller-declared pass/release/claim decisions.
-:func:`validate_report` reads every embedded artifact, checks its independent digest and derives
-all statuses from those observations.  This keeps a hash-valid arbitrary document or stale binding
-from becoming release evidence.
+``commercial-evidence-report/v1`` records caller-authored observations.  Its hashes prove only
+that those bytes are internally consistent; they do not prove that a command ran, that a model
+exists, or that reported metrics came from independent raw rows.  The v1 shape is retained as a
+diagnostic compatibility boundary, but it can no longer produce a passing Core Gate or a release
+or claim decision.  A future release path must aggregate provenance-bound results emitted by
+dedicated validators over their raw artifacts.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ RELEASE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts"
 )
 CLASSIFICATION_PATH = Path(__file__).with_name("v013-gate-classification-v1.json")
 REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v1"
+PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v2"
 OBSERVATION_SCHEMA_VERSION = "deeplaw.commercial-gate-observation/v1"
 STATUS_VALUES = frozenset(
     {"passed", "failed", "not_applicable", "not_executed", "not_claimed"}
@@ -576,15 +579,21 @@ def validate_report(
     expected_corpus_role: str | None = None,
     classification: Mapping[str, Any] | str | Path | None = None,
 ) -> dict[str, Any]:
-    """Validate and semantically derive a commercial evidence report.
+    """Validate a legacy report and reject its self-reported Core observations.
 
     Structural, digest, binding and privacy violations raise :class:`SemanticEvidenceError`.
-    A well-formed report whose observations fail a gate returns a deterministic ``status`` of
-    ``failed``/``not_executed`` rather than trusting any declared booleans in the report.
+    A well-formed v1 report returns a deterministic failed result because its command, run-count,
+    model, metric, hard-zero, and redaction fields are not provenance-bound raw evidence.  This
+    compatibility seam deliberately cannot return ``release_ready`` or claim eligibility.
     """
 
     document = _as_document(report)
     _check_bounds_and_secrets(document)
+    if document.get("schema_version") == PROVENANCE_REPORT_SCHEMA_VERSION:
+        raise SemanticEvidenceError(
+            "provenance-bound report v2 aggregation is disabled until every Core raw-artifact "
+            "validator is implemented"
+        )
     _schema_validate(document)
     if document["schema_version"] != REPORT_SCHEMA_VERSION:
         raise SemanticEvidenceError("unsupported commercial evidence report schema")
@@ -670,6 +679,20 @@ def validate_report(
         )
         computed[gate_id] = {"category": definition["category"], "status": status, "issues": issues}
 
+    # v1 contains self-reported observations rather than results recomputed by dedicated
+    # validators from raw run artifacts.  Preserve the structural diagnostics above, but never
+    # convert those observations into a passing Core Gate.  In particular, a made-up model or
+    # executable, a caller-authored run_count, and caller-authored hard-zero/redaction counters
+    # must not become release evidence merely because the enclosing JSON hashes are consistent.
+    for gate_id, item in computed.items():
+        if item["category"] != "Core" or gate_id not in declarations:
+            continue
+        item["status"] = "failed"
+        item["issues"] = [
+            *item["issues"],
+            "legacy_self_report_not_provenance_bound",
+        ]
+
     core_statuses = [item["status"] for item in computed.values() if item["category"] == "Core"]
     if any(status == "failed" for status in core_statuses):
         overall_status = "failed"
@@ -681,27 +704,12 @@ def validate_report(
         overall_status = "passed"
     else:
         overall_status = "not_executed"
-    hard_zero = all(
-        failure["count"] == 0
-        for artifact in artifacts.values()
-        for failure in artifact["content"]["hard_failures"]
-    ) and all(
-        artifact["content"]["redaction"]["secret_canary_count"] == 0
-        and artifact["content"]["redaction"]["private_path_count"] == 0
-        for artifact in artifacts.values()
-    )
-    release_ready = (
-        overall_status == "passed"
-        and document["corpus"]["role"] in {"qualification_holdout", "final_blind"}
-        and document["corpus"]["frozen"] is True
-        and hard_zero
-    )
-    claim_eligible = release_ready
-    competitive = claim_eligible and all(
-        item["status"] == "passed"
-        for item in computed.values()
-        if item["category"] == "Competitive Claim"
-    )
+    # These values are intentionally unknown/false for v1.  Do not reuse the caller's zero
+    # counters as a derived hard-zero decision.
+    hard_zero = False
+    release_ready = False
+    claim_eligible = False
+    competitive = False
     return {
         "status": overall_status,
         "gate_statuses": {gate_id: item["status"] for gate_id, item in computed.items()},
@@ -892,6 +900,7 @@ def _main() -> int:
 
 __all__ = [
     "CLASSIFICATION_PATH",
+    "PROVENANCE_REPORT_SCHEMA_VERSION",
     "RELEASE_MANIFEST_SCHEMA_PATH",
     "REPORT_SCHEMA_PATH",
     "STATUS_VALUES",
