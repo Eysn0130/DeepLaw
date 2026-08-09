@@ -242,6 +242,8 @@ def prepare(
             "personal",
             "--max-sensitivity",
             "restricted",
+            "--max-request-bytes",
+            "131072",
             "--max-mutations-per-minute",
             "120",
             "--max-objects",

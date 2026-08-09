@@ -538,6 +538,26 @@ class SemanticInventoryBuilder:
             canonical_json(frozen_candidates).encode("utf-8")
         ):
             raise RuntimeError("v3 semantic inventory admitted candidate freeze is invalid")
+        frozen_applicability_digest = coverage.get("applicability_digest")
+        if frozen_applicability_digest != digest:
+            raise RuntimeError("v3 semantic inventory applicability digest is invalid")
+        provider_coverage = {
+            key: value for key, value in coverage.items() if key != "applicability"
+        }
+        inventory_summary = {
+            key: inventory[key]
+            for key in (
+                "inventory_id",
+                "inventory_sha256",
+                "observation_count",
+                "packet_count",
+                "duplicate_clusters",
+                "alias_collisions",
+                "contradiction_candidates",
+                "unresolved_identities",
+            )
+        }
+        inventory_summary["coverage"] = provider_coverage
         packet = {
             "schema_version": "deeplaw.semantic-finalization-packet/v2",
             "compiler_profile_version": "3",
@@ -550,20 +570,7 @@ class SemanticInventoryBuilder:
             "inventory_sha256": inventory["inventory_sha256"],
             "applicability_policy_sha256": policy_digest(),
             "applicability_digest": digest,
-            "inventory": {
-                key: inventory[key]
-                for key in (
-                    "inventory_id",
-                    "inventory_sha256",
-                    "observation_count",
-                    "packet_count",
-                    "duplicate_clusters",
-                    "alias_collisions",
-                    "contradiction_candidates",
-                    "unresolved_identities",
-                    "coverage",
-                )
-            },
+            "inventory": inventory_summary,
             "duties": duties,
             "existing_canonical_knowledge": [],
             "previous_outputs": inventory["previous_outputs"],

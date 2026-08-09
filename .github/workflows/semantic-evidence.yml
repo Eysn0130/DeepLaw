@@ -118,10 +118,10 @@ jobs:
             --vault "${RUNNER_TEMP}/semantic-vault" \
             --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
             --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
-            --output "${evidence}/deterministic-semantic-lifecycle.json"
+            --output "${evidence}/deterministic-semantic-lifecycle-v2.json"
           uv run --frozen python -m benchmarks.semantic.run_query_suite \
             --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
-            --compiler-report "${evidence}/deterministic-semantic-lifecycle.json" \
+            --compiler-report "${evidence}/deterministic-semantic-lifecycle-v2.json" \
             --corpus "${corpus}" \
             --vault "${RUNNER_TEMP}/semantic-vault" \
             --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
@@ -164,6 +164,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Upload deterministic candidate evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: semantic-deterministic-review-candidate

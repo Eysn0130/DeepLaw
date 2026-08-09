@@ -240,7 +240,14 @@ def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
         "personal",
         "--max-sensitivity",
         "public",
+        "--max-request-bytes",
+        "131072",
     )
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        assert store.connection.execute(
+            "SELECT max_request_bytes FROM knowledge_sink_grants_v3 WHERE grant_id = ?",
+            (grant["grant_id"],),
+        ).fetchone()["max_request_bytes"] == 131072
     result = compile_gold_source(
         vault=vault,
         grant_id=grant["grant_id"],
@@ -280,6 +287,10 @@ def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
         )
     assert result["packet_count"] >= 2
     assert len(set(result["packet_ids"])) >= 2
+    assert result["schema_version"] == "deeplaw.deterministic-semantic-source-run/v2"
+    assert result["compiler_profile_version"] == "3"
+    assert result["semantic_status"] == "partial"
+    assert result["unresolved_duties"]
     assert state["valid"] is True
     assert len(state["final_knowledge_ids"]) == 1
     assert tampered["valid"] is False
@@ -383,7 +394,14 @@ def test_cross_source_synthesis_binds_every_input_source_in_its_receipt(
         "personal",
         "--max-sensitivity",
         "public",
+        "--max-request-bytes",
+        "131072",
     )
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        assert store.connection.execute(
+            "SELECT max_request_bytes FROM knowledge_sink_grants_v3 WHERE grant_id = ?",
+            (grant["grant_id"],),
+        ).fetchone()["max_request_bytes"] == 131072
     first_run = compile_gold_source(
         vault=vault,
         grant_id=grant["grant_id"],
@@ -402,6 +420,27 @@ def test_cross_source_synthesis_binds_every_input_source_in_its_receipt(
                 "compilation_run_id": first_run["compilation_run_id"],
             }
         },
+    )
+
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        statement_rows = store.connection.execute(
+            """
+            SELECT statements.statement_text, statements.statement_sha256,
+                   statements.statement_json, maps.char_start, maps.char_end
+            FROM knowledge_statements_v1 AS statements
+            JOIN statement_evidence_maps_v1 AS maps
+              ON maps.statement_id = statements.statement_id
+            ORDER BY statements.statement_id
+            """
+        ).fetchall()
+    assert len(statement_rows) == 5
+    assert all(row["char_start"] == 0 for row in statement_rows)
+    assert all(
+        row["char_end"] == len(row["statement_text"])
+        and row["statement_sha256"]
+        == sha256_bytes(row["statement_text"].encode("utf-8"))
+        and json.loads(row["statement_json"])["source_refs"]
+        for row in statement_rows
     )
 
     result = PurposeAwareRetrievalService(vault).query(

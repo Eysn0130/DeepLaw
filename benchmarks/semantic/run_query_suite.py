@@ -50,6 +50,39 @@ def _validate(name: str, value: dict[str, Any]) -> None:
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
 
 
+_DETERMINISTIC_SEMANTIC_STATUS_PRIORITY = ("blocked", "unknown", "partial", "complete")
+
+
+def _validate_deterministic_compiler_report(compiler_report: dict[str, Any]) -> None:
+    """Validate the development v2 lifecycle without weakening historical v1 gates."""
+
+    version = compiler_report.get("schema_version")
+    if version == "deeplaw.deterministic-semantic-lifecycle/v1":
+        _validate("deterministic-semantic-lifecycle.v1.schema.json", compiler_report)
+        if any(item.get("semantic_status") != "complete" for item in compiler_report["runs"]):
+            raise ValueError("deterministic semantic lifecycle v1 cannot admit partial runs")
+        return
+    if version != "deeplaw.deterministic-semantic-lifecycle/v2":
+        raise ValueError("unsupported deterministic semantic lifecycle compiler evidence")
+    _validate("deterministic-semantic-lifecycle.v2.schema.json", compiler_report)
+    if compiler_report.get("status") != "passed":
+        raise ValueError("semantic query suite requires passed compiler evidence")
+    if compiler_report.get("compiler_profile_version") != "3":
+        raise ValueError("deterministic semantic lifecycle v2 requires compiler profile 3")
+    statuses = [item["semantic_status"] for item in compiler_report["runs"]]
+    counts = {status: statuses.count(status) for status in _DETERMINISTIC_SEMANTIC_STATUS_PRIORITY}
+    counts["total"] = len(statuses)
+    aggregate = next(
+        status for status in _DETERMINISTIC_SEMANTIC_STATUS_PRIORITY if counts[status]
+    )
+    if compiler_report["semantic_status_counts"] != counts:
+        raise ValueError("deterministic semantic lifecycle v2 status counts do not match runs")
+    if compiler_report["semantic_status"] != aggregate:
+        raise ValueError("deterministic semantic lifecycle v2 aggregate status is invalid")
+    if aggregate not in {"complete", "partial"}:
+        raise ValueError("deterministic semantic lifecycle v2 is not admissible for query scoring")
+
+
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
@@ -600,6 +633,96 @@ def _selected(value: dict[str, Any]) -> tuple[list[str], list[str]]:
             ):
                 source_revisions.add(source_revision_id)
     return sorted(revisions), sorted(source_revisions)
+
+
+def _v3_context_retrieval_view(capsule: dict[str, Any]) -> dict[str, Any]:
+    """Project the owner-local v3 Capsule onto the deterministic scorer view."""
+
+    if capsule.get("schema_version") != "deeplaw.knowledge-capsule/v3":
+        raise ValueError("semantic context must use the knowledge Capsule v3 schema")
+    statements = capsule.get("statements")
+    evidence = capsule.get("evidence")
+    gaps = capsule.get("gaps")
+    if not isinstance(statements, list):
+        raise ValueError("knowledge Capsule v3 statements must be an array")
+    if not isinstance(evidence, list):
+        raise ValueError("knowledge Capsule v3 evidence must be an array")
+    if not isinstance(gaps, list):
+        raise ValueError("knowledge Capsule v3 gaps must be an array")
+
+    compiled: list[dict[str, Any]] = []
+    for ordinal, statement in enumerate(statements):
+        if not isinstance(statement, dict):
+            raise ValueError(f"knowledge Capsule v3 statement {ordinal} must be an object")
+        object_summary = statement.get("object_summary")
+        knowledge_revision_id = statement.get("knowledge_revision_id")
+        statement_text = statement.get("statement_text")
+        source_refs = statement.get("source_refs")
+        if not isinstance(object_summary, dict):
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} object_summary must be an object"
+            )
+        knowledge_id = object_summary.get("knowledge_id")
+        if not isinstance(knowledge_id, str) or not knowledge_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} object_summary has no knowledge_id"
+            )
+        if not isinstance(knowledge_revision_id, str) or not knowledge_revision_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} has no knowledge_revision_id"
+            )
+        summary_revision_id = object_summary.get("revision_id")
+        if summary_revision_id is not None and summary_revision_id != knowledge_revision_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} revision identity is inconsistent"
+            )
+        statement_knowledge_id = statement.get("knowledge_id")
+        if statement_knowledge_id is not None and statement_knowledge_id != knowledge_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} knowledge identity is inconsistent"
+            )
+        if not isinstance(statement_text, str) or not statement_text:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} statement_text must be non-empty"
+            )
+        if not isinstance(source_refs, list) or any(
+            not isinstance(reference, dict) for reference in source_refs
+        ):
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} source_refs must be an object array"
+            )
+
+        item = {
+            **object_summary,
+            "knowledge_id": knowledge_id,
+            "revision_id": knowledge_revision_id,
+            "content": statement_text,
+            "source_refs": [dict(reference) for reference in source_refs],
+        }
+        for field in ("valid_from", "valid_to", "limitation"):
+            if field in statement:
+                item[field] = statement[field]
+        compiled.append(item)
+
+    projected_evidence: list[dict[str, Any]] = []
+    for ordinal, item in enumerate(evidence):
+        if not isinstance(item, dict):
+            raise ValueError(f"knowledge Capsule v3 evidence {ordinal} must be an object")
+        projected_evidence.append(dict(item))
+
+    gap_codes: set[str] = set()
+    for ordinal, gap in enumerate(gaps):
+        if not isinstance(gap, dict):
+            raise ValueError(f"knowledge Capsule v3 gap {ordinal} must be an object")
+        code = gap.get("code")
+        if not isinstance(code, str) or not code:
+            raise ValueError(f"knowledge Capsule v3 gap {ordinal} has no code")
+        gap_codes.add(code)
+    return {
+        "compiled": compiled,
+        "evidence": projected_evidence,
+        "gaps": [{"code": code} for code in sorted(gap_codes)],
+    }
 
 
 def _rank_metrics(
@@ -1415,43 +1538,10 @@ def _context_verification(
         "--confirm-no-case-data",
     )
     assert capsule is not None
-    sections = capsule.get("sections", {})
-    source_derived = [
-        item
-        for item in sections.get("source_derived_knowledge", [])
-        if isinstance(item, dict)
-    ]
-    compiled = [
-        item
-        for name in (
-            "agent_derived_knowledge",
-            "agent_memory",
-        )
-        for item in sections.get(name, [])
-        if isinstance(item, dict)
-    ]
-    evidence = [
-        item
-        for name in ("official_evidence", "user_private_evidence")
-        for item in sections.get(name, [])
-        if isinstance(item, dict)
-    ] + [item for item in source_derived if "knowledge_id" not in item]
-    compiled = [
-        *[item for item in source_derived if "knowledge_id" in item],
-        *compiled,
-    ]
-    gap_codes = sorted(
-        {
-            gap.split(":", 1)[0]
-            for gap in sections.get("gaps", [])
-            if isinstance(gap, str) and ":" in gap
-        }
-    )
-    retrieval_view = {
-        "compiled": compiled,
-        "evidence": evidence,
-        "gaps": [{"code": code} for code in gap_codes],
-    }
+    retrieval_view = _v3_context_retrieval_view(capsule)
+    compiled = retrieval_view["compiled"]
+    evidence = retrieval_view["evidence"]
+    gap_codes = [gap["code"] for gap in retrieval_view["gaps"]]
     compiled_revision_ids, selected_source_revision_ids = _selected(
         retrieval_view
     )
@@ -1465,7 +1555,13 @@ def _context_verification(
         and expected_gap_codes.issubset(set(gap_codes))
     )
     explicit_gap = bool(
-        {"evidence_gap", "retrieval_gap", "uncompiled_source", "stale_knowledge"}
+        {
+            "evidence_gap",
+            "no_answer",
+            "retrieval_gap",
+            "uncompiled_source",
+            "stale_knowledge",
+        }
         & set(gap_codes)
     )
     fallback_used = bool(
@@ -1505,9 +1601,11 @@ def _context_verification(
         "verification_valid": bool(verification and verification.get("valid")),
         "semantic_valid": semantic_valid,
         "knowledge_ids": sorted(
-            str(item["knowledge_id"])
-            for item in compiled
-            if isinstance(item.get("knowledge_id"), str)
+            {
+                str(item["knowledge_id"])
+                for item in compiled
+                if isinstance(item.get("knowledge_id"), str)
+            }
         ),
         "compiled_revision_ids": compiled_revision_ids,
         "selected_source_revision_ids": selected_source_revision_ids,
@@ -1662,7 +1760,13 @@ def _case_result(
         {str(item["code"]) for item in gaps if isinstance(item.get("code"), str)}
     )
     explicit_gap = bool(
-        {"evidence_gap", "retrieval_gap", "uncompiled_source", "stale_knowledge"}
+        {
+            "evidence_gap",
+            "no_answer",
+            "retrieval_gap",
+            "uncompiled_source",
+            "stale_knowledge",
+        }
         & set(gap_codes)
     )
     fallback_used = bool(warm.get("query_plan", {}).get("fallback", {}).get("used"))
@@ -1915,11 +2019,17 @@ def run(
         "deeplaw.real-semantic-host-report/v1",
         "deeplaw.real-semantic-host-report/v2",
         "deeplaw.deterministic-semantic-lifecycle/v1",
+        "deeplaw.deterministic-semantic-lifecycle/v2",
     }
-    if (
-        compiler_report.get("schema_version") not in supported_compiler_reports
-        or compiler_report.get("status") != "passed"
-    ):
+    compiler_schema_version = compiler_report.get("schema_version")
+    if compiler_schema_version not in supported_compiler_reports:
+        raise ValueError("unsupported semantic compiler evidence")
+    if compiler_schema_version in {
+        "deeplaw.deterministic-semantic-lifecycle/v1",
+        "deeplaw.deterministic-semantic-lifecycle/v2",
+    }:
+        _validate_deterministic_compiler_report(compiler_report)
+    if compiler_report.get("status") != "passed":
         raise ValueError("semantic query suite requires passed compiler evidence")
     if compiler_report.get("gold_id") != gold["gold_id"]:
         raise ValueError("semantic query suite compiler evidence does not bind Gold")

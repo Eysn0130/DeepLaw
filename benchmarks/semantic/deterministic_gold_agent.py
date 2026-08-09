@@ -10,11 +10,10 @@ from jsonschema import Draft202012Validator
 from deeplaw.api import KnowledgeOS
 from deeplaw.compilation.finalization import (
     CONTENT_DUTY_OBSERVATION_KINDS,
-    CONTENT_OUTPUT_DUTIES,
     RELATION_OUTPUT_DUTY,
 )
-from deeplaw.compilation.profiles import REQUIRED_SEMANTIC_DUTIES, SEMANTIC_DUTIES
 from deeplaw.compilation.semantic import SemanticCompilationService
+from deeplaw.evidence import build_input_set_sha256, statement_sha256
 from deeplaw.util import canonical_json, sha256_bytes
 
 
@@ -368,6 +367,74 @@ def _object_action(
     }
 
 
+def _statement_plan(
+    *,
+    packet_id: str,
+    object_action_ordinal: int,
+    action: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind one exact statement to the complete deterministic object body."""
+
+    body = action["body"]
+    source_refs = action["source_refs"]
+    statement_type = "factual"
+    support_status = action["epistemic_state"]
+    valid_from = action["valid_from"]
+    valid_to = action["valid_to"]
+    limitation = None
+    gaps: list[dict[str, str]] = (
+        [
+            {
+                "gap_id": "deterministic-gold-contested-evidence",
+                "reason": (
+                    "The frozen object is contested but this action has fewer than two "
+                    "exact source witnesses."
+                ),
+            }
+        ]
+        if support_status == "contested" and len(source_refs) < 2
+        else []
+    )
+    return {
+        "packet_id": packet_id,
+        "object_action_ordinal": object_action_ordinal,
+        "statements": [
+            {
+                "ordinal": 1,
+                "char_start": 0,
+                "char_end": len(body),
+                "statement_text": body,
+                "statement_sha256": statement_sha256(body),
+                "statement_type": statement_type,
+                "support_status": support_status,
+                "source_refs": source_refs,
+                "knowledge_revision_refs": [],
+                "relation_revision_refs": [],
+                "valid_from": valid_from,
+                "valid_to": valid_to,
+                "limitation": limitation,
+                "gaps": gaps,
+                "input_set_sha256": build_input_set_sha256(
+                    source_refs=source_refs,
+                    knowledge_revision_refs=[],
+                    relation_revision_refs=[],
+                    valid_from=valid_from,
+                    valid_to=valid_to,
+                    statement_type=statement_type,
+                    support_status=support_status,
+                    limitation=limitation,
+                    gaps=gaps,
+                ),
+            }
+        ],
+    }
+
+
+def _unique_source_refs(references: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_key = {canonical_json(reference): reference for reference in references}
+    return [by_key[key] for key in sorted(by_key)]
+
+
 def _summary_body(source_key: str, object_count: int) -> str:
     if source_key == "concept-procedure-events":
         return (
@@ -431,7 +498,7 @@ def compile_source(
     if source_key not in OBJECT_SPECS:
         raise KeyError(f"deterministic semantic fixture is unsupported: {source_key}")
     knowledge_os = KnowledgeOS.open(vault)
-    profile = knowledge_os.semantic_compilations.profile(version="2")
+    profile = knowledge_os.semantic_compilations.profile(version="3")
     run = knowledge_os.semantic_compilations.begin(
         grant_id=grant_id,
         source_revision_id=source_revision_id,
@@ -633,58 +700,100 @@ def compile_source(
         for action in relation_actions
         for reference in action["evidence_refs"]
     ]
+    statement_plans = [
+        _statement_plan(
+            packet_id=packet_plan["packet_id"],
+            object_action_ordinal=action_ordinal,
+            action=action,
+        )
+        for packet_plan in packet_plans
+        for action_ordinal, action in enumerate(packet_plan["object_actions"], start=1)
+    ]
     duty_reports = []
-    duty_ids = {item["duty_type"]: item["duty_id"] for item in finalization["duties"]}
-    for duty in SEMANTIC_DUTIES:
+    for frozen_report in finalization["duties"]:
+        duty = frozen_report["duty_type"]
+        report = dict(frozen_report)
+        applicability = report["applicability"]
         output_refs: list[str] = []
         evidence_refs: list[dict[str, Any]] = []
         unresolved_items: list[str] = []
-        if duty in CONTENT_DUTY_OBSERVATION_KINDS:
-            matching = observations_by_kind.get(CONTENT_DUTY_OBSERVATION_KINDS[duty], [])
-            applicable = bool(matching)
-            output_refs = [item["observation_id"] for item in matching]
-            evidence_refs = [
-                reference
-                for item in matching
-                for reference in item["source_refs"]
-            ]
-        elif duty == RELATION_OUTPUT_DUTY:
-            applicable = bool(relation_actions)
-            evidence_refs = relation_evidence_refs
-        elif duty == "overview_impact":
-            applicable = source_key in {"update-v1", "update-v2"}
+        if applicability == "applicable":
+            if duty in CONTENT_DUTY_OBSERVATION_KINDS:
+                matching = observations_by_kind.get(CONTENT_DUTY_OBSERVATION_KINDS[duty], [])
+                output_refs = [item["observation_id"] for item in matching]
+                evidence_refs = _unique_source_refs(
+                    [
+                        reference
+                        for item in matching
+                        for reference in item["source_refs"]
+                    ]
+                )
+                if matching:
+                    report["status"] = "satisfied"
+                else:
+                    report["status"] = "unresolved"
+                    unresolved_items = [
+                        (
+                            "Deterministic compiler emitted no "
+                            f"{CONTENT_DUTY_OBSERVATION_KINDS[duty]} output."
+                        )
+                    ]
+            elif duty == RELATION_OUTPUT_DUTY:
+                evidence_refs = _unique_source_refs(relation_evidence_refs)
+                if relation_actions:
+                    report["status"] = "satisfied"
+                else:
+                    report["status"] = "unresolved"
+                    unresolved_items = [
+                        "Deterministic compiler emitted no typed relation output."
+                    ]
+            elif duty == "source_summary":
+                evidence_refs = _unique_source_refs(all_current_refs)
+                report["status"] = "satisfied"
+            else:
+                report["status"] = "satisfied"
+        elif applicability == "unknown":
+            report["status"] = "unresolved"
+            unresolved_items = list(report["unresolved_items"])
         else:
-            applicable = duty in REQUIRED_SEMANTIC_DUTIES or duty == "source_summary"
-        if duty == "source_summary":
-            evidence_refs = all_current_refs
-        status = "satisfied" if applicable else "not_applicable"
-        duty_reports.append(
-            {
-                "duty_id": duty_ids[duty],
-                "duty_type": duty,
-                "required": duty in REQUIRED_SEMANTIC_DUTIES,
-                "status": status,
-                "output_refs": output_refs,
-                "evidence_refs": evidence_refs,
-                "reason": (
-                    "Deterministic frozen semantic content disposition."
-                    if duty in CONTENT_OUTPUT_DUTIES or duty == RELATION_OUTPUT_DUTY
-                    else "Deterministic frozen semantic control/scan disposition."
-                ),
-                "unresolved_items": unresolved_items,
-                "omission_reason": None,
-            }
+            report["status"] = "omitted_with_reason"
+        report["output_refs"] = output_refs
+        report["evidence_refs"] = evidence_refs
+        report["unresolved_items"] = unresolved_items
+        if report["status"] != "unresolved":
+            report["unresolved_items"] = []
+        if report["status"] == "omitted_with_reason":
+            report["output_refs"] = []
+            report["evidence_refs"] = []
+        if report["status"] != "omitted_with_reason":
+            report["omission_reason"] = None
+        duty_reports.append(report)
+    complete_allowed = all(
+        (
+            report["applicability"] == "not_applicable"
+            and report["status"] == "omitted_with_reason"
         )
+        or (
+            report["applicability"] == "applicable"
+            and report["status"] == "satisfied"
+        )
+        for report in duty_reports
+    )
     publication = {
-        "schema_version": "deeplaw.semantic-publication-plan/v2",
+        "schema_version": "deeplaw.semantic-publication-plan/v3",
+        "compiler_profile_version": "3",
         "compilation_run_id": run.compilation_run_id,
         "source_revision_id": source_revision_id,
         "expected_audit_head": packets[0]["input_audit_head"],
         "inventory_sha256": inventory["inventory_sha256"],
+        "finalization_packet_id": finalization["finalization_packet_id"],
+        "applicability_policy_sha256": finalization["applicability_policy_sha256"],
+        "applicability_digest": finalization["applicability_digest"],
         "observation_dispositions": dispositions,
         "packet_plans": packet_plans,
+        "statement_plans": statement_plans,
         "duty_reports": duty_reports,
-        "semantic_status": "complete",
+        "semantic_status": "complete" if complete_allowed else "partial",
         "warnings": [],
     }
     run.stage_publication(publication, confirm_no_case_data=True)
@@ -693,13 +802,24 @@ def compile_source(
     completed = run.resume(project=True, confirm_no_case_data=True)
     verification = knowledge_os.verify()
     return {
+        "schema_version": "deeplaw.deterministic-semantic-source-run/v2",
         "source_key": source_key,
         "source_revision_id": source_revision_id,
         "compilation_run_id": begin["compilation_run_id"],
+        "compiler_profile_version": "3",
         "packet_count": len(packets),
         "packet_ids": [packet["packet_id"] for packet in packets],
         "observation_count": inventory["observation_count"],
         "semantic_status": committed["semantic_status"],
+        "applicability_policy_sha256": finalization["applicability_policy_sha256"],
+        "applicability_digest": finalization["applicability_digest"],
+        "unresolved_duties": sorted(
+            {
+                report["duty_type"]
+                for report in duty_reports
+                if report["status"] == "unresolved"
+            }
+        ),
         "transaction_status": completed["status"],
         "quality_receipt_sha256": committed["receipt_sha256"],
         "source_summary_revision_id": committed["source_summary_revision_id"],
@@ -738,7 +858,7 @@ def main() -> int:
         packet_max_fragments=arguments.packet_max_fragments,
     )
     schema = json.loads(
-        (_repository() / "contracts" / "deterministic-semantic-source-run.v1.schema.json")
+        (_repository() / "contracts" / "deterministic-semantic-source-run.v2.schema.json")
         .read_text(encoding="utf-8")
     )
     Draft202012Validator(schema).validate(report)

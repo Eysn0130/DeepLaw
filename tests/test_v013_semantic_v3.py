@@ -243,6 +243,156 @@ def test_v3_observation_v2_inventory_and_finalization_packet(tmp_path: Path) -> 
     assert begun["compiler_profile_version"] == "3"
 
 
+def test_v3_finalization_packet_uses_closed_coverage_projection(tmp_path: Path) -> None:
+    service, grant_id, run_id, _ = _v3_fixture(tmp_path)
+    while packet := service.next_observation_packet(run_id):
+        fragment_ids = [item["fragment_id"] for item in packet["fragments"]]
+        service.stage_observations(
+            grant_id=grant_id,
+            compilation_run_id=run_id,
+            plan={
+                "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+                "compilation_run_id": run_id,
+                "source_revision_id": packet["source_revision_id"],
+                "packet_id": packet["packet_id"],
+                "expected_audit_head": packet["input_audit_head"],
+                "observations": [],
+                "coverage": {
+                    "packet_fragment_count": len(fragment_ids),
+                    "covered_fragment_ids": fragment_ids,
+                    "omitted_fragments": [],
+                    "ratio": 1.0,
+                },
+                "warnings": [],
+            },
+            confirm_no_case_data=True,
+        )
+    inventory = service.inventory(
+        grant_id=grant_id,
+        compilation_run_id=run_id,
+        confirm_no_case_data=True,
+    )
+    packet = service.finalization_packet(run_id)
+    assert "applicability" not in packet["inventory"]["coverage"]
+    assert packet["applicability_digest"] == inventory["coverage"]["applicability_digest"]
+    assert len(canonical_json(packet).encode("utf-8")) <= 65536
+    _validate_contract("semantic-finalization-packet.v2.schema.json", packet)
+
+
+def test_v3_inventory_admits_current_relations_without_knowledge_expiry(
+    tmp_path: Path,
+) -> None:
+    _service, compiler_grant_id, _first_run_id, begun = _v3_fixture(tmp_path)
+    root = tmp_path / "vault"
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        relation_grant_id = store.enable_grant(
+            writer_id="v013-v3-relation-agent",
+            max_sensitivity="restricted",
+            operations=("add_relation", "upsert_concept"),
+        )["grant_id"]
+        concepts = {}
+        for key, sensitivity in (
+            ("current", "private"),
+            ("current-object", "private"),
+            ("expired", "private"),
+            ("future", "private"),
+            ("restricted", "restricted"),
+            ("restricted-object", "restricted"),
+        ):
+            concepts[key] = store.remember(
+                grant_id=relation_grant_id,
+                idempotency_key=f"v3-relation-{key}",
+                title=f"V3 relation {key}",
+                body=f"A semantic relation endpoint for {key}.",
+                kind="concept",
+                operation="upsert_concept",
+                sensitivity=sensitivity,
+                semantic_key=f"concept:v3-relation-{key}",
+                confirm_no_case_data=True,
+            )
+        fragment = store.connection.execute(
+            """
+            SELECT source_fragments.fragment_id, source_fragments.locator,
+                   source_fragments.text_sha256
+            FROM source_revision_bindings_v2
+            JOIN source_fragments
+              ON source_fragments.source_id = source_revision_bindings_v2.legacy_source_id
+            WHERE source_revision_bindings_v2.source_revision_id = ?
+            ORDER BY source_fragments.ordinal
+            LIMIT 1
+            """,
+            (begun["source_revision_id"],),
+        ).fetchone()
+        assert fragment is not None
+        evidence_ref = {
+            "source_revision_id": begun["source_revision_id"],
+            "fragment_id": fragment["fragment_id"],
+            "locator": fragment["locator"],
+            "quote_sha256": fragment["text_sha256"],
+        }
+        for key, subject, object_key, valid_from, valid_to in (
+            ("current", "current", "current-object", None, None),
+            ("expired", "expired", "future", None, "2000-01-01T00:00:00Z"),
+            ("future", "current-object", "expired", "2999-01-01T00:00:00Z", None),
+            ("restricted", "restricted", "restricted-object", None, None),
+        ):
+            store.add_relation(
+                grant_id=relation_grant_id,
+                idempotency_key=f"v3-relation-edge-{key}",
+                subject_knowledge_id=concepts[subject]["knowledge_id"],
+                predicate="related_to",
+                object_knowledge_id=concepts[object_key]["knowledge_id"],
+                evidence_refs=[evidence_ref],
+                valid_from=valid_from,
+                valid_to=valid_to,
+                confirm_no_case_data=True,
+            )
+
+    profile = KnowledgeOS.open(root).compilations.profile(version="3")
+    with KnowledgeOS.open(root) as knowledge_os:
+        second_run = knowledge_os.compilations.begin(
+            grant_id=compiler_grant_id,
+            source_revision_id=begun["source_revision_id"],
+            compiler_profile=profile["compiler_profile"],
+            compiler_profile_version="3",
+            host_identity="v013-v3-agent-second-run",
+            prompt_template_id=profile["prompt_template_id"],
+            prompt_config_sha256=profile["prompt_config_sha256"],
+            plan_configuration_sha256=profile["plan_configuration_sha256"],
+            packet_max_fragments=64,
+            confirm_no_case_data=True,
+        )
+    service = SemanticCompilationService(root)
+    while packet := service.next_observation_packet(second_run.compilation_run_id):
+        fragment_ids = [item["fragment_id"] for item in packet["fragments"]]
+        service.stage_observations(
+            grant_id=compiler_grant_id,
+            compilation_run_id=second_run.compilation_run_id,
+            plan={
+                "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+                "compilation_run_id": second_run.compilation_run_id,
+                "source_revision_id": packet["source_revision_id"],
+                "packet_id": packet["packet_id"],
+                "expected_audit_head": packet["input_audit_head"],
+                "observations": [],
+                "coverage": {
+                    "packet_fragment_count": len(fragment_ids),
+                    "covered_fragment_ids": fragment_ids,
+                    "omitted_fragments": [],
+                    "ratio": 1.0,
+                },
+                "warnings": [],
+            },
+            confirm_no_case_data=True,
+        )
+    inventory = service.inventory(
+        grant_id=compiler_grant_id,
+        compilation_run_id=second_run.compilation_run_id,
+        confirm_no_case_data=True,
+    )
+    assert inventory["coverage"]["runtime_facts"]["existing"]["relation_count"] == 1
+
+
 def test_v3_packet_filters_existing_knowledge_by_grant_boundary(tmp_path: Path) -> None:
     root = tmp_path / "vault"
     initialize_knowledge_vault(root, name="v013-semantic-v3-boundary", scope="project")

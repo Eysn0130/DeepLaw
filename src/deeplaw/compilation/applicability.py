@@ -167,14 +167,28 @@ def _grant_allows(grant: Any, *, scope: Any, sensitivity: Any) -> bool:
         return False
 
 
-def _interval_allows(row: Any, *, reference_time: str) -> bool:
+def _interval_allows(
+    row: Any,
+    *,
+    reference_time: str,
+    include_expiry: bool = True,
+) -> bool:
+    """Apply a revision's valid interval, optionally including Knowledge expiry.
+
+    Knowledge Revisions carry ``expires_at``; Relation Revisions deliberately do
+    not.  Keep the two contracts explicit so a missing Relation column cannot be
+    mistaken for an invalid row or raise while freezing an inventory.
+    """
     try:
+        valid_from = row["valid_from"]
+        valid_to = row["valid_to"]
+        expires_at = row["expires_at"] if include_expiry else None
         return bool(
-            (row["valid_from"] is None or row["valid_from"] <= reference_time)
-            and (row["valid_to"] is None or row["valid_to"] > reference_time)
-            and (row["expires_at"] is None or row["expires_at"] > reference_time)
+            (valid_from is None or valid_from <= reference_time)
+            and (valid_to is None or valid_to > reference_time)
+            and (expires_at is None or expires_at > reference_time)
         )
-    except (KeyError, TypeError):
+    except (IndexError, KeyError, TypeError):
         return False
 
 
@@ -310,7 +324,11 @@ def _existing_facts(
                 scope=row["scope"],
                 sensitivity=row["sensitivity"],
             )
-            or not _interval_allows(row, reference_time=reference_time)
+            or not _interval_allows(
+                row,
+                reference_time=reference_time,
+                include_expiry=False,
+            )
         ):
             continue
         try:
