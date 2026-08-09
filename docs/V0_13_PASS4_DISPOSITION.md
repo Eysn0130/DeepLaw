@@ -97,7 +97,11 @@ Accepted fixes:
 - Evidence Wiki development Sources use exact UTF-8 bytes;
 - unavailable filesystem probes return honest `unknown`/null metadata;
 - fresh-wheel diagnostics redact both path syntaxes and normalize separators;
-- runtime-stability fixture failures expose only a closed stage and closed exception category.
+- runtime-stability fixture failures expose only a closed stage and closed exception category;
+- the runtime-stability RSS child now uses the same closed environment with a caller-owned isolated
+  home, including Windows `USERPROFILE`, instead of a second three-variable launcher; unsupported
+  Windows current-RSS measurement remains honestly `not_executed` while fixture and reader checks
+  still execute.
 
 These changes passed local fault-injection and canary regressions. Native Windows 3.11/3.12/3.13
 execution is not replaced by the local macOS result. The current-source CI matrix now schedules all
@@ -110,7 +114,8 @@ fixture.
 Candidate CI and release qualification are now distinct:
 
 - Candidate CI runs current-source regression on Linux/macOS/Windows and Python 3.11/3.12/3.13,
-  emits a claim-ineligible receipt, and never invokes `--require-eligible`.
+  emits a claim-ineligible receipt, and never invokes `--require-eligible`. Receipt generation now
+  uses the exact uv-managed test interpreter and fails closed on a matrix major/minor mismatch.
 - Platform Core excludes the six explicitly marked scale/Wiki qualification cases, requires an
   exact JUnit inventory with zero failure/error/unclassified skip, executes native Windows cases on
   Windows, and requires the frozen historical v0.6 wheel.
