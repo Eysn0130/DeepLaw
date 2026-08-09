@@ -49,6 +49,7 @@ from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_mcp_server import create_knowledge_mcp_server
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.persistent_read_runtime import PersistentReadRuntime
+from deeplaw.subprocess_environment import _build_subprocess_environment
 from deeplaw.util import canonical_json, sha256_bytes
 
 SCHEMA_VERSION = "deeplaw.v013-runtime-stability-report/v1"
@@ -997,6 +998,17 @@ def _run_rss_child(vault_path: Path, *, request_count: int, warmup_requests: int
         "--warmup-requests",
         str(warmup_requests),
     ]
+    isolated_home = vault_path.parent / ".runtime-child-home"
+    isolated_home.mkdir(parents=True, exist_ok=True, mode=0o700)
+    child_environment = _build_subprocess_environment(
+        overrides={"HOME": str(isolated_home)}
+    )
+    child_environment.update(
+        {
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONUNBUFFERED": "1",
+        }
+    )
     try:
         completed = subprocess.run(
             command,
@@ -1005,11 +1017,7 @@ def _run_rss_child(vault_path: Path, *, request_count: int, warmup_requests: int
             text=True,
             timeout=MAX_CHILD_TIMEOUT_SECONDS,
             cwd=_repo_root(),
-            env={
-                "PATH": os.defpath,
-                "PYTHONNOUSERSITE": "1",
-                "PYTHONUNBUFFERED": "1",
-            },
+            env=child_environment,
         )
     except (OSError, subprocess.SubprocessError, ValueError) as error:
         raise RuntimeError(f"RSS child process failed: {type(error).__name__}") from error

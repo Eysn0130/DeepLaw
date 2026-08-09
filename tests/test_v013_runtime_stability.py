@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -14,6 +14,7 @@ from benchmarks.v013.runtime_stability import (
     SCHEMA_VERSION,
     _LedgerCounts,
     _rss_result,
+    _run_rss_child,
     build_report,
     verify_report,
 )
@@ -23,57 +24,7 @@ SCHEMA_PATH = REPOSITORY / "contracts/v013-runtime-stability-report.v1.schema.js
 _LOCAL_PATH = re.compile(
     r"(?:/Users/|/home/|/tmp/|/private/var/|/var/folders/|[A-Za-z]:[\\/])"
 )
-_FIXTURE_DIAGNOSTIC_MESSAGES = {
-    "source compilation artifact metadata is inconsistent": "artifact_metadata_mismatch",
-    "content-addressed object path is unsafe": "object_path_unsafe",
-    "content-addressed object failed exact-byte verification": "object_byte_mismatch",
-    "autonomous event transaction time moved backwards": "transaction_time_regression",
-}
-_FIXTURE_DIAGNOSTIC_FRAMES = {
-    "_artifact": "artifact",
-    "_write_object": "write_object",
-    "_atomic_owner_write": "atomic_write",
-    "_owner_directory": "owner_directory",
-    "_next_transaction_time": "transaction_time",
-    "_commit_statement_fixture": "fixture_commit",
-    "_ledger_counts": "ledger_counts",
-    "__init__": "store_init",
-}
-
-
-def _closed_fixture_diagnostic(error: BaseException) -> str:
-    code = _FIXTURE_DIAGNOSTIC_MESSAGES.get(str(error))
-    if code is not None:
-        return code
-    frames: list[str] = []
-    traceback = error.__traceback__
-    while traceback is not None:
-        frame = _FIXTURE_DIAGNOSTIC_FRAMES.get(traceback.tb_frame.f_code.co_name)
-        if frame is not None and frame not in frames:
-            frames.append(frame)
-        traceback = traceback.tb_next
-    suffix = "_".join(frames) if frames else "no_known_frame"
-    fingerprint = hashlib.sha256(str(error).encode("utf-8")).hexdigest()[:16]
-    return (
-        f"unmapped_{runtime_stability._failure_type(error)}_"
-        f"sha256_{fingerprint}_{suffix}"
-    )
-
-
-def test_runtime_stability_smoke_is_schema_bound_and_read_only(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    diagnostics: list[str] = []
-    original_fixture_failure = runtime_stability._fixture_failure
-
-    def record_fixture_failure(
-        error: BaseException,
-    ) -> runtime_stability._RuntimeDiagnosticFailure:
-        diagnostics.append(_closed_fixture_diagnostic(error))
-        return original_fixture_failure(error)
-
-    monkeypatch.setattr(runtime_stability, "_fixture_failure", record_fixture_failure)
+def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -> None:
     report = build_report(
         request_count=2,
         warmup_requests=1,
@@ -92,10 +43,7 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(
     assert report["configuration"]["query_plan_version"] == "6"
     assert report["configuration"]["rss_growth_limit_percent"] == 10.0
     assert report["fixture"]["construction"] == "public_profile_v3_compilation"
-    assert report["fixture"]["statement_count"] == 1, (
-        report["rss_stability"]["reason"],
-        diagnostics,
-    )
+    assert report["fixture"]["statement_count"] == 1, report["rss_stability"]["reason"]
     assert report["rss_stability"]["request_count"] == 2
     assert report["rss_stability"]["attempted_requests"] == 2
     assert report["rss_stability"]["successful_requests"] == 2
@@ -112,6 +60,42 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(
     assert report["concurrent_readers"]["canonical_ledger_unchanged"] is True
     assert verify_report(report) == {"valid": True, "errors": []}
     assert _LOCAL_PATH.search(json.dumps(report, ensure_ascii=False, sort_keys=True)) is None
+
+
+def test_rss_child_uses_closed_portable_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del args
+        environment = kwargs["env"]
+        assert isinstance(environment, dict)
+        captured.update(environment)
+        return subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"status":"not_executed"}\n',
+            stderr="",
+        )
+
+    monkeypatch.setenv("DEEPLAW_TEST_AMBIENT_SECRET", "ambient-secret")
+    monkeypatch.setenv("TEST_PROVIDER_TOKEN", "provider-secret")
+    monkeypatch.setattr(runtime_stability.subprocess, "run", fake_run)
+
+    result = _run_rss_child(
+        tmp_path / "vault",
+        request_count=2,
+        warmup_requests=1,
+    )
+
+    assert result == {"status": "not_executed"}
+    assert captured["HOME"] == str(tmp_path / ".runtime-child-home")
+    assert captured["PYTHONNOUSERSITE"] == "1"
+    assert captured["PYTHONUNBUFFERED"] == "1"
+    assert "DEEPLAW_TEST_AMBIENT_SECRET" not in captured
+    assert "TEST_PROVIDER_TOKEN" not in captured
 
 
 def test_frozen_10k_never_runs_without_explicit_parameter(tmp_path: Path) -> None:
