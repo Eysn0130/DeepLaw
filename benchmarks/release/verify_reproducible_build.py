@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -127,6 +128,17 @@ _REQUIRED_SDIST_PATHS = (
 _REQUIRED_BUILD_PACKAGES = frozenset(
     {"hatchling", "packaging", "pathspec", "pluggy", "trove-classifiers"}
 )
+_GENERATED_SDIST_MEMBERS = frozenset(
+    {
+        "PKG-INFO",
+        "dependency_links.txt",
+        "entry_points.txt",
+        "requires.txt",
+        "SOURCES.txt",
+        "top_level.txt",
+        "zip-safe",
+    }
+)
 
 
 def _sha256(path: Path) -> str:
@@ -200,6 +212,137 @@ def _build(repository: Path, output: Path, *, source_date_epoch: int) -> list[Pa
     if len(artifacts) != 2 or {path.suffix for path in artifacts} != {".whl", ".gz"}:
         raise RuntimeError("release build must produce exactly one wheel and one sdist")
     return artifacts
+
+
+def _tracked_source_tree(repository: Path, destination: Path) -> set[str]:
+    """Materialize only the current worktree's tracked files for PEP 517.
+
+    Hatchling's sdist discovery can inspect files that happen to be present in
+    the working directory.  Building from a clean materialization keeps ignored
+    files (including local credentials and generated state) out of the build
+    context while preserving tracked worktree edits for dirty-candidate
+    diagnostics.
+    """
+
+    process = subprocess.run(
+        ["git", "ls-files", "--cached", "--stage", "-z"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+    )
+    if process.returncode != 0:
+        detail = process.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"unable to enumerate tracked release inputs: {detail}")
+    entries = process.stdout.split(b"\0")
+    if entries and entries[-1] == b"":
+        entries.pop()
+    if not entries:
+        raise RuntimeError("tracked release input tree is empty")
+
+    repository_root = repository.resolve()
+    parsed_entries: list[tuple[str, str]] = []
+    for entry in entries:
+        try:
+            metadata, raw_path = entry.split(b"\t", maxsplit=1)
+            metadata_fields = metadata.split(b" ")
+            if len(metadata_fields) != 3:
+                raise ValueError("invalid index metadata")
+            mode = metadata_fields[0].decode("ascii")
+            stage = metadata_fields[2].decode("ascii")
+            relative_text = os.fsdecode(raw_path)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise RuntimeError("git returned an invalid tracked release input") from error
+        if stage != "0":
+            raise RuntimeError(
+                "tracked release input index must contain only stage-0 entries"
+            )
+        parsed_entries.append((mode, relative_text))
+
+    destination.mkdir(parents=True, exist_ok=False)
+    tracked: set[str] = set()
+    for mode, relative_text in parsed_entries:
+        try:
+            relative = PurePosixPath(relative_text)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise RuntimeError("git returned an invalid tracked release input") from error
+        if (
+            relative.is_absolute()
+            or not relative.parts
+            or ".." in relative.parts
+            or "" in relative.parts
+        ):
+            raise RuntimeError(f"tracked release input has an unsafe path: {relative_text}")
+        relative_path = Path(*relative.parts)
+        source = repository / relative_path
+        target = destination / relative_path
+        tracked.add(relative.as_posix())
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        # A gitlink is represented by a directory in an initialized submodule,
+        # but its contents are not part of the superproject tree.  Preserve the
+        # directory entry without rejecting either initialized or absent links.
+        if mode == "160000":
+            target.mkdir(exist_ok=True)
+            continue
+        try:
+            source_stat = source.lstat()
+        except FileNotFoundError as error:
+            raise RuntimeError(f"tracked release input is unavailable: {relative_text}") from error
+        if stat.S_ISLNK(source_stat.st_mode):
+            link_target = os.readlink(source)
+            if os.path.isabs(link_target):
+                raise RuntimeError(
+                    f"tracked release symlink has an absolute target: {relative_text}"
+                )
+            resolved = source.resolve(strict=False)
+            try:
+                resolved.relative_to(repository_root)
+            except ValueError as error:
+                raise RuntimeError(
+                    f"tracked release symlink escapes the repository: {relative_text}"
+                ) from error
+            target.symlink_to(link_target)
+        elif stat.S_ISREG(source_stat.st_mode):
+            shutil.copy2(source, target)
+        else:
+            raise RuntimeError(f"tracked release input is not a regular file: {relative_text}")
+    return tracked
+
+
+def _verify_sdist_source_members(
+    inventory: dict[str, Any],
+    tracked_source_paths: set[str],
+) -> None:
+    roots = {PurePosixPath(item).parts[0] for item in inventory["paths"]}
+    if len(roots) != 1:
+        raise RuntimeError("sdist package inventory has multiple archive roots")
+    root = next(iter(roots))
+    unexpected: list[str] = []
+    for item in inventory["paths"]:
+        if item == root:
+            continue
+        relative = PurePosixPath(item).relative_to(root).as_posix()
+        if relative in tracked_source_paths:
+            continue
+        parts = PurePosixPath(relative).parts
+        if any(path.startswith(relative + "/") for path in tracked_source_paths):
+            continue
+        if len(parts) == 1 and relative in _GENERATED_SDIST_MEMBERS:
+            continue
+        if len(parts) == 1 and relative.endswith(".egg-info"):
+            continue
+        if (
+            len(parts) == 2
+            and parts[0].endswith(".egg-info")
+            and parts[1] in _GENERATED_SDIST_MEMBERS
+        ):
+            continue
+        unexpected.append(relative)
+    if unexpected:
+        raise RuntimeError(
+            "sdist contains files outside the tracked source tree: "
+            + ", ".join(sorted(unexpected))
+        )
 
 
 def _required_wheel_paths(repository: Path) -> tuple[str, ...]:
@@ -342,8 +485,22 @@ def verify(
     )
     with tempfile.TemporaryDirectory(prefix="deeplaw-reproducible-build-") as temporary:
         temporary_root = Path(temporary)
-        first = _build(repository, temporary_root / "first", source_date_epoch=source_date_epoch)
-        second = _build(repository, temporary_root / "second", source_date_epoch=source_date_epoch)
+        first_source_tree = _tracked_source_tree(repository, temporary_root / "source-first")
+        second_source_tree = _tracked_source_tree(repository, temporary_root / "source-second")
+        first_source_repository = temporary_root / "source-first"
+        second_source_repository = temporary_root / "source-second"
+        first = _build(
+            first_source_repository,
+            temporary_root / "first",
+            source_date_epoch=source_date_epoch,
+        )
+        second = _build(
+            second_source_repository,
+            temporary_root / "second",
+            source_date_epoch=source_date_epoch,
+        )
+        if first_source_tree != second_source_tree:
+            raise RuntimeError("repeated builds received different tracked source inventories")
         first_by_name = {path.name: path for path in first}
         second_by_name = {path.name: path for path in second}
         if set(first_by_name) != set(second_by_name):
@@ -364,10 +521,8 @@ def verify(
                         "wheel package inventory is missing required files: " + ", ".join(missing)
                     )
             else:
-                roots = {PurePosixPath(item).parts[0] for item in inventory["paths"]}
-                if len(roots) != 1:
-                    raise RuntimeError("sdist package inventory has multiple archive roots")
-                root = next(iter(roots))
+                _verify_sdist_source_members(inventory, first_source_tree)
+                root = PurePosixPath(inventory["paths"][0]).parts[0]
                 missing = [
                     item
                     for item in _REQUIRED_SDIST_PATHS
