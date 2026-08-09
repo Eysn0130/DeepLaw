@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -35,37 +36,44 @@ _FIXTURE_DIAGNOSTIC_FRAMES = {
     "_owner_directory": "owner_directory",
     "_next_transaction_time": "transaction_time",
     "_commit_statement_fixture": "fixture_commit",
+    "_ledger_counts": "ledger_counts",
+    "__init__": "store_init",
 }
 
 
-def _closed_fixture_diagnostic(workspace: Path) -> str:
-    try:
-        workspace.mkdir(parents=True, exist_ok=False)
-        runtime_stability._build_fixture_report(workspace)
-    except BaseException as error:
-        seen: set[int] = set()
-        current: BaseException | None = error
-        frames: list[str] = []
-        while current is not None and id(current) not in seen:
-            seen.add(id(current))
-            code = _FIXTURE_DIAGNOSTIC_MESSAGES.get(str(current))
-            if code is not None:
-                return code
-            traceback = current.__traceback__
-            while traceback is not None:
-                frame = _FIXTURE_DIAGNOSTIC_FRAMES.get(
-                    traceback.tb_frame.f_code.co_name
-                )
-                if frame is not None and frame not in frames:
-                    frames.append(frame)
-                traceback = traceback.tb_next
-            current = current.__cause__ or current.__context__
-        suffix = "_".join(frames) if frames else "no_known_frame"
-        return f"unmapped_{runtime_stability._failure_type(error)}_{suffix}"
-    return "not_reproduced"
+def _closed_fixture_diagnostic(error: BaseException) -> str:
+    code = _FIXTURE_DIAGNOSTIC_MESSAGES.get(str(error))
+    if code is not None:
+        return code
+    frames: list[str] = []
+    traceback = error.__traceback__
+    while traceback is not None:
+        frame = _FIXTURE_DIAGNOSTIC_FRAMES.get(traceback.tb_frame.f_code.co_name)
+        if frame is not None and frame not in frames:
+            frames.append(frame)
+        traceback = traceback.tb_next
+    suffix = "_".join(frames) if frames else "no_known_frame"
+    fingerprint = hashlib.sha256(str(error).encode("utf-8")).hexdigest()[:16]
+    return (
+        f"unmapped_{runtime_stability._failure_type(error)}_"
+        f"sha256_{fingerprint}_{suffix}"
+    )
 
 
-def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -> None:
+def test_runtime_stability_smoke_is_schema_bound_and_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics: list[str] = []
+    original_fixture_failure = runtime_stability._fixture_failure
+
+    def record_fixture_failure(
+        error: BaseException,
+    ) -> runtime_stability._RuntimeDiagnosticFailure:
+        diagnostics.append(_closed_fixture_diagnostic(error))
+        return original_fixture_failure(error)
+
+    monkeypatch.setattr(runtime_stability, "_fixture_failure", record_fixture_failure)
     report = build_report(
         request_count=2,
         warmup_requests=1,
@@ -86,7 +94,7 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -
     assert report["fixture"]["construction"] == "public_profile_v3_compilation"
     assert report["fixture"]["statement_count"] == 1, (
         report["rss_stability"]["reason"],
-        _closed_fixture_diagnostic(tmp_path / "diagnostic-workspace"),
+        diagnostics,
     )
     assert report["rss_stability"]["request_count"] == 2
     assert report["rss_stability"]["attempted_requests"] == 2
