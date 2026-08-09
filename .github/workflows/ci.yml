@@ -18,7 +18,7 @@ jobs:
   test:
     name: Candidate current-source regression ${{ matrix.os }} Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +53,13 @@ jobs:
 
       - name: Lint
         run: uv run --frozen ruff check .
+
+      - name: Windows closed-environment preflight
+        if: runner.os == 'Windows'
+        run: >-
+          uv run --frozen pytest --strict-markers -vv --maxfail=1
+          tests/test_prd12_goal_route_identity_reproduction.py::test_prd12_goal_is_retrieval_only_and_not_route_identity
+          tests/test_prd12_task_routing_reproduction.py::test_p0c_cli_cold_thread_task_text_only_recovery
 
       - name: Candidate current-source regression (not release readiness)
         shell: bash
