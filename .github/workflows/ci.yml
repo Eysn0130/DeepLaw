@@ -72,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run --frozen pytest --strict-markers --junitxml="${JUNIT_PATH}"
-          python - "${JUNIT_PATH}" "${RECEIPT_PATH}" <<'PY'
+          uv run --frozen python - "${JUNIT_PATH}" "${RECEIPT_PATH}" <<'PY'
           import json
           import os
           import pathlib
@@ -96,6 +96,12 @@ jobs:
               manifest["classifications"]["historical_compatibility"]["cases"]
           )
           root = ET.parse(junit_path).getroot()
+          actual_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+          expected_python = os.environ["MATRIX_PYTHON"]
+          if actual_python != expected_python:
+              raise SystemExit(
+                  f"matrix Python mismatch: expected {expected_python}, got {actual_python}"
+              )
           skipped = []
           for case in root.findall(".//testcase"):
               if case.find("skipped") is not None:
