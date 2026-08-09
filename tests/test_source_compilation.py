@@ -2990,7 +2990,12 @@ def test_dense_only_low_relevance_candidates_do_not_report_empty_fallback_as_use
 
 def test_weak_single_term_lexical_match_cannot_answer_unknown_identifier(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "deeplaw.knowledge_store.secrets.token_hex",
+        lambda _nbytes: "00000000000000000000000000000000000000000000000000000000000003bb",
+    )
     root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
     coordinator = CompilationCoordinator(root)
     configuration_sha256 = sha256_bytes(b"lexical-relevance-floor-v1")
