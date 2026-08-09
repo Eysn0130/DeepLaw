@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+import pytest
+
 from deeplaw.api import KnowledgeOS
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
 from deeplaw.knowledge_sink_mcp_server import handle_knowledge_sink
@@ -337,3 +339,90 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
     assert mcp_provider["receipt"]["receipt_id"] == mcp_provider["capsule"]["receipt_id"]
     with knowledge_autonomy.AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head_before
+
+
+def test_mcp_checkpoint_conflict_rebuild_and_forget_trajectory(tmp_path: Path) -> None:
+    (
+        root,
+        grant_id,
+        old_revision_id,
+        knowledge_id,
+        current_revision_id,
+        _mismatched_knowledge_id,
+        _raw_log_knowledge_id,
+    ) = _checkpoint_vault(tmp_path)
+
+    stale_request = {
+        "operation": "remember",
+        "idempotency_key": "checkpoint-stale-cas",
+        "confirm_no_case_data": True,
+        "title": "Task checkpoint",
+        "body": _CURRENT_BODY,
+        "kind": "memory",
+        "memory_type": "working",
+        "knowledge_id": knowledge_id,
+        "expected_revision_id": old_revision_id,
+        "semantic_key": _SEMANTIC_KEY,
+        "expires_at": _EXPIRES_AT,
+        "scope": "project",
+        "sensitivity": "private",
+        "run_id": _RUN_ID,
+        "model_id": "deterministic-test-model",
+        "tool_id": "pytest-checkpoint-continuity",
+        "tags": ["checkpoint", "task-4f3a"],
+    }
+    with pytest.raises(RuntimeError) as caught:
+        handle_knowledge_sink(stale_request, grant_id=grant_id, vault_path=root)
+    message = str(caught.value)
+    assert message.startswith("checkpoint_head_conflict:")
+    assert knowledge_id not in message
+    assert old_revision_id not in message
+    assert current_revision_id not in message
+
+    with knowledge_autonomy.AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt = store.rebuild_checkpoint_route_projection()
+    assert rebuilt["rebuildable"] is True
+
+    current = handle_knowledge_support(
+        operation="context",
+        task=f"Resume {_SEMANTIC_KEY} at the saved cursor.",
+        query_target={"knowledge_id": knowledge_id},
+        purpose="answer",
+        task_binding=_TASK_BINDING,
+        confirm_no_case_data=True,
+        vault_path=root,
+    )
+    serialized_current = canonical_json(current["result"])
+    assert knowledge_id in serialized_current
+    assert current_revision_id in serialized_current
+    assert old_revision_id not in serialized_current
+
+    forgotten = handle_knowledge_sink(
+        {
+            "operation": "forget",
+            "idempotency_key": "checkpoint-owner-forget",
+            "confirm_no_case_data": True,
+            "knowledge_id": knowledge_id,
+            "expected_revision_id": current_revision_id,
+            "reason": "Owner requested checkpoint withdrawal.",
+        },
+        grant_id=grant_id,
+        vault_path=root,
+    )
+    assert forgotten["result"]["lifecycle"] == "forgotten"
+    with knowledge_autonomy.AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt_after_forget = store.rebuild_checkpoint_route_projection()
+    assert rebuilt_after_forget["rebuildable"] is True
+
+    after_forget = handle_knowledge_support(
+        operation="context",
+        task=f"Resume {_SEMANTIC_KEY} at the saved cursor.",
+        query_target={"knowledge_id": knowledge_id},
+        purpose="answer",
+        task_binding=_TASK_BINDING,
+        confirm_no_case_data=True,
+        vault_path=root,
+    )
+    serialized_after_forget = canonical_json(after_forget["result"])
+    assert knowledge_id not in serialized_after_forget
+    assert current_revision_id not in serialized_after_forget
