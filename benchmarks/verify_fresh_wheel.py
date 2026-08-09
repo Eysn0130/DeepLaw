@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from deeplaw import __version__
-from deeplaw.util import sha256_file
+from deeplaw.evidence import build_input_set_sha256
+from deeplaw.util import canonical_json, sha256_bytes, sha256_file, stable_id
 
 
 def _run(interpreter: Path, *arguments: str) -> dict[str, Any]:
@@ -29,36 +30,61 @@ def _run(interpreter: Path, *arguments: str) -> dict[str, Any]:
     return json.loads(completed.stdout)
 
 
-def _compilation_plan(
+def _source_reference(packet: dict[str, Any], fragment: dict[str, Any]) -> dict[str, str]:
+    return {
+        "source_revision_id": packet["source_revision_id"],
+        "fragment_id": fragment["fragment_id"],
+        "locator": fragment["locator"],
+        "quote_sha256": fragment["text_sha256"],
+    }
+
+
+def _semantic_packet_plan(
     packet: dict[str, Any],
     *,
-    input_audit_head: str,
+    compilation_run_id: str,
 ) -> dict[str, Any]:
-    actions = []
-    fragment_ids = []
+    observations: list[dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
+    statements: list[dict[str, Any]] = []
     for fragment in packet["fragments"]:
-        fragment_ids.append(fragment["fragment_id"])
+        body = str(fragment["text"])
+        source_refs = [_source_reference(packet, fragment)]
+        title = f"Fresh wheel claim {fragment['ordinal']}"
+        observation = {
+            "packet_id": packet["packet_id"],
+            "semantic_key_candidate": f"fresh-wheel:{fragment['fragment_id']}",
+            "kind": "claim",
+            "title_candidate": title,
+            "body_candidate": body,
+            "aliases": [],
+            "source_refs": source_refs,
+            "assertion": None,
+            "applicability": None,
+            "tags": ["fresh-wheel"],
+            "reason": "Verify installed-wheel Source-to-Knowledge publication.",
+        }
+        observation["observation_id"] = stable_id(
+            "observation",
+            compilation_run_id,
+            packet["packet_id"],
+            canonical_json(observation),
+        )
+        observations.append(observation)
         actions.append(
             {
                 "action": "create",
-                "kind": "claim",
-                "semantic_key": f"fresh-wheel:{fragment['fragment_id']}",
+                "kind": observation["kind"],
+                "semantic_key": observation["semantic_key_candidate"],
                 "knowledge_id": None,
                 "expected_revision_id": None,
-                "title": f"Fresh wheel claim {fragment['ordinal']}",
-                "body": fragment["text"],
-                "aliases": [],
+                "title": title,
+                "body": body,
+                "aliases": observation["aliases"],
                 "epistemic_state": "supported",
-                "source_refs": [
-                    {
-                        "source_revision_id": packet["source_revision_id"],
-                        "fragment_id": fragment["fragment_id"],
-                        "locator": fragment["locator"],
-                        "quote_sha256": fragment["text_sha256"],
-                    }
-                ],
-                "assertion": None,
-                "tags": ["fresh-wheel"],
+                "source_refs": source_refs,
+                "assertion": observation["assertion"],
+                "tags": observation["tags"],
                 "valid_from": None,
                 "valid_to": None,
                 "applicability": {
@@ -71,26 +97,174 @@ def _compilation_plan(
                 "reason": "Verify installed-wheel Source-to-Knowledge publication.",
             }
         )
+        text_sha256 = sha256_bytes(body.encode("utf-8"))
+        statements.append(
+            {
+                "packet_id": packet["packet_id"],
+                "object_action_ordinal": len(actions),
+                "statements": [
+                    {
+                        "ordinal": 1,
+                        "char_start": 0,
+                        "char_end": len(body),
+                        "statement_text": body,
+                        "statement_sha256": text_sha256,
+                        "statement_type": "factual",
+                        "support_status": "supported",
+                        "source_refs": source_refs,
+                        "knowledge_revision_refs": [],
+                        "relation_revision_refs": [],
+                        "valid_from": None,
+                        "valid_to": None,
+                        "limitation": None,
+                        "gaps": [],
+                        "input_set_sha256": build_input_set_sha256(
+                            source_refs=source_refs,
+                            knowledge_revision_refs=[],
+                            relation_revision_refs=[],
+                            valid_from=None,
+                            valid_to=None,
+                            statement_type="factual",
+                            support_status="supported",
+                            limitation=None,
+                            gaps=[],
+                        ),
+                    }
+                ],
+            }
+        )
+    fragment_ids = [fragment["fragment_id"] for fragment in packet["fragments"]]
     return {
-        "schema_version": "deeplaw.source-compilation-plan/v1",
-        "source_revision_id": packet["source_revision_id"],
-        "packet_id": packet["packet_id"],
-        "expected_audit_head": input_audit_head,
-        "object_actions": actions,
-        "relation_actions": [],
-        "identity_actions": [],
-        "unresolved_identities": [],
-        "contradictions": [],
-        "coverage": {
-            "packet_fragment_count": len(fragment_ids),
-            "covered_fragment_ids": fragment_ids,
-            "omitted_fragment_ids": [],
-            "ratio": 1.0,
-            "completeness": "complete",
+        "observation_plan": {
+            "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+            "compilation_run_id": compilation_run_id,
+            "source_revision_id": packet["source_revision_id"],
+            "packet_id": packet["packet_id"],
+            "expected_audit_head": packet["input_audit_head"],
+            "observations": observations,
+            "coverage": {
+                "packet_fragment_count": len(fragment_ids),
+                "covered_fragment_ids": fragment_ids,
+                "omitted_fragments": [],
+                "ratio": 1.0,
+            },
+            "warnings": [],
         },
-        "skipped_fragments": [],
+        "packet_plan": {
+            "schema_version": "deeplaw.source-compilation-plan/v1",
+            "source_revision_id": packet["source_revision_id"],
+            "packet_id": packet["packet_id"],
+            "expected_audit_head": packet["input_audit_head"],
+            "object_actions": actions,
+            "relation_actions": [],
+            "identity_actions": [],
+            "unresolved_identities": [],
+            "contradictions": [],
+            "coverage": {
+                "packet_fragment_count": len(fragment_ids),
+                "covered_fragment_ids": fragment_ids,
+                "omitted_fragment_ids": [],
+                "ratio": 1.0,
+                "completeness": "complete",
+            },
+            "skipped_fragments": [],
+            "warnings": [],
+        },
+        "observations": observations,
+        "statement_plans": statements,
+    }
+
+
+def _semantic_publication_plan(
+    *,
+    compilation: dict[str, Any],
+    finalization: dict[str, Any],
+    packet_plans: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
+    statement_plans: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": "deeplaw.semantic-publication-plan/v3",
+        "compiler_profile_version": "3",
+        "compilation_run_id": compilation["compilation_run_id"],
+        "source_revision_id": compilation["source_revision_id"],
+        "expected_audit_head": compilation["input_audit_head"],
+        "inventory_sha256": finalization["inventory_sha256"],
+        "finalization_packet_id": finalization["finalization_packet_id"],
+        "applicability_policy_sha256": finalization["applicability_policy_sha256"],
+        "applicability_digest": finalization["applicability_digest"],
+        "packet_plans": packet_plans,
+        "statement_plans": statement_plans,
+        "observation_dispositions": [
+            {
+                "observation_id": observation["observation_id"],
+                "disposition": "published",
+                "target_ref": observation["semantic_key_candidate"],
+                "reason": "Publish the source-bound fresh-wheel claim.",
+            }
+            for observation in observations
+        ],
+        "duty_reports": finalization["duties"],
+        "semantic_status": "partial",
         "warnings": [],
     }
+
+
+def _compiled_query_hit(query: dict[str, Any]) -> bool:
+    """Return whether a Query v6 result contains a real compiled hit.
+
+    Query v6 exposes the discovery/admission/selection counts in both its
+    Query Plan and metrics surfaces.  Keep the smoke check bound to those
+    public fields and to the selected Statement's source binding instead of
+    relying on the removed Query v5 hit flag.
+    """
+
+    plan = query.get("query_plan")
+    metrics = query.get("metrics")
+    statements = query.get("statements")
+    if not isinstance(plan, dict) or plan.get("schema_version") != (
+        "deeplaw.knowledge-query-plan/v6"
+    ):
+        return False
+    if not isinstance(metrics, dict) or not isinstance(statements, list):
+        return False
+
+    count_fields = (
+        "compiled_candidate_count",
+        "admitted_statement_count",
+        "selected_statement_count",
+    )
+    counts: dict[str, int] = {}
+    for field in count_fields:
+        plan_count = plan.get(field)
+        metric_count = metrics.get(field)
+        if (
+            isinstance(plan_count, bool)
+            or not isinstance(plan_count, int)
+            or plan_count < 0
+            or isinstance(metric_count, bool)
+            or not isinstance(metric_count, int)
+            or metric_count < 0
+            or metric_count != plan_count
+        ):
+            return False
+        counts[field] = plan_count
+
+    if not (
+        0 < counts["selected_statement_count"]
+        <= counts["admitted_statement_count"]
+        <= counts["compiled_candidate_count"]
+        and counts["selected_statement_count"] == len(statements)
+    ):
+        return False
+
+    return any(
+        isinstance(statement, dict)
+        and statement.get("current_supported") is True
+        and isinstance(statement.get("source_refs"), list)
+        and bool(statement["source_refs"])
+        for statement in statements
+    )
 
 
 def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
@@ -193,6 +367,8 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             "profile",
             "--vault",
             str(vault),
+            "--compiler-profile-version",
+            "3",
         )
         compiler_grant = _run(
             interpreter,
@@ -206,7 +382,7 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             "--scope",
             "project",
             "--profile",
-            "compiler",
+            "semantic-compiler",
         )
         compilation = _run(
             interpreter,
@@ -221,15 +397,20 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             compiled["identity"]["source_revision_id"],
             "--host-identity",
             "fresh-wheel-no-model",
+            "--compiler-profile-version",
+            "3",
             "--confirm-no-case-data",
         )
         run_id = compilation["compilation_run_id"]
         packet_count = 0
+        packet_plans: list[dict[str, Any]] = []
+        observations: list[dict[str, Any]] = []
+        statement_plans: list[dict[str, Any]] = []
         while packet_count < 10_000:
             packet = _run(
                 interpreter,
                 "knowledge",
-                "compile",
+                "semantic",
                 "packet",
                 "--vault",
                 str(vault),
@@ -240,13 +421,14 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             )
             if packet.get("complete") is True:
                 break
-            plan_path = root / f"compilation-plan-{packet_count + 1}.json"
+            packet_plan = _semantic_packet_plan(
+                packet,
+                compilation_run_id=run_id,
+            )
+            plan_path = root / f"semantic-observation-plan-{packet_count + 1}.json"
             plan_path.write_text(
                 json.dumps(
-                    _compilation_plan(
-                        packet,
-                        input_audit_head=compilation["input_audit_head"],
-                    ),
+                    packet_plan["observation_plan"],
                     ensure_ascii=False,
                     separators=(",", ":"),
                     sort_keys=True,
@@ -256,8 +438,8 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             _run(
                 interpreter,
                 "knowledge",
-                "compile",
-                "stage",
+                "semantic",
+                "observe",
                 "--vault",
                 str(vault),
                 "--grant-id",
@@ -268,9 +450,68 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
                 str(plan_path),
                 "--confirm-no-case-data",
             )
+            packet_plans.append(packet_plan["packet_plan"])
+            observations.extend(packet_plan["observations"])
+            statement_plans.extend(packet_plan["statement_plans"])
             packet_count += 1
         else:
             raise RuntimeError("fresh-wheel compilation exceeded its packet bound")
+        _run(
+            interpreter,
+            "knowledge",
+            "semantic",
+            "inventory",
+            "--vault",
+            str(vault),
+            "--grant-id",
+            compiler_grant["grant_id"],
+            "--run-id",
+            run_id,
+            "--confirm-no-case-data",
+        )
+        finalization = _run(
+            interpreter,
+            "knowledge",
+            "semantic",
+            "finalization",
+            "--vault",
+            str(vault),
+            "--grant-id",
+            compiler_grant["grant_id"],
+            "--run-id",
+            run_id,
+        )
+        publication_path = root / "semantic-publication-plan.json"
+        publication_path.write_text(
+            json.dumps(
+                _semantic_publication_plan(
+                    compilation=compilation,
+                    finalization=finalization,
+                    packet_plans=packet_plans,
+                    observations=observations,
+                    statement_plans=statement_plans,
+                ),
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        _run(
+            interpreter,
+            "knowledge",
+            "semantic",
+            "finalize",
+            "--vault",
+            str(vault),
+            "--grant-id",
+            compiler_grant["grant_id"],
+            "--run-id",
+            run_id,
+            "--plan",
+            str(publication_path),
+            "--confirm-no-case-data",
+        )
         compilation_validation = _run(
             interpreter,
             "knowledge",
@@ -363,6 +604,7 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             "--capsule",
             str(capsule),
         )
+        compiled_query_hit = _compiled_query_hit(compiled_query)
     return {
         "schema_version": "deeplaw.fresh-wheel-smoke/v1",
         "package_version": __version__,
@@ -378,12 +620,12 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
         "compilation_run_id": run_id,
         "compilation_packet_count": packet_count,
         "compilation_validation_valid": compilation_validation["valid"],
-        "compilation_object_count": compilation_receipt["committed_object_count"],
+        "compilation_object_count": compilation_receipt["observation_count"],
         "compilation_status": compilation_completed["status"],
         "living_wiki_manifest_sha256": compilation_completed["projection"][
             "living_wiki"
         ]["manifest_sha256"],
-        "compiled_query_hit": compiled_query["metrics"]["compiled_hit"],
+        "compiled_query_hit": compiled_query_hit,
         "knowledge_verification_valid": knowledge_verification["valid"],
         "https_preflight_valid": (
             https_preflight["network_performed"] is False
@@ -395,9 +637,9 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
         "valid": (
             verification["valid"]
             and compilation_validation["valid"]
-            and compilation_receipt["committed_object_count"] > 0
+            and compilation_receipt["observation_count"] > 0
             and compilation_completed["status"] == "succeeded"
-            and compiled_query["metrics"]["compiled_hit"]
+            and compiled_query_hit
             and knowledge_verification["valid"]
             and https_preflight["network_performed"] is False
             and version == f"deeplaw {__version__}"
