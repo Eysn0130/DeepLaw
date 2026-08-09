@@ -66,3 +66,18 @@ def test_closed_environment_rejects_nul_override() -> None:
         subprocess_environment._build_subprocess_environment(
             overrides={"HOME": "bad\x00path"}
         )
+
+
+def test_closed_environment_maps_isolated_home_to_windows_userprofile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subprocess_environment.os, "name", "nt")
+    monkeypatch.setenv("USERPROFILE", r"C:\ambient-user")
+
+    environment = subprocess_environment._build_subprocess_environment(
+        overrides={"HOME": r"D:\isolated-home"}
+    )
+
+    assert environment["HOME"] == r"D:\isolated-home"
+    assert environment["USERPROFILE"] == r"D:\isolated-home"
+    assert r"C:\ambient-user" not in environment.values()

@@ -62,4 +62,8 @@ def _build_subprocess_environment(
         if not isinstance(name, str) or not isinstance(value, str) or "\x00" in value:
             raise ValueError("subprocess environment overrides must be text values")
         environment[name] = value
+        if name == "HOME" and os.name == "nt":
+            # ``pathlib.Path.home`` consults USERPROFILE on Windows.  This is an
+            # isolated caller-owned value, not inherited ambient profile state.
+            environment["USERPROFILE"] = value
     return environment
