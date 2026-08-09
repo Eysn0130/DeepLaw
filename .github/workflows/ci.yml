@@ -66,14 +66,15 @@ jobs:
         shell: bash
         env:
           JUNIT_PATH: ${{ runner.temp }}/candidate-tests.xml
-          RECEIPT_PATH: ${{ runner.temp }}/candidate-skip-receipt.json
+          SKIP_RECEIPT_PATH: ${{ runner.temp }}/candidate-skip-receipt.json
+          INVENTORY_RECEIPT_PATH: ${{ runner.temp }}/candidate-current-source-inventory.json
           MATRIX_OS: ${{ matrix.os }}
           MATRIX_PYTHON: ${{ matrix.python-version }}
           PYTHONUTF8: "1"
         run: |
           set -euo pipefail
           uv run --frozen pytest --strict-markers --junitxml="${JUNIT_PATH}"
-          uv run --frozen python - "${JUNIT_PATH}" "${RECEIPT_PATH}" <<'PY'
+          uv run --frozen python - "${JUNIT_PATH}" "${SKIP_RECEIPT_PATH}" <<'PY'
           import json
           import os
           import pathlib
@@ -152,6 +153,12 @@ jobs:
               encoding="utf-8",
           )
           PY
+          # Candidate inventory is evidence only.  Drift is retained in the
+          # receipt and cannot become a Platform Core release pass.
+          uv run --frozen python -m benchmarks.release.platform_inventory \
+            --mode candidate \
+            --selection common \
+            --output "${INVENTORY_RECEIPT_PATH}"
 
       - name: Upload candidate regression receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -161,6 +168,7 @@ jobs:
           path: |
             ${{ runner.temp }}/candidate-tests.xml
             ${{ runner.temp }}/candidate-skip-receipt.json
+            ${{ runner.temp }}/candidate-current-source-inventory.json
 
       - name: Build distribution
         run: uv build --build-constraints benchmarks/release/build-constraints.txt

@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import json
 import random
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from deeplaw.compilation.applicability import applicability_digest, policy_digest
-from deeplaw.compilation.coordinator import CompilationCoordinator, _artifact
-from deeplaw.compilation.models import COMPILER_GRANT_OPERATIONS
-from deeplaw.compilation.profiles import SEMANTIC_DUTIES, compiler_profile
+from deeplaw.api import KnowledgeOS
+from deeplaw.compilation.models import SEMANTIC_COMPILER_GRANT_OPERATIONS
+from deeplaw.compilation.semantic import SemanticCompilationService
 from deeplaw.evidence import build_input_set_sha256, statement_sha256
 from deeplaw.knowledge_autonomy import (
     RELATION_PREDICATES as AUTONOMOUS_RELATION_PREDICATES,
@@ -32,7 +32,7 @@ from deeplaw.knowledge_autonomy import (
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.retrieval import PurposeAwareRetrievalService
-from deeplaw.util import canonical_json, sha256_bytes, stable_id
+from deeplaw.util import canonical_json
 from tests.test_v013_query_v6 import _committed_vault
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -100,322 +100,290 @@ def _scale_source_text(statement_count: int) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _scale_facts(source: Path) -> tuple[dict[str, Any], str]:
-    facts: dict[str, Any] = {
-        "source_present": True,
-        "source_admitted": True,
-        "source_nonempty": True,
-        "media_type": "text/markdown",
-        "byte_size": source.stat().st_size,
-        "lifecycle": "active",
-        "node_types": {},
-        "signals": {
-            "code": False,
-            "table": False,
-            "list": False,
-            "timeline": False,
-            "question": False,
-            "procedure": False,
-        },
-        "observation_kinds": {},
-        "observation_count": 0,
-        "existing_kinds": {},
-        "existing_count": 0,
-        "relation_count": 0,
-        "previous_output_count": 0,
-        "affected_synthesis_count": 0,
-        "truncated": False,
-    }
-    return facts, sha256_bytes(canonical_json(facts).encode("utf-8"))
-
-
-def _scale_reports(
-    *,
-    compilation_run_id: str,
-    source: Path,
-) -> list[dict[str, Any]]:
-    facts, facts_sha256 = _scale_facts(source)
-    return [
-        {
-            "duty_id": stable_id("duty", compilation_run_id, duty_type),
-            "duty_type": duty_type,
-            "required": False,
-            "applicability": "not_applicable",
-            "status": "omitted_with_reason",
-            "output_refs": [],
-            "evidence_refs": [],
-            "reason": "Deterministic P0 scale fixture.",
-            "unresolved_items": [],
-            "omission_reason": "Synthetic fixture does not exercise semantic duties.",
-            "deterministic_basis": {
-                "rule_id": "query-graph-p0-v1",
-                "facts": facts,
-                "stable_refs": [],
-                "facts_sha256": facts_sha256,
-                "reason": "Deterministic P0 scale fixture.",
-            },
-        }
-        for duty_type in SEMANTIC_DUTIES
-    ]
-
-
 def _commit_scale_vault(tmp_path: Path, statement_count: int) -> Path:
-    """Commit ``statement_count`` source-bound Statements without a model call."""
+    """Commit a seeded, source-bound fixture through the public v3 chain."""
 
     root = tmp_path / f"scale-{statement_count}"
     source = tmp_path / f"scale-{statement_count}.md"
-    source.write_text(_scale_source_text(statement_count), encoding="utf-8")
-    initialize_knowledge_vault(root, name="query graph p0", scope="project")
-    initialize_autonomous_core(root)
-    with KnowledgeVault(root, read_only=False) as vault:
-        compiled = compile_source(
-            vault,
-            source,
-            source_kind="document",
-            confirm_no_case_data=True,
-        )
-    with AutonomousKnowledgeStore(root, read_only=False) as store:
-        grant_id = store.enable_grant(
-            writer_id="query-graph-p0-scale",
-            operations=COMPILER_GRANT_OPERATIONS,
-            max_request_bytes=320 * 1024,
-            max_mutations_per_minute=120,
-            max_objects=100_000,
-        )["grant_id"]
-
-    profile = compiler_profile(version="3")
-    coordinator = CompilationCoordinator(root)
-    begun = coordinator.begin(
-        grant_id=grant_id,
-        source_revision_id=compiled["identity"]["source_revision_id"],
-        compiler_profile=profile["compiler_profile"],
-        compiler_profile_version="3",
-        host_identity="query-graph-p0-scale",
-        model_identity=None,
-        prompt_template_id=profile["prompt_template_id"],
-        prompt_config_sha256=profile["prompt_config_sha256"],
-        plan_configuration_sha256=profile["plan_configuration_sha256"],
-        confirm_no_case_data=True,
-        packet_max_fragments=128,
+    source.write_text(
+        _scale_source_text(statement_count), encoding="utf-8", newline="\n"
     )
-
-    packet_plans: list[dict[str, str]] = []
-    statement_plans: list[dict[str, Any]] = []
-    packet_count = 0
-    action_count = 0
-    while (packet := coordinator.next_packet(begun["compilation_run_id"])) is not None:
-        packet_count += 1
-        packet_plans.append({"packet_id": packet["packet_id"]})
-        object_actions: list[dict[str, Any]] = []
-        for local_ordinal, fragment in enumerate(packet["fragments"], start=1):
-            source_ref = {
-                "source_revision_id": packet["source_revision_id"],
-                "fragment_id": fragment["fragment_id"],
-                "locator": fragment["locator"],
-                "quote_sha256": fragment["text_sha256"],
-            }
-            statements: list[dict[str, Any]] = []
-            cursor = 0
-            for ordinal, line in enumerate(fragment["text"].splitlines(), start=1):
-                if not line.strip():
-                    cursor += len(line) + 1
-                    continue
-                text = line.strip()
-                start = fragment["text"].find(text, cursor)
-                end = start + len(text)
-                cursor = end + 1
-                statements.append(
-                    _statement_value(
-                        ordinal=ordinal,
-                        text=text,
-                        source_ref=source_ref,
-                        char_start=start,
-                        char_end=end,
+    initialize_knowledge_vault(root, name="query graph p0", scope="project")
+    lines = [
+        line.strip()
+        for line in source.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    shard_size = 250
+    compiled_sources: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory(prefix="query-graph-scale-", dir=tmp_path) as shard_dir_name:
+        shard_dir = Path(shard_dir_name)
+        for shard_index, start in enumerate(range(0, len(lines), shard_size)):
+            shard_path = shard_dir / f"source-{shard_index:04d}.md"
+            shard_path.write_text(
+                f"# Scale shard {shard_index:04d}\n"
+                + "\n".join(lines[start : start + shard_size])
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+        with KnowledgeVault(root, read_only=False) as vault:
+            for shard_index in range((len(lines) + shard_size - 1) // shard_size):
+                shard_path = shard_dir / f"source-{shard_index:04d}.md"
+                compiled_sources.append(
+                    compile_source(
+                        vault,
+                        shard_path,
+                        source_kind="document",
+                        title=f"Query graph P0 scale shard {shard_index:04d}",
+                        logical_path=(
+                            f"query-graph-p0/scale-{statement_count}/"
+                            f"shard-{shard_index:04d}.md"
+                        ),
+                        confirm_no_case_data=True,
                     )
                 )
-            object_actions.append(
-                {
-                    "action": "create",
-                    "kind": "claim",
-                    "semantic_key": f"query-graph-p0:scale:{action_count}",
-                    "knowledge_id": None,
-                    "expected_revision_id": None,
-                    "title": f"P0 scale group {action_count}",
-                    "body": fragment["text"],
-                    "aliases": [],
-                    "epistemic_state": "supported",
-                    "source_refs": [source_ref],
-                    "assertion": None,
-                    "tags": [],
-                    "valid_from": None,
-                    "valid_to": None,
-                    "applicability": {
-                        "description": "Deterministic P0 scale fixture.",
-                        "scopes": [],
-                        "conditions": [],
-                        "exclusions": [],
-                    },
-                    "synthesis_inputs": None,
-                    "reason": "Deterministic P0 scale fixture.",
+        initialize_autonomous_core(root)
+        run_order = list(range(len(compiled_sources)))
+        random.Random(_SCALE_SEED + statement_count + 1).shuffle(run_order)
+        packet_count = 0
+        with KnowledgeOS.open(root) as knowledge_os:
+            profile = knowledge_os.compilations.profile(version="3")
+            for shard_index in run_order:
+                with AutonomousKnowledgeStore(root, read_only=False) as store:
+                    grant_id = store.enable_grant(
+                        writer_id=f"query-graph-p0-scale-{shard_index:04d}",
+                        operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+                        max_request_bytes=320 * 1024,
+                        max_mutations_per_minute=120,
+                        max_objects=100_000,
+                    )["grant_id"]
+                compiled = compiled_sources[shard_index]
+                source_revision_id = compiled["identity"]["source_revision_id"]
+                run = knowledge_os.compilations.begin(
+                    grant_id=grant_id,
+                    source_revision_id=source_revision_id,
+                    compiler_profile=profile["compiler_profile"],
+                    compiler_profile_version=profile["compiler_profile_version"],
+                    host_identity="query-graph-p0-scale",
+                    model_identity=None,
+                    prompt_template_id=profile["prompt_template_id"],
+                    prompt_config_sha256=profile["prompt_config_sha256"],
+                    plan_configuration_sha256=profile["plan_configuration_sha256"],
+                    packet_max_fragments=1,
+                    confirm_no_case_data=True,
+                )
+                packet_plans: list[dict[str, Any]] = []
+                statement_plans: list[dict[str, Any]] = []
+                dispositions: list[dict[str, Any]] = []
+                while packet := run.next_packet():
+                    packet_count += 1
+                    object_actions: list[dict[str, Any]] = []
+                    observations: list[dict[str, Any]] = []
+                    for local_ordinal, fragment in enumerate(packet["fragments"], start=1):
+                        source_ref = {
+                            "source_revision_id": packet["source_revision_id"],
+                            "fragment_id": fragment["fragment_id"],
+                            "locator": fragment["locator"],
+                            "quote_sha256": fragment["text_sha256"],
+                        }
+                        semantic_key = (
+                            f"query-graph-p0:scale:{statement_count}:"
+                            f"{_SCALE_SEED:08x}:{shard_index:04d}:"
+                            f"{len(packet_plans):04d}:{local_ordinal:02d}"
+                        )
+                        observation = {
+                            "packet_id": packet["packet_id"],
+                            "semantic_key_candidate": semantic_key,
+                            "kind": "claim",
+                            "title_candidate": f"P0 scale shard {shard_index:04d}",
+                            "body_candidate": fragment["text"],
+                            "aliases": [f"scale-{statement_count}-{shard_index:04d}"],
+                            "source_refs": [source_ref],
+                            "assertion": None,
+                            "applicability": None,
+                            "tags": ["query-graph-p0-development"],
+                            "reason": "Freeze a deterministic public-seam scale observation.",
+                        }
+                        observation["observation_id"] = SemanticCompilationService.observation_id(
+                            compilation_run_id=packet["compilation_run_id"],
+                            packet_id=packet["packet_id"],
+                            observation=observation,
+                        )
+                        observations.append(observation)
+                        statements: list[dict[str, Any]] = []
+                        cursor = 0
+                        for ordinal, line in enumerate(fragment["text"].splitlines(), start=1):
+                            if not line.strip():
+                                cursor += len(line) + 1
+                                continue
+                            text = line.strip()
+                            start_offset = fragment["text"].find(text, cursor)
+                            if start_offset < 0:
+                                start_offset = cursor
+                            end_offset = start_offset + len(text)
+                            cursor = end_offset + 1
+                            statements.append(
+                                _statement_value(
+                                    ordinal=ordinal,
+                                    text=text,
+                                    source_ref=source_ref,
+                                    char_start=start_offset,
+                                    char_end=end_offset,
+                                )
+                            )
+                        object_actions.append(
+                            {
+                                "action": "create",
+                                "kind": "claim",
+                                "semantic_key": semantic_key,
+                                "knowledge_id": None,
+                                "expected_revision_id": None,
+                                "title": f"P0 scale shard {shard_index:04d}",
+                                "body": fragment["text"],
+                                "aliases": [],
+                                "epistemic_state": "supported",
+                                "source_refs": [source_ref],
+                                "assertion": None,
+                                "tags": ["query-graph-p0-development"],
+                                "valid_from": None,
+                                "valid_to": None,
+                                "applicability": {
+                                    "description": "Deterministic P0 scale fixture.",
+                                    "scopes": [],
+                                    "conditions": [],
+                                    "exclusions": [],
+                                },
+                                "synthesis_inputs": None,
+                                "reason": "Publish a deterministic source-bound scale claim.",
+                            }
+                        )
+                        statement_plans.append(
+                            {
+                                "packet_id": packet["packet_id"],
+                                "object_action_ordinal": local_ordinal,
+                                "statements": statements,
+                            }
+                        )
+                        dispositions.append(
+                            {
+                                "observation_id": observation["observation_id"],
+                                "disposition": "published",
+                                "target_ref": semantic_key,
+                                "reason": "Publish the deterministic scale observation.",
+                            }
+                        )
+                    run.stage_observations(
+                        {
+                            "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+                            "compilation_run_id": packet["compilation_run_id"],
+                            "source_revision_id": packet["source_revision_id"],
+                            "packet_id": packet["packet_id"],
+                            "expected_audit_head": packet["input_audit_head"],
+                            "observations": observations,
+                            "coverage": {
+                                "packet_fragment_count": len(packet["fragments"]),
+                                "covered_fragment_ids": [
+                                    fragment["fragment_id"] for fragment in packet["fragments"]
+                                ],
+                                "omitted_fragments": [],
+                                "ratio": 1.0,
+                            },
+                            "warnings": [],
+                        },
+                        confirm_no_case_data=True,
+                    )
+                    packet_plans.append(
+                        {
+                            "schema_version": "deeplaw.source-compilation-plan/v1",
+                            "source_revision_id": packet["source_revision_id"],
+                            "packet_id": packet["packet_id"],
+                            "expected_audit_head": packet["input_audit_head"],
+                            "object_actions": object_actions,
+                            "relation_actions": [],
+                            "identity_actions": [],
+                            "unresolved_identities": [],
+                            "contradictions": [],
+                            "coverage": {
+                                "packet_fragment_count": len(packet["fragments"]),
+                                "covered_fragment_ids": [
+                                    fragment["fragment_id"] for fragment in packet["fragments"]
+                                ],
+                                "omitted_fragment_ids": [],
+                                "ratio": 1.0,
+                                "completeness": "complete",
+                            },
+                            "skipped_fragments": [],
+                            "warnings": [],
+                        }
+                    )
+                inventory = run.semantic_inventory(confirm_no_case_data=True)
+                finalization = run.finalization_packet()
+                duty_reports = []
+                for duty in finalization["duties"]:
+                    applicability = duty["applicability"]
+                    if applicability == "not_applicable":
+                        status = "omitted_with_reason"
+                        unresolved_items: list[str] = []
+                        omission_reason = (
+                            "No deterministic witness in this development fixture."
+                        )
+                    else:
+                        status = "unresolved"
+                        unresolved_items = [
+                            "Development fixture intentionally leaves semantic duty "
+                            "unresolved; it is not qualification evidence."
+                        ]
+                        omission_reason = None
+                    duty_reports.append(
+                        {
+                            "duty_id": duty["duty_id"],
+                            "duty_type": duty["duty_type"],
+                            "required": duty["required"],
+                            "applicability": applicability,
+                            "status": status,
+                            "output_refs": [],
+                            "evidence_refs": [],
+                            "reason": "Deterministic P0 scale fixture duty decision.",
+                            "unresolved_items": unresolved_items,
+                            "omission_reason": omission_reason,
+                            "deterministic_basis": duty["deterministic_basis"],
+                        }
+                    )
+                publication = {
+                    "schema_version": "deeplaw.semantic-publication-plan/v3",
+                    "compiler_profile_version": "3",
+                    "compilation_run_id": run.compilation_run_id,
+                    "source_revision_id": source_revision_id,
+                    "expected_audit_head": run.begin_receipt()["input_audit_head"],
+                    "inventory_sha256": inventory["inventory_sha256"],
+                    "finalization_packet_id": finalization["finalization_packet_id"],
+                    "applicability_policy_sha256": finalization[
+                        "applicability_policy_sha256"
+                    ],
+                    "applicability_digest": finalization["applicability_digest"],
+                    "packet_plans": packet_plans,
+                    "statement_plans": statement_plans,
+                    "observation_dispositions": dispositions,
+                    "duty_reports": duty_reports,
+                    "semantic_status": "partial",
+                    "warnings": [
+                        "Development-only query graph scale; claim-ineligible."
+                    ],
                 }
-            )
-            statement_plans.append(
-                {
-                    "packet_id": packet["packet_id"],
-                    "object_action_ordinal": local_ordinal,
-                    "statements": statements,
-                }
-            )
-            action_count += 1
-        plan = {
-            "schema_version": "deeplaw.source-compilation-plan/v1",
-            "source_revision_id": packet["source_revision_id"],
-            "packet_id": packet["packet_id"],
-            "expected_audit_head": packet["input_audit_head"],
-            "object_actions": object_actions,
-            "relation_actions": [],
-            "identity_actions": [],
-            "unresolved_identities": [],
-            "contradictions": [],
-            "coverage": {
-                "packet_fragment_count": len(packet["fragments"]),
-                "covered_fragment_ids": [
-                    fragment["fragment_id"] for fragment in packet["fragments"]
-                ],
-                "omitted_fragment_ids": [],
-                "ratio": 1.0,
-                "completeness": "complete",
-            },
-            "skipped_fragments": [],
-            "warnings": [],
-        }
-        coordinator.stage(
-            grant_id=grant_id,
-            compilation_run_id=begun["compilation_run_id"],
-            plan=plan,
-            confirm_no_case_data=True,
-        )
+                run.stage_publication(publication, confirm_no_case_data=True)
+                assert run.validate(confirm_no_case_data=True)["valid"] is True
+                run.commit(confirm_no_case_data=True)
     assert packet_count >= 1
-    assert coordinator.validate(
-        grant_id=grant_id,
-        compilation_run_id=begun["compilation_run_id"],
-        confirm_no_case_data=True,
-    )["valid"] is True
-
-    reports = _scale_reports(
-        compilation_run_id=begun["compilation_run_id"],
-        source=source,
-    )
-    applicability_policy_sha256 = policy_digest()
-    applicability_sha256 = applicability_digest(
-        {
-            report["duty_type"]: {
-                "applicability": report["applicability"],
-                "deterministic_basis": report["deterministic_basis"],
-            }
-            for report in reports
-        }
-    )
-    inventory = {
-        "coverage": {
-            "applicability_policy_sha256": applicability_policy_sha256,
-            "applicability_digest": applicability_sha256,
-            "compilation_run_id": begun["compilation_run_id"],
-        },
-    }
-    inventory["inventory_sha256"] = sha256_bytes(
-        canonical_json(inventory).encode("utf-8")
-    )
-    with AutonomousKnowledgeStore(root, read_only=False) as store:
-        inventory_digest, _ = _artifact(
-            store,
-            value=inventory,
-            role="semantic_inventory",
-            created_at=store._next_transaction_time(),
-        )
-        store.connection.execute(
-            """
-            UPDATE semantic_compilation_runs_v2
-            SET inventory_sha256 = ?
-            WHERE compilation_run_id = ?
-            """,
-            (inventory["inventory_sha256"], begun["compilation_run_id"]),
-        )
-        store.connection.execute(
-            """
-            INSERT INTO semantic_inventories_v1(
-                artifact_sha256, inventory_sha256, inventory_id,
-                compilation_run_id, observation_count, packet_count,
-                truncated, recorded_at
-            ) VALUES (?, ?, ?, ?, 0, ?, 0, ?)
-            """,
-            (
-                inventory_digest,
-                inventory["inventory_sha256"],
-                "semanticinventory_" + begun["compilation_run_id"][-24:],
-                begun["compilation_run_id"],
-                packet_count,
-                store._next_transaction_time(),
-            ),
-        )
-        for report in reports:
-            store.connection.execute(
-                """
-                INSERT INTO semantic_duty_reports_v1(
-                    compilation_run_id, duty_id, duty_type, required,
-                    status, report_json
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    begun["compilation_run_id"],
-                    report["duty_id"],
-                    report["duty_type"],
-                    int(report["required"]),
-                    report["status"],
-                    canonical_json(report),
-                ),
-            )
-        store.connection.commit()
-
-    publication = {
-        "schema_version": "deeplaw.semantic-publication-plan/v3",
-        "compiler_profile_version": "3",
-        "compilation_run_id": begun["compilation_run_id"],
-        "source_revision_id": compiled["identity"]["source_revision_id"],
-        "expected_audit_head": begun["input_audit_head"],
-        "inventory_sha256": inventory["inventory_sha256"],
-        "finalization_packet_id": "finalization_" + "e" * 24,
-        "applicability_policy_sha256": applicability_policy_sha256,
-        "applicability_digest": applicability_sha256,
-        "packet_plans": packet_plans,
-        "statement_plans": statement_plans,
-        "observation_dispositions": [],
-        "duty_reports": reports,
-        "semantic_status": "partial",
-        "warnings": [],
-    }
-    with AutonomousKnowledgeStore(root, read_only=False) as store:
-        publication_digest, _ = _artifact(
-            store,
-            value=publication,
-            role="publication_plan",
-            created_at=store._next_transaction_time(),
-        )
-        store.connection.execute(
-            """
-            UPDATE semantic_compilation_runs_v2
-            SET publication_plan_sha256 = ?
-            WHERE compilation_run_id = ?
-            """,
-            (publication_digest, begun["compilation_run_id"]),
-        )
-        store.connection.commit()
-    CompilationCoordinator(root).commit(
-        grant_id=grant_id,
-        compilation_run_id=begun["compilation_run_id"],
-        confirm_no_case_data=True,
-    )
+    assert _statement_count(root) == statement_count
     return root
+
+
+def _statement_count(root: Path) -> int:
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        return int(
+            store.connection.execute("SELECT COUNT(*) FROM knowledge_statements_v1").fetchone()[0]
+        )
 
 
 def test_v6_statement_tail_scan_is_bounded_but_position_independent(

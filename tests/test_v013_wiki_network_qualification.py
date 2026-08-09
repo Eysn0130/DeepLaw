@@ -40,7 +40,7 @@ KIND_OPERATIONS = {
     "skill": "save_skill",
     "memory": "remember",
 }
-MUTATION_OPERATIONS = tuple(sorted(set(KIND_OPERATIONS.values()) | {"record_run"}))
+MUTATION_OPERATIONS = tuple(sorted(set(KIND_OPERATIONS.values()) | {"add_relation", "record_run"}))
 
 
 def _vault(tmp_path: Path) -> Path:
@@ -365,29 +365,348 @@ def test_v013_development_wiki_network_qualification(tmp_path: Path) -> None:
 
 
 @pytest.mark.qualification
-@pytest.mark.parametrize(
-    ("uncovered_case", "reason"),
-    (
-        (
-            "wrong_merge",
-            "The public mutation seam cannot safely synthesize a wrong-merge identity fixture "
-            "without bypassing the coordinator.",
-        ),
-        (
-            "alias_collision",
-            "The public fixture seam does not expose an owner-approved alias-collision setup; "
-            "do not manufacture one with private Ledger writes.",
-        ),
-        (
-            "cycle",
-            "The governed cycle/contradiction fixture is executed by the dedicated Query/Graph "
-            "qualification; this all-kinds Wiki fixture does not duplicate that mutation lane.",
-        ),
-    ),
-)
-def test_v013_wiki_network_uncovered_cases_are_explicitly_skipped(
-    uncovered_case: str,
-    reason: str,
+def test_v013_wiki_network_wrong_merge_stays_identity_ambiguous(tmp_path: Path) -> None:
+    """Same titles must retain distinct semantic identities and pages."""
+
+    from deeplaw.api import KnowledgeOS
+    from deeplaw.knowledge_mcp_server import handle_knowledge_support
+    from deeplaw.util import canonical_json
+
+    root = _vault(tmp_path)
+    grant_id = _grant(root)
+    first = _sink(
+        root,
+        grant_id,
+        {
+            "operation": "upsert_concept",
+            "idempotency_key": "wiki-network-wrong-merge-a",
+            "title": "Shared qualification title",
+            "body": "First synthetic object with its own semantic identity.",
+            "scope": "project",
+            "sensitivity": "private",
+            "semantic_key": "v013:wrong-merge:first",
+        },
+    )
+    second = _sink(
+        root,
+        grant_id,
+        {
+            "operation": "upsert_concept",
+            "idempotency_key": "wiki-network-wrong-merge-b",
+            "title": "Shared qualification title",
+            "body": "Second synthetic object with its own semantic identity.",
+            "scope": "project",
+            "sensitivity": "private",
+            "semantic_key": "v013:wrong-merge:second",
+        },
+    )
+
+    assert first["knowledge_id"] != second["knowledge_id"]
+    assert first["revision_id"] != second["revision_id"]
+    for result in (first, second):
+        assert result["origin"] == "agent_derived"
+        assert result["authority"] == "agent_derived"
+        assert result["legal_authority"] is False
+        assert result["lifecycle"] == "active"
+        assert result["scope"] == "project"
+        assert result["sensitivity"] == "private"
+        assert result["source_free"] is True
+
+    from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
+
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt = store.rebuild_derived(projection_profile="standard")
+    assert rebuilt["living_wiki"]["projection_profile_name"] == "standard"
+
+    snapshot = _artifact_snapshot(root)
+    records = {
+        record["knowledge_id"]: record
+        for record in snapshot["registry"]["records"]
+        if record.get("knowledge_id") in {first["knowledge_id"], second["knowledge_id"]}
+    }
+    assert set(records) == {first["knowledge_id"], second["knowledge_id"]}
+    assert records[first["knowledge_id"]]["canonical_page_path"] != records[
+        second["knowledge_id"]
+    ]["canonical_page_path"]
+    assert records[first["knowledge_id"]]["semantic_key"] != records[second["knowledge_id"]][
+        "semantic_key"
+    ]
+    with KnowledgeOS.open(root) as knowledge_os:
+        for result in (first, second):
+            page = knowledge_os.wiki.page(records[result["knowledge_id"]]["canonical_page_path"])
+            assert page["write_performed"] is False
+            assert result["knowledge_id"] in page["content"]
+
+    identity = handle_knowledge_support(
+        operation="identity_lookup",
+        query="Shared qualification title",
+        scope="project",
+        max_sensitivity="private",
+        limit=2,
+        vault_path=root,
+    )
+    assert len(canonical_json(identity).encode("utf-8")) <= 65_536
+    lookup = identity["result"]
+    assert lookup["status"] == "ambiguous"
+    assert lookup["candidate_count"] == 2
+    assert {item["knowledge_id"] for item in lookup["candidates"]} == set(records)
+    assert all(item["authority"] == "agent_derived" for item in lookup["candidates"])
+    assert all(item["legal_authority"] is False for item in lookup["candidates"])
+
+
+@pytest.mark.qualification
+def test_v013_wiki_network_alias_collision_is_explicitly_ambiguous(tmp_path: Path) -> None:
+    """A shared public alias must never silently select one Wiki identity."""
+
+    from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
+    from deeplaw.knowledge_mcp_server import handle_knowledge_support
+    from deeplaw.util import canonical_json
+
+    root = _vault(tmp_path)
+    grant_id = _grant(root)
+    shared_alias = "v013 qualification shared alias"
+    first = _sink(
+        root,
+        grant_id,
+        {
+            "operation": "upsert_concept",
+            "idempotency_key": "wiki-network-alias-a",
+            "title": "Alias target Alpha",
+            "body": "First alias target.",
+            "scope": "project",
+            "sensitivity": "private",
+            "semantic_key": "v013:alias-collision:first",
+            "aliases": [shared_alias],
+        },
+    )
+    second = _sink(
+        root,
+        grant_id,
+        {
+            "operation": "upsert_concept",
+            "idempotency_key": "wiki-network-alias-b",
+            "title": "Alias target Beta",
+            "body": "Second alias target.",
+            "scope": "project",
+            "sensitivity": "private",
+            "semantic_key": "v013:alias-collision:second",
+            "aliases": [shared_alias],
+        },
+    )
+    linker = _sink(
+        root,
+        grant_id,
+        {
+            "operation": "upsert_concept",
+            "idempotency_key": "wiki-network-alias-linker",
+            "title": "Alias collision linker",
+            "body": f"A bounded link points at [[{shared_alias}]].",
+            "scope": "project",
+            "sensitivity": "private",
+            "semantic_key": "v013:alias-collision:linker",
+        },
+    )
+    assert len({first["knowledge_id"], second["knowledge_id"], linker["knowledge_id"]}) == 3
+    for result in (first, second, linker):
+        assert result["origin"] == "agent_derived"
+        assert result["authority"] == "agent_derived"
+        assert result["legal_authority"] is False
+        assert result["lifecycle"] == "active"
+        assert result["scope"] == "project"
+        assert result["sensitivity"] == "private"
+        assert result["source_free"] is True
+
+    owner_note = root / "wiki" / "v013-alias-owner-note.md"
+    owner_note.write_text("# Alias owner note\nPreserve this user file.\n", encoding="utf-8")
+    owner_note_bytes = owner_note.read_bytes()
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_derived(projection_profile="standard")
+    assert owner_note.read_bytes() == owner_note_bytes
+
+    identity = handle_knowledge_support(
+        operation="identity_lookup",
+        query=shared_alias,
+        scope="project",
+        max_sensitivity="private",
+        limit=2,
+        vault_path=root,
+    )
+    assert len(canonical_json(identity).encode("utf-8")) <= 65_536
+    lookup = identity["result"]
+    assert lookup["status"] == "ambiguous"
+    assert lookup["candidate_count"] == 2
+    target_ids = {first["knowledge_id"], second["knowledge_id"]}
+    assert {item["knowledge_id"] for item in lookup["candidates"]} == target_ids
+    assert all(item["authority"] == "agent_derived" for item in lookup["candidates"])
+    assert all(item["legal_authority"] is False for item in lookup["candidates"])
+
+    snapshot = _artifact_snapshot(root)
+    resolver = snapshot["resolver"]
+    resolved = resolver.resolve(
+        {"alias": shared_alias},
+        scope="project",
+        max_sensitivity="private",
+        allowed_freshness=["fresh", "unknown"],
+    )
+    assert resolved["status"] == "ambiguous"
+    assert resolved["ambiguity"] == {"reason": "multiple_candidates", "candidate_count": 2}
+    assert {item["page_id"] for item in resolved["candidates"]} == target_ids
+
+    alias_edges = [
+        edge
+        for edge in snapshot["links"]["edges"]
+        if edge["source_page_id"] == linker["knowledge_id"]
+        and edge["target_raw"] == shared_alias
+    ]
+    assert len(alias_edges) == 1
+    # Source-free derived targets have ``unknown`` freshness.  Link-index construction uses the
+    # resolver's fail-closed default (``fresh``), so it must not disclose denied candidates.  The
+    # owner/operator resolver call above explicitly admits ``unknown`` and is the public seam that
+    # proves the alias collision is ambiguous rather than merged.
+    assert alias_edges[0]["status"] == "out_of_scope"
+    assert alias_edges[0]["candidate_count"] == 0
+    assert alias_edges[0]["target_page_ids"] == []
+
+
+@pytest.mark.qualification
+def test_v013_wiki_network_relation_cycle_uses_canonical_graph_revisions(
+    tmp_path: Path,
 ) -> None:
-    del uncovered_case
-    pytest.skip(reason)
+    """Typed A -> B -> C -> A relations survive bounded graph and Wiki rebuilds."""
+
+    from deeplaw.api import KnowledgeOS
+    from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
+    from deeplaw.knowledge_mcp_server import handle_knowledge_support
+    from deeplaw.util import canonical_json, sha256_bytes
+
+    root = _vault(tmp_path)
+    grant_id = _grant(root)
+    nodes: list[dict[str, Any]] = []
+    for index in range(3):
+        nodes.append(
+            _sink(
+                root,
+                grant_id,
+                {
+                    "operation": "upsert_concept",
+                    "idempotency_key": f"wiki-network-cycle-node-{index}",
+                    "title": f"Cycle node {index}",
+                    "body": f"Synthetic cycle node {index}.",
+                    "scope": "project",
+                    "sensitivity": "private",
+                    "semantic_key": f"v013:cycle:node:{index}",
+                },
+            )
+        )
+    predicates = ("depends_on", "supports", "implements")
+    relations: list[dict[str, Any]] = []
+    for index, predicate in enumerate(predicates):
+        relation = _sink(
+            root,
+            grant_id,
+            {
+                "operation": "add_relation",
+                "idempotency_key": f"wiki-network-cycle-relation-{index}",
+                "subject_knowledge_id": nodes[index]["knowledge_id"],
+                "predicate": predicate,
+                "object_knowledge_id": nodes[(index + 1) % 3]["knowledge_id"],
+                "evidence_refs": [{"revision_id": nodes[index]["revision_id"]}],
+            },
+        )
+        relations.append(relation)
+        assert relation["lifecycle"] == "active"
+        assert relation["origin"] == "agent_derived"
+        assert relation["authority"] == "agent_derived"
+        assert relation["legal_authority"] is False
+        assert relation["scope"] == "project"
+        assert relation["sensitivity"] == "private"
+        assert relation["source_free"] is False
+
+    owner_note = root / "wiki" / "v013-cycle-owner-note.md"
+    owner_note.write_text("# Cycle owner note\nPreserve this user file.\n", encoding="utf-8")
+    owner_note_bytes = owner_note.read_bytes()
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt = store.rebuild_derived(projection_profile="standard")
+    assert rebuilt["living_wiki"]["projection_profile_name"] == "standard"
+    assert owner_note.read_bytes() == owner_note_bytes
+
+    graph_bounded_response = handle_knowledge_support(
+        operation="graph",
+        scope="project",
+        max_sensitivity="private",
+        limit=2,
+        vault_path=root,
+    )
+    assert len(canonical_json(graph_bounded_response).encode("utf-8")) <= 65_536
+    graph_bounded = graph_bounded_response["result"]
+    assert graph_bounded["canonical_relation_revisions"] is True
+    assert graph_bounded["derived_adjacency"] is True
+    assert graph_bounded["budget"]["max_relations"] == 2
+    assert graph_bounded["budget"]["selected_relations"] == 2
+    assert len(graph_bounded["relations"]) == 2
+    assert graph_bounded["budget"]["candidate_scan_truncated"] is False
+
+    graph_response = handle_knowledge_support(
+        operation="graph",
+        scope="project",
+        max_sensitivity="private",
+        limit=3,
+        vault_path=root,
+    )
+    graph = graph_response["result"]
+    expected_edges = {
+        (
+            nodes[index]["knowledge_id"],
+            predicates[index],
+            nodes[(index + 1) % 3]["knowledge_id"],
+        )
+        for index in range(3)
+    }
+    assert {
+        (item["subject_knowledge_id"], item["predicate"], item["object_knowledge_id"])
+        for item in graph["relations"]
+    } == expected_edges
+    relation_ids = [item["relation_revision_id"] for item in graph["relations"]]
+    assert {item["relation_revision_id"] for item in relations} == set(relation_ids)
+    assert graph["audit_head"] == relations[-1]["audit_head"]
+
+    verify = handle_knowledge_support(operation="verify", vault_path=root)
+    assert len(canonical_json(verify).encode("utf-8")) <= 65_536
+    assert verify["result"]["valid"] is True
+    assert verify["result"]["autonomous_core"]["audit_head"] == graph["audit_head"]
+
+    v2_manifest = _json(root, ".deeplaw/derived/tree/living-wiki-manifest.json")
+    assert v2_manifest["relation_revision_count"] == 3
+    assert v2_manifest["relation_revision_ids_sha256"] == sha256_bytes(
+        canonical_json(relation_ids).encode("utf-8")
+    )
+
+    snapshot = _artifact_snapshot(root)
+    registry = snapshot["registry"]
+    path_by_id = {
+        record["knowledge_id"]: record["canonical_page_path"]
+        for record in registry["records"]
+        if record.get("knowledge_id") in {node["knowledge_id"] for node in nodes}
+    }
+    assert len(path_by_id) == 3
+    for relation in graph["relations"]:
+        page_text = (root / path_by_id[relation["subject_knowledge_id"]]).read_text(
+            encoding="utf-8"
+        )
+        assert relation["relation_revision_id"] in page_text
+        target_path = path_by_id[relation["object_knowledge_id"]].removesuffix(".md")
+        matching_edges = [
+            edge
+            for edge in snapshot["links"]["edges"]
+            if edge["source_page_id"] == relation["subject_knowledge_id"]
+            and edge["target_raw"] == target_path
+        ]
+        assert matching_edges
+        assert all(edge["link_type"] == "wikilink" for edge in matching_edges)
+
+    with KnowledgeOS.open(root) as knowledge_os:
+        local_graph = knowledge_os.wiki.local_graph(nodes[0]["knowledge_id"], limit=2)
+    assert local_graph["canonical_relation_revisions"] is True
+    assert local_graph["budget"]["max_relations"] == 2
+    assert len(local_graph["relations"]) == 2
+    assert local_graph["derived_adjacency"] is True

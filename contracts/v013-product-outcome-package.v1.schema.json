@@ -1,0 +1,400 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-product-outcome-package.v1.schema.json",
+  "title": "DeepLaw v0.13 benchmark product outcome package and lifecycle manifest v1",
+  "description": "Closed, content-addressed benchmark manifest. It is never a release assembly input and cannot establish qualification by itself.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_id",
+    "package_version",
+    "package_sha256",
+    "evidence_kind",
+    "benchmark_only",
+    "claim_eligible",
+    "assembly_policy",
+    "lifecycle_status",
+    "candidate_binding",
+    "protocol_binding",
+    "threshold_binding",
+    "classification_binding",
+    "mounts",
+    "artifacts",
+    "data_layers",
+    "isolation_receipts",
+    "outcomes",
+    "attestations",
+    "lifecycle_events"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-product-outcome-package/v1"},
+    "package_id": {"$ref": "#/$defs/identifier"},
+    "package_version": {"$ref": "#/$defs/version"},
+    "package_sha256": {"$ref": "#/$defs/sha256"},
+    "evidence_kind": {
+      "enum": ["synthetic_dry_run", "owner_bound_external"]
+    },
+    "benchmark_only": {"const": true},
+    "claim_eligible": {"const": false},
+    "assembly_policy": {"$ref": "#/$defs/assemblyPolicy"},
+    "lifecycle_status": {
+      "enum": [
+        "prepared_not_executed",
+        "development_only",
+        "downgraded_development",
+        "failed",
+        "not_qualified"
+      ]
+    },
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "threshold_binding": {"$ref": "#/$defs/thresholdBinding"},
+    "classification_binding": {"$ref": "#/$defs/classificationBinding"},
+    "mounts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/mount"}
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "data_layers": {"$ref": "#/$defs/dataLayers"},
+    "isolation_receipts": {"$ref": "#/$defs/isolationReceipts"},
+    "outcomes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/outcome"}
+    },
+    "attestations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/attestation"}
+    },
+    "lifecycle_events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/lifecycleEvent"}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,512}$"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+/-]{0,127}$"
+    },
+    "assemblyPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assembly_enabled", "reason_code"],
+      "properties": {
+        "assembly_enabled": {"const": false},
+        "reason_code": {
+          "enum": ["benchmark_only_manifest", "blocked_missing_external_evidence"]
+        }
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_commit",
+        "candidate_tree",
+        "package_version",
+        "wheel_artifact_id"
+      ],
+      "properties": {
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "package_version": {"$ref": "#/$defs/version"},
+        "wheel_artifact_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_artifact_id", "protocol_sha256", "frozen"],
+      "properties": {
+        "protocol_id": {"$ref": "#/$defs/identifier"},
+        "protocol_artifact_id": {"$ref": "#/$defs/identifier"},
+        "protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "thresholdBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold_id", "threshold_artifact_id", "threshold_sha256", "frozen"],
+      "properties": {
+        "threshold_id": {"$ref": "#/$defs/identifier"},
+        "threshold_artifact_id": {"$ref": "#/$defs/identifier"},
+        "threshold_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "classificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification_id",
+        "classification_artifact_id",
+        "classification_sha256",
+        "frozen"
+      ],
+      "properties": {
+        "classification_id": {"$ref": "#/$defs/identifier"},
+        "classification_artifact_id": {"$ref": "#/$defs/identifier"},
+        "classification_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mount_id", "purpose", "visibility", "read_only"],
+      "properties": {
+        "mount_id": {"$ref": "#/$defs/identifier"},
+        "purpose": {
+          "enum": [
+            "package_workspace",
+            "candidate",
+            "protocol",
+            "thresholds",
+            "classification",
+            "development_corpus",
+            "qualification_holdout",
+            "final_blind",
+            "gold",
+            "compiler_receipt",
+            "evaluator_receipt",
+            "outcome_output",
+            "scorer",
+            "validator",
+            "attestation"
+          ]
+        },
+        "visibility": {
+          "enum": [
+            "owner_only",
+            "compiler_only",
+            "evaluator_only",
+            "compiler_evaluator",
+            "owner_evaluator"
+          ]
+        },
+        "read_only": {"const": true}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_kind",
+        "root",
+        "relative_path",
+        "byte_size",
+        "file_sha256",
+        "schema_version",
+        "record_sha256",
+        "consumed_by"
+      ],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/identifier"},
+        "artifact_kind": {"$ref": "#/$defs/identifier"},
+        "root": {"$ref": "#/$defs/identifier"},
+        "relative_path": {"$ref": "#/$defs/relativePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "schema_version": {"$ref": "#/$defs/schemaVersion"},
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "consumed_by": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "dataLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "source",
+        "status",
+        "frozen",
+        "diagnostic_or_tuning_used",
+        "corpus_artifact_id",
+        "gold_artifact_id"
+      ],
+      "properties": {
+        "role": {
+          "enum": ["development", "qualification_holdout", "final_blind"]
+        },
+        "source": {
+          "enum": ["repository", "repository_external", "public_synthetic"]
+        },
+        "status": {
+          "enum": [
+            "development_only",
+            "not_bound",
+            "bound",
+            "downgraded_development",
+            "failed",
+            "replaced"
+          ]
+        },
+        "frozen": {"type": "boolean"},
+        "diagnostic_or_tuning_used": {"type": "boolean"},
+        "corpus_artifact_id": {"type": ["string", "null"]},
+        "gold_artifact_id": {"type": ["string", "null"]}
+      }
+    },
+    "dataLayers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development", "qualification_holdout", "final_blind"],
+      "properties": {
+        "development": {"$ref": "#/$defs/dataLayer"},
+        "qualification_holdout": {"$ref": "#/$defs/dataLayer"},
+        "final_blind": {"$ref": "#/$defs/dataLayer"}
+      }
+    },
+    "isolationReceipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compiler_artifact_id", "evaluator_artifact_id"],
+      "properties": {
+        "compiler_artifact_id": {"$ref": "#/$defs/identifier"},
+        "evaluator_artifact_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome_id",
+        "product_id",
+        "status",
+        "corpus_role",
+        "raw_output_artifact_id",
+        "gate_result_artifact_id",
+        "scorer_source_artifact_id",
+        "scorer_executable_artifact_id",
+        "validator_id",
+        "validator_version",
+        "validator_source_artifact_id",
+        "validator_executable_artifact_id",
+        "diagnostic_or_tuning_used"
+      ],
+      "properties": {
+        "outcome_id": {"$ref": "#/$defs/identifier"},
+        "product_id": {"enum": ["continuity", "wiki", "legal"]},
+        "status": {
+          "enum": [
+            "prepared_not_executed",
+            "not_executed",
+            "failed",
+            "downgraded_development"
+          ]
+        },
+        "corpus_role": {
+          "enum": ["development", "qualification_holdout", "final_blind"]
+        },
+        "raw_output_artifact_id": {"$ref": "#/$defs/identifier"},
+        "gate_result_artifact_id": {"$ref": "#/$defs/identifier"},
+        "scorer_source_artifact_id": {"$ref": "#/$defs/identifier"},
+        "scorer_executable_artifact_id": {"$ref": "#/$defs/identifier"},
+        "validator_id": {"$ref": "#/$defs/identifier"},
+        "validator_version": {"$ref": "#/$defs/version"},
+        "validator_source_artifact_id": {"$ref": "#/$defs/identifier"},
+        "validator_executable_artifact_id": {"$ref": "#/$defs/identifier"},
+        "diagnostic_or_tuning_used": {"type": "boolean"}
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attestation_id", "role", "subject", "artifact_id", "claim_eligible"],
+      "properties": {
+        "attestation_id": {"$ref": "#/$defs/identifier"},
+        "role": {"enum": ["owner", "evaluator"]},
+        "subject": {"$ref": "#/$defs/identifier"},
+        "artifact_id": {"$ref": "#/$defs/identifier"},
+        "claim_eligible": {"const": false}
+      }
+    },
+    "lifecycleEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_type",
+        "actor_role",
+        "occurred_at",
+        "outcome_id",
+        "artifact_refs",
+        "reason_code",
+        "record_sha256"
+      ],
+      "properties": {
+        "event_id": {"$ref": "#/$defs/identifier"},
+        "event_type": {
+          "enum": [
+            "package_prepared",
+            "outcome_not_executed",
+            "outcome_failed",
+            "qualification_downgraded_development",
+            "final_blind_failed",
+            "final_blind_replaced"
+          ]
+        },
+        "actor_role": {"enum": ["owner", "evaluator", "system"]},
+        "occurred_at": {"type": "string", "minLength": 1, "maxLength": 64},
+        "outcome_id": {"type": ["string", "null"]},
+        "artifact_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "reason_code": {"$ref": "#/$defs/identifier"},
+        "record_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

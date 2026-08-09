@@ -16,7 +16,9 @@ from deeplaw.util import (
     QUERY_EXPANSION_PROFILE_V2_SHA256,
     canonical_json,
     normalize_query_text,
+    query_discovery_text,
     query_expansion_terms,
+    query_target_anchors,
     sha256_bytes,
 )
 
@@ -166,6 +168,27 @@ def test_positive_negative_paraphrases_are_hand_written_and_bounded() -> None:
     assert query_expansion_terms("Atlas diagnostic badge publication") == []
     with pytest.raises(ValueError):
         query_expansion_terms("x" * 20_001)
+
+
+def test_discovery_keeps_source_and_identity_anchors_are_generic_and_bounded() -> None:
+    source = "诊断日志保留政策"
+    discovery = query_discovery_text(source)
+    assert source in discovery
+    assert {"diagnostic", "retention", "policy"} <= set(discovery.split())
+
+    assert query_target_anchors("What does Policy Alpha require?")[0] == (
+        "policy alpha",
+    )
+    assert query_target_anchors("Compare Current requirements")[0] == ()
+    assert query_target_anchors("Policy Alpha and Policy Beta comparison")[0] == (
+        "policy alpha",
+        "policy beta",
+    )
+    assert query_target_anchors("Alpha 政策 archive requirements")[0] == ("alpha",)
+    # A single sentence-initial homonym is not an anchor; lexical discovery
+    # must retain both meanings until another admission signal disambiguates.
+    assert query_target_anchors("Mercury policy")[0] == ()
+    assert query_target_anchors("Tell me about Mercury policy")[0] == ("mercury",)
 
 
 def test_product_source_has_no_benchmark_or_gold_imports() -> None:

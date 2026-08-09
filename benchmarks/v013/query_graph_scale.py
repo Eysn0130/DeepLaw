@@ -30,10 +30,9 @@ except ImportError:  # pragma: no cover - exercised on native Windows
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from deeplaw.compilation.applicability import applicability_digest, policy_digest
-from deeplaw.compilation.coordinator import CompilationCoordinator, _artifact
-from deeplaw.compilation.models import COMPILER_GRANT_OPERATIONS
-from deeplaw.compilation.profiles import SEMANTIC_DUTIES, compiler_profile
+from deeplaw.api import KnowledgeOS
+from deeplaw.compilation.models import SEMANTIC_COMPILER_GRANT_OPERATIONS
+from deeplaw.compilation.semantic import SemanticCompilationService
 from deeplaw.evidence import build_input_set_sha256, statement_sha256
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
@@ -43,7 +42,7 @@ from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.persistent_read_runtime import PersistentReadRuntime
 from deeplaw.retrieval import PurposeAwareRetrievalService
-from deeplaw.util import canonical_json, sha256_bytes, stable_id
+from deeplaw.util import canonical_json, sha256_bytes
 
 SCHEMA_VERSION = "deeplaw.v013-query-graph-scale-report/v1"
 RUNNER_RELATIVE_PATH = "benchmarks/v013/query_graph_scale.py"
@@ -58,8 +57,8 @@ GRAPH_ADMITTED_BOUND = 500
 GRAPH_SCANNED_BOUND = 5_000
 MAX_PROVIDER_STATEMENTS = 8
 QUERY_RETRIEVAL_MODES = ("exact", "lexical", "dense", "graph", "hybrid")
-STATEMENTS_PER_REVISION = 1_000
-PACKET_MAX_FRAGMENTS = 4
+STATEMENTS_PER_REVISION = 250
+PACKET_MAX_FRAGMENTS = 1
 
 _LOCAL_PATH = re.compile(
     r"(?:/Users/|/home/|/private/var/|/tmp/|/var/folders/|[A-Za-z]:[\\/]|\\\\)"
@@ -217,315 +216,345 @@ def _source_text(statement_count: int, *, seed: int) -> str:
         )
         for index in permutation[group_start : group_start + STATEMENTS_PER_REVISION]:
             # Source order is seeded and randomized; the short unique text keeps
-            # each 1,000-Statement section below the compiler's 12,000-character
+            # each 250-Statement section below the compiler's 12,000-character
             # extraction chunk ceiling, so no Statement is split at a chunk edge.
             lines.append(f"q{index:06d}")
     return "\n".join(lines) + "\n"
 
 
-def _scale_facts(source: Path) -> tuple[dict[str, Any], str]:
-    facts: dict[str, Any] = {
-        "source_present": True,
-        "source_admitted": True,
-        "source_nonempty": True,
-        "media_type": "text/markdown",
-        "byte_size": source.stat().st_size,
-        "lifecycle": "active",
-        "node_types": {},
-        "signals": {
-            key: False for key in ("code", "table", "list", "timeline", "question", "procedure")
-        },
-        "observation_kinds": {},
-        "observation_count": 0,
-        "existing_kinds": {},
-        "existing_count": 0,
-        "relation_count": 0,
-        "previous_output_count": 0,
-        "affected_synthesis_count": 0,
-        "truncated": False,
-    }
-    return facts, sha256_bytes(canonical_json(facts).encode("utf-8"))
+def _commit_statement_fixture(
+    root: Path,
+    source: Path,
+    *,
+    statement_count: int,
+) -> dict[str, Any]:
+    """Create a seeded fixture through the public Source + semantic v3 chain."""
 
-
-def _duty_reports(*, run_id: str, source: Path) -> list[dict[str, Any]]:
-    facts, facts_sha256 = _scale_facts(source)
-    return [
-        {
-            "duty_id": stable_id("duty", run_id, duty_type),
-            "duty_type": duty_type,
-            "required": False,
-            "applicability": "not_applicable",
-            "status": "omitted_with_reason",
-            "output_refs": [],
-            "evidence_refs": [],
-            "reason": "Deterministic Query/Graph scale fixture.",
-            "unresolved_items": [],
-            "omission_reason": "Synthetic fixture does not exercise semantic duties.",
-            "deterministic_basis": {
-                "rule_id": "query-graph-scale-v1",
-                "facts": facts,
-                "stable_refs": [],
-                "facts_sha256": facts_sha256,
-                "reason": "Deterministic Query/Graph scale fixture.",
-            },
-        }
-        for duty_type in SEMANTIC_DUTIES
-    ]
-
-
-def _commit_statement_fixture(root: Path, source: Path, *, statement_count: int) -> dict[str, Any]:
-    """Create source-bound Statements through the public v3 compilation commit path."""
-
-    initialize_knowledge_vault(root, name="DeepLaw Query/Graph scale diagnostic", scope="project")
-    initialize_autonomous_core(root)
-    with KnowledgeVault(root, read_only=False) as vault:
-        compiled = compile_source(vault, source, source_kind="document", confirm_no_case_data=True)
-    source_revision_id = str(compiled["identity"]["source_revision_id"])
-    with AutonomousKnowledgeStore(root, read_only=False) as store:
-        grant_id = store.enable_grant(
-            writer_id="v013-query-graph-scale-compiler",
-            operations=COMPILER_GRANT_OPERATIONS,
-            max_request_bytes=320 * 1024,
-            max_mutations_per_minute=120,
-            max_objects=100_000,
-        )["grant_id"]
-    profile = compiler_profile(version="3")
-    coordinator = CompilationCoordinator(root)
-    begun = coordinator.begin(
-        grant_id=grant_id,
-        source_revision_id=source_revision_id,
-        compiler_profile=profile["compiler_profile"],
-        compiler_profile_version="3",
-        host_identity="v013-query-graph-scale",
-        model_identity=None,
-        prompt_template_id=profile["prompt_template_id"],
-        prompt_config_sha256=profile["prompt_config_sha256"],
-        plan_configuration_sha256=profile["plan_configuration_sha256"],
-        confirm_no_case_data=True,
-        # Four <12 KiB sections keep each staged public compilation request
-        # under its closed grant byte budget. Grouping 1,000 Statements per
-        # revision also keeps the exact 100k fixture at 100 governed mutations,
-        # below the production 120/min grant ceiling without weakening it.
-        packet_max_fragments=PACKET_MAX_FRAGMENTS,
+    initialize_knowledge_vault(
+        root,
+        name="DeepLaw Query/Graph scale diagnostic",
+        scope="project",
     )
-    packet_plans: list[dict[str, str]] = []
-    statement_plans: list[dict[str, Any]] = []
-    packet_count = 0
-    action_count = 0
-    while (packet := coordinator.next_packet(begun["compilation_run_id"])) is not None:
-        packet_count += 1
-        packet_plans.append({"packet_id": packet["packet_id"]})
-        object_actions: list[dict[str, Any]] = []
-        for local_ordinal, fragment in enumerate(packet["fragments"], start=1):
-            source_ref = {
-                "source_revision_id": packet["source_revision_id"],
-                "fragment_id": fragment["fragment_id"],
-                "locator": fragment["locator"],
-                "quote_sha256": fragment["text_sha256"],
-            }
-            statements: list[dict[str, Any]] = []
-            cursor = 0
-            for ordinal, line in enumerate(fragment["text"].splitlines(), start=1):
-                if not line.strip() or line.lstrip().startswith("#"):
-                    cursor += len(line) + 1
-                    continue
-                text = line.strip()
-                start = fragment["text"].find(text, cursor)
-                if start < 0:
-                    start = cursor
-                end = start + len(text)
-                cursor = end + 1
-                statements.append(
-                    _statement_value(
-                        ordinal=ordinal,
-                        text=text,
-                        source_ref=source_ref,
-                        char_start=start,
-                        char_end=end,
+    lines = [
+        line.strip()
+        for line in source.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    shard_size = STATEMENTS_PER_REVISION
+    compiled_sources: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory(
+        prefix="query-graph-scale-",
+        dir=root.parent,
+    ) as shard_dir_name:
+        shard_dir = Path(shard_dir_name)
+        shard_count = (len(lines) + shard_size - 1) // shard_size
+        for shard_index in range(shard_count):
+            shard_path = shard_dir / f"source-{shard_index:04d}.md"
+            start = shard_index * shard_size
+            shard_path.write_text(
+                f"# Scale shard {shard_index:04d}\n"
+                + "\n".join(lines[start : start + shard_size])
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+        with KnowledgeVault(root, read_only=False) as vault:
+            for shard_index in range(shard_count):
+                shard_path = shard_dir / f"source-{shard_index:04d}.md"
+                compiled_sources.append(
+                    compile_source(
+                        vault,
+                        shard_path,
+                        source_kind="document",
+                        title=f"Query graph scale shard {shard_index:04d}",
+                        logical_path=(
+                            f"query-graph-scale/scale-{statement_count}/"
+                            f"shard-{shard_index:04d}.md"
+                        ),
+                        confirm_no_case_data=True,
                     )
                 )
-            object_actions.append(
-                {
-                    "action": "create",
-                    "kind": "claim",
-                    "semantic_key": f"v013-query-graph-scale:{action_count}",
-                    "knowledge_id": None,
-                    "expected_revision_id": None,
-                    "title": f"Query graph scale group {action_count}",
-                    "body": fragment["text"],
-                    "aliases": [],
-                    "epistemic_state": "supported",
-                    "source_refs": [source_ref],
-                    "assertion": None,
-                    "tags": [],
-                    "valid_from": None,
-                    "valid_to": None,
-                    "applicability": {
-                        "description": "Deterministic Query/Graph scale fixture.",
-                        "scopes": [],
-                        "conditions": [],
-                        "exclusions": [],
-                    },
-                    "synthesis_inputs": None,
-                    "reason": "Deterministic Query/Graph scale fixture.",
+        # Source evidence must be part of the initial autonomous migration so
+        # KnowledgeOS.open can verify the public read boundary before compiling.
+        initialize_autonomous_core(root)
+        run_order = list(range(len(compiled_sources)))
+        random.Random(SEED + statement_count + 1).shuffle(run_order)
+        packet_count = 0
+        compilation_run_ids: list[str] = []
+        source_revision_ids: list[str] = []
+        with KnowledgeOS.open(root) as knowledge_os:
+            profile = knowledge_os.compilations.profile(version="3")
+            for shard_index in run_order:
+                with AutonomousKnowledgeStore(root, read_only=False) as store:
+                    grant_id = store.enable_grant(
+                        writer_id=f"v013-query-graph-scale-{shard_index:04d}",
+                        operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+                        max_request_bytes=320 * 1024,
+                        max_mutations_per_minute=120,
+                        max_objects=100_000,
+                    )["grant_id"]
+                compiled = compiled_sources[shard_index]
+                source_revision_id = str(compiled["identity"]["source_revision_id"])
+                source_revision_ids.append(source_revision_id)
+                run = knowledge_os.compilations.begin(
+                    grant_id=grant_id,
+                    source_revision_id=source_revision_id,
+                    compiler_profile=profile["compiler_profile"],
+                    compiler_profile_version=profile["compiler_profile_version"],
+                    host_identity="v013-query-graph-scale",
+                    model_identity=None,
+                    prompt_template_id=profile["prompt_template_id"],
+                    prompt_config_sha256=profile["prompt_config_sha256"],
+                    plan_configuration_sha256=profile["plan_configuration_sha256"],
+                    packet_max_fragments=PACKET_MAX_FRAGMENTS,
+                    confirm_no_case_data=True,
+                )
+                compilation_run_ids.append(run.compilation_run_id)
+                packet_plans: list[dict[str, Any]] = []
+                statement_plans: list[dict[str, Any]] = []
+                dispositions: list[dict[str, Any]] = []
+                run_packet_count = 0
+                while packet := run.next_packet():
+                    packet_count += 1
+                    run_packet_count += 1
+                    object_actions: list[dict[str, Any]] = []
+                    observations: list[dict[str, Any]] = []
+                    for local_ordinal, fragment in enumerate(packet["fragments"], start=1):
+                        source_ref = {
+                            "source_revision_id": packet["source_revision_id"],
+                            "fragment_id": fragment["fragment_id"],
+                            "locator": fragment["locator"],
+                            "quote_sha256": fragment["text_sha256"],
+                        }
+                        semantic_key = (
+                            f"v013-query-graph-scale:{statement_count}:"
+                            f"{SEED:08x}:{shard_index:04d}:"
+                            f"{len(packet_plans):04d}:{local_ordinal:02d}"
+                        )
+                        observation = {
+                            "packet_id": packet["packet_id"],
+                            "semantic_key_candidate": semantic_key,
+                            "kind": "claim",
+                            "title_candidate": f"Query graph scale shard {shard_index:04d}",
+                            "body_candidate": fragment["text"],
+                            "aliases": [f"scale-{statement_count}-{shard_index:04d}"],
+                            "source_refs": [source_ref],
+                            "assertion": None,
+                            "applicability": None,
+                            "tags": ["query-graph-scale-development"],
+                            "reason": "Freeze a deterministic public-seam scale observation.",
+                        }
+                        observation["observation_id"] = SemanticCompilationService.observation_id(
+                            compilation_run_id=packet["compilation_run_id"],
+                            packet_id=packet["packet_id"],
+                            observation=observation,
+                        )
+                        observations.append(observation)
+                        statements: list[dict[str, Any]] = []
+                        cursor = 0
+                        for ordinal, line in enumerate(fragment["text"].splitlines(), start=1):
+                            if not line.strip():
+                                cursor += len(line) + 1
+                                continue
+                            text = line.strip()
+                            start_offset = fragment["text"].find(text, cursor)
+                            if start_offset < 0:
+                                start_offset = cursor
+                            end_offset = start_offset + len(text)
+                            cursor = end_offset + 1
+                            statements.append(
+                                _statement_value(
+                                    ordinal=ordinal,
+                                    text=text,
+                                    source_ref=source_ref,
+                                    char_start=start_offset,
+                                    char_end=end_offset,
+                                )
+                            )
+                        object_actions.append(
+                            {
+                                "action": "create",
+                                "kind": "claim",
+                                "semantic_key": semantic_key,
+                                "knowledge_id": None,
+                                "expected_revision_id": None,
+                                "title": f"Query graph scale shard {shard_index:04d}",
+                                "body": fragment["text"],
+                                "aliases": [],
+                                "epistemic_state": "supported",
+                                "source_refs": [source_ref],
+                                "assertion": None,
+                                "tags": ["query-graph-scale-development"],
+                                "valid_from": None,
+                                "valid_to": None,
+                                "applicability": {
+                                    "description": "Deterministic Query/Graph scale fixture.",
+                                    "scopes": [],
+                                    "conditions": [],
+                                    "exclusions": [],
+                                },
+                                "synthesis_inputs": None,
+                                "reason": "Publish a deterministic source-bound scale claim.",
+                            }
+                        )
+                        statement_plans.append(
+                            {
+                                "packet_id": packet["packet_id"],
+                                "object_action_ordinal": local_ordinal,
+                                "statements": statements,
+                            }
+                        )
+                        dispositions.append(
+                            {
+                                "observation_id": observation["observation_id"],
+                                "disposition": "published",
+                                "target_ref": semantic_key,
+                                "reason": "Publish the deterministic scale observation.",
+                            }
+                        )
+                    run.stage_observations(
+                        {
+                            "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+                            "compilation_run_id": packet["compilation_run_id"],
+                            "source_revision_id": packet["source_revision_id"],
+                            "packet_id": packet["packet_id"],
+                            "expected_audit_head": packet["input_audit_head"],
+                            "observations": observations,
+                            "coverage": {
+                                "packet_fragment_count": len(packet["fragments"]),
+                                "covered_fragment_ids": [
+                                    fragment["fragment_id"] for fragment in packet["fragments"]
+                                ],
+                                "omitted_fragments": [],
+                                "ratio": 1.0,
+                            },
+                            "warnings": [],
+                        },
+                        confirm_no_case_data=True,
+                    )
+                    packet_plans.append(
+                        {
+                            "schema_version": "deeplaw.source-compilation-plan/v1",
+                            "source_revision_id": packet["source_revision_id"],
+                            "packet_id": packet["packet_id"],
+                            "expected_audit_head": packet["input_audit_head"],
+                            "object_actions": object_actions,
+                            "relation_actions": [],
+                            "identity_actions": [],
+                            "unresolved_identities": [],
+                            "contradictions": [],
+                            "coverage": {
+                                "packet_fragment_count": len(packet["fragments"]),
+                                "covered_fragment_ids": [
+                                    fragment["fragment_id"] for fragment in packet["fragments"]
+                                ],
+                                "omitted_fragment_ids": [],
+                                "ratio": 1.0,
+                                "completeness": "complete",
+                            },
+                            "skipped_fragments": [],
+                            "warnings": [],
+                        }
+                    )
+                if run_packet_count == 0:
+                    raise RuntimeError("source compilation produced no packets")
+                inventory = run.semantic_inventory(confirm_no_case_data=True)
+                finalization = run.finalization_packet()
+                duty_reports = []
+                for duty in finalization["duties"]:
+                    applicability = duty["applicability"]
+                    if applicability == "not_applicable":
+                        status = "omitted_with_reason"
+                        unresolved_items: list[str] = []
+                        omission_reason = (
+                            "No deterministic witness in this development fixture."
+                        )
+                    else:
+                        status = "unresolved"
+                        unresolved_items = [
+                            "Development fixture intentionally leaves semantic duty "
+                            "unresolved; it is not qualification evidence."
+                        ]
+                        omission_reason = None
+                    duty_reports.append(
+                        {
+                            "duty_id": duty["duty_id"],
+                            "duty_type": duty["duty_type"],
+                            "required": duty["required"],
+                            "applicability": applicability,
+                            "status": status,
+                            "output_refs": [],
+                            "evidence_refs": [],
+                            "reason": "Deterministic Query/Graph scale fixture duty decision.",
+                            "unresolved_items": unresolved_items,
+                            "omission_reason": omission_reason,
+                            "deterministic_basis": duty["deterministic_basis"],
+                        }
+                    )
+                publication = {
+                    "schema_version": "deeplaw.semantic-publication-plan/v3",
+                    "compiler_profile_version": "3",
+                    "compilation_run_id": run.compilation_run_id,
+                    "source_revision_id": source_revision_id,
+                    "expected_audit_head": run.begin_receipt()["input_audit_head"],
+                    "inventory_sha256": inventory["inventory_sha256"],
+                    "finalization_packet_id": finalization["finalization_packet_id"],
+                    "applicability_policy_sha256": finalization[
+                        "applicability_policy_sha256"
+                    ],
+                    "applicability_digest": finalization["applicability_digest"],
+                    "packet_plans": packet_plans,
+                    "statement_plans": statement_plans,
+                    "observation_dispositions": dispositions,
+                    "duty_reports": duty_reports,
+                    "semantic_status": "partial",
+                    "warnings": [
+                        "Development-only query graph scale; claim-ineligible."
+                    ],
                 }
-            )
-            statement_plans.append(
-                {
-                    "packet_id": packet["packet_id"],
-                    "object_action_ordinal": local_ordinal,
-                    "statements": statements,
-                }
-            )
-            action_count += 1
-        plan = {
-            "schema_version": "deeplaw.source-compilation-plan/v1",
-            "source_revision_id": packet["source_revision_id"],
-            "packet_id": packet["packet_id"],
-            "expected_audit_head": packet["input_audit_head"],
-            "object_actions": object_actions,
-            "relation_actions": [],
-            "identity_actions": [],
-            "unresolved_identities": [],
-            "contradictions": [],
-            "coverage": {
-                "packet_fragment_count": len(packet["fragments"]),
-                "covered_fragment_ids": [
-                    fragment["fragment_id"] for fragment in packet["fragments"]
-                ],
-                "omitted_fragment_ids": [],
-                "ratio": 1.0,
-                "completeness": "complete",
-            },
-            "skipped_fragments": [],
-            "warnings": [],
-        }
-        coordinator.stage(
-            grant_id=grant_id,
-            compilation_run_id=begun["compilation_run_id"],
-            plan=plan,
-            confirm_no_case_data=True,
+                run.stage_publication(publication, confirm_no_case_data=True)
+                if run.validate(confirm_no_case_data=True)["valid"] is not True:
+                    raise RuntimeError("source compilation validation failed")
+                run.commit(confirm_no_case_data=True)
+    actual_count = _statement_count(root)
+    if actual_count != statement_count:
+        raise RuntimeError(
+            f"Statement fixture count mismatch: expected {statement_count}, got {actual_count}"
         )
-    if packet_count == 0:
-        raise RuntimeError("source compilation produced no packets")
-    if action_count == 0:
-        raise RuntimeError("source compilation produced no object actions")
-    if (
-        coordinator.validate(
-            grant_id=grant_id,
-            compilation_run_id=begun["compilation_run_id"],
-            confirm_no_case_data=True,
-        )["valid"]
-        is not True
-    ):
-        raise RuntimeError("source compilation validation failed")
-    reports = _duty_reports(run_id=begun["compilation_run_id"], source=source)
-    applicability_policy_sha256 = policy_digest()
-    applicability_sha256 = applicability_digest(
-        {
-            report["duty_type"]: {
-                "applicability": report["applicability"],
-                "deterministic_basis": report["deterministic_basis"],
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        audit_head = store.audit_head
+        knowledge_revision_ids = sorted(
+            {
+                str(row["knowledge_revision_id"])
+                for row in store.connection.execute(
+                    "SELECT DISTINCT knowledge_revision_id "
+                    "FROM knowledge_statements_v1"
+                ).fetchall()
             }
-            for report in reports
-        }
-    )
-    inventory = {
-        "coverage": {
-            "applicability_policy_sha256": applicability_policy_sha256,
-            "applicability_digest": applicability_sha256,
-            "compilation_run_id": begun["compilation_run_id"],
-        },
-    }
-    inventory["inventory_sha256"] = sha256_bytes(canonical_json(inventory).encode("utf-8"))
-    with AutonomousKnowledgeStore(root, read_only=False) as store:
-        inventory_digest, _ = _artifact(
-            store,
-            value=inventory,
-            role="semantic_inventory",
-            created_at=store._next_transaction_time(),
         )
-        store.connection.execute(
-            "UPDATE semantic_compilation_runs_v2 SET inventory_sha256 = ? "
-            "WHERE compilation_run_id = ?",
-            (inventory["inventory_sha256"], begun["compilation_run_id"]),
-        )
-        store.connection.execute(
-            """
-            INSERT INTO semantic_inventories_v1(
-                artifact_sha256, inventory_sha256, inventory_id,
-                compilation_run_id, observation_count, packet_count,
-                truncated, recorded_at
-            ) VALUES (?, ?, ?, ?, 0, ?, 0, ?)
-            """,
-            (
-                inventory_digest,
-                inventory["inventory_sha256"],
-                "semanticinventory_" + begun["compilation_run_id"][-24:],
-                begun["compilation_run_id"],
-                packet_count,
-                store._next_transaction_time(),
-            ),
-        )
-        for report in reports:
-            store.connection.execute(
-                """
-                INSERT INTO semantic_duty_reports_v1(
-                    compilation_run_id, duty_id, duty_type, required,
-                    status, report_json
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    begun["compilation_run_id"],
-                    report["duty_id"],
-                    report["duty_type"],
-                    int(report["required"]),
-                    report["status"],
-                    canonical_json(report),
-                ),
-            )
-        store.connection.commit()
-    publication = {
-        "schema_version": "deeplaw.semantic-publication-plan/v3",
-        "compiler_profile_version": "3",
-        "compilation_run_id": begun["compilation_run_id"],
-        "source_revision_id": source_revision_id,
-        "expected_audit_head": begun["input_audit_head"],
-        "inventory_sha256": inventory["inventory_sha256"],
-        "finalization_packet_id": "finalization_" + "e" * 24,
-        "applicability_policy_sha256": applicability_policy_sha256,
-        "applicability_digest": applicability_sha256,
-        "packet_plans": packet_plans,
-        "statement_plans": statement_plans,
-        "observation_dispositions": [],
-        "duty_reports": reports,
-        "semantic_status": "partial",
-        "warnings": [],
-    }
-    with AutonomousKnowledgeStore(root, read_only=False) as store:
-        publication_digest, _ = _artifact(
-            store,
-            value=publication,
-            role="publication_plan",
-            created_at=store._next_transaction_time(),
-        )
-        store.connection.execute(
-            "UPDATE semantic_compilation_runs_v2 SET publication_plan_sha256 = ? "
-            "WHERE compilation_run_id = ?",
-            (publication_digest, begun["compilation_run_id"]),
-        )
-        store.connection.commit()
-    committed = CompilationCoordinator(root).commit(
-        grant_id=grant_id,
-        compilation_run_id=begun["compilation_run_id"],
-        confirm_no_case_data=True,
-    )
+    source_revision_ids = sorted(set(source_revision_ids))
+    compilation_run_ids = sorted(set(compilation_run_ids))
     return {
-        "source_revision_id": source_revision_id,
-        "compilation_run_id": begun["compilation_run_id"],
-        "statement_count": action_count and _statement_count(root),
+        "source_revision_id": source_revision_ids[0],
+        "source_revision_ids": source_revision_ids,
+        "source_revision_count": len(source_revision_ids),
+        "source_revision_ids_sha256": sha256_bytes(
+            canonical_json(source_revision_ids).encode("utf-8")
+        ),
+        "compilation_run_id": compilation_run_ids[0],
+        "compilation_run_ids": compilation_run_ids,
+        "compilation_run_count": len(compilation_run_ids),
+        "compilation_run_ids_sha256": sha256_bytes(
+            canonical_json(compilation_run_ids).encode("utf-8")
+        ),
+        "knowledge_revision_ids": knowledge_revision_ids,
+        "knowledge_revision_count": len(knowledge_revision_ids),
+        "knowledge_revision_ids_sha256": sha256_bytes(
+            canonical_json(knowledge_revision_ids).encode("utf-8")
+        ),
+        "statement_count": actual_count,
         "packet_count": packet_count,
-        "audit_head": committed.get("audit_head"),
+        "audit_head": audit_head,
     }
 
 
@@ -658,6 +687,14 @@ def _create_graph_fixture(
         verification = store.verify()
         graph_by_seed = store.graph(knowledge_id=nodes[0], limit=100)
         graph_global = store.graph(limit=GRAPH_ADMITTED_BOUND)
+        graph_limit_probe = store.graph(limit=1)
+        selection_bound_reached = (
+            len(graph_limit_probe["relations"]) == 1
+            and graph_limit_probe["budget"].get("selected_relations") == 1
+        )
+        selection_truncation_marker = graph_limit_probe["budget"].get(
+            "selection_truncated"
+        )
         graph_hops: dict[str, Any] = {}
         for hops in (0, 1, 2):
             recall = store.recall(
@@ -726,6 +763,12 @@ def _create_graph_fixture(
         "reason": (
             "smoke graph has fewer than 500 relations; 500/5000 truncation requires "
             "an expensive lane"
+            + (
+                "; current correctness blocker: public graph seam exposes no explicit "
+                "selection-truncation flag or Gap/Receipt when max_relations is reached"
+                if selection_bound_reached and selection_truncation_marker is None
+                else ""
+            )
         ),
     }
     return {
@@ -959,7 +1002,7 @@ def _run_scale(root: Path, *, scale: int, execute_expensive: bool) -> dict[str, 
                 "storage": _storage(scale_root),
             },
             "limitations": [
-                "Synthetic, source-free quality diagnostic; not eligible for a release "
+                "Synthetic, source-bound quality diagnostic; not eligible for a release "
                 "or competitive claim.",
                 "500/5000 relation truncation is not passable unless the bound and an "
                 "explicit Gap/Receipt are observed.",
@@ -1159,6 +1202,52 @@ def verify_report(value: Any) -> dict[str, Any]:
             and not item.get("reason")
         ):
             errors.append("not_executed scale lacks a reason")
+        if not isinstance(item, Mapping) or item.get("statement_status") != "executed":
+            continue
+        fixture = item.get("fixture")
+        if not isinstance(fixture, Mapping):
+            errors.append("executed scale lacks a source-bound fixture")
+            continue
+        for plural, singular, count_key, digest_key in (
+            (
+                "source_revision_ids",
+                "source_revision_id",
+                "source_revision_count",
+                "source_revision_ids_sha256",
+            ),
+            (
+                "compilation_run_ids",
+                "compilation_run_id",
+                "compilation_run_count",
+                "compilation_run_ids_sha256",
+            ),
+            (
+                "knowledge_revision_ids",
+                None,
+                "knowledge_revision_count",
+                "knowledge_revision_ids_sha256",
+            ),
+        ):
+            identifiers = fixture.get(plural)
+            if not isinstance(identifiers, list) or not identifiers:
+                errors.append(f"executed fixture lacks {plural}")
+                continue
+            if identifiers != sorted(set(identifiers)):
+                errors.append(f"executed fixture {plural} are not sorted and unique")
+            if fixture.get(count_key) != len(identifiers):
+                errors.append(f"executed fixture {count_key} mismatch")
+            expected_digest = sha256_bytes(canonical_json(identifiers).encode("utf-8"))
+            if fixture.get(digest_key) != expected_digest:
+                errors.append(f"executed fixture {digest_key} mismatch")
+            if singular is not None and fixture.get(singular) != identifiers[0]:
+                errors.append(f"executed fixture {singular} mismatch")
+        statement = item.get("statement")
+        if isinstance(statement, Mapping) and fixture.get("statement_count") != statement.get(
+            "statement_count"
+        ):
+            errors.append("executed fixture statement_count mismatch")
+        if not item.get("source_sha256"):
+            errors.append("executed scale lacks source_sha256")
     return {"valid": not errors, "errors": errors}
 
 

@@ -30,12 +30,15 @@
     "as_of": {"type": ["string", "null"], "format": "date-time"},
     "query_target": {
       "type": "object", "additionalProperties": false,
-      "required": ["text", "normalized", "query_sha256", "terms"],
+      "required": ["text", "normalized", "query_sha256", "terms", "identity_anchor_count", "identity_anchors_sha256", "identity_anchors_truncated"],
       "properties": {
         "text": {"type": "string", "minLength": 1, "maxLength": 5000},
         "normalized": {"type": "string", "minLength": 1, "maxLength": 5000},
         "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "terms": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 200}},
+        "identity_anchor_count": {"type": "integer", "minimum": 0, "maximum": 8},
+        "identity_anchors_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "identity_anchors_truncated": {"type": "boolean"},
         "semantic_key": {"type": "string", "maxLength": 500},
         "knowledge_id": {"type": "string", "maxLength": 500},
         "revision_id": {"type": "string", "maxLength": 500},
@@ -45,7 +48,8 @@
     "query_expansion": {
       "type": "object", "additionalProperties": false,
       "required": [
-        "profile", "applied", "term_count", "terms_sha256", "terms_truncated",
+        "profile", "profile_sha256", "lexicon_sha256", "configuration_sha256",
+        "applied", "term_count", "terms_sha256", "terms_truncated",
         "authority_changed", "stored_evidence_changed"
       ],
       "properties": {
@@ -55,6 +59,9 @@
             "deeplaw-deterministic-query-expansion/2"
           ]
         },
+        "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "lexicon_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "applied": {"type": "boolean"},
         "term_count": {"type": "integer", "minimum": 0, "maximum": 24},
         "terms_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

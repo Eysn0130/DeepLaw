@@ -14,6 +14,7 @@ _ASCII_TOKEN = re.compile(r"[a-zA-Z0-9]+(?:[-_.][a-zA-Z0-9]+)*")
 _QUOTED_PHRASE = re.compile(r'"([^"\n]{2,200})"|“([^”\n]{2,200})”|`([^`\n]{2,200})`')
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _ASCII_PART = re.compile(r"[A-Za-z]+|[0-9]+")
+_QUERY_ANCHOR_WORD = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*", re.UNICODE)
 _ARTICLE = re.compile(
     r"第\s*([〇零一二两三四五六七八九十百千万亿0-9]+)\s*条(?:\s*之\s*([〇零一二两三四五六七八九十百0-9]+))?"
 )
@@ -139,6 +140,54 @@ _STOP_TERMS = {
     "应当",
     "需要",
 }
+
+# These are query-grammar words, not an entity lexicon.  They prevent normal
+# sentence capitalization (for example ``Compare Current requirements``) from
+# becoming an identity anchor while leaving domain names such as ``Policy
+# Alpha`` eligible.
+_QUERY_ANCHOR_GRAMMAR_STOPWORDS = frozenset(
+    {
+        "about",
+        "and",
+        "are",
+        "can",
+        "compare",
+        "could",
+        "current",
+        "does",
+        "explain",
+        "find",
+        "for",
+        "from",
+        "give",
+        "has",
+        "have",
+        "how",
+        "in",
+        "is",
+        "latest",
+        "list",
+        "me",
+        "not",
+        "of",
+        "or",
+        "please",
+        "required",
+        "requirements",
+        "show",
+        "tell",
+        "the",
+        "to",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "with",
+        "would",
+        "you",
+    }
+)
 
 # This deliberately small compatibility table is a retrieval aid, not a text
 # conversion authority.  It covers high-frequency query vocabulary without
@@ -357,6 +406,25 @@ QUERY_EXPANSION_PROFILE_V2_METADATA = {
     **_QUERY_EXPANSION_PROFILE_V2_BODY,
     "profile_sha256": QUERY_EXPANSION_PROFILE_V2_SHA256,
 }
+
+# Query expansion configuration is a deterministic runtime binding rather than
+# caller-provided metadata.  Keep the normalizer and bounded matching controls
+# explicit so a Query Plan receipt can be reproduced without exposing the
+# expansion lexicon or accepting a caller-selected configuration.
+QUERY_EXPANSION_CONFIGURATION = {
+    "profile_id": QUERY_EXPANSION_PROFILE_V2_METADATA["profile_id"],
+    "profile_sha256": QUERY_EXPANSION_PROFILE_V2_METADATA["profile_sha256"],
+    "lexicon_sha256": QUERY_EXPANSION_PROFILE_V2_METADATA["lexicon_sha256"],
+    "max_terms": QUERY_EXPANSION_PROFILE_V2_METADATA["max_terms"],
+    "match_policy": QUERY_EXPANSION_PROFILE_V2_METADATA["match_policy"],
+    "normalization": "normalize_query_text-casefold-v1",
+}
+QUERY_EXPANSION_CONFIGURATION_SHA256 = sha256_bytes(
+    canonical_json(QUERY_EXPANSION_CONFIGURATION).encode("utf-8")
+)
+
+_QUERY_TARGET_ANCHOR_LIMIT = 8
+_QUERY_TARGET_ANCHOR_WORD_LIMIT = 8
 
 
 def has_instruction_risk(text: str) -> bool:
@@ -649,14 +717,112 @@ def query_discovery_text(text: str) -> str:
     """Build bounded reranker text without dropping mixed-language exact anchors."""
 
     expansions = query_expansion_terms(text)
+    # Keep the normalized source query as the first reranker component.  The
+    # lexical aliases below are additive; replacing the source query would
+    # erase CJK and non-ASCII proper names before candidate scoring.
+    source_query = normalize_text(text)[:5_000]
     if not expansions:
-        return text
+        return source_query
     ascii_anchors = [
         term
         for term in search_terms(text, limit=64, cover_tail=True)
         if _ASCII_TOKEN.fullmatch(term)
     ]
-    return " ".join(dict.fromkeys((*ascii_anchors, *expansions)))
+    return " ".join(dict.fromkeys((source_query, *ascii_anchors, *expansions)))
+
+
+def query_target_anchors(
+    text: str,
+    *,
+    limit: int = _QUERY_TARGET_ANCHOR_LIMIT,
+    word_limit: int = _QUERY_TARGET_ANCHOR_WORD_LIMIT,
+) -> tuple[tuple[str, ...], bool]:
+    """Extract bounded entity-lexicon-free Titlecase/uppercase query anchors.
+
+    This intentionally has no entity dictionary and identifies adjacent cased words
+    plus bounded singleton tokens in mixed/comparison queries.  A sentence-
+    initial singleton such as ``Mercury`` is not an anchor, preserving
+    same-form ambiguity until another admission signal disambiguates it.
+    """
+
+    if not isinstance(text, str) or not text:
+        return (), False
+    if limit <= 0 or word_limit < 2:
+        return (), bool(limit > 0)
+    normalized = normalize_query_text(text)
+    matches = list(_QUERY_ANCHOR_WORD.finditer(normalized))
+    runs: list[list[str]] = []
+    current: list[str] = []
+    previous_end: int | None = None
+
+    def flush() -> None:
+        nonlocal current
+        if len(current) >= 2:
+            runs.append(current)
+        current = []
+
+    for match in matches:
+        word = match.group(0)
+        is_cased = any(character.isalpha() for character in word)
+        is_title_or_upper = (
+            is_cased
+            and word.casefold() not in _QUERY_ANCHOR_GRAMMAR_STOPWORDS
+            and (word.istitle() or word.isupper())
+        )
+        contiguous = previous_end is not None and normalized[previous_end : match.start()].isspace()
+        if is_title_or_upper and (not current or contiguous):
+            current.append(word)
+        else:
+            flush()
+            if is_title_or_upper:
+                current.append(word)
+        previous_end = match.end()
+    flush()
+
+    truncated = False
+    if not runs:
+        # A singleton Titlecase/uppercase word is useful only when it is not
+        # merely sentence-initial prose.  Mixed-script queries and explicit
+        # all-uppercase identifiers remain eligible; comparisons with two or
+        # more cased words retain each independent candidate.
+        searchable_terms = set(search_terms(text, limit=64, cover_tail=True))
+        singleton_matches = [
+            match
+            for match in matches
+            if (
+                any(character.isalpha() for character in match.group(0))
+                and match.group(0).casefold() not in _QUERY_ANCHOR_GRAMMAR_STOPWORDS
+                and (match.group(0).istitle() or match.group(0).isupper())
+                and match.group(0).casefold() in searchable_terms
+            )
+        ]
+        has_cjk = any(
+            "\u3400" <= character <= "\u9fff"
+            for character in normalize_query_text(text)
+        )
+        if len(singleton_matches) > 1 or has_cjk:
+            runs = [[match.group(0)] for match in singleton_matches]
+        elif singleton_matches:
+            match = singleton_matches[0]
+            sentence_initial = not normalized[: match.start()].strip()
+            if not sentence_initial or match.group(0).isupper():
+                runs = [[match.group(0)]]
+    anchors: list[str] = []
+    seen: set[str] = set()
+    for run in runs:
+        if len(run) > word_limit:
+            truncated = True
+            run = run[:word_limit]
+        anchor = " ".join(word.casefold() for word in run)
+        if anchor and anchor not in seen:
+            seen.add(anchor)
+            anchors.append(anchor)
+        if len(anchors) >= limit:
+            truncated = truncated or len(runs) > len(anchors)
+            break
+    if len(runs) > limit:
+        truncated = True
+    return tuple(anchors), truncated
 
 
 def search_terms_v1(text: str) -> list[str]:

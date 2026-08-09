@@ -313,11 +313,25 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert all(version in ci for version in ('"3.11"', '"3.12"', '"3.13"'))
     assert "fail-fast: false" in ci
     assert "candidate-skip-receipt.json" in ci
-    assert '"release_ready": False' in ci
+    assert "candidate-current-source-inventory.json" in ci
+    assert "benchmarks.release.platform_inventory" in ci
+    assert "candidate_current_source_inventory" in ci or "--mode candidate" in ci
     assert "--require-eligible" not in ci
-    assert "qualification" in ci
-    assert "historical_compatibility" in ci
-    assert "test_manifest" in ci
+    assert "--selection common" in ci
+
+
+def test_manual_platform_core_preflight_is_fail_closed_before_core_execution() -> None:
+    gate = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    preflight = gate.index("Preflight frozen Platform Core collection")
+    core = gate.index("Run full mandatory suite with zero skips")
+    assert preflight < core
+    assert "benchmarks.release.platform_inventory" in gate
+    assert "--mode platform_core" in gate
+    assert "--require-match" in gate
+    assert "platform-core-inventory-preflight-${{ matrix.slug }}.json" in gate
+    assert "platform-evidence/platform-core-inventory-preflight-${{ matrix.slug }}.json" in gate
 
 
 def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() -> None:

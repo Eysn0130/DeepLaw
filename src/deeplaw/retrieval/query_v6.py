@@ -26,10 +26,14 @@ from ..task_context import (
     task_snapshot_sha256,
 )
 from ..util import (
+    QUERY_EXPANSION_CONFIGURATION_SHA256,
     QUERY_EXPANSION_PROFILE,
+    QUERY_EXPANSION_PROFILE_V2_LEXICON_SHA256,
+    QUERY_EXPANSION_PROFILE_V2_SHA256,
     canonical_json,
     query_expansion_terms,
     query_search_terms,
+    query_target_anchors,
     sha256_bytes,
     stable_id,
     strict_json_loads,
@@ -86,6 +90,7 @@ _CHECKPOINT_SECRET = re.compile(
     r"|\bbearer\s+[A-Za-z0-9._~-]{8,}\b"
     r"|\b(?:sk[-_]|ghp_)[A-Za-z0-9_-]{8,}\b"
 )
+_QUERY_WORD_TOKEN = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*", re.UNICODE)
 
 
 def _bounded(value: Any, *, field: str, maximum: int) -> str:
@@ -377,13 +382,40 @@ def _target(query: str, value: str | dict[str, Any] | None) -> dict[str, Any]:
         raise ValueError("query_target is invalid")
     normalized = normalize_identity_text(text) or text.casefold()
     terms = sorted(set(query_search_terms(text, limit=64, cover_tail=True)))
+    identity_anchors, identity_anchors_truncated = query_target_anchors(text)
     return {
         "text": text,
         "normalized": normalized,
         "query_sha256": sha256_bytes(text.encode("utf-8")),
         "terms": terms,
+        "identity_anchor_count": len(identity_anchors),
+        "identity_anchors_sha256": sha256_bytes(
+            canonical_json(identity_anchors).encode("utf-8")
+        ),
+        "identity_anchors_truncated": identity_anchors_truncated,
         **extras,
     }
+
+
+def _identity_anchor_match(anchor: str, text: str) -> bool:
+    anchor_words = tuple(anchor.split())
+    if not anchor_words:
+        return False
+    candidate_words = tuple(
+        match.group(0).casefold() for match in _QUERY_WORD_TOKEN.finditer(text)
+    )
+    width = len(anchor_words)
+    return any(
+        candidate_words[index : index + width] == anchor_words
+        for index in range(len(candidate_words) - width + 1)
+    )
+
+
+def _identity_anchor_filter_values(text: str) -> tuple[str, ...]:
+    """Return deterministic generic identity anchors for admission filtering."""
+
+    anchors, _truncated = query_target_anchors(text)
+    return anchors
 
 
 def _applicable_duties(
@@ -512,8 +544,13 @@ def _query_expansion_receipt(query: str) -> dict[str, Any]:
     profile = explanation.get("profile_id")
     if profile != QUERY_EXPANSION_PROFILE:
         raise RuntimeError("query expansion profile is invalid")
+    if explanation.get("profile_sha256") != QUERY_EXPANSION_PROFILE_V2_SHA256:
+        raise RuntimeError("query expansion profile digest is invalid")
     return {
         "profile": profile,
+        "profile_sha256": QUERY_EXPANSION_PROFILE_V2_SHA256,
+        "lexicon_sha256": QUERY_EXPANSION_PROFILE_V2_LEXICON_SHA256,
+        "configuration_sha256": QUERY_EXPANSION_CONFIGURATION_SHA256,
         "applied": bool(terms),
         "term_count": len(terms),
         "terms_sha256": sha256_bytes(canonical_json(terms).encode("utf-8")),
@@ -722,9 +759,10 @@ def _load_statement_candidates(
                 "instr(lower(statements.statement_text), lower(?)) > 0",
                 "instr(lower(revisions.title), lower(?)) > 0",
                 "instr(lower(COALESCE(revisions.semantic_key, '')), lower(?)) > 0",
+                "instr(lower(revisions.metadata_json), lower(?)) > 0",
             )
         )
-        match_parameters.extend((term, term, term))
+        match_parameters.extend((term, term, term, term))
     if not has_identity_target and match_clauses:
         discovery_clauses = [*match_clauses]
         discovery_parameters = [*match_parameters]
@@ -763,6 +801,7 @@ def _load_statement_candidates(
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
     query_terms = set(target["terms"])
+    identity_anchor_values = _identity_anchor_filter_values(target["text"])
     freshness_policy_designators = (
         _policy_designators(target["text"])
         if purpose == "freshness_check"
@@ -866,17 +905,43 @@ def _load_statement_candidates(
                 rejections.append({**item_ref, "reason": "provenance_not_admitted"})
                 continue
             text = str(value["statement_text"])
+            metadata = strict_json_loads(row["metadata_json"])
+            if not isinstance(metadata, dict):
+                metadata = {}
+            aliases = metadata.get("aliases", [])
+            if not isinstance(aliases, list):
+                aliases = []
+            admitted_aliases = [
+                alias for alias in aliases if isinstance(alias, str) and 0 < len(alias) <= 200
+            ][:16]
+            graph_neighbor = row["knowledge_revision_id"] in graph_revision_ids
+            identity_surface = " ".join(
+                (
+                    str(row["title"] or ""),
+                    str(row["semantic_key"] or ""),
+                    *admitted_aliases,
+                    text,
+                )
+            )
+            if (
+                identity_anchor_values
+                and not has_identity_target
+                and not graph_neighbor
+                and not any(
+                    _identity_anchor_match(anchor, identity_surface)
+                    for anchor in identity_anchor_values
+                )
+            ):
+                rejections.append({**item_ref, "reason": "identity_anchor_mismatch"})
+                continue
             searchable = set(query_search_terms(
-                " ".join((row["title"], row["semantic_key"] or "", text)),
+                identity_surface,
                 limit=128,
                 cover_tail=True,
             ))
             if query_terms and not query_terms.intersection(searchable) and not has_identity_target:
                 rejections.append({**item_ref, "reason": "query_mismatch"})
                 continue
-            metadata = strict_json_loads(row["metadata_json"])
-            if not isinstance(metadata, dict):
-                metadata = {}
             partition = (
                 "source_free_interpretation"
                 if bool(row["source_free"])

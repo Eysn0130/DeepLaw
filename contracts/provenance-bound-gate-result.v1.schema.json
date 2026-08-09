@@ -11,6 +11,8 @@
     "category",
     "validator_id",
     "validator_version",
+    "validator_source",
+    "validator_executable",
     "classification_binding",
     "candidate_binding",
     "protocol_binding",
@@ -34,6 +36,8 @@
     "category": {"$ref": "#/$defs/category"},
     "validator_id": {"$ref": "#/$defs/identifier"},
     "validator_version": {"$ref": "#/$defs/version"},
+    "validator_source": {"$ref": "#/$defs/validatorFileBinding"},
+    "validator_executable": {"$ref": "#/$defs/validatorFileBinding"},
     "classification_binding": {"$ref": "#/$defs/classificationBinding"},
     "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
     "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
@@ -138,7 +142,7 @@
       "properties": {
         "protocol_id": {"$ref": "#/$defs/identifier"},
         "protocol_sha256": {"$ref": "#/$defs/sha256"},
-        "frozen": {"type": "boolean"}
+        "frozen": {"const": true}
       }
     },
     "thresholdBinding": {
@@ -148,7 +152,7 @@
       "properties": {
         "threshold_id": {"$ref": "#/$defs/identifier"},
         "threshold_sha256": {"$ref": "#/$defs/sha256"},
-        "frozen": {"type": "boolean"}
+        "frozen": {"const": true}
       }
     },
     "goldBinding": {
@@ -165,7 +169,7 @@
           "type": "string",
           "enum": ["repository", "repository_external"]
         },
-        "frozen": {"type": "boolean"}
+        "frozen": {"const": true}
       }
     },
     "corpus": {
@@ -182,7 +186,7 @@
           "enum": ["repository", "repository_external"]
         },
         "sha256": {"$ref": "#/$defs/sha256"},
-        "frozen": {"type": "boolean"}
+        "frozen": {"const": true}
       }
     },
     "classificationBinding": {
@@ -225,7 +229,8 @@
         "python_version",
         "tool_name",
         "tool_version",
-        "model_id"
+        "model_id",
+        "dimensions"
       ],
       "properties": {
         "run_id": {"$ref": "#/$defs/identifier"},
@@ -248,7 +253,8 @@
         "python_version": {"type": "string", "minLength": 1, "maxLength": 100},
         "tool_name": {"type": "string", "minLength": 1, "maxLength": 100},
         "tool_version": {"type": "string", "minLength": 1, "maxLength": 100},
-        "model_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
+        "model_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200},
+        "dimensions": {"$ref": "#/$defs/dimensions"}
       }
     },
     "metric": {
@@ -267,6 +273,16 @@
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/identifier"}
         }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {"$ref": "#/$defs/identifier"},
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
       }
     },
     "hardFailure": {
@@ -329,6 +345,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "input_id",
         "relative_path",
         "byte_size",
         "file_sha256",
@@ -337,12 +354,27 @@
         "artifact_kind"
       ],
       "properties": {
+        "input_id": {"$ref": "#/$defs/identifier"},
         "relative_path": {"$ref": "#/$defs/relativePath"},
-        "byte_size": {"type": "integer", "minimum": 0, "maximum": 100000000000},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
         "file_sha256": {"$ref": "#/$defs/sha256"},
         "schema_version": {"$ref": "#/$defs/version"},
         "record_sha256": {"$ref": "#/$defs/sha256"},
         "artifact_kind": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "validatorFileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "file_sha256"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/relativePath"},
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "file_sha256": {"$ref": "#/$defs/sha256"}
       }
     }
   }

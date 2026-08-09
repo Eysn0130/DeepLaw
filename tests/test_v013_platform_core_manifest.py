@@ -16,10 +16,22 @@ from benchmarks.release.platform_gate import (
     _manifest_digest,
     load_platform_manifest,
 )
+from benchmarks.release.platform_inventory import (
+    CANDIDATE_STATUS,
+    build_receipt,
+    inventory_digest,
+    write_receipt,
+)
+from benchmarks.release.platform_inventory import (
+    SCHEMA_VERSION as INVENTORY_SCHEMA_VERSION,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = REPOSITORY / "benchmarks/release/platform-core-test-manifest-v1.json"
 SCHEMA_PATH = REPOSITORY / "contracts/platform-core-test-manifest.v1.schema.json"
+INVENTORY_SCHEMA_PATH = (
+    REPOSITORY / "contracts/platform-core-inventory-preflight.v1.schema.json"
+)
 
 
 def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
@@ -59,6 +71,33 @@ def test_platform_core_manifest_generation_commands_are_explicit() -> None:
         len(manifest["inventories"]["common"]["cases"])
         + len(manifest["inventories"]["windows"]["additional_cases"])
     )
+
+
+def test_platform_inventory_candidate_receipt_is_closed_and_preserves_drift(
+    tmp_path: Path,
+) -> None:
+    manifest_before = MANIFEST_PATH.read_bytes()
+    receipt = build_receipt(REPOSITORY, mode="candidate", selection="common")
+    output = tmp_path / "candidate-current-source-inventory.json"
+    sealed = write_receipt(output, receipt)
+
+    schema = json.loads(INVENTORY_SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(sealed)
+    assert sealed["schema_version"] == INVENTORY_SCHEMA_VERSION
+    assert sealed["mode"] == "candidate"
+    assert sealed["status"] == CANDIDATE_STATUS
+    assert sealed["release_ready"] is False
+    assert isinstance(sealed["candidate"]["worktree_clean"], bool)
+    assert sealed["node_ids"] == sorted(sealed["node_ids"])
+    assert sealed["count"] == len(sealed["node_ids"])
+    assert sealed["digest"] == inventory_digest(sealed["node_ids"])
+    assert sealed["frozen_comparison"]["expected_count"] == 1339
+    assert {
+        "tests/test_subprocess_environment.py::test_closed_environment_maps_isolated_home_to_windows_userprofile",
+        "tests/test_v013_runtime_stability.py::test_rss_child_uses_closed_portable_environment",
+    } <= set(sealed["frozen_comparison"]["unexpected"])
+    assert MANIFEST_PATH.read_bytes() == manifest_before
 
 
 def test_platform_core_manifest_rejects_tampered_digest(tmp_path: Path) -> None:

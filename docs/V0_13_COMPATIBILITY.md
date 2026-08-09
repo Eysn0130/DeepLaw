@@ -10,7 +10,7 @@ the additive v0.13 working-tree contract and must not be read as a published ver
 | Semantic compilation | `living-wiki-agent/v3`; repository-visible deterministic development runs use source-run/lifecycle v2 | Profile v1 and v2 compiler inputs remain readable; deterministic lifecycle v1 stays immutable and complete-only | v3 adds dynamic applicability, Statements and exact freshness/verification status; development lifecycle v2 separates mechanical `status` from truthful `semantic_status` and is never formal release evidence |
 | Query | Query Plan v6 for `knowledge query`/Python retrieval query | Query Plan v5 remains explicitly selectable | v6 honors and receipts `retrieval_mode`/`graph_hops`/canonical fallback and an optional opaque task binding, discovers ≤20 revisions, then admits ≤512 Statements from only those revisions; it no-answers legacy content without admitted Statements |
 | Context | Query Plan v6 for Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`, `deeplaw knowledge autonomy context`, and autonomous MCP `operation=context` | Explicit `query_plan_version=5` only; a task binding is rejected instead of discarded on v5 | v6 uses the shared domain assembler and additive local Capsule v3 (≤262,144 bytes); exact task binding gates working checkpoints, while nested Provider v2 (≤65,536 bytes) excludes the binding; no ordinary query/context writes the Canonical Ledger |
-| Expansion | expansion Profile v2 | v1 receipts remain valid | v2 removes benchmark-shaped aliases and binds a generic lexicon digest |
+| Expansion | expansion Profile v2 | v1 receipts remain valid | v2 removes benchmark-shaped aliases, binds profile/lexicon/configuration digests, and keeps aliases additive to the bounded source query; Query Plan v6 records only bounded identity-anchor count/digest/truncation |
 | Projection | `standard` Profile, Living Wiki manifest v2 paired with Registry/Link/Resolver manifest v3 | aggregate manifest v1 and Profile `full` remain readable | `standard` removes per-object Canvas; profile changes clean only verified owned files; revisions above 64 Statements use derived Statement Evidence shards without changing canonical identity |
 | Evidence grounding | Statement/Evidence core v1 | source/object references remain readable | statement-bearing Profile v3 content must pass exact map/receipt verification |
 | MCP read surface | default `query_plan_version=6`; recommended `query/context/wiki/source/verify` | Explicit v5 MCP output/v3 with Capsule v2 and Query Plan v5; scheduled `search`/`recall`/`wiki_lookup` routes remain | `knowledge_support` stays read-only; Provider content is ≤64 KiB and never carries the full plan, candidate scores, rejected-candidate text, or local audit internals |
@@ -50,6 +50,14 @@ be ignored, and Statement discovery no longer scans the first 5,000 globally ord
 matching. The plan and receipt bind effective controls, upstream discovery digests/channels,
 limitations and the 512-candidate bound. Invalid retrieval modes fail at the shared Python seam,
 which also covers CLI/MCP calls after their own closed validation.
+
+Query Plan v6 also retains the bounded normalized source query when expansion aliases are applied;
+aliases are additive and cannot erase CJK or non-ASCII names. An entity-lexicon-free identity-anchor
+pass recognizes bounded adjacent Titlecase/uppercase name tokens (including independent comparison
+targets) and requires a complete token match for ordinary Statements. Explicit identity targets and
+admitted graph neighbors remain eligible through their existing admission paths. The plan records
+only `identity_anchor_count`, `identity_anchors_sha256`, and `identity_anchors_truncated`; anchor
+text is never emitted in a receipt, and a single homonym such as `Mercury` is not silently resolved.
 
 The MCP `audit` projection is local-only. Provider delivery is reduced to `standard` and uses only
 the opaque `receipt_id` for a redacted explain lookup. The runtime trace is ephemeral (16 entries,

@@ -224,6 +224,10 @@ def _current_rows(
         revision = store._revision_row(row, include_body=True)
         if not store.revision_provenance_admitted(revision):
             continue
+        # The canonical revision keeps validated aliases inside governance metadata.  Promote
+        # that exact field for the page-record seam; registry validation still owns normalization
+        # and bounds, and no editable path/frontmatter text is consulted here.
+        revision["aliases"] = revision["metadata"].get("aliases", [])
         dependency_states = [
             item["freshness"]
             for item in store.connection.execute(

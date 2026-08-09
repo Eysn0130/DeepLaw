@@ -103,11 +103,11 @@ Accepted fixes:
   Windows current-RSS measurement remains honestly `not_executed` while fixture and reader checks
   still execute.
 
-These changes passed local fault-injection and canary regressions. Native Windows 3.11/3.12/3.13
-execution is not replaced by the local macOS result. The current-source CI matrix now schedules all
-nine OS/Python cells, but its future green result will remain claim-ineligible development evidence.
-The manual Platform Core workflow still requires the frozen inventory and exact historical v0.6
-fixture.
+These changes passed local fault-injection and canary regressions. Current-head Candidate CI run
+`31329735169` for head `b83016d92e2e74a34b753330f2f1e8a0452e8a74` completed all nine OS/Python
+cells, including native Windows 3.11/3.12/3.13, successfully. This remains claim-ineligible
+development evidence and does not satisfy Platform Core. The manual Platform Core workflow still
+requires the frozen inventory and exact historical v0.6 fixture.
 
 ### Gate topology
 
@@ -249,8 +249,10 @@ was not treated as acceptance evidence.
 ## Known limitations and not claimed
 
 - Living Wiki performance remains outside the frozen comparator.
-- Windows root cause for the earlier `statement_count=0` is not guessed; the next raw report now has
-  a bounded diagnostic category.
+- The historical Windows raw report's zero-statement witness remains unchanged. Current-head
+  diagnostics bound that result to the RSS child returning no report `(1)`: its bespoke three-variable
+  environment omitted Windows bootstrap and isolated-home variables. The shared closed-environment
+  repair now leaves unsupported current-RSS measurement as `not_executed`.
 - Scale/Wiki fixture construction requires a future explicit evaluator decision.
 - Twelve provenance-bound Core validators and selective-forget raw evidence are still incomplete;
   assembly remains disabled.

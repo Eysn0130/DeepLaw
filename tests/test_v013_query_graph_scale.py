@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
 from benchmarks.v013.query_graph_scale import SEED, _source_text, build_report, verify_report
+from deeplaw.util import canonical_json, sha256_bytes
 
 
 def test_exact_100k_statement_source_stays_within_fragment_and_grant_bounds() -> None:
     source = _source_text(100_000, seed=SEED)
     sections = ["# " + item for item in source.split("\n# ")]
 
-    assert len(sections) == 100
+    assert len(sections) == 400
     assert max(len(section) for section in sections) < 12_000
     assert sum(
         1
@@ -33,8 +35,8 @@ def test_smoke_report_schema_hash_and_tail_recall(tmp_path: Path) -> None:
     assert report["release_gate_passed"] is False
     assert report["configuration"]["seed"] > 0
     assert report["configuration"]["graph_hops"] == [0, 1, 2]
-    assert report["configuration"]["statements_per_revision"] == 1_000
-    assert report["configuration"]["packet_max_fragments"] == 4
+    assert report["configuration"]["statements_per_revision"] == 250
+    assert report["configuration"]["packet_max_fragments"] == 1
     assert report["candidate"]["source_hashes"]
     assert "src/deeplaw/projection/builder.py" in report["candidate"]["source_hashes"]
 
@@ -42,6 +44,12 @@ def test_smoke_report_schema_hash_and_tail_recall(tmp_path: Path) -> None:
     assert lane["status"] == "executed"
     assert lane["construction"] == "public_profile_v3_compilation"
     assert lane["derived_rebuild"] == {"status": "executed", "reason": None}
+    fixture = lane["fixture"]
+    assert fixture["source_revision_count"] == len(fixture["source_revision_ids"])
+    assert fixture["compilation_run_count"] == len(fixture["compilation_run_ids"])
+    assert fixture["knowledge_revision_count"] == len(fixture["knowledge_revision_ids"])
+    assert fixture["source_revision_id"] == fixture["source_revision_ids"][0]
+    assert fixture["compilation_run_id"] == fixture["compilation_run_ids"][0]
     assert lane["statement"]["statement_count"] == 101
     assert lane["statement"]["target_positions"] == [0, 50, 100]
     assert lane["statement"]["tail_recall"] is True
@@ -80,6 +88,20 @@ def test_smoke_report_schema_hash_and_tail_recall(tmp_path: Path) -> None:
 
     serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
     assert re.search(r"(?:/Users/|/home/|/tmp/|/private/var/|[A-Za-z]:[\\/])", serialized) is None
+
+
+def test_executed_fixture_provenance_digest_is_recomputed(tmp_path: Path) -> None:
+    report = build_report(scales=(101,), workspace=tmp_path / "workspace")
+    tampered = deepcopy(report)
+    tampered["scale_reports"][0]["fixture"]["source_revision_ids_sha256"] = "0" * 64
+    body = dict(tampered)
+    body.pop("report_sha256")
+    tampered["report_sha256"] = sha256_bytes(canonical_json(body).encode("utf-8"))
+
+    validation = verify_report(tampered)
+
+    assert validation["valid"] is False
+    assert "executed fixture source_revision_ids_sha256 mismatch" in validation["errors"]
 
 
 def test_expensive_lanes_never_substitute_smoke_without_explicit_flag(tmp_path: Path) -> None:

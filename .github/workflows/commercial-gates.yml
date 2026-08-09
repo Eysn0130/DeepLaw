@@ -176,6 +176,27 @@ jobs:
       - name: Install mandatory test profile
         run: uv sync --frozen --extra dev --extra discovery
 
+      - name: Preflight frozen Platform Core collection
+        shell: bash
+        env:
+          PLATFORM_INVENTORY_SELECTION: ${{ matrix.system == 'Windows' && 'windows' || 'common' }}
+          PLATFORM_INVENTORY_PATH: ${{ runner.temp }}/platform-core-inventory-preflight-${{ matrix.slug }}.json
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.platform_inventory \
+            --mode platform_core \
+            --selection "${PLATFORM_INVENTORY_SELECTION}" \
+            --require-match \
+            --output "${PLATFORM_INVENTORY_PATH}"
+
+      - name: Upload Platform Core inventory preflight
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: platform-core-inventory-preflight-${{ matrix.slug }}
+          if-no-files-found: error
+          path: ${{ runner.temp }}/platform-core-inventory-preflight-${{ matrix.slug }}.json
+
       - name: Run full mandatory suite with zero skips
         shell: bash
         env:
@@ -223,6 +244,8 @@ jobs:
             "${RUNNER_TEMP}/platform-evidence/platform-${{ matrix.slug }}.json"
           cp "${RUNNER_TEMP}/platform-binding-${{ matrix.slug }}.json" \
             "${RUNNER_TEMP}/platform-evidence/platform-binding-${{ matrix.slug }}.json"
+          cp "${RUNNER_TEMP}/platform-core-inventory-preflight-${{ matrix.slug }}.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-core-inventory-preflight-${{ matrix.slug }}.json"
           cp "benchmarks/release/platform-core-test-manifest-v1.json" \
             "${RUNNER_TEMP}/platform-evidence/platform-core-test-manifest-v1.json"
 
