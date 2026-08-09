@@ -7,6 +7,7 @@ identity from a file name, title, frontmatter, or path.
 
 from __future__ import annotations
 
+import ntpath
 import os
 import re
 import stat
@@ -163,13 +164,310 @@ def _as_records(value: Any, *, field: str) -> list[dict[str, Any]]:
     return records
 
 
+def _windows_path_key(value: str) -> str:
+    """Return a case-insensitive Windows path key for handle/path comparisons.
+
+    ``GetFinalPathNameByHandleW`` normally returns a ``\\?\\``-prefixed path while the
+    path passed to ``CreateFileW`` may be a regular DOS or UNC path.  Strip only that
+    namespace prefix and normalize separators/casing; no filesystem resolution occurs.
+    """
+
+    path = value.replace("/", "\\")
+    if path.startswith("\\\\?\\UNC\\"):
+        path = "\\\\" + path[8:]
+    elif path.startswith("\\\\?\\"):
+        path = path[4:]
+    return ntpath.normcase(ntpath.normpath(path))
+
+
+def _windows_native_api() -> tuple[Any, Any, Any, Any]:
+    """Load the small Win32 API surface used by the safe reader lazily.
+
+    Keeping this import and binding Windows-only means the POSIX descriptor path remains
+    unchanged and importing DeepLaw on POSIX never requires a Windows runtime.
+    """
+
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.GetFileInformationByHandleEx.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL
+    kernel32.GetFinalPathNameByHandleW.argtypes = [
+        wintypes.HANDLE,
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+    ]
+    kernel32.GetFinalPathNameByHandleW.restype = wintypes.DWORD
+    kernel32.GetFileSizeEx.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(ctypes.c_longlong),
+    ]
+    kernel32.GetFileSizeEx.restype = wintypes.BOOL
+    kernel32.ReadFile.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.c_void_p,
+    ]
+    kernel32.ReadFile.restype = wintypes.BOOL
+
+    class _FileAttributeTagInfo(ctypes.Structure):
+        _fields_ = (
+            ("FileAttributes", wintypes.DWORD),
+            ("ReparseTag", wintypes.DWORD),
+        )
+
+    return ctypes, wintypes, kernel32, _FileAttributeTagInfo
+
+
+def _windows_handle_value(handle: Any, ctypes: Any) -> int | None:
+    if handle is None:
+        return None
+    value = handle if isinstance(handle, int) else getattr(handle, "value", None)
+    if value is None or value == ctypes.c_void_p(-1).value:
+        return None
+    return int(value)
+
+
+def _windows_open_handle(
+    kernel32: Any,
+    ctypes: Any,
+    path: str,
+    *,
+    directory: bool,
+    field: str,
+) -> Any:
+    generic_read = 0x80000000
+    share_all = 0x00000001 | 0x00000002 | 0x00000004
+    open_existing = 3
+    file_flag_backup_semantics = 0x02000000
+    file_flag_open_reparse_point = 0x00200000
+    flags = file_flag_open_reparse_point
+    if directory:
+        flags |= file_flag_backup_semantics
+    handle = kernel32.CreateFileW(
+        path,
+        generic_read,
+        share_all,
+        None,
+        open_existing,
+        flags,
+        None,
+    )
+    if _windows_handle_value(handle, ctypes) is None:
+        raise RegistryError(f"{field} cannot be opened safely")
+    return handle
+
+
+def _windows_close_handle(kernel32: Any, ctypes: Any, handle: Any) -> None:
+    if _windows_handle_value(handle, ctypes) is not None:
+        with suppress(OSError):
+            kernel32.CloseHandle(handle)
+
+
+def _windows_file_attributes(
+    kernel32: Any,
+    ctypes: Any,
+    info_type: Any,
+    handle: Any,
+    *,
+    field: str,
+) -> tuple[int, int]:
+    info = info_type()
+    # FileAttributeTagInfo (9) returns attributes and the reparse tag without resolving
+    # the opened object.  The OPEN_REPARSE_POINT flag above therefore lets us reject the
+    # reparse object itself instead of accidentally inspecting its target.
+    if not kernel32.GetFileInformationByHandleEx(
+        handle,
+        9,
+        ctypes.byref(info),
+        ctypes.sizeof(info),
+    ):
+        raise RegistryError(f"{field} file attributes are unavailable")
+    return int(info.FileAttributes), int(info.ReparseTag)
+
+
+def _windows_final_path(
+    kernel32: Any,
+    ctypes: Any,
+    handle: Any,
+    *,
+    field: str,
+) -> str:
+    size = 512
+    while size <= 32_768:
+        buffer = ctypes.create_unicode_buffer(size)
+        length = int(kernel32.GetFinalPathNameByHandleW(handle, buffer, size, 0))
+        if length == 0:
+            raise RegistryError(f"{field} final path is unavailable")
+        if length < size:
+            return buffer.value
+        size = max(size * 2, length + 1)
+    raise RegistryError(f"{field} final path is too long")
+
+
+def _windows_read_handle(
+    kernel32: Any,
+    ctypes: Any,
+    wintypes: Any,
+    handle: Any,
+    *,
+    max_bytes: int,
+    field: str,
+) -> bytes:
+    size = ctypes.c_longlong()
+    if not kernel32.GetFileSizeEx(handle, ctypes.byref(size)):
+        raise RegistryError(f"{field} size is unavailable")
+    if size.value < 0 or size.value > max_bytes:
+        raise RegistryError(f"{field} exceeds its byte bound")
+
+    chunks: list[bytes] = []
+    total = 0
+    block_size = min(1024 * 1024, max_bytes + 1)
+    buffer = ctypes.create_string_buffer(max(1, block_size))
+    while total <= max_bytes:
+        request = min(block_size, max_bytes + 1 - total)
+        if request <= 0:
+            break
+        count = wintypes.DWORD()
+        if not kernel32.ReadFile(
+            handle,
+            buffer,
+            request,
+            ctypes.byref(count),
+            None,
+        ):
+            raise RegistryError(f"{field} cannot be read safely")
+        read = int(count.value)
+        if read == 0:
+            break
+        chunks.append(bytes(buffer.raw[:read]))
+        total += read
+        if total > max_bytes:
+            raise RegistryError(f"{field} exceeds its byte bound")
+    return b"".join(chunks)
+
+
+def _safe_read_file_windows(root: Path, relative: str, *, max_bytes: int, field: str) -> bytes:
+    ctypes, wintypes, kernel32, info_type = _windows_native_api()
+    root_path = ntpath.abspath(os.fspath(root))
+    root_handle = _windows_open_handle(
+        kernel32,
+        ctypes,
+        root_path,
+        directory=True,
+        field=field,
+    )
+    try:
+        root_attributes, _ = _windows_file_attributes(
+            kernel32,
+            ctypes,
+            info_type,
+            root_handle,
+            field=field,
+        )
+        if not root_attributes & 0x00000010:
+            raise RegistryError(f"{field} root is not a directory")
+        if root_attributes & 0x00000400:
+            raise RegistryError(f"{field} root is a reparse point")
+        root_key = _windows_path_key(
+            _windows_final_path(kernel32, ctypes, root_handle, field=field)
+        )
+
+        # Open every declared ancestor with OPEN_REPARSE_POINT as a directory.  This rejects
+        # static symlink/junction/reparse ancestors before the final read; the final handle path
+        # check below also closes the race where an ancestor is replaced while these checks run.
+        for index in range(1, len(PurePosixPath(relative).parts)):
+            parent_path = ntpath.join(root_path, *PurePosixPath(relative).parts[:index])
+            parent_handle = _windows_open_handle(
+                kernel32,
+                ctypes,
+                parent_path,
+                directory=True,
+                field=field,
+            )
+            try:
+                attributes, _ = _windows_file_attributes(
+                    kernel32,
+                    ctypes,
+                    info_type,
+                    parent_handle,
+                    field=field,
+                )
+                if not attributes & 0x00000010 or attributes & 0x00000400:
+                    raise RegistryError(f"{field} parent is not a regular directory")
+            finally:
+                _windows_close_handle(kernel32, ctypes, parent_handle)
+
+        target_path = ntpath.join(root_path, *PurePosixPath(relative).parts)
+        target_handle = _windows_open_handle(
+            kernel32,
+            ctypes,
+            target_path,
+            directory=False,
+            field=field,
+        )
+        try:
+            attributes, _ = _windows_file_attributes(
+                kernel32,
+                ctypes,
+                info_type,
+                target_handle,
+                field=field,
+            )
+            if attributes & 0x00000400:
+                raise RegistryError(f"{field} is a reparse point")
+            if attributes & 0x00000010:
+                raise RegistryError(f"{field} is not a regular file")
+            expected_key = ntpath.join(root_key, *PurePosixPath(relative).parts)
+            actual_key = _windows_path_key(
+                _windows_final_path(kernel32, ctypes, target_handle, field=field)
+            )
+            if actual_key != _windows_path_key(expected_key):
+                raise RegistryError(f"{field} escaped its root")
+            return _windows_read_handle(
+                kernel32,
+                ctypes,
+                wintypes,
+                target_handle,
+                max_bytes=max_bytes,
+                field=field,
+            )
+        finally:
+            _windows_close_handle(kernel32, ctypes, target_handle)
+    finally:
+        _windows_close_handle(kernel32, ctypes, root_handle)
+
+
 def _safe_read_file(root: Path, relative: str, *, max_bytes: int, field: str) -> bytes:
     """Read a manifest-declared regular file without following symlinks.
 
     On POSIX, every path component is opened relative to the already-open parent descriptor
     with ``O_NOFOLLOW``.  This keeps the check and the use of a parent directory in one kernel
-    operation and avoids a path-based lstat/open race.  Platforms without the required descriptor
-    APIs use a conservative no-symlink fallback and fail closed when that guarantee is unavailable.
+    operation and avoids a path-based lstat/open race.  Windows uses native file handles opened
+    with ``FILE_FLAG_OPEN_REPARSE_POINT`` and verifies the handle's final path before reading.
+    Platforms without either native guarantee use a conservative no-symlink fallback and fail
+    closed when that guarantee is unavailable.
     """
 
     if not isinstance(relative, str) or _CONTROL.search(relative):
@@ -182,6 +480,14 @@ def _safe_read_file(root: Path, relative: str, *, max_bytes: int, field: str) ->
         or len(relative) > 2_000
     ):
         raise RegistryError(f"{field} path is unsafe")
+
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
+        raise RegistryError(f"{field} byte bound is invalid")
+
+    if os.name == "nt":
+        if any(":" in part for part in rel.parts):
+            raise RegistryError(f"{field} path is unsafe")
+        return _safe_read_file_windows(root, relative, max_bytes=max_bytes, field=field)
 
     nofollow = getattr(os, "O_NOFOLLOW", None)
     directory = getattr(os, "O_DIRECTORY", None)

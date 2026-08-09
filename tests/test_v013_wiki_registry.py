@@ -20,7 +20,7 @@ from deeplaw.wiki import (
     validate_living_wiki_manifest_v3,
     validate_page_registry_component,
 )
-from deeplaw.wiki.registry import _canonical_digest, _safe_read_file
+from deeplaw.wiki.registry import _canonical_digest, _safe_read_file, _windows_path_key
 
 ZERO = "0" * 64
 
@@ -358,3 +358,12 @@ def test_safe_reader_rejects_intermediate_symlink_and_nonregular_target(tmp_path
     (root / "directory").mkdir()
     with pytest.raises(RegistryError):
         _safe_read_file(root, "directory", max_bytes=1024, field="test")
+
+
+def test_windows_handle_path_key_normalizes_final_path_namespaces() -> None:
+    assert _windows_path_key(r"\\?\C:\DeepLaw\Wiki\manifest.json") == (
+        r"c:\deeplaw\wiki\manifest.json"
+    )
+    assert _windows_path_key(r"\\?\UNC\Server\Share\manifest.json") == (
+        r"\\server\share\manifest.json"
+    )
