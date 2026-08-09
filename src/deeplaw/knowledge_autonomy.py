@@ -2321,6 +2321,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             self.connection.execute("PRAGMA synchronous = FULL")
         self.read_only = read_only
         self._held_file_leases: dict[str, tuple[str, int]] = {}
+        self._legacy_source_state_cache: dict[str, dict[str, dict[str, Any]]] = {}
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA busy_timeout = 5000")
@@ -2931,10 +2932,80 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         response["audit_head"] = self.audit_head
         return response
 
+    def _legacy_source_state_at(
+        self,
+        legacy_audit_head: str,
+    ) -> dict[str, dict[str, Any]]:
+        """Replay source lifecycle through one exact legacy audit head."""
+
+        if not _SHA256.fullmatch(legacy_audit_head):
+            raise ValueError("legacy audit head is invalid")
+        cached = self._legacy_source_state_cache.get(legacy_audit_head)
+        if cached is not None:
+            return cached
+        lifecycles: dict[str, dict[str, Any]] = {}
+        found = False
+        for row in self.connection.execute(
+            """
+            SELECT sequence, event_type, object_id, payload_json, event_hash, created_at
+            FROM events ORDER BY sequence
+            """
+        ):
+            payload = strict_json_loads(row["payload_json"])
+            if not isinstance(payload, dict):
+                raise ValueError("legacy event payload is invalid")
+            event_type = row["event_type"]
+            object_id = row["object_id"]
+            if event_type == "source_compiled" and isinstance(object_id, str):
+                lifecycles[object_id] = {
+                    "source_key": payload.get("source_key"),
+                    "previous_source_id": payload.get("previous_source_id"),
+                    "status": "pending",
+                    "activated_at": None,
+                    "superseded_at": None,
+                    "removed_at": None,
+                }
+            elif event_type == "source_activated" and isinstance(object_id, str):
+                state = lifecycles.get(object_id)
+                if state is None:
+                    state = {
+                        "source_key": payload.get("source_key"),
+                        "previous_source_id": payload.get("previous_source_id"),
+                        "status": "pending",
+                        "activated_at": None,
+                        "superseded_at": None,
+                        "removed_at": None,
+                    }
+                    lifecycles[object_id] = state
+                previous_source_id = payload.get("previous_source_id")
+                previous = lifecycles.get(previous_source_id)
+                if previous is not None:
+                    previous["status"] = "superseded"
+                    previous["superseded_at"] = payload.get("activated_at")
+                state["status"] = "active"
+                state["activated_at"] = payload.get("activated_at")
+            elif event_type == "source_removed" and isinstance(object_id, str):
+                state = lifecycles.get(object_id)
+                if state is not None:
+                    state["status"] = "removed"
+                    state["removed_at"] = payload.get("removed_at")
+            if row["event_hash"] == legacy_audit_head:
+                found = True
+                break
+        if not found:
+            raise ValueError("legacy audit head is not registered")
+        self._legacy_source_state_cache[legacy_audit_head] = lifecycles
+        return lifecycles
+
     def _source_reference_binding(
         self,
         reference: dict[str, Any],
+        *,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> dict[str, Any] | None:
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="source reference as_of")
         revision_id = reference.get("revision_id")
         if isinstance(revision_id, str):
             if any(key in reference for key in ("fragment_id", "locator", "uri", "quote_sha256")):
@@ -2984,10 +3055,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         source_id = reference.get("source_id")
         if not isinstance(source_revision_id, str) and not isinstance(source_id, str):
             return None
+        binding_time_clause = ""
+        binding_parameters: tuple[Any, ...]
         if isinstance(source_revision_id, str):
+            binding_parameters = (source_revision_id,)
+            if as_of is not None:
+                binding_time_clause = "AND evidence_bindings_v3.recorded_at <= ?"
+                binding_parameters = (source_revision_id, as_of)
             binding = self.connection.execute(
-                """
+                f"""
                 SELECT evidence_bindings_v3.legacy_source_id AS source_id,
+                       evidence_bindings_v3.source_revision_id,
                        evidence_bindings_v3.scope,
                        evidence_bindings_v3.sensitivity,
                        evidence_bindings_v3.lifecycle,
@@ -3001,16 +3079,22 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 LEFT JOIN source_lifecycle
                   ON source_lifecycle.source_id = evidence_bindings_v3.legacy_source_id
                 WHERE evidence_bindings_v3.source_revision_id = ?
+                  {binding_time_clause}
                 ORDER BY evidence_bindings_v3.recorded_at DESC,
                          evidence_bindings_v3.binding_id DESC
                 LIMIT 1
                 """,
-                (source_revision_id,),
+                binding_parameters,
             ).fetchone()
         else:
+            binding_parameters = (source_id,)
+            if as_of is not None:
+                binding_time_clause = "AND evidence_bindings_v3.recorded_at <= ?"
+                binding_parameters = (source_id, as_of)
             binding = self.connection.execute(
-                """
+                f"""
                 SELECT evidence_bindings_v3.legacy_source_id AS source_id,
+                       evidence_bindings_v3.source_revision_id,
                        evidence_bindings_v3.scope,
                        evidence_bindings_v3.sensitivity,
                        evidence_bindings_v3.lifecycle,
@@ -3024,33 +3108,87 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 LEFT JOIN source_lifecycle
                   ON source_lifecycle.source_id = evidence_bindings_v3.legacy_source_id
                 WHERE evidence_bindings_v3.legacy_source_id = ?
+                  {binding_time_clause}
                 ORDER BY evidence_bindings_v3.recorded_at DESC,
                          evidence_bindings_v3.binding_id DESC
                 LIMIT 1
                 """,
-                (source_id,),
+                binding_parameters,
             ).fetchone()
         if binding is None or (isinstance(source_id, str) and source_id != binding["source_id"]):
             return None
         if reference.get("uri") not in {None, binding["origin_uri"]}:
             return None
         fragment_id = reference.get("fragment_id")
+        active = binding["lifecycle"] == "active"
+        if binding["source_id"] is not None:
+            if as_of is None:
+                active = active and (
+                    binding["source_status"] == "active"
+                    or (
+                        binding["source_status"] == "pending"
+                        and binding["origin"] == "user_source"
+                        and binding["authority"] in {"user_provided", "verified_source"}
+                    )
+                )
+            else:
+                if legacy_audit_head is not None:
+                    lifecycles = self._legacy_source_state_at(legacy_audit_head)
+                    lifecycle = lifecycles.get(binding["source_id"])
+                    historical_status = lifecycle["status"] if lifecycle is not None else None
+                    active = active and (
+                        historical_status == "active"
+                        or (
+                            historical_status == "pending"
+                            and binding["origin"] == "user_source"
+                            and binding["authority"]
+                            in {"user_provided", "verified_source"}
+                        )
+                    )
+                else:
+                    lifecycle = self.connection.execute(
+                        """
+                        SELECT activated_at, superseded_at, removed_at
+                        FROM source_lifecycle
+                        WHERE source_id = ?
+                        """,
+                        (binding["source_id"],),
+                    ).fetchone()
+                    historical_status = None
+                    if lifecycle is not None:
+                        if (
+                            lifecycle["removed_at"] is not None
+                            and lifecycle["removed_at"] <= as_of
+                        ):
+                            historical_status = "removed"
+                        elif (
+                            lifecycle["superseded_at"] is not None
+                            and lifecycle["superseded_at"] <= as_of
+                        ):
+                            historical_status = "superseded"
+                        elif (
+                            lifecycle["activated_at"] is not None
+                            and lifecycle["activated_at"] <= as_of
+                        ):
+                            historical_status = "active"
+                        else:
+                            historical_status = "pending"
+                    active = active and (
+                        historical_status == "active"
+                        or (
+                            historical_status == "pending"
+                            and binding["origin"] == "user_source"
+                            and binding["authority"]
+                            in {"user_provided", "verified_source"}
+                        )
+                    )
         if fragment_id is None:
             if "locator" in reference or "quote_sha256" in reference:
                 return None
             return {
                 "scope": binding["scope"],
                 "sensitivity": binding["sensitivity"],
-                "active": binding["lifecycle"] == "active"
-                and (
-                    binding["source_id"] is None
-                    or binding["source_status"] == "active"
-                    or (
-                        binding["source_status"] == "pending"
-                        and binding["origin"] == "user_source"
-                        and binding["authority"] in {"user_provided", "verified_source"}
-                    )
-                ),
+                "active": active,
             }
         if not isinstance(fragment_id, str):
             return None
@@ -3070,16 +3208,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         return {
             "scope": binding["scope"],
             "sensitivity": binding["sensitivity"],
-            "active": binding["lifecycle"] == "active"
-            and (
-                binding["source_id"] is None
-                or binding["source_status"] == "active"
-                or (
-                    binding["source_status"] == "pending"
-                    and binding["origin"] == "user_source"
-                    and binding["authority"] in {"user_provided", "verified_source"}
-                )
-            ),
+            "active": active,
         }
 
     def _pin_source_references(
@@ -3114,8 +3243,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         scope: str | None = None,
         max_sensitivity: str | None = None,
         require_active: bool = True,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> bool:
-        binding = self._source_reference_binding(reference)
+        binding = self._source_reference_binding(
+            reference,
+            as_of=as_of,
+            legacy_audit_head=legacy_audit_head,
+        )
         if binding is None:
             return False
         if require_active and binding["active"] is not True:
@@ -3140,6 +3275,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         consumer_revision_id: str,
         scope: str | None,
         max_sensitivity: str | None,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> bool:
         """Admit an unchanged exact fragment through a recorded active successor."""
 
@@ -3147,18 +3284,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         fragment_id = reference.get("fragment_id")
         if not isinstance(source_revision_id, str) or not isinstance(fragment_id, str):
             return False
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="successor provenance as_of")
         dependency = self.connection.execute(
             """
-            SELECT freshness FROM knowledge_dependencies_v1
+            SELECT freshness, recorded_at, updated_at FROM knowledge_dependencies_v1
             WHERE consumer_kind = ? AND consumer_revision_id = ?
               AND source_revision_id = ? AND fragment_id = ?
               AND dependency_kind = 'direct'
+              AND (? IS NULL OR recorded_at <= ?)
             """,
             (
                 consumer_kind,
                 consumer_revision_id,
                 source_revision_id,
                 fragment_id,
+                as_of,
+                as_of,
             ),
         ).fetchone()
         event = self.connection.execute(
@@ -3167,21 +3309,35 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             FROM source_freshness_events_v1
             WHERE target_kind = ? AND target_id = ?
               AND source_revision_id = ?
+              AND (? IS NULL OR recorded_at <= ?)
             ORDER BY recorded_at DESC, freshness_event_id DESC
             LIMIT 1
             """,
-            (consumer_kind, consumer_revision_id, source_revision_id),
+            (consumer_kind, consumer_revision_id, source_revision_id, as_of, as_of),
         ).fetchone()
+        dependency_freshness = (
+            self._dependency_freshness_at(
+                dependency,
+                target_kind=consumer_kind,
+                target_id=consumer_revision_id,
+                source_revision_id=source_revision_id,
+                as_of=as_of,
+            )
+            if dependency is not None
+            else None
+        )
         if (
             dependency is None
-            or dependency["freshness"] != "fresh"
+            or dependency_freshness != "fresh"
             or event is None
             or event["freshness"] != "fresh"
             or event["replacement_source_revision_id"] is None
         ):
             return False
         successor = self._source_reference_binding(
-            {"source_revision_id": event["replacement_source_revision_id"]}
+            {"source_revision_id": event["replacement_source_revision_id"]},
+            as_of=as_of,
+            legacy_audit_head=legacy_audit_head,
         )
         if successor is None or successor["active"] is not True:
             return False
@@ -3197,8 +3353,60 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             )
         )
 
-    def revision_provenance_admitted(self, revision: dict[str, Any]) -> bool:
+    def _dependency_freshness_at(
+        self,
+        dependency: sqlite3.Row,
+        *,
+        target_kind: str,
+        target_id: str,
+        source_revision_id: str,
+        as_of: str | None,
+    ) -> str:
+        """Resolve a dependency's last known state without looking past ``as_of``."""
+
+        if as_of is None or dependency["updated_at"] <= as_of:
+            return dependency["freshness"]
+        prior = self.connection.execute(
+            """
+            SELECT freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ?
+              AND source_revision_id = ? AND recorded_at <= ?
+            ORDER BY recorded_at DESC, freshness_event_id DESC
+            LIMIT 1
+            """,
+            (target_kind, target_id, source_revision_id, as_of),
+        ).fetchone()
+        if prior is not None:
+            return cast(str, prior["freshness"])
+        future = self.connection.execute(
+            """
+            SELECT previous_freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ?
+              AND source_revision_id = ? AND recorded_at > ?
+              AND previous_freshness IS NOT NULL
+            ORDER BY recorded_at, freshness_event_id
+            LIMIT 1
+            """,
+            (target_kind, target_id, source_revision_id, as_of),
+        ).fetchone()
+        return (
+            cast(str, future["previous_freshness"])
+            if future is not None
+            else cast(str, dependency["freshness"])
+        )
+
+    def revision_provenance_admitted(
+        self,
+        revision: dict[str, Any],
+        *,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
+    ) -> bool:
         """Check current source lifecycle without changing immutable revision history."""
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="revision provenance as_of")
         references = revision.get("source_refs", [])
         source_admitted = revision.get("verification") != "source_bound" or (
             bool(references)
@@ -3209,6 +3417,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         reference,
                         scope=cast(str | None, revision.get("scope")),
                         max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                        as_of=as_of,
+                        legacy_audit_head=legacy_audit_head,
                     )
                     or self._successor_equivalent_reference_is_admitted(
                         reference,
@@ -3216,6 +3426,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         consumer_revision_id=cast(str, revision.get("revision_id")),
                         scope=cast(str | None, revision.get("scope")),
                         max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                        as_of=as_of,
+                        legacy_audit_head=legacy_audit_head,
                     )
                 )
                 for reference in references
@@ -3228,6 +3440,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 revision_id,
                 scope=cast(str | None, revision.get("scope")),
                 max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                as_of=as_of,
+                legacy_audit_head=legacy_audit_head,
             )
         )
         return (
@@ -3236,6 +3450,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             and self._revision_dependencies_admitted(
                 consumer_kind="knowledge_revision",
                 consumer_revision_id=revision_id,
+                as_of=as_of,
             )
         )
 
@@ -3245,30 +3460,50 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         scope: str | None,
         max_sensitivity: str | None,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> bool:
         rows = self.connection.execute(
             """
-            SELECT source_revision_id, freshness
+            SELECT source_revision_id, freshness, recorded_at, updated_at
             FROM knowledge_dependencies_v1
             WHERE consumer_kind = 'knowledge_revision'
               AND consumer_revision_id = ?
               AND dependency_kind = 'direct'
+              AND (? IS NULL OR recorded_at <= ?)
             ORDER BY source_revision_id
             """,
-            (revision_id,),
+            (revision_id, as_of, as_of),
         ).fetchall()
         return bool(rows) and all(
-            row["freshness"] == "fresh"
+            self._dependency_freshness_at(
+                row,
+                target_kind="knowledge_revision",
+                target_id=revision_id,
+                source_revision_id=row["source_revision_id"],
+                as_of=as_of,
+            )
+            == "fresh"
             and self._source_reference_is_bound(
                 {"source_revision_id": row["source_revision_id"]},
                 scope=scope,
                 max_sensitivity=max_sensitivity,
+                as_of=as_of,
+                legacy_audit_head=legacy_audit_head,
             )
             for row in rows
         )
 
-    def relation_provenance_admitted(self, relation: dict[str, Any]) -> bool:
+    def relation_provenance_admitted(
+        self,
+        relation: dict[str, Any],
+        *,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
+    ) -> bool:
         """Check whether every canonical relation evidence reference remains admissible."""
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="relation provenance as_of")
         references = relation.get("evidence_refs", [])
         return bool(references) and all(
             isinstance(reference, dict)
@@ -3277,6 +3512,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     reference,
                     scope=cast(str | None, relation.get("scope")),
                     max_sensitivity=cast(str | None, relation.get("sensitivity")),
+                    as_of=as_of,
+                    legacy_audit_head=legacy_audit_head,
                 )
                 or self._successor_equivalent_reference_is_admitted(
                     reference,
@@ -3287,6 +3524,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     ),
                     scope=cast(str | None, relation.get("scope")),
                     max_sensitivity=cast(str | None, relation.get("sensitivity")),
+                    as_of=as_of,
+                    legacy_audit_head=legacy_audit_head,
                 )
             )
             for reference in references
@@ -3296,6 +3535,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 str,
                 relation.get("relation_revision_id"),
             ),
+            as_of=as_of,
         )
 
     def _revision_dependencies_admitted(
@@ -3303,18 +3543,73 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         consumer_kind: str,
         consumer_revision_id: str,
+        as_of: str | None = None,
     ) -> bool:
-        row = self.connection.execute(
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="revision dependency as_of")
+        dependency_rows = self.connection.execute(
             """
-            SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN freshness = 'fresh' THEN 1 ELSE 0 END) AS fresh
+            SELECT dependency_id, freshness, input_kind, input_id, recorded_at, updated_at
             FROM revision_dependencies_v1
             WHERE consumer_kind = ? AND consumer_revision_id = ?
             """,
             (consumer_kind, consumer_revision_id),
+        ).fetchall()
+        rows = [
+            row
+            for row in dependency_rows
+            if as_of is None or row["recorded_at"] <= as_of
+        ]
+        if not rows:
+            return True
+        return all(
+            self._revision_dependency_freshness_at(
+                row,
+                consumer_kind=consumer_kind,
+                consumer_revision_id=consumer_revision_id,
+                as_of=as_of,
+            )
+            == "fresh"
+            for row in rows
+        )
+
+    def _revision_dependency_freshness_at(
+        self,
+        dependency: sqlite3.Row,
+        *,
+        consumer_kind: str,
+        consumer_revision_id: str,
+        as_of: str | None,
+    ) -> str:
+        if as_of is None or dependency["updated_at"] <= as_of:
+            return cast(str, dependency["freshness"])
+        prior = self.connection.execute(
+            """
+            SELECT freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ? AND recorded_at <= ?
+            ORDER BY recorded_at DESC, freshness_event_id DESC
+            LIMIT 1
+            """,
+            (consumer_kind, consumer_revision_id, as_of),
         ).fetchone()
-        return row is not None and (
-            row["total"] == 0 or row["fresh"] == row["total"]
+        if prior is not None:
+            return cast(str, prior["freshness"])
+        future = self.connection.execute(
+            """
+            SELECT previous_freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ? AND recorded_at > ?
+              AND previous_freshness IS NOT NULL
+            ORDER BY recorded_at, freshness_event_id
+            LIMIT 1
+            """,
+            (consumer_kind, consumer_revision_id, as_of),
+        ).fetchone()
+        return (
+            cast(str, future["previous_freshness"])
+            if future is not None
+            else cast(str, dependency["freshness"])
         )
 
     def _knowledge_admission_reasons(
@@ -10888,6 +11183,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
     def _derived_search_snapshot_at(
         self,
         reference_time: str,
+        *,
+        legacy_audit_head: str | None = None,
     ) -> tuple[list[tuple[str, str, str, str, str, str]], list[str], str]:
         """Rebuild the lexical and relation identities at a Ledger event time."""
 
@@ -10918,7 +11215,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         admitted_ids: set[str] = set()
         for row in rows:
             if not self.revision_provenance_admitted(
-                self._revision_row(row, include_body=False)
+                self._revision_row(row, include_body=False),
+                as_of=reference_time,
+                legacy_audit_head=legacy_audit_head,
             ) or not _interval_admits(
                 reference_time=reference_time,
                 valid_from=row["valid_from"],
@@ -10947,7 +11246,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 reference_time,
                 reference_time=reference_time,
             )
-            if self.relation_provenance_admitted(relation)
+            if self.relation_provenance_admitted(
+                relation,
+                as_of=reference_time,
+                legacy_audit_head=legacy_audit_head,
+            )
             and relation["subject_knowledge_id"] in admitted_ids
             and relation["object_knowledge_id"] in admitted_ids
         ]
@@ -11210,7 +11513,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             manifest_search,
             manifest_relation_revisions,
             manifest_revision_ids_sha256,
-        ) = self._derived_search_snapshot_at(manifest["generated_at"])
+        ) = self._derived_search_snapshot_at(
+            manifest["generated_at"],
+            legacy_audit_head=manifest["legacy_audit_head"],
+        )
         if not (
             manifest.get("knowledge_revision_count")
             == living_manifest.get("knowledge_revision_count")

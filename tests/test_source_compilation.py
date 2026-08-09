@@ -1456,6 +1456,9 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
         compilation_run_id=begun["compilation_run_id"],
         confirm_no_case_data=True,
     )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        baseline_verification = store.rebuild_derived()
+    assert baseline_verification["schema_version"] == "deeplaw.derived-manifest/v2"
 
     source.write_text(
         "\n\n".join(
@@ -1475,6 +1478,13 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
             confirm_no_case_data=True,
         )
         manifest = vault.source_review_manifest(second["source"]["source_id"])
+    # Register both evidence revisions before building the historical baseline;
+    # the successor remains pending and must not enter that projection.
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.import_legacy_evidence()
+        baseline_before_successor_approval = store.rebuild_derived()
+    assert baseline_before_successor_approval["schema_version"] == "deeplaw.derived-manifest/v2"
+    with KnowledgeVault(root, read_only=False) as vault:
         vault.approve_source_assets(
             second["source"]["source_id"],
             confirm_reviewed=True,
@@ -1482,12 +1492,66 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
             reviewer_id="freshness-test",
             review_reason="Activate the exact successor Source Revision.",
         )
-    report = coordinator.refresh(
-        grant_id=grant_id,
-        source_revision_id=first["identity"]["source_revision_id"],
-        replacement_source_revision_id=second["identity"]["source_revision_id"],
-        confirm_no_case_data=True,
-    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        stale_before_refresh = store.verify()
+    assert stale_before_refresh["valid"] is True, stale_before_refresh["failures"]
+    assert stale_before_refresh["derived_ready"] is False
+    assert "derived_manifest_stale" in {
+        item["code"] for item in stale_before_refresh["warnings"]
+    }
+
+    manifest_path = root / ".deeplaw" / "derived" / "manifest.json"
+    living_manifest_path = root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    living_manifest_bytes = living_manifest_path.read_bytes()
+    try:
+        manifest = json.loads(manifest_bytes)
+        living_manifest = json.loads(living_manifest_bytes)
+        for value in (manifest, living_manifest):
+            value["knowledge_revision_count"] += 1
+            value["knowledge_revision_ids_sha256"] = sha256_bytes(b"tampered-revision-ids")
+            value["fts_rows_sha256"] = sha256_bytes(b"tampered-fts-rows")
+        living_body = {
+            key: value for key, value in living_manifest.items() if key != "manifest_sha256"
+        }
+        living_manifest["manifest_sha256"] = sha256_bytes(
+            canonical_json(living_body).encode("utf-8")
+        )
+        manifest["components"][0]["manifest_sha256"] = living_manifest["manifest_sha256"]
+        manifest["components"][0]["manifest_byte_size"] = len(
+            (
+                json.dumps(living_manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+        )
+        manifest_body = {
+            key: value for key, value in manifest.items() if key != "manifest_sha256"
+        }
+        manifest["manifest_sha256"] = sha256_bytes(
+            canonical_json(manifest_body).encode("utf-8")
+        )
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
+        living_manifest_path.write_text(
+            json.dumps(living_manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
+        with AutonomousKnowledgeStore(root, read_only=True) as store:
+            tampered_verification = store.verify()
+        assert tampered_verification["valid"] is False
+        assert "derived_manifest_invalid" in {
+            item["code"] for item in tampered_verification["failures"]
+        }
+    finally:
+        manifest_path.write_bytes(manifest_bytes)
+        living_manifest_path.write_bytes(living_manifest_bytes)
+
+    with KnowledgeOS.open(root) as knowledge_os:
+        report = knowledge_os.compilations.refresh(
+            grant_id=grant_id,
+            source_revision_id=first["identity"]["source_revision_id"],
+            replacement_source_revision_id=second["identity"]["source_revision_id"],
+            confirm_no_case_data=True,
+        )
     assert len(report["changed_fragment_ids"]) == 1
     assert len(report["unchanged_fragment_ids"]) == 2
     assert report["added_fragment_ids"] == []
@@ -1532,6 +1596,15 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
         gap["code"] for gap in unrelated_query["gaps"]
     }.isdisjoint({"stale_knowledge", "uncompiled_source"})
     assert verification["valid"] is True, verification["failures"]
+    assert verification["derived_ready"] is False
+    assert "derived_manifest_stale" in {
+        item["code"] for item in verification["warnings"]
+    }
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_derived()
+        rebuilt_verification = store.verify()
+    assert rebuilt_verification["valid"] is True, rebuilt_verification["failures"]
+    assert rebuilt_verification["derived_ready"] is True
 
 
 def test_source_structural_diff_reports_added_and_moved_fragments(
