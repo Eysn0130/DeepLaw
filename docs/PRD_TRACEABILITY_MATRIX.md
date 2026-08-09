@@ -1,7 +1,7 @@
 # DeepLaw PRD 1.2 traceability matrix
 
-Status: **current source-candidate mapping**, re-audited 2026-08-09 through implementation commit
-`ceaaa8e417098e92efcca064604e63945833726e`. This document adopts PRD 1.2 into the development
+Status: **current source-candidate mapping**, re-audited 2026-08-10 through Pass 5 implementation
+commit `7a9d7d1f242fe46db1f258737305369f50ec69de`. This document adopts PRD 1.2 into the development
 and acceptance process. It is not a release note, qualification result, or permission to implement
 every Target.
 
@@ -11,9 +11,9 @@ every Target.
   `daa524d62471801ca79699948ebca52ab194e14adcdf0bc1d332850fd7a12fb8`.
 - Upstream research SHA-256:
   `00dfab0dfed139f5d81982061a75896f29552f56a125aa83bec57f0c6a860967`.
-- Branch: `codex/semantic-evidence-package-fix`; reviewed implementation commit/tree:
-  `ceaaa8e417098e92efcca064604e63945833726e` /
-  `e2ca644e23fc01a3026350982b4a781711f29c0d`.
+- Branch: `codex/v013-evidence-provenance`; reviewed Pass 5 implementation commit/tree:
+  `7a9d7d1f242fe46db1f258737305369f50ec69de` /
+  `76aae2d9a42622db2984c86f3b3fa667f21c8f5d`.
 - The Owner's prior work was preserved. The remediation is split into failure reproductions,
   routing/snapshot correction, sink compatibility, route-first retrieval, bounded diagnostics,
   repository-development protocol rotation, and the v0.13 release gate. No reset, force push,
@@ -244,24 +244,43 @@ Evidence abbreviations in the table are repository-relative paths:
 | Host Integration | Target with local static/thin-adapter evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
 | Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
 
-## Pass 2 gate classification and skip disposition
+## Pass 5 current-head addendum
 
-| Gate class | Rule | Pass 2 status |
+Pass 5 does not upgrade any PRD row to `Qualified` or `Released`.
+
+- Wiki wrong-merge, alias-collision and typed cycle cases now execute through public mutation,
+  projection, Resolver and graph seams. They remain repository-visible development evidence;
+  independent human Wiki task qualification is `not_executed`.
+- Statement 5,001 now executes through public Source Revision and semantic compilation stages with
+  Source/Compilation/Knowledge Revision inventory digests. Statement 10k/100k and Relation
+  500/5000/10k/100k remain required `not_executed` lanes.
+- A `limit=1` public graph probe reproduced missing selection-truncation Gap/Receipt evidence. It is
+  a current correctness blocker and was not hidden by raising/removing the bound.
+- The fresh Query v6 challenge was consumed during remediation and is now
+  `development_tuning_used`; it cannot be Human Gold, qualification holdout or final blind.
+- Product-outcome package v1 is benchmark-only, rejects every pass, and leaves assembly disabled.
+  Human Gold, exact Legal Pack, real Codex, performance, Platform Core and public-redownload gates
+  remain unexecuted or failed as detailed in `docs/V0_13_PASS5_DISPOSITION.md`.
+
+## Pass 5 gate classification and skip disposition
+
+| Gate class | Rule | Pass 5 status |
 |---|---|---|
 | **Core** | Required; no core safety, integrity, legal, boundary, scale, platform, or supply-chain gate may be lowered | Kernel correction does not lower a Core gate; required external evidence remains `not_executed` |
 | **Capability** | May remain `not_claimed` when the capability is not declared | Run Timeline and semantic restore remain deferred; Claude/OpenCode remain `not_claimed` unless support is explicitly declared; E2E continuity remains `Target` |
 | **Competitive Claim** | Independent named-comparator/host evidence; kernel evidence cannot satisfy it | Independent gate remains false and `not_executed`; no superiority/SOTA claim |
 
-The nine skip dispositions below are explicit non-results, not passes or silent omissions:
+The remaining six pytest skip dispositions are explicit non-results, not passes or silent
+omissions. The three prior Wiki skips now execute but remain development-only:
 
 | Required lane | Disposition |
 |---|---|
 | Statement scale 10k | `required not_executed` |
 | Statement scale 100k | `required not_executed` |
 | Relation truncation 500/5000 | `required not_executed` |
-| Wiki wrong merge | `required not_executed` |
-| Wiki alias collision | `required not_executed` |
-| Wiki cycle | `required not_executed` |
+| Wiki wrong merge | `development executed`; independent human task `not_executed` |
+| Wiki alias collision | `development executed`; independent human task `not_executed` |
+| Wiki cycle | `development executed`; scale truncation `not_executed` |
 | Historical v0.6 wheel | `separate compatibility not_executed` |
 | Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
 | Windows native junction | `macOS not_applicable`; Windows evidence remains required |
