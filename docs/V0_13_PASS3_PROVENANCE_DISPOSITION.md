@@ -171,6 +171,57 @@ The release workflow remains deliberately conservative while the provenance work
 
 This preserves the v0.12 package line and prevents a v0.13 downgrade or forged pass receipt.
 
+## 5A. Current-head deterministic CI remediation boundary
+
+The new source-candidate branch uses Draft PR #22. Its deterministic PR workflow is not a Core
+Gate and is not external qualification evidence. It builds an exact wheel and uses a separate
+repository-visible development corpus only to expose current-source regressions. The following
+failures were reproduced through the workflow-equivalent public seams and received bounded fixes:
+
+- Profile v3 finalization repeated the full applicability table inside the Provider packet and
+  exceeded the 64 KiB packet bound. The Provider projection now removes only that duplicate table,
+  retains its digest and every duty result, and keeps the 64 KiB hard limit.
+- The deterministic publication plan legitimately grew beyond the default 64 KiB Sink request
+  after exact Statement plans were added. Only the fixture-specific owner grant is raised to a
+  bounded 128 KiB request limit; runtime defaults and the Provider 64 KiB limit are unchanged.
+- Relation applicability attempted to read the Knowledge-only `expires_at` column. Relation valid
+  time now uses its actual `valid_from`/`valid_to` contract; scope, sensitivity and lifecycle
+  admission remain unchanged.
+- Historical Query v6 evidence could represent one immutable Fragment through locator-complete and
+  locator-omitted references, then repeat the same evidence across targeted duty fallbacks. Source
+  references now canonicalize through the bound Fragment row and evidence is reserved by stable
+  evidence identity before every bounded fallback.
+- The no-model lifecycle v1 contract required the false value `semantic_status=complete`. Additive
+  source-run/lifecycle v2 development receipts now distinguish mechanical success from semantic
+  completeness. The old v1 bytes and old package-consensus path remain untouched.
+- Windows could not safely open Living Wiki manifests because the POSIX descriptor path has no
+  native equivalent there. The Windows path now uses reparse-point-aware handles, bounded reads,
+  final-handle containment and alternate-stream rejection. Only current Windows CI can supply
+  platform evidence; macOS unit tests do not qualify this lane.
+
+The deterministic workflow uploads any available failed raw report with `if: always()` while the
+job remains failed. This preserves the failure evidence; it does not turn a failed development
+score into a pass. The historical package-consensus workflow continues to consume v1 and cannot
+interpret lifecycle v2 as formal release evidence.
+
+A pre-commit workflow-equivalent development run produced twelve successful compilation
+transactions and a valid Vault, while truthfully classifying all 12 source runs and the aggregate
+as `semantic_status=partial`. The subsequent frozen repository-visible query suite completed
+instead of crashing and reported `status=failed`: 12 of 15 canonical cases passed,
+`context_semantic_accuracy=0.933333`, and 11 of 14 Chinese variants passed
+(`query_variant_pass_rate=0.785714`). The unresolved cases are:
+
+- case 10: the withdrawn Policy A request still admits substitute compiled content; the Chinese
+  variant also lacks the required stale-withdrawal result;
+- case 11: the Chinese Context variant retrieves both policies but misses the required comparison
+  Synthesis;
+- case 14: the Chinese quote Context variant misses the verification-badge claim.
+
+These are real development quality failures, not provenance failures and not synthetic external
+results. They are retained as current limitations rather than weakening Gold, changing expected
+answers, or expanding this Pass 3 evidence task into multilingual retrieval product work. The
+deterministic PR job must remain red while they remain reproducible.
+
 ## 6. Continuity read-only recheck
 
 The ordinary Context route-override boundary was rechecked read-only. Public Python Context and
@@ -232,19 +283,35 @@ No private absolute path is part of this report.
 
 ## 9. Local verification boundary
 
-The requested focused checks are contract/regression checks only:
+The requested focused checks and the current remediation regressions are contract/development
+checks only:
 
 ```bash
 uv run --frozen pytest --strict-markers -q \
+  tests/test_semantic_gold.py \
+  tests/test_semantic_lifecycle_v2.py \
+  tests/test_v013_semantic_v3.py \
+  tests/test_semantic_context_v3_projection.py \
+  tests/test_v013_query_v6.py \
+  tests/test_v013_wiki_registry.py \
   tests/test_v013_commercial_evidence_semantics.py \
   tests/test_v013_commercial_release_gate.py \
-  tests/test_v013_provenance_contracts.py
+  tests/test_v013_provenance_contracts.py \
+  tests/test_prd12_route_reservation_reproduction.py \
+  tests/test_prd12_goal_route_identity_reproduction.py \
+  tests/test_prd12_checkpoint_head_reproduction.py
 
-git diff --check -- docs/V0_13_PASS3_PROVENANCE_DISPOSITION.md
+uv lock --check
+uv run --frozen pytest --strict-markers -rs
+uv run --frozen ruff check .
+git diff --check
 ```
 
-Passing these checks verifies the fail-closed contract and documentation diff. It does not change
-the statuses above, does not execute external inputs or Hosts, and does not authorize release.
+The reviewed pre-commit full run completed with `1310 passed, 9 skipped`; every skip remains
+classified in section 7 and is not counted as qualification. The fresh-wheel smoke completed with
+`valid=true`, Profile v3 publication, a real Query v6 compiled hit, a schema-valid Capsule, and
+package version `0.12.0`. These results verify local fail-closed and installed-wheel behavior only.
+They do not change the Core statuses above, execute external inputs or Hosts, or authorize release.
 
 ## Final decision
 

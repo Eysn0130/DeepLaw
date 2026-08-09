@@ -7,7 +7,7 @@ the additive v0.13 working-tree contract and must not be read as a published ver
 
 | Surface | Current default in the source candidate | Compatibility retained | Boundary |
 | --- | --- | --- | --- |
-| Semantic compilation | `living-wiki-agent/v3` | Profile v1 and v2 inputs/status remain readable | v3 adds dynamic applicability, Statements and exact freshness/verification status |
+| Semantic compilation | `living-wiki-agent/v3`; repository-visible deterministic development runs use source-run/lifecycle v2 | Profile v1 and v2 compiler inputs remain readable; deterministic lifecycle v1 stays immutable and complete-only | v3 adds dynamic applicability, Statements and exact freshness/verification status; development lifecycle v2 separates mechanical `status` from truthful `semantic_status` and is never formal release evidence |
 | Query | Query Plan v6 for `knowledge query`/Python retrieval query | Query Plan v5 remains explicitly selectable | v6 honors and receipts `retrieval_mode`/`graph_hops`/canonical fallback and an optional opaque task binding, discovers ≤20 revisions, then admits ≤512 Statements from only those revisions; it no-answers legacy content without admitted Statements |
 | Context | Query Plan v6 for Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`, `deeplaw knowledge autonomy context`, and autonomous MCP `operation=context` | Explicit `query_plan_version=5` only; a task binding is rejected instead of discarded on v5 | v6 uses the shared domain assembler and additive local Capsule v3 (≤262,144 bytes); exact task binding gates working checkpoints, while nested Provider v2 (≤65,536 bytes) excludes the binding; no ordinary query/context writes the Canonical Ledger |
 | Expansion | expansion Profile v2 | v1 receipts remain valid | v2 removes benchmark-shaped aliases and binds a generic lexicon digest |
@@ -25,6 +25,12 @@ The candidate adds tables and markers in place; it does not rewrite v1/v2 record
 
 - `deeplaw.semantic-compilation-core/v1` remains the existing semantic persistence marker; Profile
   v3 uses additive versioned artifacts and records through the existing compilation transaction;
+- `deeplaw.deterministic-semantic-source-run/v2` and
+  `deeplaw.deterministic-semantic-lifecycle/v2` are repository-visible, no-model development
+  receipts. A mechanically successful lifecycle may truthfully be `semantic_status=partial`; the
+  v2 aggregate is derived from its run rows using `blocked > unknown > partial > complete` and is
+  fixed to `formal_release_evidence_ready=false`. Historical v1 receipts remain complete-only and
+  are not rewritten or widened to admit v2;
 - `deeplaw.statement-evidence-core/v1` explicitly identifies Statement, map, receipt and dependency
   persistence;
 - Living Wiki v3 Registry/Link/Resolver artifacts are derived and rebuildable; they are not a
@@ -86,6 +92,11 @@ Linux/macOS/Windows × Python 3.11/3.12/3.13, fresh-wheel migration, exact relea
 reproducible wheel/sdist, SBOM, provenance, public re-download, real Codex blind tasks, Human Gold,
 real Obsidian desktop E2E and real Tolaria desktop integration remain external or release-bound
 gates. No compatibility claim in this document converts any of them to `pass`.
+
+The repository-visible deterministic Semantic Gold remains development evidence. Profile v3 can
+complete every canonical transaction and verify the Vault while reporting partial duty coverage;
+its lifecycle v2 result may be used to expose query regressions, but cannot satisfy Human Gold,
+real-Host, legal, commercial-release, or competitive-claim gates.
 
 ## Qualification disposition
 
