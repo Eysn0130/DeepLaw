@@ -141,7 +141,7 @@ def _install(
     uv: str,
     python: Path,
     artifact: Path,
-    constraints: Path,
+    constraints: Path | None,
     cwd: Path,
     environment: dict[str, str],
     operation: str,
@@ -154,10 +154,10 @@ def _install(
         "install",
         "--python",
         str(python),
-        "--constraint",
-        str(constraints),
         "--no-progress",
     ]
+    if constraints is not None:
+        command[5:5] = ["--constraint", str(constraints)]
     if upgrade:
         command.append("--upgrade")
     command.append(str(artifact))
@@ -284,7 +284,7 @@ def run(
             uv=uv,
             python=upgrade_python,
             artifact=legacy,
-            constraints=constraints,
+            constraints=None,
             cwd=root,
             environment=environment,
             operation="install_legacy_wheel",

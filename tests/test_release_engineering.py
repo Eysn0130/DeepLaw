@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from jsonschema import Draft202012Validator
 
 from benchmarks.release.evidence import verify_record_digest
 from benchmarks.release.inventory_licenses import _reviewed_exception_matches, inventory
-from benchmarks.release.run_distribution_lifecycle import _isolated_environment
+from benchmarks.release.run_distribution_lifecycle import _install, _isolated_environment
 from benchmarks.release.verify_reproducible_build import (
     DEFAULT_SOURCE_DATE_EPOCH,
     _verify_build_inputs,
@@ -19,6 +20,66 @@ from benchmarks.release.verify_reproducible_build import (
 )
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+
+
+def test_distribution_lifecycle_scopes_runtime_constraints_to_current_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: dict[str, list[str]] = {}
+
+    def capture_run(
+        command: list[str],
+        *,
+        operation: str,
+        **_: object,
+    ) -> subprocess.CompletedProcess[bytes]:
+        commands[operation] = command
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(
+        "benchmarks.release.run_distribution_lifecycle._run", capture_run
+    )
+    constraints = tmp_path / "runtime-constraints.txt"
+    python = tmp_path / "bin" / "python"
+    environment = {"PATH": "/usr/bin"}
+    common = {
+        "uv": "uv",
+        "python": python,
+        "cwd": tmp_path,
+        "environment": environment,
+        "evidence": [],
+    }
+
+    _install(
+        **common,
+        artifact=tmp_path / "legacy.whl",
+        constraints=None,
+        operation="install_legacy_wheel",
+    )
+    for operation, artifact, upgrade in (
+        ("install_verified_wheel", tmp_path / "current.whl", False),
+        ("upgrade_legacy_to_verified_wheel", tmp_path / "current.whl", True),
+        ("install_verified_sdist", tmp_path / "current.tar.gz", False),
+    ):
+        _install(
+            **common,
+            artifact=artifact,
+            constraints=constraints,
+            operation=operation,
+            upgrade=upgrade,
+        )
+
+    assert "--constraint" not in commands["install_legacy_wheel"]
+    assert "--no-deps" not in commands["install_legacy_wheel"]
+    for operation in (
+        "install_verified_wheel",
+        "upgrade_legacy_to_verified_wheel",
+        "install_verified_sdist",
+    ):
+        command = commands[operation]
+        assert command[command.index("--constraint") + 1] == str(constraints)
+        assert "--no-deps" not in command
 
 
 def test_distribution_lifecycle_uses_an_explicit_isolated_home(
