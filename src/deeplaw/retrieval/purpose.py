@@ -308,8 +308,14 @@ class PurposeAwareRetrievalService:
         projection: str = "standard",
         task_binding: dict[str, Any] | None = None,
         _runtime_snapshot: Any | None = None,
+        _task_route_text: str | None = None,
     ) -> dict[str, Any]:
         selected_query = self._bounded_query(query)
+        selected_task_route_text = (
+            self._bounded_query(_task_route_text)
+            if _task_route_text is not None
+            else selected_query
+        )
         if purpose not in QUERY_PURPOSES:
             raise ValueError("query purpose is invalid")
         if query_plan_version not in {"4", "5", "6"}:
@@ -385,6 +391,7 @@ class PurposeAwareRetrievalService:
                         applicable_duties=applicable_duties,
                         projection=projection,
                         task_binding=normalized_task_binding,
+                        task_route_query=selected_task_route_text,
                     )
                 result = self._legal_boundary_result(
                     query=selected_query,
@@ -436,6 +443,7 @@ class PurposeAwareRetrievalService:
                     applicable_duties=applicable_duties,
                     projection=projection,
                     task_binding=normalized_task_binding,
+                    task_route_query=selected_task_route_text,
                 )
 
             compiled_budget, evidence_budget = self._partition_budget(

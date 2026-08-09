@@ -223,6 +223,7 @@ def assemble_v6_context(
         projection=projection,
         task_binding=normalized_task_binding,
         _runtime_snapshot=runtime_snapshot,
+        _task_route_text=task,
     )
     if (
         retrieval.get("audit_head") != store.audit_head

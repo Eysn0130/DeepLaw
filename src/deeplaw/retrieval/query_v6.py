@@ -463,6 +463,10 @@ def _with_route_discovery(
 
 
 _ROUTE_GAP_DETAILS: dict[str, tuple[str, str]] = {
+    "head_conflict": (
+        "checkpoint_head_conflict",
+        "The admitted task route has more than one current checkpoint head.",
+    ),
     "workspace_diverged": (
         "workspace_diverged",
         "The requested workspace snapshot differs from the admitted task checkpoint.",
@@ -815,15 +819,19 @@ def _load_statement_candidates(
             kinds=kinds,
         )
     )
-    candidates.extend(working_candidates)
     rejections.extend(working_rejections)
     candidates.sort(key=lambda item: item["_score"])
+    ordinary_limit = _MAX_STATEMENT_CANDIDATES - min(len(working_candidates), 1)
     combined_truncated = (
         truncated
         or working_truncated
-        or len(candidates) > _MAX_STATEMENT_CANDIDATES
+        or len(candidates) > ordinary_limit
+        or len(working_candidates) > 1
     )
-    candidates = candidates[:_MAX_STATEMENT_CANDIDATES]
+    # An exact route hit is a separate bounded admission partition.  It is
+    # reserved ahead of ordinary content selection, while the combined pool
+    # remains capped at the same 512-candidate hard bound.
+    candidates = [*working_candidates[:1], *candidates[:ordinary_limit]]
     return candidates, rejections, len(rows) + working_scanned, combined_truncated
 
 
@@ -1468,6 +1476,7 @@ def execute_v6(
     applicable_duties: tuple[str, ...] | list[str] | None,
     projection: str,
     task_binding: dict[str, Any] | None = None,
+    task_route_query: str | None = None,
 ) -> dict[str, Any]:
     if projection not in V6_PROJECTIONS:
         raise ValueError("query projection is invalid")
@@ -1490,7 +1499,9 @@ def execute_v6(
         # route projection is a bounded exact index and therefore cannot be
         # displaced by the global Top-20 recall/ranking cut.
         route_lookup = knowledge_store.lookup_checkpoint_route_projection(
-            task_sha256=sha256_bytes(query.encode("utf-8")),
+            task_sha256=sha256_bytes(
+                (task_route_query if task_route_query is not None else query).encode("utf-8")
+            ),
             task_binding=normalized_task_binding,
             limit=_MAX_ROUTE_REVISIONS,
             scope=scope,

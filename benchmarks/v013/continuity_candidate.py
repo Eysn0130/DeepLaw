@@ -429,7 +429,7 @@ def build_host_plus_deeplaw(
                 "title": checkpoint["distractor"]["title"],
                 "body": checkpoint["distractor"]["body"],
                 "kind": "memory",
-                "memory_type": "working",
+                "memory_type": "episodic",
                 "semantic_key": checkpoint["distractor"]["semantic_key"],
                 "expires_at": checkpoint["expires_at"],
                 "scope": "project",

@@ -3825,6 +3825,54 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             _checkpoint_route_values(projection),
         )
 
+    def _assert_checkpoint_head_write(
+        self,
+        *,
+        binding: dict[str, Any],
+        knowledge_id: str | None,
+        expected_revision_id: str | None,
+    ) -> None:
+        """Require CAS against the sole current head of a task route."""
+
+        if not self._checkpoint_route_projection_exists():
+            raise RuntimeError("checkpoint route projection is unavailable")
+        route_sha256 = task_route_sha256(binding)
+        rows = self.connection.execute(
+            """
+            SELECT knowledge_id, revision_id
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            ORDER BY knowledge_id
+            LIMIT 3
+            """,
+            (route_sha256,),
+        ).fetchall()
+        if len(rows) > 1:
+            raise RuntimeError("checkpoint_head_conflict: task route has multiple current heads")
+        if rows:
+            head = rows[0]
+            if (
+                knowledge_id != head["knowledge_id"]
+                or expected_revision_id != head["revision_id"]
+            ):
+                raise RuntimeError(
+                    "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                )
+            return
+        if knowledge_id is None:
+            return
+        prior = self.connection.execute(
+            """
+            SELECT route_sha256
+            FROM knowledge_checkpoint_routes_v1
+            WHERE knowledge_id = ?
+            LIMIT 2
+            """,
+            (knowledge_id,),
+        ).fetchall()
+        if prior and any(row["route_sha256"] != route_sha256 for row in prior):
+            raise RuntimeError("checkpoint_head_conflict: task route identity cannot change")
+
     def _checkpoint_route_projection_row_is_current(self, row: sqlite3.Row) -> bool:
         """Fail closed when a bounded lookup encounters stale derived state."""
 
@@ -3960,16 +4008,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "status": "index_unavailable",
                     "scanned": scanned,
                 }
-            if rows and all(row["snapshot_sha256"] == snapshot_sha256 for row in rows):
+            if truncated or len(rows) > 1:
                 return {
                     **base_response,
-                    "status": "limit_exceeded" if truncated else "exact",
-                    "route_sha256": route_sha256,
-                    "snapshot_sha256": snapshot_sha256,
-                    "revision_ids": [] if truncated else [row["revision_id"] for row in rows],
-                    "knowledge_ids": [] if truncated else [row["knowledge_id"] for row in rows],
+                    "status": "head_conflict",
                     "scanned": scanned,
                     "truncated": truncated,
+                }
+            if rows and rows[0]["snapshot_sha256"] == snapshot_sha256:
+                return {
+                    **base_response,
+                    "status": "exact",
+                    "route_sha256": route_sha256,
+                    "snapshot_sha256": snapshot_sha256,
+                    "revision_ids": [rows[0]["revision_id"]],
+                    "knowledge_ids": [rows[0]["knowledge_id"]],
+                    "scanned": scanned,
+                    "truncated": False,
                 }
             if rows:
                 return {
@@ -4019,13 +4074,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         ).fetchall()
         truncated = len(rows) > limit
         rows = rows[:limit]
-        if truncated or not rows:
+        if truncated or len(rows) > 1:
             return {
                 **base_response,
-                "status": "ambiguous" if truncated else "not_found",
+                "status": "head_conflict",
                 "scanned": scanned + len(rows),
                 "truncated": truncated,
             }
+        if not rows:
+            return {**base_response, "status": "not_found", "scanned": scanned}
         if any(not self._checkpoint_route_projection_row_is_current(row) for row in rows):
             return {**base_response, "status": "index_unavailable", "scanned": scanned}
         binding: Any = None
@@ -4042,22 +4099,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             or task_snapshot_sha256(normalized_binding) != rows[0]["snapshot_sha256"]
         ):
             return {**base_response, "status": "index_unavailable", "scanned": scanned}
-        if len({row["snapshot_sha256"] for row in rows}) != 1:
-            return {
-                **base_response,
-                "status": "workspace_diverged",
-                "route_sha256": route_sha256,
-                "scanned": scanned + len(rows),
-                "truncated": False,
-            }
         return {
             **base_response,
             "status": "exact",
             "route_sha256": route_sha256,
             "snapshot_sha256": rows[0]["snapshot_sha256"],
             "canonical_binding": binding,
-            "revision_ids": [row["revision_id"] for row in rows],
-            "knowledge_ids": [row["knowledge_id"] for row in rows],
+            "revision_ids": [rows[0]["revision_id"]],
+            "knowledge_ids": [rows[0]["knowledge_id"]],
             "scanned": scanned + len(rows),
             "truncated": False,
         }
@@ -4707,6 +4756,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             sensitivity=sensitivity,
             writer_id=grant["writer_id"],
         )
+        checkpoint_binding = (
+            self.run_task_context_binding(run_id)
+            if kind == "memory" and memory_type == "working" and run_binding_valid
+            else None
+        )
         if (
             kind == "memory"
             and memory_type == "working"
@@ -4836,6 +4890,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             lifecycle: Lifecycle = lifecycle_override
         else:
             lifecycle = "quarantined" if quarantine_reasons else "active"
+        if lifecycle == "active" and checkpoint_binding is not None:
+            self._assert_checkpoint_head_write(
+                binding=checkpoint_binding,
+                knowledge_id=knowledge_id,
+                expected_revision_id=expected_revision_id,
+            )
         if lifecycle == "active":
             duplicate = self.connection.execute(
                 """
@@ -4865,6 +4925,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     knowledge_id is not None
                     and expected_revision_id != duplicate["current_revision_id"]
                 ):
+                    if checkpoint_binding is not None:
+                        raise RuntimeError(
+                            "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                        )
                     raise RuntimeError("Knowledge Object compare-and-swap conflict")
                 return self._collapse_duplicate(
                     duplicate_knowledge_id=duplicate["knowledge_id"],
@@ -4925,6 +4989,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "quarantined Knowledge Object requires an explicit owner restore policy"
                     )
                 if expected_revision_id != parent_revision_id:
+                    if checkpoint_binding is not None:
+                        raise RuntimeError(
+                            "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                        )
                     raise RuntimeError("Knowledge Object compare-and-swap conflict")
                 if parent_revision_id is not None:
                     current_lifecycle = self.connection.execute(
@@ -5111,6 +5179,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 self.connection.rollback()
                 stage_path.unlink(missing_ok=True)
                 return locked_replay
+            if lifecycle == "active" and checkpoint_binding is not None:
+                self._assert_checkpoint_head_write(
+                    binding=checkpoint_binding,
+                    knowledge_id=knowledge_id,
+                    expected_revision_id=expected_revision_id,
+                )
             current = self.connection.execute(
                 "SELECT current_revision_id FROM knowledge_objects_v3 WHERE knowledge_id = ?",
                 (knowledge_id,),
@@ -5138,6 +5212,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         ),
                     )
             elif current is None or current["current_revision_id"] != parent_revision_id:
+                if checkpoint_binding is not None:
+                    raise RuntimeError(
+                        "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                    )
                 raise RuntimeError("Knowledge Object compare-and-swap conflict")
             if lifecycle == "active":
                 duplicate = self.connection.execute(
