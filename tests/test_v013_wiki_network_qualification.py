@@ -364,6 +364,7 @@ def test_v013_development_wiki_network_qualification(tmp_path: Path) -> None:
     assert user_note.read_bytes() == user_note_bytes
 
 
+@pytest.mark.qualification
 @pytest.mark.parametrize(
     ("uncovered_case", "reason"),
     (

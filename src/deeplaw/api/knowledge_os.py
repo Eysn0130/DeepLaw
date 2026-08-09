@@ -620,15 +620,18 @@ class KnowledgeOS:
         def verify() -> None:
             if not autonomous_core_installed(root):
                 raise RuntimeError("Autonomous Knowledge OS is not initialized")
-            with (
-                KnowledgeVault(root, read_only=True) as legacy,
-                AutonomousKnowledgeStore(root, read_only=True) as store,
-            ):
-                if (
-                    legacy.audit_head != store.legacy_audit_head
-                    or not legacy.verify_integrity()["valid"]
-                    or not store.verify()["valid"]
-                ):
+            with KnowledgeVault(root, read_only=True) as legacy:
+                legacy_integrity = legacy.verify_integrity()
+                with AutonomousKnowledgeStore(
+                    root,
+                    read_only=True,
+                    legacy_snapshot=legacy,
+                ) as store:
+                    autonomous_integrity = store.verify(
+                        preverified_legacy_integrity=legacy_integrity,
+                        preverified_legacy_audit_head=legacy.audit_head,
+                    )
+                if not legacy_integrity["valid"] or not autonomous_integrity["valid"]:
                     raise RuntimeError("Knowledge OS integrity is invalid")
 
         _invoke(verify)

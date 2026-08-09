@@ -74,6 +74,120 @@ _SENSITIVE_MARKER = re.compile(
     r"credential\s*[:=]|secret\s*[:=]|private[_ -]?key)"
 )
 
+_FIXTURE_FAILURE_STAGES = frozenset(
+    {
+        "workspace",
+        "source_write",
+        "vault_initialize",
+        "source_compile",
+        "compilation_begin",
+        "compilation_packet",
+        "compilation_stage",
+        "compilation_validate",
+        "compilation_inventory",
+        "compilation_commit",
+        "statement_verify",
+    }
+)
+_FIXTURE_FAILURE_TYPES = frozenset(
+    {
+        "attribute_error",
+        "file_not_found",
+        "permission_error",
+        "os_error",
+        "sqlite_error",
+        "timeout",
+        "json_error",
+        "value_error",
+        "type_error",
+        "lookup_error",
+        "runtime_error",
+        "assertion_error",
+        "other",
+    }
+)
+_TRACE_STAGE_BY_FUNCTION = {
+    "initialize_knowledge_vault": "vault_initialize",
+    "initialize_autonomous_core": "vault_initialize",
+    "compile_source": "source_compile",
+    "begin": "compilation_begin",
+    "next_packet": "compilation_packet",
+    "stage": "compilation_stage",
+    "validate": "compilation_validate",
+    "_duty_reports": "compilation_inventory",
+    "_artifact": "compilation_inventory",
+    "commit": "compilation_commit",
+    "_statement_value": "statement_verify",
+    "_ledger_counts": "statement_verify",
+}
+
+
+class _RuntimeDiagnosticFailure(RuntimeError):
+    """Carry only a closed stage and exception category into the raw report."""
+
+    def __init__(self, stage: str, error_type: str) -> None:
+        self.stage = stage if stage in _FIXTURE_FAILURE_STAGES else "workspace"
+        self.error_type = error_type if error_type in _FIXTURE_FAILURE_TYPES else "other"
+        super().__init__(self.reason)
+
+    @property
+    def reason(self) -> str:
+        return f"fixture_failure:{self.stage}:{self.error_type}"
+
+
+def _failure_type(error: BaseException) -> str:
+    if isinstance(error, PermissionError):
+        return "permission_error"
+    if isinstance(error, FileNotFoundError):
+        return "file_not_found"
+    if isinstance(error, AttributeError):
+        return "attribute_error"
+    if isinstance(error, sqlite3.Error):
+        return "sqlite_error"
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    if isinstance(error, json.JSONDecodeError):
+        return "json_error"
+    if isinstance(error, OSError):
+        return "os_error"
+    if isinstance(error, ValueError):
+        return "value_error"
+    if isinstance(error, TypeError):
+        return "type_error"
+    if isinstance(error, LookupError):
+        return "lookup_error"
+    if isinstance(error, AssertionError):
+        return "assertion_error"
+    if isinstance(error, RuntimeError):
+        return "runtime_error"
+    return "other"
+
+
+def _fixture_failure(error: BaseException) -> _RuntimeDiagnosticFailure:
+    if isinstance(error, _RuntimeDiagnosticFailure):
+        return error
+    stage = "compilation_inventory"
+    traceback = error.__traceback__
+    while traceback is not None:
+        mapped = _TRACE_STAGE_BY_FUNCTION.get(traceback.tb_frame.f_code.co_name)
+        if mapped is not None:
+            stage = mapped
+            break
+        traceback = traceback.tb_next
+    return _RuntimeDiagnosticFailure(stage, _failure_type(error))
+
+
+def _fixture_failure_reason_is_closed(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    parts = value.split(":")
+    return (
+        len(parts) == 3
+        and parts[0] == "fixture_failure"
+        and parts[1] in _FIXTURE_FAILURE_STAGES
+        and parts[2] in _FIXTURE_FAILURE_TYPES
+    )
+
 QUERY_TEXT = "Synthetic runtime stability Statement is queryable through Query v6."
 
 
@@ -1033,13 +1147,17 @@ def _digest_body(report: Mapping[str, Any]) -> dict[str, Any]:
 def _build_fixture_report(root: Path) -> dict[str, Any]:
     vault = root / "vault"
     source = root / "synthetic-runtime-stability.md"
-    source.write_text(
-        "# Synthetic runtime stability\n" + QUERY_TEXT + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    fixture = _commit_statement_fixture(vault, source)
-    counts = _ledger_counts(vault)
+    try:
+        source.write_bytes(
+            ("# Synthetic runtime stability\n" + QUERY_TEXT + "\n").encode("utf-8")
+        )
+    except Exception as error:
+        raise _RuntimeDiagnosticFailure("source_write", _failure_type(error)) from error
+    try:
+        fixture = _commit_statement_fixture(vault, source)
+        counts = _ledger_counts(vault)
+    except Exception as error:
+        raise _fixture_failure(error) from error
     return {
         "status": "executed",
         "construction": "public_profile_v3_compilation",
@@ -1092,7 +1210,8 @@ def build_report(
             ledger_after = _ledger_counts(vault)
             fixture["canonical_ledger_event_count"] = ledger_before.total
         except Exception as error:
-            reason = _safe_reason(f"fixture or lane failed: {type(error).__name__}")
+            failure = _fixture_failure(error)
+            reason = failure.reason
             fixture = {
                 "status": "fail",
                 "construction": "public_profile_v3_compilation",
@@ -1206,6 +1325,14 @@ def verify_report(value: Any) -> dict[str, Any]:
         errors.append("claim eligibility is not fail-closed")
     if report.get("release_gate_passed") is not False:
         errors.append("release gate is not fail-closed")
+    fixture = report.get("fixture")
+    if isinstance(fixture, Mapping) and fixture.get("status") == "fail":
+        rss_reason = report.get("rss_stability", {}).get("reason")
+        concurrent_reason = report.get("concurrent_readers", {}).get("reason")
+        if not _fixture_failure_reason_is_closed(rss_reason):
+            errors.append("fixture failure lacks a closed RSS reason")
+        if concurrent_reason != rss_reason:
+            errors.append("fixture failure reason differs across unexecuted lanes")
     serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
     if _LOCAL_PATH.search(serialized):
         errors.append("report contains a local absolute path")

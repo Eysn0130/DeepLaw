@@ -266,6 +266,14 @@ _QUERY_CROSS_LANGUAGE_ALIASES_V1 = {
 }
 
 _QUERY_CROSS_LANGUAGE_ALIASES_V2 = {
+    "诊断": ("diagnostic",),
+    "保留": ("retain", "retention"),
+    "期限": ("duration", "period"),
+    "支持": ("support",),
+    "验证": ("verify", "verification"),
+    "徽章": ("badge",),
+    "精确": ("exact",),
+    "颜色": ("color",),
     "组织": ("organization",),
     "也称": ("known",),
     "别名": ("alias",),
@@ -585,14 +593,15 @@ def query_expansion_terms(
         raise ValueError("query text is invalid or exceeds its bound")
     selected, aliases = _query_expansion_profile(profile)
     normalized = normalize_query_text(text).casefold()
-    terms = sorted(
+    unbounded_terms = sorted(
         {
             alias
             for phrase, values in aliases.items()
             if phrase in normalized
             for alias in values
         }
-    )[:_QUERY_EXPANSION_MAX_TERMS_V2]
+    )
+    terms = unbounded_terms[:_QUERY_EXPANSION_MAX_TERMS_V2]
     if not explain:
         return terms
     rule_ids = (
@@ -609,6 +618,7 @@ def query_expansion_terms(
             else None
         ),
         "terms": terms,
+        "terms_truncated": len(unbounded_terms) > _QUERY_EXPANSION_MAX_TERMS_V2,
         "rule_ids": rule_ids,
     }
 

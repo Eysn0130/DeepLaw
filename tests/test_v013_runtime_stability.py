@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+import benchmarks.v013.runtime_stability as runtime_stability
 from benchmarks.v013.runtime_stability import (
     FROZEN_REQUEST_COUNT,
     SCHEMA_VERSION,
@@ -110,6 +111,41 @@ def test_report_verifier_fails_closed_on_claim_or_path_tampering(tmp_path: Path)
     path_tampered = dict(report)
     path_tampered["limitations"] = ["/Users/private/source.md"]
     assert verify_report(path_tampered)["valid"] is False
+
+
+def test_fixture_failure_reason_is_bounded_enumerated_and_redacted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_fixture(_: Path) -> dict[str, object]:
+        raise runtime_stability._RuntimeDiagnosticFailure("source_write", "os_error")
+
+    monkeypatch.setattr(runtime_stability, "_build_fixture_report", fail_fixture)
+
+    report = build_report(request_count=1)
+
+    assert report["fixture"]["status"] == "fail"
+    assert report["fixture"]["statement_count"] == 0
+    assert report["rss_stability"]["reason"] == "fixture_failure:source_write:os_error"
+    assert report["concurrent_readers"]["reason"] == report["rss_stability"]["reason"]
+    serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+    assert "/Users/private/source.md" not in serialized
+    assert "DEEPLAW_TEST_AMBIENT_SECRET" not in serialized
+    assert verify_report(report) == {"valid": True, "errors": []}
+
+
+def test_fixture_failure_verifier_rejects_unbounded_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_fixture(_: Path) -> dict[str, object]:
+        raise OSError("/Users/private/source.md secret=do-not-record")
+
+    monkeypatch.setattr(runtime_stability, "_build_fixture_report", fail_fixture)
+    report = build_report(request_count=1)
+    assert "source.md" not in json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+    report["rss_stability"]["reason"] = "raw /Users/private/source.md secret=do-not-record"
+
+    assert verify_report(report)["valid"] is False
 
 
 def test_invalid_request_arguments_fail_closed() -> None:

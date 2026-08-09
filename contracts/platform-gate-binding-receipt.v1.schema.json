@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/platform-gate-binding-receipt.v1.schema.json",
+  "title": "DeepLaw Platform Gate binding receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "binding",
+    "environment",
+    "toolchain",
+    "test_manifest",
+    "passed",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.platform-gate-binding-receipt/v1"
+    },
+    "binding": { "$ref": "#/$defs/binding" },
+    "environment": { "$ref": "#/$defs/environment" },
+    "toolchain": { "$ref": "#/$defs/toolchain" },
+    "test_manifest": { "$ref": "#/$defs/test_manifest" },
+    "passed": { "const": true },
+    "record_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "worktree_clean",
+        "package_version",
+        "lock_sha256",
+        "pyproject_sha256",
+        "contracts",
+        "migrations"
+      ],
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "worktree_clean": { "type": "boolean" },
+        "package_version": { "type": "string", "minLength": 1 },
+        "lock_sha256": { "$ref": "#/$defs/sha256" },
+        "pyproject_sha256": { "$ref": "#/$defs/sha256" },
+        "contracts": { "type": "object" },
+        "migrations": { "type": "object" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform_system",
+        "platform_release",
+        "platform_version",
+        "machine",
+        "python_implementation",
+        "python_version",
+        "python_executable_name",
+        "uv_version",
+        "ci",
+        "github_actions",
+        "github_runner_os",
+        "github_runner_arch"
+      ],
+      "properties": {
+        "platform_system": { "enum": ["Darwin", "Linux", "Windows"] },
+        "platform_release": { "type": "string" },
+        "platform_version": { "type": "string" },
+        "machine": { "type": "string" },
+        "python_implementation": { "type": "string" },
+        "python_version": { "type": "string" },
+        "python_executable_name": { "type": "string" },
+        "uv_version": { "type": "string", "minLength": 1 },
+        "ci": { "type": "boolean" },
+        "github_actions": { "type": "boolean" },
+        "github_runner_os": { "type": ["string", "null"] },
+        "github_runner_arch": { "type": ["string", "null"] }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uv_version",
+        "resolved_executable_name",
+        "resolved_executable_sha256"
+      ],
+      "properties": {
+        "uv_version": { "type": "string", "minLength": 1 },
+        "resolved_executable_name": { "type": "string", "minLength": 1 },
+        "resolved_executable_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "file_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_name", "sha256", "byte_size"],
+      "properties": {
+        "logical_name": {
+          "const": "platform-core-test-manifest-v1.json"
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byte_size": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "test_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "manifest",
+        "manifest_sha256",
+        "inventory_selection",
+        "inventory_count",
+        "inventory_sha256",
+        "missing",
+        "unexpected",
+        "duplicate",
+        "qualification_status",
+        "nonapplicable_status",
+        "historical_compatibility_status"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.platform-core-test-manifest/v1"
+        },
+        "manifest": { "$ref": "#/$defs/file_record" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "inventory_selection": {
+          "enum": ["not qualification", "not qualification and not windows_native"]
+        },
+        "inventory_count": { "type": "integer", "minimum": 1 },
+        "inventory_sha256": { "$ref": "#/$defs/sha256" },
+        "missing": { "type": "array", "maxItems": 0 },
+        "unexpected": { "type": "array", "maxItems": 0 },
+        "duplicate": { "type": "array", "maxItems": 0 },
+        "qualification_status": { "const": "not_executed" },
+        "nonapplicable_status": { "enum": ["passed", "nonapplicable"] },
+        "historical_compatibility_status": { "const": "passed" }
+      }
+    }
+  }
+}

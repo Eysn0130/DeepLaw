@@ -9,7 +9,6 @@ host, or release qualification.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +23,7 @@ from deeplaw.knowledge_autonomy import (
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
 from deeplaw.knowledge_sink_mcp_server import handle_knowledge_sink
 from deeplaw.knowledge_store import initialize_knowledge_vault
+from deeplaw.subprocess_environment import _build_subprocess_environment
 from deeplaw.task_context import build_task_context_binding
 from deeplaw.util import canonical_json, sha256_bytes
 
@@ -157,13 +157,12 @@ def _selected_ids(provider_capsule: dict[str, Any], known_ids: set[str]) -> set[
 
 def _run_cli_context(root: Path) -> dict[str, Any]:
     repository = Path(__file__).resolve().parents[1]
-    env = {
-        "HOME": str(root.parent / "cli-home"),
-        "LANG": "C",
-        "LC_ALL": "C",
-        "PATH": os.defpath,
-        "PYTHONPATH": str(repository / "src"),
-    }
+    env = _build_subprocess_environment(
+        overrides={
+            "HOME": str(root.parent / "cli-home"),
+            "PYTHONPATH": str(repository / "src"),
+        }
+    )
     completed = subprocess.run(
         [
             sys.executable,

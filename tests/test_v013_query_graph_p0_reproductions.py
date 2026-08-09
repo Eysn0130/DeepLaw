@@ -460,6 +460,7 @@ def test_v6_statement_tail_scan_is_bounded_but_position_independent(
         ), f"exact statement at scan position {position} was not selected"
 
 
+@pytest.mark.qualification
 @pytest.mark.skip(
     reason="not_executed: 10,000-Statement commit is reserved for the full stress lane",
 )
@@ -467,6 +468,7 @@ def test_v6_statement_scan_10000_not_executed(tmp_path: Path) -> None:
     _commit_scale_vault(tmp_path, 10_000)
 
 
+@pytest.mark.qualification
 @pytest.mark.skip(
     reason="not_executed: 100,000-Statement commit exceeds this narrow timeout-safe lane",
 )
@@ -668,6 +670,7 @@ def test_relation_graph_edges_have_no_position_bias_and_temporal_gates(
         )
 
 
+@pytest.mark.qualification
 @pytest.mark.skip(
     reason="not_executed: 500/5,000 relation-edge truncation needs a dedicated bulk fixture",
 )

@@ -131,7 +131,17 @@ def test_v2_uses_generic_atomic_concepts_and_excludes_benchmark_phrases() -> Non
     assert v2_keys == {"组织", "别名", "来源", "政策", "冲突"}
     for phrase in ("Atlas", "诊断日志", "保留政策", "验证徽章", "计划发布", "审阅完成"):
         assert phrase.casefold() not in " ".join(v2_keys).casefold()
-    assert query_expansion_terms("Atlas 审阅完成 2025-06-01 徽章 发布") == []
+    assert query_expansion_terms("Atlas 审阅完成 2025-06-01 发布") == []
+    assert {
+        "diagnostic",
+        "retention",
+        "period",
+        "support",
+        "verification",
+        "badge",
+        "exact",
+        "color",
+    } <= set(query_expansion_terms("诊断保留期限支持验证徽章精确颜色"))
 
 
 def test_v1_compatibility_is_explicit_and_default_is_v2() -> None:
@@ -140,7 +150,7 @@ def test_v1_compatibility_is_explicit_and_default_is_v2() -> None:
     assert {"log", "policy"} <= set(legacy_terms)
     assert "diagnostic" not in legacy_terms
     assert "retention" not in legacy_terms
-    assert "diagnostic" not in query_expansion_terms(query)
+    assert {"diagnostic", "retention"} <= set(query_expansion_terms(query))
     explanation = query_expansion_terms("组织与冲突", explain=True)
     assert explanation["profile_id"] == QUERY_EXPANSION_PROFILE_V2
     assert explanation["profile_sha256"] == QUERY_EXPANSION_PROFILE_V2_SHA256

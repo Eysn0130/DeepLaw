@@ -4,6 +4,7 @@ import ast
 import hashlib
 import io
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -254,7 +255,11 @@ def test_install_uninstall_are_atomic_bounded_idempotent_and_preserve_unknowns(
         repository_identity="repository-test",
     )
     assert first["changed"] is True
-    assert stat.S_IMODE(settings.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
+    if os.name != "nt":
+        assert stat.S_IMODE(settings.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
+        assert first["owner_only"] is True
+    else:
+        assert first["owner_only"] is False
     initial_bytes = settings.read_bytes()
     second = install.install_settings(
         settings,
@@ -327,6 +332,49 @@ def test_install_conflicts_default_path_and_oversize_fail_closed(tmp_path: Path)
     )
     with pytest.raises(install.InstallerError):
         install.uninstall_settings(settings)
+
+
+def test_atomic_write_windows_does_not_require_posix_fchmod(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = tmp_path / "settings.json"
+    monkeypatch.delattr(install.os, "fchmod", raising=False)
+
+    install._atomic_write(settings, {"windows": True})
+
+    assert json.loads(settings.read_text(encoding="utf-8")) == {"windows": True}
+
+
+def test_atomic_write_cleanup_cannot_mask_replace_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = tmp_path / "settings.json"
+    descriptor: dict[str, int] = {}
+    real_mkstemp = install.tempfile.mkstemp
+
+    def capture_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
+        fd, temporary = real_mkstemp(*args, **kwargs)
+        descriptor["fd"] = fd
+        return fd, temporary
+
+    monkeypatch.setattr(install.tempfile, "mkstemp", capture_mkstemp)
+
+    def fail_replace(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("replace failed")
+
+    monkeypatch.setattr(install.os, "replace", fail_replace)
+
+    def fail_cleanup(self: Path, *args: object, **kwargs: object) -> None:
+        raise OSError("cleanup failed")
+
+    monkeypatch.setattr(Path, "unlink", fail_cleanup)
+
+    with pytest.raises(RuntimeError, match="replace failed"):
+        install._atomic_write(settings, {"replace": False})
+    with pytest.raises(OSError):
+        os.fstat(descriptor["fd"])
 
 
 def test_adapter_sources_have_no_transcript_network_model_or_mutation_surface() -> None:

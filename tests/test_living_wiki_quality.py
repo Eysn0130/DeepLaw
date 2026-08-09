@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from benchmarks.living_wiki.compare_quality import ComparisonError, compare
+from benchmarks.living_wiki.compare_quality import ComparisonError, _digest, compare, main
 
 
 def _report(*, role: str, commit: str, version: str) -> dict[str, Any]:
@@ -61,6 +63,7 @@ def _report(*, role: str, commit: str, version: str) -> dict[str, Any]:
             "network_policy": "offline_no_acquisition",
         },
         "configuration": {"scope": "project"},
+        "cli_coverage": {},
         "compilation": {
             "first_compilation_latency_ms": 500.0,
             "incremental_refresh_latency_ms": 200.0,
@@ -68,6 +71,8 @@ def _report(*, role: str, commit: str, version: str) -> dict[str, Any]:
             "destructive_rebuild_latency_ms": 400.0,
         },
         "retrieval": retrieval,
+        "living_wiki": {},
+        "lifecycle": {},
         "security": {
             "unauthorized_disclosure": 0,
             "silent_fallback": 0,
@@ -109,3 +114,46 @@ def test_quality_comparison_rejects_functional_or_environment_drift() -> None:
     different_environment["environment"]["machine"] = "arm64"
     with pytest.raises(ComparisonError, match="same frozen quality experiment"):
         compare(baseline, different_environment)
+
+
+def test_cli_writes_schema_bound_failure_receipt_before_nonzero_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    baseline = _report(role="baseline", commit="a" * 40, version="0.10.0")
+    candidate = _report(role="fresh_wheel", commit="b" * 40, version="0.11.0")
+    candidate["retrieval"]["cold_latency_ms_p50"] = 301.0
+    for report in (baseline, candidate):
+        report["record_sha256"] = _digest(
+            {key: value for key, value in report.items() if key != "record_sha256"}
+        )
+    baseline_path = tmp_path / "baseline.json"
+    candidate_path = tmp_path / "candidate.json"
+    output = tmp_path / "comparison.json"
+    baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+    candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "compare-quality",
+            "--repository",
+            str(repository),
+            "--baseline",
+            str(baseline_path),
+            "--candidate",
+            str(candidate_path),
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert main() == 1
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["schema_version"].endswith("comparison-failure/v1")
+    assert receipt["failure_code"] == "performance_regression"
+    assert receipt["performance_regression"] is True
+    assert receipt["passed"] is False
+    assert receipt["inputs"][0]["relative_path"] == "baseline.json"
+    assert receipt["inputs"][1]["relative_path"] == "candidate.json"
+    assert not any(item["passed"] for item in receipt["performance_comparisons"][:1])

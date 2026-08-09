@@ -26,12 +26,15 @@ from ..task_context import (
     task_snapshot_sha256,
 )
 from ..util import (
+    QUERY_EXPANSION_PROFILE,
     canonical_json,
+    query_expansion_terms,
     query_search_terms,
     sha256_bytes,
     stable_id,
     strict_json_loads,
 )
+from .purpose import _policy_designator_conflicts, _policy_designators
 
 V6_DUTIES = (
     "primary_answer",
@@ -465,6 +468,61 @@ def _candidate_score(item: dict[str, Any], target: dict[str, Any]) -> tuple[int,
     return (-exact, -overlap, -factual, str(item["statement_id"]))
 
 
+def _freshness_policy_designator_reason(
+    query_designators: set[str],
+    item: dict[str, Any],
+) -> str | None:
+    """Return a stable admission reason for an exact named-policy freshness query."""
+
+    if not query_designators:
+        return None
+    values = [
+        item.get("title"),
+        item.get("semantic_key"),
+        item.get("content"),
+        item.get("statement_text"),
+        item.get("excerpt"),
+    ]
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict) and isinstance(metadata.get("aliases"), list):
+        values.extend(metadata["aliases"])
+    candidate_designators = {
+        designator
+        for value in values
+        if isinstance(value, str)
+        for designator in _policy_designators(value)
+    }
+    if not candidate_designators:
+        return "freshness_policy_designator_missing"
+    if candidate_designators != query_designators or _policy_designator_conflicts(
+        query_designators,
+        {**item, "metadata": metadata if isinstance(metadata, dict) else {}},
+    ):
+        return "freshness_policy_designator_mismatch"
+    return None
+
+
+def _query_expansion_receipt(query: str) -> dict[str, Any]:
+    explanation = query_expansion_terms(query, explain=True)
+    if not isinstance(explanation, dict):
+        raise RuntimeError("query expansion explanation is invalid")
+    terms = explanation.get("terms")
+    if not isinstance(terms, list) or any(not isinstance(term, str) for term in terms):
+        raise RuntimeError("query expansion terms are invalid")
+    profile = explanation.get("profile_id")
+    if profile != QUERY_EXPANSION_PROFILE:
+        raise RuntimeError("query expansion profile is invalid")
+    return {
+        "profile": profile,
+        "applied": bool(terms),
+        "term_count": len(terms),
+        "terms_sha256": sha256_bytes(canonical_json(terms).encode("utf-8")),
+        "terms_truncated": bool(explanation.get("terms_truncated", False)),
+        "authority_changed": False,
+        "stored_evidence_changed": False,
+    }
+
+
 def _empty_discovery(
     *,
     graph_hops: int,
@@ -705,6 +763,13 @@ def _load_statement_candidates(
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
     query_terms = set(target["terms"])
+    freshness_policy_designators = (
+        _policy_designators(target["text"])
+        if purpose == "freshness_check"
+        else set()
+    )
+    if len(freshness_policy_designators) != 1:
+        freshness_policy_designators = set()
     for row in rows:
         statement_id = str(row["statement_id"])
         item_ref = {"statement_id": statement_id}
@@ -765,6 +830,17 @@ def _load_statement_candidates(
                 for field in target_values
             ):
                 rejections.append({**item_ref, "reason": "query_target_mismatch"})
+                continue
+            designator_reason = _freshness_policy_designator_reason(
+                freshness_policy_designators,
+                {
+                    "title": row["title"],
+                    "semantic_key": row["semantic_key"],
+                    "statement_text": value["statement_text"],
+                },
+            )
+            if designator_reason is not None:
+                rejections.append({**item_ref, "reason": designator_reason})
                 continue
             if freshness != "fresh" and purpose != "historical":
                 rejections.append({**item_ref, "reason": f"{freshness}_statement"})
@@ -929,6 +1005,13 @@ def _load_working_memory_candidates(
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
     query_terms = set(target["terms"])
+    freshness_policy_designators = (
+        _policy_designators(target["text"])
+        if purpose == "freshness_check"
+        else set()
+    )
+    if len(freshness_policy_designators) != 1:
+        freshness_policy_designators = set()
     has_identity_target = any(
         target.get(field) is not None
         for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
@@ -1007,6 +1090,17 @@ def _load_working_memory_candidates(
                 rejections.append({**candidate_ref, "reason": "working_memory_not_checkpoint"})
                 continue
             text = body
+            designator_reason = _freshness_policy_designator_reason(
+                freshness_policy_designators,
+                {
+                    "title": revision["title"],
+                    "semantic_key": revision.get("semantic_key"),
+                    "statement_text": text,
+                },
+            )
+            if designator_reason is not None:
+                rejections.append({**candidate_ref, "reason": designator_reason})
+                continue
             searchable = set(
                 query_search_terms(
                     " ".join(
@@ -2237,6 +2331,7 @@ def execute_v6(
         "max_sensitivity": max_sensitivity,
         "as_of": as_of,
         "query_target": target,
+        "query_expansion": _query_expansion_receipt(target["text"]),
         "applicable_duties": applicable,
         "retrieval_controls": {
             "graph_hops": graph_hops,

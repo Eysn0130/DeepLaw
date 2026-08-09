@@ -587,7 +587,10 @@ def run_candidate(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
         initialize_knowledge_vault(root, name="evidence-wiki-development", scope="project")
         initialize_autonomous_core(root)
         source_path = root / fixture["source_filename"]
-        source_path.write_text(fixture["source_text"], encoding="utf-8")
+        # Source Revision bytes are evidence.  ``Path.write_text`` without an explicit
+        # newline policy lets Windows translate ``\n`` to ``\r\n`` and changes the
+        # ingested content hash.  Write the exact UTF-8 byte sequence instead.
+        source_path.write_bytes(fixture["source_text"].encode("utf-8"))
         with KnowledgeVault(root, read_only=False) as vault:
             compiled = compile_source(
                 vault,

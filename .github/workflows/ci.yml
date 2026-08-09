@@ -16,12 +16,16 @@ concurrency:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Candidate current-source regression ${{ matrix.os }} Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
         python-version:
           - "3.11"
           - "3.12"
@@ -50,8 +54,99 @@ jobs:
       - name: Lint
         run: uv run --frozen ruff check .
 
-      - name: Test
-        run: uv run --frozen pytest
+      - name: Candidate current-source regression (not release readiness)
+        shell: bash
+        env:
+          JUNIT_PATH: ${{ runner.temp }}/candidate-tests.xml
+          RECEIPT_PATH: ${{ runner.temp }}/candidate-skip-receipt.json
+          MATRIX_OS: ${{ matrix.os }}
+          MATRIX_PYTHON: ${{ matrix.python-version }}
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          uv run --frozen pytest --strict-markers --junitxml="${JUNIT_PATH}"
+          python - "${JUNIT_PATH}" "${RECEIPT_PATH}" <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          junit_path = pathlib.Path(sys.argv[1])
+          receipt_path = pathlib.Path(sys.argv[2])
+          manifest = json.loads(
+              pathlib.Path("benchmarks/release/platform-core-test-manifest-v1.json")
+              .read_text(encoding="utf-8")
+          )
+          def identities(cases):
+              return {
+                  (case["junit"]["classname"], case["junit"]["name"])
+                  for case in cases
+              }
+          qualification = identities(manifest["classifications"]["qualification"]["cases"])
+          nonapplicable = identities(manifest["classifications"]["nonapplicable"]["cases"])
+          historical_compatibility = identities(
+              manifest["classifications"]["historical_compatibility"]["cases"]
+          )
+          root = ET.parse(junit_path).getroot()
+          skipped = []
+          for case in root.findall(".//testcase"):
+              if case.find("skipped") is not None:
+                  skipped.append((case.attrib.get("classname", ""), case.attrib.get("name", "")))
+          unclassified = sorted(
+              set(skipped) - qualification - nonapplicable - historical_compatibility
+          )
+          if unclassified:
+              raise SystemExit(f"unclassified candidate skips: {unclassified[:8]}")
+          suites = root.findall(".//testsuite")
+          receipt = {
+              "schema_version": "deeplaw.platform-candidate-regression-receipt/v1",
+              "status": "current_source_regression",
+              "release_ready": False,
+              "environment": {
+                  "matrix_os": os.environ["MATRIX_OS"],
+                  "matrix_python": os.environ["MATRIX_PYTHON"],
+                  "python_version": sys.version,
+              },
+              "test_manifest": {
+                  "schema_version": manifest["schema_version"],
+                  "manifest_sha256": manifest["manifest_sha256"],
+              },
+              "junit": {
+                  "tests": sum(int(suite.attrib.get("tests", "0")) for suite in suites),
+                  "failures": sum(int(suite.attrib.get("failures", "0")) for suite in suites),
+                  "errors": sum(int(suite.attrib.get("errors", "0")) for suite in suites),
+                  "skipped": len(skipped),
+              },
+              "qualification": {
+                  "status": "not_executed",
+                  "skipped": sum(identity in qualification for identity in skipped),
+              },
+              "nonapplicable": {
+                  "status": "nonapplicable",
+                  "skipped": sum(identity in nonapplicable for identity in skipped),
+              },
+              "historical_compatibility": {
+                  "status": "not_executed",
+                  "skipped": sum(
+                      identity in historical_compatibility for identity in skipped
+                  ),
+              },
+          }
+          receipt_path.write_text(
+              json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload candidate regression receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-regression-${{ matrix.os }}-${{ matrix.python-version }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/candidate-tests.xml
+            ${{ runner.temp }}/candidate-skip-receipt.json
 
       - name: Build distribution
         run: uv build --build-constraints benchmarks/release/build-constraints.txt

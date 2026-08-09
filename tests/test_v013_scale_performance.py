@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from benchmarks.v013.scale_performance import (
     OPERATION_INVENTORY,
     SCHEMA_VERSION,
+    _filesystem_metadata,
     _Fixture,
     _fixture_operation_runners,
     _full_vault_scan_monitor,
@@ -20,6 +22,21 @@ from benchmarks.v013.scale_performance import (
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = REPOSITORY / "contracts/v013-scale-performance-report.v1.schema.json"
+
+
+def test_filesystem_probe_is_honest_when_statvfs_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(os, "statvfs", raising=False)
+
+    metadata = _filesystem_metadata(tmp_path)
+
+    assert metadata == {
+        "kind": "unknown",
+        "block_size": None,
+        "reason": "filesystem statistics probe failed",
+    }
 
 
 def test_exact_100k_source_fixture_stays_within_line_count_ceiling() -> None:

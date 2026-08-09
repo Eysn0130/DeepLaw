@@ -280,6 +280,8 @@ def test_platform_gate_uses_utf8_for_cross_platform_subprocess_output() -> None:
     workflow = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(encoding="utf-8")
 
     assert 'PYTHONUTF8: "1"' in workflow
+    assert 'version: "0.11.5"' in workflow
+    assert workflow.count('version: "0.11.5"') == workflow.count("astral-sh/setup-uv@")
 
 
 def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
@@ -295,6 +297,27 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
     assert commercial.count(exact_commercial_ref) == 7
     assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
     assert ci.count(exact_ci_ref) == 3
+    assert "  pull_request:" not in commercial
+    assert "qualification and not windows_native" in commercial
+    assert 'marker: not qualification' in commercial
+    assert "--manifest" in commercial
+    assert "--binding-receipt" in commercial
+
+
+def test_candidate_ci_is_current_source_regression_not_release_readiness() -> None:
+    ci = (REPOSITORY / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "current-source regression" in ci
+    assert "runs-on: ${{ matrix.os }}" in ci
+    assert all(system in ci for system in ("ubuntu-latest", "macos-latest", "windows-latest"))
+    assert all(version in ci for version in ('"3.11"', '"3.12"', '"3.13"'))
+    assert "fail-fast: false" in ci
+    assert "candidate-skip-receipt.json" in ci
+    assert '"release_ready": False' in ci
+    assert "--require-eligible" not in ci
+    assert "qualification" in ci
+    assert "historical_compatibility" in ci
+    assert "test_manifest" in ci
 
 
 def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() -> None:

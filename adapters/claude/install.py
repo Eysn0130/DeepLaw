@@ -9,6 +9,7 @@ import re
 import stat
 import tempfile
 from collections.abc import Mapping
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -363,17 +364,46 @@ def _atomic_write(path: Path, value: Mapping[str, Any]) -> None:
         dir=path.parent,
     )
     temporary_path = Path(temporary)
+    stream = None
     try:
-        os.fchmod(descriptor, stat.S_IRUSR | stat.S_IWUSR)
-        with os.fdopen(descriptor, "wb") as stream:
+        if os.name != "nt":
+            fchmod = getattr(os, "fchmod", None)
+            if fchmod is not None:
+                fchmod(descriptor, stat.S_IRUSR | stat.S_IWUSR)
+            else:
+                os.chmod(temporary_path, stat.S_IRUSR | stat.S_IWUSR)
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        try:
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
+        except BaseException:
+            with suppress(BaseException):
+                stream.close()
+            raise
+        stream.close()
+        stream = None
         os.replace(temporary_path, path)
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
     except BaseException:
-        temporary_path.unlink(missing_ok=True)
+        if stream is not None:
+            with suppress(BaseException):
+                stream.close()
+        if descriptor >= 0:
+            with suppress(BaseException):
+                os.close(descriptor)
+        with suppress(BaseException):
+            temporary_path.unlink(missing_ok=True)
         raise
+
+
+def _set_posix_owner_mode(path: Path) -> None:
+    if os.name != "nt":
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
+def _owner_only_receipt() -> bool:
+    return os.name != "nt"
 
 
 def install_settings(settings: str | os.PathLike[str], **options: Any) -> dict[str, Any]:
@@ -383,7 +413,7 @@ def install_settings(settings: str | os.PathLike[str], **options: Any) -> dict[s
     if changed:
         _atomic_write(path, merged)
     elif path.exists():
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        _set_posix_owner_mode(path)
     return {
         "schema_version": "deeplaw.claude-hook-install-receipt/v1",
         "operation": "install",
@@ -393,7 +423,7 @@ def install_settings(settings: str | os.PathLike[str], **options: Any) -> dict[s
         "events": list(HOOK_EVENTS),
         "hook_marker": HOOK_MARKER,
         "settings_written": changed,
-        "owner_only": True,
+        "owner_only": _owner_only_receipt(),
         "default_settings_touched": False,
     }
 
@@ -405,7 +435,7 @@ def uninstall_settings(settings: str | os.PathLike[str]) -> dict[str, Any]:
     if removed:
         _atomic_write(path, merged)
     elif path.exists():
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        _set_posix_owner_mode(path)
     return {
         "schema_version": "deeplaw.claude-hook-install-receipt/v1",
         "operation": "uninstall",
@@ -414,7 +444,7 @@ def uninstall_settings(settings: str | os.PathLike[str]) -> dict[str, Any]:
         "events": list(HOOK_EVENTS),
         "hook_marker": HOOK_MARKER,
         "settings_written": bool(removed),
-        "owner_only": True,
+        "owner_only": _owner_only_receipt(),
         "default_settings_touched": False,
     }
 

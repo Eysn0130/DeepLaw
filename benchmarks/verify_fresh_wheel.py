@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,13 @@ from deeplaw import __version__
 from deeplaw.compilation import CompilationCoordinator
 from deeplaw.evidence import build_input_set_sha256
 from deeplaw.util import canonical_json, sha256_bytes, sha256_file, stable_id
+
+_POSIX_ABSOLUTE_PATH = re.compile(
+    r"/(?:Users|home|private|tmp|var)(?:[\\/][^\s,;:()<>]+)*"
+)
+_WINDOWS_ABSOLUTE_PATH = re.compile(
+    r"(?i)(?:[A-Za-z]:[\\/]|\\\\)(?:[^\s,;:()<>]+[\\/])*[^\s,;:()<>]*"
+)
 
 
 def _run(interpreter: Path, *arguments: str) -> dict[str, Any]:
@@ -291,10 +299,21 @@ def _resume_failure_diagnostic(
     except BaseException as error:
         message = str(error)
         for path in (vault, vault.parent):
-            for rendered in {str(path), str(path.resolve())}:
+            for rendered in {
+                str(path),
+                str(path.resolve()),
+                path.as_posix(),
+                str(path).replace("/", "\\"),
+                str(path.resolve()).replace("/", "\\"),
+            }:
                 message = message.replace(rendered, "<redacted-path>")
-                message = message.replace(rendered.replace("\\", "/"), "<redacted-path>")
+        # Redact both path syntaxes before normalising separators.  The second pass
+        # covers paths that are not rooted at the temporary Vault (for example a
+        # Windows runner's checkout path) without retaining an absolute prefix.
+        message = _POSIX_ABSOLUTE_PATH.sub("<redacted-path>", message)
+        message = _WINDOWS_ABSOLUTE_PATH.sub("<redacted-path>", message)
         message = " ".join(message.split())[:500]
+        message = message.replace("\\", "/")
         return f"{type(error).__name__}:{message or '<no-message>'}"
     return "direct_resume_passed_after_cli_failure"
 
@@ -339,6 +358,7 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
         source.write_text(
             "# Decision\nThe fresh wheel uses SQLite as its canonical local store.\n",
             encoding="utf-8",
+            newline="\n",
         )
         initialized = _run(
             interpreter,

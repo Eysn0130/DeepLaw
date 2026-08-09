@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "task_binding", "intent", "purpose", "policy_id", "scope", "max_sensitivity",
-    "as_of", "query_target", "applicable_duties", "retrieval_controls", "discovery",
+    "as_of", "query_target", "query_expansion", "applicable_duties", "retrieval_controls", "discovery",
     "budget", "projection",
     "input_audit_head", "input_legacy_audit_head", "compiled_candidate_count",
     "admitted_statement_count", "selected_statement_count", "evidence_selected_count",
@@ -40,6 +40,27 @@
         "knowledge_id": {"type": "string", "maxLength": 500},
         "revision_id": {"type": "string", "maxLength": 500},
         "kind": {"type": "string", "maxLength": 500}
+      }
+    },
+    "query_expansion": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "profile", "applied", "term_count", "terms_sha256", "terms_truncated",
+        "authority_changed", "stored_evidence_changed"
+      ],
+      "properties": {
+        "profile": {
+          "enum": [
+            "deeplaw-deterministic-query-expansion/1",
+            "deeplaw-deterministic-query-expansion/2"
+          ]
+        },
+        "applied": {"type": "boolean"},
+        "term_count": {"type": "integer", "minimum": 0, "maximum": 24},
+        "terms_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "terms_truncated": {"type": "boolean"},
+        "authority_changed": {"const": false},
+        "stored_evidence_changed": {"const": false}
       }
     },
     "applicable_duties": {"type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true, "items": {"enum": ["primary_answer", "identity", "definition", "current_state", "temporal_freshness", "procedure", "exception", "contradiction", "applicability", "limitation", "source_evidence", "unresolved_gap"]}},

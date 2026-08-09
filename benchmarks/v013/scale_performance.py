@@ -176,7 +176,7 @@ def _total_ram_bytes() -> tuple[int | None, str | None]:
     try:
         page_size = int(os.sysconf("SC_PAGE_SIZE"))
         page_count = int(os.sysconf("SC_PHYS_PAGES"))
-    except (AttributeError, OSError, TypeError, ValueError):
+    except (AttributeError, NotImplementedError, OSError, TypeError, ValueError):
         return None, "portable total-RAM probe is unavailable"
     if page_size <= 0 or page_count <= 0:
         return None, "OS returned an invalid total-RAM value"
@@ -187,7 +187,7 @@ def _filesystem_metadata(path: Path) -> dict[str, Any]:
     try:
         stats = os.statvfs(path)
         block_size = int(stats.f_frsize or stats.f_bsize)
-    except (OSError, ValueError):
+    except (AttributeError, OSError, TypeError, ValueError):
         return {
             "kind": "unknown",
             "block_size": None,

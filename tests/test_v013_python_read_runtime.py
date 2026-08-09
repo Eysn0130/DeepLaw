@@ -62,7 +62,7 @@ def test_python_facade_reuses_startup_snapshot_and_closes_it(
 
     knowledge_os = KnowledgeOS.open(root)
     try:
-        assert counts == {"legacy": 2, "autonomous": 1}
+        assert counts == {"legacy": 1, "autonomous": 1}
         first = knowledge_os.context.compile(
             task="warm Python Capsule request",
             confirm_no_case_data=True,
@@ -75,11 +75,11 @@ def test_python_facade_reuses_startup_snapshot_and_closes_it(
         assert second["schema_version"] == "deeplaw.knowledge-capsule/v3"
         assert first["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v6"
         assert second["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v6"
-        assert counts == {"legacy": 3, "autonomous": 2}
+        assert counts == {"legacy": 2, "autonomous": 2}
 
         verified = knowledge_os.verify()
         assert verified["valid"] is True
-        assert counts == {"legacy": 4, "autonomous": 3}
+        assert counts == {"legacy": 3, "autonomous": 3}
     finally:
         knowledge_os.close()
 
@@ -129,4 +129,4 @@ def test_python_facade_reopens_after_bounded_identity_change(
             task="reopened Python Capsule request",
             confirm_no_case_data=True,
         )
-        assert counts == {"legacy": 4, "autonomous": 3}
+        assert counts == {"legacy": 3, "autonomous": 3}

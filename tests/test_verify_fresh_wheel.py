@@ -89,3 +89,31 @@ def test_resume_failure_diagnostic_preserves_cause_without_local_path(
 
     assert diagnostic == "RuntimeError:projection failed below <redacted-path>/wiki"
     assert str(tmp_path) not in diagnostic
+
+
+def test_resume_failure_diagnostic_normalizes_redacted_windows_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vault = Path("C:/Users/private/vault")
+
+    class FailingCoordinator:
+        def __init__(self, _: Path) -> None:
+            pass
+
+        def resume(self, **_: object) -> None:
+            raise RuntimeError(r"projection failed below C:\Users\private\vault\wiki")
+
+    monkeypatch.setattr(
+        "benchmarks.verify_fresh_wheel.CompilationCoordinator",
+        FailingCoordinator,
+    )
+
+    diagnostic = _resume_failure_diagnostic(
+        vault,
+        grant_id="grant_000000000000000000000000",
+        compilation_run_id="compilationrun_000000000000000000000000",
+    )
+
+    assert diagnostic == "RuntimeError:projection failed below <redacted-path>/wiki"
+    assert "\\" not in diagnostic
+    assert "C:" not in diagnostic

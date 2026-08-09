@@ -1,7 +1,6 @@
 name: Commercial GA gates
 
 on:
-  pull_request:
   workflow_call:
     inputs:
       release_ref:
@@ -49,6 +48,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -88,47 +88,47 @@ jobs:
             system: Linux
             python: "3.11"
             slug: linux-py311
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: ubuntu-latest
             system: Linux
             python: "3.12"
             slug: linux-py312
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: ubuntu-latest
             system: Linux
             python: "3.13"
             slug: linux-py313
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: macos-latest
             system: Darwin
             python: "3.11"
             slug: darwin-py311
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: macos-latest
             system: Darwin
             python: "3.12"
             slug: darwin-py312
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: macos-latest
             system: Darwin
             python: "3.13"
             slug: darwin-py313
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: windows-latest
             system: Windows
             python: "3.11"
             slug: windows-py311
-            marker: all
+            marker: not qualification
           - os: windows-latest
             system: Windows
             python: "3.12"
             slug: windows-py312
-            marker: all
+            marker: not qualification
           - os: windows-latest
             system: Windows
             python: "3.13"
             slug: windows-py313
-            marker: all
+            marker: not qualification
 
     steps:
       - name: Check out exact candidate and history
@@ -142,6 +142,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: ${{ matrix.python }}
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -207,6 +208,8 @@ jobs:
           set -euo pipefail
           uv run --frozen python -m benchmarks.release.platform_gate \
             --junit "${RUNNER_TEMP}/pytest-${{ matrix.slug }}.xml" \
+            --manifest "benchmarks/release/platform-core-test-manifest-v1.json" \
+            --binding-receipt "${RUNNER_TEMP}/platform-binding-${{ matrix.slug }}.json" \
             --lifecycle "${RUNNER_TEMP}/distribution-lifecycle-${{ matrix.slug }}.json" \
             --expected-system "${{ matrix.system }}" \
             --expected-python "${{ matrix.python }}" \
@@ -218,6 +221,10 @@ jobs:
             "${RUNNER_TEMP}/platform-evidence/distribution-lifecycle-${{ matrix.slug }}.json"
           cp "${RUNNER_TEMP}/platform-${{ matrix.slug }}.json" \
             "${RUNNER_TEMP}/platform-evidence/platform-${{ matrix.slug }}.json"
+          cp "${RUNNER_TEMP}/platform-binding-${{ matrix.slug }}.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-binding-${{ matrix.slug }}.json"
+          cp "benchmarks/release/platform-core-test-manifest-v1.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-core-test-manifest-v1.json"
 
       - name: Upload platform evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -244,6 +251,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -323,6 +331,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -418,6 +427,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -473,6 +483,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -570,6 +581,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
