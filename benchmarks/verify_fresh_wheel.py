@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from deeplaw import __version__
+from deeplaw.compilation import CompilationCoordinator
 from deeplaw.evidence import build_input_set_sha256
 from deeplaw.util import canonical_json, sha256_bytes, sha256_file, stable_id
 
@@ -265,6 +266,37 @@ def _compiled_query_hit(query: dict[str, Any]) -> bool:
         and bool(statement["source_refs"])
         for statement in statements
     )
+
+
+def _resume_failure_diagnostic(
+    vault: Path,
+    *,
+    grant_id: str,
+    compilation_run_id: str,
+) -> str:
+    """Reproduce a failed installed-CLI resume without exposing local paths.
+
+    This path runs only after the public installed-wheel command has already
+    failed.  It cannot turn the smoke result into a pass; it preserves the raw
+    domain exception needed to diagnose platform-specific projection failures.
+    """
+
+    try:
+        CompilationCoordinator(vault).resume(
+            grant_id=grant_id,
+            compilation_run_id=compilation_run_id,
+            project=True,
+            confirm_no_case_data=True,
+        )
+    except BaseException as error:
+        message = str(error)
+        for path in (vault, vault.parent):
+            for rendered in {str(path), str(path.resolve())}:
+                message = message.replace(rendered, "<redacted-path>")
+                message = message.replace(rendered.replace("\\", "/"), "<redacted-path>")
+        message = " ".join(message.split())[:500]
+        return f"{type(error).__name__}:{message or '<no-message>'}"
+    return "direct_resume_passed_after_cli_failure"
 
 
 def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
@@ -538,20 +570,30 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
             run_id,
             "--confirm-no-case-data",
         )
-        compilation_completed = _run(
-            interpreter,
-            "knowledge",
-            "compile",
-            "resume",
-            "--vault",
-            str(vault),
-            "--grant-id",
-            compiler_grant["grant_id"],
-            "--run-id",
-            run_id,
-            "--project",
-            "--confirm-no-case-data",
-        )
+        try:
+            compilation_completed = _run(
+                interpreter,
+                "knowledge",
+                "compile",
+                "resume",
+                "--vault",
+                str(vault),
+                "--grant-id",
+                compiler_grant["grant_id"],
+                "--run-id",
+                run_id,
+                "--project",
+                "--confirm-no-case-data",
+            )
+        except RuntimeError:
+            diagnostic = _resume_failure_diagnostic(
+                vault,
+                grant_id=compiler_grant["grant_id"],
+                compilation_run_id=run_id,
+            )
+            raise RuntimeError(
+                f"fresh-wheel installed CLI resume failed; diagnostic={diagnostic}"
+            ) from None
         compiled_query = _run(
             interpreter,
             "knowledge",

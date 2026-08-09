@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from benchmarks.verify_fresh_wheel import _compiled_query_hit
+from benchmarks.verify_fresh_wheel import (
+    _compiled_query_hit,
+    _resume_failure_diagnostic,
+)
 
 
 def _query_v6() -> dict[str, object]:
@@ -56,3 +61,31 @@ def test_compiled_query_hit_fails_closed_on_non_compiled_v6_results(mutate) -> N
     mutate(query)
 
     assert _compiled_query_hit(query) is False
+
+
+def test_resume_failure_diagnostic_preserves_cause_without_local_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vault = tmp_path / "private" / "vault"
+
+    class FailingCoordinator:
+        def __init__(self, _: Path) -> None:
+            pass
+
+        def resume(self, **_: object) -> None:
+            raise RuntimeError(f"projection failed below {vault / 'wiki'}")
+
+    monkeypatch.setattr(
+        "benchmarks.verify_fresh_wheel.CompilationCoordinator",
+        FailingCoordinator,
+    )
+
+    diagnostic = _resume_failure_diagnostic(
+        vault,
+        grant_id="grant_000000000000000000000000",
+        compilation_run_id="compilationrun_000000000000000000000000",
+    )
+
+    assert diagnostic == "RuntimeError:projection failed below <redacted-path>/wiki"
+    assert str(tmp_path) not in diagnostic
