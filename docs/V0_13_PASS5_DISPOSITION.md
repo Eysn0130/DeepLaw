@@ -110,7 +110,11 @@ alongside a compound anchor so a multi-target request is not silently reduced to
 The same local CLI benchmark then returned 15/15 cases, 14/14 variants, Context accuracy `1.0`,
 stale prohibited selections `0`, and Provider hard-limit violations `0`; the corrected raw report
 SHA-256 is `1cb12753e12bdca21546f0327eb3ecdec2ad32315016a6e204f8a83520be75cc`.
-Fresh current-head GitHub evidence is still required before handoff.
+GitHub Semantic workflow run `31344654167` independently reproduced those hard-zero metrics at
+commit `31c70908e55dc4a044b4832d1c7886b7a6ed709d`; its raw report SHA-256 is
+`fb6aca211fdf24d821d3bd8a0df4beb4f7f9e3c4a99b2156a1489e0389cae23c`. That run is
+repository-visible development evidence, not Human Gold or product qualification. A later
+documentation/test-harness commit still requires its own current-head rerun before handoff.
 
 The first complete post-fix suite then exposed a separate fail-closed boundary: an all-uppercase,
 delimiter-separated opaque identifier was being split into independent singleton identity anchors,
@@ -143,6 +147,13 @@ Expansion receipt bindings from that run:
 
 The canonical visible semantic suite is again 15/15 with 14/14 query variants and no Provider
 hard-bound regression in the local raw rerun above. These are development results only.
+
+Candidate CI run `31344654006` at the same semantic commit also exposed a Windows-only test-harness
+failure: the unseen-development CLI subprocess used the closed environment allowlist but supplied
+no case-owned `HOME`, so Windows could not resolve `Path.home()`. The repair supplies an isolated
+home through the existing allowlist and keeps ambient/provider secrets, Desktop state and host
+credentials excluded. This is not a runtime relaxation and does not use `os.environ.copy()`.
+Final current-head Candidate CI is reported in the handoff rather than self-referenced here.
 
 ## Statement/Relation/Graph scale
 
