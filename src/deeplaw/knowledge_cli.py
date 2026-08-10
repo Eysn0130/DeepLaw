@@ -808,6 +808,16 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="answer",
     )
     context.add_argument(
+        "--scope",
+        choices=sorted(AUTONOMOUS_SCOPES),
+        help="Autonomous scope; defaults to the Vault manifest scope",
+    )
+    context.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        help="Maximum admitted sensitivity; defaults to private",
+    )
+    context.add_argument(
         "--policy",
         choices=("compiled-first-v1", "evidence-first-v1", "balanced-v1"),
     )
@@ -3688,6 +3698,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 )
             if not use_autonomous_context and task_binding is not None:
                 raise ValueError("task_binding requires query_plan_version=6")
+            if not use_autonomous_context and (
+                args.scope is not None or args.max_sensitivity is not None
+            ):
+                raise ValueError(
+                    "scope and max_sensitivity require an autonomous compilation workspace"
+                )
             if use_autonomous_context and args.include_restricted:
                 raise ValueError("Knowledge Capsules cannot expose restricted content")
             if use_autonomous_context:
@@ -3696,8 +3712,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     goal=args.goal,
                     purpose=args.purpose,
                     policy=args.policy,
-                    scope=str(vault.manifest.get("scope", "project")),
-                    max_sensitivity="private",
+                    scope=args.scope or str(vault.manifest.get("scope", "project")),
+                    max_sensitivity=args.max_sensitivity or "private",
                     limit=args.max_items,
                     max_chars=args.max_chars,
                     max_tokens=args.max_tokens,

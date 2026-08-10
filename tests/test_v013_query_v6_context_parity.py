@@ -105,6 +105,52 @@ def _assert_v6_context(result: dict[str, Any]) -> None:
     assert "statements" in result
 
 
+def _selected_context_identity(value: dict[str, Any], *, provider: bool = False) -> tuple:
+    body: Any = value
+    if provider:
+        body = value.get("capsule", {})
+    statements = body.get("statements", []) if isinstance(body, dict) else []
+    evidence = body.get("evidence", []) if isinstance(body, dict) else []
+    gaps = body.get("gaps", []) if isinstance(body, dict) else []
+    statement_ids = tuple(
+        item.get("statement_id")
+        for item in statements
+        if isinstance(item, dict) and isinstance(item.get("statement_id"), str)
+    )
+    revision_ids = tuple(
+        sorted(
+            {
+                item.get("knowledge_revision_id")
+                for item in statements
+                if isinstance(item, dict)
+                and isinstance(item.get("knowledge_revision_id"), str)
+            }
+        )
+    )
+    source_ids = tuple(
+        sorted(
+            {
+                reference.get("source_revision_id")
+                for item in [*statements, *evidence]
+                if isinstance(item, dict)
+                for reference in item.get("source_refs", [])
+                if isinstance(reference, dict)
+                and isinstance(reference.get("source_revision_id"), str)
+            }
+        )
+    )
+    gap_codes = tuple(
+        sorted(
+            {
+                item.get("code")
+                for item in gaps
+                if isinstance(item, dict) and isinstance(item.get("code"), str)
+            }
+        )
+    )
+    return statement_ids, revision_ids, source_ids, gap_codes
+
+
 def _reseal_capsule(capsule: dict[str, Any]) -> None:
     body = {
         key: value
@@ -275,6 +321,12 @@ def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
         python_query = knowledge_os.retrieval.query(_TASK, task_binding=binding)
         python_context = knowledge_os.context.compile(
             task=_TASK,
+            scope="project",
+            max_sensitivity="public",
+            limit=8,
+            max_chars=6_000,
+            max_tokens=6_000,
+            max_sources=12,
             task_binding=binding,
             confirm_no_case_data=True,
         )
@@ -309,6 +361,10 @@ def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
         str(root),
         "--task",
         _TASK,
+        "--scope",
+        "project",
+        "--max-sensitivity",
+        "public",
         "--task-binding",
         encoded_binding,
         "--confirm-no-case-data",
@@ -319,6 +375,32 @@ def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
     assert binding["binding_sha256"] not in canonical_json(
         cli_context["provider_capsule"]
     )
+
+    mcp_context = handle_knowledge_support(
+        operation="context",
+        task=_TASK,
+        scope="project",
+        max_sensitivity="public",
+        limit=8,
+        max_chars=6_000,
+        max_tokens=6_000,
+        max_sources=12,
+        task_binding=binding,
+        confirm_no_case_data=True,
+        vault_path=root,
+    )
+    assert python_context["query_plan"]["scope"] == "project"
+    assert python_context["query_plan"]["max_sensitivity"] == "public"
+    assert cli_context["query_plan"]["scope"] == "project"
+    assert cli_context["query_plan"]["max_sensitivity"] == "public"
+    assert (
+        python_context["provider_capsule"]
+        == cli_context["provider_capsule"]
+        == mcp_context["result"]
+    )
+    assert _selected_context_identity(
+        python_context["provider_capsule"], provider=True
+    ) == _selected_context_identity(mcp_context["result"], provider=True)
 
     for operation, fields in (
         ("query", {"query": _TASK}),

@@ -78,11 +78,20 @@
         "provider_capsule_bytes", "mcp_tool_result_bytes", "provider_content_bytes",
         "transport_metadata_bytes", "provider_token_estimate",
         "token_measurement_method", "useful_context_recall",
-        "false_suppression_rate", "duty_coverage", "relevant_chars",
+        "false_suppression_rate", "required_target_count",
+        "false_suppressed_required_target_count",
+        "required_target_miss_without_suppression_count",
+        "required_target_not_discovered_count", "required_target_uncompiled_count",
+        "required_target_rejected_count", "required_target_gap_count",
+        "recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k",
+        "surface_identity_parity_valid", "request_parameter_parity_valid",
+        "receipt_explain_valid",
+        "duty_coverage", "relevant_chars",
         "context_chars", "relevant_chars_ratio", "redundancy_rate",
         "duplicate_evidence_rate", "context_latency_ms", "mcp_latency_ms",
         "provider_hard_limit_valid", "variant_count", "variant_pass_count",
-        "query_variant_recall_delta"
+        "query_variant_recall_delta", "query_variant_rank_deltas",
+        "variant_rank_metrics"
       ],
       "properties": {
         "case_id": {"type": "string", "pattern": "^semantic-case-[0-9]{2}$"},
@@ -95,11 +104,29 @@
         "provider_capsule_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "mcp_tool_result_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
         "provider_content_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
-        "transport_metadata_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "transport_metadata_bytes": {
+          "description": "Canonical JSON MCP envelope overhead beyond the provider-visible capsule content.",
+          "type": "integer", "minimum": 0, "maximum": 65536
+        },
         "provider_token_estimate": {"type": "integer", "minimum": 0},
         "token_measurement_method": {"const": "utf8_bytes_div_4_estimate"},
         "useful_context_recall": {"$ref": "#/$defs/ratio"},
         "false_suppression_rate": {"$ref": "#/$defs/ratio"},
+        "required_target_count": {"type": "integer", "minimum": 0},
+        "false_suppressed_required_target_count": {"type": "integer", "minimum": 0},
+        "required_target_miss_without_suppression_count": {"type": "integer", "minimum": 0},
+        "required_target_not_discovered_count": {"type": "integer", "minimum": 0},
+        "required_target_uncompiled_count": {"type": "integer", "minimum": 0},
+        "required_target_rejected_count": {"type": "integer", "minimum": 0},
+        "required_target_gap_count": {"type": "integer", "minimum": 0},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"},
+        "surface_identity_parity_valid": {"type": "boolean"},
+        "request_parameter_parity_valid": {"type": "boolean"},
+        "receipt_explain_valid": {"type": "boolean"},
         "duty_coverage": {"$ref": "#/$defs/ratio"},
         "relevant_chars": {"type": "integer", "minimum": 0},
         "context_chars": {"type": "integer", "minimum": 0},
@@ -111,7 +138,39 @@
         "provider_hard_limit_valid": {"type": "boolean"},
         "variant_count": {"type": "integer", "minimum": 0, "maximum": 100},
         "variant_pass_count": {"type": "integer", "minimum": 0, "maximum": 100},
-        "query_variant_recall_delta": {"$ref": "#/$defs/ratio"}
+        "query_variant_recall_delta": {"$ref": "#/$defs/ratio"},
+        "query_variant_rank_deltas": {"$ref": "#/$defs/rankDeltas"},
+        "variant_rank_metrics": {
+          "type": "array", "maxItems": 12,
+          "items": {"$ref": "#/$defs/variantRankMetric"}
+        }
+      }
+    },
+    "rankDeltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k"],
+      "properties": {
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "variantRankMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_id", "recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k"
+      ],
+      "properties": {
+        "variant_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"}
       }
     },
     "notExecutedMetric": {
@@ -133,7 +192,13 @@
       "additionalProperties": false,
       "required": [
         "query_count", "query_variant_count", "useful_context_recall",
-        "false_suppression_rate", "duty_coverage", "relevant_chars",
+        "false_suppression_rate", "required_target_count",
+        "false_suppressed_required_target_count",
+        "required_target_miss_without_suppression_count",
+        "required_target_not_discovered_count", "required_target_uncompiled_count",
+        "required_target_rejected_count", "required_target_gap_count",
+        "recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k",
+        "duty_coverage", "relevant_chars",
         "context_chars", "relevant_chars_ratio", "redundancy_rate",
         "duplicate_evidence_rate", "local_capsule_bytes", "provider_capsule_bytes",
         "mcp_tool_result_bytes", "provider_content_bytes", "transport_metadata_bytes",
@@ -141,6 +206,8 @@
         "token_measurement_method", "actual_provider_input_tokens",
         "context_latency_p50_ms", "context_latency_p95_ms", "mcp_latency_p50_ms",
         "mcp_latency_p95_ms", "query_variant_recall_delta",
+        "query_variant_rank_deltas", "surface_identity_parity_failures",
+        "request_parameter_parity_failures", "receipt_explain_failures",
         "distractor_induced_answer_delta", "token_savings",
         "provider_hard_limit_violations"
       ],
@@ -149,6 +216,18 @@
         "query_variant_count": {"type": "integer", "minimum": 0, "maximum": 10000},
         "useful_context_recall": {"$ref": "#/$defs/ratio"},
         "false_suppression_rate": {"$ref": "#/$defs/ratio"},
+        "required_target_count": {"type": "integer", "minimum": 0},
+        "false_suppressed_required_target_count": {"type": "integer", "minimum": 0},
+        "required_target_miss_without_suppression_count": {"type": "integer", "minimum": 0},
+        "required_target_not_discovered_count": {"type": "integer", "minimum": 0},
+        "required_target_uncompiled_count": {"type": "integer", "minimum": 0},
+        "required_target_rejected_count": {"type": "integer", "minimum": 0},
+        "required_target_gap_count": {"type": "integer", "minimum": 0},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"},
         "duty_coverage": {"$ref": "#/$defs/ratio"},
         "relevant_chars": {"type": "integer", "minimum": 0},
         "context_chars": {"type": "integer", "minimum": 0},
@@ -159,7 +238,10 @@
         "provider_capsule_bytes": {"type": "integer", "minimum": 0},
         "mcp_tool_result_bytes": {"type": "integer", "minimum": 0},
         "provider_content_bytes": {"type": "integer", "minimum": 0},
-        "transport_metadata_bytes": {"type": "integer", "minimum": 0},
+        "transport_metadata_bytes": {
+          "description": "Canonical JSON MCP envelope overhead beyond the provider-visible capsule content.",
+          "type": "integer", "minimum": 0
+        },
         "transport_overhead_ratio": {"$ref": "#/$defs/ratio"},
         "provider_token_estimate": {"type": "integer", "minimum": 0},
         "token_measurement_method": {"const": "utf8_bytes_div_4_estimate"},
@@ -169,6 +251,10 @@
         "mcp_latency_p50_ms": {"type": "integer", "minimum": 0},
         "mcp_latency_p95_ms": {"type": "integer", "minimum": 0},
         "query_variant_recall_delta": {"$ref": "#/$defs/ratio"},
+        "query_variant_rank_deltas": {"$ref": "#/$defs/rankDeltas"},
+        "surface_identity_parity_failures": {"type": "integer", "minimum": 0},
+        "request_parameter_parity_failures": {"type": "integer", "minimum": 0},
+        "receipt_explain_failures": {"type": "integer", "minimum": 0},
         "distractor_induced_answer_delta": {"$ref": "#/$defs/notExecutedMetric"},
         "token_savings": {"$ref": "#/$defs/notExecutedMetric"},
         "provider_hard_limit_violations": {"type": "integer", "minimum": 0}

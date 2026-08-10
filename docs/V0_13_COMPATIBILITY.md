@@ -9,7 +9,7 @@ the additive v0.13 working-tree contract and must not be read as a published ver
 | --- | --- | --- | --- |
 | Semantic compilation | `living-wiki-agent/v3`; repository-visible deterministic development runs use source-run/lifecycle v2 | Profile v1 and v2 compiler inputs remain readable; deterministic lifecycle v1 stays immutable and complete-only | v3 adds dynamic applicability, Statements and exact freshness/verification status; development lifecycle v2 separates mechanical `status` from truthful `semantic_status` and is never formal release evidence |
 | Query | Query Plan v6 for `knowledge query`/Python retrieval query | Query Plan v5 remains explicitly selectable | v6 honors and receipts `retrieval_mode`/`graph_hops`/canonical fallback and an optional opaque task binding, discovers ≤20 revisions, then admits ≤512 Statements from only those revisions; it no-answers legacy content without admitted Statements |
-| Context | Query Plan v6 for Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`, `deeplaw knowledge autonomy context`, and autonomous MCP `operation=context` | Explicit `query_plan_version=5` only; a task binding is rejected instead of discarded on v5 | v6 uses the shared domain assembler and additive local Capsule v3 (≤262,144 bytes); exact task binding gates working checkpoints, while nested Provider v2 (≤65,536 bytes) excludes the binding; no ordinary query/context writes the Canonical Ledger |
+| Context | Query Plan v6 for Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`, `deeplaw knowledge autonomy context`, and autonomous MCP `operation=context` | Explicit `query_plan_version=5` only; a task binding is rejected instead of discarded on v5 | Top-level CLI accepts explicit `scope` and `max_sensitivity` for host-parity runs while preserving Vault-scope/private defaults; v6 uses the shared domain assembler and additive local Capsule v3 (≤262,144 bytes); exact task binding gates working checkpoints, while nested Provider v2 (≤65,536 bytes) excludes the binding; no ordinary query/context writes the Canonical Ledger |
 | Expansion | expansion Profile v2 | v1 receipts remain valid | v2 removes benchmark-shaped aliases, binds profile/lexicon/configuration digests, and keeps aliases additive to the bounded source query; Query Plan v6 records only bounded identity-anchor count/digest/truncation |
 | Projection | `standard` Profile, Living Wiki manifest v2 paired with Registry/Link/Resolver manifest v3 | aggregate manifest v1 and Profile `full` remain readable | `standard` removes per-object Canvas; profile changes clean only verified owned files; revisions above 64 Statements use derived Statement Evidence shards without changing canonical identity |
 | Evidence grounding | Statement/Evidence core v1 | source/object references remain readable | statement-bearing Profile v3 content must pass exact map/receipt verification |
@@ -79,6 +79,10 @@ The repository-visible Semantic runner now emits an additive
 `deeplaw.semantic-context-outcome/v2` development report. It treats `deeplaw knowledge context`
 with Query Plan v6 as the primary Agent outcome surface and keeps Query Plan v5 `knowledge query`
 inside the historical mixed v1 compatibility report as a non-qualifying operator diagnostic.
+Context v6 reports provider-visible Precision@K, Recall@K, MRR and nDCG, separately retains the
+historical target-scoped precision diagnostic, and fails the development case when explicit request
+parameters, selected semantics, or the bounded MCP receipt-explain projection diverge across CLI,
+Python and MCP.
 Owner-local Capsule v3 bytes, Provider Capsule v2 bytes, complete MCP
 tool-result bytes, selected Provider content bytes and transport metadata bytes are separate
 fields. UTF-8 bytes are never named tokens: the only token value without a real tokenizer or

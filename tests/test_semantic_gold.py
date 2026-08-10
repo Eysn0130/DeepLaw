@@ -47,6 +47,8 @@ from benchmarks.semantic.run_query_suite import (
     _case_result,
     _claim_evidence_checks,
     _compiled_hit_ratio,
+    _context_quality_measurement,
+    _context_rank_metrics,
     _evaluate_read_challenge,
     _execution_environment,
     _rank_metrics,
@@ -508,6 +510,13 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
     )
     assert metrics["recall_at_k"] == 1.0
     assert metrics["target_scoped_precision_at_k"] == 1.0
+    context_metrics = _context_rank_metrics(
+        case=case,
+        value=value,
+        source_ids={"concept-procedure-events": target_source},
+    )
+    assert context_metrics["precision_at_k"] == 0.5
+    assert context_metrics["mrr"] == metrics["reciprocal_rank"]
 
 
 def test_freshness_check_does_not_expand_unrelated_graph_neighbors(
@@ -605,6 +614,129 @@ def test_target_scoped_precision_excludes_other_generic_source_summaries() -> No
     )
     assert metrics["matched_label_ids"] == ["label-source-summary"]
     assert metrics["target_scoped_precision_at_k"] == 1.0
+
+
+def test_context_quality_duplicate_evidence_uses_evidence_identity_only() -> None:
+    case = {
+        "expected_objects": [],
+        "expected_gap_codes": [],
+    }
+    source_revision_id = "sourcerev_" + "a" * 24
+    shared_reference = {
+        "source_revision_id": source_revision_id,
+        "fragment_id": "fragment_" + "b" * 24,
+        "locator": "section:1",
+        "quote_sha256": "c" * 64,
+    }
+
+    true_duplicate = _context_quality_measurement(
+        case=case,
+        retrieval_view={
+            "compiled": [
+                {"source_refs": [shared_reference], "content": "Statement citation"}
+            ],
+            "evidence": [
+                {"evidence_id": "queryevidence_same", **shared_reference},
+                {"evidence_id": "queryevidence_same", **shared_reference},
+            ],
+            "gaps": [],
+        },
+        source_ids={},
+        matched_label_ids=[],
+    )
+    assert true_duplicate["duplicate_evidence_rate"] == 0.5
+
+    distinct_fragments = _context_quality_measurement(
+        case=case,
+        retrieval_view={
+            "compiled": [],
+            "evidence": [
+                {"evidence_id": "queryevidence_a", **shared_reference},
+                {
+                    "evidence_id": "queryevidence_b",
+                    **{
+                        **shared_reference,
+                        "fragment_id": "fragment_" + "d" * 24,
+                    },
+                },
+            ],
+            "gaps": [],
+        },
+        source_ids={},
+        matched_label_ids=[],
+    )
+    assert distinct_fragments["duplicate_evidence_rate"] == 0.0
+
+    citation_overlap = _context_quality_measurement(
+        case=case,
+        retrieval_view={
+            "compiled": [
+                {"source_refs": [shared_reference], "content": "Statement citation"}
+            ],
+            "evidence": [{"evidence_id": "queryevidence_only", **shared_reference}],
+            "gaps": [],
+        },
+        source_ids={},
+        matched_label_ids=[],
+    )
+    assert citation_overlap["duplicate_evidence_rate"] == 0.0
+
+
+def test_context_quality_false_suppression_is_admission_scoped() -> None:
+    statement_id = "statement_" + "a" * 24
+    case = {
+        "source_keys": [],
+        "expected_objects": [
+            {
+                "label_id": "label-target",
+                "required": True,
+                "kind": "concept",
+                "canonical_label": "Target concept",
+                "content_assertions": [],
+            }
+        ],
+        "expected_gap_codes": [],
+    }
+    candidate = {
+        "statement_id": statement_id,
+        "kind": "concept",
+        "title": "Target concept",
+        "semantic_key": "concept:target",
+        "aliases": [],
+        "content": "Target concept body",
+        "source_refs": [],
+    }
+    retrieval_view = {
+        "compiled": [],
+        "evidence": [],
+        "gaps": [],
+        "query_plan": {},
+    }
+
+    suppressed = _context_quality_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids={},
+        matched_label_ids=[],
+        local_audit={"suppressions": [{"statement_id": statement_id}]},
+        candidate_items=[candidate],
+    )
+    assert suppressed["false_suppressed_required_target_count"] == 1
+    assert suppressed["required_target_miss_without_suppression_count"] == 0
+    assert suppressed["false_suppression_rate"] == 1.0
+
+    rejected = _context_quality_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids={},
+        matched_label_ids=[],
+        local_audit={"rejections": [{"statement_id": statement_id}]},
+        candidate_items=[candidate],
+    )
+    assert rejected["false_suppressed_required_target_count"] == 0
+    assert rejected["required_target_miss_without_suppression_count"] == 1
+    assert rejected["required_target_rejected_count"] == 1
+    assert rejected["false_suppression_rate"] == 0.0
 
 
 def test_compiled_hit_ratio_excludes_explicit_gap_only_cases() -> None:
