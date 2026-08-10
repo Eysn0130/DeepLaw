@@ -8,6 +8,8 @@ Status: **development evidence and construction scope only; not qualification or
   `cae4bdf2a91e1a2cf828fa7c6e7b081313632bba` /
   `fb2e4d104af0917c2aedc4b77f4ac89f4c55b6db`.
 - Pass 8 branch: `codex/v013-pass8-lean-qualification`.
+- Final code candidate commit / tree: `2a635d228e99537304282223ae08ef066a4961e2` /
+  `566b2f546816264d997f1418c61be6c25cdb2494`.
 - One-time rule freeze commit / tree: `4befa479a063e2c022814d8d9f15feeeecbee5b9` /
   `7e8602eb9ecaee6f16044d3786d8623ea3cb50ab`.
 - Frozen `AGENTS.md` SHA-256:
@@ -61,7 +63,7 @@ AGPL checkout and its dependencies are not packaged or redistributed by DeepLaw.
 | 12 | Broken/orphan/dangling/self-loop/cycle are explicit | zero-link coverage, unresolved edges, graph dangling/self-loop/cycle fixtures | `pass` at smoke scale | Large Relation/Wiki lane remains outcome 15 |
 | 13 | Incremental/full rebuild equivalence | deterministic change set, recovery and v3 integration tests; a real 1k source successor produces exact incremental/full v2/v3, Registry, Link Index and Resolver equality | `pass` at 1k | Re-run the affected frozen candidate lanes once; do not repeat 100k during ordinary fixes |
 | 14 | Git/history/recovery | immutable revision history and crash recovery pass; exact external Git rename task absent | `partial` | Run one external Git move/cache invalidation task; do not make Git the Authority |
-| 15 | 10k normal use; 100k bounded | 10k Link Index sharding exists; full Wiki/Relation/RSS lanes are not executed | `partial` | Execute frozen 5k/10k/100k candidate lanes once after correctness freeze |
+| 15 | 10k normal use; 100k bounded | 5,001/10k/100k Statement tail retrieval is bounded; the 10k-request RSS/concurrency lane and 1k exact rebuild/cache lane executed; large Wiki and Relation lanes did not | `partial` | Retain the executed development evidence; run audited 5k/10k/100k Relation and 10k/100k Wiki lanes without private construction before release |
 | 16 | Tolaria can open the DeepLaw Workspace | exact frozen Tolaria source-level MCP service opens/reads/edits the allowed note; protected roots remain outside the upstream call | `partial` | Real Tolaria desktop GUI open/edit and post-edit DeepLaw reconciliation are `not_executed`; do not call the source-level probe a desktop E2E |
 | 17 | Agent receives bounded Context through CLI/MCP | corrected v6 development suite passes 15/15 cases and exact Local → Provider → MCP identity/request parity | `partial` | Real Host ×3 and actual Provider token usage remain release gates |
 | 18 | Protected evidence cannot be rewritten by editor or Agent | read-only roots, immutable Sources, separate sink grant and protected-root tests; exact Tolaria probe denies every protected target and verifies unchanged hashes | `pass` locally | OS sandbox isolation and real desktop behavior remain release evidence gaps |
@@ -99,18 +101,20 @@ Gold input, so those gates remain `not_executed`.
 The minimum A–G corrections were rerun from the first-party `deeplaw knowledge context` command,
 the `deeplaw knowledge query` audit projection, MCP `knowledge_context`, and receipt explain. The
 isolated runtime installed only `deeplaw-0.12.0-py3-none-any.whl`, SHA-256
-`5e36bda5b3b01a00b33804b023d361d24595ebd5a1613892e24ec0436e79e490`, built from
-commit/tree `a6176b9a60c7286ba2251369913656aeafeadb63` /
-`5f44d98458c07a00fcb39da45b180611a3959ce8`. The frozen
+`48afb6e70a4ce8e8e2ce7e6d68b6cb1a9f58cb3a00f7ea401a19df0133bf4e82`, built from the final
+code candidate. The affected runtime evidence is bound to commit/tree
+`ea0a44c0b76f9ec23bb3482feea1bd621e0b1df7` /
+`8e09bc6eb648a6ccbb2c1e2dfeb2addf577221c2`; the only later code-candidate change retired a stale
+5,001-Relation diagnostic reason and did not change packaged runtime source. The frozen
 Gold is still `machine_review_pending`, so every result below is Development evidence with
 `qualification_eligible=false`.
 
 | Evidence | Result |
 |---|---|
-| deterministic semantic lifecycle v2 | `passed`; report `semanticdeterministic_596e40e38b8515906a25cbc8`; file SHA-256 `b727342109cb693608e21180aa4938bb9b8c3844b745eb127803656c0d669a42` |
-| semantic query diagnostic | `passed` 15/15 canonical and 14/14 variants; report `semanticqueryrun_b633a13d3f35d07f700c08ce`; file SHA-256 `d0abee89233c759e86b11d45a6573b9033573706d215ead6e432b2ba18a9c4e7` |
-| Context v2 | `passed` 15/15; report `semanticcontextoutcome_81cf1a486483d99862726171`; file SHA-256 `2fa5aef2927cc63978aebf0464e70a6a0d58bcbb2730e2ca139822b7ea800b57` |
-| query cost v2 | file SHA-256 `6df765405a319f1b9de4979fb087e94c84505346e84f941ade9b7c543d619bba`; actual Provider input tokens remain `null` |
+| deterministic semantic lifecycle v2 | `passed`; report `semanticdeterministic_09c7006509aa34780f409a8b`; file SHA-256 `84253336455ccd2e467d5890e657eac8529f4a682d361e37e877158324cd2297` |
+| semantic query diagnostic | `passed` 15/15 canonical and 14/14 variants; report `semanticqueryrun_aecff9f2fb97c6e5c5498e65`; file SHA-256 `47b4ed432ce05ee5bd842309f3640df54f40c18686c5b85099b5fee455754025` |
+| Context v2 | `passed` 15/15; report `semanticcontextoutcome_2930d43da788befb7d83e7a7`; file SHA-256 `19dca907f6c94f9e89990dd1ecca13d78e9e9a4a8dded0ce5f2243921793534f` |
+| query cost v2 | file SHA-256 `13234a16d1d834a87b543307bcb371759b54bc111c15f0d6ff474e3a2a94860d`; actual Provider input tokens remain `null` |
 
 Corrected provider-visible metrics are Precision@K `0.581667`, Recall@K `1.0`, MRR
 `0.855556`, and nDCG@K `0.890684`; target-scoped Precision@K remains a separate diagnostic at
@@ -129,6 +133,13 @@ explicit `("missing",)` identity while retaining safe-directory and symlink reje
 corrected exact-wheel run above passed directly from the no-derived snapshot without a manual
 rebuild.
 
+The first 100k Statement construction attempt then failed before retrieval because v3 semantic
+inventory froze up to 10,000 globally admitted candidates and copied that local inventory into the
+Provider-visible finalization packet. The minimum correction performs exact admitted lookup for at
+most 256 observation-relevant identity keys, records truncation and the full local digest, and
+projects only task-relevant canonical knowledge. A focused 10k-candidate regression keeps the
+packet within 65,536 bytes, and the affected 100k public-profile construction/retrieval lane passed.
+
 The exact Tolaria external source probe is report
 `tolaria_interop_e9df12e58307d1da94ad995a`, self-addressed report SHA-256
 `ce59e1fa905448c77ce59d938129abb66562de37bffb7383e1afe631caaf921a` (serialized file SHA-256
@@ -139,11 +150,30 @@ Revision; no canonical Ledger write occurred. The external dependency audit has 
 findings, none redistributed by DeepLaw. OS sandbox proof, desktop GUI behavior, reconciliation,
 and release-time contributor/file rights confirmation remain open.
 
-The 1k construction scale report is bound to the same exact commit and has file SHA-256
+The 1k construction scale report is bound to the earlier exact runtime commit and has file SHA-256
 `ae96056ac2a5c34699bd7789f64db93cca5cba808f59c76a98abf0b4065a6b8f` and self-addressed
 report SHA-256 `453886430bb09164dff6bc873b1401aadd2acafb200d6ab4254b369fed4c702f`.
 It reports no failed or degraded operation: Wiki page p95 `76.392083 ms`, backlinks p95
 `75.547916 ms`, compiled-first p95 `8.597625 ms`, exact projection equivalence, no stale cache,
-eight successful concurrent readers, and zero provider hard-limit violations. It remains
-claim-ineligible; the dedicated 10k-request RSS lane and all 10k/100k candidate lanes are
-`not_executed`.
+eight successful concurrent readers, and zero provider hard-limit violations.
+
+The dedicated Python 3.13 runtime-stability report executed 10,000/10,000 requests and 8/8
+barrier-synchronized read-only readers with no failure and no canonical Ledger mutation. Current
+RSS changed from `99,450,880` to `85,934,080` bytes (`-13.591433%`); peak RSS is unavailable under
+the recorded macOS sampling method. Its file/self-addressed SHA-256 values are
+`a2fbd98fa42960f8fc9efcad9643169a05d53de201d38da75884064c02e8c23a` /
+`a7b6f328d1b1acbb6d79e51a166144e9aad9237836948967f9a806cd0b4fd5e3`.
+
+The 5,001 and 10,000 exact final-code-candidate Statement reports have file SHA-256 values
+`18d85ee7c90ae87b35d39984b2b5bd993c7ce4e22873079ece9d3e5bd5c26f11` and
+`0977588d9fc41d2789325c9acd9b86fa2b3d13770ebd3224cc7aa59521067c76`. The affected 100k report
+has file SHA-256 `4f280dff9f0f368fe4a4837d1178edfdd30ffeb3b722c1ec0c8a8d25846b102d`.
+All sampled head/middle/tail Statements were selected, candidate discovery stayed bounded at 512,
+and the largest Provider payload was `7,060` bytes against the `65,536`-byte hard limit. The 100k
+fixture recorded 400 public compilation runs, 310,116 files, `1,188,124,770` storage bytes, and
+process peak RSS `1,993,129,984` bytes. These are claim-ineligible construction diagnostics.
+
+Relation/Graph 5,001/10k/100k and Wiki performance 10k/100k remain `not_executed`. The only public
+Relation mutation seam is rate-bounded at 120/minute and no audited bulk constructor exists; the
+runner did not substitute private SQL/Ledger writes. These unresolved lanes keep outcome 15
+`partial` and block release qualification.
