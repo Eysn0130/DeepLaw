@@ -142,6 +142,7 @@
         "source_update",
         "incremental_projection",
         "full_rebuild",
+        "projection_equivalence",
         "mcp_cold",
         "mcp_warm",
         "concurrent_read",
@@ -163,6 +164,7 @@
         "rss_stability_10000_requests",
         "concurrent_readers",
         "cache_invalidation_after_source_update",
+        "projection_equivalence",
         "provider_hard_limit_violations"
       ],
       "properties": {
@@ -172,6 +174,7 @@
         "rss_stability_10000_requests": {"$ref": "#/$defs/target_map"},
         "concurrent_readers": {"$ref": "#/$defs/target_map"},
         "cache_invalidation_after_source_update": {"$ref": "#/$defs/target_map"},
+        "projection_equivalence": {"$ref": "#/$defs/target_map"},
         "provider_hard_limit_violations": {"$ref": "#/$defs/target_map"}
       }
     },
@@ -290,7 +293,10 @@
         "provider_payload_bytes",
         "provider_hard_limit_violations",
         "file_count",
-        "canvas_count"
+        "canvas_count",
+        "source_update",
+        "cache_invalidation",
+        "projection_equivalence"
       ],
       "properties": {
         "value": {"type": ["number", "boolean", "null"]},
@@ -304,7 +310,140 @@
         "provider_payload_bytes": {"type": ["integer", "null"], "minimum": 0},
         "provider_hard_limit_violations": {"type": ["integer", "null"], "minimum": 0},
         "file_count": {"type": ["integer", "null"], "minimum": 0},
-        "canvas_count": {"type": ["integer", "null"], "minimum": 0}
+        "canvas_count": {"type": ["integer", "null"], "minimum": 0},
+        "source_update": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/source_update_measurement"}
+          ]
+        },
+        "cache_invalidation": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/cache_invalidation_measurement"}
+          ]
+        },
+        "projection_equivalence": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/projection_equivalence_measurement"}
+          ]
+        }
+      }
+    },
+    "source_update_measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "old_source_id",
+        "new_source_id",
+        "old_source_revision_id",
+        "new_source_revision_id",
+        "source_revision_distinct",
+        "old_canonical_source_key",
+        "new_canonical_source_key",
+        "canonical_source_key_stable",
+        "old_audit_head",
+        "new_audit_head",
+        "audit_head_changed",
+        "old_autonomous_audit_head",
+        "new_autonomous_audit_head",
+        "autonomous_audit_head_changed"
+      ],
+      "properties": {
+        "old_source_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "new_source_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "old_source_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "new_source_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "source_revision_distinct": {"type": "boolean"},
+        "old_canonical_source_key": {"type": "string", "minLength": 1, "maxLength": 200},
+        "new_canonical_source_key": {"type": "string", "minLength": 1, "maxLength": 200},
+        "canonical_source_key_stable": {"type": "boolean"},
+        "old_audit_head": {"$ref": "#/$defs/sha256"},
+        "new_audit_head": {"$ref": "#/$defs/sha256"},
+        "audit_head_changed": {"type": "boolean"},
+        "old_autonomous_audit_head": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "new_autonomous_audit_head": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "autonomous_audit_head_changed": {"type": "boolean"}
+      }
+    },
+    "cache_invalidation_measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warm_before_result_sha256",
+        "warm_after_result_sha256",
+        "fresh_after_result_sha256",
+        "warm_after_identity_sha256",
+        "fresh_after_identity_sha256",
+        "exact_bounded_result_match",
+        "exact_identity_match",
+        "old_source_revision_in_warm_after",
+        "old_source_revision_in_fresh_after",
+        "new_source_revision_in_warm_after",
+        "new_source_revision_in_fresh_after",
+        "stale_cache_served"
+      ],
+      "properties": {
+        "warm_before_result_sha256": {"$ref": "#/$defs/sha256"},
+        "warm_after_result_sha256": {"$ref": "#/$defs/sha256"},
+        "fresh_after_result_sha256": {"$ref": "#/$defs/sha256"},
+        "warm_after_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "fresh_after_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "exact_bounded_result_match": {"type": "boolean"},
+        "exact_identity_match": {"type": "boolean"},
+        "old_source_revision_in_warm_after": {"type": "boolean"},
+        "old_source_revision_in_fresh_after": {"type": "boolean"},
+        "new_source_revision_in_warm_after": {"type": "boolean"},
+        "new_source_revision_in_fresh_after": {"type": "boolean"},
+        "stale_cache_served": {"type": "boolean"}
+      }
+    },
+    "projection_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v2_manifest_sha256",
+        "v2_file_inventory_sha256",
+        "v3_manifest_sha256",
+        "v3_inventory_sha256",
+        "component_hashes"
+      ],
+      "properties": {
+        "v2_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "v2_file_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "v3_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "v3_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "component_hashes": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/projection_component_hashes"},
+          "minProperties": 3,
+          "maxProperties": 3
+        }
+      }
+    },
+    "projection_component_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_sha256", "registry_or_index_sha256"],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "registry_or_index_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "projection_equivalence_measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact", "same_canonical_input", "full_rebuild_from_empty_projection",
+        "incremental", "full_rebuild"
+      ],
+      "properties": {
+        "exact": {"type": "boolean"},
+        "same_canonical_input": {"type": "boolean"},
+        "full_rebuild_from_empty_projection": {"const": true},
+        "incremental": {"$ref": "#/$defs/projection_hashes"},
+        "full_rebuild": {"$ref": "#/$defs/projection_hashes"}
       }
     },
     "operation": {
@@ -340,6 +479,7 @@
             "source_update",
             "incremental_projection",
             "full_rebuild",
+            "projection_equivalence",
             "mcp_cold",
             "mcp_warm",
             "concurrent_read",
@@ -375,8 +515,8 @@
         "fixture_reason": {"$ref": "#/$defs/text"},
         "operations": {
           "type": "array",
-          "minItems": 20,
-          "maxItems": 20,
+          "minItems": 21,
+          "maxItems": 21,
           "items": {"$ref": "#/$defs/operation"}
         }
       }

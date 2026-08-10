@@ -14,6 +14,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -56,6 +57,7 @@ OPERATION_INVENTORY = (
     "source_update",
     "incremental_projection",
     "full_rebuild",
+    "projection_equivalence",
     "mcp_cold",
     "mcp_warm",
     "concurrent_read",
@@ -100,6 +102,9 @@ REFERENCE_TARGETS: dict[str, Any] = {
     "concurrent_readers": {"successful_readers": {"operator": ">=", "value": 8, "unit": "readers"}},
     "cache_invalidation_after_source_update": {
         "stale_cache_served": {"operator": "==", "value": False, "unit": "boolean"}
+    },
+    "projection_equivalence": {
+        "exact": {"operator": "==", "value": True, "unit": "boolean"}
     },
     "provider_hard_limit_violations": {
         "violations": {"operator": "==", "value": 0, "unit": "count"}
@@ -254,6 +259,18 @@ class _Fixture:
         self.wiki_path = ""
         self.projection_error: str | None = None
         self.knowledge_os: KnowledgeOS | None = None
+        self.source_revision_id: str | None = None
+        self.canonical_source_key: str | None = None
+        self.source_audit_head: str | None = None
+        self.autonomous_audit_head: str | None = None
+        self.updated_source_revision_id: str | None = None
+        self.updated_source_audit_head: str | None = None
+        self.updated_autonomous_audit_head: str | None = None
+        self.source_update_result: dict[str, Any] | None = None
+        self.cache_invalidation_result: dict[str, Any] | None = None
+        self.projection_equivalence_result: dict[str, Any] | None = None
+        self.incremental_projection_result: dict[str, Any] | None = None
+        self.cache_warm_before: dict[str, Any] | None = None
 
     def create(self) -> None:
         self.root.mkdir(parents=True, exist_ok=False, mode=0o700)
@@ -279,12 +296,16 @@ class _Fixture:
                 logical_path="synthetic-evidence.md",
             )
             review_manifest = legacy.source_review_manifest(compiled["source"]["source_id"])
-            legacy.approve_source_assets(
+            approval = legacy.approve_source_assets(
                 compiled["source"]["source_id"],
                 confirm_reviewed=True,
                 review_manifest_sha256=review_manifest["review_manifest_sha256"],
             )
+            source_info = legacy.source_info(compiled["source"]["source_id"])
         self.source_id = compiled["source"]["source_id"]
+        self.source_revision_id = source_info.get("source_revision_id")
+        self.canonical_source_key = source_info.get("canonical_source_key")
+        self.source_audit_head = approval.get("audit_head")
         self.asset_ids = list(compiled.get("asset_ids", []))
         initialize_autonomous_core(self.vault)
         with AutonomousKnowledgeStore(self.vault, read_only=False) as store:
@@ -333,6 +354,7 @@ class _Fixture:
                 self.projection_error = _sanitize_reason(
                     f"projection unavailable: {type(error).__name__}"
                 )
+            self.autonomous_audit_head = store.audit_head
         # Keep one explicit Python facade alive for all read operations.  Its lazy
         # PersistentReadRuntime is warmed before per-operation instrumentation so startup
         # verification is not misclassified as request work.
@@ -528,6 +550,17 @@ def _threshold(scale: int, operation: str) -> dict[str, Any]:
             "reference": "cache_invalidation_after_source_update.stale_cache_served",
             "reason": None,
         }
+    if operation == "projection_equivalence":
+        target = REFERENCE_TARGETS["projection_equivalence"]["exact"]
+        return {
+            "applies": True,
+            "metric": "projection_equivalence",
+            "operator": target["operator"],
+            "value": target["value"],
+            "unit": target["unit"],
+            "reference": "projection_equivalence.exact",
+            "reason": None,
+        }
     if operation == "provider_payload_bytes":
         target = REFERENCE_TARGETS["provider_hard_limit_violations"]["violations"]
         return {
@@ -584,6 +617,9 @@ def _empty_measurement() -> dict[str, Any]:
         "provider_hard_limit_violations": None,
         "file_count": None,
         "canvas_count": None,
+        "source_update": None,
+        "cache_invalidation": None,
+        "projection_equivalence": None,
     }
 
 
@@ -629,6 +665,33 @@ def _measurement_from_result(operation: str, result: Any) -> dict[str, Any]:
         if isinstance(full_scan, bool):
             measurement["full_filesystem_scan"] = full_scan
         measurement["unit"] = "boolean"
+    elif operation == "source_update" and isinstance(result, Mapping):
+        details = result.get("source_update")
+        if isinstance(details, Mapping):
+            measurement["source_update"] = dict(details)
+            distinct = details.get("source_revision_distinct")
+            audit_changed = details.get("audit_head_changed")
+            stable_source = details.get("canonical_source_key_stable")
+            if all(isinstance(value, bool) for value in (distinct, audit_changed, stable_source)):
+                measurement["value"] = bool(distinct and audit_changed and stable_source)
+                measurement["unit"] = "boolean"
+    elif operation == "cache_invalidation_after_source_update" and isinstance(result, Mapping):
+        details = result.get("cache_invalidation")
+        if isinstance(details, Mapping):
+            measurement["cache_invalidation"] = dict(details)
+            stale = details.get("stale_cache_served")
+            if isinstance(stale, bool):
+                measurement["value"] = stale
+                measurement["unit"] = "boolean"
+                measurement["stale_cache_served"] = stale
+    elif operation == "projection_equivalence" and isinstance(result, Mapping):
+        details = result.get("projection_equivalence")
+        if isinstance(details, Mapping):
+            measurement["projection_equivalence"] = dict(details)
+            exact = details.get("exact")
+            if isinstance(exact, bool):
+                measurement["value"] = exact
+                measurement["unit"] = "boolean"
     return measurement
 
 
@@ -660,6 +723,8 @@ def _judgment_value(
         return measurement["rss_growth_percent"]
     if threshold["metric"] == "stale_cache_served":
         return measurement["stale_cache_served"]
+    if threshold["metric"] == "projection_equivalence":
+        return measurement["value"]
     if threshold["metric"] == "violations":
         return measurement["provider_hard_limit_violations"]
     if threshold["metric"] in {"full_filesystem_scan", "per_request_full_verify"}:
@@ -676,6 +741,7 @@ def _operation_record(
     runner: Callable[[], Any] | None,
     threshold: dict[str, Any],
     not_executed_reason: str | None = None,
+    single_shot: bool = False,
 ) -> dict[str, Any]:
     latency_values: list[float] = []
     errors: list[str] = []
@@ -683,18 +749,22 @@ def _operation_record(
     warmup_completed = 0
     run_completed = 0
     if runner is not None:
-        for _ in range(warmup_runs):
+        effective_warmup_runs = 0 if single_shot else warmup_runs
+        effective_query_runs = 1 if single_shot else query_runs
+        for _ in range(effective_warmup_runs):
             try:
                 runner()
                 warmup_completed += 1
             except Exception as error:  # pragma: no cover - exercised by unavailable APIs
-                errors.append(f"warmup {type(error).__name__}")
-        for _ in range(query_runs):
+                errors.append(
+                    f"warmup {type(error).__name__}: {_sanitize_reason(str(error))}"
+                )
+        for _ in range(effective_query_runs):
             started = time.perf_counter()
             try:
                 last_result = runner()
             except Exception as error:  # pragma: no cover - exercised by unavailable APIs
-                errors.append(f"run {type(error).__name__}")
+                errors.append(f"run {type(error).__name__}: {_sanitize_reason(str(error))}")
                 continue
             latency_values.append((time.perf_counter() - started) * 1_000)
             run_completed += 1
@@ -711,6 +781,8 @@ def _operation_record(
             not_executed_reason
             or "operation prerequisites were unavailable; no successful measurement was collected"
         )
+        if errors:
+            reason = f"{reason}; runs failed: {', '.join(errors[:4])}"
     else:
         value = _judgment_value(operation, threshold, latency, measurement)
         if threshold["applies"]:
@@ -774,9 +846,119 @@ def _full_vault_scan_monitor(root: Path) -> Iterator[dict[str, bool]]:
         yield observation
 
 
+def _source_revision_ids(value: Any) -> set[str]:
+    """Collect only governed Source Revision identities from a bounded read result."""
+
+    found: set[str] = set()
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if key == "source_revision_id" and isinstance(item, str):
+                found.add(item)
+            elif key == "source_revision_ids" and isinstance(item, (list, tuple)):
+                found.update(entry for entry in item if isinstance(entry, str))
+            else:
+                found.update(_source_revision_ids(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found.update(_source_revision_ids(item))
+    return found
+
+
+def _stable_context_probe(value: Any) -> Any:
+    """Drop request timestamps/receipt digests before exact bounded-result comparison."""
+
+    volatile = {
+        "created_at",
+        "capsule_id",
+        "capsule_digest",
+        "receipt_id",
+        "query_plan_sha256",
+        "receipt_sha256",
+    }
+    if isinstance(value, Mapping):
+        return {
+            key: _stable_context_probe(item)
+            for key, item in value.items()
+            if key not in volatile
+        }
+    if isinstance(value, list):
+        return [_stable_context_probe(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_stable_context_probe(item) for item in value)
+    return value
+
+
+def _context_probe_identity(value: Mapping[str, Any]) -> dict[str, Any]:
+    source_ids = sorted(_source_revision_ids(value.get("statements", [])))
+    source_ids.extend(
+        item
+        for item in sorted(_source_revision_ids(value.get("evidence", [])))
+        if item not in source_ids
+    )
+    statement_revision_ids = sorted(
+        {
+            item.get("knowledge_revision_id")
+            for item in value.get("statements", [])
+            if isinstance(item, Mapping) and isinstance(item.get("knowledge_revision_id"), str)
+        }
+    )
+    return {
+        "audit_head": value.get("audit_head"),
+        "legacy_audit_head": value.get("query_plan", {}).get("input_legacy_audit_head")
+        if isinstance(value.get("query_plan"), Mapping)
+        else None,
+        "source_revision_ids": source_ids,
+        "knowledge_revision_ids": statement_revision_ids,
+    }
+
+
+def _projection_hash_view(root: Path) -> dict[str, Any]:
+    """Return exact manifest/Registry/Link Index hashes without page bodies."""
+
+    from deeplaw.projection.incremental import read_previous_manifest, read_previous_v3
+
+    v2 = read_previous_manifest(root)
+    v3 = read_previous_v3(root)
+    if v2 is None or v3 is None:
+        raise RuntimeError("projection receipt is unavailable")
+    component_hashes = {
+        descriptor["component"]: {
+            "manifest_sha256": descriptor["manifest_sha256"],
+            "registry_or_index_sha256": descriptor.get("registry_or_index_sha256"),
+        }
+        for descriptor in v3["manifest"]["components"]
+    }
+    return {
+        "v2_manifest_sha256": v2["manifest_sha256"],
+        "v2_file_inventory_sha256": sha256_bytes(
+            canonical_json(v2["files"]).encode("utf-8")
+        ),
+        "v3_manifest_sha256": v3["manifest_sha256"],
+        "v3_inventory_sha256": v3["inventory_sha256"],
+        "component_hashes": component_hashes,
+    }
+
+
+def _clear_synthetic_projection_state(root: Path) -> None:
+    """Remove only known derived projection roots in the isolated fixture clone."""
+
+    for relative in (
+        "wiki",
+        "canvas",
+        ".deeplaw/derived/tree",
+        ".deeplaw/derived/wiki",
+    ):
+        target = root.joinpath(*relative.split("/"))
+        if target.is_symlink():
+            raise RuntimeError("synthetic projection root is unsafe")
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            raise RuntimeError("synthetic projection root is not a directory")
+
+
 def _fixture_operation_runners(fixture: _Fixture) -> dict[str, Callable[[], Any]]:
     root = fixture.vault
-    knowledge_id = fixture.knowledge_ids[0]
     task = "Synthetic compiled object marker glyph000001"
     evidence_task = "Synthetic compiled evidence marker glyph000000"
     knowledge_os = fixture.knowledge_os
@@ -789,6 +971,19 @@ def _fixture_operation_runners(fixture: _Fixture) -> dict[str, Callable[[], Any]
         task=task,
         purpose="answer",
         policy="compiled-first-v1",
+        scope="project",
+        max_sensitivity="private",
+        limit=5,
+        max_chars=5_000,
+        max_tokens=4_000,
+        confirm_no_case_data=True,
+    )
+    # Capture the evidence probe before any source mutation.  The same persistent facade is then
+    # observed after the source successor is approved, which exercises its live identity guard.
+    fixture.cache_warm_before = knowledge_os.context.compile(
+        task=evidence_task,
+        purpose="verify",
+        policy="evidence-first-v1",
         scope="project",
         max_sensitivity="private",
         limit=5,
@@ -880,30 +1075,248 @@ def _fixture_operation_runners(fixture: _Fixture) -> dict[str, Callable[[], Any]
         verification["per_request_full_verify"] = calls > 0
         return verification
 
-    def incremental_projection() -> Any:
+    def source_update() -> Any:
+        if fixture.source_update_result is not None:
+            return fixture.source_update_result
+        old_source_id = fixture.source_id
+        old_source_revision_id = fixture.source_revision_id
+        old_canonical_source_key = fixture.canonical_source_key
+        old_audit_head = fixture.source_audit_head
+        old_autonomous_audit_head = fixture.autonomous_audit_head
+        if not all(
+            isinstance(value, str)
+            for value in (
+                old_source_id,
+                old_source_revision_id,
+                old_canonical_source_key,
+                old_audit_head,
+            )
+        ):
+            raise RuntimeError("synthetic source identity is unavailable")
+        # The legacy SQLite plane intentionally stays on DELETE journaling.  Release only the
+        # pinned read transaction (the same KnowledgeOS facade and its live observer remain alive)
+        # so the first-party source compiler can perform its real atomic mutation.  The next warm
+        # read must reopen through the observer; no cache-clearing result is used as evidence.
+        runtime = knowledge_os._runtime
+        if runtime is not None and runtime._snapshot is not None:
+            runtime._snapshot.close()
+            # The observer is autocommit, but close it as well so SQLite has no live read handle
+            # while the compiler commits the DELETE-journal transaction.
+            if runtime._observer is not None:
+                runtime._observer.close()
+                runtime._observer = None
+        original_marker = (
+            "Synthetic compiled evidence marker glyph000000 is bounded "
+            "for construction diagnostics."
+        )
+        successor_marker = (
+            "Synthetic compiled evidence marker glyph000000 updated revision is bounded "
+            "for construction diagnostics."
+        )
+        source_text = fixture.source_path.read_text(encoding="utf-8")
+        if original_marker not in source_text:
+            raise RuntimeError("synthetic source successor marker is unavailable")
+        fixture.source_path.write_text(
+            source_text.replace(original_marker, successor_marker, 1),
+            encoding="utf-8",
+            newline="\n",
+        )
+        with KnowledgeVault(root, read_only=False) as legacy:
+            compiled = compile_source(
+                legacy,
+                fixture.source_path,
+                source_kind="document",
+                sensitivity="public",
+                confirm_no_case_data=True,
+                logical_path="synthetic-evidence.md",
+            )
+            new_source_id = compiled["source"]["source_id"]
+            review_manifest = legacy.source_review_manifest(new_source_id)
+            legacy.approve_source_assets(
+                new_source_id,
+                confirm_reviewed=True,
+                review_manifest_sha256=review_manifest["review_manifest_sha256"],
+            )
+            new_source = legacy.source_info(new_source_id)
+            new_source_revision_id = new_source.get("source_revision_id")
+            new_canonical_source_key = new_source.get("canonical_source_key")
+            new_audit_head = legacy.audit_head
         with AutonomousKnowledgeStore(root, read_only=False) as store:
-            current = store.get_current(knowledge_id)
+            new_autonomous_audit_head = store.audit_head
+        if not all(
+            isinstance(value, str)
+            for value in (
+                new_source_id,
+                new_source_revision_id,
+                new_canonical_source_key,
+                new_audit_head,
+            )
+        ):
+            raise RuntimeError("successor source identity is unavailable")
+        details = {
+            "old_source_id": old_source_id,
+            "new_source_id": new_source_id,
+            "old_source_revision_id": old_source_revision_id,
+            "new_source_revision_id": new_source_revision_id,
+            "source_revision_distinct": old_source_revision_id != new_source_revision_id,
+            "old_canonical_source_key": old_canonical_source_key,
+            "new_canonical_source_key": new_canonical_source_key,
+            "canonical_source_key_stable": old_canonical_source_key
+            == new_canonical_source_key,
+            "old_audit_head": old_audit_head,
+            "new_audit_head": new_audit_head,
+            "audit_head_changed": old_audit_head != new_audit_head,
+            "old_autonomous_audit_head": old_autonomous_audit_head,
+            "new_autonomous_audit_head": new_autonomous_audit_head,
+            "autonomous_audit_head_changed": old_autonomous_audit_head
+            != new_autonomous_audit_head,
+        }
+        fixture.updated_source_revision_id = new_source_revision_id
+        fixture.updated_source_audit_head = new_audit_head
+        fixture.updated_autonomous_audit_head = new_autonomous_audit_head
+        fixture.source_update_result = {"source_update": details}
+        # Keep the returned receipt bounded to identities and audit heads; source bytes and paths
+        # never enter the report.
+        return fixture.source_update_result
+
+    def cache_invalidation_after_source_update() -> Any:
+        if fixture.cache_invalidation_result is not None:
+            return fixture.cache_invalidation_result
+        if fixture.source_update_result is None or fixture.cache_warm_before is None:
+            raise RuntimeError("source update and pre-update warm read are unavailable")
+        warm_after = knowledge_os.context.compile(
+            task=evidence_task,
+            purpose="verify",
+            policy="evidence-first-v1",
+            scope="project",
+            max_sensitivity="private",
+            limit=5,
+            max_chars=5_000,
+            max_tokens=4_000,
+            confirm_no_case_data=True,
+        )
+        fresh_facade = KnowledgeOS.open(root)
+        try:
+            fresh_after = fresh_facade.context.compile(
+                task=evidence_task,
+                purpose="verify",
+                policy="evidence-first-v1",
+                scope="project",
+                max_sensitivity="private",
+                limit=5,
+                max_chars=5_000,
+                max_tokens=4_000,
+                confirm_no_case_data=True,
+            )
+        finally:
+            fresh_facade.close()
+        warm_before_view = _stable_context_probe(fixture.cache_warm_before)
+        warm_after_view = _stable_context_probe(warm_after)
+        fresh_after_view = _stable_context_probe(fresh_after)
+        warm_after_identity = _context_probe_identity(warm_after)
+        fresh_after_identity = _context_probe_identity(fresh_after)
+        old_revision = fixture.source_revision_id
+        new_revision = fixture.updated_source_revision_id
+        if not isinstance(old_revision, str) or not isinstance(new_revision, str):
+            raise RuntimeError("source update revision identities are unavailable")
+        old_in_warm_after = old_revision in warm_after_identity["source_revision_ids"]
+        old_in_fresh_after = old_revision in fresh_after_identity["source_revision_ids"]
+        new_in_warm_after = new_revision in warm_after_identity["source_revision_ids"]
+        new_in_fresh_after = new_revision in fresh_after_identity["source_revision_ids"]
+        exact_result_match = warm_after_view == fresh_after_view
+        exact_identity_match = warm_after_identity == fresh_after_identity
+        stale_cache_served = not (
+            exact_result_match
+            and exact_identity_match
+            and new_in_warm_after
+            and new_in_fresh_after
+            and not old_in_warm_after
+            and not old_in_fresh_after
+        )
+        details = {
+            "warm_before_result_sha256": sha256_bytes(
+                canonical_json(warm_before_view).encode("utf-8")
+            ),
+            "warm_after_result_sha256": sha256_bytes(
+                canonical_json(warm_after_view).encode("utf-8")
+            ),
+            "fresh_after_result_sha256": sha256_bytes(
+                canonical_json(fresh_after_view).encode("utf-8")
+            ),
+            "warm_after_identity_sha256": sha256_bytes(
+                canonical_json(warm_after_identity).encode("utf-8")
+            ),
+            "fresh_after_identity_sha256": sha256_bytes(
+                canonical_json(fresh_after_identity).encode("utf-8")
+            ),
+            "exact_bounded_result_match": exact_result_match,
+            "exact_identity_match": exact_identity_match,
+            "old_source_revision_in_warm_after": old_in_warm_after,
+            "old_source_revision_in_fresh_after": old_in_fresh_after,
+            "new_source_revision_in_warm_after": new_in_warm_after,
+            "new_source_revision_in_fresh_after": new_in_fresh_after,
+            "stale_cache_served": stale_cache_served,
+        }
+        fixture.cache_invalidation_result = {"cache_invalidation": details}
+        return fixture.cache_invalidation_result
+
+    def incremental_projection() -> Any:
+        if fixture.incremental_projection_result is not None:
+            return fixture.incremental_projection_result
+        with AutonomousKnowledgeStore(root, read_only=False) as store:
+            current = store.get_current(fixture.knowledge_ids[0])
             if current is None:
                 raise KeyError("synthetic Knowledge Object unavailable")
             grant = store.enable_grant(
-                writer_id=f"v013-incremental-{time.time_ns()}",
+                writer_id=f"v013-incremental-{fixture.scale}",
                 operations=("upsert_concept",),
                 max_mutations_per_minute=120,
                 max_objects=100_000,
             )
             store.remember(
                 grant_id=grant["grant_id"],
-                idempotency_key=f"incremental-{time.time_ns()}",
-                knowledge_id=knowledge_id,
+                idempotency_key=f"incremental-{fixture.scale}",
+                knowledge_id=fixture.knowledge_ids[0],
                 expected_revision_id=current["revision_id"],
                 title=current["title"],
                 body=f"{current['body']} incremental marker.",
                 kind="concept",
                 operation="upsert_concept",
-                semantic_key=f"v013-scale-glyph:incremental:{time.time_ns()}",
+                semantic_key=f"v013-scale-glyph:incremental:{fixture.scale}",
                 confirm_no_case_data=True,
             )
-            return store.rebuild_derived(projection_profile=PROJECTION_PROFILE)
+            receipt = store.rebuild_derived(projection_profile=PROJECTION_PROFILE)
+        fixture.incremental_projection_result = receipt
+        return receipt
+
+    def projection_equivalence() -> Any:
+        if fixture.projection_equivalence_result is not None:
+            return fixture.projection_equivalence_result
+        full_root = fixture.root / "projection-full-rebuild"
+        shutil.copytree(root, full_root)
+        _clear_synthetic_projection_state(full_root)
+        incremental_receipt = fixture.incremental_projection_result
+        if incremental_receipt is None:
+            raise RuntimeError("incremental projection receipt is unavailable")
+        with AutonomousKnowledgeStore(full_root, read_only=False) as store:
+            full_receipt = store.rebuild_derived(projection_profile=PROJECTION_PROFILE)
+        incremental_hashes = _projection_hash_view(root)
+        full_hashes = _projection_hash_view(full_root)
+        same_input = (
+            incremental_receipt.get("input_audit_head")
+            == full_receipt.get("input_audit_head")
+            and incremental_receipt.get("legacy_audit_head")
+            == full_receipt.get("legacy_audit_head")
+        )
+        details = {
+            "exact": bool(same_input and incremental_hashes == full_hashes),
+            "same_canonical_input": same_input,
+            "full_rebuild_from_empty_projection": True,
+            "incremental": incremental_hashes,
+            "full_rebuild": full_hashes,
+        }
+        fixture.projection_equivalence_result = {"projection_equivalence": details}
+        return fixture.projection_equivalence_result
 
     def full_rebuild() -> Any:
         with (
@@ -945,7 +1358,10 @@ def _fixture_operation_runners(fixture: _Fixture) -> dict[str, Callable[[], Any]
         "evidence_first": evidence_first,
         "context": context,
         "verify": verify,
+        "source_update": source_update,
+        "cache_invalidation_after_source_update": cache_invalidation_after_source_update,
         "incremental_projection": incremental_projection,
+        "projection_equivalence": projection_equivalence,
         "full_rebuild": full_rebuild,
         "concurrent_read": concurrent_read,
         "storage_sqlite_bytes": storage_sqlite_bytes,
@@ -964,6 +1380,7 @@ def _special_record(
     runner: Callable[[], Any] | None,
     threshold: dict[str, Any],
     reason: str,
+    single_shot: bool = False,
 ) -> dict[str, Any]:
     return _operation_record(
         scale=scale,
@@ -973,6 +1390,7 @@ def _special_record(
         runner=runner,
         threshold=threshold,
         not_executed_reason=reason,
+        single_shot=single_shot,
     )
 
 
@@ -1024,6 +1442,7 @@ def _run_scale(
                 "outlinks",
                 "incremental_projection",
                 "full_rebuild",
+                "projection_equivalence",
                 "storage_canvas_count",
             }
             if fixture.projection_error and operation in projection_operations:
@@ -1058,6 +1477,24 @@ def _run_scale(
                         runner=lifespan.call,
                         threshold=threshold,
                     )
+            elif operation in {
+                "source_update",
+                "cache_invalidation_after_source_update",
+                "incremental_projection",
+                "projection_equivalence",
+            } and scale != 1_000:
+                record = _special_record(
+                    scale=scale,
+                    operation=operation,
+                    query_runs=query_runs,
+                    warmup_runs=warmup_runs,
+                    runner=None,
+                    threshold=threshold,
+                    reason=(
+                        "source-update and projection-equivalence probes are frozen to the 1k "
+                        "regression fixture; this scale was not executed"
+                    ),
+                )
             elif operation in runners:
                 record = _operation_record(
                     scale=scale,
@@ -1066,6 +1503,14 @@ def _run_scale(
                     warmup_runs=warmup_runs,
                     runner=runners[operation],
                     threshold=threshold,
+                    single_shot=operation
+                    in {
+                        "source_update",
+                        "cache_invalidation_after_source_update",
+                        "full_rebuild",
+                        "incremental_projection",
+                        "projection_equivalence",
+                    },
                 )
             elif operation == "rss_stability_10000_requests":
                 if rss_requests != FROZEN_RSS_REQUESTS:
@@ -1098,32 +1543,6 @@ def _run_scale(
                     reason=(
                         "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic "
                         "fixture; this scale was not executed"
-                    ),
-                )
-            elif operation == "source_update":
-                record = _special_record(
-                    scale=scale,
-                    operation=operation,
-                    query_runs=query_runs,
-                    warmup_runs=warmup_runs,
-                    runner=None,
-                    threshold=threshold,
-                    reason=(
-                        "source update mutates the canonical legacy read plane; this fixture "
-                        "keeps its evidence and autonomous audit heads stable"
-                    ),
-                )
-            elif operation == "cache_invalidation_after_source_update":
-                record = _special_record(
-                    scale=scale,
-                    operation=operation,
-                    query_runs=query_runs,
-                    warmup_runs=warmup_runs,
-                    runner=None,
-                    threshold=threshold,
-                    reason=(
-                        "source_update was not executed, so stale-cache invalidation is "
-                        "not inferred"
                     ),
                 )
             else:

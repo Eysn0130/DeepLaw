@@ -163,3 +163,53 @@ def test_report_verifier_rejects_tamper_and_local_paths() -> None:
     path_tampered = dict(report)
     path_tampered["limitations"] = ["/Users/private/source.md"]
     assert verify_scale_performance_report(path_tampered)["valid"] is False
+
+
+def test_scale_report_observes_source_update_cache_and_projection_equivalence() -> None:
+    report = build_scale_performance_report(
+        scales=(1_000,),
+        query_runs=1,
+        warmup_runs=0,
+        rss_requests=10_000,
+    )
+    operations = {
+        item["operation"]: item for item in report["scale_reports"][0]["operations"]
+    }
+
+    source_update = operations["source_update"]
+    source_details = source_update["measurement"]["source_update"]
+    assert source_update["status"] == "executed", (
+        source_update["reason"],
+        source_update["measurement"],
+    )
+    assert source_details["source_revision_distinct"] is True
+    assert source_details["canonical_source_key_stable"] is True
+    assert source_details["old_canonical_source_key"] == (
+        source_details["new_canonical_source_key"]
+    )
+    assert source_details["audit_head_changed"] is True
+    assert source_details["old_source_revision_id"] != source_details["new_source_revision_id"]
+
+    cache = operations["cache_invalidation_after_source_update"]
+    cache_details = cache["measurement"]["cache_invalidation"]
+    assert cache["status"] == "pass"
+    assert cache_details["exact_bounded_result_match"] is True
+    assert cache_details["exact_identity_match"] is True
+    assert cache_details["stale_cache_served"] is False
+    assert cache_details["old_source_revision_in_warm_after"] is False
+    assert cache_details["old_source_revision_in_fresh_after"] is False
+
+    incremental = operations["incremental_projection"]
+    assert incremental["status"] == "executed"
+
+    equivalence = operations["projection_equivalence"]
+    equivalence_details = equivalence["measurement"]["projection_equivalence"]
+    assert equivalence["status"] == "pass"
+    assert equivalence_details["exact"] is True
+    assert equivalence_details["same_canonical_input"] is True
+    assert equivalence_details["full_rebuild_from_empty_projection"] is True
+    assert equivalence_details["incremental"] == equivalence_details["full_rebuild"]
+    serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+    assert "/tmp/" not in serialized
+    assert "/Users/" not in serialized
+    assert verify_scale_performance_report(report)["valid"] is True
