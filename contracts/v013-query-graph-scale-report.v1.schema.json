@@ -391,12 +391,21 @@
     "truncation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["admitted_bound", "scanned_bound", "status", "gap_or_receipt_evidence"],
+      "required": [
+        "admitted_bound", "scanned_bound", "status", "gap_or_receipt_evidence",
+        "selection_truncated", "candidate_scan_truncated", "gaps"
+      ],
       "properties": {
         "admitted_bound": {"const": 500},
         "scanned_bound": {"const": 5000},
         "candidate_relations_scanned": {"type": "integer", "minimum": 0},
         "candidate_scan_truncated": {"type": "boolean"},
+        "selection_truncated": {"type": "boolean"},
+        "gaps": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/text"}
+        },
         "status": {"enum": ["executed", "fail", "not_executed"]},
         "gap_or_receipt_evidence": {"type": "boolean"},
         "reason": {"type": "string", "minLength": 1, "maxLength": 2000}

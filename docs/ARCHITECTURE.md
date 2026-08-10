@@ -305,7 +305,14 @@ a universal hard-coded ranking by object kind:
 - bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
   stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v6 binds
   the expansion profile/count/digest and validates it as part of the query/audit receipt; v5
-  continues to accept the additive v1/v2 expansion receipt shape;
+  continues to accept the additive v1/v2 expansion receipt shape. Natural-language capitalization
+  and inferred identity anchors are bounded discovery/rerank/selection hints, not identity or
+  Authority constraints; only caller-explicit stable identity targets remain strict;
+- canonical graph views keep the 500-admitted / 5,000-scanned hard bounds and report selection
+  truncation independently from candidate-scan truncation. A selection-truncated result requires
+  an actually observed additional admitted Relation; a rejected-only tail cannot manufacture that
+  signal. Both conditions carry bounded gaps, and Wiki local graph plus CLI/MCP reuse the same
+  domain response;
 - every fallback from compiled knowledge to source fragments must be observable in the plan,
   explanation, gap, or receipt;
 - CLI, MCP, and Python use Query Plan v6 by default in the source candidate. The planner resolves

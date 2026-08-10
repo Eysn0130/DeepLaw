@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from itertools import pairwise
 from typing import Any
 
 from ..evidence.statements import (
@@ -382,7 +383,7 @@ def _target(query: str, value: str | dict[str, Any] | None) -> dict[str, Any]:
         raise ValueError("query_target is invalid")
     normalized = normalize_identity_text(text) or text.casefold()
     terms = sorted(set(query_search_terms(text, limit=64, cover_tail=True)))
-    identity_anchors, identity_anchors_truncated = query_target_anchors(text)
+    identity_anchors, identity_anchors_truncated = _identity_anchor_hints(text)
     return {
         "text": text,
         "normalized": normalized,
@@ -397,15 +398,35 @@ def _target(query: str, value: str | dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _identity_anchor_match(anchor: str, text: str) -> bool:
-    return query_identity_anchor_match(anchor, text)
+def _identity_anchor_hints(text: str) -> tuple[tuple[str, ...], bool]:
+    """Return the bounded, receipt-bound anchor hints used by v6 selection."""
+
+    anchors, anchor_truncated = query_target_anchors(text)
+    terms = tuple(
+        dict.fromkeys(
+            term
+            for term in query_search_terms(text, limit=64, cover_tail=True)
+            if isinstance(term, str) and term
+        )
+    )
+    adjacent = tuple(
+        f"{left} {right}"
+        for left, right in pairwise(terms)
+        if left != right
+    )
+    hints = tuple(dict.fromkeys((*anchors, *adjacent)))
+    truncated = anchor_truncated or len(hints) > 8
+    return hints[:8], truncated
 
 
-def _identity_anchor_filter_values(text: str) -> tuple[str, ...]:
-    """Return deterministic generic identity anchors for admission filtering."""
-
-    anchors, _truncated = query_target_anchors(text)
-    return anchors
+def _identity_anchor_hint_matches(
+    hints: tuple[str, ...],
+    identity_surface: str,
+) -> bool:
+    return any(
+        query_identity_anchor_match(hint, identity_surface)
+        for hint in hints
+    )
 
 
 def _applicable_duties(
@@ -791,7 +812,11 @@ def _load_statement_candidates(
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
     query_terms = set(target["terms"])
-    identity_anchor_values = _identity_anchor_filter_values(target["text"])
+    identity_anchor_hints = (
+        _identity_anchor_hints(target["text"])[0]
+        if not has_identity_target
+        else ()
+    )
     freshness_policy_designators = (
         _policy_designators(target["text"])
         if purpose == "freshness_check"
@@ -904,7 +929,6 @@ def _load_statement_candidates(
             admitted_aliases = [
                 alias for alias in aliases if isinstance(alias, str) and 0 < len(alias) <= 200
             ][:16]
-            graph_neighbor = row["knowledge_revision_id"] in graph_revision_ids
             identity_surface = " ".join(
                 (
                     str(row["title"] or ""),
@@ -913,25 +937,20 @@ def _load_statement_candidates(
                     text,
                 )
             )
-            if (
-                identity_anchor_values
-                and not has_identity_target
-                and not graph_neighbor
-                and not any(
-                    _identity_anchor_match(anchor, identity_surface)
-                    for anchor in identity_anchor_values
+            searchable = set(
+                query_search_terms(
+                    identity_surface,
+                    limit=128,
+                    cover_tail=True,
                 )
-            ):
-                rejections.append({**item_ref, "reason": "identity_anchor_mismatch"})
-                continue
-            searchable = set(query_search_terms(
-                identity_surface,
-                limit=128,
-                cover_tail=True,
-            ))
+            )
             if query_terms and not query_terms.intersection(searchable) and not has_identity_target:
                 rejections.append({**item_ref, "reason": "query_mismatch"})
                 continue
+            anchor_hint_match = _identity_anchor_hint_matches(
+                identity_anchor_hints,
+                identity_surface,
+            )
             partition = (
                 "source_free_interpretation"
                 if bool(row["source_free"])
@@ -974,6 +993,7 @@ def _load_statement_candidates(
                     "legal_authority": False,
                     "source_free": bool(row["source_free"]),
                     "applicability": metadata.get("applicability"),
+                    "_anchor_hint_match": anchor_hint_match,
                     "_score": _candidate_score(
                         {
                             "statement_id": statement_id,
@@ -1797,10 +1817,49 @@ def execute_v6(
     )
     statement_item_limit = statement_budget["items"]
     statement_character_limit = statement_budget["characters"]
+    has_explicit_target = any(
+        target.get(field) is not None
+        for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
+    )
+    inferred_anchor_pool = (
+        not has_explicit_target
+        and any(item.get("_anchor_hint_match") is True for item in candidates)
+    )
+    if inferred_anchor_pool:
+        working_memory = [
+            item
+            for item in candidates
+            if item.get("partition") == "run_bound_working_memory"
+        ]
+        ordinary = [
+            item
+            for item in candidates
+            if item.get("partition") != "run_bound_working_memory"
+        ]
+        ordinary.sort(
+            key=lambda item: (
+                not bool(item.get("_anchor_hint_match")),
+                item["_score"],
+            )
+        )
+        candidates = [*working_memory, *ordinary]
     selected: list[dict[str, Any]] = []
+    target_relevance_suppressions: list[dict[str, str]] = []
     budget_suppressions: list[dict[str, str]] = []
     selected_statement_characters = 0
     for item in candidates:
+        if (
+            inferred_anchor_pool
+            and item.get("partition") != "run_bound_working_memory"
+            and item.get("_anchor_hint_match") is not True
+        ):
+            target_relevance_suppressions.append(
+                {
+                    "candidate_id": str(item["statement_id"]),
+                    "reason": "target_relevance",
+                }
+            )
+            continue
         if len(selected) >= statement_item_limit:
             break
         item_characters = len(str(item.get("statement_text", "")))
@@ -1817,13 +1876,21 @@ def execute_v6(
     budget_suppressed_ids = {
         item["candidate_id"] for item in budget_suppressions
     }
+    target_relevance_suppressed_ids = {
+        item["candidate_id"] for item in target_relevance_suppressions
+    }
     selected_statement_ids = {str(item["statement_id"]) for item in selected}
     suppressions: list[dict[str, str]] = [
-        {"candidate_id": str(item["statement_id"]), "reason": "selection_budget"}
+        {
+            "candidate_id": str(item["statement_id"]),
+            "reason": "selection_budget",
+        }
         for item in candidates
         if str(item["statement_id"]) not in selected_statement_ids
         and str(item["statement_id"]) not in budget_suppressed_ids
+        and str(item["statement_id"]) not in target_relevance_suppressed_ids
     ][:_MAX_CANDIDATE_RECEIPTS]
+    suppressions = [*target_relevance_suppressions, *suppressions]
     suppressions.extend(budget_suppressions)
     if scan_truncated:
         suppressions.append(
@@ -2447,6 +2514,8 @@ def execute_v6(
     plan = {**plan_core, "query_sha256": query_sha256, "receipt_id": receipt_id}
     _validate_contract("knowledge-query-plan.v6.schema.json", plan)
     plan_sha256 = sha256_bytes(canonical_json(plan).encode("utf-8"))
+    for item in candidates:
+        item.pop("_anchor_hint_match", None)
     candidate_receipts = [
         {
             "statement_id": str(item["statement_id"]),

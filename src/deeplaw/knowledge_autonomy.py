@@ -10771,7 +10771,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             limit=_MAX_GRAPH_RELATION_SCAN + 1,
         )
         relation_scan_truncated = len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN
+        candidate_relations_scanned = 0
+        selection_truncated = False
         for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
+            candidate_relations_scanned += 1
             if not self.relation_provenance_admitted(relation):
                 rejected.append(
                     {
@@ -10835,6 +10838,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     }
                 )
                 continue
+            if len(relations) >= limit:
+                selection_truncated = True
+                break
             for endpoint in endpoints:
                 admitted[endpoint["knowledge_id"]] = {
                     "knowledge_id": endpoint["knowledge_id"],
@@ -10874,8 +10880,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             relation_card["source_free"] = relation["source_free"]
             relation_card["legal_authority"] = False
             relations.append(relation_card)
-            if len(relations) >= limit:
-                break
+        gaps: list[str] = []
+        if selection_truncated:
+            gaps.append(
+                "graph relation selection reached the requested limit; additional admitted "
+                "relations were omitted"
+            )
+        if relation_scan_truncated:
+            gaps.append(
+                "graph relation candidate scan reached its 5000-row bound; additional "
+                "candidates were not inspected"
+            )
         return {
             "schema_version": "deeplaw.knowledge-graph-view/v1",
             "vault_id": self.vault_id,
@@ -10888,11 +10903,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 "max_relations": limit,
                 "selected_relations": len(relations),
                 "max_candidate_relations_scanned": _MAX_GRAPH_RELATION_SCAN,
-                "candidate_relations_scanned": min(
-                    len(relation_candidates), _MAX_GRAPH_RELATION_SCAN
-                ),
+                "candidate_relations_scanned": candidate_relations_scanned,
                 "candidate_scan_truncated": relation_scan_truncated,
+                "selection_truncated": selection_truncated,
             },
+            "gaps": gaps,
             "audit_head": self.audit_head,
             "derived_adjacency": True,
             "canonical_relation_revisions": True,

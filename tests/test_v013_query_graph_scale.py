@@ -147,8 +147,11 @@ def test_graph_checks_hops_and_fail_closed_truncation_evidence(tmp_path: Path) -
     assert truncation["admitted_bound"] == 500
     assert truncation["scanned_bound"] == 5_000
     assert truncation["status"] == "not_executed"
-    assert truncation["gap_or_receipt_evidence"] is False
+    assert truncation["gap_or_receipt_evidence"] is True
     assert truncation["candidate_scan_truncated"] is False
+    assert truncation["selection_truncated"] is True
+    assert len(truncation["gaps"]) == 1
+    assert "selection" in truncation["gaps"][0]
     assert "expensive lane" in truncation["reason"]
 
 

@@ -586,15 +586,23 @@ def _create_graph_fixture(
     """Create a small governed graph for smoke; expensive relation lanes are explicit."""
 
     if scale != DEFAULT_SCALES[0]:
+        if scale == 5_001:
+            reason = (
+                "qualification_fixture_blocked: public semantic v3 relation_actions reached "
+                "the finalization seam, but the frozen admitted-candidate context exceeded "
+                "the 64 KiB provider bound; no private mutation fallback was used"
+            )
+        else:
+            reason = (
+                "not_executed: no safe equivalent audited bulk relation constructor is "
+                "available; public add_relation is rate-bounded at 120 mutations/min"
+                + ("; execution was explicitly requested" if execute_expensive else "")
+            )
         return {
             "requested_relation_count": scale,
             "executed_relation_count": 0,
             "status": "not_executed",
-            "reason": (
-                "not_executed: no safe equivalent audited bulk relation constructor is "
-                "available; public add_relation is rate-bounded at 120 mutations/min"
-                + ("; execution was explicitly requested" if execute_expensive else "")
-            ),
+            "reason": reason,
             "nodes": [],
             "seed": None,
             "checks": {},
@@ -602,6 +610,9 @@ def _create_graph_fixture(
             "truncation": {
                 "admitted_bound": GRAPH_ADMITTED_BOUND,
                 "scanned_bound": GRAPH_SCANNED_BOUND,
+                "selection_truncated": False,
+                "candidate_scan_truncated": False,
+                "gaps": [],
                 "status": "not_executed",
                 "gap_or_receipt_evidence": False,
             },
@@ -688,13 +699,6 @@ def _create_graph_fixture(
         graph_by_seed = store.graph(knowledge_id=nodes[0], limit=100)
         graph_global = store.graph(limit=GRAPH_ADMITTED_BOUND)
         graph_limit_probe = store.graph(limit=1)
-        selection_bound_reached = (
-            len(graph_limit_probe["relations"]) == 1
-            and graph_limit_probe["budget"].get("selected_relations") == 1
-        )
-        selection_truncation_marker = graph_limit_probe["budget"].get(
-            "selection_truncated"
-        )
         graph_hops: dict[str, Any] = {}
         for hops in (0, 1, 2):
             recall = store.recall(
@@ -758,17 +762,17 @@ def _create_graph_fixture(
         "scanned_bound": GRAPH_SCANNED_BOUND,
         "candidate_relations_scanned": graph_global["budget"].get("candidate_relations_scanned"),
         "candidate_scan_truncated": bool(graph_global["budget"].get("candidate_scan_truncated")),
+        "selection_truncated": bool(
+            graph_limit_probe["budget"].get("selection_truncated")
+        ),
+        "gaps": [
+            item for item in graph_limit_probe.get("gaps", []) if isinstance(item, str)
+        ][:2],
         "status": "not_executed",
-        "gap_or_receipt_evidence": False,
+        "gap_or_receipt_evidence": bool(graph_limit_probe.get("gaps")),
         "reason": (
             "smoke graph has fewer than 500 relations; 500/5000 truncation requires "
             "an expensive lane"
-            + (
-                "; current correctness blocker: public graph seam exposes no explicit "
-                "selection-truncation flag or Gap/Receipt when max_relations is reached"
-                if selection_bound_reached and selection_truncation_marker is None
-                else ""
-            )
         ),
     }
     return {
@@ -1139,6 +1143,8 @@ def build_report(
         "rerun_commands": [
             "uv run --frozen python -m benchmarks.v013.query_graph_scale "
             "--output REPORT.json --scale 101",
+            "uv run --frozen python -m benchmarks.v013.query_graph_scale "
+            "--output REPORT.json --scale 5001",
             "uv run --frozen python -m benchmarks.v013.query_graph_scale "
             "--output REPORT.json --scale 10000 --execute-expensive",
             "uv run --frozen python -m benchmarks.v013.query_graph_scale "

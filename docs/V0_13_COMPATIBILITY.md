@@ -15,6 +15,7 @@ the additive v0.13 working-tree contract and must not be read as a published ver
 | Evidence grounding | Statement/Evidence core v1 | source/object references remain readable | statement-bearing Profile v3 content must pass exact map/receipt verification |
 | MCP read surface | default `query_plan_version=6`; recommended `query/context/wiki/source/verify` | Explicit v5 MCP output/v3 with Capsule v2 and Query Plan v5; scheduled `search`/`recall`/`wiki_lookup` routes remain | `knowledge_support` stays read-only; Provider content is ≤64 KiB and never carries the full plan, candidate scores, rejected-candidate text, or local audit internals |
 | MCP mutation surface | unchanged separate `knowledge_sink` | existing owner grants remain subject to their exact allowlist | no read operation hides a write or widens a Grant |
+| Knowledge Graph view | graph view v1 with independent `selection_truncated` and `candidate_scan_truncated` budget signals plus bounded gaps | existing node/relation/rejected fields and the 500-admitted / 5,000-scanned hard bounds are unchanged | an inferred complete result is no longer allowed when another admitted Relation or an uninspected candidate tail exists; Wiki local graph and CLI/MCP use the same domain response |
 | Agent context | host-neutral Agent Context Envelope v1 | Editor Context Envelope v1 remains accepted for editor-specific context | both are ephemeral; neither is evidence or canonical knowledge |
 | Python context lifecycle | lazy persistent snapshot for repeated `KnowledgeOS.context.compile` calls on one handle | startup verification and one-shot retrieval/source/wiki behavior remain | warm context checks bounded identities; state change reopens fail-closed; `close`/context manager releases the snapshot |
 | Legal Pack | unchanged isolated `law_support` store/process | current signed release and private-reference compatibility remain | v0.13 Navigator is a source-free read-only view and never creates Official prose |
@@ -52,12 +53,24 @@ limitations and the 512-candidate bound. Invalid retrieval modes fail at the sha
 which also covers CLI/MCP calls after their own closed validation.
 
 Query Plan v6 also retains the bounded normalized source query when expansion aliases are applied;
-aliases are additive and cannot erase CJK or non-ASCII names. An entity-lexicon-free identity-anchor
-pass recognizes bounded adjacent Titlecase/uppercase name tokens (including independent comparison
-targets) and requires a complete token match for ordinary Statements. Explicit identity targets and
-admitted graph neighbors remain eligible through their existing admission paths. The plan records
-only `identity_anchor_count`, `identity_anchors_sha256`, and `identity_anchors_truncated`; anchor
-text is never emitted in a receipt, and a single homonym such as `Mercury` is not silently resolved.
+aliases are additive and cannot erase CJK or non-ASCII names. Its entity-lexicon-free identity
+anchor fields bind the bounded, case-folded phrase hints actually used for discovery/reranking and
+selection. Natural-language capitalization, Title Case or punctuation cannot turn such a hint into
+an admission rule: ordinary Statements still pass the independent lexical, scope, Authority,
+lifecycle and temporal checks, and a non-selected hint mismatch is recorded as a local relevance
+suppression rather than `identity_anchor_mismatch`. Explicit `semantic_key`, `knowledge_id` and
+`revision_id` targets remain strict admission constraints. The plan records only
+`identity_anchor_count`, `identity_anchors_sha256`, and `identity_anchors_truncated`; anchor text is
+never emitted in a receipt, and ambiguous matching aliases remain multiple candidates rather than
+being silently merged.
+
+The graph response change is additive and non-persistent. `selection_truncated=true` means at least
+one additional governance-admitted Relation was observed after the requested result limit;
+`candidate_scan_truncated=true` means the 5,000-candidate scan ended with an uninspected tail. The
+runtime may inspect only until the first extra admitted Relation to establish selection truncation;
+it never returns that extra Relation and never scans beyond 5,000. Candidate scan and selection
+truncation have separate bounded gaps, while a tail containing only governance-rejected Relations
+does not falsely report admitted selection truncation.
 
 The MCP `audit` projection is local-only. Provider delivery is reduced to `standard` and uses only
 the opaque `receipt_id` for a redacted explain lookup. The runtime trace is ephemeral (16 entries,

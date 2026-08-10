@@ -135,16 +135,37 @@
     },
     "graph": {
       "type": "object",
-      "required": ["schema_version", "nodes", "relations", "rejected", "budget", "audit_head", "derived_adjacency", "canonical_relation_revisions"],
+      "required": ["schema_version", "nodes", "relations", "rejected", "budget", "gaps", "audit_head", "derived_adjacency", "canonical_relation_revisions"],
       "properties": {
         "schema_version": {"const": "deeplaw.knowledge-graph-view/v1"},
         "nodes": {"type": "array", "maxItems": 40},
         "relations": {"type": "array", "maxItems": 20},
         "rejected": {"type": "array", "maxItems": 100},
-        "budget": {"type": "object"},
+        "budget": {"$ref": "#/$defs/graph_budget"},
+        "gaps": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
         "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "derived_adjacency": {"const": true},
         "canonical_relation_revisions": {"const": true}
+      }
+    },
+    "graph_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_relations", "selected_relations", "max_candidate_relations_scanned",
+        "candidate_relations_scanned", "candidate_scan_truncated", "selection_truncated"
+      ],
+      "properties": {
+        "max_relations": {"type": "integer", "minimum": 1, "maximum": 500},
+        "selected_relations": {"type": "integer", "minimum": 0, "maximum": 500},
+        "max_candidate_relations_scanned": {"const": 5000},
+        "candidate_relations_scanned": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "candidate_scan_truncated": {"type": "boolean"},
+        "selection_truncated": {"type": "boolean"}
       }
     }
   }
