@@ -94,7 +94,6 @@ adopt a large upstream runtime. The frozen scope is:
   file/symbol, target file, rights basis, attribution, tests, and security or
   dependency impact before implementation;
 - `reuse_mode` is one of `verbatim`, `adapted`, `behavioral`, or `reference`;
-  `pending/none` is used while no source has actually been copied;
 - only the individually named files/symbols in the manifest may be considered;
   generated trees, transitive vendor directories, large runtimes, and unrelated
   product code are out of scope;
@@ -104,15 +103,36 @@ adopt a large upstream runtime. The frozen scope is:
 
 ### Unified reuse manifest
 
-The following is the release-review manifest. `pending/none` is intentional: no
-OpenWiki or Tolaria source is currently copied or adapted into DeepLaw or a
-release artifact. A future entry must be completed before the corresponding
-change is made.
+The following is the release-review manifest for reuse actually exercised in
+Pass 8. `behavioral` means the public outcome and fixtures were independently
+re-authored in DeepLaw; `reference` means design review or execution from a
+separate exact checkout. Neither mode below incorporates an upstream source
+fragment into a DeepLaw release artifact.
 
 | repository | exact commit | source file/symbol | reuse_mode | rights_basis | target file | modifications | attribution | tests | security/dependency impact |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) | `none (no source copied at this stage)` | `pending/none` | `MIT license at the exact commit; Owner-authorized focused reuse` | `none` | `none; inventory pending` | `pending; preserve copyright, license, and NOTICE text if copied` | `pending; no copied code to test` | `none now; review dependencies and security before any copy` |
-| `refactoringhq/tolaria` | `ab01faa6773136a58285d04cb81e2587c11bac85` | `none (no source copied at this stage)` | `pending/none` | `Owner-declared same-team reuse authorization; AGPL-3.0-or-later terms and release-time contributor-rights confirmation required` | `none` | `none; inventory pending` | `pending; preserve copyright, license, and NOTICE text if copied` | `pending; no copied code to test` | `none now; no AGPL runtime/dependency is added; review before any copy` |
+| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) | `src/agent/wiki-link-validator.ts:validateWikiInternalLinks` | `reference` | `MIT at exact commit; Owner-authorized sibling reuse` | `docs/V0_13_PASS8_CAPABILITY_GAP_MATRIX.md` | Compared broken-link outcomes with DeepLaw's Registry/Link Index; retained stable Ledger identity and indexed reads; copied no implementation | This manifest and `THIRD_PARTY_NOTICES.md`; no MIT source fragment incorporated | `tests/test_v013_wiki_link_index.py` | No dependency, network, telemetry, runtime, or distributed upstream bytes |
+| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) | `src/agent/utils.ts:getUpdateNoopStatus`; `src/agent/utils.ts:createOpenWikiContentSnapshot` | `reference` | `MIT at exact commit; Owner-authorized sibling reuse` | `docs/V0_13_PASS8_CAPABILITY_GAP_MATRIX.md` | Compared content-snapshot/no-op behavior; retained DeepLaw revision-bound projection manifests; copied no implementation | This manifest and `THIRD_PARTY_NOTICES.md`; no MIT source fragment incorporated | `tests/test_v013_projection_incremental.py` | No dependency or runtime impact; no upstream scheduler adopted |
+| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) | `src/ingestion/code-mode.ts` managed-block behavior | `reference` | `MIT at exact commit; Owner-authorized sibling reuse` | `docs/V0_13_PASS8_CAPABILITY_GAP_MATRIX.md` | Compared user-content protection; retained DeepLaw canonical/editable/derived ownership separation; copied no implementation | This manifest and `THIRD_PARTY_NOTICES.md`; no MIT source fragment incorporated | `tests/test_knowledge_markdown.py`; `tests/test_v013_projection_ownership.py` | No dependency; did not adopt recursive directory sync, CI injection, or a second Authority model |
+| `refactoringhq/tolaria` | `ab01faa6773136a58285d04cb81e2587c11bac85` | `src/utils/wikilinks.ts:blankFencedCodeLines`; `src/utils/wikilinks.ts:extractOutgoingLinks`; `src/utils/wikilinks.test.ts`; `src/utils/wikilinks.table.test.ts`; `tests/smoke/wikilink-traditional-chinese.spec.ts` | `behavioral` | `Owner-declared same-team reuse authorization; published AGPL-3.0-or-later; release-time file/contributor-rights confirmation remains required only if derived source is distributed` | `tests/test_v013_wiki_link_index.py`; `tests/test_v013_wiki_resolver.py` | Independently re-authored Python table/code-fence/alias/CJK fixtures against DeepLaw stable identity and ambiguity semantics; copied no TypeScript implementation or test text | This manifest and `THIRD_PARTY_NOTICES.md`; no AGPL source fragment incorporated | `tests/test_v013_wiki_link_index.py`; `tests/test_v013_wiki_resolver.py` | No Node/Tauri/React/Rust dependency; no runtime, network, telemetry, Secret, Authority, or Ledger change |
+| `refactoringhq/tolaria` | `ab01faa6773136a58285d04cb81e2587c11bac85` | `mcp-server/tool-service.js:createMcpToolService`; `mcp-server/vault.js:getNote`; `mcp-server/vault.js:updateNote` | `reference` | `Owner-declared same-team reuse authorization; external checkout remains AGPL-3.0-or-later; no upstream bytes redistributed` | `benchmarks/hosts/run_tolaria_workspace_interop.py`; `benchmarks/hosts/tolaria_workspace_probe.mjs`; `contracts/tolaria-workspace-interop-report.v1.schema.json`; `tests/test_v013_tolaria_workspace_interop.py` | An independently authored development probe imports the exact external service to open/read/update one allowed synthetic note; DeepLaw policy denies protected paths before the call; `expectedMtime` is never treated as a Revision | This manifest, report provenance, and `THIRD_PARTY_NOTICES.md`; upstream remains a separately installed external checkout | `tests/test_v013_tolaria_workspace_interop.py`; exact external report `tolaria_interop_032e0d74e03671a6a03e9ab7` | External `npm audit` has six known high findings; none are redistributed. Closed child environment; no Secret; OS sandbox not proven; no Core dependency or canonical Ledger write |
+
+### Actual copied/adapted inventory
+
+- Verbatim upstream source in the DeepLaw tree or distribution: **none**.
+- Adapted upstream implementation in the DeepLaw tree or distribution: **none**.
+- Independently re-authored behavioral inventory:
+  `tests/test_v013_wiki_link_index.py` and
+  `tests/test_v013_wiki_resolver.py`.
+- Independently authored external-execution inventory:
+  `benchmarks/hosts/run_tolaria_workspace_interop.py`,
+  `benchmarks/hosts/tolaria_workspace_probe.mjs`,
+  `contracts/tolaria-workspace-interop-report.v1.schema.json`, and
+  `tests/test_v013_tolaria_workspace_interop.py`.
+- Exact external upstream bytes executed during the Development probe:
+  Tolaria `mcp-server/tool-service.js` and its separately installed locked
+  dependencies. They are not part of the DeepLaw source distribution, wheel,
+  sdist, SBOM, or runtime dependency graph.
 
 Tolaria's `rights_basis` is explicitly **Owner-declared same-team reuse
 authorization**. Before an Apache-2.0 release, the Owner/release reviewer must
