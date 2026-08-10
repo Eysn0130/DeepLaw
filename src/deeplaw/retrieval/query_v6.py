@@ -59,6 +59,12 @@ V6_DUTIES = (
 V6_PROJECTIONS = frozenset({"compact", "standard", "audit"})
 _SENSITIVITY_ORDER = ("public", "internal", "private", "restricted")
 _FRESHNESS_ORDER = {"fresh": 0, "unknown": 1, "stale": 2, "invalidated": 3}
+_FRESHNESS_STATEMENT_REASONS = {
+    "fresh": "fresh_statement",
+    "unknown": "unknown_statement",
+    "stale": "stale_statement",
+    "invalidated": "invalidated_statement",
+}
 _MAX_DISCOVERED_REVISIONS = 20
 # Task-route lookup is a separate, explicitly bounded admission path.  Keep
 # the route budget at the public v6 revision bound so the existing query-plan
@@ -908,7 +914,10 @@ def _load_statement_candidates(
                 rejections.append({**item_ref, "reason": designator_reason})
                 continue
             if freshness != "fresh" and purpose != "historical":
-                rejections.append({**item_ref, "reason": f"{freshness}_statement"})
+                freshness_reason = _FRESHNESS_STATEMENT_REASONS.get(freshness)
+                if freshness_reason is None:
+                    raise RuntimeError("query freshness state is invalid")
+                rejections.append({**item_ref, "reason": freshness_reason})
                 continue
             if value["support_status"] in {"unsupported", "not_applicable"}:
                 rejections.append({**item_ref, "reason": "unsupported_statement"})
@@ -1128,7 +1137,7 @@ def _load_working_memory_candidates(
             if not inside_boundary:
                 continue
             if reasons:
-                rejections.append({**candidate_ref, "reason": ",".join(reasons)})
+                rejections.append({**candidate_ref, "reason": "admission_policy"})
                 continue
             metadata = revision.get("metadata", {})
             if not isinstance(metadata, dict) or metadata.get("memory_type") != "working":
@@ -1936,7 +1945,7 @@ def execute_v6(
         suppressions.append(
             {
                 "candidate_id": "statement_candidates",
-                "reason": "discovered_revision_candidate_bound",
+                "reason": "scan_bound",
             }
         )
     deduplications: list[dict[str, str]] = []

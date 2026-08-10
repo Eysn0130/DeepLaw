@@ -223,7 +223,7 @@ _TRACE_LABEL = re.compile(r"^[A-Za-z0-9_.:-]{1,120}$")
 _TRACE_IDENTIFIER = re.compile(
     r"^(?:statement|querygap|knowledge|knowledgerev|relationrev|sourcerev|fragment|queryreceipt)_[0-9a-f]{24,64}$"
 )
-_TRACE_SAFE_LABELS = frozenset(
+_TRACE_DUTY_CODES = frozenset(
     {
         "primary_answer",
         "identity",
@@ -237,6 +237,10 @@ _TRACE_SAFE_LABELS = frozenset(
         "limitation",
         "source_evidence",
         "unresolved_gap",
+    }
+)
+_TRACE_REASON_CODES = frozenset(
+    {
         "duplicate_source_reference",
         "represented_source_reference",
         "invalid_source_ref",
@@ -261,6 +265,22 @@ _TRACE_SAFE_LABELS = frozenset(
         "source_free_factual",
         "provenance_not_admitted",
         "invalid_statement_evidence",
+        "historical_working_memory",
+        "working_memory_not_run_bound",
+        "task_binding_required",
+        "task_binding_unbound",
+        "task_binding_mismatch",
+        "working_memory_unavailable",
+        "working_memory_not_checkpoint",
+        "invalid_working_memory",
+        "fresh_statement",
+        "unknown_statement",
+        "stale_statement",
+        "invalidated_statement",
+        "freshness_policy_designator_missing",
+        "freshness_policy_designator_mismatch",
+        "relevance_floor",
+        "admission_policy",
         "workspace_diverged",
         "stale_checkpoint",
         "task_line_ambiguous",
@@ -367,12 +387,16 @@ def _trace_identifier(value: Any) -> str:
     return f"sha256:{sha256_bytes(value.encode('utf-8'))}"
 
 
-def _trace_label(value: Any) -> str:
-    if isinstance(value, str) and value in _TRACE_SAFE_LABELS:
-        return value
-    if isinstance(value, str):
-        return f"sha256:{sha256_bytes(value.encode('utf-8'))}"
-    raise RuntimeError("query audit label is invalid")
+def _trace_label(value: Any, *, field: str) -> str:
+    allowed = {
+        "duty": _TRACE_DUTY_CODES,
+        "reason": _TRACE_REASON_CODES,
+    }.get(field)
+    if allowed is None:
+        raise RuntimeError(f"query audit label field is invalid: {field}")
+    if not isinstance(value, str) or value not in allowed:
+        raise RuntimeError(f"query audit {field} is invalid")
+    return value
 
 
 def _trace_hash(value: Any, *, field: str) -> str:
@@ -395,7 +419,7 @@ def _redact_query_audit_item(value: Any) -> dict[str, Any]:
     redacted: dict[str, Any] = {}
     for key, item in value.items():
         if key in {"reason", "duty"}:
-            redacted[key] = _trace_label(item)
+            redacted[key] = _trace_label(item, field=key)
         elif key in {"statement_id", "candidate_id"}:
             redacted[key] = _trace_identifier(item)
         elif key == "source_key":

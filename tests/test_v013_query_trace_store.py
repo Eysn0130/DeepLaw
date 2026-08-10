@@ -70,12 +70,18 @@ def _audit(
         "candidates": [{"statement_id": statement_id, "score": [0, 0, 0, statement_id]}],
     }
     if large:
+        reason_codes = (
+            "query_mismatch",
+            "source_budget",
+            "character_budget",
+            "selection_budget",
+        )
         body["rejections"] = [
-            {"statement_id": statement_id, "reason": f"query_mismatch_{index:04d}"}
+            {"statement_id": statement_id, "reason": reason_codes[index % len(reason_codes)]}
             for index in range(512)
         ]
         body["suppressions"] = [
-            {"candidate_id": source_key, "reason": f"source_budget_{index:04d}"}
+            {"candidate_id": source_key, "reason": reason_codes[index % len(reason_codes)]}
             for index in range(512)
         ]
         body["candidates"] = [
@@ -168,6 +174,23 @@ def test_query_trace_contract_rejects_unwhitelisted_nested_payload() -> None:
         Draft202012Validator(schema).validate(result)
 
 
+@pytest.mark.parametrize("field", ["reason", "duty"])
+def test_query_trace_unknown_taxonomy_fails_closed(field: str) -> None:
+    runtime = _runtime()
+    receipt_id = "queryreceipt_" + "1" * 24
+    audit = _audit(receipt_id)
+    target = audit["rejections"][0] if field == "reason" else audit["fallback"][0]
+    target[field] = "taxonomy_drift"
+    body = dict(audit)
+    body.pop("receipt_sha256")
+    audit["receipt_sha256"] = sha256_bytes(canonical_json(body).encode("utf-8"))
+
+    with pytest.raises(RuntimeError, match=f"query audit {field} is invalid"):
+        runtime.retain_query_receipt(audit)
+    assert runtime.query_receipts == {}
+    assert runtime.query_receipts_bytes == 0
+
+
 def test_query_trace_lru_ttl_and_owner_clear(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = _runtime()
     clock = [100.0]
@@ -226,6 +249,11 @@ def test_provider_v2_and_audit_read_contracts_are_closed(tmp_path: Path) -> None
     Draft202012Validator.check_schema(audit_schema)
     provider_validator = Draft202012Validator(provider_schema)
     audit_validator = Draft202012Validator(audit_schema)
+    audit_item_properties = audit_schema["$defs"]["audit_item"]["properties"]
+    assert set(audit_item_properties["reason"]["enum"]) == set(
+        mcp_server._TRACE_REASON_CODES
+    )
+    assert set(audit_item_properties["duty"]["enum"]) == set(mcp_server._TRACE_DUTY_CODES)
 
     vault = _synthetic_vault(tmp_path)
 
@@ -252,6 +280,12 @@ def test_provider_v2_and_audit_read_contracts_are_closed(tmp_path: Path) -> None
             assert explained.root.isError is False
             audit = explained.root.structuredContent["result"]
             audit_validator.validate(audit)
+            for collection in ("fallback", "deduplications", "suppressions", "rejections"):
+                for item in audit["audit"][collection]:
+                    if "reason" in item:
+                        assert item["reason"] in mcp_server._TRACE_REASON_CODES
+                    if "duty" in item:
+                        assert item["duty"] in mcp_server._TRACE_DUTY_CODES
             assert "trace contract probe" not in canonical_json(audit)
             assert "score" not in canonical_json(audit)
 
@@ -334,7 +368,7 @@ def test_explain_over_limit_fails_closed_without_payload_leak(tmp_path: Path) ->
                 {"operation": "explain", "receipt_id": receipt_id},
             )
             assert explained.root.isError is True
-            assert "query_mismatch_0001" not in " ".join(
+            assert "taxonomy_drift" not in " ".join(
                 getattr(item, "text", "") for item in explained.root.content
             )
 
