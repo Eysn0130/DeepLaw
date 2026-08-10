@@ -95,8 +95,8 @@ def test_host_bridge_contracts_match_closed_artifacts() -> None:
     assert tolaria["integration_status"] == "integration_limited"
     assert tolaria["exact_upstream"] == {
         "name": "Tolaria",
-        "version": "v2026-07-22",
-        "commit": "e2cd718a518cc96d1081b6ec3aabefe3b6c77199",
+        "version": "alpha-v2026.8.10-alpha.0001",
+        "commit": "ab01faa6773136a58285d04cb81e2587c11bac85",
         "plugin_api_status": "not_available",
         "stable_active_note_preview_promote": False,
     }
@@ -115,9 +115,9 @@ def test_tolaria_harness_reports_limited_steps_without_private_paths() -> None:
     serialized = json.dumps(result, ensure_ascii=False, sort_keys=True)
     assert len(serialized.encode("utf-8")) <= 65_536
     assert result["integration_status"] == "integration_limited"
-    assert result["exact_upstream"]["version"] == "v2026-07-22"
+    assert result["exact_upstream"]["version"] == "alpha-v2026.8.10-alpha.0001"
     assert result["exact_upstream"]["commit"] == (
-        "e2cd718a518cc96d1081b6ec3aabefe3b6c77199"
+        "ab01faa6773136a58285d04cb81e2587c11bac85"
     )
     assert result["agent_context"]["schema_version"] == "deeplaw.agent-context-envelope/v1"
     assert result["agent_context"]["authority"] == "none"

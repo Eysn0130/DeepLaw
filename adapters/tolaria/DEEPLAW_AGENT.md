@@ -1,7 +1,7 @@
 # DeepLaw in Tolaria
 
-Compatibility target: Tolaria `v2026-07-22`
-(`e2cd718a518cc96d1081b6ec3aabefe3b6c77199`). The adapter status is
+Compatibility target: Tolaria `alpha-v2026.8.10-alpha.0001`
+(`ab01faa6773136a58285d04cb81e2587c11bac85`, package `0.1.0`). The adapter status is
 `integration_limited`: it uses Tolaria's documented stdio MCP and UI-action boundary, without
 assuming a plugin API, forking Tolaria, or copying Tolaria code.
 

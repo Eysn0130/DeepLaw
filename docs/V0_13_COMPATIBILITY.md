@@ -109,8 +109,8 @@ release wheel and rollback artifacts; that release-bound gate is `not_executed`.
 - Obsidian targets the public plugin API package `1.13.1` and exact upstream API commit
   `cc1744324150c632416857c98964f87b1574a5fc`. Its CLI bridge has closed parsers and no manual-ID
   core picker flow; real desktop E2E remains `not_executed`.
-- Tolaria targets `v2026-07-22`, commit
-  `e2cd718a518cc96d1081b6ec3aabefe3b6c77199`. Its external MCP boundary is supported, while the
+- Tolaria targets `alpha-v2026.8.10-alpha.0001`, commit
+  `ab01faa6773136a58285d04cb81e2587c11bac85` (package `0.1.0`). Its external MCP boundary is supported, while the
   missing third-party preview/promotion UI seam keeps the product result `integration_limited`.
 
 ## Rollback and downgrade

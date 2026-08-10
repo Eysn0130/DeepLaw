@@ -17,8 +17,8 @@ from deeplaw.editor_bridge import (
     tolaria_open_note_request,
 )
 
-TOLARIA_VERSION = "v2026-07-22"
-TOLARIA_COMMIT = "e2cd718a518cc96d1081b6ec3aabefe3b6c77199"
+TOLARIA_VERSION = "alpha-v2026.8.10-alpha.0001"
+TOLARIA_COMMIT = "ab01faa6773136a58285d04cb81e2587c11bac85"
 
 
 def _step(status: str, **details: object) -> dict[str, object]:

@@ -95,8 +95,9 @@ proves the mapping remains ephemeral and does not mutate the Ledger.
 The flow is: Tolaria supplies explicit context → DeepLaw retrieves or compiles → an authorized Sink
 commits canonical state → Tolaria refreshes/opens the exact projected path. Tolaria's note tools
 never write canonical roots. This preserves its workspace/Agent abstractions without importing
-DeepLaw's governance into the frontend. The compatibility target is Tolaria `v2026-07-22`, commit
-`e2cd718a518cc96d1081b6ec3aabefe3b6c77199`. The exact upstream release exposes no stable
+DeepLaw's governance into the frontend. The compatibility target is Tolaria
+`alpha-v2026.8.10-alpha.0001`, commit
+`ab01faa6773136a58285d04cb81e2587c11bac85` (package `0.1.0`). The exact upstream release exposes no stable
 third-party active-note preview or promotion UI extension point, so the executable harness reports
 the full product loop as `integration_limited` rather than simulating it. References:
 [Tolaria repository](https://github.com/refactoringhq/tolaria),

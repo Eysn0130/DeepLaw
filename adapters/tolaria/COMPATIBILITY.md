@@ -1,7 +1,7 @@
 # Tolaria compatibility report
 
-Status: `integration_limited`, verified against source tag `v2026-07-22`, commit
-`e2cd718a518cc96d1081b6ec3aabefe3b6c77199`, on 2026-08-07.
+Status: `integration_limited`, reviewed at source tag `alpha-v2026.8.10-alpha.0001`, commit
+`ab01faa6773136a58285d04cb81e2587c11bac85` (package `0.1.0`), on 2026-08-11.
 
 The reviewed Tolaria release is files-first and offline-first. Its current supported integration
 surface is an external stdio MCP server plus a WebSocket UI bridge. Durable external registrations
