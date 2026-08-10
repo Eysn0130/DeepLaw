@@ -429,6 +429,17 @@ def _identity_anchor_hint_matches(
     )
 
 
+def _meaningful_query_terms(terms: Iterable[str]) -> set[str]:
+    """Drop only short ASCII numeric fragments from content relevance scoring."""
+
+    return {
+        term
+        for term in terms
+        if isinstance(term, str)
+        and not (term.isascii() and term.isdigit() and len(term) < 3)
+    }
+
+
 def _applicable_duties(
     *,
     query: str,
@@ -811,7 +822,12 @@ def _load_statement_candidates(
     rows = rows[:_MAX_STATEMENT_CANDIDATES]
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
-    query_terms = set(target["terms"])
+    query_terms = _meaningful_query_terms(target["terms"])
+    identity_anchor_values = (
+        query_target_anchors(target["text"])[0]
+        if not has_identity_target
+        else ()
+    )
     identity_anchor_hints = (
         _identity_anchor_hints(target["text"])[0]
         if not has_identity_target
@@ -951,6 +967,10 @@ def _load_statement_candidates(
                 identity_anchor_hints,
                 identity_surface,
             )
+            exact_anchor_hint_match = _identity_anchor_hint_matches(
+                identity_anchor_values,
+                identity_surface,
+            )
             partition = (
                 "source_free_interpretation"
                 if bool(row["source_free"])
@@ -993,7 +1013,9 @@ def _load_statement_candidates(
                     "legal_authority": False,
                     "source_free": bool(row["source_free"]),
                     "applicability": metadata.get("applicability"),
+                    "_query_search_terms": tuple(searchable),
                     "_anchor_hint_match": anchor_hint_match,
+                    "_exact_anchor_hint_match": exact_anchor_hint_match,
                     "_score": _candidate_score(
                         {
                             "statement_id": statement_id,
@@ -1844,22 +1866,45 @@ def execute_v6(
         )
         candidates = [*working_memory, *ordinary]
     selected: list[dict[str, Any]] = []
-    target_relevance_suppressions: list[dict[str, str]] = []
+    content_relevance_suppressions: list[dict[str, str]] = []
     budget_suppressions: list[dict[str, str]] = []
     selected_statement_characters = 0
+    query_terms = _meaningful_query_terms(target["terms"])
+    identity_anchor_tail_terms = {
+        anchor.rsplit(" ", 1)[-1]
+        for anchor in query_target_anchors(target["text"])[0]
+        if " " in anchor
+    }
+    structured_query_terms = {
+        term
+        for term in query_terms
+        if any(character.isdigit() for character in term)
+    }
+    content_specific_terms = identity_anchor_tail_terms | structured_query_terms
     for item in candidates:
-        if (
-            inferred_anchor_pool
-            and item.get("partition") != "run_bound_working_memory"
-            and item.get("_anchor_hint_match") is not True
-        ):
-            target_relevance_suppressions.append(
-                {
-                    "candidate_id": str(item["statement_id"]),
-                    "reason": "target_relevance",
-                }
-            )
-            continue
+        if inferred_anchor_pool and item.get("partition") != "run_bound_working_memory":
+            overlap = query_terms.intersection(item.get("_query_search_terms", ()))
+            if not (
+                len(overlap) >= 3
+                or (
+                    len(overlap) >= 2
+                    and (
+                        overlap.intersection(content_specific_terms)
+                        or item.get("_anchor_hint_match") is True
+                    )
+                )
+                or (
+                    len(overlap) >= 1
+                    and item.get("_exact_anchor_hint_match") is True
+                )
+            ):
+                content_relevance_suppressions.append(
+                    {
+                        "candidate_id": str(item["statement_id"]),
+                        "reason": "relevance_floor",
+                    }
+                )
+                continue
         if len(selected) >= statement_item_limit:
             break
         item_characters = len(str(item.get("statement_text", "")))
@@ -1876,8 +1921,8 @@ def execute_v6(
     budget_suppressed_ids = {
         item["candidate_id"] for item in budget_suppressions
     }
-    target_relevance_suppressed_ids = {
-        item["candidate_id"] for item in target_relevance_suppressions
+    content_relevance_suppressed_ids = {
+        item["candidate_id"] for item in content_relevance_suppressions
     }
     selected_statement_ids = {str(item["statement_id"]) for item in selected}
     suppressions: list[dict[str, str]] = [
@@ -1888,9 +1933,9 @@ def execute_v6(
         for item in candidates
         if str(item["statement_id"]) not in selected_statement_ids
         and str(item["statement_id"]) not in budget_suppressed_ids
-        and str(item["statement_id"]) not in target_relevance_suppressed_ids
+        and str(item["statement_id"]) not in content_relevance_suppressed_ids
     ][:_MAX_CANDIDATE_RECEIPTS]
-    suppressions = [*target_relevance_suppressions, *suppressions]
+    suppressions = [*content_relevance_suppressions, *suppressions]
     suppressions.extend(budget_suppressions)
     if scan_truncated:
         suppressions.append(
@@ -2515,7 +2560,9 @@ def execute_v6(
     _validate_contract("knowledge-query-plan.v6.schema.json", plan)
     plan_sha256 = sha256_bytes(canonical_json(plan).encode("utf-8"))
     for item in candidates:
+        item.pop("_query_search_terms", None)
         item.pop("_anchor_hint_match", None)
+        item.pop("_exact_anchor_hint_match", None)
     candidate_receipts = [
         {
             "statement_id": str(item["statement_id"]),

@@ -15,7 +15,7 @@ import pytest
 from deeplaw.api import KnowledgeOS
 from deeplaw.compilation.semantic import SemanticCompilationService
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
-from deeplaw.util import canonical_json
+from deeplaw.util import canonical_json, query_identity_anchor_match, query_target_anchors
 from tests.test_v013_query_v6_unseen_development import _build_case, _run_cli
 
 _BASE_TASK = "Please summarize Policy Alpha requirements"
@@ -202,7 +202,7 @@ def test_v6_case_punctuation_quotes_and_cjk_preserve_required_identities(
         item.get("reason") == "identity_anchor_mismatch"
         for item in title_case_query["local_audit"]["rejections"]
     )
-    assert any(
+    assert not any(
         item.get("reason") == "target_relevance"
         for item in title_case_query["local_audit"]["suppressions"]
     )
@@ -229,6 +229,53 @@ def test_v6_case_punctuation_quotes_and_cjk_preserve_required_identities(
             else:
                 assert payload["hard_limit_bytes"] == 65_536
                 assert len(canonical_json(payload).encode("utf-8")) <= 65_536
+
+
+def test_v6_inferred_anchor_is_ranking_only_for_related_nonmatching_candidate(
+    alpha_case: dict[str, Any],
+) -> None:
+    task = "Please summarize Policy Alpha and 星河项目 requirements"
+    with KnowledgeOS.open(alpha_case["root"]) as knowledge_os:
+        query = knowledge_os.retrieval.query(
+            task,
+            purpose="verify",
+            scope="project",
+            max_sensitivity="public",
+            limit=13,
+            max_chars=8_000,
+            max_tokens=6_000,
+            max_sources=12,
+            projection="audit",
+        )
+    multilingual = next(
+        statement
+        for statement in query["statements"]
+        if "ALPHA_MULTILINGUAL" in statement["statement_text"]
+    )
+    surface = " ".join(
+        (
+            multilingual["object_summary"]["title"],
+            multilingual["statement_text"],
+        )
+    )
+    assert not any(
+        query_identity_anchor_match(anchor, surface)
+        for anchor in query_target_anchors(task)[0]
+    )
+    assert not any(
+        item.get("reason") == "target_relevance"
+        for item in query["local_audit"]["suppressions"]
+    )
+
+
+def test_v6_single_token_cjk_anchor_preserves_related_statement(
+    alpha_case: dict[str, Any],
+) -> None:
+    for payload in _context_triplet(alpha_case, "Alpha 指什么？"):  # noqa: RUF001
+        labels = _labels(payload)
+        assert "ALPHA_BOTH" in labels
+        assert _alpha_rows(payload)
+        assert not any(gap.get("code") == "no_answer" for gap in payload.get("gaps", []))
 
 
 def test_v6_multitarget_exception_alias_and_opaque_unknown_metamorphisms(

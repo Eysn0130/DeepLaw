@@ -25,12 +25,21 @@ capitalization: sentence case returned the three governed `Policy Alpha` Stateme
 Case returned none and recorded ten `identity_anchor_mismatch` rejections. Capitalization had been
 converted from an inference into eligibility.
 
-The current fix keeps caller-explicit stable identity targets strict and keeps all scope,
-sensitivity, Authority, lifecycle, temporal and evidence admission unchanged. Inferred
-natural-language anchors are bounded, digest-bound relevance hints. They cannot grant Authority or
-replace an explicit Resolver decision, and they do not change the 20-revision, 512-Statement or
-65,536-byte Provider bounds. Ambiguous aliases remain multiple candidates; an opaque unknown ID
-does not receive an unrelated answer.
+The first Pass 6 fix removed the admission rejection but accidentally retained a second hard
+`target_relevance` gate during final selection. Exact visible-semantic execution exposed the
+consequence: case 08 omitted the third dated Event and case 11 omitted the revision-bound comparison
+Synthesis. Removing that gate without a replacement also admitted wrong-target distractors, and the
+first generic content floor regressed the single-token CJK alias query `MRC 指什么？`.
+
+The accepted minimum repair keeps caller-explicit stable identity targets strict and keeps all
+scope, sensitivity, Authority, lifecycle, temporal and evidence admission unchanged. Inferred
+natural-language anchors remain bounded, digest-bound ranking hints; anchor mismatch is not an
+eligibility rule. Final selection uses the existing query terms as a bounded content-relevance
+floor, excludes short ASCII numeric fragments from that score, and can retain an exact lexical-hint
+candidate with one meaningful term. Non-anchor candidates with sufficient content overlap remain
+eligible, including the third date Event and comparison Synthesis. The 20-revision, 512-Statement
+and 65,536-byte Provider bounds are unchanged. Ambiguous aliases remain multiple candidates; an
+opaque unknown ID does not receive an unrelated answer.
 
 The new public Python/CLI/MCP metamorphic suite covers lower/sentence/title case, punctuation,
 quoted names, multi-target comparison, CJK + English proper names, negation/exception, alias
@@ -38,14 +47,16 @@ ambiguity, opaque unknown identities, and explicit semantic/Knowledge/Revision t
 required identities—not invocation receipts or byte order—are the invariant. This suite is
 repository-visible and tuning-used development evidence. It is not Human Gold or final blind.
 
-Query Plan v5 remains an explicit compatibility path. The separate visible-development JUnit runs
-reported v5 compatibility `48 passed` with SHA-256
-`acf4ba3905183d41ae20e95199f0fb1f3f74f8f9e8db535c38bcfaa54a0a2e03`, and v6 default Context
-`21 passed` with SHA-256
-`5c540ed71fc5e7abcd19debfd00f244806709a660c9d11a732babf8724755de1`; both had zero failures,
-errors, or skips. These transient local reports are development-only and are not frozen external
-artifacts. A suspected v5 identity-anchor relevance-floor bypass was not reproduced at a stable
-public seam, so Pass 6 does not change v5 runtime semantics.
+Query Plan v5 remains an explicit compatibility path. The final exact visible-development query
+execution exercised the v5 query result and the default v6 Context together: all 15 canonical cases
+and 14 variants passed, `query_variant_pass_rate=1.0`, `context_semantic_accuracy=1.0`,
+`citation_validity=1.0`, `claim_evidence_binding_accuracy=1.0`,
+`stale_prohibited_selections=0`, and `provider_hard_limit_violations=0`. The report SHA-256 is
+`614aa331155212e9096fb492e4a5cadbee9fde6c2f0cb71543daa59287c4123d`; the cost report SHA-256 is
+`c4c8c4ff566091a10ab394581442cf729ff9d822b784058d4900d7e03582c169`. These are
+repository-visible, tuning-used development results, not external qualification. A suspected v5
+identity-anchor relevance-floor bypass was not reproduced at a stable public seam, so Pass 6 does
+not change v5 runtime semantics.
 
 ## Graph completeness
 
@@ -92,13 +103,13 @@ and stops at `prepared_not_executed`.
 ## Platform and remaining qualification order
 
 The historical Platform Core inventory remains immutable at 1,339 common tests with digest
-`d397dc6cad207959eda7032d6cda115d992cdbbf9a58251c72c1da38a2c5537a`. The Pass 6 pre-commit current-source
-collection is 1,396 with digest
-`6a1abe5d0e34398cb8ef13d998e367f0f1e3b76b74e49804bd7d954e28f68769` and 57 expected drift
+`d397dc6cad207959eda7032d6cda115d992cdbbf9a58251c72c1da38a2c5537a`. The final Pass 6 pre-commit
+current-source collection is 1,398 with digest
+`10375738ea7171f0e7b0c4000e55740450376ecf5a860f99489dc620219ebe2e` and 59 expected drift
 entries. Its candidate receipt file SHA-256 is
-`0fe6145d5f869c7af9bd4d5f6db23395b3a020537e03fc074cff8b3846ee783f`; it explicitly keeps
+`ab7e20619c2a766e44f7b6dd6e0c034a4dc31f02a15103d0cd682a9a0237c683`; it explicitly keeps
 `release_ready=false`. Manual Platform Core exited 1 and wrote a fail-closed receipt with SHA-256
-`17654437583960c27a682f16875e648ad64322de85a7ea7877d7350129faa696`.
+`ee5d14c3ff874586bba2d5c205c470044b5368195598aa15ee8fa7158752ab1c`.
 Candidate CI can be green without becoming a Platform Core pass. Inventory rotation remains
 forbidden until independent product outcomes pass and a final candidate is frozen.
 
@@ -134,7 +145,7 @@ uv run --frozen python -m benchmarks.v013.product_outcome_package --dry-run
 uv run --frozen python -m benchmarks.release.platform_inventory --mode platform_core --selection common --require-match --output RECEIPT.json
 ```
 
-The complete suite returned `1398 passed, 6 skipped in 384.34s`. The skips are not release passes:
+The complete suite returned `1400 passed, 6 skipped in 386.17s`. The skips are not release passes:
 historical v0.6 wheel unavailable; Statement 10k and 100k not executed; Relation 500/5,000
 qualification fixture blocked as described above; native Windows ACL and junction require Windows.
 `uv lock --check`, Ruff and `git diff --check` passed. Current-head GitHub Candidate CI remains a
