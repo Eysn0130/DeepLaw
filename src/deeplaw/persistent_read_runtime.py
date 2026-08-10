@@ -193,13 +193,26 @@ class _LiveObserver:
 
     def _manifest_identity(self) -> tuple[Any, ...]:
         path = self.root / ".deeplaw" / "derived" / "manifest.json"
-        for parent in (path.parent, path.parent.parent):
-            try:
-                parent_info = parent.lstat()
-            except OSError as error:
-                raise RuntimeError("derived manifest parent is unavailable") from error
-            if not stat.S_ISDIR(parent_info.st_mode) or parent.is_symlink():
-                raise RuntimeError("derived manifest parent is not a safe directory")
+        control_root = path.parent.parent
+        try:
+            control_info = control_root.lstat()
+        except OSError as error:
+            raise RuntimeError("derived manifest parent is unavailable") from error
+        if not stat.S_ISDIR(control_info.st_mode) or control_root.is_symlink():
+            raise RuntimeError("derived manifest parent is not a safe directory")
+        try:
+            derived_info = path.parent.lstat()
+        except FileNotFoundError:
+            # Snapshot restore may intentionally omit rebuildable derived state.
+            # Canonical reads remain valid and a later manifest creation changes
+            # this observer identity from ``missing`` to the exact file identity.
+            if not path.exists() and not path.is_symlink():
+                return ("missing",)
+            raise RuntimeError("derived manifest parent is unavailable") from None
+        except OSError as error:
+            raise RuntimeError("derived manifest parent is unavailable") from error
+        if not stat.S_ISDIR(derived_info.st_mode) or path.parent.is_symlink():
+            raise RuntimeError("derived manifest parent is not a safe directory")
         try:
             identity = self._regular_file_identity(path, "derived manifest")
         except RuntimeError as error:

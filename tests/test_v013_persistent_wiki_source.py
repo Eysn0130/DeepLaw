@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -108,6 +109,36 @@ def test_lifespan_snapshot_reuses_verified_source_and_wiki_indexes(
         assert "cursor" in links and "truncation_reason" in links
     finally:
         runtime.close()
+
+
+def test_missing_rebuildable_derived_directory_uses_canonical_snapshot(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    _seed(root, tmp_path)
+    shutil.rmtree(root / ".deeplaw" / "derived")
+
+    runtime = PersistentReadRuntime(root)
+    try:
+        assert runtime.snapshot.wiki is None
+        assert runtime.snapshot.legacy_integrity["valid"] is True
+        assert runtime.snapshot.autonomous_integrity["valid"] is True
+        assert runtime.snapshot.identity.manifest == ("missing",)
+    finally:
+        runtime.close()
+
+
+def test_missing_derived_fallback_does_not_accept_a_symlink_parent(tmp_path: Path) -> None:
+    root = _vault(tmp_path)
+    _seed(root, tmp_path)
+    derived = root / ".deeplaw" / "derived"
+    shutil.rmtree(derived)
+    outside = tmp_path / "outside-derived"
+    outside.mkdir()
+    derived.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(RuntimeError, match="derived manifest parent is not a safe directory"):
+        PersistentReadRuntime(root)
 
 
 def test_wiki_bundle_tamper_invalidates_before_serving_old_snapshot(tmp_path: Path) -> None:
