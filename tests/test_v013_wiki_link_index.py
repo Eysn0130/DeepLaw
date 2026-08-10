@@ -367,6 +367,49 @@ def test_scanner_excludes_fenced_inline_and_escaped_wikilinks() -> None:
     assert index["edges"][0]["target_raw"] == "real.md"
 
 
+def test_table_alias_and_multilingual_wikilink_keep_navigation_identity() -> None:
+    body = (
+        "| 主题 | 说明 |\n"
+        "| --- | --- |\n"
+        "| [[知识/政策.md|政策（繁體）]] | `[[行内假链接.md]]` |\n"
+        "~~~markdown\n[[围栏假链接.md]]\n~~~\n"
+    ).encode()
+    target_body = "# 政策\n受治理的内容。".encode()
+    pages = [
+        _page("source", "source.md", body),
+        _page("target", "知识/政策.md", target_body),
+    ]
+    registry = build_page_registry(
+        pages,
+        v2_file_inventory=[
+            {
+                "path": page["canonical_page_path"],
+                "byte_size": page["byte_size"],
+                "sha256": page["sha256"],
+            }
+            for page in pages
+        ],
+        input_audit_head=ZERO,
+        legacy_audit_head=ZERO,
+        v2_manifest_sha256=ZERO,
+        generated_at="2026-08-08T00:00:00Z",
+    )
+    bodies = {"source.md": body, "知识/政策.md": target_body}
+
+    index = build_link_index(registry, bodies)
+
+    assert len(index["edges"]) == 1
+    edge = index["edges"][0]
+    assert edge["source_page_id"] == "source"
+    assert edge["target_raw"] == "知识/政策.md"
+    assert edge["target_page_ids"] == ["target"]
+    assert edge["status"] == "resolved"
+    assert "[[知识/政策.md|政策（繁體）]]".encode() in bodies["source.md"]
+    backlinks = query_links(index, "target", direction="backlinks")
+    assert backlinks["total_count"] == 1
+    assert backlinks["links"][0]["source_page_id"] == "source"
+
+
 def test_tampered_edges_fail_closed_without_filesystem_scan() -> None:
     body = b"[[target.md]]"
     pages = [_page("source", "source.md", body), _page("target", "target.md", b"plain")]

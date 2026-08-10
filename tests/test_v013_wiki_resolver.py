@@ -202,6 +202,32 @@ def test_alias_ambiguity_never_becomes_resolved_by_limit() -> None:
     assert result["truncation_reason"] == "candidate_limit"
 
 
+def test_multilingual_alias_is_exact_and_never_wrong_merges() -> None:
+    resolver = _resolver(
+        _page(
+            "knowledge_policy_mainland",
+            "knowledge/policy-mainland.md",
+            title="数据保留政策",
+            aliases=["資料保留政策", "保留政策"],
+        ),
+        _page(
+            "knowledge_policy_harbor",
+            "knowledge/policy-harbor.md",
+            title="港口保留政策",
+            aliases=["保留政策"],
+        ),
+    )
+
+    exact = resolver.resolve({"alias": "資料保留政策"})
+    assert exact["status"] == "resolved"
+    assert exact["candidates"][0]["page_id"] == "knowledge_policy_mainland"
+
+    ambiguous = resolver.resolve({"alias": "保留政策"}, limit=1)
+    assert ambiguous["status"] == "ambiguous"
+    assert ambiguous["candidate_count"] == 2
+    assert ambiguous["candidates_truncated"] is True
+
+
 def test_admission_and_deferred_namespaces_fail_closed() -> None:
     resolver = _resolver(
         _page("knowledge_private", "private.md", scope="personal", sensitivity="private"),
