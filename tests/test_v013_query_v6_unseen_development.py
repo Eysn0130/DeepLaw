@@ -96,13 +96,18 @@ _ALPHA_FALSE_POSITIVES = {
 }
 
 
-def _run_cli(*arguments: str) -> dict[str, Any]:
+def _run_cli(cli_home: Path, *arguments: str) -> dict[str, Any]:
     completed = subprocess.run(
         [sys.executable, "-m", "deeplaw", "knowledge", "--format", "json", *arguments],
         cwd=_REPOSITORY,
         capture_output=True,
         check=False,
-        env=_build_subprocess_environment(),
+        env=_build_subprocess_environment(
+            overrides={
+                "HOME": str(cli_home),
+                "PYTHONPATH": str(_REPOSITORY / "src"),
+            }
+        ),
         text=True,
         timeout=300,
     )
@@ -240,8 +245,15 @@ def _packet_plan(packet: dict[str, Any], actions: list[dict[str, Any]]) -> dict[
     }
 
 
-def _approve_source(root: Path, source_path: Path, *, title: str) -> dict[str, Any]:
+def _approve_source(
+    root: Path,
+    source_path: Path,
+    *,
+    title: str,
+    cli_home: Path,
+) -> dict[str, Any]:
     source = _run_cli(
+        cli_home,
         "source",
         "add",
         "--vault",
@@ -259,6 +271,7 @@ def _approve_source(root: Path, source_path: Path, *, title: str) -> dict[str, A
         "--confirm-no-case-data",
     )["source"]
     manifest = _run_cli(
+        cli_home,
         "review",
         "manifest",
         "--vault",
@@ -267,6 +280,7 @@ def _approve_source(root: Path, source_path: Path, *, title: str) -> dict[str, A
         source["source_id"],
     )
     approved = _run_cli(
+        cli_home,
         "review",
         "approve-source",
         "--vault",
@@ -537,8 +551,11 @@ def _build_case(base: Path, *, source_text: str = _SOURCE_V1) -> dict[str, Any]:
     root = base / "vault"
     source_path = base / "unseen-query-v6.md"
     base.mkdir(parents=True, exist_ok=True)
+    cli_home = base / "cli-home"
+    cli_home.mkdir(parents=True, exist_ok=True)
     source_path.write_text(source_text, encoding="utf-8", newline="\n")
     _run_cli(
+        cli_home,
         "init",
         "--vault",
         str(root),
@@ -547,8 +564,14 @@ def _build_case(base: Path, *, source_text: str = _SOURCE_V1) -> dict[str, Any]:
         "--scope",
         "project",
     )
-    source = _approve_source(root, source_path, title="Unseen Query v6 development")
+    source = _approve_source(
+        root,
+        source_path,
+        title="Unseen Query v6 development",
+        cli_home=cli_home,
+    )
     grant = _run_cli(
+        cli_home,
         "sink",
         "enable",
         "--vault",
@@ -565,6 +588,7 @@ def _build_case(base: Path, *, source_text: str = _SOURCE_V1) -> dict[str, Any]:
         "262144",
     )
     result = _compile_semantic(root, source=source, grant_id=grant["grant_id"])
+    result["cli_home"] = cli_home
     result["source_path"] = source_path
     result["source_title"] = "Unseen Query v6 development"
     return result
@@ -735,7 +759,12 @@ def test_v6_unseen_development_stale_and_new_revision_are_measured(
     old_labels = _labels(old_context)
     source_path = case["source_path"]
     source_path.write_text(_SOURCE_V2, encoding="utf-8", newline="\n")
-    new_source = _approve_source(case["root"], source_path, title=case["source_title"])
+    new_source = _approve_source(
+        case["root"],
+        source_path,
+        title=case["source_title"],
+        cli_home=case["cli_home"],
+    )
     _compile_semantic(case["root"], source=new_source, grant_id=case["grant_id"])
     latest, latest_mcp = _context(case, "Policy Alpha current requirement")
     latest_labels = _labels(latest)
