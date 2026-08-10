@@ -244,6 +244,9 @@ retrieved content or model confidence:
 - Prefer the standard library and the smallest stable dependency set. A dependency or upstream
   import requires license, version, supply-chain, offline, network, telemetry, and rebuildability
   review; update `uv.lock`, `THIRD_PARTY_NOTICES.md`, SBOM, and security evidence when applicable.
+- Owner-designated sibling-repository reuse may be verbatim, adapted, behavioral, or reference-only,
+  but must bind a PRD outcome, exact commit/file, rights basis, attribution, tests, and security
+  boundary; it must not introduce another Authority, Ledger, Agent runtime, telemetry, or Secret model.
 - Establish a tight behavioral test at the correct public seam. When practical, observe the
   regression fail before implementing the minimum fix. Test contracts and user-visible behavior,
   not private implementation details.

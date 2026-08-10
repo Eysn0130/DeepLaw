@@ -1,6 +1,6 @@
 # Third-Party Notices And Research References
 
-Reviewed: 2026-07-28
+Reviewed: 2026-08-11
 
 DeepLaw is licensed separately under the license declared by this repository.
 This document records upstream systems reviewed during architecture work and
@@ -12,9 +12,18 @@ required for a particular release artifact.
 
 No source file or substantial code fragment from the research projects listed
 below has been copied, modified, vendored, or redistributed in the current
-DeepLaw source tree. Their algorithms and architecture informed design
+DeepLaw source tree. Pass 8 records Owner-authorized focused reuse for OpenWiki
+and Tolaria, but their current inventory remains `pending/none` and their code
+is not in a release artifact. Their algorithms and architecture informed design
 decisions documented in the
 [upstream reuse audit](https://github.com/Eysn0130/DeepLaw/blob/main/docs/UPSTREAM_REUSE.md).
+
+Owner authorization is frozen to the individually named files/symbols and target
+paths in that audit's unified reuse manifest. Whole-repository vendor trees,
+large upstream runtimes, and product-control-plane code remain out of scope.
+Only when code is actually copied into a release artifact must this file add the
+MIT, AGPL-3.0-or-later, or separate-grant notice required for that exact code;
+the review rows below are not by themselves incorporated license notices.
 
 If that status changes, this file must be updated in the same change with:
 
@@ -25,8 +34,9 @@ If that status changes, this file must be updated in the same change with:
 - tests and an SBOM entry.
 
 Claims of separate permission are not relied upon for repository distribution
-unless the grant and its scope have been verified through the project's
-release process.
+unless the grant and its scope have been verified through the project's release
+process. An unrecorded oral authorization is not a sufficient sole basis for a
+commercial artifact.
 
 ## Safe OOXML XML Parser
 
@@ -237,6 +247,7 @@ and have not contributed copied source code:
 | Project | Commit reviewed | Published license at review | Use in DeepLaw |
 | --- | --- | --- | --- |
 | [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI, public-entity grounding, job-control, and schema-upgrade reference |
+| [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki) | `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) | MIT | Owner-authorized focused reuse under frozen manifest; no source copied or redistributed currently |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Hybrid retrieval, evidence, result-budget, and evaluation reference |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-source, annotation-coordinate, and bounded-MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |
@@ -256,13 +267,16 @@ and have not contributed copied source code:
 | [obsidianmd/jsoncanvas](https://github.com/obsidianmd/jsoncanvas) | `456f843cb293` | MIT | Public JSON Canvas format |
 | [obsidianmd/obsidian-api](https://github.com/obsidianmd/obsidian-api) | `cc1744324150` | MIT | Plugin lifecycle, command, workspace, and event API reference |
 | [obsidianmd/obsidian-sample-plugin](https://github.com/obsidianmd/obsidian-sample-plugin) | `23c165fd362d` | 0BSD | Official build layout and external API bundling reference |
-| [refactoringhq/tolaria](https://github.com/refactoringhq/tolaria) | `b00fefef3fd5` (`v2026-06-23`) | AGPL-3.0-or-later | MCP configuration, active-vault resolution, editor context, and open-note boundary research only; no code copied |
+| [refactoringhq/tolaria](https://github.com/refactoringhq/tolaria) | `ab01faa6773136a58285d04cb81e2587c11bac85` | AGPL-3.0-or-later | Owner-authorized focused reuse under same-team authorization; no source copied or redistributed currently |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Character-span retrieval metric reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External legal retrieval benchmark reference |
 
 Published licenses are identified only to explain the reuse review. Because no
 code from these projects is currently distributed by DeepLaw, this table does
-not assert that their full license texts are incorporated into DeepLaw.
+not assert that their full license texts are incorporated into DeepLaw. If a
+future release includes actual copied code, the exact file inventory, preserved
+headers, applicable MIT/AGPL/separate-grant notices, tests, and SBOM entry must
+be added before distribution.
 
 ## Benchmark And Marketing Notice
 

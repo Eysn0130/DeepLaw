@@ -343,6 +343,28 @@ uv export --frozen --no-dev --extra discovery --no-emit-project \
 The second command is valid only together with the checked-in VEX and its
 execution-surface tests. A new or unmatched advisory fails the gate.
 
+## Approved evaluation harness
+
+An Owner-approved evaluation harness may read a repository-ignored `.env` only
+through a dotenv parser and only to extract one explicitly configured DeepSeek
+key. The launcher must not `cat`, `source`, `printenv`, `env`, `ps e`, or use an
+equivalent whole-environment dump; it must not inherit the full environment, and
+it must never print or record a Secret.
+
+The harness may start only the explicitly configured read-only DeepLaw MCP child;
+that child receives a closed environment whitelist and cannot access the
+repository `.env` or any temporary Secret. No other inherited or auto-discovered
+MCP server, tool, grant, vault, or credential is allowed. A DeepSeek Secret must
+not enter DeepLaw MCP, prompts, argv, stdout, stderr, reports, or artifacts. Use a
+synthetic canary and scan launcher inputs, command output, logs, reports, and
+artifacts for both the canary and the actual Secret before and after each run.
+Any temporary Secret file is mode `0600` and is deleted on normal exit and failure
+cleanup.
+
+If a key has appeared in chat, Git, logs, or an artifact, stop the evaluation and
+rotate it before any further run. This evaluation-only rule does not change
+DeepLaw's MCP, Authority, Ledger, telemetry, or Secret boundaries.
+
 ## Authorization boundary
 
 This policy does not authorize access to systems, accounts, data, or legal
