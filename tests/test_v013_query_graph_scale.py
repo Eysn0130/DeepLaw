@@ -8,7 +8,13 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from benchmarks.v013.query_graph_scale import SEED, _source_text, build_report, verify_report
+from benchmarks.v013.query_graph_scale import (
+    SEED,
+    _create_graph_fixture,
+    _source_text,
+    build_report,
+    verify_report,
+)
 from deeplaw.util import canonical_json, sha256_bytes
 
 
@@ -117,6 +123,21 @@ def test_expensive_lanes_never_substitute_smoke_without_explicit_flag(tmp_path: 
         assert lane["statement"]["tail_recall"] is None
         assert lane["graph"]["status"] == "not_executed"
         assert lane["derived_rebuild"]["status"] == "not_executed"
+
+
+def test_5001_graph_lane_does_not_report_the_closed_provider_bound_defect(
+    tmp_path: Path,
+) -> None:
+    graph = _create_graph_fixture(
+        tmp_path / "unused",
+        scale=5_001,
+        source_revision_id="sourcerev_000000000000000000000000",
+        execute_expensive=True,
+    )
+
+    assert graph["status"] == "not_executed"
+    assert "no safe equivalent audited bulk relation constructor" in graph["reason"]
+    assert "provider bound" not in graph["reason"]
 
 
 def test_graph_checks_hops_and_fail_closed_truncation_evidence(tmp_path: Path) -> None:

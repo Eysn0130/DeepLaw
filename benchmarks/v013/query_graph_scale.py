@@ -586,18 +586,11 @@ def _create_graph_fixture(
     """Create a small governed graph for smoke; expensive relation lanes are explicit."""
 
     if scale != DEFAULT_SCALES[0]:
-        if scale == 5_001:
-            reason = (
-                "qualification_fixture_blocked: public semantic v3 relation_actions reached "
-                "the finalization seam, but the frozen admitted-candidate context exceeded "
-                "the 64 KiB provider bound; no private mutation fallback was used"
-            )
-        else:
-            reason = (
-                "not_executed: no safe equivalent audited bulk relation constructor is "
-                "available; public add_relation is rate-bounded at 120 mutations/min"
-                + ("; execution was explicitly requested" if execute_expensive else "")
-            )
+        reason = (
+            "not_executed: no safe equivalent audited bulk relation constructor is "
+            "available; public add_relation is rate-bounded at 120 mutations/min"
+            + ("; execution was explicitly requested" if execute_expensive else "")
+        )
         return {
             "requested_relation_count": scale,
             "executed_relation_count": 0,
