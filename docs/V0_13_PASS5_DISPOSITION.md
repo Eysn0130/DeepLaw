@@ -94,6 +94,31 @@ Result: development hard-zero regression only; `legal_pack_qualified=not_execute
 
 ## Query v6 development challenge
 
+After the first Pass 5 commits, current-head Semantic workflow run `31341879530` exposed a
+development regression that the focused tests had not represented. Its raw report at commit
+`506f204bd32a0bc50874d3fb2044832561ea0584` (SHA-256
+`05063ec3657bed1c9cf448132e8769fd05f3b839f07bc8fe097f9212e15035bd`) recorded 11/15 cases,
+variant pass rate `0.714286`, Context accuracy `0.933333`, and one stale prohibited selection.
+Sol independently reproduced the same result through the public CLI benchmark.
+
+The correction does not change thresholds or budgets. It keeps the raw multilingual query and its
+bounded expansion as separate reranker views and fuses each candidate's highest score from the
+unchanged single-view reranker. A relevance-floor bypass is limited to full-word canonical
+title/semantic-key/admitted-alias matches. A repeated independent proper-name anchor is retained
+alongside a compound anchor so a multi-target request is not silently reduced to one target.
+
+The same local CLI benchmark then returned 15/15 cases, 14/14 variants, Context accuracy `1.0`,
+stale prohibited selections `0`, and Provider hard-limit violations `0`; the corrected raw report
+SHA-256 is `1cb12753e12bdca21546f0327eb3ecdec2ad32315016a6e204f8a83520be75cc`.
+Fresh current-head GitHub evidence is still required before handoff.
+
+The first complete post-fix suite then exposed a separate fail-closed boundary: an all-uppercase,
+delimiter-separated opaque identifier was being split into independent singleton identity anchors,
+so its generic `fact` segment could bypass the unchanged v5 relevance floor. Opaque tokens are now
+kept as one complete bounded anchor. The current repository-visible development v3 fixture rotated
+only the byte hashes of the two changed indexed source files; historical v1, cases, labels,
+expected IDs, thresholds and governance fields were not changed.
+
 The initially fresh repository challenge was consumed while repairing this candidate and is now
 explicitly `development_tuning_used`; it cannot be reused as qualification/final blind evidence.
 Its public Python + MCP Context result was:
@@ -114,10 +139,10 @@ Expansion receipt bindings from that run:
 
 - profile SHA-256: `7bdbb82c4de2a01a60a22c471080cd89703186db0c8bf45c232e59a7155740de`;
 - lexicon SHA-256: `0d801ca669bdd9dfa613de31cb73a0b576947130623dc7162ee7af6d49fcbf21`;
-- configuration SHA-256: `26c2e7bbb74f09f98a5c70135e868f6265d2d06cffa24b9430f13f7edbbe65e3`.
+- configuration SHA-256: `eea17154d0ad6e844c1e9fd14d1e10c145e434c337846d230b598c9635363991`.
 
-The canonical visible semantic suite also remains 15/15 with 14/14 query variants and no Provider
-hard-bound regression. These are development results only.
+The canonical visible semantic suite is again 15/15 with 14/14 query variants and no Provider
+hard-bound regression in the local raw rerun above. These are development results only.
 
 ## Statement/Relation/Graph scale
 
@@ -194,9 +219,11 @@ uv run --frozen python -m benchmarks.v013.product_outcome_package --dry-run
 uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 5001
 ```
 
-The final complete pytest count, current-head CI identity and final commit/tree are reported in the
-task handoff after the documentation commit; this tracked document intentionally does not claim a
-self-referential commit hash.
+The final pre-commit complete run returned `1375 passed, 6 skipped in 371.26s`. The six skips are
+not release passes: one unavailable historical v0.6 wheel, Statement 10k and 100k, Relation
+500/5000, and two native Windows ACL/junction lanes. Current-head CI identity and final commit/tree
+are reported in the task handoff after the documentation commit; this tracked document
+intentionally does not claim a self-referential commit hash.
 
 ## Gate status
 
