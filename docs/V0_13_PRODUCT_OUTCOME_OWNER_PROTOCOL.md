@@ -11,32 +11,42 @@ qualification。`contracts/v013-product-outcome-package.v1.schema.json` 是闭�
 
 ## Owner workspace、目录和 mount
 
-将 Owner 提供的 workspace 挂载为 verifier 的 `workspace` mount。manifest 只存相对路径，
-root 名称来自 `mounts`；不把本机绝对路径写进 JSON。每个 mount 必须是目录、不可为
-symlink，所有文件 `read_only=true`。下表是精确的目录布局（`<workspace>` 是外部
-Owner workspace，不是仓库根目录）：
+synthetic dry-run 可以使用单一、`owner_only` 的 `package_workspace` mount；
+`owner_bound_external` 不可以。外部 package 必须为每个专用隔离域声明唯一 `mount_id`，
+并在调用 verifier 时为所有 mount 提供完整的 `roots={mount_id: directory}`；不存在
+default-root fallback。manifest 只存相对路径，不把本机绝对路径写进 JSON。每个 resolved
+root 必须是目录、不可为 symlink，所有文件 `read_only=true`。compiler-only 与
+evaluator-only 隔离域不得解析到同一 root。同一 evaluator workspace 可以由
+`outcome_output` 和 `validator` 两个专用 mount id 共同指向，以便既保持 artifact purpose
+闭合，又让 Gate Result 的相对输入引用可重算。下表是精确的目录布局（`<workspace>` 是
+外部 Owner workspace，不是仓库根目录）：
 
 | 目录 | manifest `purpose` | 可见性 | 内容 |
 | --- | --- | --- | --- |
-| `<workspace>/candidate/` | `candidate` | compiler/evaluator | 精确 candidate wheel；commit/tree/package version 绑定 |
-| `<workspace>/protocol/` | `protocol` | compiler/evaluator | `qualification-protocol-v1.json` 原始 bytes |
-| `<workspace>/thresholds/` | `thresholds` | compiler/evaluator | frozen threshold/metric catalog 原始 bytes |
+| `<workspace>/candidate/` | `candidate` | `compiler_evaluator` | 精确 candidate wheel；commit/tree/package version 绑定 |
+| `<workspace>/protocol/` | `protocol` | `owner_evaluator` | `qualification-protocol-v1.json` 原始 bytes；compiler 不可见 |
+| `<workspace>/thresholds/` | `thresholds` | `owner_evaluator` | frozen threshold/metric catalog 原始 bytes；compiler 不可见 |
 | `<workspace>/classification/` | `classification` | `owner_evaluator` | v0.13 classification 原始 bytes + SHA |
-| `<workspace>/corpus/development/` | `development_corpus` | compiler | development source corpus；可调试，不是 holdout |
-| `<workspace>/corpus/qualification_holdout/` | `qualification_holdout` | compiler（source only） | Owner 外部 corpus；Gold 不得挂入 compiler |
-| `<workspace>/corpus/final_blind/` | `final_blind` | compiler（source only） | freeze 后才可挂载；失败后的 replacement 必须新 bytes |
-| `<workspace>/gold/` | `gold` | evaluator only | 对应 corpus Gold；compiler 永不获得 Gold |
+| `<workspace>/corpus/development/` | `development_corpus` | `compiler_only` | development source corpus；可调试，不是 holdout |
+| `<workspace>/corpus/qualification_holdout/` | `qualification_holdout` | `compiler_only` | Owner 外部 source corpus；Gold 不得挂入 compiler |
+| `<workspace>/corpus/final_blind/` | `final_blind` | `compiler_only` | freeze 后才可挂载；失败后的 replacement 必须新 bytes |
+| `<workspace>/gold/` | `gold` | `evaluator_only` | 对应 corpus Gold；compiler 永不获得 Gold |
 | `<workspace>/receipts/compiler/` | `compiler_receipt` | `owner_evaluator` | compiler isolation receipt |
 | `<workspace>/receipts/evaluator/` | `evaluator_receipt` | `owner_evaluator` | evaluator isolation receipt |
-| `<workspace>/outputs/<product>/` | `outcome_output` | evaluator/owner | continuity、wiki、legal 的 raw output |
-| `<workspace>/scorers/` | `scorer` | evaluator only | scorer source 和 executable 原始 bytes |
-| `<workspace>/validators/` | `validator` | evaluator/owner | 专属 Gate Result validator source 和 executable bytes |
+| `<workspace>/outputs/<product>/` | `outcome_output` | `owner_evaluator` | continuity、wiki、legal 的 raw output 与 Gate Result |
+| `<workspace>/scorers/` | `scorer` | `evaluator_only` | scorer source 和 executable 原始 bytes |
+| `<workspace>/validators/` | `validator` | `owner_evaluator` | 专属 Gate Result validator source 和 executable bytes |
 | `<workspace>/attestations/` | `attestation` | `owner_evaluator` | owner 与 evaluator attestation 原始 bytes |
 
-`workspace` 只是本地示例 mount 名称；生产 Owner 可以为上述目录声明独立 mount id，
-但每个 artifact 的 `root` 必须指向已声明 mount，且 verifier 必须收到对应的
-`roots={mount_id: directory}`。缺失 mount、越界相对路径、symlink、size、file SHA 或
-record digest 任一项都会失败关闭。
+每个 artifact 的 `root` 必须指向已声明 mount，artifact kind、mount purpose 和 visibility
+必须相容。Gold、scorer、protocol、threshold、classification、validator、raw output、
+Gate Result 和 evaluator receipt 都不能进入 compiler-visible mount；corpus 也不能借用
+Gold/scorer/output mount。duplicate mount、缺失或额外 root、越界相对路径、symlink、
+size、file SHA 或 record digest 任一项都会失败关闭。
+
+这些检查只证明 manifest 引用的 bytes、root 解析和观察记录一致。JSON attestation 与
+isolation receipt 本身不能证明 OS sandbox。独立 qualification 仍必须由专用执行环境证明
+不同 OS 用户或容器、read-only mount、compiler/evaluator 进程隔离、网络策略和不可见目录。
 
 ## 执行顺序
 

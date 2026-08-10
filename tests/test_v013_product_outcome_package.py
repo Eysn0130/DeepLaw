@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -27,6 +28,104 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
 
 def _refresh(package: dict[str, object]) -> None:
     package["package_sha256"] = package_sha256(package)  # type: ignore[arg-type]
+
+
+def _add_mount(
+    package: dict[str, object],
+    *,
+    mount_id: str,
+    purpose: str,
+    visibility: str,
+) -> None:
+    package["mounts"].append(  # type: ignore[union-attr]
+        {
+            "mount_id": mount_id,
+            "purpose": purpose,
+            "visibility": visibility,
+            "read_only": True,
+        }
+    )
+
+
+def _relocate_artifact(
+    package: dict[str, object],
+    root: Path,
+    *,
+    artifact_id: str,
+    mount_id: str,
+) -> Path:
+    descriptor: dict[str, Any] = next(  # type: ignore[assignment]
+        item for item in package["artifacts"] if item["artifact_id"] == artifact_id  # type: ignore[index]
+    )
+    source = root / str(descriptor["relative_path"])
+    mount_root = root / mount_id
+    mount_root.mkdir(parents=True, exist_ok=True)
+    target = mount_root / source.name
+    target.write_bytes(source.read_bytes())
+    descriptor["root"] = mount_id
+    descriptor["relative_path"] = target.name
+    return mount_root
+
+
+def _owner_bound_fixture(root: Path) -> dict[str, object]:
+    root.mkdir(parents=True, exist_ok=True)
+    package = _fixture(root)
+    package["evidence_kind"] = "owner_bound_external"
+    purpose_by_kind = {
+        "candidate_wheel": ("candidate", "compiler_evaluator"),
+        "protocol_manifest": ("protocol", "owner_evaluator"),
+        "threshold_manifest": ("thresholds", "owner_evaluator"),
+        "classification_manifest": ("classification", "owner_evaluator"),
+        "corpus_manifest": ("development_corpus", "compiler_only"),
+        "gold_manifest": ("gold", "evaluator_only"),
+        "compiler_isolation_receipt": ("compiler_receipt", "owner_evaluator"),
+        "evaluator_isolation_receipt": ("evaluator_receipt", "owner_evaluator"),
+        "owner_attestation": ("attestation", "owner_evaluator"),
+        "evaluator_attestation": ("attestation", "owner_evaluator"),
+        "raw_outcome_output": ("outcome_output", "owner_evaluator"),
+        "provenance_gate_result": ("outcome_output", "owner_evaluator"),
+        "scorer_source": ("scorer", "evaluator_only"),
+        "scorer_executable": ("scorer", "evaluator_only"),
+        "validator_source": ("validator", "owner_evaluator"),
+        "validator_executable": ("validator", "owner_evaluator"),
+    }
+    package["mounts"] = []
+    declared: set[str] = set()
+    for descriptor in package["artifacts"]:  # type: ignore[union-attr]
+        purpose, visibility = purpose_by_kind[descriptor["artifact_kind"]]
+        mount_id = f"external-{purpose}"
+        if mount_id not in declared:
+            _add_mount(
+                package,
+                mount_id=mount_id,
+                purpose=purpose,
+                visibility=visibility,
+            )
+            declared.add(mount_id)
+        relative_path = Path(descriptor["relative_path"])
+        source = root / relative_path
+        mount_root = (
+            root / "external-evaluator-workspace"
+            if purpose in {"outcome_output", "validator"}
+            else root / mount_id
+        )
+        target = mount_root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+        descriptor["root"] = mount_id
+    _refresh(package)
+    return package
+
+
+def _owner_bound_roots(root: Path, package: dict[str, object]) -> dict[str, Path]:
+    return {
+        mount["mount_id"]: (
+            root / "external-evaluator-workspace"
+            if mount["purpose"] in {"outcome_output", "validator"}
+            else root / mount["mount_id"]
+        )
+        for mount in package["mounts"]  # type: ignore[union-attr]
+    }
 
 
 def _rewrite_gate(
@@ -113,6 +212,172 @@ def test_explicit_mount_mapping_cannot_silently_fall_back_to_default_root(
 
     with pytest.raises(ProductOutcomePackageError, match="no explicitly provided root"):
         validate_product_outcome_package(package, root=tmp_path, roots={})
+
+
+def test_mount_ids_are_unique_even_when_mount_descriptors_differ(tmp_path: Path) -> None:
+    package = _fixture(tmp_path)
+    duplicate = dict(package["mounts"][0])  # type: ignore[index]
+    duplicate.update(purpose="candidate", visibility="compiler_only")
+    package["mounts"].append(duplicate)  # type: ignore[union-attr]
+    _refresh(package)
+
+    with pytest.raises(ProductOutcomePackageError, match="mount_id"):
+        validate_product_outcome_package(package, root=tmp_path)
+
+
+def test_owner_bound_external_requires_complete_explicit_mount_roots(tmp_path: Path) -> None:
+    root_only = tmp_path / "root-only"
+    package = _owner_bound_fixture(root_only)
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(package, root=root_only)
+
+    incomplete = tmp_path / "incomplete"
+    package = _owner_bound_fixture(incomplete)
+    incomplete_roots = _owner_bound_roots(incomplete, package)
+    incomplete_roots.pop(next(iter(incomplete_roots)))
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(
+            package,
+            root=incomplete,
+            roots=incomplete_roots,
+        )
+
+    complete = tmp_path / "complete"
+    package = _owner_bound_fixture(complete)
+    assert (
+        validate_product_outcome_package(
+            package,
+            root=complete,
+            roots=_owner_bound_roots(complete, package),
+        )
+        == package
+    )
+
+
+def test_compiler_and_evaluator_mounts_cannot_share_a_resolved_root(tmp_path: Path) -> None:
+    root = tmp_path / "role-root-collision"
+    package = _owner_bound_fixture(root)
+    _add_mount(
+        package,
+        mount_id="compiler-mount",
+        purpose="candidate",
+        visibility="compiler_only",
+    )
+    _add_mount(
+        package,
+        mount_id="evaluator-mount",
+        purpose="gold",
+        visibility="evaluator_only",
+    )
+    shared_root = root / "shared"
+    shared_root.mkdir()
+    _refresh(package)
+    roots = _owner_bound_roots(root, package)
+    roots["compiler-mount"] = shared_root
+    roots["evaluator-mount"] = shared_root / "."
+
+    with pytest.raises(
+        ProductOutcomePackageError,
+        match="compiler_only and evaluator_only mounts must use distinct resolved roots",
+    ):
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots=roots,
+        )
+
+
+@pytest.mark.parametrize(
+    ("purpose", "visibility"),
+    [
+        ("gold", "compiler_only"),
+        ("scorer", "compiler_evaluator"),
+        ("development_corpus", "evaluator_only"),
+        ("outcome_output", "compiler_only"),
+        ("package_workspace", "compiler_evaluator"),
+    ],
+)
+def test_mount_purpose_and_visibility_are_closed(
+    tmp_path: Path,
+    purpose: str,
+    visibility: str,
+) -> None:
+    root = tmp_path / f"{purpose}-{visibility}"
+    root.mkdir()
+    package = _fixture(root)
+    package["mounts"][0]["purpose"] = purpose  # type: ignore[index]
+    package["mounts"][0]["visibility"] = visibility  # type: ignore[index]
+    _refresh(package)
+
+    with pytest.raises(ProductOutcomePackageError, match=r"visibility|owner_only"):
+        validate_product_outcome_package(package, root=root)
+
+
+@pytest.mark.parametrize(
+    ("artifact_id", "purpose"),
+    [
+        ("development-gold", "gold"),
+        ("scorer-source-continuity", "scorer"),
+        ("scorer-executable-continuity", "scorer"),
+        ("qualification-protocol", "protocol"),
+        ("threshold-manifest", "thresholds"),
+        ("classification-manifest", "classification"),
+    ],
+)
+def test_compiler_visible_mount_cannot_bind_protected_artifacts(
+    tmp_path: Path,
+    artifact_id: str,
+    purpose: str,
+) -> None:
+    root = tmp_path / artifact_id
+    root.mkdir()
+    package = _fixture(root)
+    _add_mount(
+        package,
+        mount_id="compiler-visible",
+        purpose=purpose,
+        visibility="compiler_only",
+    )
+    compiler_root = _relocate_artifact(
+        package,
+        root,
+        artifact_id=artifact_id,
+        mount_id="compiler-visible",
+    )
+    _refresh(package)
+
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots={"workspace": root, "compiler-visible": compiler_root},
+        )
+
+
+def test_corpus_cannot_bind_a_gold_mount(tmp_path: Path) -> None:
+    root = tmp_path / "corpus-gold-mount"
+    root.mkdir()
+    package = _fixture(root)
+    _add_mount(
+        package,
+        mount_id="gold-mount",
+        purpose="gold",
+        visibility="evaluator_only",
+    )
+    gold_root = _relocate_artifact(
+        package,
+        root,
+        artifact_id="development-corpus",
+        mount_id="gold-mount",
+    )
+    _refresh(package)
+
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots={"workspace": root, "gold-mount": gold_root},
+        )
 
 
 def test_package_digest_and_nonfinite_values_cannot_be_forged(tmp_path: Path) -> None:

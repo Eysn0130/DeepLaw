@@ -46,6 +46,55 @@ PRODUCT_GATE_IDS = {
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 
+_DEDICATED_PURPOSE_ARTIFACT_KINDS: dict[str, frozenset[str]] = {
+    "candidate": frozenset({"candidate_wheel"}),
+    "protocol": frozenset({"protocol_manifest"}),
+    "thresholds": frozenset({"threshold_manifest"}),
+    "classification": frozenset({"classification_manifest"}),
+    "development_corpus": frozenset({"corpus_manifest"}),
+    "qualification_holdout": frozenset({"corpus_manifest"}),
+    "final_blind": frozenset({"corpus_manifest"}),
+    "gold": frozenset({"gold_manifest"}),
+    "scorer": frozenset({"scorer_source", "scorer_executable"}),
+    "validator": frozenset({"validator_source", "validator_executable"}),
+    "outcome_output": frozenset({"raw_outcome_output", "provenance_gate_result"}),
+    "compiler_receipt": frozenset({"compiler_isolation_receipt"}),
+    "evaluator_receipt": frozenset({"evaluator_isolation_receipt"}),
+    "attestation": frozenset({"owner_attestation", "evaluator_attestation"}),
+}
+_DEDICATED_PURPOSE_VISIBILITIES: dict[str, frozenset[str]] = {
+    "candidate": frozenset({"compiler_only", "compiler_evaluator"}),
+    "protocol": frozenset({"owner_evaluator"}),
+    "thresholds": frozenset({"owner_evaluator"}),
+    "classification": frozenset({"owner_evaluator"}),
+    "development_corpus": frozenset({"compiler_only"}),
+    "qualification_holdout": frozenset({"compiler_only"}),
+    "final_blind": frozenset({"compiler_only"}),
+    "gold": frozenset({"evaluator_only"}),
+    "scorer": frozenset({"evaluator_only"}),
+    "validator": frozenset({"owner_evaluator"}),
+    "outcome_output": frozenset({"owner_evaluator"}),
+    "compiler_receipt": frozenset({"owner_evaluator"}),
+    "evaluator_receipt": frozenset({"owner_evaluator"}),
+    "attestation": frozenset({"owner_evaluator"}),
+}
+_COMPILER_VISIBLE_ARTIFACT_KINDS = frozenset(
+    {
+        "gold_manifest",
+        "scorer_source",
+        "scorer_executable",
+        "protocol_manifest",
+        "threshold_manifest",
+        "classification_manifest",
+        "validator_source",
+        "validator_executable",
+        "raw_outcome_output",
+        "provenance_gate_result",
+        "evaluator_isolation_receipt",
+    }
+)
+_CORPUS_FORBIDDEN_PURPOSES = frozenset({"gold", "scorer", "outcome_output"})
+
 
 class ProductOutcomePackageError(ValueError):
     """Raised when a product outcome package or a bound artifact is invalid."""
@@ -227,17 +276,101 @@ def _mount_roots(
     root: Path | str | None,
     roots: Mapping[str, Path | str] | None,
 ) -> dict[str, Path]:
-    selected = _safe_root(Path(root or DEFAULT_ROOT), field="root")
+    mount_ids = [mount["mount_id"] for mount in package["mounts"]]
+    if len(mount_ids) != len(set(mount_ids)):
+        raise ProductOutcomePackageError("mount_id values must be unique")
+    declared = set(mount_ids)
+    owner_bound = package["evidence_kind"] == "owner_bound_external"
+    if owner_bound and any(
+        mount["purpose"] == "package_workspace" for mount in package["mounts"]
+    ):
+        raise ProductOutcomePackageError(
+            "owner_bound_external packages cannot use a package_workspace mount"
+        )
+    if roots is not None and not isinstance(roots, Mapping):
+        raise ProductOutcomePackageError("roots must be an explicit mount mapping")
+    if owner_bound and not roots:
+        raise ProductOutcomePackageError(
+            "owner_bound_external packages require an explicit roots mapping"
+        )
+    if roots is not None:
+        provided = set(roots)
+        unknown = provided - declared
+        if unknown:
+            raise ProductOutcomePackageError(
+                "roots contains unknown mount_id values: " + ", ".join(sorted(map(str, unknown)))
+            )
+        missing = declared - provided
+        if missing:
+            mount_id = sorted(missing)[0]
+            raise ProductOutcomePackageError(f"mount {mount_id} has no explicitly provided root")
+    selected = _safe_root(Path(root or DEFAULT_ROOT), field="root") if roots is None else None
     provided: dict[str, Path] = {}
     for mount in package["mounts"]:
         mount_id = mount["mount_id"]
-        if roots is not None and mount_id not in roots:
-            raise ProductOutcomePackageError(
-                f"mount {mount_id} has no explicitly provided root"
-            )
         chosen = roots[mount_id] if roots is not None else selected
+        if chosen is None:
+            raise ProductOutcomePackageError(f"mount {mount_id} has no explicitly provided root")
         provided[mount_id] = _safe_root(Path(chosen), field=f"mount {mount_id}")
     return provided
+
+
+def _validate_mount_role_roots(
+    package: Mapping[str, Any], mount_roots: Mapping[str, Path]
+) -> None:
+    for mount in package["mounts"]:
+        purpose = mount["purpose"]
+        if purpose == "package_workspace":
+            if mount["visibility"] != "owner_only":
+                raise ProductOutcomePackageError(
+                    "package_workspace mounts must remain owner_only"
+                )
+            continue
+        allowed = _DEDICATED_PURPOSE_VISIBILITIES.get(purpose)
+        if allowed is None or mount["visibility"] not in allowed:
+            raise ProductOutcomePackageError(
+                f"mount {mount['mount_id']} visibility is incompatible with purpose {purpose}"
+            )
+    compiler_roots = {
+        mount_roots[mount["mount_id"]]
+        for mount in package["mounts"]
+        if mount["visibility"] == "compiler_only"
+    }
+    evaluator_roots = {
+        mount_roots[mount["mount_id"]]
+        for mount in package["mounts"]
+        if mount["visibility"] == "evaluator_only"
+    }
+    if compiler_roots & evaluator_roots:
+        raise ProductOutcomePackageError(
+            "compiler_only and evaluator_only mounts must use distinct resolved roots"
+        )
+
+
+def _validate_artifact_mount_semantics(
+    artifact: Mapping[str, Any], mount: Mapping[str, Any]
+) -> None:
+    purpose = mount["purpose"]
+    artifact_kind = artifact["artifact_kind"]
+    if purpose == "package_workspace":
+        return
+    allowed_kinds = _DEDICATED_PURPOSE_ARTIFACT_KINDS.get(purpose)
+    if allowed_kinds is None or artifact_kind not in allowed_kinds:
+        raise ProductOutcomePackageError(
+            f"artifact {artifact.get('artifact_id')} kind {artifact_kind} is incompatible "
+            f"with dedicated mount purpose {purpose}"
+        )
+    if (
+        mount["visibility"] in {"compiler_only", "compiler_evaluator"}
+        and artifact_kind in _COMPILER_VISIBLE_ARTIFACT_KINDS
+    ):
+        raise ProductOutcomePackageError(
+            f"artifact {artifact.get('artifact_id')} is not allowed on a compiler-visible mount"
+        )
+    if artifact_kind == "corpus_manifest" and purpose in _CORPUS_FORBIDDEN_PURPOSES:
+        raise ProductOutcomePackageError(
+            f"corpus artifact {artifact.get('artifact_id')} cannot use mount purpose {purpose}"
+        )
 
 
 def _artifact_root(artifact: Mapping[str, Any], mount_roots: Mapping[str, Path]) -> Path:
@@ -254,13 +387,21 @@ def _validate_artifacts(
 ) -> tuple[dict[str, Mapping[str, Any]], dict[str, tuple[Path, bytes]]]:
     by_id: dict[str, Mapping[str, Any]] = {}
     opened: dict[str, tuple[Path, bytes]] = {}
+    mounts = {mount["mount_id"]: mount for mount in package["mounts"]}
     for index, artifact in enumerate(package["artifacts"]):
         artifact_id = artifact["artifact_id"]
         if artifact_id in by_id:
             raise ProductOutcomePackageError("artifact_id values must be unique")
+        mount = mounts.get(artifact.get("root"))
+        if mount is None:
+            _artifact_root(artifact, mount_roots)
+            raise ProductOutcomePackageError(
+                f"artifact {artifact_id} references an unknown mount"
+            )
+        _validate_artifact_mount_semantics(artifact, mount)
         path, raw = _bound_file(
             artifact,
-            root=_artifact_root(artifact, mount_roots),
+            root=mount_roots[artifact["root"]],
             field=f"artifacts[{index}]",
         )
         if artifact["record_sha256"] != _record_digest(raw):
@@ -728,8 +869,10 @@ def _validate_outcomes(
         gate_source = gate["validator_source"]
         gate_executable = gate["validator_executable"]
         if (
-            gate_descriptor["root"] != validator_source["root"]
-            or gate_descriptor["root"] != validator_executable["root"]
+            mount_roots[gate_descriptor["root"]]
+            != mount_roots[validator_source["root"]]
+            or mount_roots[gate_descriptor["root"]]
+            != mount_roots[validator_executable["root"]]
             or gate_source["relative_path"] != validator_source["relative_path"]
             or gate_source["file_sha256"] != validator_source["file_sha256"]
             or gate_source["byte_size"] != validator_source["byte_size"]
@@ -906,6 +1049,7 @@ def validate_product_outcome_package(
     ):
         raise ProductOutcomePackageError("product outcome package cannot enable assembly or claims")
     mount_roots = _mount_roots(package, root=root, roots=roots)
+    _validate_mount_role_roots(package, mount_roots)
     artifacts, opened = _validate_artifacts(package, mount_roots)
     _validate_reference_closure(package, artifacts)
     _validate_static_bindings(package, artifacts, opened)

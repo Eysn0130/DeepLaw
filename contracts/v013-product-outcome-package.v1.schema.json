@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deeplaw.dev/contracts/v013-product-outcome-package.v1.schema.json",
   "title": "DeepLaw v0.13 benchmark product outcome package and lifecycle manifest v1",
-  "description": "Closed, content-addressed benchmark manifest. It is never a release assembly input and cannot establish qualification by itself.",
+  "description": "Closed, content-addressed benchmark manifest. Mount IDs are unique and owner-bound external packages require an explicit, complete mount-to-root mapping; dedicated mount purposes and visibility remain governed by the validator. It is never a release assembly input and cannot establish qualification by itself.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -180,6 +180,7 @@
       }
     },
     "mount": {
+      "description": "A read-only mount identity. The validator resolves each declared mount root explicitly; compiler-only and evaluator-only mounts must not share a resolved root, and dedicated purposes constrain which artifact kinds may be bound.",
       "type": "object",
       "additionalProperties": false,
       "required": ["mount_id", "purpose", "visibility", "read_only"],
