@@ -208,12 +208,35 @@ class SemanticInventoryBuilder:
             applicability: dict[str, dict[str, Any]] | None = None
             admitted_candidates: list[dict[str, Any]] = []
             admitted_candidates_sha256: str | None = None
+            admitted_candidates_truncated = False
             if run["compiler_profile_version"] == "3":
                 reference_time = run_reference_time(store, run)
-                admitted_candidates, _ = admitted_knowledge_candidates(
-                    store,
-                    grant=grant,
-                    reference_time=reference_time,
+                identity_keys = sorted(
+                    {
+                        (item["kind"], normalize_identity_text(candidate))
+                        for item in observations
+                        if (candidate := item["semantic_key_candidate"]) is not None
+                        and item["kind"]
+                        not in {
+                            "relation",
+                            "identity_candidate",
+                            "contradiction_candidate",
+                            "unresolved_item",
+                        }
+                    }
+                )
+                identity_keys_truncated = len(identity_keys) > 256
+                admitted_candidates, admitted_candidates_truncated = (
+                    admitted_knowledge_candidates(
+                        store,
+                        grant=grant,
+                        reference_time=reference_time,
+                        limit=256,
+                        identity_keys=set(identity_keys[:256]),
+                    )
+                )
+                admitted_candidates_truncated = bool(
+                    admitted_candidates_truncated or identity_keys_truncated
                 )
                 admitted_candidates_sha256 = sha256_bytes(
                     canonical_json(admitted_candidates).encode("utf-8")
@@ -265,7 +288,7 @@ class SemanticInventoryBuilder:
                         }
                     ),
                 },
-                "truncated": False,
+                "truncated": admitted_candidates_truncated,
                 "inventory_sha256": "0" * 64,
             }
             if runtime_facts is not None and applicability is not None:
@@ -276,6 +299,9 @@ class SemanticInventoryBuilder:
                 inventory["coverage"]["existing_admitted_candidates"] = admitted_candidates
                 inventory["coverage"]["existing_admitted_candidates_sha256"] = (
                     admitted_candidates_sha256
+                )
+                inventory["coverage"]["existing_admitted_candidates_truncated"] = (
+                    admitted_candidates_truncated
                 )
             inventory["inventory_sha256"] = _inventory_digest(inventory)
             _validate_contract("run-semantic-inventory.v1.schema.json", inventory)
@@ -542,7 +568,9 @@ class SemanticInventoryBuilder:
         if frozen_applicability_digest != digest:
             raise RuntimeError("v3 semantic inventory applicability digest is invalid")
         provider_coverage = {
-            key: value for key, value in coverage.items() if key != "applicability"
+            key: value
+            for key, value in coverage.items()
+            if key not in {"applicability", "existing_admitted_candidates"}
         }
         inventory_summary = {
             key: inventory[key]

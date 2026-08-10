@@ -274,9 +274,68 @@ def test_v3_finalization_packet_uses_closed_coverage_projection(tmp_path: Path) 
     )
     packet = service.finalization_packet(run_id)
     assert "applicability" not in packet["inventory"]["coverage"]
+    assert "existing_admitted_candidates" not in packet["inventory"]["coverage"]
+    assert packet["inventory"]["coverage"]["existing_admitted_candidates_sha256"]
     assert packet["applicability_digest"] == inventory["coverage"]["applicability_digest"]
     assert len(canonical_json(packet).encode("utf-8")) <= 65536
     _validate_contract("semantic-finalization-packet.v2.schema.json", packet)
+
+
+def test_v3_large_candidate_freeze_stays_out_of_provider_packet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deeplaw.compilation import semantic_inventory
+
+    candidates = [
+        {
+            "knowledge_id": f"knowledge_{index:024x}",
+            "kind": "claim",
+            "semantic_key": f"claim:unrelated:{index:05d}",
+            "current_revision_id": f"knowledgerev_{index:024x}",
+        }
+        for index in range(10_000)
+    ]
+    monkeypatch.setattr(
+        semantic_inventory,
+        "admitted_knowledge_candidates",
+        lambda *args, **kwargs: (candidates, True),
+    )
+    service, grant_id, run_id, _ = _v3_fixture(tmp_path)
+    while packet := service.next_observation_packet(run_id):
+        fragment_ids = [item["fragment_id"] for item in packet["fragments"]]
+        service.stage_observations(
+            grant_id=grant_id,
+            compilation_run_id=run_id,
+            plan={
+                "schema_version": "deeplaw.source-compilation-observation-plan/v2",
+                "compilation_run_id": run_id,
+                "source_revision_id": packet["source_revision_id"],
+                "packet_id": packet["packet_id"],
+                "expected_audit_head": packet["input_audit_head"],
+                "observations": [],
+                "coverage": {
+                    "packet_fragment_count": len(fragment_ids),
+                    "covered_fragment_ids": fragment_ids,
+                    "omitted_fragments": [],
+                    "ratio": 1.0,
+                },
+                "warnings": [],
+            },
+            confirm_no_case_data=True,
+        )
+    inventory = service.inventory(
+        grant_id=grant_id,
+        compilation_run_id=run_id,
+        confirm_no_case_data=True,
+    )
+    packet = service.finalization_packet(run_id)
+    assert len(inventory["coverage"]["existing_admitted_candidates"]) == 10_000
+    assert inventory["coverage"]["existing_admitted_candidates_truncated"] is True
+    assert "existing_admitted_candidates" not in packet["inventory"]["coverage"]
+    assert packet["existing_canonical_knowledge"] == []
+    assert packet["truncated"] is True
+    assert len(canonical_json(packet).encode("utf-8")) <= 65536
 
 
 def test_v3_inventory_admits_current_relations_without_knowledge_expiry(

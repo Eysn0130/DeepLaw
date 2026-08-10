@@ -17,6 +17,7 @@ from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     strict_json_loads,
 )
+from ..knowledge_intelligence import normalize_identity_text
 from ..util import canonical_json, sha256_bytes
 from .profiles import (
     SEMANTIC_APPLICABILITY_POLICY,
@@ -209,6 +210,7 @@ def admitted_knowledge_candidates(
     grant: Any,
     reference_time: str,
     limit: int = MAX_RUNTIME_NODES,
+    identity_keys: set[tuple[str, str]] | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Return only current Knowledge Revisions admitted to a run grant.
 
@@ -223,25 +225,82 @@ def admitted_knowledge_candidates(
     except (KeyError, TypeError, ValueError):
         return [], False
     sensitivity_placeholders = ",".join("?" for _ in admitted_sensitivities)
-    rows = store.connection.execute(
-        f"""
-        SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
-               knowledge_objects_v3.knowledge_id,
-               knowledge_objects_v3.kind AS object_kind,
-               knowledge_objects_v3.semantic_key AS object_semantic_key,
-               knowledge_objects_v3.current_revision_id,
-               knowledge_revisions_v3.*
-        FROM knowledge_objects_v3
-        JOIN knowledge_revisions_v3
-          ON knowledge_revisions_v3.revision_id = knowledge_objects_v3.current_revision_id
-        WHERE knowledge_revisions_v3.lifecycle = 'active'
-          AND knowledge_revisions_v3.scope = ?
-          AND knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})
-        ORDER BY knowledge_objects_v3.knowledge_id
-        LIMIT ?
-        """,
-        (grant["allowed_scope"], *admitted_sensitivities, limit + 1),
-    ).fetchall()
+    query_truncated = False
+    if identity_keys is None:
+        rows = store.connection.execute(
+            f"""
+            SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                   knowledge_objects_v3.knowledge_id,
+                   knowledge_objects_v3.kind AS object_kind,
+                   knowledge_objects_v3.semantic_key AS object_semantic_key,
+                   knowledge_objects_v3.current_revision_id,
+                   knowledge_revisions_v3.*
+            FROM knowledge_objects_v3
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id = knowledge_objects_v3.current_revision_id
+            WHERE knowledge_revisions_v3.lifecycle = 'active'
+              AND knowledge_revisions_v3.scope = ?
+              AND knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})
+            ORDER BY knowledge_objects_v3.knowledge_id
+            LIMIT ?
+            """,
+            (grant["allowed_scope"], *admitted_sensitivities, limit + 1),
+        ).fetchall()
+        query_truncated = len(rows) > limit
+    else:
+        normalized_by_kind: dict[str, set[str]] = {}
+        for kind, key in identity_keys:
+            normalized = normalize_identity_text(key)
+            if not isinstance(kind, str) or not kind or not normalized:
+                continue
+            normalized_by_kind.setdefault(kind, set()).add(normalized)
+        if sum(len(keys) for keys in normalized_by_kind.values()) > MAX_RUNTIME_REFS:
+            raise ValueError("admitted candidate identity-key bound exceeded")
+        selected_rows: list[Any] = []
+        for kind in sorted(normalized_by_kind):
+            remaining = limit - len(selected_rows)
+            if remaining <= 0:
+                query_truncated = True
+                break
+            keys = sorted(normalized_by_kind[kind])
+            key_placeholders = ",".join("?" for _ in keys)
+            batch = store.connection.execute(
+                f"""
+                SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                       knowledge_objects_v3.knowledge_id,
+                       knowledge_objects_v3.kind AS object_kind,
+                       knowledge_objects_v3.semantic_key AS object_semantic_key,
+                       knowledge_objects_v3.current_revision_id,
+                       knowledge_revisions_v3.*
+                FROM knowledge_aliases_v4
+                JOIN knowledge_objects_v3 USING(knowledge_id)
+                JOIN knowledge_revisions_v3
+                  ON knowledge_revisions_v3.revision_id =
+                     knowledge_objects_v3.current_revision_id
+                WHERE knowledge_aliases_v4.alias_key IN ({key_placeholders})
+                  AND knowledge_aliases_v4.kind = ?
+                  AND knowledge_aliases_v4.scope = ?
+                  AND knowledge_aliases_v4.retired_at IS NULL
+                  AND knowledge_aliases_v4.revision_id =
+                      knowledge_revisions_v3.revision_id
+                  AND knowledge_revisions_v3.lifecycle = 'active'
+                  AND knowledge_revisions_v3.sensitivity IN ({sensitivity_placeholders})
+                ORDER BY knowledge_aliases_v4.alias_key,
+                         knowledge_objects_v3.knowledge_id
+                LIMIT ?
+                """,
+                (
+                    *keys,
+                    kind,
+                    grant["allowed_scope"],
+                    *admitted_sensitivities,
+                    remaining + 1,
+                ),
+            ).fetchall()
+            if len(batch) > remaining:
+                query_truncated = True
+            selected_rows.extend(batch[:remaining])
+        rows = selected_rows
     candidates: list[dict[str, Any]] = []
     for row in rows[:limit]:
         if not _grant_allows(
@@ -265,7 +324,7 @@ def admitted_knowledge_candidates(
                 "current_revision_id": row["current_revision_id"],
             }
         )
-    return candidates, len(rows) > limit
+    return candidates, query_truncated
 
 
 def _observation_facts(observations: list[dict[str, Any]]) -> dict[str, Any]:
