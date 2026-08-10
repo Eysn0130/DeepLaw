@@ -26,7 +26,12 @@ from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.subprocess_environment import _build_subprocess_environment
 
 
-def _relation_fixture(tmp_path: Path, *, rejected_candidates: bool = False) -> tuple[Path, str]:
+def _relation_fixture(
+    tmp_path: Path,
+    *,
+    rejected_candidates: bool = False,
+    relation_count: int = 3,
+) -> tuple[Path, str]:
     root = tmp_path / "vault"
     initialize_knowledge_vault(root, name="v013 graph completeness", scope="project")
     initialize_autonomous_core(root)
@@ -56,7 +61,7 @@ def _relation_fixture(tmp_path: Path, *, rejected_candidates: bool = False) -> t
 
         seed = concept("seed")
         evidence_anchor = concept("evidence-anchor")
-        neighbors = [concept(f"neighbor-{index}") for index in range(3)]
+        neighbors = [concept(f"neighbor-{index}") for index in range(relation_count)]
         for index, neighbor in enumerate(neighbors):
             evidence = (
                 evidence_anchor
@@ -207,14 +212,33 @@ def test_candidate_scan_truncation_has_independent_bounded_gap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("deeplaw.knowledge_autonomy._MAX_GRAPH_RELATION_SCAN", 2)
-    root, seed_id = _relation_fixture(tmp_path)
+    monkeypatch.setattr("deeplaw.knowledge_autonomy._MAX_GRAPH_RELATION_SCAN", 3)
+    root, seed_id = _relation_fixture(tmp_path, relation_count=4)
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         result = store.graph(knowledge_id=seed_id, limit=10)
 
-    assert result["budget"]["candidate_relations_scanned"] == 2
+    assert result["budget"]["candidate_relations_scanned"] == 3
     assert result["budget"]["candidate_scan_truncated"] is True
     assert result["budget"]["selection_truncated"] is False
-    assert len(result["relations"]) == 2
+    assert len(result["relations"]) == 3
     assert len(result["gaps"]) == 1
     assert "candidate scan" in result["gaps"][0]
+    assert "3-row bound" in result["gaps"][0]
+
+
+def test_selection_early_exit_does_not_fake_candidate_scan_truncation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("deeplaw.knowledge_autonomy._MAX_GRAPH_RELATION_SCAN", 3)
+    root, seed_id = _relation_fixture(tmp_path, relation_count=4)
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        result = store.graph(knowledge_id=seed_id, limit=1)
+
+    assert result["budget"]["max_candidate_relations_scanned"] == 3
+    assert result["budget"]["candidate_relations_scanned"] == 2
+    assert result["budget"]["candidate_scan_truncated"] is False
+    assert result["budget"]["selection_truncated"] is True
+    assert len(result["gaps"]) == 1
+    assert "selection" in result["gaps"][0]
+    assert "candidate scan" not in result["gaps"][0]

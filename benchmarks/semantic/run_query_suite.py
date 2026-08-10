@@ -22,6 +22,7 @@ from benchmarks.semantic.review_gold import query_set_sha256, validate_candidate
 from deeplaw.compilation.coordinator import _decoded_artifact
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.knowledge_intelligence import LOCAL_DENSE_MODEL, LOCAL_RERANKER_MODEL
+from deeplaw.knowledge_mcp_server import handle_knowledge_support
 from deeplaw.util import canonical_json, sha256_bytes, stable_id, strict_json_loads
 
 BUDGET = {
@@ -722,6 +723,166 @@ def _v3_context_retrieval_view(capsule: dict[str, Any]) -> dict[str, Any]:
         "compiled": compiled,
         "evidence": projected_evidence,
         "gaps": [{"code": code} for code in sorted(gap_codes)],
+    }
+
+
+def _context_payload_measurement(
+    *,
+    local_capsule: dict[str, Any],
+    provider_capsule: dict[str, Any],
+    mcp_tool_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Measure the three real Context delivery boundaries without renaming bytes as tokens."""
+
+    provider_content = provider_capsule.get("capsule")
+    if not isinstance(provider_content, dict):
+        raise ValueError("provider Context Capsule has no bounded content object")
+    local_capsule_bytes = len(canonical_json(local_capsule).encode("utf-8"))
+    provider_capsule_bytes = len(canonical_json(provider_capsule).encode("utf-8"))
+    mcp_tool_result_bytes = len(canonical_json(mcp_tool_result).encode("utf-8"))
+    provider_content_bytes = len(canonical_json(provider_content).encode("utf-8"))
+    delivery = provider_capsule.get("delivery")
+    declared_content_bytes = (
+        delivery.get("provider_content_bytes") if isinstance(delivery, dict) else None
+    )
+    provider_hard_limit_valid = bool(
+        provider_capsule_bytes <= 65_536
+        and mcp_tool_result_bytes <= 65_536
+        and declared_content_bytes == provider_content_bytes
+    )
+    return {
+        "local_capsule_bytes": local_capsule_bytes,
+        "provider_capsule_bytes": provider_capsule_bytes,
+        "mcp_tool_result_bytes": mcp_tool_result_bytes,
+        "provider_content_bytes": provider_content_bytes,
+        "transport_metadata_bytes": max(0, mcp_tool_result_bytes - provider_content_bytes),
+        # MCP is the Agent-facing seam, so its complete tool-result envelope is
+        # the only honest byte basis for this development token estimate.
+        "provider_token_estimate": (mcp_tool_result_bytes + 3) // 4,
+        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "provider_hard_limit_valid": provider_hard_limit_valid,
+    }
+
+
+def _context_quality_measurement(
+    *,
+    case: dict[str, Any],
+    retrieval_view: dict[str, Any],
+    source_ids: dict[str, str],
+    matched_label_ids: list[str],
+) -> dict[str, Any]:
+    required = [item for item in case["expected_objects"] if item["required"]]
+    compiled = [
+        item for item in retrieval_view.get("compiled", []) if isinstance(item, dict)
+    ]
+    relevant_compiled = [
+        item
+        for item in compiled
+        if any(
+            _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+            for expected in required
+        )
+    ]
+
+    def _text(item: dict[str, Any]) -> str:
+        return str(
+            item.get("content")
+            or item.get("statement_text")
+            or item.get("quote")
+            or item.get("excerpt")
+            or ""
+        )
+
+    evidence = [
+        item
+        for item in retrieval_view.get("evidence", [])
+        if isinstance(item, dict)
+    ]
+    relevant_source_references = {
+        (
+            str(reference.get("source_revision_id") or ""),
+            str(reference.get("fragment_revision_id") or ""),
+            str(reference.get("locator") or ""),
+        )
+        for item in relevant_compiled
+        for reference in item.get("source_refs", [])
+        if isinstance(reference, dict)
+        and isinstance(reference.get("source_revision_id"), str)
+        and reference["source_revision_id"]
+    }
+    relevant_evidence = [
+        item
+        for item in evidence
+        if isinstance(item.get("source_revision_id"), str)
+        and item["source_revision_id"]
+        and (
+            str(item.get("source_revision_id") or ""),
+            str(item.get("fragment_revision_id") or ""),
+            str(item.get("locator") or ""),
+        )
+        in relevant_source_references
+    ]
+    relevant_items = [*relevant_compiled, *relevant_evidence]
+    context_items = [*compiled, *evidence]
+    context_texts = [_text(item) for item in context_items if _text(item)]
+    normalized_texts = [_normalize(text) for text in context_texts]
+    duplicate_count = len(normalized_texts) - len(set(normalized_texts))
+    evidence_keys: list[tuple[str, str, str]] = []
+    for item in context_items:
+        references = item.get("source_refs")
+        if not isinstance(references, list):
+            references = [item] if item.get("source_revision_id") else []
+        for reference in references:
+            if not isinstance(reference, dict):
+                continue
+            source_revision_id = reference.get("source_revision_id")
+            if not isinstance(source_revision_id, str):
+                continue
+            evidence_keys.append(
+                (
+                    source_revision_id,
+                    str(reference.get("locator") or ""),
+                    str(reference.get("quote_sha256") or ""),
+                )
+            )
+    duplicate_evidence_count = len(evidence_keys) - len(set(evidence_keys))
+    relevant_chars = sum(len(_text(item)) for item in relevant_items)
+    context_chars = sum(len(text) for text in context_texts)
+    expected_gap_codes = set(case.get("expected_gap_codes", []))
+    actual_gap_codes = {
+        str(item.get("code"))
+        for item in retrieval_view.get("gaps", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    duty_total = len(required) + len(expected_gap_codes)
+    duty_matched = len(set(matched_label_ids)) + len(
+        expected_gap_codes.intersection(actual_gap_codes)
+    )
+    useful_context_recall = (
+        round(len(set(matched_label_ids)) / len(required), 6) if required else 1.0
+    )
+    return {
+        "useful_context_recall": useful_context_recall,
+        "false_suppression_rate": round(1.0 - useful_context_recall, 6),
+        "duty_coverage": round(duty_matched / duty_total, 6) if duty_total else 1.0,
+        "relevant_chars": relevant_chars,
+        "context_chars": context_chars,
+        "relevant_chars_ratio": round(relevant_chars / context_chars, 6)
+        if context_chars
+        else (1.0 if not required else 0.0),
+        "redundancy_rate": round(duplicate_count / len(normalized_texts), 6)
+        if normalized_texts
+        else 0.0,
+        "duplicate_evidence_rate": round(
+            duplicate_evidence_count / len(evidence_keys), 6
+        )
+        if evidence_keys
+        else 0.0,
     }
 
 
@@ -1504,6 +1665,7 @@ def _context_verification(
     source_ids: dict[str, str],
 ) -> dict[str, Any]:
     query = str(case["query"])
+    context_started = time.monotonic()
     capsule, _, _stdout, _ = _run_json(
         prefix,
         "autonomy",
@@ -1538,6 +1700,34 @@ def _context_verification(
         "--confirm-no-case-data",
     )
     assert capsule is not None
+    context_latency_ms = round((time.monotonic() - context_started) * 1000)
+    provider_capsule = capsule.get("provider_capsule")
+    if not isinstance(provider_capsule, dict):
+        raise ValueError("knowledge Capsule v3 does not expose its provider projection")
+    mcp_started = time.monotonic()
+    mcp_tool_result = handle_knowledge_support(
+        operation="context",
+        task=query,
+        purpose=str(case["purpose"]),
+        query_plan_version="6",
+        scope="personal",
+        max_sensitivity="public",
+        limit=BUDGET["max_items"],
+        max_chars=BUDGET["max_chars"],
+        max_tokens=BUDGET["max_tokens"],
+        max_sources=BUDGET["max_sources"],
+        graph_hops=1,
+        retrieval_mode="hybrid",
+        as_of=str(case["as_of"]) if isinstance(case.get("as_of"), str) else None,
+        confirm_no_case_data=True,
+        vault_path=vault,
+    )
+    mcp_latency_ms = round((time.monotonic() - mcp_started) * 1000)
+    payload_measurement = _context_payload_measurement(
+        local_capsule=capsule,
+        provider_capsule=provider_capsule,
+        mcp_tool_result=mcp_tool_result,
+    )
     retrieval_view = _v3_context_retrieval_view(capsule)
     compiled = retrieval_view["compiled"]
     evidence = retrieval_view["evidence"]
@@ -1546,6 +1736,12 @@ def _context_verification(
         retrieval_view
     )
     ranking = _rank_metrics(case=case, value=retrieval_view, source_ids=source_ids)
+    quality_measurement = _context_quality_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids=source_ids,
+        matched_label_ids=ranking["matched_label_ids"],
+    )
     required_label_ids = {
         item["label_id"] for item in case["expected_objects"] if item["required"]
     }
@@ -1580,7 +1776,6 @@ def _context_verification(
             and not fallback_used
             and source_ids["retention-a"] not in selected_source_revision_ids
         )
-    provider_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
     with tempfile.TemporaryDirectory(prefix="deeplaw-semantic-capsule-") as temporary:
         capsule_path = Path(temporary) / "capsule.json"
         capsule_path.write_text(canonical_json(capsule) + "\n", encoding="utf-8")
@@ -1596,8 +1791,10 @@ def _context_verification(
     return {
         "capsule_id": capsule["capsule_id"],
         "capsule_sha256": sha256_bytes(canonical_json(capsule).encode("utf-8")),
-        "provider_payload_bytes": provider_payload_bytes,
-        "provider_hard_limit_valid": provider_payload_bytes <= 65_536,
+        **payload_measurement,
+        **quality_measurement,
+        "context_latency_ms": context_latency_ms,
+        "mcp_latency_ms": mcp_latency_ms,
         "verification_valid": bool(verification and verification.get("valid")),
         "semantic_valid": semantic_valid,
         "knowledge_ids": sorted(
@@ -1970,7 +2167,35 @@ def _case_result(
             for item in [*warm.get("compiled", []), *warm.get("evidence", [])]
             if isinstance(item, dict)
         ),
-        "context_provider_payload_bytes": context["provider_payload_bytes"],
+        # v1 keeps this legacy field for compatibility.  Its value is now the
+        # complete Agent-facing MCP tool result, never the owner-local v3 Capsule.
+        "context_provider_payload_bytes": context.get(
+            "mcp_tool_result_bytes", context.get("provider_payload_bytes", 0)
+        ),
+        "context_local_capsule_bytes": context.get("local_capsule_bytes", 0),
+        "context_provider_capsule_bytes": context.get(
+            "provider_capsule_bytes", context.get("provider_payload_bytes", 0)
+        ),
+        "context_mcp_tool_result_bytes": context.get(
+            "mcp_tool_result_bytes", context.get("provider_payload_bytes", 0)
+        ),
+        "context_provider_content_bytes": context.get("provider_content_bytes", 0),
+        "context_transport_metadata_bytes": context.get("transport_metadata_bytes", 0),
+        "context_provider_token_estimate": context.get("provider_token_estimate", 0),
+        "context_token_measurement_method": context.get(
+            "token_measurement_method", "not_measured"
+        ),
+        "context_useful_context_recall": context.get("useful_context_recall", 0.0),
+        "context_false_suppression_rate": context.get("false_suppression_rate", 1.0),
+        "context_duty_coverage": context.get("duty_coverage", 0.0),
+        "context_relevant_chars": context.get("relevant_chars", 0),
+        "context_chars": context.get("context_chars", 0),
+        "context_relevant_chars_ratio": context.get("relevant_chars_ratio", 0.0),
+        "context_redundancy_rate": context.get("redundancy_rate", 0.0),
+        "context_duplicate_evidence_rate": context.get("duplicate_evidence_rate", 0.0),
+        "context_latency_ms": context.get("context_latency_ms", 0),
+        "context_mcp_latency_ms": context.get("mcp_latency_ms", 0),
+        "context_provider_hard_limit_valid": context["provider_hard_limit_valid"],
         "context_capsule_id": context["capsule_id"],
         "context_capsule_sha256": context["capsule_sha256"],
         "context_verification_valid": context["verification_valid"],
@@ -2005,6 +2230,237 @@ def _case_result(
     }
 
 
+_CONTEXT_MEASUREMENT_FIELDS = frozenset(
+    {
+        "context_local_capsule_bytes",
+        "context_provider_capsule_bytes",
+        "context_mcp_tool_result_bytes",
+        "context_provider_content_bytes",
+        "context_transport_metadata_bytes",
+        "context_provider_token_estimate",
+        "context_token_measurement_method",
+        "context_useful_context_recall",
+        "context_false_suppression_rate",
+        "context_duty_coverage",
+        "context_relevant_chars",
+        "context_chars",
+        "context_relevant_chars_ratio",
+        "context_redundancy_rate",
+        "context_duplicate_evidence_rate",
+        "context_latency_ms",
+        "context_mcp_latency_ms",
+        "context_provider_hard_limit_valid",
+    }
+)
+
+
+def _legacy_v1_case(value: dict[str, Any]) -> dict[str, Any]:
+    """Keep the historical v1 diagnostic contract byte-compatible and closed."""
+
+    result = {
+        key: item for key, item in value.items() if key not in _CONTEXT_MEASUREMENT_FIELDS
+    }
+    result["query_variant_checks"] = [
+        {
+            key: item
+            for key, item in variant.items()
+            if key not in _CONTEXT_MEASUREMENT_FIELDS
+        }
+        for variant in value["query_variant_checks"]
+    ]
+    return result
+
+
+def _context_outcome_report(
+    *,
+    gold: dict[str, Any],
+    gold_sha256: str,
+    compiler_report_id: str,
+    query_set_digest: str,
+    query_report: dict[str, Any],
+    cases: list[dict[str, Any]],
+    recorded_at: str,
+) -> dict[str, Any]:
+    context_cases: list[dict[str, Any]] = []
+    variant_deltas: list[float] = []
+    for case in cases:
+        variants = case["query_variant_checks"]
+        variant_context_passes = [
+            bool(
+                item["context_semantic_valid"]
+                and item["context_verification_valid"]
+                and item["context_provider_hard_limit_valid"]
+            )
+            for item in variants
+        ]
+        variant_recalls = [
+            float(item["context_useful_context_recall"]) for item in variants
+        ]
+        variant_delta = max(
+            (
+                abs(float(case["context_useful_context_recall"]) - value)
+                for value in variant_recalls
+            ),
+            default=0.0,
+        )
+        variant_deltas.append(variant_delta)
+        context_case = {
+            "case_id": case["case_id"],
+            "status": "passed"
+            if case["context_semantic_valid"]
+            and case["context_verification_valid"]
+            and case["context_provider_hard_limit_valid"]
+            and all(variant_context_passes)
+            else "failed",
+            "query_sha256": case["query_sha256"],
+            "query_plan_schema_version": "deeplaw.knowledge-query-plan/v6",
+            "matched_label_ids": case["context_matched_label_ids"],
+            "gap_codes": case["context_gap_codes"],
+            "local_capsule_bytes": case["context_local_capsule_bytes"],
+            "provider_capsule_bytes": case["context_provider_capsule_bytes"],
+            "mcp_tool_result_bytes": case["context_mcp_tool_result_bytes"],
+            "provider_content_bytes": case["context_provider_content_bytes"],
+            "transport_metadata_bytes": case["context_transport_metadata_bytes"],
+            "provider_token_estimate": case["context_provider_token_estimate"],
+            "token_measurement_method": case["context_token_measurement_method"],
+            "useful_context_recall": case["context_useful_context_recall"],
+            "false_suppression_rate": case["context_false_suppression_rate"],
+            "duty_coverage": case["context_duty_coverage"],
+            "relevant_chars": case["context_relevant_chars"],
+            "context_chars": case["context_chars"],
+            "relevant_chars_ratio": case["context_relevant_chars_ratio"],
+            "redundancy_rate": case["context_redundancy_rate"],
+            "duplicate_evidence_rate": case["context_duplicate_evidence_rate"],
+            "context_latency_ms": case["context_latency_ms"],
+            "mcp_latency_ms": case["context_mcp_latency_ms"],
+            "provider_hard_limit_valid": case[
+                "context_provider_hard_limit_valid"
+            ],
+            "variant_count": len(variants),
+            "variant_pass_count": sum(variant_context_passes),
+            "query_variant_recall_delta": round(variant_delta, 6),
+        }
+        context_cases.append(context_case)
+
+    relevant_chars = sum(int(item["context_relevant_chars"]) for item in cases)
+    context_chars = sum(int(item["context_chars"]) for item in cases)
+    provider_capsule_bytes = sum(
+        int(item["context_provider_capsule_bytes"]) for item in cases
+    )
+    mcp_tool_result_bytes = sum(
+        int(item["context_mcp_tool_result_bytes"]) for item in cases
+    )
+    provider_content_bytes = sum(
+        int(item["context_provider_content_bytes"]) for item in cases
+    )
+    transport_metadata_bytes = sum(
+        int(item["context_transport_metadata_bytes"]) for item in cases
+    )
+    context_latencies = [int(item["context_latency_ms"]) for item in cases]
+    mcp_latencies = [int(item["context_mcp_latency_ms"]) for item in cases]
+    metrics = {
+        "query_count": len(context_cases),
+        "query_variant_count": sum(item["variant_count"] for item in context_cases),
+        "useful_context_recall": round(
+            sum(float(item["context_useful_context_recall"]) for item in cases)
+            / len(cases),
+            6,
+        ),
+        "false_suppression_rate": round(
+            sum(float(item["context_false_suppression_rate"]) for item in cases)
+            / len(cases),
+            6,
+        ),
+        "duty_coverage": round(
+            sum(float(item["context_duty_coverage"]) for item in cases) / len(cases),
+            6,
+        ),
+        "relevant_chars": relevant_chars,
+        "context_chars": context_chars,
+        "relevant_chars_ratio": round(relevant_chars / context_chars, 6)
+        if context_chars
+        else 1.0,
+        "redundancy_rate": round(
+            sum(float(item["context_redundancy_rate"]) for item in cases) / len(cases),
+            6,
+        ),
+        "duplicate_evidence_rate": round(
+            sum(float(item["context_duplicate_evidence_rate"]) for item in cases)
+            / len(cases),
+            6,
+        ),
+        "local_capsule_bytes": sum(int(item["context_local_capsule_bytes"]) for item in cases),
+        "provider_capsule_bytes": provider_capsule_bytes,
+        "mcp_tool_result_bytes": mcp_tool_result_bytes,
+        "provider_content_bytes": provider_content_bytes,
+        "transport_metadata_bytes": transport_metadata_bytes,
+        "transport_overhead_ratio": round(
+            transport_metadata_bytes / mcp_tool_result_bytes, 6
+        )
+        if mcp_tool_result_bytes
+        else 0.0,
+        "provider_token_estimate": sum(
+            int(item["context_provider_token_estimate"]) for item in cases
+        ),
+        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "actual_provider_input_tokens": None,
+        "context_latency_p50_ms": round(median(context_latencies)),
+        "context_latency_p95_ms": _percentile(context_latencies, 0.95),
+        "mcp_latency_p50_ms": round(median(mcp_latencies)),
+        "mcp_latency_p95_ms": _percentile(mcp_latencies, 0.95),
+        "query_variant_recall_delta": round(max(variant_deltas, default=0.0), 6),
+        "distractor_induced_answer_delta": {
+            "status": "not_executed",
+            "reason_code": "no_frozen_equal_budget_distractor_pair",
+        },
+        "token_savings": {
+            "status": "not_executed",
+            "reason_code": "no_frozen_equal_duty_equal_budget_baseline",
+        },
+        "provider_hard_limit_violations": sum(
+            not item["provider_hard_limit_valid"] for item in context_cases
+        ),
+    }
+    context_status = "passed" if all(
+        item["status"] == "passed" for item in context_cases
+    ) and metrics["provider_hard_limit_violations"] == 0 else "failed"
+    body = {
+        "schema_version": "deeplaw.semantic-context-outcome/v2",
+        "status": context_status,
+        "evidence_role": "tuning_used_development",
+        "qualification_eligible": False,
+        "gold_id": gold["gold_id"],
+        "gold_sha256": gold_sha256,
+        "fixture_manifest_sha256": gold["fixture_manifest_sha256"],
+        "compiler_report_id": compiler_report_id,
+        "query_set_sha256": query_set_digest,
+        "primary_agent_surface": "deeplaw knowledge context",
+        "context_query_plan_schema_version": "deeplaw.knowledge-query-plan/v6",
+        "operator_diagnostic": {
+            "surface": "deeplaw knowledge query --query-plan-version 5",
+            "query_plan_schema_version": "deeplaw.knowledge-query-plan/v5",
+            "report_id": query_report["report_id"],
+            "report_sha256": sha256_bytes(canonical_json(query_report).encode("utf-8")),
+            "status": query_report["status"],
+            "qualification_eligible": False,
+        },
+        "budget": BUDGET,
+        "cases": context_cases,
+        "metrics": metrics,
+        "recorded_at": recorded_at,
+        "competitive_claim_eligible": False,
+    }
+    return {
+        "report_id": stable_id(
+            "semanticcontextoutcome",
+            compiler_report_id,
+            query_set_digest,
+            recorded_at,
+        ),
+        **body,
+    }
+
+
 def run(
     *,
     gold: dict[str, Any],
@@ -2013,7 +2469,7 @@ def run(
     vault: Path,
     baseline_vault: Path,
     command: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     gold_sha256 = validate_candidate(gold, repository=_repository())
     supported_compiler_reports = {
         "deeplaw.real-semantic-host-report/v1",
@@ -2174,6 +2630,47 @@ def run(
                     "context_provider_payload_bytes": variant_result[
                         "context_provider_payload_bytes"
                     ],
+                    "context_local_capsule_bytes": variant_result[
+                        "context_local_capsule_bytes"
+                    ],
+                    "context_provider_capsule_bytes": variant_result[
+                        "context_provider_capsule_bytes"
+                    ],
+                    "context_mcp_tool_result_bytes": variant_result[
+                        "context_mcp_tool_result_bytes"
+                    ],
+                    "context_provider_content_bytes": variant_result[
+                        "context_provider_content_bytes"
+                    ],
+                    "context_transport_metadata_bytes": variant_result[
+                        "context_transport_metadata_bytes"
+                    ],
+                    "context_provider_token_estimate": variant_result[
+                        "context_provider_token_estimate"
+                    ],
+                    "context_useful_context_recall": variant_result[
+                        "context_useful_context_recall"
+                    ],
+                    "context_false_suppression_rate": variant_result[
+                        "context_false_suppression_rate"
+                    ],
+                    "context_duty_coverage": variant_result["context_duty_coverage"],
+                    "context_relevant_chars": variant_result["context_relevant_chars"],
+                    "context_chars": variant_result["context_chars"],
+                    "context_relevant_chars_ratio": variant_result[
+                        "context_relevant_chars_ratio"
+                    ],
+                    "context_redundancy_rate": variant_result[
+                        "context_redundancy_rate"
+                    ],
+                    "context_duplicate_evidence_rate": variant_result[
+                        "context_duplicate_evidence_rate"
+                    ],
+                    "context_latency_ms": variant_result["context_latency_ms"],
+                    "context_mcp_latency_ms": variant_result["context_mcp_latency_ms"],
+                    "context_provider_hard_limit_valid": variant_result[
+                        "context_provider_hard_limit_valid"
+                    ],
                     "cold_latency_ms": variant_cold_latency,
                     "warm_latency_ms": variant_warm_latency,
                     "cold_peak_rss_bytes": variant_cold_peak_rss,
@@ -2311,7 +2808,7 @@ def run(
     ]
     metrics = {
         "query_count": len(cases),
-        "execution_count": (len(cases) + len(variant_checks)) * 3,
+        "execution_count": (len(cases) + len(variant_checks)) * 4,
         "query_variant_count": len(variant_checks),
         "query_variant_pass_rate": round(
             sum(item["status"] == "passed" for item in variant_checks)
@@ -2338,7 +2835,7 @@ def run(
         ) if matched_required_target_count else 0.0,
         "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
         "bytes_saved_ratio": round(
-            1 - provider_content_bytes / raw_fragment_baseline_bytes, 6
+            1 - provider_bytes / raw_fragment_baseline_bytes, 6
         ) if raw_fragment_baseline_bytes else 0.0,
         "cold_latency_p50_ms": round(median(cold_latencies)),
         "cold_latency_p95_ms": _percentile(cold_latencies, 0.95),
@@ -2535,29 +3032,46 @@ def run(
         "source_ir_coverage": source_ir_coverage,
         "continuation_probe": continuation_probe,
         "cross_packet_identity": cross_packet_identity,
-        "cases": cases,
+        "cases": [_legacy_v1_case(item) for item in cases],
         "challenges": challenges,
         "metrics": metrics,
         "recorded_at": recorded_at,
         "competitive_claim_eligible": False,
     }
+    context_outcome = _context_outcome_report(
+        gold=gold,
+        gold_sha256=gold_sha256,
+        compiler_report_id=compiler_report["report_id"],
+        query_set_digest=frozen_query_set_sha256,
+        query_report=report,
+        cases=cases,
+        recorded_at=recorded_at,
+    )
+    context_metrics = context_outcome["metrics"]
     cost = {
-        "schema_version": "deeplaw.semantic-query-cost/v1",
+        "schema_version": "deeplaw.semantic-query-cost/v2",
         "gold_id": gold["gold_id"],
         "compiler_report_id": compiler_report["report_id"],
         "query_set_sha256": frozen_query_set_sha256,
-        "first_party_command": "deeplaw knowledge query",
+        "primary_agent_surface": "deeplaw knowledge context",
         "query_count": len(cases),
-        "total_query_tokens": provider_bytes,
-        "total_context_bytes": provider_bytes,
-        "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
-        "measurement_method": "utf8_bytes_proxy",
+        "local_capsule_bytes": context_metrics["local_capsule_bytes"],
+        "provider_capsule_bytes": context_metrics["provider_capsule_bytes"],
+        "mcp_tool_result_bytes": context_metrics["mcp_tool_result_bytes"],
+        "provider_content_bytes": context_metrics["provider_content_bytes"],
+        "transport_metadata_bytes": context_metrics["transport_metadata_bytes"],
+        "provider_input_token_estimate": context_metrics["provider_token_estimate"],
+        "actual_provider_input_tokens": None,
+        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "token_savings": context_metrics["token_savings"],
         "budget": {**BUDGET, "cold_or_warm": "warm"},
         "measured_at": recorded_at,
+        "qualification_eligible": False,
     }
     _validate("semantic-query-run.v1.schema.json", report)
-    _validate("semantic-query-cost.v1.schema.json", cost)
-    return report, cost
+    _validate("semantic-context-outcome.v2.schema.json", context_outcome)
+    _validate("semantic-query-cost.v2.schema.json", cost)
+    return report, cost, context_outcome
 
 
 def main() -> int:
@@ -2572,8 +3086,9 @@ def main() -> int:
     parser.add_argument("--deeplaw-command", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cost-output", type=Path, required=True)
+    parser.add_argument("--context-output", type=Path, required=True)
     arguments = parser.parse_args()
-    report, cost = run(
+    report, cost, context_outcome = run(
         gold=_load(arguments.gold),
         compiler_report=_load(arguments.compiler_report),
         corpus=_load(arguments.corpus),
@@ -2583,9 +3098,13 @@ def main() -> int:
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.cost_output.parent.mkdir(parents=True, exist_ok=True)
+    arguments.context_output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(canonical_json(report) + "\n", encoding="utf-8")
     arguments.cost_output.write_text(canonical_json(cost) + "\n", encoding="utf-8")
-    return 0 if report["status"] == "passed" else 1
+    arguments.context_output.write_text(
+        canonical_json(context_outcome) + "\n", encoding="utf-8"
+    )
+    return 0 if report["status"] == context_outcome["status"] == "passed" else 1
 
 
 if __name__ == "__main__":

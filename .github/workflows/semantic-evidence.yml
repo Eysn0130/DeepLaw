@@ -127,7 +127,8 @@ jobs:
             --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
             --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
             --output "${evidence}/semantic-query-report.json" \
-            --cost-output "${evidence}/semantic-query-cost.json"
+            --cost-output "${evidence}/semantic-query-cost.json" \
+            --context-output "${evidence}/semantic-context-outcome-v2.json"
           claude_observed=$("${RUNNER_TEMP}/host-cli/bin/claude" --version)
           opencode_observed=$("${RUNNER_TEMP}/host-cli/bin/opencode" --version)
           uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
@@ -226,6 +227,8 @@ jobs:
             "${output}/semantic-query-report.json"
           cp "${evidence_root}/semantic/semantic-query-cost.json" \
             "${output}/semantic-query-cost.json"
+          cp "${evidence_root}/semantic/semantic-context-outcome-v2.json" \
+            "${output}/semantic-context-outcome-v2.json"
           cp "${evidence_root}"/semantic/machine-reviews/*.json \
             "${output}/machine-reviews/"
           cp "${evidence_root}/quality/v0.12-28-source-decision-matrix.json" \

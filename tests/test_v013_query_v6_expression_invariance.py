@@ -38,6 +38,29 @@ _FALSE_TARGET_MARKERS = frozenset(
 )
 _OTHER_MARKERS = frozenset({"ALIAS_ALPHA", "ALPHA_MULTILINGUAL"})
 
+# These labels stand in for the human-labelled target set used by the
+# metamorphic check.  Optional labels are intentionally kept separate from
+# required labels: a query may discover an alias without making it a required
+# Policy Alpha answer, but it must not lose a required identity.
+_HUMAN_LABELS: tuple[tuple[str, str], ...] = (
+    ("ALPHA_BOTH", "required"),
+    ("ALPHA_EXCEPTION", "required"),
+    ("ALPHA_CONTRADICTION", "required"),
+    ("ALPHA_MULTILINGUAL", "required"),
+    ("ALIAS_ALPHA", "optional"),
+    ("ALIAS_BETA", "optional"),
+)
+_HUMAN_REQUIRED_KEYS = frozenset(
+    f"claim:unseen-query-v6:{marker.lower()}"
+    for marker, requirement in _HUMAN_LABELS
+    if requirement == "required"
+)
+_HUMAN_OPTIONAL_KEYS = frozenset(
+    f"claim:unseen-query-v6:{marker.lower()}"
+    for marker, requirement in _HUMAN_LABELS
+    if requirement == "optional"
+)
+
 _ALPHA_SOURCE = "\n".join(
     [
         "# Alpha both",
@@ -111,6 +134,19 @@ def _statement_rows(payload: dict[str, Any]) -> set[tuple[str, str, str]]:
 
 def _alpha_rows(payload: dict[str, Any]) -> set[tuple[str, str, str]]:
     return {row for row in _statement_rows(payload) if row[0] in _ALPHA_KEYS}
+
+
+def _human_rows(
+    payload: dict[str, Any],
+    *,
+    required: bool,
+) -> set[tuple[str, str, str]]:
+    keys = _HUMAN_REQUIRED_KEYS if required else _HUMAN_OPTIONAL_KEYS
+    return {row for row in _statement_rows(payload) if row[0] in keys}
+
+
+def _semantic_keys(rows: set[tuple[str, str, str]]) -> set[str]:
+    return {semantic_key for semantic_key, _knowledge_id, _revision_id in rows}
 
 
 def _labels(payload: dict[str, Any]) -> set[str]:
@@ -229,6 +265,39 @@ def test_v6_case_punctuation_quotes_and_cjk_preserve_required_identities(
             else:
                 assert payload["hard_limit_bytes"] == 65_536
                 assert len(canonical_json(payload).encode("utf-8")) <= 65_536
+
+
+def test_v6_human_required_identity_set_is_expression_invariant_across_seams(
+    alpha_case: dict[str, Any],
+) -> None:
+    baseline_triplet = _context_triplet(alpha_case, _BASE_TASK)
+    expected_required = _human_rows(baseline_triplet[0], required=True)
+    assert _semantic_keys(expected_required) == _HUMAN_REQUIRED_KEYS
+    assert _human_rows(baseline_triplet[0], required=False).isdisjoint(expected_required)
+
+    variants = (
+        "please summarize policy alpha requirements",
+        "Please summarize POLICY ALPHA obligations",
+        "Please summarize Policy Alpha requirements!",
+        'Please summarize "Policy Alpha" obligations.',
+        "请总结“Policy Alpha”的义务",
+        "请总结 Policy Alpha 的要求",
+    )
+    for task in variants:
+        for seam, payload in zip(
+            ("python", "cli", "mcp"),
+            _context_triplet(alpha_case, task),
+            strict=True,
+        ):
+            observed_required = _human_rows(payload, required=True)
+            missing_required = expected_required - observed_required
+            extra_required = observed_required - expected_required
+            assert not missing_required and not extra_required, (
+                f"{seam} {task!r} drifted human-required identities; "
+                f"missing_required={sorted(_semantic_keys(missing_required))}; "
+                f"extra_required={sorted(_semantic_keys(extra_required))}; "
+                f"observed_labels={sorted(_labels(payload))}"
+            )
 
 
 def test_v6_inferred_anchor_is_ranking_only_for_related_nonmatching_candidate(

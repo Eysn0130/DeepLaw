@@ -1886,6 +1886,158 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
         )
 
 
+def test_context_measurement_separates_local_provider_and_mcp_boundaries() -> None:
+    provider_content = {"statements": [{"statement_text": "bounded evidence"}]}
+    provider = {
+        "schema_version": "deeplaw.provider-knowledge-capsule/v2",
+        "capsule": provider_content,
+        "receipt": {"receipt_id": "receipt_0123456789abcdef01234567"},
+        "delivery": {
+            "provider_content_bytes": len(
+                canonical_json(provider_content).encode("utf-8")
+            )
+        },
+    }
+    local = {
+        "schema_version": "deeplaw.knowledge-capsule/v3",
+        "task": "owner-local task text",
+        "query_plan": {"schema_version": "deeplaw.knowledge-query-plan/v6"},
+        "provider_capsule": provider,
+    }
+    mcp = {
+        "schema_version": "deeplaw.knowledge-support-output/v6",
+        "operation": "context",
+        "authority_boundary": {"authority_from_ranking": False},
+        "result": provider,
+    }
+
+    measurement = semantic_query_suite._context_payload_measurement(
+        local_capsule=local,
+        provider_capsule=provider,
+        mcp_tool_result=mcp,
+    )
+
+    assert measurement == {
+        "local_capsule_bytes": len(canonical_json(local).encode("utf-8")),
+        "provider_capsule_bytes": len(canonical_json(provider).encode("utf-8")),
+        "mcp_tool_result_bytes": len(canonical_json(mcp).encode("utf-8")),
+        "provider_content_bytes": len(
+            canonical_json(provider["capsule"]).encode("utf-8")
+        ),
+        "transport_metadata_bytes": (
+            len(canonical_json(mcp).encode("utf-8"))
+            - len(canonical_json(provider["capsule"]).encode("utf-8"))
+        ),
+        "provider_token_estimate": (
+            len(canonical_json(mcp).encode("utf-8")) + 3
+        )
+        // 4,
+        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "provider_hard_limit_valid": True,
+    }
+
+
+def test_context_outcome_uses_context_bounds_and_variant_results_not_v5_status() -> None:
+    case = {
+        "case_id": "semantic-case-01",
+        "query_sha256": "1" * 64,
+        "provider_hard_limit_valid": False,
+        "context_semantic_valid": True,
+        "context_verification_valid": True,
+        "context_provider_hard_limit_valid": True,
+        "context_matched_label_ids": ["label-example"],
+        "context_gap_codes": [],
+        "context_local_capsule_bytes": 1_000,
+        "context_provider_capsule_bytes": 500,
+        "context_mcp_tool_result_bytes": 600,
+        "context_provider_content_bytes": 400,
+        "context_transport_metadata_bytes": 200,
+        "context_provider_token_estimate": 150,
+        "context_token_measurement_method": "utf8_bytes_div_4_estimate",
+        "context_useful_context_recall": 1.0,
+        "context_false_suppression_rate": 0.0,
+        "context_duty_coverage": 1.0,
+        "context_relevant_chars": 100,
+        "context_chars": 200,
+        "context_relevant_chars_ratio": 0.5,
+        "context_redundancy_rate": 0.0,
+        "context_duplicate_evidence_rate": 0.0,
+        "context_latency_ms": 10,
+        "context_mcp_latency_ms": 5,
+        "query_variant_checks": [
+            {
+                "status": "passed",
+                "context_semantic_valid": False,
+                "context_verification_valid": True,
+                "context_provider_hard_limit_valid": True,
+                "context_useful_context_recall": 0.0,
+            }
+        ],
+    }
+    report = semantic_query_suite._context_outcome_report(
+        gold={
+            "gold_id": "semanticgold_0123456789abcdef01234567",
+            "fixture_manifest_sha256": "2" * 64,
+        },
+        gold_sha256="3" * 64,
+        compiler_report_id="semanticdeterministic_0123456789abcdef01234567",
+        query_set_digest="4" * 64,
+        query_report={
+            "report_id": "semanticqueryrun_0123456789abcdef01234567",
+            "status": "passed",
+        },
+        cases=[case],
+        recorded_at="2026-08-10T00:00:00Z",
+    )
+
+    assert report["status"] == "failed"
+    assert report["cases"][0]["provider_hard_limit_valid"] is True
+    assert report["cases"][0]["variant_pass_count"] == 0
+
+
+def test_semantic_context_cost_v2_keeps_bytes_estimates_and_actual_tokens_distinct() -> None:
+    value = {
+        "schema_version": "deeplaw.semantic-query-cost/v2",
+        "gold_id": "semanticgold_0123456789abcdef01234567",
+        "compiler_report_id": "semantichostrun_0123456789abcdef01234567",
+        "query_set_sha256": "0" * 64,
+        "primary_agent_surface": "deeplaw knowledge context",
+        "query_count": 15,
+        "local_capsule_bytes": 9_000,
+        "provider_capsule_bytes": 4_800,
+        "mcp_tool_result_bytes": 5_200,
+        "provider_content_bytes": 3_900,
+        "transport_metadata_bytes": 1_300,
+        "provider_input_token_estimate": 1_200,
+        "actual_provider_input_tokens": None,
+        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "token_savings": {
+            "status": "not_executed",
+            "reason_code": "no_frozen_equal_duty_equal_budget_baseline",
+        },
+        "budget": {
+            "max_items": 8,
+            "max_sources": 12,
+            "max_chars": 8_000,
+            "max_tokens": 6_000,
+            "max_sensitivity": "public",
+            "cold_or_warm": "warm",
+        },
+        "measured_at": "2026-08-10T00:00:00Z",
+        "qualification_eligible": False,
+    }
+    assert (
+        _query_cost(
+            value,
+            gold_id=value["gold_id"],
+            compiler_report_id=value["compiler_report_id"],
+        )
+        == value
+    )
+    assert "total_query_tokens" not in value
+    assert value["actual_provider_input_tokens"] is None
+
+
 def _query_output(
     *,
     compiled: list[dict] | None = None,

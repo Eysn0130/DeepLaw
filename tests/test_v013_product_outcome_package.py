@@ -128,6 +128,23 @@ def _owner_bound_roots(root: Path, package: dict[str, object]) -> dict[str, Path
     }
 
 
+def _stage_artifact(
+    package: dict[str, object],
+    source_root: Path,
+    target_root: Path,
+    *,
+    artifact_id: str,
+) -> None:
+    descriptor: dict[str, Any] = next(  # type: ignore[assignment]
+        item for item in package["artifacts"] if item["artifact_id"] == artifact_id  # type: ignore[index]
+    )
+    relative_path = Path(str(descriptor["relative_path"]))
+    source = source_root / relative_path
+    target = target_root / relative_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(source.read_bytes())
+
+
 def _rewrite_gate(
     tmp_path: Path,
     package: dict[str, object],
@@ -254,6 +271,115 @@ def test_owner_bound_external_requires_complete_explicit_mount_roots(tmp_path: P
     )
 
 
+def test_compiler_and_evaluator_candidate_and_evaluator_gold_cannot_share_root(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "candidate-gold-same-root"
+    package = _owner_bound_fixture(root)
+    shared_root = root / "shared"
+    shared_root.mkdir()
+    _stage_artifact(package, root, shared_root, artifact_id="candidate-wheel")
+    _stage_artifact(package, root, shared_root, artifact_id="development-gold")
+    roots = _owner_bound_roots(root, package)
+    roots["external-candidate"] = shared_root
+    roots["external-gold"] = shared_root
+
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots=roots,
+        )
+
+
+@pytest.mark.parametrize("topology", ["parent-child", "child-parent"])
+def test_compiler_evaluator_and_evaluator_only_mounts_cannot_use_nested_roots(
+    tmp_path: Path,
+    topology: str,
+) -> None:
+    root = tmp_path / topology
+    package = _owner_bound_fixture(root)
+    if topology == "parent-child":
+        candidate_root = root / "compiler-root"
+        gold_root = candidate_root / "evaluator-child"
+    else:
+        gold_root = root / "evaluator-root"
+        candidate_root = gold_root / "compiler-child"
+    _stage_artifact(package, root, candidate_root, artifact_id="candidate-wheel")
+    _stage_artifact(package, root, gold_root, artifact_id="development-gold")
+    roots = _owner_bound_roots(root, package)
+    roots["external-candidate"] = candidate_root
+    roots["external-gold"] = gold_root
+
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots=roots,
+        )
+
+
+def test_compiler_and_evaluator_and_evaluator_only_mounts_cannot_share_symlink_resolved_root(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "symlink-resolved-root"
+    package = _owner_bound_fixture(root)
+    resolved_root = root / "resolved"
+    resolved_root.mkdir()
+    alias = root / "alias"
+    alias.symlink_to(root, target_is_directory=True)
+    _stage_artifact(package, root, resolved_root, artifact_id="candidate-wheel")
+    _stage_artifact(package, root, resolved_root, artifact_id="development-gold")
+    roots = _owner_bound_roots(root, package)
+    roots["external-candidate"] = resolved_root
+    roots["external-gold"] = alias / "resolved"
+
+    with pytest.raises(ProductOutcomePackageError):
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots=roots,
+        )
+
+
+def test_compiler_and_evaluator_and_evaluator_only_mounts_allow_disjoint_roots(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "disjoint-roots"
+    package = _owner_bound_fixture(root)
+    roots = _owner_bound_roots(root, package)
+    evaluator_shared_root = root / "evaluator-shared"
+    evaluator_shared_root.mkdir()
+    _stage_artifact(package, root, evaluator_shared_root, artifact_id="development-gold")
+    for product in ("continuity", "wiki", "legal"):
+        _stage_artifact(
+            package,
+            root,
+            evaluator_shared_root,
+            artifact_id=f"scorer-source-{product}",
+        )
+        _stage_artifact(
+            package,
+            root,
+            evaluator_shared_root,
+            artifact_id=f"scorer-executable-{product}",
+        )
+    roots["external-gold"] = evaluator_shared_root
+    roots["external-scorer"] = evaluator_shared_root
+
+    assert roots["external-candidate"] != roots["external-gold"]
+    assert not roots["external-candidate"].is_relative_to(roots["external-gold"])
+    assert not roots["external-gold"].is_relative_to(roots["external-candidate"])
+    assert (
+        validate_product_outcome_package(
+            package,
+            root=root,
+            roots=roots,
+        )
+        == package
+    )
+
+
 def test_compiler_and_evaluator_mounts_cannot_share_a_resolved_root(tmp_path: Path) -> None:
     root = tmp_path / "role-root-collision"
     package = _owner_bound_fixture(root)
@@ -278,7 +404,7 @@ def test_compiler_and_evaluator_mounts_cannot_share_a_resolved_root(tmp_path: Pa
 
     with pytest.raises(
         ProductOutcomePackageError,
-        match="compiler_only and evaluator_only mounts must use distinct resolved roots",
+        match="compiler-visible and protected mounts must use disjoint resolved roots",
     ):
         validate_product_outcome_package(
             package,

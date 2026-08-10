@@ -823,11 +823,6 @@ def _load_statement_candidates(
     candidates: list[dict[str, Any]] = []
     rejections: list[dict[str, str]] = []
     query_terms = _meaningful_query_terms(target["terms"])
-    identity_anchor_values = (
-        query_target_anchors(target["text"])[0]
-        if not has_identity_target
-        else ()
-    )
     identity_anchor_hints = (
         _identity_anchor_hints(target["text"])[0]
         if not has_identity_target
@@ -953,6 +948,13 @@ def _load_statement_candidates(
                     text,
                 )
             )
+            identity_lexical_terms = set(
+                query_search_terms(
+                    " ".join((str(row["title"] or ""), *admitted_aliases)),
+                    limit=64,
+                    cover_tail=True,
+                )
+            )
             searchable = set(
                 query_search_terms(
                     identity_surface,
@@ -965,10 +967,6 @@ def _load_statement_candidates(
                 continue
             anchor_hint_match = _identity_anchor_hint_matches(
                 identity_anchor_hints,
-                identity_surface,
-            )
-            exact_anchor_hint_match = _identity_anchor_hint_matches(
-                identity_anchor_values,
                 identity_surface,
             )
             partition = (
@@ -1014,8 +1012,8 @@ def _load_statement_candidates(
                     "source_free": bool(row["source_free"]),
                     "applicability": metadata.get("applicability"),
                     "_query_search_terms": tuple(searchable),
+                    "_identity_lexical_terms": tuple(identity_lexical_terms),
                     "_anchor_hint_match": anchor_hint_match,
-                    "_exact_anchor_hint_match": exact_anchor_hint_match,
                     "_score": _candidate_score(
                         {
                             "statement_id": statement_id,
@@ -1843,11 +1841,8 @@ def execute_v6(
         target.get(field) is not None
         for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
     )
-    inferred_anchor_pool = (
-        not has_explicit_target
-        and any(item.get("_anchor_hint_match") is True for item in candidates)
-    )
-    if inferred_anchor_pool:
+    inferred_query_pool = not has_explicit_target
+    if inferred_query_pool:
         working_memory = [
             item
             for item in candidates
@@ -1870,33 +1865,33 @@ def execute_v6(
     budget_suppressions: list[dict[str, str]] = []
     selected_statement_characters = 0
     query_terms = _meaningful_query_terms(target["terms"])
-    identity_anchor_tail_terms = {
-        anchor.rsplit(" ", 1)[-1]
-        for anchor in query_target_anchors(target["text"])[0]
-        if " " in anchor
-    }
     structured_query_terms = {
         term
         for term in query_terms
         if any(character.isdigit() for character in term)
     }
-    content_specific_terms = identity_anchor_tail_terms | structured_query_terms
+    content_specific_terms = structured_query_terms
     for item in candidates:
-        if inferred_anchor_pool and item.get("partition") != "run_bound_working_memory":
+        if inferred_query_pool and item.get("partition") != "run_bound_working_memory":
             overlap = query_terms.intersection(item.get("_query_search_terms", ()))
+            identity_lexical_overlap = query_terms.intersection(
+                item.get("_identity_lexical_terms", ())
+            )
             if not (
                 len(overlap) >= 3
+                or (
+                    len(query_terms) <= 2
+                    and bool(query_terms)
+                    and overlap == query_terms
+                )
                 or (
                     len(overlap) >= 2
                     and (
                         overlap.intersection(content_specific_terms)
-                        or item.get("_anchor_hint_match") is True
+                        or identity_lexical_overlap
                     )
                 )
-                or (
-                    len(overlap) >= 1
-                    and item.get("_exact_anchor_hint_match") is True
-                )
+                or (len(overlap) >= 1 and identity_lexical_overlap)
             ):
                 content_relevance_suppressions.append(
                     {
@@ -2561,8 +2556,8 @@ def execute_v6(
     plan_sha256 = sha256_bytes(canonical_json(plan).encode("utf-8"))
     for item in candidates:
         item.pop("_query_search_terms", None)
+        item.pop("_identity_lexical_terms", None)
         item.pop("_anchor_hint_match", None)
-        item.pop("_exact_anchor_hint_match", None)
     candidate_receipts = [
         {
             "statement_id": str(item["statement_id"]),

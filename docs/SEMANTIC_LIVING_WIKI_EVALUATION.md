@@ -3,6 +3,15 @@
 Status: **v0.12.0 release gate**, 2026-08-02. This protocol is not evidence for v0.11.0 and is not a
 comparative benchmark claim.
 
+> v0.13 source-candidate addendum: the historical mixed v1 compatibility report retains its Query
+> Plan v5 retrieval command and remains a non-qualifying operator diagnostic. The current
+> development workflow additionally emits
+> `deeplaw.semantic-context-outcome/v2` for the default Query Plan v6 Context surface. It separates
+> owner-local Capsule, Provider Capsule, complete MCP tool-result, selected content and transport
+> metadata bytes; token estimates are named estimates, and token savings remain `not_executed`
+> without a frozen equal-duty/equal-budget baseline. This visible, tuning-used report is not Human
+> Gold, external qualification, or release evidence.
+
 The frozen public corpus in `benchmarks/semantic/fixtures/` covers 15 named semantic cases and five
 executed security challenges. The candidate labels, queries, purposes, expected objects, forbidden
 merges, lifecycle outcomes, fixture hashes, hard failures, and limitations are jointly bound by
@@ -168,8 +177,11 @@ codes, bounded evidence receipts, actual metrics, and latency; it does not persi
 text. The gate checks explicit unanswerability,
 successor-only selection, withdrawal exclusion, contradiction applicability, visible fallback,
 read-only behavior, Authority invariance, repeat reuse, pagination, and the UTF-8 64 KiB provider
-limit. The attached cost receipt labels its token number as a UTF-8 byte proxy rather than a
-provider-token measurement.
+limit. The historical v1 cost receipt labels its token number as a UTF-8 byte proxy rather than a
+provider-token measurement. The additive v2 cost receipt does not expose `total_query_tokens`: it
+reports Context delivery byte boundaries separately, records an explicitly named token estimate,
+leaves actual Provider input tokens null without a usage receipt, and keeps token savings
+`not_executed` without a valid comparator.
 
 `benchmarks/semantic/score_semantic_run.py` remains the contract for an optional external real-host
 experiment; it is not used to imply external-model evidence in this release. Formal v0.12 semantic
@@ -180,12 +192,14 @@ invalidates the complete six-packet set for that candidate. `competitive_claim_e
 false.
 
 `.github/workflows/semantic-evidence.yml` has two credential-free modes. `deterministic_review`
-builds a fresh wheel, produces deterministic lifecycle/query/cost evidence, and emits truthful
+builds a fresh wheel, produces deterministic lifecycle, v5 diagnostic, v6 Context outcome and v2
+cost evidence, and emits truthful
 Claude Code/OpenCode `not_executed` reports. `package_consensus` checks out the exact clean
 candidate and a separate sanitized evidence ref, validates the six read-only audit packets and
 28-source matrix, builds the consensus and bilingual Owner packets, scans for private paths and
 secret material, and emits `semantic-release-evidence`. Neither mode calls a model Provider or
-accepts an API key. The release workflow accepts only that exact-candidate artifact.
+accepts an API key. Existing commercial assembly that requires the historical cost contract remains
+fail closed; the v2 development report does not enable release assembly.
 
 This protocol supports only the bounded product statement: any Agent that implements DeepLaw's
 versioned CLI/MCP/Python contract and receives an explicit owner grant can use the same governed

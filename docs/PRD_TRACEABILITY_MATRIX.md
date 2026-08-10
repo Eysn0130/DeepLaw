@@ -244,7 +244,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | Host Integration | Target with local static/thin-adapter evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
 | Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
 
-## Pass 5 current-head addendum
+## Pass 5 historical addendum
 
 Pass 5 does not upgrade any PRD row to `Qualified` or `Released`.
 
@@ -260,7 +260,8 @@ Pass 5 does not upgrade any PRD row to `Qualified` or `Released`.
   `development_tuning_used`; it cannot be Human Gold, qualification holdout or final blind.
 - Product-outcome package v1 is benchmark-only, rejects every pass, and leaves assembly disabled.
   Human Gold, exact Legal Pack, real Codex, performance, Platform Core and public-redownload gates
-  remain unexecuted or failed as detailed in `docs/V0_13_PASS5_DISPOSITION.md`.
+  remained unexecuted or failed as recorded in the historical
+  `docs/V0_13_PASS5_DISPOSITION.md`.
 
 ## Pass 5 gate classification and skip disposition
 
@@ -284,6 +285,15 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 | Historical v0.6 wheel | `separate compatibility not_executed` |
 | Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
 | Windows native junction | `macOS not_applicable`; Windows evidence remains required |
+
+## Current source-candidate status pointer
+
+Pass 7 does not upgrade any PRD row to `Qualified` or `Released`. The current correctness,
+measurement-boundary, external-prerequisite and gate disposition is recorded only in
+`docs/V0_13_PASS7_DISPOSITION.md`; the Pass 1-6 documents remain immutable historical evidence.
+The repository-visible v5 diagnostic and v6 Context report are tuning-used development evidence.
+Human Gold, human Wiki task, exact Legal Pack, real Codex, required scale/performance, Platform
+Core and artifact redownload remain `not_executed` or failed.
 
 Current disposition remains:
 

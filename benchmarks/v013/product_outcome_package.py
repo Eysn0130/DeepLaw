@@ -94,6 +94,10 @@ _COMPILER_VISIBLE_ARTIFACT_KINDS = frozenset(
     }
 )
 _CORPUS_FORBIDDEN_PURPOSES = frozenset({"gold", "scorer", "outcome_output"})
+_COMPILER_VISIBLE_MOUNT_VISIBILITIES = frozenset(
+    {"compiler_only", "compiler_evaluator"}
+)
+_PROTECTED_MOUNT_VISIBILITIES = frozenset({"evaluator_only", "owner_evaluator"})
 
 
 class ProductOutcomePackageError(ValueError):
@@ -331,20 +335,29 @@ def _validate_mount_role_roots(
             raise ProductOutcomePackageError(
                 f"mount {mount['mount_id']} visibility is incompatible with purpose {purpose}"
             )
-    compiler_roots = {
-        mount_roots[mount["mount_id"]]
+    compiler_visible = [
+        mount
         for mount in package["mounts"]
-        if mount["visibility"] == "compiler_only"
-    }
-    evaluator_roots = {
-        mount_roots[mount["mount_id"]]
+        if mount["visibility"] in _COMPILER_VISIBLE_MOUNT_VISIBILITIES
+    ]
+    protected = [
+        mount
         for mount in package["mounts"]
-        if mount["visibility"] == "evaluator_only"
-    }
-    if compiler_roots & evaluator_roots:
-        raise ProductOutcomePackageError(
-            "compiler_only and evaluator_only mounts must use distinct resolved roots"
-        )
+        if mount["visibility"] in _PROTECTED_MOUNT_VISIBILITIES
+    ]
+    for visible_mount in compiler_visible:
+        visible_root = mount_roots[visible_mount["mount_id"]]
+        for protected_mount in protected:
+            protected_root = mount_roots[protected_mount["mount_id"]]
+            if (
+                visible_root == protected_root
+                or visible_root.is_relative_to(protected_root)
+                or protected_root.is_relative_to(visible_root)
+            ):
+                raise ProductOutcomePackageError(
+                    "compiler-visible and protected mounts must use disjoint resolved roots "
+                    "(same or nested roots are forbidden)"
+                )
 
 
 def _validate_artifact_mount_semantics(

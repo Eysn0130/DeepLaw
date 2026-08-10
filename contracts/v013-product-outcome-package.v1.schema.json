@@ -180,7 +180,7 @@
       }
     },
     "mount": {
-      "description": "A read-only mount identity. The validator resolves each declared mount root explicitly; compiler-only and evaluator-only mounts must not share a resolved root, and dedicated purposes constrain which artifact kinds may be bound.",
+      "description": "A read-only mount identity. The validator resolves each declared mount root explicitly; compiler-visible mounts (compiler_only or compiler_evaluator) must not share or nest with protected mounts (evaluator_only or owner_evaluator), while protected mounts may share an evaluator root. Dedicated purposes constrain which artifact kinds may be bound.",
       "type": "object",
       "additionalProperties": false,
       "required": ["mount_id", "purpose", "visibility", "read_only"],

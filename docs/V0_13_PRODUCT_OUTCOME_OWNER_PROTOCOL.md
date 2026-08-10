@@ -16,7 +16,11 @@ synthetic dry-run 可以使用单一、`owner_only` 的 `package_workspace` moun
 并在调用 verifier 时为所有 mount 提供完整的 `roots={mount_id: directory}`；不存在
 default-root fallback。manifest 只存相对路径，不把本机绝对路径写进 JSON。每个 resolved
 root 必须是目录、不可为 symlink，所有文件 `read_only=true`。compiler-only 与
-evaluator-only 隔离域不得解析到同一 root。同一 evaluator workspace 可以由
+evaluator-only 隔离域不得解析到同一或嵌套 root；更一般地，compiler-visible
+（`compiler_only`、`compiler_evaluator`）与 protected（`evaluator_only`、
+`owner_evaluator`）mount 的 resolved root 不得相同，也不得互为祖先/后代。
+路径先 canonical resolve 再比较，因此经由不同 symlink 路径解析到同一目录同样失败。
+protected evaluator mount 之间可以在同一 evaluator workspace 合理共享；该 workspace 可以由
 `outcome_output` 和 `validator` 两个专用 mount id 共同指向，以便既保持 artifact purpose
 闭合，又让 Gate Result 的相对输入引用可重算。下表是精确的目录布局（`<workspace>` 是
 外部 Owner workspace，不是仓库根目录）：
@@ -42,7 +46,7 @@ evaluator-only 隔离域不得解析到同一 root。同一 evaluator workspace 
 必须相容。Gold、scorer、protocol、threshold、classification、validator、raw output、
 Gate Result 和 evaluator receipt 都不能进入 compiler-visible mount；corpus 也不能借用
 Gold/scorer/output mount。duplicate mount、缺失或额外 root、越界相对路径、symlink、
-size、file SHA 或 record digest 任一项都会失败关闭。
+size、file SHA、record digest 或 compiler-visible/protected root topology 任一项都会失败关闭。
 
 这些检查只证明 manifest 引用的 bytes、root 解析和观察记录一致。JSON attestation 与
 isolation receipt 本身不能证明 OS sandbox。独立 qualification 仍必须由专用执行环境证明

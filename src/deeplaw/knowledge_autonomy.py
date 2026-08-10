@@ -10770,7 +10770,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             reference_time=reference_time,
             limit=_MAX_GRAPH_RELATION_SCAN + 1,
         )
-        relation_scan_truncated = len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN
         candidate_relations_scanned = 0
         selection_truncated = False
         for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
@@ -10880,6 +10879,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             relation_card["source_free"] = relation["source_free"]
             relation_card["legal_authority"] = False
             relations.append(relation_card)
+        relation_scan_truncated = (
+            len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN
+            and candidate_relations_scanned >= _MAX_GRAPH_RELATION_SCAN
+        )
         gaps: list[str] = []
         if selection_truncated:
             gaps.append(
@@ -10888,7 +10891,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             )
         if relation_scan_truncated:
             gaps.append(
-                "graph relation candidate scan reached its 5000-row bound; additional "
+                f"graph relation candidate scan reached its {_MAX_GRAPH_RELATION_SCAN}-row "
+                "bound; additional "
                 "candidates were not inspected"
             )
         return {

@@ -54,12 +54,12 @@ which also covers CLI/MCP calls after their own closed validation.
 
 Query Plan v6 also retains the bounded normalized source query when expansion aliases are applied;
 aliases are additive and cannot erase CJK or non-ASCII names. Its entity-lexicon-free identity
-anchor fields bind the bounded, case-folded phrase hints actually used for discovery/reranking and
-selection. Natural-language capitalization, Title Case or punctuation cannot turn such a hint into
-an admission rule: ordinary Statements still pass the independent lexical, scope, Authority,
-lifecycle and temporal checks, and a non-selected hint mismatch is recorded as a local relevance
-suppression rather than `identity_anchor_mismatch`. Explicit `semantic_key`, `knowledge_id` and
-`revision_id` targets remain strict admission constraints. The plan records only
+anchor fields bind bounded, case-folded phrase hints used only for discovery/reranking.
+Natural-language capitalization, Title Case or punctuation cannot turn such a hint into an
+eligibility or admission rule. Ordinary Statements pass an independent case-folded lexical floor;
+governed title/alias terms may establish lexical relevance, but inferred casing cannot. Scope,
+Authority, lifecycle and temporal checks remain separate. Explicit `semantic_key`, `knowledge_id`
+and `revision_id` targets remain strict admission constraints. The plan records only
 `identity_anchor_count`, `identity_anchors_sha256`, and `identity_anchors_truncated`; anchor text is
 never emitted in a receipt, and ambiguous matching aliases remain multiple candidates rather than
 being silently merged.
@@ -70,7 +70,22 @@ one additional governance-admitted Relation was observed after the requested res
 runtime may inspect only until the first extra admitted Relation to establish selection truncation;
 it never returns that extra Relation and never scans beyond 5,000. Candidate scan and selection
 truncation have separate bounded gaps, while a tail containing only governance-rejected Relations
-does not falsely report admitted selection truncation.
+does not falsely report admitted selection truncation. Selection may stop after observing the first
+extra admitted Relation without claiming candidate-scan truncation; a candidate-scan gap is emitted
+only when the actual configured scan bound is reached, and the gap records that bound rather than a
+hard-coded display value.
+
+The repository-visible Semantic runner now emits an additive
+`deeplaw.semantic-context-outcome/v2` development report. It treats `deeplaw knowledge context`
+with Query Plan v6 as the primary Agent outcome surface and keeps Query Plan v5 `knowledge query`
+inside the historical mixed v1 compatibility report as a non-qualifying operator diagnostic.
+Owner-local Capsule v3 bytes, Provider Capsule v2 bytes, complete MCP
+tool-result bytes, selected Provider content bytes and transport metadata bytes are separate
+fields. UTF-8 bytes are never named tokens: the only token value without a real tokenizer or
+Provider usage receipt is explicitly `utf8_bytes_div_4_estimate`. Token savings and
+distractor-induced delta remain `not_executed` until a frozen equal-duty, equal-budget comparator
+exists. The historical query-run v1 contract remains readable, but neither v1 nor v2 development
+evidence is qualification eligible.
 
 The MCP `audit` projection is local-only. Provider delivery is reduced to `standard` and uses only
 the opaque `receipt_id` for a redacted explain lookup. The runtime trace is ephemeral (16 entries,
