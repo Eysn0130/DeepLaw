@@ -99,33 +99,51 @@ Gold input, so those gates remain `not_executed`.
 The minimum A–G corrections were rerun from the first-party `deeplaw knowledge context` command,
 the `deeplaw knowledge query` audit projection, MCP `knowledge_context`, and receipt explain. The
 isolated runtime installed only `deeplaw-0.12.0-py3-none-any.whl`, SHA-256
-`86d35bae51d350c1e3bdfc0c2edffdad38794347afad6dc1976a37a43f839ade`. The frozen
+`5e36bda5b3b01a00b33804b023d361d24595ebd5a1613892e24ec0436e79e490`, built from
+commit/tree `a6176b9a60c7286ba2251369913656aeafeadb63` /
+`5f44d98458c07a00fcb39da45b180611a3959ce8`. The frozen
 Gold is still `machine_review_pending`, so every result below is Development evidence with
 `qualification_eligible=false`.
 
 | Evidence | Result |
 |---|---|
-| deterministic semantic lifecycle v2 | `passed`; report `semanticdeterministic_66a5758029a78d19c7ff0fbc`; file SHA-256 `d6614e874ab39a9f133cb6b7b6b84931b97ae65253a17368b463429d7afb70b1` |
-| semantic query diagnostic | `passed` 15/15 canonical and 14/14 variants; report `semanticqueryrun_00c30abb2cfa3872239f1e99`; file SHA-256 `dd435b90e0d14b277773de001772c5314ced70cbece3421ba8b2387cee89f82f` |
-| Context v2 | `passed` 15/15; report `semanticcontextoutcome_bd7c0a255c43cb5d5ea76d6f`; file SHA-256 `8c20e2f3c09015b083e892b2662e48a6c8beecadb9a245e4cce653e040c8117c` |
-| query cost v2 | file SHA-256 `3efa4f1f034a2b1f6b411fab92e3366770e14a471971f5ce6393874399c8adba`; actual Provider input tokens remain `null` |
+| deterministic semantic lifecycle v2 | `passed`; report `semanticdeterministic_596e40e38b8515906a25cbc8`; file SHA-256 `b727342109cb693608e21180aa4938bb9b8c3844b745eb127803656c0d669a42` |
+| semantic query diagnostic | `passed` 15/15 canonical and 14/14 variants; report `semanticqueryrun_b633a13d3f35d07f700c08ce`; file SHA-256 `d0abee89233c759e86b11d45a6573b9033573706d215ead6e432b2ba18a9c4e7` |
+| Context v2 | `passed` 15/15; report `semanticcontextoutcome_81cf1a486483d99862726171`; file SHA-256 `2fa5aef2927cc63978aebf0464e70a6a0d58bcbb2730e2ca139822b7ea800b57` |
+| query cost v2 | file SHA-256 `6df765405a319f1b9de4979fb087e94c84505346e84f941ade9b7c543d619bba`; actual Provider input tokens remain `null` |
 
-Corrected provider-visible metrics are Precision@K `0.585238`, Recall@K `1.0`, MRR
+Corrected provider-visible metrics are Precision@K `0.581667`, Recall@K `1.0`, MRR
 `0.855556`, and nDCG@K `0.890684`; target-scoped Precision@K remains a separate diagnostic at
 `1.0`. False Suppression is `0.0` with zero suppressed, undiscovered, rejected, uncompiled, gap, or
 otherwise missed required targets. Duplicate Evidence is `0.0`. Exact surface identity parity,
 request-parameter parity, receipt explain, and provider hard-limit failures are all zero. Local
-Capsules total `340037` UTF-8 bytes, provider Capsules `95523`, provider content `90976`, MCP tool
-results `99888`, and canonical transport-envelope metadata `8912`; `24977` is explicitly a
+Capsules total `343473` UTF-8 bytes, provider Capsules `96585`, provider content `92038`, MCP tool
+results `100950`, and canonical transport-envelope metadata `8912`; `25243` is explicitly a
 UTF-8-bytes/4 estimate, not measured Provider tokens. Token savings and the equal-budget distractor
 delta are honestly `not_executed` because no frozen comparator pair exists.
 
+The baseline snapshot intentionally contained no `.deeplaw/derived` directory. The first attempt
+therefore exposed a canonical-read defect: the live observer required a rebuildable projection
+parent before it could return canonical state. The minimum fix treats an absent derived tree as the
+explicit `("missing",)` identity while retaining safe-directory and symlink rejection. The
+corrected exact-wheel run above passed directly from the no-derived snapshot without a manual
+rebuild.
+
 The exact Tolaria external source probe is report
-`tolaria_interop_032e0d74e03671a6a03e9ab7`, self-addressed report SHA-256
-`ead081dee556b1fa4f71b432de7f69d69d5b1ae7a49cbe93888ecf61eca1fd09` (serialized file SHA-256
-`87cd31b32f9eff1910a20e353e5f84d5c98a8166b1a462d085ced6c65dba1727`). It verifies the
+`tolaria_interop_e9df12e58307d1da94ad995a`, self-addressed report SHA-256
+`ce59e1fa905448c77ce59d938129abb66562de37bffb7383e1afe631caaf921a` (serialized file SHA-256
+`8e0afc232059b6a9c320aeea1f7c6443eedcdbd19582b4b98e9c110354af7460`). It verifies the
 exact Tolaria commit and file hashes, allowed-note read/open/`expectedMtime` update, protected-target
 policy denial, and unchanged protected hashes. `expectedMtime` is explicitly not a DeepLaw
 Revision; no canonical Ledger write occurred. The external dependency audit has six known high
 findings, none redistributed by DeepLaw. OS sandbox proof, desktop GUI behavior, reconciliation,
 and release-time contributor/file rights confirmation remain open.
+
+The 1k construction scale report is bound to the same exact commit and has file SHA-256
+`ae96056ac2a5c34699bd7789f64db93cca5cba808f59c76a98abf0b4065a6b8f` and self-addressed
+report SHA-256 `453886430bb09164dff6bc873b1401aadd2acafb200d6ab4254b369fed4c702f`.
+It reports no failed or degraded operation: Wiki page p95 `76.392083 ms`, backlinks p95
+`75.547916 ms`, compiled-first p95 `8.597625 ms`, exact projection equivalence, no stale cache,
+eight successful concurrent readers, and zero provider hard-limit violations. It remains
+claim-ineligible; the dedicated 10k-request RSS lane and all 10k/100k candidate lanes are
+`not_executed`.
