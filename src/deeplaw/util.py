@@ -15,6 +15,7 @@ _QUOTED_PHRASE = re.compile(r'"([^"\n]{2,200})"|“([^”\n]{2,200})”|`([^`\n]
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _ASCII_PART = re.compile(r"[A-Za-z]+|[0-9]+")
 _QUERY_ANCHOR_WORD = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*", re.UNICODE)
+_QUERY_OPAQUE_ANCHOR = re.compile(r"[A-Z0-9]+(?:[-_:/.][A-Z0-9]+)+")
 _ARTICLE = re.compile(
     r"第\s*([〇零一二两三四五六七八九十百千万亿0-9]+)\s*条(?:\s*之\s*([〇零一二两三四五六七八九十百0-9]+))?"
 )
@@ -407,6 +408,11 @@ QUERY_EXPANSION_PROFILE_V2_METADATA = {
     "profile_sha256": QUERY_EXPANSION_PROFILE_V2_SHA256,
 }
 
+# Query discovery uses two bounded views: the normalized source query and an
+# additive ASCII/expansion view.  Fusion is deterministic max-score selection
+# across those views; the single-view reranker remains unchanged.
+QUERY_RERANKER_FUSION_POLICY = "max-score-across-source-and-expansion-views/1"
+
 # Query expansion configuration is a deterministic runtime binding rather than
 # caller-provided metadata.  Keep the normalizer and bounded matching controls
 # explicit so a Query Plan receipt can be reproduced without exposing the
@@ -418,6 +424,7 @@ QUERY_EXPANSION_CONFIGURATION = {
     "max_terms": QUERY_EXPANSION_PROFILE_V2_METADATA["max_terms"],
     "match_policy": QUERY_EXPANSION_PROFILE_V2_METADATA["match_policy"],
     "normalization": "normalize_query_text-casefold-v1",
+    "reranker_fusion_policy": QUERY_RERANKER_FUSION_POLICY,
 }
 QUERY_EXPANSION_CONFIGURATION_SHA256 = sha256_bytes(
     canonical_json(QUERY_EXPANSION_CONFIGURATION).encode("utf-8")
@@ -716,19 +723,26 @@ def query_search_terms(
 def query_discovery_text(text: str) -> str:
     """Build bounded reranker text without dropping mixed-language exact anchors."""
 
+    return " ".join(query_discovery_views(text))
+
+
+def query_discovery_views(text: str) -> tuple[str, ...]:
+    """Return bounded source and additive expansion views for reranking."""
+
     expansions = query_expansion_terms(text)
-    # Keep the normalized source query as the first reranker component.  The
-    # lexical aliases below are additive; replacing the source query would
-    # erase CJK and non-ASCII proper names before candidate scoring.
     source_query = normalize_text(text)[:5_000]
-    if not expansions:
-        return source_query
     ascii_anchors = [
         term
         for term in search_terms(text, limit=64, cover_tail=True)
         if _ASCII_TOKEN.fullmatch(term)
     ]
-    return " ".join(dict.fromkeys((source_query, *ascii_anchors, *expansions)))
+    expansion_view = normalize_text(" ".join(dict.fromkeys((*ascii_anchors, *expansions))))[
+        :5_000
+    ]
+    views = [source_query]
+    if expansion_view and expansion_view != source_query:
+        views.append(expansion_view)
+    return tuple(views)
 
 
 def query_target_anchors(
@@ -751,14 +765,22 @@ def query_target_anchors(
         return (), bool(limit > 0)
     normalized = normalize_query_text(text)
     matches = list(_QUERY_ANCHOR_WORD.finditer(normalized))
-    runs: list[list[str]] = []
-    current: list[str] = []
+    if _QUERY_OPAQUE_ANCHOR.fullmatch(text.strip()):
+        words = tuple(match.group(0).casefold() for match in matches)
+        if not 2 <= len(words) <= word_limit:
+            return (), bool(words)
+        return (" ".join(words),), False
+    compound_runs: list[list[str]] = []
+    isolated_singletons: list[re.Match[str]] = []
+    current: list[re.Match[str]] = []
     previous_end: int | None = None
 
     def flush() -> None:
         nonlocal current
         if len(current) >= 2:
-            runs.append(current)
+            compound_runs.append([item.group(0) for item in current])
+        elif current:
+            isolated_singletons.append(current[0])
         current = []
 
     for match in matches:
@@ -771,16 +793,36 @@ def query_target_anchors(
         )
         contiguous = previous_end is not None and normalized[previous_end : match.start()].isspace()
         if is_title_or_upper and (not current or contiguous):
-            current.append(word)
+            current.append(match)
         else:
             flush()
             if is_title_or_upper:
-                current.append(word)
+                current.append(match)
         previous_end = match.end()
     flush()
 
+    runs = list(compound_runs)
     truncated = False
-    if not runs:
+    if runs:
+        has_cjk = any(
+            "\u3400" <= character <= "\u9fff"
+            for character in normalize_query_text(text)
+        )
+        singleton_counts: dict[str, int] = {}
+        for match in isolated_singletons:
+            key = match.group(0).casefold()
+            singleton_counts[key] = singleton_counts.get(key, 0) + 1
+        for match in isolated_singletons:
+            word = match.group(0)
+            sentence_initial = not normalized[: match.start()].strip()
+            if (
+                has_cjk
+                or singleton_counts[word.casefold()] > 1
+                or not sentence_initial
+                or word.isupper()
+            ):
+                runs.append([word])
+    else:
         # A singleton Titlecase/uppercase word is useful only when it is not
         # merely sentence-initial prose.  Mixed-script queries and explicit
         # all-uppercase identifiers remain eligible; comparisons with two or
@@ -823,6 +865,25 @@ def query_target_anchors(
     if len(runs) > limit:
         truncated = True
     return tuple(anchors), truncated
+
+
+def query_identity_anchor_match(anchor: str, text: str) -> bool:
+    """Match a complete bounded anchor against complete Unicode word tokens."""
+
+    if not isinstance(anchor, str) or not isinstance(text, str):
+        return False
+    anchor_words = tuple(normalize_query_text(anchor).casefold().split())
+    if not anchor_words:
+        return False
+    candidate_words = tuple(
+        match.group(0).casefold()
+        for match in _QUERY_ANCHOR_WORD.finditer(normalize_query_text(text))
+    )
+    width = len(anchor_words)
+    return any(
+        candidate_words[index : index + width] == anchor_words
+        for index in range(len(candidate_words) - width + 1)
+    )
 
 
 def search_terms_v1(text: str) -> list[str]:

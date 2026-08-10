@@ -10,7 +10,11 @@ from benchmarks.semantic.deterministic_gold_agent import compile_source
 from deeplaw.api import KnowledgeOS
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
 from deeplaw.retrieval import PurposeAwareRetrievalService
-from deeplaw.util import canonical_json
+from deeplaw.util import (
+    canonical_json,
+    query_identity_anchor_match,
+    query_target_anchors,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 _FIXTURES = REPOSITORY / "benchmarks" / "semantic" / "fixtures"
@@ -133,6 +137,22 @@ def _semantic_vault(
             "compilation_run_id": report["compilation_run_id"],
         }
     return root, prefix, sources, grant["grant_id"]
+
+
+def test_v6_multilingual_compound_anchor_keeps_independent_events() -> None:
+    task = "Atlas 审阅完成 2025-06-01；Atlas 计划发布 2025-07-01；Atlas Protocol"
+    anchors, truncated = query_target_anchors(task)
+    assert anchors == ("atlas protocol", "atlas")
+    assert truncated is False
+    assert any(
+        query_identity_anchor_match(anchor, "Atlas review completed on 2025-06-01")
+        for anchor in anchors
+    )
+    assert any(
+        query_identity_anchor_match(anchor, "Atlas publication scheduled on 2025-07-01")
+        for anchor in anchors
+    )
+    assert query_identity_anchor_match("atlas protocol", "Atlas Protocol")
 
 
 def test_v6_multilingual_context_public_seams(tmp_path: Path) -> None:

@@ -27,7 +27,7 @@ from .knowledge_intelligence import (
     estimate_tokens,
     likely_contradiction,
     normalize_identity_text,
-    rerank_candidates,
+    rerank_candidate_views,
     search_dense_index,
     semantic_similarity,
     write_dense_index,
@@ -53,6 +53,7 @@ from .util import (
     fts_query,
     has_instruction_risk,
     query_discovery_text,
+    query_discovery_views,
     query_expansion_terms,
     query_search_terms,
     search_terms,
@@ -8968,6 +8969,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         terms = query_search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
         expansion_terms = query_expansion_terms(query)
+        discovery_views = query_discovery_views(query)
         discovery_query = query_discovery_text(query)
         exact_id = query if _KNOWLEDGE_ID.fullmatch(query) else None
         candidate_ids: list[str] = []
@@ -9474,7 +9476,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "feedback_utility": float(feedback_row["utility"]),
                     }
                 )
-            reranked = rerank_candidates(discovery_query, reranker_input)
+            reranked = rerank_candidate_views(discovery_views, reranker_input)
             candidate_ids = [item["knowledge_id"] for item in reranked]
             reranker_receipts = {
                 item["knowledge_id"]: {

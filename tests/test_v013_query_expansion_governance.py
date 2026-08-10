@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+from deeplaw.knowledge_intelligence import rerank_candidate_views, rerank_candidates
 from deeplaw.util import (
+    QUERY_EXPANSION_CONFIGURATION,
     QUERY_EXPANSION_PROFILE,
     QUERY_EXPANSION_PROFILE_V1,
     QUERY_EXPANSION_PROFILE_V2,
@@ -17,7 +19,9 @@ from deeplaw.util import (
     canonical_json,
     normalize_query_text,
     query_discovery_text,
+    query_discovery_views,
     query_expansion_terms,
+    query_identity_anchor_match,
     query_target_anchors,
     sha256_bytes,
 )
@@ -175,6 +179,11 @@ def test_discovery_keeps_source_and_identity_anchors_are_generic_and_bounded() -
     discovery = query_discovery_text(source)
     assert source in discovery
     assert {"diagnostic", "retention", "policy"} <= set(discovery.split())
+    views = query_discovery_views(source)
+    assert views[0] == source
+    assert {"diagnostic", "retention", "policy"} <= set(views[1].split())
+    assert not any("诊断" in view for view in views[1:])
+    assert QUERY_EXPANSION_CONFIGURATION["reranker_fusion_policy"].endswith("/1")
 
     assert query_target_anchors("What does Policy Alpha require?")[0] == (
         "policy alpha",
@@ -189,6 +198,63 @@ def test_discovery_keeps_source_and_identity_anchors_are_generic_and_bounded() -
     # must retain both meanings until another admission signal disambiguates.
     assert query_target_anchors("Mercury policy")[0] == ()
     assert query_target_anchors("Tell me about Mercury policy")[0] == ("mercury",)
+
+
+def test_compound_anchor_keeps_repeated_independent_singleton_and_word_boundaries() -> None:
+    query = (
+        "Atlas 审阅完成 2025-06-01；Atlas 计划发布 2025-07-01；Atlas Protocol"
+    )
+    anchors, truncated = query_target_anchors(query)
+    assert anchors == ("atlas protocol", "atlas")
+    assert truncated is False
+    assert query_identity_anchor_match("atlas", "Atlas review completed on 2025-06-01")
+    assert not query_identity_anchor_match("atlas protocol", "AtlasProtocol release")
+    assert not query_identity_anchor_match("atlas", "Borealis Atlasic release")
+    opaque, opaque_truncated = query_target_anchors("NO-SUCH-FACT-CHI")
+    assert opaque == ("no such fact chi",)
+    assert opaque_truncated is False
+    assert not query_identity_anchor_match(opaque[0], "Known Fact Alpha")
+
+
+def test_reranker_view_fusion_keeps_highest_real_view_score() -> None:
+    candidates = [
+        {
+            "knowledge_id": "knowledge_000000000000000000000001",
+            "title": "Evidence source summary",
+            "body": "The source summary records evidence admission.",
+            "semantic_key": "source-summary:evidence-admission",
+            "epistemic_state": "supported",
+            "feedback_utility": 0.0,
+        },
+        {
+            "knowledge_id": "knowledge_000000000000000000000002",
+            "title": "Unrelated procedure",
+            "body": "The procedure has no source summary.",
+            "semantic_key": "procedure:unrelated",
+            "epistemic_state": "supported",
+            "feedback_utility": 0.0,
+        },
+    ]
+    source_ranked = rerank_candidates("摘要说明证据准入来源", candidates)
+    expansion_ranked = rerank_candidates("evidence admission source summary", candidates)
+    fused = rerank_candidate_views(
+        ("摘要说明证据准入来源", "evidence admission source summary"),
+        candidates,
+    )
+    source_scores = {
+        item["knowledge_id"]: item["reranker_score"] for item in source_ranked
+    }
+    expansion_scores = {
+        item["knowledge_id"]: item["reranker_score"] for item in expansion_ranked
+    }
+    expected = {
+        identity: max(source_scores[identity], expansion_scores[identity])
+        for identity in source_scores
+    }
+    assert {
+        item["knowledge_id"]: item["reranker_score"] for item in fused
+    } == expected
+    assert all(item["reranker_profile"] for item in fused)
 
 
 def test_product_source_has_no_benchmark_or_gold_imports() -> None:

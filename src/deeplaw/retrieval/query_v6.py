@@ -32,6 +32,7 @@ from ..util import (
     QUERY_EXPANSION_PROFILE_V2_SHA256,
     canonical_json,
     query_expansion_terms,
+    query_identity_anchor_match,
     query_search_terms,
     query_target_anchors,
     sha256_bytes,
@@ -90,7 +91,6 @@ _CHECKPOINT_SECRET = re.compile(
     r"|\bbearer\s+[A-Za-z0-9._~-]{8,}\b"
     r"|\b(?:sk[-_]|ghp_)[A-Za-z0-9_-]{8,}\b"
 )
-_QUERY_WORD_TOKEN = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*", re.UNICODE)
 
 
 def _bounded(value: Any, *, field: str, maximum: int) -> str:
@@ -398,17 +398,7 @@ def _target(query: str, value: str | dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _identity_anchor_match(anchor: str, text: str) -> bool:
-    anchor_words = tuple(anchor.split())
-    if not anchor_words:
-        return False
-    candidate_words = tuple(
-        match.group(0).casefold() for match in _QUERY_WORD_TOKEN.finditer(text)
-    )
-    width = len(anchor_words)
-    return any(
-        candidate_words[index : index + width] == anchor_words
-        for index in range(len(candidate_words) - width + 1)
-    )
+    return query_identity_anchor_match(anchor, text)
 
 
 def _identity_anchor_filter_values(text: str) -> tuple[str, ...]:

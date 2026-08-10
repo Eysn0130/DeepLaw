@@ -504,6 +504,47 @@ def rerank_candidates(
     return output
 
 
+def rerank_candidate_views(
+    views: Iterable[str],
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fuse bounded query views by each candidate's highest real score."""
+
+    selected_views = tuple(
+        dict.fromkeys(
+            view
+            for view in views
+            if isinstance(view, str) and view
+        )
+    )
+    if not selected_views:
+        return []
+    best: dict[str, tuple[float, int, dict[str, Any]]] = {}
+    for view_index, view in enumerate(selected_views):
+        ranked = rerank_candidates(view, candidates)
+        for candidate in ranked:
+            identity = str(candidate.get("knowledge_id", ""))
+            score = float(candidate.get("reranker_score", 0.0))
+            previous = best.get(identity)
+            if previous is None or score > previous[0] or (
+                score == previous[0] and view_index < previous[1]
+            ):
+                best[identity] = (score, view_index, candidate)
+    ordered = sorted(
+        best.values(),
+        key=lambda item: (-item[0], str(item[2].get("knowledge_id", ""))),
+    )
+    return [
+        {
+            **candidate,
+            "reranker_rank": rank,
+            "reranker_score": round(score, 6),
+            "reranker_profile": LOCAL_RERANKER_MODEL,
+        }
+        for rank, (score, _view_index, candidate) in enumerate(ordered, start=1)
+    ]
+
+
 def detect_communities(
     node_ids: Iterable[str],
     relations: Iterable[dict[str, Any]],

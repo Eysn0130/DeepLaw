@@ -16,7 +16,7 @@ from ..knowledge_autonomy import (
 from ..knowledge_intelligence import (
     estimate_tokens,
     normalize_identity_text,
-    rerank_candidates,
+    rerank_candidate_views,
 )
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
@@ -25,9 +25,11 @@ from ..task_context import normalize_task_context_binding
 from ..util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
-    query_discovery_text,
+    query_discovery_views,
     query_expansion_terms,
+    query_identity_anchor_match,
     query_search_terms,
+    query_target_anchors,
     search_terms,
     sha256_bytes,
     strict_json_loads,
@@ -859,6 +861,7 @@ class PurposeAwareRetrievalService:
         structured_query_anchors = set(_ISO_DATE_ANCHOR.findall(query))
         comparison_query = _is_comparison_query(normalized_query, query)
         query_policy_designators = _policy_designators(query)
+        identity_anchor_values = query_target_anchors(query)[0]
         for item in raw["results"]:
             if _policy_designator_conflicts(query_policy_designators, item):
                 low_relevance_prevented += 1
@@ -876,11 +879,15 @@ class PurposeAwareRetrievalService:
             identity_values = [item.get("title"), item.get("semantic_key")]
             if isinstance(aliases, list):
                 identity_values.extend(aliases)
-            exact_identity_phrase = any(
-                isinstance(value, str)
-                and len(normalized := normalize_identity_text(value)) >= 3
-                and normalized in normalized_query
-                for value in identity_values
+            identity_surface = " ".join(
+                value for value in identity_values if isinstance(value, str)
+            )
+            exact_identity_anchor = bool(
+                identity_anchor_values
+                and any(
+                    query_identity_anchor_match(anchor, identity_surface)
+                    for anchor in identity_anchor_values
+                )
             )
             exact_structured_anchor = _matches_structured_query_anchor(
                 structured_query_anchors, item
@@ -897,7 +904,7 @@ class PurposeAwareRetrievalService:
             )
             if (
                 not {"exact", "identity_alias"}.intersection(channels)
-                and not exact_identity_phrase
+                and not exact_identity_anchor
                 and not exact_structured_anchor
                 and not exact_identity_graph_neighbor
                 and (
@@ -2364,11 +2371,10 @@ class PurposeAwareRetrievalService:
                 query_policy_designators, item
             )
         ]
-        discovery_query = query_discovery_text(query)
         evidence_scores = {
             item["knowledge_id"]: float(item["reranker_score"])
-            for item in rerank_candidates(
-                discovery_query,
+            for item in rerank_candidate_views(
+                query_discovery_views(query),
                 [
                     {
                         "knowledge_id": item["asset_id"],
