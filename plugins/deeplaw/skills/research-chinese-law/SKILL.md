@@ -40,7 +40,7 @@ their own server or plugin prefix to that name. The prefix is not a second tool.
 Do not use any other DeepLaw tool. If the server advertises a different leaf name
 or more than one tool, stop and report an adapter/runtime contract mismatch.
 
-`law_support` routes nine read-only operations:
+`law_support` routes thirteen read-only operations:
 
 - `search`: return a bounded evidence-card set;
 - `get`: fetch one exact segment selected by `segment_id`;
@@ -52,6 +52,10 @@ or more than one tool, stop and report an adapter/runtime contract mismatch.
 - `private_info`: inspect the current private snapshot;
 - `federated_context`: compile separately admitted official, private, and explicitly enabled
   Agent-interpretation partitions under one bounded plan.
+- `capabilities`: read deterministic evidence capabilities for one exact `segment_id`;
+- `challenge_trace`: build one bounded deterministic Authoritative Pack trace for a `query`;
+- `challenge_get`: fetch one exact retained trace by `trace_id`;
+- `challenge_replay`: replay and verify one supplied closed `trace`.
 
 Use `private_*` only when the user explicitly asks to use their DeepLaw private
 legal-reference library. Never infer private scope from a workspace, filename,

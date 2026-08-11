@@ -1,6 +1,7 @@
 # DeepLaw Agent Adapters
 
-DeepLaw provides local adapters for Codex, Claude Code, OpenCode, Obsidian and Tolaria. The two default products are
+DeepLaw provides local configuration adapters for Codex, Claude Code and OpenCode, plus limited
+editor integrations for Obsidian and Tolaria. The two default Agent products are
 read-only; an autonomous mutation capability is a third, separately enabled process and must not be
 collapsed into either query surface:
 
@@ -12,6 +13,8 @@ collapsed into either query surface:
 
 This document describes adapter behavior only. Corpus building, release
 governance, and retrieval internals are separate concerns.
+The default/Advanced/Compatibility/Experimental/Retire Candidate classification is frozen in
+[`../governance/product-surface-manifest.v1.json`](../governance/product-surface-manifest.v1.json).
 
 ## Acceptance status
 
@@ -56,8 +59,8 @@ so the visible name can differ, but the server-level leaf name must remain
 exactly `law_support`. For example, OpenCode renders it as
 `deeplaw_law_support`. Host namespacing does not create a second public tool.
 
-`law_support` routes nine read-only operations under the v0.9 v3 contract (the historical v0.7
-package retains the frozen v2 surface):
+`law_support` routes thirteen read-only operations under the current input/output v4 contract (the
+historical v1-v3 contracts remain compatibility surfaces):
 
 | Operation | Purpose | Required selector |
 | --- | --- | --- |
@@ -70,6 +73,10 @@ package retains the frozen v2 surface):
 | `private_verify` | Verify one private snapshot receipt | `segment_id`, `receipt_id` |
 | `private_info` | Inspect the private snapshot | none |
 | `federated_context` | Compile separately admitted official/private/Agent interpretation partitions | `query`, `confirm_no_case_data=true` |
+| `capabilities` | Read deterministic evidence capabilities for one exact segment | `segment_id` |
+| `challenge_trace` | Build a bounded deterministic Authoritative Pack challenge trace | `query` |
+| `challenge_get` | Fetch one exact locally retained challenge trace | `trace_id` |
+| `challenge_replay` | Replay and verify a supplied challenge trace | `trace` |
 
 No host adapter may expose a separate write, upload, memory,
 reindex, delete, activation, administration, case, or chat tool. Build and
@@ -124,10 +131,13 @@ PDF catalog build. A project-only `uv sync` is insufficient when the Agent
 launches the plugin from another working directory unless its environment also
 exposes that project's `.venv/bin`.
 
-The MCP process inherits its environment. Point it at an immutable database with
-`DEEPLAW_DB`, or point `DEEPLAW_HOME` at a directory containing `ACTIVE` and the
-corresponding `releases/<release-id>/deeplaw.sqlite3`. Do not put a machine-local
-database path in a committed plugin manifest. With neither override, every host
+The raw MCP process inherits the launcher environment, so a production Host configuration must use
+the repository's closed-environment wrapper and pass only the explicitly required DeepLaw
+configuration. Host credential variables, provider API keys, shell startup state, and credential
+paths must not reach the DeepLaw MCP child. Point the wrapper at an immutable database with
+`DEEPLAW_DB`, or at a directory containing `ACTIVE` and the corresponding
+`releases/<release-id>/deeplaw.sqlite3`. Do not put a machine-local database or credential path in a
+committed plugin manifest. With neither DeepLaw data override, every host
 uses the same user-level `~/.deeplaw` home, so a wheel install does not depend on
 the checkout or current working directory.
 

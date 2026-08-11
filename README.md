@@ -50,12 +50,17 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 
 > [!NOTE]
 > **DeepLaw 2.0 是产品品牌，不是软件版本号。** **本地单用户 Agent Knowledge OS** 是当前交付边界。
-> 当前软件版本 `v0.12.0` 在 v0.11 的受治理编译事务之上，正式交付 Semantic
-> Compilation v2、跨 Packet identity 融合、revision-bound Synthesis Refresh、Query Plan v5、
-> 生产级 Obsidian/Tolaria Bridge，以及真实 Agent 语义质量门禁。旧版
+> 当前源码候选的 package 仍为 `0.12.0`，`release_ready=false`；默认 Context 已使用 Query Plan
+> v6 / local Capsule v3 / Provider Capsule v2。Obsidian 仍是 source candidate，Tolaria 仍是
+> `integration_limited`，真实 Host、Human Gold、final blind 与跨平台发布资格尚未闭环。旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
+
+默认产品叙事只突出 `init`、`doctor`、`source add`、`compile`、`reconcile`、`query/context`、
+`backup`、`forget` 与 `host connect`。Semantic/Synthesis/backfill、discovery profile、比较诊断、
+图分析和低层 Sink 操作保留在 Advanced；历史 alias 与持久合同本阶段不删除、不弃用。精确分类见
+[`governance/product-surface-manifest.v1.json`](governance/product-surface-manifest.v1.json)。
 
 ## 核心边界
 
@@ -251,8 +256,8 @@ vault/
 
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | v5：recall/get/lineage/graph/identity/gaps/Wiki/verify/Capsule、Semantic/Compilation 状态和 Query Plan v5 |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
+| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | input/output v6：推荐 query/context/source/wiki/verify；默认 Query Plan v6，v5 仅显式兼容 |
+| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | input v5 / output v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
 | `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主
@@ -262,9 +267,9 @@ vault/
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current** | v0.12.0：Semantic Compilation v2、run-wide identity/completeness、Synthesis Refresh、Query Plan v5、稳定 API/CLI/MCP、生产级 Obsidian/Tolaria Bridge，以及确定性 Agent、多代理机器共识、Living Wiki、28-source Authoritative Pack 与 fresh-wheel 发布门禁 |
+| **Current source candidate** | package `0.12.0`：Query Plan v6、local Capsule v3、Provider Capsule v2、受治理 Compilation/Synthesis、稳定 CLI/MCP/Python 核心；`release_ready=false` |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
-| **Quality closure** | DeepLaw Evaluation Protocol v1 以公开、维护者可见、时间冻结的 holdout 评估仓库检索、自治安全和 Typed Compiler；发布报告绑定 exact wheel、commit、freeze 和逐项结果。无需外部机构认证 |
+| **Development evidence** | 公开、维护者可见的协议与 holdout 只构成 claim-ineligible development evidence；Human Gold、qualification holdout 与 final blind 尚未完成 |
 | **Comparative closure pending** | Codex、Claude Code、OpenCode 外部真实模型语义执行和全部具名基线同条件比较均未执行；no-model 宿主生命周期与确定性 Agent 不冒充真实模型，因此 `competitive_claim_eligible=false` |
 | **Not claimed** | 没有远程 SaaS、多人控制平面、自动法律适用/裁判或模型自授予权限；公开 holdout 不被描述为 secret、unseen 或 contamination-free，也不宣称全面领先或 SOTA |
 

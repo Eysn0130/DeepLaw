@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/product-surface-manifest.v1.schema.json",
+  "title": "DeepLaw product surface manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_version",
+    "lifecycle_status",
+    "release_ready",
+    "default_product",
+    "external_callers",
+    "surfaces",
+    "deprecation_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.product-surface-manifest/v1"},
+    "package_version": {"const": "0.12.0"},
+    "lifecycle_status": {"const": "source_candidate"},
+    "release_ready": {"const": false},
+    "default_product": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/defaultProduct"}
+    },
+    "external_callers": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/caller"}
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/surface"}
+    },
+    "deprecation_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "persistent_contracts_deleted_in_pass10",
+        "aliases_deprecated_in_pass10",
+        "required_before_deprecation"
+      ],
+      "properties": {
+        "persistent_contracts_deleted_in_pass10": {"const": false},
+        "aliases_deprecated_in_pass10": {"const": false},
+        "required_before_deprecation": {
+          "const": [
+            "external_caller_inventory",
+            "historical_data_migration_evidence",
+            "rollback_rehearsal",
+            "owner_approval"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "binding": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?!/)(?!.*(?:/Users/|/home/|[A-Za-z]:\\\\)).+$"
+    },
+    "defaultProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "bindings"],
+      "properties": {
+        "name": {
+          "enum": [
+            "init",
+            "doctor",
+            "source add",
+            "compile",
+            "reconcile",
+            "query/context",
+            "backup",
+            "forget",
+            "host connect"
+          ]
+        },
+        "status": {"enum": ["current", "documented_workflow_no_single_command"]},
+        "bindings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/binding"}
+        }
+      }
+    },
+    "caller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caller", "current_bindings", "compatibility_bindings", "mutation_boundary"],
+      "properties": {
+        "caller": {
+          "enum": [
+            "CLI",
+            "knowledge_support",
+            "knowledge_sink",
+            "law_support",
+            "plugins/skills",
+            "adapters",
+            "tests/contracts",
+            "historical persisted data"
+          ]
+        },
+        "current_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/binding"}
+        },
+        "compatibility_bindings": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/binding"}
+        },
+        "mutation_boundary": {"$ref": "#/$defs/text"}
+      }
+    },
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surface_id",
+        "category",
+        "disposition",
+        "default_highlight",
+        "status",
+        "bindings",
+        "persistent_contract",
+        "rationale"
+      ],
+      "properties": {
+        "surface_id": {"$ref": "#/$defs/identifier"},
+        "category": {
+          "enum": [
+            "Recommended",
+            "Advanced",
+            "Compatibility",
+            "Experimental",
+            "Retire Candidate"
+          ]
+        },
+        "disposition": {"enum": ["Retain", "Merge", "Hide", "Deprecate", "Retire", "Defer"]},
+        "default_highlight": {"type": "boolean"},
+        "status": {
+          "enum": [
+            "current",
+            "advanced_current",
+            "compatibility_retained",
+            "integration_limited",
+            "source_candidate",
+            "external_verification_pending",
+            "deprecation_blocked"
+          ]
+        },
+        "bindings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/binding"}
+        },
+        "persistent_contract": {"type": "boolean"},
+        "rationale": {"$ref": "#/$defs/text"}
+      }
+    }
+  }
+}

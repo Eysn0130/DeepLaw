@@ -51,12 +51,19 @@ same domain services.
 
 > [!NOTE]
 > **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
-> is the current delivery boundary. Software release `v0.12.0` adds Semantic Compilation v2,
-> run-wide identity fusion, revision-bound Synthesis Refresh, Query Plan v5, production
-> Obsidian/Tolaria bridges, and a deterministic multi-agent-consensus semantic quality gate. The older
+> is the current delivery boundary. The source candidate still packages as `0.12.0` and has
+> `release_ready=false`; default Context uses Query Plan v6, local Capsule v3, and Provider Capsule
+> v2. Obsidian remains a source candidate, Tolaria remains `integration_limited`, and real-Host,
+> Human Gold, final-blind, and cross-platform release qualification are incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
+
+The default product story highlights only `init`, `doctor`, `source add`, `compile`, `reconcile`,
+`query/context`, `backup`, `forget`, and `host connect`. Semantic/Synthesis/backfill, discovery
+profiles, comparison diagnostics, graph analytics, and low-level Sink operations stay Advanced.
+Historical aliases and persisted contracts are neither deleted nor deprecated in this pass. See the
+[machine-readable product surface manifest](governance/product-surface-manifest.v1.json).
 
 ## Permanent boundaries
 
@@ -191,8 +198,8 @@ lexical fallback remains available.
 
 | Process / leaf | Permission | Purpose |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | Read-only | v5 recall/query, exact get, explain, lineage, graph, identity, gaps, Wiki, Semantic/Compilation state, Query Plan v5, verification, and Knowledge Capsule |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
+| `deeplaw knowledge mcp --stdio` / `knowledge_support` | Read-only | input/output v6; recommended query/context/source/wiki/verify, default Query Plan v6, explicit v5 compatibility |
+| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | input v5 / output v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
 | `deeplaw mcp --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
 
 The default Knowledge OS plugin registers only `knowledge_support`. A sink requires an owner-created
@@ -203,9 +210,9 @@ administration, or permission changes.
 
 | Status | Capability |
 | --- | --- |
-| **Current in v0.12.0** | Semantic Compilation v2, run-wide identity/completeness, Synthesis Refresh, Query Plan v5, stable CLI/MCP/Python surfaces, production Obsidian/Tolaria bridges, and deterministic-Agent/machine-consensus/Living Wiki/28-source Authoritative Pack/fresh-wheel release gates |
+| **Current source candidate** | package `0.12.0`: Query Plan v6, local Capsule v3, Provider Capsule v2, governed Compilation/Synthesis, and stable CLI/MCP/Python core; `release_ready=false` |
 | **Compatibility** | v0.7 Source IR, reviewed source-derived Knowledge Assets, Proposal Inbox, Workbench, and Retrieval Fabric remain available in their explicit compatibility partition |
-| **Quality closure** | DeepLaw Evaluation Protocol v1 evaluates repository retrieval, autonomy safety, and Typed Compiler quality on a public, maintainer-visible, time-frozen holdout. Release reports bind exact wheel, commit, freeze, and case-level results. No external institution certification is required |
+| **Development evidence** | Public maintainer-visible protocols and holdouts are claim-ineligible development evidence; Human Gold, qualification holdout, and final blind remain incomplete |
 | **Comparative closure pending** | External real-model semantic execution for Codex, Claude Code, and OpenCode and all same-condition named-baseline runs remain unexecuted. No-model host lifecycle and the deterministic Agent are not represented as model evidence; `competitive_claim_eligible=false` |
 | **Not claimed** | Remote SaaS, multi-user control, automatic legal adjudication, model-created permissions, secret/unseen/contamination-free status for the public holdout, or overall superiority/SOTA |
 

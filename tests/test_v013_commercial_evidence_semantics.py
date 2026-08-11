@@ -216,6 +216,56 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
     Draft202012Validator.check_schema(report_schema)
     Draft202012Validator.check_schema(classification_schema)
     Draft202012Validator(classification_schema).validate(CLASSIFICATION)
+    surface_schema = json.loads(
+        (REPOSITORY / "contracts/product-surface-manifest.v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    surface_manifest = json.loads(
+        (REPOSITORY / "governance/product-surface-manifest.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    Draft202012Validator.check_schema(surface_schema)
+    Draft202012Validator(surface_schema).validate(surface_manifest)
+    assert [item["name"] for item in surface_manifest["default_product"]] == [
+        "init",
+        "doctor",
+        "source add",
+        "compile",
+        "reconcile",
+        "query/context",
+        "backup",
+        "forget",
+        "host connect",
+    ]
+    assert {item["caller"] for item in surface_manifest["external_callers"]} == {
+        "CLI",
+        "knowledge_support",
+        "knowledge_sink",
+        "law_support",
+        "plugins/skills",
+        "adapters",
+        "tests/contracts",
+        "historical persisted data",
+    }
+    assert {item["category"] for item in surface_manifest["surfaces"]} == {
+        "Recommended",
+        "Advanced",
+        "Compatibility",
+        "Experimental",
+        "Retire Candidate",
+    }
+    assert surface_manifest["deprecation_policy"] == {
+        "persistent_contracts_deleted_in_pass10": False,
+        "aliases_deprecated_in_pass10": False,
+        "required_before_deprecation": [
+            "external_caller_inventory",
+            "historical_data_migration_evidence",
+            "rollback_rehearsal",
+            "owner_approval",
+        ],
+    }
     assert {item["category"] for item in CLASSIFICATION["categories"]} == {
         "Core",
         "Capability",

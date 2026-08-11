@@ -1,8 +1,9 @@
 # DeepLaw Living Wiki Compiler
 
-Status: **Current v0.12.0 implementation**, 2026-07-30. Release eligibility and exact evidence are
-tracked in [`V0_11_ACCEPTANCE_MATRIX.md`](V0_11_ACCEPTANCE_MATRIX.md) and the formal release
-manifest.
+Status: **Current source candidate; package 0.12.0; release_ready=false**, 2026-08-11. Release
+eligibility and exact evidence are tracked in [`V0_13_ACCEPTANCE_MATRIX.md`](V0_13_ACCEPTANCE_MATRIX.md),
+the product surface manifest, and the applicable frozen qualification artifacts. This status does
+not make Obsidian or Tolaria production-qualified.
 
 ## Contract boundary
 
@@ -235,8 +236,9 @@ The public facade maps internal validation, not-found, permission and state conf
 
 ## MCP and host workflow
 
-`knowledge_support` v4 is read-only and exposes compilation inventory/profile/status/explain,
-purpose-aware query and existing context/verification operations. `knowledge_sink` v3 is a separate
+`knowledge_support` input/output v6 is read-only and exposes compilation
+inventory/profile/status/explain, purpose-aware Query Plan v6 query/context and existing
+verification operations. `knowledge_sink` input v5 / output v4 is a separate
 process and exposes only the operations in its owner-created grant. Its caller-supplied idempotency
 key is durably bound to the exact closed request and a content-addressed result; reusing the key for
 different input fails closed. A compiler host requires both processes; a Skill or retrieved
