@@ -29,12 +29,14 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
 - derived data is replaceable and cannot change legal validity.
 
 Current decision: none of the reviewed knowledge platforms is a DeepLaw runtime
-authority. Pass 8 records a bounded Owner-authorized sibling-reuse path for
-OpenWiki and Tolaria; this supersedes the prior blanket no-code-reuse decision
-only for the frozen manifest below. No source code from either repository has
-been copied into the current source tree or any release artifact. Any future
-copy must name the exact file/symbol and target in the manifest before work
-starts. Whole-repository vendoring, large upstream runtimes, and product-control
+authority. Pass 8 records an Owner-authorized sibling-reuse path for OpenWiki
+and Tolaria; this supersedes the prior blanket no-code-reuse decision. A bounded
+implementation may directly reuse a named file or symbol when that is the
+smallest correct solution; it does not require a separate research pass or a
+new Owner approval. The implementation change must add or update the reuse
+manifest and verification in the same review. No source code from either
+repository has been copied into the current source tree or any release artifact.
+Whole-repository vendoring, large upstream runtimes, and product-control
 plane adoption remain prohibited; sibling material may not introduce another
 Authority, Ledger, Agent runtime, telemetry, or Secret model. The base MCP
 runtime stays lightweight. Offline builders may use separately installed OCR/PDF
@@ -86,13 +88,14 @@ they are exact base-runtime dependency pins recorded in `uv.lock`.
 
 ## Owner-authorized sibling reuse (Pass 8)
 
-Owner authorization permits only a focused, reviewable reuse decision for the two
-named sibling repositories. It is not permission to vendor either repository or
-adopt a large upstream runtime. The frozen scope is:
+Owner authorization permits focused, reviewable direct reuse from the two named
+sibling repositories. It is not permission to vendor either repository or adopt
+a large upstream runtime. The scope is:
 
 - each reuse must bind a concrete PRD outcome and name an exact commit, source
   file/symbol, target file, rights basis, attribution, tests, and security or
-  dependency impact before implementation;
+  dependency impact in the same change; this record is a merge/release control,
+  not a separate product-design phase;
 - `reuse_mode` is one of `verbatim`, `adapted`, `behavioral`, or `reference`;
 - only the individually named files/symbols in the manifest may be considered;
   generated trees, transitive vendor directories, large runtimes, and unrelated

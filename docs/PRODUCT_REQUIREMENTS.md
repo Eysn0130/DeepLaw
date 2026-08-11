@@ -1,13 +1,13 @@
 # DeepLaw Product Requirements
 
 Status: **normative product-direction baseline**  
-PRD revision: **1.2**  
-Reviewed: **2026-08-08**
+PRD revision: **1.3**
+Reviewed: **2026-08-11**
 
 This document defines why DeepLaw exists, which user outcomes it owns, the stable product
 boundaries, and the evidence required before scope may expand. It is intentionally smaller and
 more stable than an implementation specification. Current candidate, release, and qualification
-status lives in `docs/V0_13_CORE_SCOPE_DISPOSITION.md`; research snapshots live in
+status lives in `docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; research snapshots live in
 `docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 Runtime facts remain authoritative in `src/deeplaw`, tests, JSON Schemas, SQLite migrations,
@@ -21,9 +21,10 @@ amend this document through the change-control process in section 16.
 
 ## 1. Product definition
 
-> DeepLaw is a local-first, host-neutral, evidence-governed Agent Knowledge OS. It compiles
-> immutable Source Revisions and governed working knowledge into a human/Agent-readable Living
-> Wiki, then delivers the smallest verifiable Knowledge Capsule needed for the current task.
+> DeepLaw is a local-first, host-neutral, evidence-governed Agent Knowledge OS. It preserves
+> immutable Source Revisions in a source-native evidence plane, compiles governed working knowledge,
+> projects a human/Agent-readable Living Wiki, and delivers the smallest verifiable Knowledge
+> Capsule needed for the current task.
 
 “Knowledge OS” means the local identity, governance, lifecycle, compilation, and context-selection
 kernel plus thin drivers. It does not mean an operating system, Agent runtime, scheduler, model
@@ -41,6 +42,13 @@ DeepLaw's primary job is to improve two outcomes:
 
 Protected legal and other authoritative materials are a strict evidence policy within this same
 Knowledge OS. They are not a separate product and do not redefine DeepLaw as a law-only system.
+
+The source-native evidence plane is the **Evidence Library** product role of the existing Evidence
+Core, not a new database or parallel knowledge engine. Professional documents such as laws,
+standards, policies, manuals, contracts, and research papers remain exact, versioned source objects
+in their original format. The Living Wiki is their governed navigation and knowledge projection;
+it is not the canonical document store and does not require a full editable Markdown copy of every
+source.
 
 DeepLaw is a **Source-to-Knowledge and Task-to-Context Compiler**, not a system for storing or
 injecting as much history as possible.
@@ -327,6 +335,16 @@ merely because a Host can access them.
 identity, exact acquired bytes or a verifiable immutable snapshot, acquisition provenance, and
 scope; connector authentication, filenames, URLs, or provider trust MUST NOT create Authority.
 
+`PRD-SRC-011` Professional or authoritative documents MUST remain in a source-native Evidence
+Library that preserves exact bytes and format, Document and Version identity, source hierarchy,
+Fragments, Locators, parse provenance, and applicable valid time. Searchability MUST NOT depend on
+rewriting the complete document as an editable Wiki page.
+
+`PRD-SRC-012` Extracted text, OCR, layout trees, thumbnails, FTS, vectors, and other document
+accelerators are derived state. They MUST bind the exact Source Revision, parser or model identity,
+configuration, and output hash; they MUST be replaceable and MUST NOT silently repair or normalize
+task-critical source tokens into purported evidence.
+
 ### 7.3 Governed knowledge growth
 
 `PRD-KNOW-001` Durable Knowledge writes MUST create a new revision and audit event rather than
@@ -416,6 +434,19 @@ delete user-owned material.
 or typed relation path with revision, provenance, temporal state, hop budget, truncation, and Gap
 information. Pre-generating a Canvas or path page for every object remains optional derived
 presentation, not the graph contract.
+
+`PRD-WIKI-014` A protected professional Source SHOULD project as a bounded evidence card, catalog
+entry, status view, derived concept page, or source link rather than a full editable transcription.
+The exact Source Revision and required passage are resolved on demand from the Evidence Library;
+Wiki prose or a copied excerpt MUST NOT replace the source.
+
+`PRD-WIKI-015` Fine-grained physical persistence across compilation, evidence, and Wiki projection
+MUST have explicit file-count, storage, rebuild, backup/recovery, and lookup budgets. Large corpora
+MUST NOT amplify every logical record into an unbounded set of filesystem artifacts. Sharding,
+bundling, or on-demand rendering MAY change physical layout, but stable identities, content digests,
+source bindings, receipts, audit replay, corruption detection, Page Registry, Link Index, Resolver,
+and visible Gap semantics MUST remain equivalent. A scale result for one artifact family MUST NOT be
+attributed to Statement, Relation, or Wiki persistence generally without a public-path inventory.
 
 ### 7.5 Context compilation and delivery
 
@@ -518,6 +549,11 @@ Gap rather than a plausible replacement.
 `PRD-EVID-008` DeepLaw supplies evidence and context; it does not decide legal applicability,
 facts, strategy, or a verdict.
 
+`PRD-EVID-009` A request with exact-quote, citation, version, effective-date, exception, proviso,
+cross-reference, completeness, or audit duties MUST use a source-first evidence path. Governed
+knowledge and Wiki relations MAY guide discovery and selection, but they MUST NOT substitute for
+the exact admitted Source passage required by the duty.
+
 ## 8. Public product surfaces
 
 The recommended surface remains deliberately small:
@@ -528,7 +564,7 @@ Operator inspect -> knowledge query
 Owner operate    -> deeplaw CLI
 Explicit write   -> owner-granted knowledge_sink
 Legal read       -> isolated law_support
-Human workspace  -> governed Markdown Living Wiki
+Human workspace  -> governed Living Wiki plus source-native evidence drill-down
 ```
 
 Legacy recall aliases and explicit older Query/Capsule versions are compatibility surfaces, not
@@ -694,7 +730,7 @@ remain zero.
 
 This PRD does not carry mutable release status, package version, benchmark thresholds, or a
 candidate-specific checklist. The authoritative current disposition is
-`docs/V0_13_CORE_SCOPE_DISPOSITION.md`; thresholds and holdout rules live in the applicable
+`docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; thresholds and holdout rules live in the applicable
 evaluation protocol. A capability is not shipped, qualified, or claim-eligible merely because its
 target appears here.
 
@@ -750,6 +786,36 @@ Before implementation, every proposed feature MUST supply a Product Task Card an
    task?
 
 Missing evidence for questions 2 through 4 means **do not implement**.
+
+Existing code is subject to the same evidence standard. Every public command, MCP operation,
+Schema, persistent store, page family, model path, adapter, and background or maintenance workflow
+MUST carry two independent classifications.
+
+Its **structural classification** is one of:
+
+- **Core:** directly serves a PRD outcome through a recommended product journey;
+- **Driver:** a thin interface over Core without duplicated policy or persistence;
+- **Compatibility:** preserves an identified external consumer or stored-state obligation without
+  becoming a second product path; or
+- **Experiment:** non-default, non-claimable, and removable without becoming a product dependency.
+
+Its **lifecycle classification** is one of:
+
+- **Active:** supported in its documented role;
+- **Hidden:** retained for operator, internal-state-machine, or experimental use but excluded from
+  the recommended product journey;
+- **Deprecated:** retained temporarily with an inventory-backed replacement and removal plan;
+- **Deferred:** not implemented or not promoted until the feature-admission evidence exists; or
+- **Retired:** removed from active use because it duplicates another path, lacks an evidenced user
+  task, violates an invariant, or imposes disproportionate security, storage, migration,
+  operational, or maintenance cost.
+
+Passing unit tests or already existing in the tree is not sufficient reason to retain a capability.
+Removal is a first-class product outcome. Before deleting released behavior or persistent state,
+the maintainer MUST inventory real callers, contracts, migrations, recovery, and user data and
+provide the applicable deprecation or export path. Unreleased candidate-only behavior with no
+external caller or durable-state obligation MAY be removed directly with focused regression and
+documentation evidence.
 
 The default complexity budget is:
 
@@ -845,7 +911,9 @@ quality claim. The durable conclusions are:
   transcript or preference recall; it supplies portable, task-lineage-specific governed project
   state and evidence.
 - LLM Wiki compilation can reduce repeated derivation but is not lossless; coverage probes and
-  exact-evidence fallback are product requirements.
+  exact-evidence fallback are product requirements. Professional source collections remain
+  source-native Evidence Libraries, while the Wiki supplies bounded navigation, governed derived
+  knowledge, and links back to exact Source.
 - Markdown, Wikilinks, Obsidian, Tolaria, OKF, and AKBP are open editor or interchange surfaces,
   not DeepLaw identity, Authority, or capability systems.
 - Memory correctness is a governed state trajectory and must be evaluated through update, use,
@@ -870,9 +938,10 @@ Frozen upstream commits, licenses, primary references, and current candidate con
 DeepLaw's future is not a larger RAG, a transcript warehouse, an Obsidian clone, a universal graph,
 or an Agent runtime. Its durable direction is:
 
-> preserve exact evidence; compile governed knowledge; maintain explicit project, task-lineage,
-> revision, time, conflict, and Authority state; let humans and Agents share an open Wiki; and
-> deliver only the minimum verified context needed for the next correct action.
+> preserve exact evidence in source-native form; compile governed knowledge; maintain explicit
+> project, task-lineage, revision, time, conflict, and Authority state; let humans and Agents share
+> an open Wiki without turning it into the canonical document store; and deliver only the minimum
+> verified context needed for the next correct action.
 
 If a proposed feature does not materially improve that chain under an external task and a frozen
 budget, it is outside the product core.

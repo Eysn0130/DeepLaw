@@ -50,10 +50,11 @@ continuity/context rows only.
 
 ## Product boundary
 
-DeepLaw is a local-first Agent Knowledge OS that compiles source materials into a governed Living
-Wiki and returns verifiable, bounded knowledge context to Codex, Claude Code, OpenCode, and other
-Agent runtimes. It does not own the model, conversation loop, general tool execution, legal
-adjudication, or a remote control plane.
+DeepLaw is a local-first Agent Knowledge OS that preserves source materials in a source-native
+evidence plane, compiles governed knowledge, projects a governed Living Wiki, and returns
+verifiable, bounded knowledge context to Codex, Claude Code, OpenCode, and other Agent runtimes. It
+does not own the model, conversation loop, general tool execution, legal adjudication, or a remote
+control plane.
 
 DeepLaw is logically one governed knowledge system with multiple policy planes, not a collection of
 disconnected knowledge products or databases. A plane defines origin, Authority, scope,
@@ -73,6 +74,29 @@ Protected authoritative packs are Authority classes within the evidence domain. 
 interpretations derived from them remain governed knowledge with `legal_authority=false`; even a
 human-verified interpretation does not become the authoritative source itself. SQLite and derived
 indexes support these domains. They do not create another source of Authority.
+
+### Source-native Evidence Library and Wiki projection
+
+The **Evidence Library** is the human/product role of the existing Evidence Core. It is not a new
+store, policy plane, or retrieval engine. Laws, standards, policies, manuals, contracts, research
+papers, and other professional sources remain exact Source Revisions in their original format with
+Document/Version identity, source hierarchy, Fragments, Locators, parser provenance, and applicable
+time. Derived text, OCR, layout, FTS, vectors, thumbnails, and previews are replaceable accelerators
+bound to those exact bytes.
+
+```text
+source-native file / bytes
+  -> immutable Source Revision + Document/Version/Locator
+  -> rebuildable Document IR and search accelerators
+  -> governed Knowledge Revisions and bounded Wiki navigation
+  -> source-first drill-down when quotation, version, time, or completeness is required
+```
+
+The Living Wiki exposes readable identities, status, derived concepts, relationships, gaps, and
+bounded evidence links. It does not become the canonical container for a professional document and
+does not require full source transcription into editable Markdown. Protected source projections are
+read-only evidence views; any human or Agent interpretation remains a separately governed Knowledge
+Revision.
 
 Current v0.12 process and storage isolation, especially for `law_support`, enforces trust,
 capability, and privacy boundaries. It does not make the Legal Pack a second Knowledge OS or permit

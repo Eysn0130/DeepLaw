@@ -1,19 +1,24 @@
-# DeepLaw PRD 1.2 traceability matrix
+# DeepLaw PRD 1.3 traceability matrix
 
-Status: **current source-candidate mapping**, re-audited 2026-08-10 through Pass 5 implementation
-commit `7a9d7d1f242fe46db1f258737305369f50ec69de`. This document adopts PRD 1.2 into the development
-and acceptance process. It is not a release note, qualification result, or permission to implement
-every Target.
+Status: **current source-candidate mapping**, carried forward from the Pass 5 full mapping and
+updated 2026-08-11 with the Pass 8 disposition and PRD 1.3 evidence/Wiki boundary clarification.
+This is not a fresh qualification, release note, or permission to implement every Target.
 
 ## Frozen audit boundary
 
-- PRD revision: `1.2`; SHA-256:
-  `daa524d62471801ca79699948ebca52ab194e14adcdf0bc1d332850fd7a12fb8`.
+- PRD revision: `1.3`; SHA-256:
+  `f83bf5a9b29eef9b0af80034b2190266f1ba74edc5c56f422289ab3a49aed9b5`.
 - Upstream research SHA-256:
   `00dfab0dfed139f5d81982061a75896f29552f56a125aa83bec57f0c6a860967`.
-- Branch: `codex/v013-evidence-provenance`; reviewed Pass 5 implementation commit/tree:
-  `7a9d7d1f242fe46db1f258737305369f50ec69de` /
-  `76aae2d9a42622db2984c86f3b3fa667f21c8f5d`.
+- Pass 8 reviewed upstream coordinates are OpenWiki
+  `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) and Tolaria
+  `ab01faa6773136a58285d04cb81e2587c11bac85`. These are frozen review/external-probe
+  coordinates, not dependency pins or assertions about either upstream's current HEAD.
+- Branch: `codex/v013-pass8-lean-qualification`; Pass 8 final code candidate commit/tree:
+  `2a635d228e99537304282223ae08ef066a4961e2` /
+  `566b2f546816264d997f1418c61be6c25cdb2494`. The pre-PRD-1.3 documentation HEAD/tree is
+  `2dd0e8a0b97239eb28cd0e8ca9a2c939363a2f59` /
+  `a3340c2364407269868ca99be61c4bd63b98e7f8`.
 - The Owner's prior work was preserved. The remediation is split into failure reproductions,
   routing/snapshot correction, sink compatibility, route-first retrieval, bounded diagnostics,
   repository-development protocol rotation, and the v0.13 release gate. No reset, force push,
@@ -25,8 +30,12 @@ every Target.
   Semantic, and Statement Evidence compilation cores remain additive v1 migrations. There is no
   standalone `migrations/` directory; migration, verified backup, recovery, and rollback are
   implemented in the domain stores.
-- Current implementation baseline before this documentation rotation:
-  `uv run --frozen pytest --strict-markers` → `1253 passed, 9 skipped in 328.52s`.
+- Current source-candidate read surfaces are Query Plan v6, local Capsule v3, Provider Capsule v2,
+  and MCP `knowledge-support-output/v6`; the mutation surface is
+  `knowledge-sink.input/v5` with frozen v2 compatibility. The published package remains v0.12.0;
+  these candidate surfaces are not thereby released as v0.13.
+- Pass 8 final code-candidate baseline before this documentation rotation:
+  `uv run --frozen pytest --strict-markers` → `1427 passed, 6 skipped`.
 - Historical repository Gold freeze inputs are inventoried by
   `benchmarks/quality/repository-gold-v1.json`: `README.md`, `AGENTS.md`, `README_EN.md`,
   `docs/AGENT_ADAPTERS.md`, `src/deeplaw/knowledge_autonomy.py`,
@@ -72,7 +81,7 @@ Only the PRD states `Target`, `Implemented`, `Qualified`, `Released`, `Deferred`
 the mapped behavior with repository regression evidence; it does not mean the behavior passed an
 independent Human Gold, real-Host, exact-Pack, scale, portability, or release-artifact gate.
 `Qualified` requires capability-specific external evidence, and `Released` requires a published
-artifact bound to that evidence. No PRD 1.2 row is marked `Qualified` or `Released` in this audit.
+artifact bound to that evidence. No PRD 1.3 row is marked `Qualified` or `Released` in this audit.
 
 Evidence abbreviations in the table are repository-relative paths:
 
@@ -89,7 +98,7 @@ Evidence abbreviations in the table are repository-relative paths:
   `src/deeplaw/wiki_coverage.py`; `LEGAL`: `src/deeplaw/store.py`,
   `src/deeplaw/search.py`, and `src/deeplaw/mcp_server.py`.
 - `ARCH`: `docs/ARCHITECTURE.md`; `AKO`: `docs/AUTONOMOUS_KNOWLEDGE_OS.md`;
-  `DISP`: `docs/V0_13_CORE_SCOPE_DISPOSITION.md`; `UP`:
+  `DISP`: `docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; `UP`:
   `docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 ## Problem and principle mapping
@@ -103,7 +112,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-PROBLEM-005 | Keep evidence, interpretation, provenance, and Authority distinct | Target | KA, LEGAL | Knowledge v3; legal evidence v2 | autonomy and legal tests | Legal development qualification failed | Exact signed Pack and independent legal Gold absent | Obtain verified Pack and legal Gold |
 | PRD-PROBLEM-006 | Reject poisoning, false state, scope escape, and secret persistence | Target | KA, KMCP, host harnesses | SINK5 with frozen v2; provider gates | security and host-isolation tests | Fake-host canary only | Real isolated Hosts not executed | Run preflight and real Hosts only after Owner prerequisites |
 | PRD-PROBLEM-007 | Preserve temporal change, supersession, and stale-state gaps | Target | KA, KC, Q6 | revision/relation/query-plan contracts | temporal/freshness tests | None independent | Semantic restore and stale-head user tasks unqualified | Freeze temporal and restore tasks |
-| PRD-PROBLEM-008 | Fail closed across Vault, project, worktree, and task lines | Target | KA, KOS, Q6, TC | task binding v1 plus existing Vault/scope contracts | PRD 1.2 binding/lineage/worktree/Vault regressions | Same-Vault wrong-line reproduced then remediated in development; default physical cross-Vault leak not reproduced | Explicit cross-Vault references and full fork/conflict lifecycle remain unqualified | Freeze external lineage and explicit cross-Vault tasks |
+| PRD-PROBLEM-008 | Fail closed across Vault, project, worktree, and task lines | Target | KA, KOS, Q6, TC | task binding v1 plus existing Vault/scope contracts | PRD 1.3 binding/lineage/worktree/Vault regressions | Same-Vault wrong-line reproduced then remediated in development; default physical cross-Vault leak not reproduced | Explicit cross-Vault references and full fork/conflict lifecycle remain unqualified | Freeze external lineage and explicit cross-Vault tasks |
 | PRD-PRINCIPLE-001 | Minimum sufficient context | Target | Q6, CAP | Capsule v3/provider v2 | quality/context tests | Continuity development score | Context-density threshold failed | Fresh holdout and task-success comparison |
 | PRD-PRINCIPLE-002 | Evidence before interpretation | Implemented | KA, KC, LEGAL | evidence/Statement/legal contracts | source, Statement, legal tests | Wiki development chain | Legal qualification failed | Exact-Pack and legal Human Gold qualification |
 | PRD-PRINCIPLE-003 | One governed system with isolated policy planes | Implemented | KS, KA, KC, LEGAL | shared identity/revision contracts | autonomy/source/legal tests | None independent | Physical-plane parity not externally qualified | Keep shared semantics in every future repair |
@@ -150,6 +159,8 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-SRC-008 | Targeted refinement only; no unbounded regeneration/injection | Implemented | KC, Q6 | bounded compilation/query schemas | semantic/query tests | None independent | No external refinement task | Preserve bounds in future failure reproduction |
 | PRD-SRC-009 | Bounded owner-visible source acquisition manifest | Implemented | `source_connectors.py`, `source_adapters.py` | source snapshot contracts | source connector/security tests | Local-only | No external connector qualification | Run allowlist/exclusion/provenance task |
 | PRD-SRC-010 | Connector cannot create identity or Authority | Implemented | source connectors, KS admission | snapshot/source identity schemas | connector/authority tests | Local-only | No adversarial external acquisition | Test alias/path/URL collisions |
+| PRD-SRC-011 | Keep professional/authoritative documents source-native with exact Document/Version/Locator identity | Target | Foundation implemented in Evidence Core, KS, LEGAL, and Document IR | source/document/legal schemas | source, parser, document and legal tests | Journey unqualified; local foundation evidence only | Broad professional-format, Wiki-to-Source drill-down, and exact Legal Pack qualification remain absent | Run source-native PDF/DOCX/HTML and exact legal tasks without full-Wiki transcription |
+| PRD-SRC-012 | Treat OCR/layout/search accelerators as revision-bound replaceable state | Implemented | document pipeline, derived indexes | parser/derived manifests | parser, OCR-risk, rebuild tests | Local development only | Critical-token and multi-parser external corpus unqualified | Freeze critical-token mutation and rebuild-equivalence Gold |
 | PRD-KNOW-001 | Every mutation creates revision and audit event | Implemented | KA coordinator | Knowledge revision/event schemas | autonomous/audit tests | None independent | Same-owner OS compromise out of scope | Retain replay/integrity hard gate |
 | PRD-KNOW-002 | Separate owner-granted knowledge_sink | Implemented | sink server, KA | SINK5 with frozen v2 compatibility | sink MCP/contract tests | Local stdio only | Real Host grant isolation pending | Verify resolved tool set and OS isolation |
 | PRD-KNOW-003 | Read/query/context/Wiki/law surfaces contain no hidden writes | Implemented | KMCP, KOS, LEGAL | read MCP schemas | MCP/no-write tests | Local stdio only | Real host not executed | Repeat Ledger-head no-write checks in Hosts |
@@ -178,6 +189,8 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-WIKI-011 | Wikilinks/backlinks are navigation; typed Relation Revisions assert semantics | Implemented | WIKI link index, KA relations | Knowledge Relation v3 | link/graph/relation tests | Local only | No external wrong-relation task | Add co-occurrence negative Gold |
 | PRD-WIKI-012 | Distinguish protected, derived, governed-editable, and user-owned pages | Target | partial ownership manifest/reconcile | manifest/Knowledge contracts | ownership tests | Local owner-file evidence | Complete ownership class semantics not proven | Freeze protected/editable/user-file human task |
 | PRD-WIKI-013 | Bounded typed neighborhood/path with provenance, time, hops, truncation, Gap | Target | bounded graph read only | relation/query-plan schemas | graph tests | None | No true explanatory Relation Path API | Reproduce a core path task before implementation |
+| PRD-WIKI-014 | Project protected sources as bounded cards/links, not editable canonical transcriptions | Target | partial source/evidence projections | Wiki/source manifests | projection/ownership tests | Local only | General professional Evidence Library journey and human drill-down are unqualified | Freeze paired Wiki-to-exact-Source task before expanding page families |
+| PRD-WIKI-015 | Bound fine-grained physical persistence across compilation, evidence, and projection | Target | Statement evidence CAS plus current sharded Wiki projection | Statement/receipt and page/registry/manifest contracts | Statement evidence, 1k Wiki, and focused shard tests | Pass 8 100k Statement construction diagnostic is claim-ineligible | The diagnostic used 310,116 files and 1,188,124,770 bytes; the known implementation writes `statement`, `statement_map`, and `statement_evidence_receipt` CAS objects per Statement, but the artifact-family share still requires a fresh public-path inventory. Wiki 10k/100k and Relation physical profiles were not executed, so neither is assigned the same root cause. | Reproduce 1k/10k artifact-family counts through public paths, then qualify a bounded physical profile without changing identity, receipt, replay, recovery, or visible semantics |
 
 ## Context and retrieval mapping
 
@@ -211,6 +224,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-EVID-006 | False Authority, wrong version, invalid locator/quote, mutation are zero-tolerance | Implemented | LEGAL verification/admission | legal evidence schemas | legal hard-failure tests | Development hard zeros only | Current/exception primary evidence absent | Run independent legal Gold on exact Pack |
 | PRD-EVID-007 | Unverifiable version/temporal chain returns Gap | Implemented | LEGAL, Q6 | federated/context schemas | temporal/no-answer tests | Development Gap result | No verified temporal chain | Qualify Gap precision/recall |
 | PRD-EVID-008 | DeepLaw supplies evidence/context, not legal judgment | Implemented | legal read surface | law MCP schemas | contract/negative-operation tests | Local only | Model task not executed | Keep adjudication outside Host prompts/tools |
+| PRD-EVID-009 | Use source-first retrieval for quote/version/time/exception/proviso/cross-reference/completeness duties | Target | Partial Q6 duty/fallback and LEGAL foundation | query-plan/evidence-card schemas | duty, citation, temporal and fallback tests | Development foundation only | Public-path tasks have not yet shown that every duty materializes the exact admitted Source Revision and Locator; exact Legal Pack, Human Gold, OCR-critical-token, and real Host runs are absent | Reproduce all named duties, require exact passage materialization or an acceptable Gap, and retain zero wrong-version/locator/Authority failures |
 | PRD-SEC-001 | Local canonical state; no implicit upload/telemetry/background cloud | Implemented | stores, explicit connectors | snapshot/manifest contracts | no-network/security tests | Local only | Same-owner external tools out of boundary | Verify clean install and network policy later |
 | PRD-SEC-002 | Treat all imported and retrieved content as untrusted data | Implemented | KA risk gate, projection gates | sink/Knowledge schemas | injection/quarantine tests | Local only | Real-model poisoning absent | Add adversarial Human Gold task |
 | PRD-SEC-003 | Closed Host environment and complete Provider-secret isolation | Implemented | host harness allowlists | host report schemas | host-environment-isolation tests | Fake-host canary pass | Real Provider blocked by Owner prerequisites | Keep real calls blocked until prerequisites |
@@ -288,12 +302,15 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 
 ## Current source-candidate status pointer
 
-Pass 7 does not upgrade any PRD row to `Qualified` or `Released`. The current correctness,
-measurement-boundary, external-prerequisite and gate disposition is recorded only in
-`docs/V0_13_PASS7_DISPOSITION.md`; the Pass 1-6 documents remain immutable historical evidence.
-The repository-visible v5 diagnostic and v6 Context report are tuning-used development evidence.
-Human Gold, human Wiki task, exact Legal Pack, real Codex, required scale/performance, Platform
-Core and artifact redownload remain `not_executed` or failed.
+Pass 7 is historical development evidence. Pass 8 supersedes it only for the current candidate
+disposition and does not upgrade any PRD row to `Qualified` or `Released`. The current boundary is
+recorded in `docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; Pass 1-7 documents remain immutable
+historical evidence. Pass 8 report hashes name external or temporary artifacts that are not all
+present in the current tree, so those measurements are claim-only unless a tracked artifact and
+runner can reproduce them. Repository-visible development Gold and Context reports are
+tuning-used, not independent holdout evidence. Human Gold, human Wiki task, exact Legal Pack, real
+Codex/OpenCode, actual Provider tokens, required Wiki/Relation scale, 3-OS verification, final
+artifact chain, signature, and public redownload remain `not_executed` or unresolved.
 
 Current disposition remains:
 
