@@ -11,9 +11,11 @@ fixtures. They are public, label-visible, repository-visible, non-independent, a
 claim evidence.
 
 The v0.13 release gate additionally requires repository-external Human Gold, Compiler/Evaluator
-isolation receipts, frozen qualification/final-blind holdouts, real Host/model tasks, exact Legal
-Pack evidence, current-candidate scale and cross-platform results. Those artifacts do not exist in
-this repository development protocol.
+isolation receipts, frozen qualification/final-blind holdouts, passing real Host/model tasks, exact
+Legal Pack evidence, complete current-candidate scale, and cross-platform results. Pass 11 retains
+some claim-ineligible exact-candidate Host, editor, scale, and artifact observations, but they do
+not supply this complete external gate set and are not part of this repository-visible development
+protocol. See [`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).
 
 DeepLaw's evaluation architecture uses:
 

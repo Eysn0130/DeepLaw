@@ -1,0 +1,62 @@
+{
+  "schema_version": "deeplaw.pass11-final-artifact-evidence/v1",
+  "candidate": {
+    "git_commit": "9aea8598b231ae85a70a478f37682a9b7a17f024",
+    "git_tree": "425d07324c22de051e2bf00fe04e7a9b80de9e2b",
+    "package_version": "0.12.0",
+    "working_tree_clean": true
+  },
+  "distributions": {
+    "wheel": {
+      "name": "deeplaw-0.12.0-py3-none-any.whl",
+      "bytes": 1243859,
+      "sha256": "1e997e94b619e228cd9a692b51d20c7ff3ca001fd5db74ce9d0a005397ca0976"
+    },
+    "sdist": {
+      "name": "deeplaw-0.12.0.tar.gz",
+      "bytes": 14276324,
+      "sha256": "5c19c9fa598aefb328cae9480b3030b70cbc6947c3a23cb475741773c2a95806"
+    }
+  },
+  "retained_reports": [
+    {"name": "audit-build.json", "bytes": 60676, "sha256": "8d7b77c25c064658e582ed0a621faec764e76f495f68779ac7ad4238215d4ca0"},
+    {"name": "audit-default.json", "bytes": 60678, "sha256": "96c02f6aa6575ca90e12867935267452b079da60b1e7900ceca3ba2a71adf89d"},
+    {"name": "audit-discovery.json", "bytes": 60680, "sha256": "fe57ad2743aeef88b4c9fc261ab70a252e8813a178bb163ca6e8f0665715dd8e"},
+    {"name": "audit-document-engine.json", "bytes": 60872, "sha256": "71b79b3e653ede2d35bbdf744908289ee28d60dd00827f47ca7fcd821af1a2c1"},
+    {"name": "deeplaw-0.12.0-licenses.json", "bytes": 130360, "sha256": "a806435697443c03507168ed6e5426cfc116fe32bdba72c550d24edbf6b0c95e"},
+    {"name": "deeplaw-0.12.0.cdx.json", "bytes": 46219, "sha256": "75a6e615b191f2c202b279a273af004ad0400a2f3a1df82d34c6ae31cabbe171"},
+    {"name": "distribution-lifecycle.json", "bytes": 67288, "sha256": "190cf70a38d9cc98fa64e3cf52985d88d7f625cf9473319420ebbe637046487e"},
+    {"name": "reproducible-build.json", "bytes": 61811, "sha256": "120fca8089f971db442b7ad1eda22010f870836a0572cfa0349c9d55e5ad30f7"}
+  ],
+  "darwin_install_smoke": [
+    {"python": "3.11.15", "wheel_install": true, "cli_version": true, "package_version": true, "dependency_check": true, "uninstall": true},
+    {"python": "3.12.13", "wheel_install": true, "cli_version": true, "package_version": true, "dependency_check": true, "uninstall": true},
+    {"python": "3.13.13", "wheel_install": true, "cli_version": true, "package_version": true, "dependency_check": true, "uninstall": true}
+  ],
+  "executed": {
+    "byte_reproducible_wheel_and_sdist": true,
+    "darwin_python_install_smoke": true,
+    "darwin_python_311_distribution_lifecycle": true,
+    "upgrade_from_0_6_0": true,
+    "dependency_audits": true,
+    "cyclonedx_sbom_generated": true,
+    "license_inventory_passed": true
+  },
+  "not_executed": {
+    "full_nine_cell_platform_matrix": true,
+    "linux": true,
+    "windows": true,
+    "signed_provenance_attestation": true,
+    "artifact_signature": true,
+    "public_redownload": true,
+    "exact_wheel_vault_snapshot_restore_rollback": true,
+    "support_bundle_redaction": true,
+    "final_blind": true
+  },
+  "claim_eligible": false,
+  "release_gate_passed": false,
+  "release_ready": false,
+  "version_change_authorized": false,
+  "tag_authorized": false,
+  "publication_authorized": false
+}

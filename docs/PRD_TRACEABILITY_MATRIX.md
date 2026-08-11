@@ -22,6 +22,8 @@ Run Timeline and semantic restore remain `not_claimed` as recorded in
 The exact-candidate Obsidian seam, current Tolaria pin, professional-Evidence regressions, and
 partial 1k/10k/100k scale observations are bounded by
 [`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
+The current artifact and final executed/failed/not-executed decision are recorded in
+[`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).
 
 ## Frozen audit boundary
 

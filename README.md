@@ -80,6 +80,8 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 [`docs/V0_13_PASS11_OPENCODE_DISPOSITION.md`](docs/V0_13_PASS11_OPENCODE_DISPOSITION.md)。
 当前 Wiki、Obsidian、Tolaria、专业 Evidence 与 scale 处置见
 [`docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md)。
+Pass 11 最终 executed/failed/not-executed 与 artifact 决策见
+[`docs/V0_13_PASS11_FINAL_DISPOSITION.md`](docs/V0_13_PASS11_FINAL_DISPOSITION.md)。
 
 默认 Help 只展示这条 Basic journey；`--help-advanced`、`--help-admin` 和
 `--help-compatibility` 分别展开专家、管理员和历史兼容入口。连接 Host 前，owner 可生成一个经过

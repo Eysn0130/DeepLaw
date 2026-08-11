@@ -88,6 +88,8 @@ isolated DeepSeek task and the evaluator-only `not_scored` result.
 The [Pass 11 Wiki and Evidence disposition](docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md) records
 the exact-candidate Obsidian seam, current Tolaria pin, scale diagnostics, and professional/legal
 evidence boundary.
+The [Pass 11 final disposition](docs/V0_13_PASS11_FINAL_DISPOSITION.md) records the exact artifact,
+executed/failed/not-executed inventory, and unchanged release decision.
 
 Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
 `--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.
