@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -239,6 +240,29 @@ def test_host_connect_fails_closed_when_real_context_seam_is_not_callable(
     monkeypatch.setattr(host_connect_module.KnowledgeOS, "open", staticmethod(fail_open))
     with pytest.raises(RuntimeError, match="Host connect blocked"):
         build_host_connect_plan(host="codex", vault_path=vault)
+
+
+def test_host_connect_loads_contract_from_installed_package_layout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed_module = tmp_path / "site-packages" / "deeplaw" / "host_connect.py"
+    packaged_contract = installed_module.parent / "contracts" / (
+        "host-connect-plan.v1.schema.json"
+    )
+    packaged_contract.parent.mkdir(parents=True)
+    shutil.copy2(
+        Path(__file__).resolve().parents[1]
+        / "contracts"
+        / "host-connect-plan.v1.schema.json",
+        packaged_contract,
+    )
+    installed_module.touch()
+    monkeypatch.setattr(host_connect_module, "__file__", str(installed_module))
+
+    contract = host_connect_module._contract()
+
+    assert contract["$id"].endswith("host-connect-plan.v1.schema.json")
 
 
 def test_owner_forget_routes_explicit_asset_knowledge_and_source_targets(

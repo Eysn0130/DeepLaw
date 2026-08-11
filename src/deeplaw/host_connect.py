@@ -14,10 +14,10 @@ HostName = Literal["codex", "claude-code", "opencode"]
 
 
 def _contract() -> dict[str, Any]:
-    path = (
-        Path(__file__).resolve().parents[2]
-        / "contracts/host-connect-plan.v1.schema.json"
-    )
+    name = "host-connect-plan.v1.schema.json"
+    packaged = Path(__file__).resolve().parent / "contracts" / name
+    repository = Path(__file__).resolve().parents[2] / "contracts" / name
+    path = packaged if packaged.is_file() else repository
     value = strict_json_loads(path.read_bytes())
     if not isinstance(value, dict):
         raise RuntimeError("Host Connect Plan contract is invalid")
