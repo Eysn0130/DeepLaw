@@ -62,9 +62,10 @@ bundle redaction were not executed. The machine-readable local evidence is under
   current Tolaria source pin, reproducible distributions, local dependency/SBOM/license checks,
   and Darwin three-Python install smoke executed.
 - The 69db28c query/graph scale report was preserved without rebinding after the visible
-  development Gold rotated. Its current-checkout verification now correctly reports a Gold byte
-  mismatch; the runner had recorded that Gold was not read or scored, so these remain historical
-  candidate measurements rather than qualification evidence.
+  development Gold rotated and a later Windows ACL fix changed a bound source file. Its
+  current-checkout verification now correctly reports Gold and candidate-source byte mismatches;
+  the runner had recorded that Gold was not read or scored, so these remain historical candidate
+  measurements rather than qualification evidence.
 
 ## Failed observations
 

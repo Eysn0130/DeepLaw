@@ -66,10 +66,11 @@ safe audited bulk constructor exists. No private bulk API was added to manufactu
 
 The query/graph report remains byte-for-byte bound to candidate `69db28c`. It explicitly records
 that the synthetic scale construction did not read or score the repository-visible development
-Gold. After the Pass 11 documentation changed and that development Gold was rotated, verification
-from the current checkout correctly returns `Gold byte binding mismatch`. The historical report
-and its manifest were not rebound or rewritten; its measurements are retained as historical
-candidate observations and are not current qualification evidence.
+Gold. After the Pass 11 documentation changed, the development Gold was rotated, and the later
+Windows ACL fix changed one source file bound by the runner, verification from the current checkout
+correctly returns `Gold byte binding mismatch` and `candidate source byte binding mismatch`. The
+historical report and its manifest were not rebound or rewritten; its measurements are retained as
+historical candidate observations and are not current qualification evidence.
 
 ## Professional Evidence boundary
 

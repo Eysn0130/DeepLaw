@@ -78,7 +78,10 @@ def test_pass11_query_graph_report_preserves_historical_limits_without_rebinding
     report = _load("query-graph-scale-69db28c.json")
     assert verify_report(report) == {
         "valid": False,
-        "errors": ["Gold byte binding mismatch"],
+        "errors": [
+            "Gold byte binding mismatch",
+            "candidate source byte binding mismatch",
+        ],
     }
     bindings = report["evidence_bindings"]
     assert isinstance(bindings, dict)
