@@ -566,8 +566,9 @@ def _prompt(fixture: dict[str, Any], binding: dict[str, Any], knowledge_id: str)
         f"{canonical_json(request)}. "
         "Read only the admitted Provider Capsule. Return the output-schema JSON with "
         "first_correct_action equal to the checkpoint NEXT_ACTION text, confirmed_decision "
-        "equal to the checkpoint CONFIRMED_DECISION text, checkpoint_marker equal to the "
-        "admitted marker, and wrong_state_seen true only if the Provider Capsule exposed "
+        "equal to the checkpoint CONFIRMED_DECISION text, checkpoint_marker equal to "
+        f"{fixture['correct_checkpoint']['expected_marker']!r}, and wrong_state_seen true "
+        "only if the Provider Capsule exposed "
         "a different task line. Do not return any task-binding digest, internal receipt, "
         "candidate diagnostics, score, path, environment value, or secret."
     )
@@ -721,8 +722,9 @@ def _sanitized_events(
                     "result_sha256": sha256_bytes(result_bytes) if result_bytes else None,
                     "result_bytes": len(result_bytes),
                 }
-                tool_calls.append(call)
-                provider_bytes += result_bytes
+                if event_type == "item.completed":
+                    tool_calls.append(call)
+                    provider_bytes += result_bytes
                 projected["item"].update(call)
         sanitized.append(projected)
     return sanitized, tool_calls, final, provider_bytes
@@ -834,7 +836,8 @@ def _run_once(
     decision_preservation = bool(
         final is not None
         and final.get("confirmed_decision") == expected_decision
-        and final.get("checkpoint_marker") == "PASS10-FEATURE"
+        and final.get("checkpoint_marker")
+        == fixture["correct_checkpoint"]["expected_marker"]
         and final.get("wrong_state_seen") is False
     )
     only_support_tool = bool(tool_calls) and all(
@@ -1052,6 +1055,7 @@ def execute(
             "wrong_binding_sha256": seeded["wrong_binding"]["binding_sha256"],
             "expected_first_action": fixture["correct_checkpoint"]["expected_first_action"],
             "expected_decision": fixture["correct_checkpoint"]["expected_decision"],
+            "expected_marker": fixture["correct_checkpoint"]["expected_marker"],
             "forbidden_markers_sha256": sha256_bytes(
                 canonical_json(fixture["wrong_checkpoint"]["forbidden_markers"]).encode()
             ),

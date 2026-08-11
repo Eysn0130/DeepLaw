@@ -36,7 +36,8 @@
     "old_body": "GOAL: Preserve the frozen feature task.\nCONFIRMED_DECISION: Use the stale feature cursor.\nCONSTRAINT: Keep task and worktree binding exact.\nVERIFIED_FACT: The stale feature marker is PASS10-STALE-FEATURE.\nOPEN_GAP: The current feature state is not yet admitted.\nNEXT_ACTION: Do not use the stale PASS10 action.\nARTIFACT_REF: commit:pass10-stale-feature.",
     "current_body": "GOAL: Preserve the frozen feature task.\nCONFIRMED_DECISION: Continue only from PASS10-FEATURE.\nCONSTRAINT: Keep task and worktree binding exact.\nVERIFIED_FACT: The admitted receipt marker is PASS10-FEATURE-RECEIPT.\nOPEN_GAP: Full cross-thread qualification remains incomplete.\nNEXT_ACTION: Verify deployment receipt PASS10-FEATURE-RECEIPT.\nARTIFACT_REF: commit:pass10-feature-current.",
     "expected_first_action": "Verify deployment receipt PASS10-FEATURE-RECEIPT.",
-    "expected_decision": "Continue only from PASS10-FEATURE."
+    "expected_decision": "Continue only from PASS10-FEATURE.",
+    "expected_marker": "PASS10-FEATURE-RECEIPT"
   },
   "wrong_checkpoint": {
     "semantic_key": "checkpoint:pass10-main:slot-0",

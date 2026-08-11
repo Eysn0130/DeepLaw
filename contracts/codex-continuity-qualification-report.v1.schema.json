@@ -79,7 +79,7 @@
       "required": [
         "name", "sha256", "configuration_sha256", "case_id", "task_sha256",
         "correct_binding_sha256", "wrong_binding_sha256", "expected_first_action",
-        "expected_decision", "forbidden_markers_sha256"
+        "expected_decision", "expected_marker", "forbidden_markers_sha256"
       ],
       "properties": {
         "name": {"const": "continuity-real-host-candidate-v1.json"},
@@ -91,6 +91,7 @@
         "wrong_binding_sha256": {"$ref": "#/$defs/sha256"},
         "expected_first_action": {"type": "string", "minLength": 1, "maxLength": 500},
         "expected_decision": {"type": "string", "minLength": 1, "maxLength": 500},
+        "expected_marker": {"const": "PASS10-FEATURE-RECEIPT"},
         "forbidden_markers_sha256": {"$ref": "#/$defs/sha256"}
       }
     },

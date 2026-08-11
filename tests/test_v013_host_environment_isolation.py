@@ -515,11 +515,22 @@ def test_codex_qualification_fixture_and_event_receipts_are_bounded(
     final = {
         "first_correct_action": fixture["correct_checkpoint"]["expected_first_action"],
         "confirmed_decision": fixture["correct_checkpoint"]["expected_decision"],
-        "checkpoint_marker": "PASS10-FEATURE",
+        "checkpoint_marker": fixture["correct_checkpoint"]["expected_marker"],
         "wrong_state_seen": False,
     }
     events = [
         {"type": "thread.started", "thread_id": "thread_fixture"},
+        {
+            "type": "item.started",
+            "item": {
+                "id": "item_tool",
+                "type": "mcp_tool_call",
+                "tool": "deeplaw.knowledge_support",
+                "status": "in_progress",
+                "arguments": {"operation": "context"},
+                "result": None,
+            },
+        },
         {
             "type": "item.completed",
             "item": {
