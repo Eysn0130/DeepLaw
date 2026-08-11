@@ -1,6 +1,14 @@
 name: Pass 10 Statement bundle evidence
 
 on:
+  push:
+    branches:
+      - codex/v013-pass10-commercial-qualification
+    paths:
+      - .github/workflows/pass10-statement-evidence.yml
+      - benchmarks/v013/query_graph_scale.py
+      - contracts/v013-query-graph-scale-report.v1.schema.json
+      - tests/test_v013_query_graph_scale.py
   workflow_dispatch:
     inputs:
       candidate_ref:
@@ -23,7 +31,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.candidate_ref }}
+          ref: ${{ inputs.candidate_ref || github.sha }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
@@ -37,7 +45,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$(git rev-parse '${{ inputs.candidate_ref }}^{commit}')"
+          test "$(git rev-parse HEAD)" = \
+            "$(git rev-parse '${{ inputs.candidate_ref || github.sha }}^{commit}')"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           uv lock --check
           uv build --wheel --out-dir dist
