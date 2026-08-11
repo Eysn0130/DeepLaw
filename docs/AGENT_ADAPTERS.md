@@ -28,8 +28,8 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
-| Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; one seam executed at the historical b14 candidate, while broader and exact-head qualification is pending |
-| Tolaria external MCP bridge | **`integration_limited`** | exact v2026-07-22 source contract and real local CLI harness; missing third-party product UI seam |
+| Obsidian CLI bridge and bundle | **Source candidate / local-only** | exact-candidate synthetic macOS load/verify/rename/edit/reconcile/conflict-recovery seam executed; Human/blind and broader qualification pending |
+| Tolaria external MCP bridge | **`integration_limited`** | exact `v2026-08-11` source/hash contract and local CLI harness; Desktop/UI seam not executed |
 | Real model/session tasks on all hosts | **Failed candidate evidence only** | Three Pass 11 exact-wheel Codex App Server A/B/C/D workflows were partial/failed; one isolated OpenCode/DeepSeek workflow did not call `knowledge_support` and was `not_scored`; no profile was admitted and multi-state continuity remains unexecuted |
 
 The compiler workflow and grant boundary are specified in
@@ -45,6 +45,8 @@ The current Codex token-attribution failure disposition is recorded in
 [`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
 The current OpenCode continuity failure disposition is recorded in
 [`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md).
+The current editor/Wiki/scale evidence boundary is recorded in
+[`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate

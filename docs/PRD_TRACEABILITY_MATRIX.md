@@ -19,6 +19,9 @@ read-only Host connection plan, and frozen caller/contract preservation boundary
 and [`V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md`](V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md).
 Run Timeline and semantic restore remain `not_claimed` as recorded in
 [`V0_13_PASS11_TIMELINE_RESTORE_DISPOSITION.md`](V0_13_PASS11_TIMELINE_RESTORE_DISPOSITION.md).
+The exact-candidate Obsidian seam, current Tolaria pin, professional-Evidence regressions, and
+partial 1k/10k/100k scale observations are bounded by
+[`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
 
 ## Frozen audit boundary
 
@@ -165,17 +168,17 @@ Evidence abbreviations in the table are repository-relative paths:
 
 | PRD ID | Capability | Current status | Runtime code | Contract/Schema | Tests | External evidence | Limitation | Required next action |
 |---|---|---|---|---|---|---|---|---|
-| PRD-SRC-001 | Immutable Source Revision; changed bytes create successor | Implemented | KS, KC | source revision/compilation contracts | source-compilation tests | Wiki development chain | No current-candidate external source corpus | Run successor task on fresh authorized sources |
-| PRD-SRC-002 | Preserve order, structure, fragments, locators, hashes, parser provenance | Implemented | KS, KC | Source IR/fragment/locator contracts | source/parser tests | Wiki development chain | Legal exact Pack pending | Qualify exact bytes and locators |
+| PRD-SRC-001 | Immutable Source Revision; changed bytes create successor | Implemented | KS, KC | source revision/compilation contracts | source-compilation tests | Exact-candidate synthetic successor regression | No external professional source corpus | Run successor task on fresh authorized sources |
+| PRD-SRC-002 | Preserve order, structure, fragments, locators, hashes, parser provenance | Implemented | KS, KC | Source IR/fragment/locator contracts | source/parser tests | Exact-candidate professional-format development regressions | Legal exact Pack and external corpus pending | Qualify exact bytes and locators on licensed sources |
 | PRD-SRC-003 | Model proposes; deterministic code governs commit | Implemented | KC, KA | closed Plan and sink schemas | semantic/coordinator tests | Fake-Agent only | Real model proposal not executed | Run isolated real Host after prerequisites |
-| PRD-SRC-004 | Selectively invalidate true dependents | Implemented | KC freshness, WIKI incremental | dependency/freshness contracts | semantic/incremental tests | Local synthetic | Current 10k/100k qualification deferred | Run product Gold first, then scale if justified |
+| PRD-SRC-004 | Selectively invalidate true dependents | Implemented | KC freshness, WIKI incremental | dependency/freshness contracts | semantic/incremental tests | Exact-candidate 1k source-update/cache/equivalence diagnostic | 10k/100k source update and equivalence not executed | Add bounded large-scale lanes only through existing public primitives |
 | PRD-SRC-005 | Idempotent unchanged ingest and semantic identity reuse | Implemented | KC, KA reconciliation | identity/idempotency contracts | source/identity tests | None independent | Real duplicate corpus unqualified | Add authorized repeated-ingest task |
 | PRD-SRC-006 | Explicit withdrawal, supersession, forgetting, private erasure | Implemented | KS, KA | lifecycle/tombstone contracts | lifecycle/GC tests | Local only | Selective forgetting Human Gold absent | Freeze write-execute-forget task |
 | PRD-SRC-007 | Treat compilation as lossy and expose coverage gaps | Implemented | KC, Q6, WIKI coverage | duty/gap contracts | coverage/semantic tests | Wiki development pass | Coverage Spec is a validation kernel, not full Guides | Run human missing-coverage task |
 | PRD-SRC-008 | Targeted refinement only; no unbounded regeneration/injection | Implemented | KC, Q6 | bounded compilation/query schemas | semantic/query tests | None independent | No external refinement task | Preserve bounds in future failure reproduction |
 | PRD-SRC-009 | Bounded owner-visible source acquisition manifest | Implemented | `source_connectors.py`, `source_adapters.py` | source snapshot contracts | source connector/security tests | Local-only | No external connector qualification | Run allowlist/exclusion/provenance task |
 | PRD-SRC-010 | Connector cannot create identity or Authority | Implemented | source connectors, KS admission | snapshot/source identity schemas | connector/authority tests | Local-only | No adversarial external acquisition | Test alias/path/URL collisions |
-| PRD-SRC-011 | Keep professional/authoritative documents source-native with exact Document/Version/Locator identity | Target | Foundation implemented in Evidence Core, KS, LEGAL, and Document IR | source/document/legal schemas | source, parser, document and legal tests | Journey unqualified; local foundation evidence only | Broad professional-format, Wiki-to-Source drill-down, and exact Legal Pack qualification remain absent | Run source-native PDF/DOCX/HTML and exact legal tasks without full-Wiki transcription |
+| PRD-SRC-011 | Keep professional/authoritative documents source-native with exact Document/Version/Locator identity | Target | Foundation implemented in Evidence Core, KS, LEGAL, and Document IR | source/document/legal schemas | source, parser, document and legal tests | Exact-candidate PDF/DOCX/HTML/Markdown, OCR, quote/Locator, and Wiki-to-Source development regressions | No licensed professional corpus, independent user task, or exact Legal Pack qualification | Run source-native licensed tasks without full-Wiki transcription |
 | PRD-SRC-012 | Treat OCR/layout/search accelerators as revision-bound replaceable state | Implemented | document pipeline, derived indexes | parser/derived manifests | parser, OCR-risk, rebuild tests | Local development only | Critical-token and multi-parser external corpus unqualified | Freeze critical-token mutation and rebuild-equivalence Gold |
 | PRD-KNOW-001 | Every mutation creates revision and audit event | Implemented | KA coordinator | Knowledge revision/event schemas | autonomous/audit tests | None independent | Same-owner OS compromise out of scope | Retain replay/integrity hard gate |
 | PRD-KNOW-002 | Separate owner-granted knowledge_sink | Implemented | sink server, KA | SINK5 with frozen v2 compatibility | sink MCP/contract tests | Local stdio only | Real Host grant isolation pending | Verify resolved tool set and OS isolation |
@@ -195,11 +198,11 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-WIKI-001 | Evidence-labelled readable Markdown projections | Implemented | WIKI | Wiki manifest/registry contracts | projection/page tests | Wiki development pass | Statement resolver deferred | Execute human drill-down task |
 | PRD-WIKI-002 | Human and Agent share the same semantic link network | Implemented | WIKI, KMCP | Link Index/Resolver schemas | link/resolver/MCP tests | Development chain only | No independent human task | Freeze human/Agent paired navigation Gold |
 | PRD-WIKI-003 | Wiki surface metadata cannot create identity or Authority | Implemented | WIKI, KA reconciliation | registry/Knowledge contracts | ownership/authority tests | Local only | Editor product E2E absent | Test frontmatter/Wikilink attacks in editor task |
-| PRD-WIKI-004 | Rename/move preserves ID; content edit creates revision | Implemented | KA reconcile, WIKI registry | Knowledge Revision v2 | reconcile/registry tests | Local only | Real editor concurrent edit pending | Run authorized editor task |
-| PRD-WIKI-005 | Registry/Link Index/Resolver avoid warm filesystem scans | Implemented | `wiki/registry.py`, `link_index.py`, `resolver.py` | v3 registry/index contracts | registry/link/resolver tests | Local only | Human and current-candidate scale unqualified | Measure bounded lookup after product Gold |
-| PRD-WIKI-006 | Full/incremental equivalence and user-file preservation | Implemented | projection builder/incremental | manifest/journal schemas | incremental/ownership/recovery tests | Local synthetic | 3-OS/current scale not executed | Run equivalence and owner-file task |
+| PRD-WIKI-004 | Rename/move preserves ID; content edit creates revision | Implemented | KA reconcile, WIKI registry | Knowledge Revision v2 | reconcile/registry tests | Exact-candidate synthetic Obsidian rename/edit/reconcile/conflict recovery | Independent Human/blind editor task pending | Run authorized paired Human/editor task |
+| PRD-WIKI-005 | Registry/Link Index/Resolver avoid warm filesystem scans | Implemented | `wiki/registry.py`, `link_index.py`, `resolver.py` | v3 registry/index contracts | registry/link/resolver tests | Exact-candidate 1k/10k/100k lookup diagnostics | Persistent MCP cold/warm only at 1k; no Human task | Complete missing large-scale and Human lanes |
+| PRD-WIKI-006 | Full/incremental equivalence and user-file preservation | Implemented | projection builder/incremental | manifest/journal schemas | incremental/ownership/recovery tests | Exact-candidate 1k equivalence and local user-file protection | 10k/100k equivalence and 3-OS evidence not executed | Complete large-scale equivalence and platform lanes |
 | PRD-WIKI-007 | Optional Guides/Codemaps/Canvas/community/materialized paths | Deferred | Existing derived views only | Existing manifests | page-family tests | None | Core Scope forbids expansion | Revisit in v0.14+ after external failure |
-| PRD-WIKI-008 | Obsidian/Tolaria/future GUI remain clients of shared services | Implemented | shared-service editor adapters only | adapter manifests | editor bridge/living-wiki delivery tests | Obsidian local-only; Tolaria integration-limited | Client boundary exists, but real desktop/product E2E and any future GUI are deferred | Do not claim product integration; run explicit E2E later |
+| PRD-WIKI-008 | Obsidian/Tolaria/future GUI remain clients of shared services | Implemented | shared-service editor adapters only | adapter manifests | editor bridge/living-wiki delivery tests | Exact-candidate synthetic Obsidian Desktop seam; Tolaria `v2026-08-11` source only | Obsidian remains claim-ineligible; Tolaria Desktop and future GUI deferred | Retain source-candidate/integration-limited statuses and run explicit E2E later |
 | PRD-WIKI-009 | Shared projection may expose unequal Authority and reconcile edits | Implemented | WIKI, KA | registry/Knowledge contracts | projection/reconcile tests | Local only | No independent editor audit | Pair human edit with exact revision verification |
 | PRD-WIKI-010 | Page exposes machine identity/current revision and human status dimensions | Target | partial page frontmatter/registry | current Wiki schemas | page/registry tests | Development Wiki pass | Ownership classes and full E2E mapping incomplete | Freeze page-comprehension task |
 | PRD-WIKI-011 | Wikilinks/backlinks are navigation; typed Relation Revisions assert semantics | Implemented | WIKI link index, KA relations | Knowledge Relation v3 | link/graph/relation tests | Local only | No external wrong-relation task | Add co-occurrence negative Gold |
@@ -224,7 +227,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-CTX-010 | Judge context by downstream success, evidence duties, and efficiency | Target | benchmark/scorer tools only | repository development protocol v2; external protocol absent | quality metric tests | Visible development fixture only; prior continuity density failed | Independent Gold and model tasks absent | Freeze equal-budget external outcome protocol |
 | PRD-CTX-011 | Stateless retry binds explicit version/scope/task/budgets/truncation | Implemented | Q6, TC | plan v6 + task binding v1 | plan parity + task binding regressions | Local deterministic development only | Real Host retry/expiry evidence absent | Run equal-input retry and changed-head Host task |
 | PRD-CTX-012 | Capability discovery distinguishes read, diagnostics, and granted mutation | Implemented | KMCP/sink MCP/LEGAL | closed MCP schemas | stdio schema tests | Local no-model lifecycle | Resolved real-host config pending | Verify exact tool list in isolated Hosts |
-| PRD-CTX-013 | Eligibility is independent of row/file/import/ID order | Target | Q6 revision discovery then bounded statements | plan v6 | tail/P0/scale tests | 5,001 regression executed; current 10k/100k lanes are `not_executed` | Order invariance is not mapped at every public seam | Run 10k/100k and complete public-seam mapping before implementation status |
+| PRD-CTX-013 | Eligibility is independent of row/file/import/ID order | Target | Q6 revision discovery then bounded statements | plan v6 | tail/P0/scale tests | Exact-candidate 1k/10k/100k Statement tail/position diagnostics executed | Order invariance is not mapped at every public seam; Relation lanes are unexecuted | Complete public-seam mapping and Relation evidence before implementation status |
 | PRD-CTX-014 | Capsule binds Vault/project/task-line/head/revisions/policy and detects stale head | Target | CAP, Q6, TC, TR kernel | Capsule v3/plan v6/task binding v1 | stale-runtime, route-first, snapshot-divergence, Pass 2 reservation/goal/head-conflict tests | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | Local exact-route/snapshot kernel passes; stale/head-conflict Gaps are bounded and redacted; full changed-head re-resolution, real Host derivation, and fresh external Gold absent | Run changed-head re-resolution holdout |
 | PRD-CTX-015 | Ambiguity fails closed and exposes only admitted disambiguation | Target | identity admission, partial target checks | identity/plan schemas | identity/query tests | Local only | Cross-Vault/project/task ambiguity not complete | Freeze ambiguity matrix |
 
@@ -269,7 +272,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | Capability | Current | Qualification boundary |
 |---|---|---|
 | Continuity/Context | Target workflow with implemented route/snapshot/admission kernel | Semantic cold-start, density, fork lifecycle, Human Gold, native-memory comparison, and real Hosts pending |
-| Living Wiki | Implemented development chain | Independent human usability, ownership classes, typed path task, and current scale pending |
+| Living Wiki | Implemented development chain with partial exact-candidate scale/editor evidence | Independent Human usability, 10k/100k incremental equivalence, RSS, Relation scale, and platform evidence pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
 | Host Integration | Target with local static/thin-adapter evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
 | Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
@@ -306,8 +309,8 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 
 | Required lane | Disposition |
 |---|---|
-| Statement scale 10k | `required not_executed` |
-| Statement scale 100k | `required not_executed` |
+| Statement scale 10k | `development executed`; claim-ineligible and Relation lane `not_executed` |
+| Statement scale 100k | `development executed`; claim-ineligible and Relation lane `not_executed` |
 | Relation truncation 500/5000 | `required not_executed` |
 | Wiki wrong merge | `development executed`; independent human task `not_executed` |
 | Wiki alias collision | `development executed`; independent human task `not_executed` |
@@ -325,9 +328,9 @@ byte binding, the Codex environment receipt fails the current child-argv contrac
 candidate prompt exposed evaluator labels, the expected marker, and an exact Knowledge ID. Those
 artifacts cannot be promoted by rewriting commit, tree, or hash fields. Repository-visible
 development Gold and Context reports remain tuning-used, not independent holdout evidence. Human
-Gold, physically isolated qualification/final blind, exact Legal Pack, uncontaminated exact-head
-Codex/OpenCode tasks, required Wiki/Relation scale, final cross-platform artifact chain, signature,
-and public redownload remain `not_executed` or unresolved.
+Gold, physically isolated qualification/final blind, exact Legal Pack, uncontaminated passing
+Codex/OpenCode tasks, the unexecuted Wiki/Relation scale lanes, final cross-platform artifact chain,
+signature, and public redownload remain `not_executed` or unresolved.
 
 Pass 11 has added local fail-closed coverage for candidate/evaluator file separation, neutral Host
 output, natural-task discovery without an exact Knowledge ID, wrong-route exclusion, stale-revision
@@ -339,6 +342,15 @@ Human Gold, physical qualification/final-blind split, and remaining Host matrix 
 One later isolated OpenCode `1.18.16` / `deepseek-v4-flash` workflow preserved closed environments,
 usage, and an unchanged Ledger, but emitted no tool call, Provider Capsule, or neutral Host output;
 its independent evaluator result is `not_scored`, and the same task is not repeated.
+
+The exact-candidate synthetic Obsidian Desktop seam executed load/verify/rename/edit/reconcile and
+stale-base conflict recovery without retaining user content or local paths. Claim eligibility
+remains false. The Wiki diagnostics constructed 1k/10k/100k fixtures, but only the 1k lane executed
+source-update/equivalence and persistent MCP probes; all large Relation lanes remain unexecuted.
+Tolaria is pinned to release `v2026-08-11` / commit
+`cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d`, but its Desktop seam was not executed. Professional
+source/Evidence regressions passed on an exact clean candidate; the retained synthetic legal
+Recall values remain zero and the licensed/signed corpus plus independent reviewer are absent.
 
 Current disposition remains:
 

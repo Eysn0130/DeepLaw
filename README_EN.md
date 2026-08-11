@@ -56,17 +56,20 @@ same domain services.
 > v2. Obsidian remains a source candidate and Tolaria remains `integration_limited`. The Pass 10
 > Codex runs are retained only as historical candidate evidence because the prompt exposed scoring
 > labels, the expected marker, and an exact ID, while the environment receipt drifted from the
-> current contract. One Obsidian seam
-> executed at the historical b14 candidate. Pass 11 now has local fail-closed tests for
+> current contract. Pass 11 executed one isolated synthetic Obsidian Desktop
+> load/verify/rename/edit/reconcile/conflict-recovery seam on an exact candidate, but it remains
+> claim-ineligible development evidence; Human/blind and broader qualification were not executed.
+> Pass 11 now has local fail-closed tests for
 > candidate/evaluator separation and natural-task discovery. Three exact-wheel Codex App Server
 > A/B/C/D workflows then produced only partial/failed candidate evidence: the 19-operation C and
 > exact MCP D conditions did not pass, no operation profile was admitted, and the multi-state
 > continuity suite was not executed. One isolated OpenCode `1.18.16` /
 > `deepseek-v4-flash` exact-wheel workflow then preserved the security and usage receipts but did
 > not call `knowledge_support`; it produced no Provider Capsule and was independently `not_scored`.
-> The same task is not rerun to manufacture continuity evidence. Broader and exact-head
-> qualification is pending. Human
-> Gold, final-blind, and cross-platform release qualification are also incomplete. The older
+> The same task is not rerun to manufacture continuity evidence. The 1k/10k/100k Wiki/Statement
+> construction diagnostics also leave Relation, large-scale incremental equivalence, RSS,
+> cross-platform, and independent legal gates incomplete. Human Gold and final-blind are also
+> incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
@@ -82,6 +85,9 @@ The [Pass 11 token-attribution disposition](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_
 records the three failed/partial Codex candidate workflows and the no-profile decision.
 The [Pass 11 OpenCode disposition](docs/V0_13_PASS11_OPENCODE_DISPOSITION.md) records the failed
 isolated DeepSeek task and the evaluator-only `not_scored` result.
+The [Pass 11 Wiki and Evidence disposition](docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md) records
+the exact-candidate Obsidian seam, current Tolaria pin, scale diagnostics, and professional/legal
+evidence boundary.
 
 Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
 `--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.

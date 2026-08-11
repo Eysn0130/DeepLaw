@@ -7,7 +7,9 @@ Current Pass 11 Host dispositions moved to
 and [`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md): three later
 Codex App Server workflows and one OpenCode/DeepSeek workflow executed as partial/failed candidate
 evidence. No operation profile, continuity qualification, or release claim was admitted. The Pass
-10 facts below remain unchanged.
+10 facts below remain unchanged. Current exact-candidate editor/Wiki/scale evidence is separately
+bounded by
+[`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
 
 This disposition preserves the Pass 10 facts while preventing historical candidate artifacts from
 being presented as uncontaminated or exact-head qualification. It does not rewrite the retained

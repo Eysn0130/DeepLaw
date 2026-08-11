@@ -53,15 +53,16 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > 当前源码候选的 package 仍为 `0.12.0`，`release_ready=false`；默认 Context 已使用 Query Plan
 > v6 / local Capsule v3 / Provider Capsule v2。Obsidian 仍是 source candidate，Tolaria 仍是
 > `integration_limited`。Pass 10 的 Codex 三次运行因评分标签、expected marker、exact ID 污染与
-> receipt 合同漂移，现仅保留为 historical candidate evidence。Obsidian 的一个 seam 在历史 b14
-> candidate 上执行；
+> receipt 合同漂移，现仅保留为 historical candidate evidence。Pass 11 已在 exact candidate 上
+> 执行一个隔离 synthetic Obsidian Desktop load/verify/rename/edit/reconcile/conflict-recovery seam，
+> 但它仍是 claim-ineligible development evidence；Human/blind 和更广资格未执行。
 > Pass 11 已建立 candidate/evaluator 分离与自然任务 discovery 的本地失败闭合测试，并运行了三次
 > exact-wheel Codex App Server A/B/C/D workflow；三次均为 partial/failed candidate evidence，
 > 19-operation C 与 exact MCP D 未通过，未准入 operation profile。多状态 continuity suite 未执行。
 > 另有一次隔离 OpenCode `1.18.16` / `deepseek-v4-flash` exact-wheel workflow：安全与 usage
 > 回执成立，但模型未调用 `knowledge_support`，没有 Provider Capsule，独立评分为 `not_scored`；不以
-> 同题重跑制造 continuity。更广任务和 exact-head qualification 仍待完成。Human Gold、final blind
-> 与跨平台发布资格也未闭环。
+> 同题重跑制造 continuity。另有 1k/10k/100k Wiki/Statement construction diagnostics，但 Relation、
+> 大规模增量等价、RSS、跨平台和法律独立资格仍未闭环。Human Gold 与 final blind 也未闭环。
 > 旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
@@ -77,6 +78,8 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 [`docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)。
 当前 OpenCode continuity 失败处置见
 [`docs/V0_13_PASS11_OPENCODE_DISPOSITION.md`](docs/V0_13_PASS11_OPENCODE_DISPOSITION.md)。
+当前 Wiki、Obsidian、Tolaria、专业 Evidence 与 scale 处置见
+[`docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md)。
 
 默认 Help 只展示这条 Basic journey；`--help-advanced`、`--help-admin` 和
 `--help-compatibility` 分别展开专家、管理员和历史兼容入口。连接 Host 前，owner 可生成一个经过
