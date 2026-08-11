@@ -33,7 +33,24 @@ def test_exact_100k_statement_source_stays_within_fragment_and_grant_bounds() ->
 
 def test_smoke_report_schema_hash_and_tail_recall(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
-    report = build_report(scales=(101,), workspace=workspace)
+    wheel = tmp_path / "deeplaw-0.12.0-py3-none-any.whl"
+    wheel.write_bytes(b"exact synthetic wheel binding")
+    report = build_report(
+        scales=(101,),
+        workspace=workspace,
+        candidate_wheel=wheel,
+        exact_argv=(
+            "python",
+            "-m",
+            "benchmarks.v013.query_graph_scale",
+            "--output",
+            "report.json",
+            "--scale",
+            "101",
+            "--candidate-wheel",
+            wheel.name,
+        ),
+    )
 
     assert verify_report(report) == {"valid": True, "errors": []}
     assert report["claim_eligible"] is False
@@ -44,12 +61,33 @@ def test_smoke_report_schema_hash_and_tail_recall(tmp_path: Path) -> None:
     assert report["configuration"]["statements_per_revision"] == 250
     assert report["configuration"]["packet_max_fragments"] == 1
     assert report["candidate"]["source_hashes"]
+    assert report["candidate"]["git_commit"] == report["environment"]["git_commit"]
+    assert report["candidate"]["git_tree"] == report["environment"]["git_tree"]
+    assert report["candidate"]["wheel"] == {
+        "status": "bound",
+        "filename": wheel.name,
+        "sha256": sha256_bytes(wheel.read_bytes()),
+    }
     assert "src/deeplaw/projection/builder.py" in report["candidate"]["source_hashes"]
+    assert report["evidence_bindings"]["configuration_sha256"] == sha256_bytes(
+        canonical_json(report["configuration"]).encode("utf-8")
+    )
+    assert report["evidence_bindings"]["gold"]["execution_status"] == "not_executed"
+    assert report["execution"]["argv"][0:3] == [
+        "python",
+        "-m",
+        "benchmarks.v013.query_graph_scale",
+    ]
+    assert report["measurements"]["actual_provider_tokens"]["status"] == "not_executed"
+    assert report["rollback_boundary"]["new_bundle_to_old_binary"] == (
+        "not_supported_in_place"
+    )
 
     lane = report["scale_reports"][0]
     assert lane["status"] == "executed"
     assert lane["construction"] == "public_profile_v3_compilation"
     assert lane["derived_rebuild"] == {"status": "executed", "reason": None}
+    assert lane["snapshot_restore"]["status"] == "not_executed"
     fixture = lane["fixture"]
     assert fixture["source_revision_count"] == len(fixture["source_revision_ids"])
     assert fixture["compilation_run_count"] == len(fixture["compilation_run_ids"])
@@ -69,6 +107,12 @@ def test_smoke_report_schema_hash_and_tail_recall(tmp_path: Path) -> None:
     assert lane["statement"]["runtime_startup_ms"] >= 0
     assert all(item["selected"] for item in lane["statement"]["targets"])
     assert all(item["provider_bytes"] <= 65_536 for item in lane["statement"]["targets"])
+    assert lane["bundle"] == {
+        "statement_count": 101,
+        "statements_per_compiled_revision": 250,
+        "compiled_revision_count": 1,
+        "wiki_statement_shard_file_count": 2,
+    }
 
     shard_paths = sorted((workspace / "scale-101" / "wiki" / "statements").glob("*.md"))
     assert len(shard_paths) == 2
@@ -108,6 +152,19 @@ def test_executed_fixture_provenance_digest_is_recomputed(tmp_path: Path) -> Non
 
     assert validation["valid"] is False
     assert "executed fixture source_revision_ids_sha256 mismatch" in validation["errors"]
+
+    binding_tampered = deepcopy(report)
+    binding_tampered["evidence_bindings"]["configuration_sha256"] = "0" * 64
+    body = dict(binding_tampered)
+    body.pop("report_sha256")
+    binding_tampered["report_sha256"] = sha256_bytes(
+        canonical_json(body).encode("utf-8")
+    )
+
+    binding_validation = verify_report(binding_tampered)
+
+    assert binding_validation["valid"] is False
+    assert "configuration evidence digest mismatch" in binding_validation["errors"]
 
 
 def test_expensive_lanes_never_substitute_smoke_without_explicit_flag(tmp_path: Path) -> None:

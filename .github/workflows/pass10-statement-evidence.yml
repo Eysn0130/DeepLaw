@@ -1,0 +1,103 @@
+name: Pass 10 Statement bundle evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Exact commit to qualify.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  statement-bundle-scale:
+    name: Exact wheel 1k/10k/100k Statement evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the exact clean candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.candidate_ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          version: "0.11.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Build and install the exact wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse '${{ inputs.candidate_ref }}^{commit}')"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv build --wheel --out-dir dist
+          candidate_wheels=(dist/deeplaw-*.whl)
+          test "${#candidate_wheels[@]}" -eq 1
+          uv venv --python 3.12 --no-project output/pass10-runtime
+          uv pip install --python output/pass10-runtime/bin/python "${candidate_wheels[0]}"
+
+      - name: Run public Statement qualification lanes
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_wheels=(dist/deeplaw-*.whl)
+          output/pass10-runtime/bin/python -m benchmarks.v013.query_graph_scale \
+            --output output/pass10-statement-scale.json \
+            --scale 1000 \
+            --scale 10000 \
+            --scale 100000 \
+            --execute-expensive \
+            --candidate-wheel "${candidate_wheels[0]}"
+
+      - name: Verify bindings and package downloadable evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_wheels=(dist/deeplaw-*.whl)
+          output/pass10-runtime/bin/python - \
+            output/pass10-statement-scale.json "${candidate_wheels[0]}" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          from benchmarks.v013.query_graph_scale import verify_report
+
+          report = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          wheel_sha256 = hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest()
+          assert verify_report(report) == {"valid": True, "errors": []}
+          assert report["candidate"]["wheel"]["sha256"] == wheel_sha256
+          assert report["candidate"]["wheel"]["status"] == "bound"
+          assert report["environment"]["working_tree_dirty"] is False
+          assert [item["scale"] for item in report["scale_reports"]] == [1000, 10000, 100000]
+          assert all(item["statement_status"] == "executed" for item in report["scale_reports"])
+          assert report["scale_reports"][0]["snapshot_restore"]["status"] == "executed"
+          assert report["overall"]["fail_count"] == 0
+          PY
+          mkdir -p output/pass10-evidence
+          cp output/pass10-statement-scale.json output/pass10-evidence/
+          cp "${candidate_wheels[0]}" output/pass10-evidence/
+          output/pass10-runtime/bin/python -m benchmarks.release.write_checksums \
+            --assets-root output/pass10-evidence \
+            --output output/pass10-evidence/SHA256SUMS
+          (cd output/pass10-evidence && sha256sum --check SHA256SUMS)
+          git diff --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Upload exact wheel and Statement evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pass10-statement-bundle-evidence
+          if-no-files-found: error
+          retention-days: 30
+          path: output/pass10-evidence/

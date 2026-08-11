@@ -35,6 +35,18 @@
       "required": ["package_version", "runner", "runner_sha256", "source_hashes"],
       "properties": {
         "package_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "git_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "git_tree": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "wheel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "filename", "sha256"],
+          "properties": {
+            "status": {"enum": ["bound", "not_provided"]},
+            "filename": {"type": ["string", "null"], "pattern": "^[^/\\\\]+$", "maxLength": 300},
+            "sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+          }
+        },
         "runner": {"const": "benchmarks/v013/query_graph_scale.py"},
         "runner_sha256": {"$ref": "#/$defs/sha256"},
         "source_hashes": {
@@ -81,6 +93,7 @@
         "python": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
         "sqlite": {"type": "string", "minLength": 1, "maxLength": 50},
         "git_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "git_tree": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
         "working_tree_dirty": {"type": "boolean"},
         "git_reason": {"type": ["string", "null"], "maxLength": 300}
       }
@@ -106,9 +119,9 @@
         "scales": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 4,
+          "maxItems": 5,
           "uniqueItems": true,
-          "items": {"enum": [101, 5001, 10000, 100000]}
+          "items": {"enum": [101, 1000, 5001, 10000, 100000]}
         },
         "seed": {"type": "integer", "minimum": 0},
         "execute_expensive": {"type": "boolean"},
@@ -128,9 +141,13 @@
     "scale_reports": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 4,
+      "maxItems": 5,
       "items": {"$ref": "#/$defs/scale_report"}
     },
+    "evidence_bindings": {"$ref": "#/$defs/evidence_bindings"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "measurements": {"$ref": "#/$defs/measurements"},
+    "rollback_boundary": {"$ref": "#/$defs/rollback_boundary"},
     "overall": {
       "type": "object",
       "additionalProperties": false,
@@ -172,12 +189,111 @@
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "evidence_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration_sha256", "fixture_sha256", "gold"],
+      "properties": {
+        "configuration_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "gold": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "execution_status", "reason"],
+          "properties": {
+            "path": {"const": "benchmarks/quality/repository-gold-development-v3.json"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "execution_status": {"const": "not_executed"},
+            "reason": {"$ref": "#/$defs/text"}
+          }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "argv", "exit_status"],
+      "properties": {
+        "status": {"const": "executed"},
+        "argv": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {"type": "string", "maxLength": 500}
+        },
+        "exit_status": {"const": 0}
+      }
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_bytes", "actual_provider_tokens"],
+      "properties": {
+        "provider_bytes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "maximum"],
+          "properties": {
+            "status": {"const": "executed"},
+            "maximum": {"type": "integer", "minimum": 0, "maximum": 65536}
+          }
+        },
+        "actual_provider_tokens": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "reason"],
+          "properties": {
+            "status": {"const": "not_executed"},
+            "value": {"type": "null"},
+            "reason": {"$ref": "#/$defs/text"}
+          }
+        }
+      }
+    },
+    "rollback_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["new_bundle_to_old_binary", "required_path"],
+      "properties": {
+        "new_bundle_to_old_binary": {"const": "not_supported_in_place"},
+        "required_path": {"$ref": "#/$defs/text"}
+      }
+    },
+    "snapshot_restore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {"enum": ["executed", "fail", "not_executed"]},
+        "reason": {"type": ["string", "null"], "maxLength": 2000},
+        "snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "snapshot_valid": {"type": "boolean"},
+        "restore_valid": {"type": "boolean"},
+        "restored_tail_recall": {"type": "boolean"},
+        "derived_rebuilt": {"type": "boolean"}
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement_count",
+        "statements_per_compiled_revision",
+        "compiled_revision_count",
+        "wiki_statement_shard_file_count"
+      ],
+      "properties": {
+        "statement_count": {"type": "integer", "minimum": 1},
+        "statements_per_compiled_revision": {"const": 250},
+        "compiled_revision_count": {"type": "integer", "minimum": 1},
+        "wiki_statement_shard_file_count": {"type": "integer", "minimum": 1}
+      }
+    },
     "not_executed": {
       "type": "object",
       "additionalProperties": false,
       "required": ["scale", "reason"],
       "properties": {
-        "scale": {"type": "integer", "enum": [101, 5001, 10000, 100000]},
+        "scale": {"type": "integer", "enum": [101, 1000, 5001, 10000, 100000]},
         "reason": {"$ref": "#/$defs/text"}
       }
     },
@@ -198,7 +314,7 @@
         "limitations"
       ],
       "properties": {
-        "scale": {"type": "integer", "enum": [101, 5001, 10000, 100000]},
+        "scale": {"type": "integer", "enum": [101, 1000, 5001, 10000, 100000]},
         "status": {"enum": ["executed", "fail", "not_executed"]},
         "statement_status": {"enum": ["executed", "fail", "not_executed"]},
         "graph_status": {"enum": ["executed", "fail", "not_executed"]},
@@ -213,8 +329,10 @@
             "reason": {"type": ["string", "null"], "maxLength": 2000}
           }
         },
+        "snapshot_restore": {"$ref": "#/$defs/snapshot_restore"},
         "source_sha256": {"$ref": "#/$defs/sha256"},
         "fixture": {"$ref": "#/$defs/fixture"},
+        "bundle": {"$ref": "#/$defs/bundle"},
         "statement": {"$ref": "#/$defs/statement"},
         "graph": {"$ref": "#/$defs/graph"},
         "resource": {"$ref": "#/$defs/resource"},

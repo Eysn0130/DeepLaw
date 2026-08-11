@@ -36,7 +36,10 @@ from deeplaw.compilation.semantic import SemanticCompilationService
 from deeplaw.evidence import build_input_set_sha256, statement_sha256
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
+    create_autonomous_snapshot,
     initialize_autonomous_core,
+    restore_autonomous_snapshot,
+    verify_autonomous_snapshot,
 )
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
@@ -47,7 +50,7 @@ from deeplaw.util import canonical_json, sha256_bytes
 SCHEMA_VERSION = "deeplaw.v013-query-graph-scale-report/v1"
 RUNNER_RELATIVE_PATH = "benchmarks/v013/query_graph_scale.py"
 SCHEMA_RELATIVE_PATH = "contracts/v013-query-graph-scale-report.v1.schema.json"
-SCALE_CHOICES = (101, 5_001, 10_000, 100_000)
+SCALE_CHOICES = (101, 1_000, 5_001, 10_000, 100_000)
 DEFAULT_SCALES = (101,)
 EXPENSIVE_SCALES = (10_000, 100_000)
 SEED = 0xD33F013
@@ -59,6 +62,7 @@ MAX_PROVIDER_STATEMENTS = 8
 QUERY_RETRIEVAL_MODES = ("exact", "lexical", "dense", "graph", "hybrid")
 STATEMENTS_PER_REVISION = 250
 PACKET_MAX_FRAGMENTS = 1
+GOLD_RELATIVE_PATH = "benchmarks/quality/repository-gold-development-v3.json"
 
 _LOCAL_PATH = re.compile(
     r"(?:/Users/|/home/|/private/var/|/tmp/|/var/folders/|[A-Za-z]:[\\/]|\\\\)"
@@ -99,6 +103,13 @@ def _git_metadata() -> dict[str, Any]:
             text=True,
             timeout=10,
         ).stdout.strip()
+        tree = subprocess.run(
+            ["git", "rev-parse", "HEAD^{tree}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
         dirty = bool(
             subprocess.run(
                 ["git", "status", "--porcelain", "--untracked-files=all"],
@@ -109,10 +120,22 @@ def _git_metadata() -> dict[str, Any]:
             ).stdout.strip()
         )
     except (OSError, subprocess.SubprocessError, ValueError) as error:
-        return {"commit": None, "working_tree_dirty": False, "reason": type(error).__name__}
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        return {"commit": None, "working_tree_dirty": dirty, "reason": "invalid git commit"}
-    return {"commit": commit, "working_tree_dirty": dirty, "reason": None}
+        return {
+            "commit": None,
+            "tree": None,
+            "working_tree_dirty": False,
+            "reason": type(error).__name__,
+        }
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not re.fullmatch(
+        r"[0-9a-f]{40}", tree
+    ):
+        return {
+            "commit": None,
+            "tree": None,
+            "working_tree_dirty": dirty,
+            "reason": "invalid git identity",
+        }
+    return {"commit": commit, "tree": tree, "working_tree_dirty": dirty, "reason": None}
 
 
 def _environment() -> dict[str, Any]:
@@ -136,6 +159,7 @@ def _environment() -> dict[str, Any]:
         "python": platform.python_version(),
         "sqlite": _sqlite_version(),
         "git_commit": git["commit"],
+        "git_tree": git["tree"],
         "working_tree_dirty": git["working_tree_dirty"],
         "git_reason": git["reason"],
     }
@@ -919,6 +943,10 @@ def _run_scale(root: Path, *, scale: int, execute_expensive: bool) -> dict[str, 
                 "status": "not_executed",
                 "reason": "the scale lane was not executed",
             },
+            "snapshot_restore": {
+                "status": "not_executed",
+                "reason": "the scale lane was not executed",
+            },
             "statement": {"statement_count": 0, "tail_recall": None},
             "graph": {
                 "requested_relation_count": scale,
@@ -963,14 +991,51 @@ def _run_scale(root: Path, *, scale: int, execute_expensive: bool) -> dict[str, 
             else:
                 derived_rebuild = {"status": "executed", "reason": None}
         query = _query_scale(scale_root, statement_count=scale)
+        if scale == 1_000:
+            snapshot_path = root / "snapshot-scale-1000"
+            restore_path = root / "restore-scale-1000"
+            snapshot = create_autonomous_snapshot(scale_root, snapshot_path)
+            verification = verify_autonomous_snapshot(snapshot_path)
+            restored = restore_autonomous_snapshot(
+                restore_path,
+                snapshot=snapshot_path,
+                confirm=True,
+            )
+            with AutonomousKnowledgeStore(restore_path, read_only=False) as restored_store:
+                restored_store.rebuild_derived(projection_profile="standard")
+            restored_query = _query_scale(restore_path, statement_count=scale)
+            snapshot_restore = {
+                "status": (
+                    "executed"
+                    if verification["valid"]
+                    and restored["valid"]
+                    and restored_query["tail_recall"]
+                    else "fail"
+                ),
+                "reason": None,
+                "snapshot_sha256": snapshot["snapshot_sha256"],
+                "snapshot_valid": verification["valid"],
+                "restore_valid": restored["valid"],
+                "restored_tail_recall": restored_query["tail_recall"],
+                "derived_rebuilt": True,
+            }
+        else:
+            snapshot_restore = {
+                "status": "not_executed",
+                "reason": "the exact bundle format is rehearsed once in the 1,000-Statement lane",
+            }
         build_ms = round((time.perf_counter() - build_start) * 1000, 3)
         rss_after = _peak_rss_bytes()
         derived_failed = derived_rebuild["status"] == "fail"
+        snapshot_failed = snapshot_restore["status"] == "fail"
         return {
             "scale": scale,
             "status": (
                 "fail"
-                if not query["tail_recall"] or derived_failed or relation["status"] == "fail"
+                if not query["tail_recall"]
+                or derived_failed
+                or snapshot_failed
+                or relation["status"] == "fail"
                 else "executed"
                 if relation["status"] == "executed"
                 else "not_executed"
@@ -982,14 +1047,25 @@ def _run_scale(root: Path, *, scale: int, execute_expensive: bool) -> dict[str, 
                 if not query["tail_recall"]
                 else derived_rebuild["reason"]
                 if derived_failed
+                else "snapshot/restore rehearsal failed"
+                if snapshot_failed
                 else relation.get("reason")
                 if relation["status"] == "not_executed"
                 else None
             ),
             "construction": "public_profile_v3_compilation",
             "derived_rebuild": derived_rebuild,
+            "snapshot_restore": snapshot_restore,
             "source_sha256": _sha256_path(source),
             "fixture": fixture,
+            "bundle": {
+                "statement_count": scale,
+                "statements_per_compiled_revision": STATEMENTS_PER_REVISION,
+                "compiled_revision_count": fixture["knowledge_revision_count"],
+                "wiki_statement_shard_file_count": len(
+                    tuple((scale_root / "wiki" / "statements").glob("*.md"))
+                ),
+            },
             "statement": query,
             "graph": relation,
             "resource": {
@@ -1014,6 +1090,10 @@ def _run_scale(root: Path, *, scale: int, execute_expensive: bool) -> dict[str, 
             "reason": _safe_reason(f"{type(error).__name__}: {error}"),
             "construction": "public_profile_v3_compilation",
             "derived_rebuild": {
+                "status": "fail",
+                "reason": _safe_reason(f"{type(error).__name__}: {error}"),
+            },
+            "snapshot_restore": {
                 "status": "fail",
                 "reason": _safe_reason(f"{type(error).__name__}: {error}"),
             },
@@ -1049,15 +1129,43 @@ def _package_version() -> str:
     return str(__version__)
 
 
+def _fixture_binding(reports: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    binding: list[dict[str, Any]] = []
+    for item in reports:
+        fixture_value = item.get("fixture")
+        fixture = fixture_value if isinstance(fixture_value, Mapping) else {}
+        binding.append(
+            {
+                "scale": item.get("scale"),
+                "statement_status": item.get("statement_status"),
+                "source_sha256": item.get("source_sha256"),
+                "source_revision_ids_sha256": fixture.get("source_revision_ids_sha256"),
+                "compilation_run_ids_sha256": fixture.get("compilation_run_ids_sha256"),
+                "knowledge_revision_ids_sha256": fixture.get("knowledge_revision_ids_sha256"),
+            }
+        )
+    return binding
+
+
 def build_report(
     *,
     scales: Sequence[int] = DEFAULT_SCALES,
     execute_expensive: bool = False,
     workspace: Path | None = None,
+    candidate_wheel: Path | None = None,
+    exact_argv: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     selected = tuple(dict.fromkeys(int(value) for value in scales))
     if not selected or any(value not in SCALE_CHOICES for value in selected):
         raise ValueError(f"scales must be selected from {SCALE_CHOICES}")
+    if candidate_wheel is not None and (
+        not candidate_wheel.is_file() or candidate_wheel.is_symlink()
+    ):
+        raise ValueError("candidate wheel must be an existing regular file")
+    if exact_argv is not None and _LOCAL_PATH.search(
+        json.dumps(list(exact_argv), ensure_ascii=False)
+    ):
+        raise ValueError("exact argv must not contain local absolute paths")
     with _temporary_workspace(workspace) as root:
         reports = [
             _run_scale(root, scale=value, execute_expensive=execute_expensive) for value in selected
@@ -1083,6 +1191,31 @@ def build_report(
         for item in reports
         if item["status"] == "not_executed"
     ]
+    configuration = {
+        "scales": list(selected),
+        "seed": SEED,
+        "execute_expensive": execute_expensive,
+        "statement_candidate_bound": STATEMENT_CANDIDATE_BOUND,
+        "legacy_global_prefix_scan_removed": True,
+        "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
+        "graph_admitted_bound": GRAPH_ADMITTED_BOUND,
+        "graph_scanned_bound": GRAPH_SCANNED_BOUND,
+        "graph_hops": [0, 1, 2],
+        "max_provider_statements": MAX_PROVIDER_STATEMENTS,
+        "statements_per_revision": STATEMENTS_PER_REVISION,
+        "packet_max_fragments": PACKET_MAX_FRAGMENTS,
+    }
+    fixture_binding = _fixture_binding(reports)
+    environment = _environment()
+    wheel = (
+        {
+            "status": "bound",
+            "filename": candidate_wheel.name,
+            "sha256": _sha256_path(candidate_wheel),
+        }
+        if candidate_wheel is not None
+        else {"status": "not_provided", "filename": None, "sha256": None}
+    )
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "claim_eligible": False,
@@ -1096,24 +1229,54 @@ def build_report(
         "release_gate_passed": False,
         "candidate": {
             "package_version": _package_version(),
+            "git_commit": environment["git_commit"],
+            "git_tree": environment["git_tree"],
+            "wheel": wheel,
             "runner": RUNNER_RELATIVE_PATH,
             "runner_sha256": runner_hash,
             "source_hashes": source_hashes,
         },
-        "environment": _environment(),
-        "configuration": {
-            "scales": list(selected),
-            "seed": SEED,
-            "execute_expensive": execute_expensive,
-            "statement_candidate_bound": STATEMENT_CANDIDATE_BOUND,
-            "legacy_global_prefix_scan_removed": True,
-            "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
-            "graph_admitted_bound": GRAPH_ADMITTED_BOUND,
-            "graph_scanned_bound": GRAPH_SCANNED_BOUND,
-            "graph_hops": [0, 1, 2],
-            "max_provider_statements": MAX_PROVIDER_STATEMENTS,
-            "statements_per_revision": STATEMENTS_PER_REVISION,
-            "packet_max_fragments": PACKET_MAX_FRAGMENTS,
+        "environment": environment,
+        "configuration": configuration,
+        "evidence_bindings": {
+            "configuration_sha256": sha256_bytes(
+                canonical_json(configuration).encode("utf-8")
+            ),
+            "fixture_sha256": sha256_bytes(
+                canonical_json(fixture_binding).encode("utf-8")
+            ),
+            "gold": {
+                "path": GOLD_RELATIVE_PATH,
+                "sha256": _sha256_path(_repo_root() / GOLD_RELATIVE_PATH),
+                "execution_status": "not_executed",
+                "reason": "synthetic scale construction does not read or score Gold",
+            },
+        },
+        "execution": {
+            "status": "executed",
+            "argv": list(exact_argv) if exact_argv is not None else [],
+            "exit_status": 0,
+        },
+        "measurements": {
+            "provider_bytes": {
+                "status": "executed",
+                "maximum": max(
+                    (
+                        item.get("statement", {}).get("max_provider_bytes", 0)
+                        for item in reports
+                    ),
+                    default=0,
+                ),
+            },
+            "actual_provider_tokens": {
+                "status": "not_executed",
+                "value": None,
+                "reason": "this no-model scale runner measures bytes, not provider tokens",
+            },
+        },
+        "rollback_boundary": {
+            "new_bundle_to_old_binary": "not_supported_in_place",
+            "required_path": "restore a pre-bundle snapshot before running the old binary",
         },
         "scale_reports": reports,
         "overall": {
@@ -1194,6 +1357,46 @@ def verify_report(value: Any) -> dict[str, Any]:
         errors.append("release gate is not fail-closed")
     if _LOCAL_PATH.search(json.dumps(report, ensure_ascii=False, sort_keys=True)):
         errors.append("report contains a local absolute path")
+    bindings = report.get("evidence_bindings")
+    configuration = report.get("configuration")
+    if isinstance(bindings, Mapping) and isinstance(configuration, Mapping):
+        if bindings.get("configuration_sha256") != sha256_bytes(
+            canonical_json(configuration).encode("utf-8")
+        ):
+            errors.append("configuration evidence digest mismatch")
+        if bindings.get("fixture_sha256") != sha256_bytes(
+            canonical_json(_fixture_binding(report.get("scale_reports", []))).encode("utf-8")
+        ):
+            errors.append("fixture evidence digest mismatch")
+        gold = bindings.get("gold")
+        if isinstance(gold, Mapping) and gold.get("sha256") != _sha256_path(
+            _repo_root() / GOLD_RELATIVE_PATH
+        ):
+            errors.append("Gold byte binding mismatch")
+        candidate = report.get("candidate")
+        environment = report.get("environment")
+        if isinstance(candidate, Mapping) and isinstance(environment, Mapping):
+            if candidate.get("git_commit") != environment.get("git_commit"):
+                errors.append("candidate commit binding mismatch")
+            if candidate.get("git_tree") != environment.get("git_tree"):
+                errors.append("candidate tree binding mismatch")
+            expected_source_hashes = {
+                RUNNER_RELATIVE_PATH: _sha256_path(_runner_path()),
+                SCHEMA_RELATIVE_PATH: _sha256_path(_repo_root() / SCHEMA_RELATIVE_PATH),
+                "src/deeplaw/retrieval/query_v6.py": _sha256_path(
+                    _repo_root() / "src/deeplaw/retrieval/query_v6.py"
+                ),
+                "src/deeplaw/knowledge_autonomy.py": _sha256_path(
+                    _repo_root() / "src/deeplaw/knowledge_autonomy.py"
+                ),
+                "src/deeplaw/projection/builder.py": _sha256_path(
+                    _repo_root() / "src/deeplaw/projection/builder.py"
+                ),
+            }
+            if candidate.get("source_hashes") != expected_source_hashes:
+                errors.append("candidate source byte binding mismatch")
+            if candidate.get("runner_sha256") != expected_source_hashes[RUNNER_RELATIVE_PATH]:
+                errors.append("runner byte binding mismatch")
     for item in report.get("scale_reports", []):
         if (
             isinstance(item, Mapping)
@@ -1257,14 +1460,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--scale", type=int, choices=SCALE_CHOICES, action="append")
     parser.add_argument("--execute-expensive", action="store_true")
+    parser.add_argument("--candidate-wheel", type=Path)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    scales = tuple(args.scale) if args.scale else DEFAULT_SCALES
+    exact_argv = [
+        "python",
+        "-m",
+        "benchmarks.v013.query_graph_scale",
+        "--output",
+        str(args.output),
+    ]
+    for scale in scales:
+        exact_argv.extend(("--scale", str(scale)))
+    if args.execute_expensive:
+        exact_argv.append("--execute-expensive")
+    if args.candidate_wheel is not None:
+        exact_argv.extend(("--candidate-wheel", str(args.candidate_wheel)))
     report = build_report(
-        scales=tuple(args.scale) if args.scale else DEFAULT_SCALES,
+        scales=scales,
         execute_expensive=args.execute_expensive,
+        candidate_wheel=args.candidate_wheel,
+        exact_argv=exact_argv,
     )
     output = args.output.expanduser().absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
