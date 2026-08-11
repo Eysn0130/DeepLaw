@@ -84,7 +84,7 @@
             "compile",
             "reconcile",
             "query/context",
-            "backup",
+            "snapshot",
             "forget",
             "host connect"
           ]

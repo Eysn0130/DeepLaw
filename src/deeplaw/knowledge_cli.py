@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import secrets
+import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -138,6 +139,103 @@ from .skill_factory import (
 from .task_context import normalize_task_context_binding
 from .util import canonical_json, excerpt, strict_json_loads
 
+_BASIC_KNOWLEDGE_COMMANDS = (
+    "init",
+    "doctor",
+    "source",
+    "compile",
+    "reconcile",
+    "host",
+    "context",
+    "wiki",
+    "snapshot",
+    "forget",
+)
+_KNOWLEDGE_HELP_TIERS = {
+    "advanced": (
+        "agent-context",
+        "autonomy",
+        "backfill",
+        "compare-retrieval",
+        "diagnose-retrieval",
+        "discovery-model",
+        "editor",
+        "lineage",
+        "projection",
+        "query",
+        "relation",
+        "retrieval-profile",
+        "semantic",
+        "structure",
+        "synthesis",
+        "workbench",
+    ),
+    "admin": (
+        "export",
+        "gc",
+        "import-package",
+        "inbox",
+        "job",
+        "mcp",
+        "migrate",
+        "rebuild-indexes",
+        "revoke",
+        "run-receipt",
+        "sink",
+        "skill",
+        "verify-package",
+    ),
+    "compatibility": (
+        "approve",
+        "approve-source",
+        "debug",
+        "explain",
+        "feedback",
+        "get",
+        "ingest",
+        "inspect",
+        "propose",
+        "recall",
+        "relate",
+        "review",
+        "search",
+        "verify",
+    ),
+}
+
+
+def _tier_help(tier: str) -> str:
+    commands = _KNOWLEDGE_HELP_TIERS[tier]
+    rendered = "\n".join(f"  deeplaw knowledge {command}" for command in commands)
+    return (
+        f"DeepLaw Knowledge {tier.title()} commands\n\n{rendered}\n\n"
+        "These commands remain directly executable. No alias or persistent contract is removed.\n"
+    )
+
+
+class _KnowledgeTierHelp(argparse.Action):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        if option_string is None:
+            raise RuntimeError("knowledge help tier is unavailable")
+        tier = option_string.removeprefix("--help-")
+        parser._print_message(_tier_help(tier), sys.stdout)
+        parser.exit()
+
+
+def _curate_default_help(
+    action: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    by_name = {choice.dest: choice for choice in action._choices_actions}
+    action._choices_actions[:] = [
+        by_name[name] for name in _BASIC_KNOWLEDGE_COMMANDS
+    ]
+
 
 @contextmanager
 def _command_vault(
@@ -182,6 +280,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     knowledge = commands.add_parser(
         "knowledge",
         help="Operate the local Markdown-native Agent Knowledge OS",
+        description=(
+            "Basic journey: init -> doctor -> source add -> compile -> reconcile -> "
+            "host context -> wiki/source drill-down -> snapshot/forget"
+        ),
+        epilog=(
+            "Use --help-advanced, --help-admin, or --help-compatibility for the "
+            "layered command inventory."
+        ),
     )
     knowledge.add_argument(
         "--format",
@@ -190,7 +296,18 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="json",
         help="Render the final result as pretty JSON, one JSONL event, or human-readable text",
     )
-    subcommands = knowledge.add_subparsers(dest="knowledge_command", required=True)
+    for tier in _KNOWLEDGE_HELP_TIERS:
+        knowledge.add_argument(
+            f"--help-{tier}",
+            action=_KnowledgeTierHelp,
+            nargs=0,
+            help=f"Show {tier} commands without changing their compatibility",
+        )
+    subcommands = knowledge.add_subparsers(
+        dest="knowledge_command",
+        required=True,
+        metavar="{" + ",".join(_BASIC_KNOWLEDGE_COMMANDS) + "}",
+    )
 
     init = subcommands.add_parser("init", help="Initialize an owner-only knowledge vault")
     init.add_argument("--vault", type=Path, default=default_knowledge_vault())
@@ -1267,6 +1384,13 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     autonomy_reconcile.add_argument("--vault", type=Path, default=default_knowledge_vault())
     autonomy_reconcile.add_argument("--grant-id", required=True)
     autonomy_reconcile.add_argument("--confirm-no-case-data", action="store_true")
+    reconcile = subcommands.add_parser(
+        "reconcile",
+        help="Reconcile safe Markdown edits through the shared domain coordinator",
+    )
+    reconcile.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    reconcile.add_argument("--grant-id", required=True)
+    reconcile.add_argument("--confirm-no-case-data", action="store_true")
     autonomy_watch = autonomy_commands.add_parser(
         "watch",
         help="Poll the bounded Markdown workspace and reconcile changes through the coordinator",
@@ -1822,9 +1946,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     sink_status.add_argument("--vault", type=Path, default=default_knowledge_vault())
     sink_status.add_argument("--grant-id", required=True)
+    sink_apply_help = (
+        "Apply one closed knowledge-sink input v2-v5 request; the contract is "
+        "selected from the active grant"
+    )
     sink_apply = sink_commands.add_parser(
         "apply",
-        help="Apply one closed knowledge-sink.input/v2 JSON request",
+        help=sink_apply_help,
+        description=sink_apply_help,
     )
     sink_apply.add_argument("--vault", type=Path, default=default_knowledge_vault())
     sink_apply.add_argument("--grant-id", required=True)
@@ -1843,6 +1972,22 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     sink_mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     sink_mcp.add_argument("--stdio", action="store_true")
 
+    host = subcommands.add_parser(
+        "host",
+        help="Build a read-only Host connection plan without managing Host auth/runtime",
+    )
+    host_commands = host.add_subparsers(dest="host_command", required=True)
+    host_connect = host_commands.add_parser(
+        "connect",
+        help="Verify one vault and print a merge-only read-only MCP configuration",
+    )
+    host_connect.add_argument(
+        "--host",
+        choices=("codex", "claude-code", "opencode"),
+        required=True,
+    )
+    host_connect.add_argument("--vault", type=Path, default=default_knowledge_vault())
+
     mcp = subcommands.add_parser(
         "mcp",
         help="Run the optional read-only Knowledge Asset MCP server",
@@ -1850,6 +1995,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     mcp.add_argument("--vault", type=Path)
     mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     mcp.add_argument("--stdio", action="store_true")
+    _curate_default_help(subcommands)
 
 
 def _write_capsule(path: Path, capsule: dict[str, Any]) -> None:
@@ -2137,6 +2283,15 @@ def _parse_task_binding_argument(value: str | None) -> dict[str, Any] | None:
 
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
+    if command == "host":
+        from .host_connect import build_host_connect_plan
+
+        if args.host_command != "connect":
+            raise ValueError(f"unsupported Host action: {args.host_command}")
+        return build_host_connect_plan(host=args.host, vault_path=args.vault)
+    if command == "reconcile":
+        args.autonomy_command = "reconcile"
+        command = "autonomy"
     if command == "init":
         legacy = initialize_knowledge_vault(
             args.vault,

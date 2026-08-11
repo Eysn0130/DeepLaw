@@ -70,13 +70,99 @@ def _print_json(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
 
 
+_ROOT_HELP_TIERS = {
+    "advanced": (
+        "add",
+        "sync",
+        "review",
+        "recall",
+        "explain",
+        "feedback",
+        "status",
+        "open",
+        "pdf-evidence",
+        "search",
+        "get",
+        "capabilities",
+        "verify",
+        "eval",
+        "export-markdown",
+    ),
+    "admin": (
+        "build",
+        "migrate-capabilities",
+        "rollback-capabilities",
+        "document-engine",
+        "official",
+        "private",
+        "maintainer",
+    ),
+    "compatibility": (
+        "challenge-trace",
+        "challenge-replay",
+        "completion",
+        "mcp",
+    ),
+}
+
+
+class _RootTierHelp(argparse.Action):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        if option_string is None:
+            raise RuntimeError("root help tier is unavailable")
+        tier = option_string.removeprefix("--help-")
+        commands = _ROOT_HELP_TIERS[tier]
+        rendered = "\n".join(f"  deeplaw {command}" for command in commands)
+        parser._print_message(
+            f"DeepLaw {tier.title()} commands\n\n{rendered}\n\n"
+            "All commands remain directly executable.\n",
+            sys.stdout,
+        )
+        parser.exit()
+
+
+def _curate_root_help(
+    action: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    visible = {"init", "doctor", "knowledge"}
+    action._choices_actions[:] = [
+        choice for choice in action._choices_actions if choice.dest in visible
+    ]
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="deeplaw",
-        description="Local Agent Knowledge OS with independently governed Legal Pack evidence",
+        description=(
+            "Local Agent Knowledge OS with independently governed Legal Pack evidence\n\n"
+            "Basic journey: init -> doctor -> knowledge source/compile/reconcile -> "
+            "host context -> wiki/source drill-down -> snapshot/forget"
+        ),
+        epilog=(
+            "Use --help-advanced, --help-admin, or --help-compatibility for layered "
+            "operator commands."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"deeplaw {__version__}")
-    commands = parser.add_subparsers(dest="command", required=True)
+    for tier in _ROOT_HELP_TIERS:
+        parser.add_argument(
+            f"--help-{tier}",
+            action=_RootTierHelp,
+            nargs=0,
+            help=f"Show {tier} commands",
+        )
+    commands = parser.add_subparsers(
+        dest="command",
+        required=True,
+        metavar="{init,doctor,knowledge}",
+    )
     add_golden_parsers(commands)
 
     build = commands.add_parser("build", help="Build an immutable release from a verified manifest")
@@ -368,6 +454,7 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--quiet", action="store_true")
     doctor.add_argument("--no-color", action="store_true")
     add_knowledge_parser(commands)
+    _curate_root_help(commands)
     return parser
 
 

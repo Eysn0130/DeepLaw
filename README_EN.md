@@ -66,12 +66,26 @@ same domain services.
 > knowledge.
 
 The default product story highlights only `init`, `doctor`, `source add`, `compile`, `reconcile`,
-`query/context`, `backup`, `forget`, and `host connect`. Semantic/Synthesis/backfill, discovery
+`query/context`, `snapshot`, `forget`, and `host connect`. Semantic/Synthesis/backfill, discovery
 profiles, comparison diagnostics, graph analytics, and low-level Sink operations stay Advanced.
 Historical aliases and persisted contracts are neither deleted nor deprecated in this pass. See the
 [machine-readable product surface manifest](governance/product-surface-manifest.v1.json).
 The [Pass 10 current disposition](docs/V0_13_PASS10_CURRENT_DISPOSITION.md) records the evidence
 invalidation without rewriting historical files.
+
+Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
+`--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.
+Before connecting a Host, the owner can generate a read-only merge plan after Vault preflight:
+
+```bash
+uv run deeplaw knowledge host connect --host codex --vault ./vault
+```
+
+`--host` also accepts `claude-code` or `opencode`. The command prints only a `knowledge_support`
+configuration for manual merge. It does not install or modify the Host, manage authentication or
+the Host runtime, or enable `knowledge_sink`. The output contains the owner-selected local Vault
+path and therefore must not be copied into a Provider Capsule, benchmark receipt, or public support
+bundle.
 
 ## Permanent boundaries
 

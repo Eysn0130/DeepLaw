@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-connect-plan.v1.schema.json",
+  "title": "DeepLaw Host Connect Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "host",
+    "server_leaf",
+    "read_only",
+    "configuration",
+    "preflight",
+    "merge_required",
+    "authentication_managed",
+    "host_runtime_managed",
+    "install_performed",
+    "write_performed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-connect-plan/v1"},
+    "host": {"enum": ["codex", "claude-code", "opencode"]},
+    "server_leaf": {"const": "knowledge_support"},
+    "read_only": {"const": true},
+    "configuration": {
+      "oneOf": [
+        {"$ref": "#/$defs/codexClaudeConfiguration"},
+        {"$ref": "#/$defs/openCodeConfiguration"}
+      ]
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vault_ready",
+        "canonical_valid",
+        "autonomous_core_installed"
+      ],
+      "properties": {
+        "vault_ready": {"const": true},
+        "canonical_valid": {"const": true},
+        "autonomous_core_installed": {"const": true}
+      }
+    },
+    "merge_required": {"const": true},
+    "authentication_managed": {"const": false},
+    "host_runtime_managed": {"const": false},
+    "install_performed": {"const": false},
+    "write_performed": {"const": false}
+  },
+  "$defs": {
+    "argument": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "stdioArguments": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {"const": "knowledge"},
+        {"const": "mcp"},
+        {"const": "--stdio"},
+        {"const": "--vault"},
+        {"$ref": "#/$defs/argument"}
+      ],
+      "items": false
+    },
+    "fullCommand": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {"const": "deeplaw"},
+        {"const": "knowledge"},
+        {"const": "mcp"},
+        {"const": "--stdio"},
+        {"const": "--vault"},
+        {"$ref": "#/$defs/argument"}
+      ],
+      "items": false
+    },
+    "codexClaudeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcpServers"],
+      "properties": {
+        "mcpServers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw-knowledge"],
+          "properties": {
+            "deeplaw-knowledge": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["command", "args"],
+              "properties": {
+                "command": {"const": "deeplaw"},
+                "args": {"$ref": "#/$defs/stdioArguments"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "openCodeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp", "permission"],
+      "properties": {
+        "mcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw_knowledge"],
+          "properties": {
+            "deeplaw_knowledge": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "command", "enabled", "timeout"],
+              "properties": {
+                "type": {"const": "local"},
+                "command": {"$ref": "#/$defs/fullCommand"},
+                "enabled": {"const": true},
+                "timeout": {"type": "integer", "minimum": 1000, "maximum": 60000}
+              }
+            }
+          }
+        },
+        "permission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "deeplaw_knowledge_*",
+            "deeplaw_knowledge_knowledge_support"
+          ],
+          "properties": {
+            "deeplaw_knowledge_*": {"const": "deny"},
+            "deeplaw_knowledge_knowledge_support": {"const": "allow"}
+          }
+        }
+      }
+    }
+  }
+}

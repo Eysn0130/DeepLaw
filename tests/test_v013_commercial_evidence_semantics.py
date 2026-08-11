@@ -235,7 +235,7 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
         "compile",
         "reconcile",
         "query/context",
-        "backup",
+        "snapshot",
         "forget",
         "host connect",
     ]

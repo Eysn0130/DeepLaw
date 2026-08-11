@@ -354,6 +354,30 @@ be installed separately. Its current split Skills are explicit-only:
 `use-knowledge-assets` and `compile-living-wiki` are scheduled compatibility
 wrappers, not the current default path.
 
+### Owner-side Host connection plan
+
+The Basic CLI journey exposes one real, read-only connection preflight for the supported static
+Host configuration shapes:
+
+```bash
+deeplaw knowledge host connect --host codex --vault ./vault
+deeplaw knowledge host connect --host claude-code --vault ./vault
+deeplaw knowledge host connect --host opencode --vault ./vault
+```
+
+The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
+core installed. It then validates and prints a
+[`host-connect-plan/v1`](../contracts/host-connect-plan.v1.schema.json) document containing only a
+`knowledge_support` stdio configuration. `merge_required=true`: DeepLaw does not write Host
+configuration, install a Host, manage Host authentication or runtime state, or enable the separate
+`knowledge_sink` process. The OpenCode plan denies the wildcard DeepLaw namespace and allows only
+the exact read-only leaf.
+
+This is an owner-side setup artifact, not provider-visible context. The plan necessarily contains
+the owner-selected local Vault path. Qualification receipts, Provider Capsules, logs, screenshots,
+and public support bundles must omit or redact that path. Adapters continue to delegate retrieval,
+admission, governance, and persistence to the shared domain services.
+
 Codex development install:
 
 ```bash

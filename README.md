@@ -64,11 +64,24 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
 
 默认产品叙事只突出 `init`、`doctor`、`source add`、`compile`、`reconcile`、`query/context`、
-`backup`、`forget` 与 `host connect`。Semantic/Synthesis/backfill、discovery profile、比较诊断、
+`snapshot`、`forget` 与 `host connect`。Semantic/Synthesis/backfill、discovery profile、比较诊断、
 图分析和低层 Sink 操作保留在 Advanced；历史 alias 与持久合同本阶段不删除、不弃用。精确分类见
 [`governance/product-surface-manifest.v1.json`](governance/product-surface-manifest.v1.json)。
 当前证据处置见
 [`docs/V0_13_PASS10_CURRENT_DISPOSITION.md`](docs/V0_13_PASS10_CURRENT_DISPOSITION.md)。
+
+默认 Help 只展示这条 Basic journey；`--help-advanced`、`--help-admin` 和
+`--help-compatibility` 分别展开专家、管理员和历史兼容入口。连接 Host 前，owner 可生成一个经过
+Vault preflight 的只读合并计划：
+
+```bash
+uv run deeplaw knowledge host connect --host codex --vault ./vault
+```
+
+`--host` 也接受 `claude-code` 或 `opencode`。命令只输出需要人工合并的
+`knowledge_support` 配置，不安装或修改 Host，不管理认证或 Host runtime，也不启用
+`knowledge_sink`。输出含 owner 选择的本地 Vault 路径，因此不能直接放入 Provider Capsule、
+benchmark receipt 或公开 support bundle。
 
 ## 核心边界
 

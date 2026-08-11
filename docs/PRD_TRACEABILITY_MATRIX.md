@@ -4,6 +4,16 @@ Status: **current source-candidate mapping**, carried forward from the Pass 5 fu
 updated 2026-08-11 with the Pass 8 disposition and PRD 1.3 evidence/Wiki boundary clarification.
 This is not a fresh qualification, release note, or permission to implement every Target.
 
+Pass 11 current pointers: Pass 10 evidence is invalidated without rewriting its historical files
+by [`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md). Candidate task
+inputs and evaluator-only Gold/scoring are now physically separated, but no real-Host
+qualification has run. The default CLI product journey, layered Help, direct reconcile alias,
+read-only Host connection plan, and frozen caller/contract preservation boundary are recorded in
+[`../governance/product-surface-manifest.v1.json`](../governance/product-surface-manifest.v1.json)
+and [`V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md`](V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md).
+Run Timeline and semantic restore remain `not_claimed` as recorded in
+[`V0_13_PASS11_TIMELINE_RESTORE_DISPOSITION.md`](V0_13_PASS11_TIMELINE_RESTORE_DISPOSITION.md).
+
 ## Frozen audit boundary
 
 - PRD revision: `1.3`; SHA-256:
