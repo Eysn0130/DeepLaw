@@ -372,7 +372,10 @@ deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
 The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
-core installed. It then validates and prints a
+core installed. It also executes one bounded, no-write, no-model Context call and verifies that
+the audit head is unchanged. The plan distinguishes compiled Knowledge, a source-only honest Gap,
+and an empty honest Gap; an uncallable read seam is blocked rather than reported ready. It then
+validates and prints a
 [`host-connect-plan/v1`](../contracts/host-connect-plan.v1.schema.json) document containing only a
 `knowledge_support` stdio configuration. `merge_required=true`: DeepLaw does not write Host
 configuration, install a Host, manage Host authentication or runtime state, or enable the separate
@@ -383,6 +386,12 @@ This is an owner-side setup artifact, not provider-visible context. The plan nec
 the owner-selected local Vault path. Qualification receipts, Provider Capsules, logs, screenshots,
 and public support bundles must omit or redact that path. Adapters continue to delegate retrieval,
 admission, governance, and persistence to the shared domain services.
+
+For owner/Host compilation orchestration, the command
+`deeplaw knowledge compile handoff --source-revision-id <exact-id>` produces a read-only receipt
+that binds the existing compiler profile and the public
+`knowledge_support`/separate `knowledge_sink` saga. It does not include a Grant, call a model, merge
+read and write leaves, or add another coordinator.
 
 Codex development install:
 

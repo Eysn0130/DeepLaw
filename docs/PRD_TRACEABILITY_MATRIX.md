@@ -265,7 +265,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-OPS-004 | Recover post-commit/pre-materialization failure | Implemented | KA pending materialization/recover | recovery event contracts | projection/autonomy recovery tests | Local fault injection | Real crash/process interruption pending | Run interrupted mutation task |
 | PRD-OPS-005 | OKF/AKBP are interchange only | Deferred | No v0.13 runtime | None | None | Research-only UP | No admitted interoperability failure | Route to v0.14/v0.15 research |
 | PRD-OPS-006 | Exports bind exact hashes and exclude secrets/paths | Target | partial package/export code | package v1/manifests | package/security tests | Historical local artifacts only | Fresh current wheel/provenance/redownload absent | Freeze export disclosure and round-trip task |
-| PRD-OPS-007 | Forget/erasure updates eligibility and projections without tombstone leakage | Implemented | KA forget/GC, WIKI rebuild | lifecycle/tombstone contracts | forget/GC/rebuild tests | Local only | Independent selective-forget Gold absent | Run write-execute-forget holdout |
+| PRD-OPS-007 | Forget/erasure updates eligibility and projections without tombstone leakage | Implemented | target-aware owner CLI, KA forget/GC, Source lifecycle, WIKI rebuild | lifecycle/tombstone contracts | explicit Asset/Knowledge/Source, scope/sensitivity/CAS/idempotency/recall/Wiki tests | Local deterministic vertical only | Independent selective-forget Gold absent | Run write-execute-forget holdout |
 | PRD-OPS-008 | Semantic restore creates a new attributable revision/event | Not Implemented | Snapshot/Vault rollback only | No public semantic-restore contract | No complete revision-restore acceptance | None | Pointer rewind is forbidden and not a substitute | Reproduce user rollback task before design |
 | PRD-OPS-009 | Bounded integrity-verifiable operational and Run Timeline | Target | events/run records/query trace primitives | separate existing contracts | `test_prd12_run_timeline_reproduction.py` | `reproduced_missing_public_seam` | No unified owner timeline, filtering, pagination, forget, or restore events | Freeze owner time-to-locate and lifecycle Gold |
 
@@ -273,10 +273,10 @@ Evidence abbreviations in the table are repository-relative paths:
 
 | Capability | Current | Qualification boundary |
 |---|---|---|
-| Continuity/Context | Target workflow with implemented route/snapshot/admission kernel | Semantic cold-start, density, fork lifecycle, Human Gold, native-memory comparison, and real Hosts pending |
+| Continuity/Context | Source-only honest Gap and deterministic Source-to-compiled-Context vertical implemented | Semantic density, fork lifecycle, independent Human Gold, native-memory comparison, and real Hosts pending |
 | Living Wiki | Implemented development chain with partial exact-candidate scale/editor evidence | Independent Human usability, 10k/100k incremental equivalence, RSS, Relation scale, and platform evidence pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
-| Host Integration | Target with local static/thin-adapter evidence | Real isolated Codex/Claude/OpenCode runs and secret preflight pending |
+| Host Integration | Bounded real read-seam preflight and split read/sink deterministic Host implemented | Real isolated Codex/Claude/OpenCode tasks and provider-secret qualification pending |
 | Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
 
 ## Pass 5 historical addendum

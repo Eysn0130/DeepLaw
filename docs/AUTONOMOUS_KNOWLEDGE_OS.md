@@ -532,8 +532,11 @@ text never grants tools by itself; the host and owner policy remain authoritativ
 deeplaw knowledge init --vault ./vault --name project --scope project
 ```
 
-This creates the retained v0.7 compatibility schema plus the v0.9 autonomous core. No mutation grant is
-enabled. `--legacy-review-core` exists only for compatibility testing and staged migration.
+This creates the retained v0.7 compatibility schema plus the v0.9 autonomous core. The root
+`deeplaw init` route delegates to the same default service, so fresh root and nested Vaults no
+longer diverge. No mutation grant is enabled. `--legacy-review-core` exists only for compatibility
+testing and staged migration. A Source-only Vault remains a valid v6 workspace: Context returns a
+bounded `uncompiled_source` Gap until governed compilation succeeds.
 
 ### Existing Vault
 

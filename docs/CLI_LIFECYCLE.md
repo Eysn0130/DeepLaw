@@ -1,6 +1,7 @@
 # DeepLaw Knowledge CLI lifecycle
 
-Status: **v0.7 compatibility CLI retained by v0.12.0**, reviewed 2026-07-30. New Vaults and autonomous migration use
+Status: **v0.7 compatibility CLI retained by v0.12.0**, reviewed 2026-08-12. New Vaults and
+autonomous migration use
 the `deeplaw knowledge autonomy ...` and `deeplaw knowledge sink ...` commands documented in
 [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md). Examples below keep legacy writes
 in the offline CLI; Agent MCP remains read-only.
@@ -50,6 +51,10 @@ deeplaw init ./vault --name project --scope project
 deeplaw status --vault ./vault --jobs
 deeplaw doctor --vault ./vault
 ```
+
+Both `deeplaw init` and `deeplaw knowledge init` delegate to the same default initialization
+service: a fresh Vault contains the retained compatibility schema and the autonomous core. Only
+the explicit `--legacy-review-core` compatibility path omits the autonomous core.
 
 Initialization creates owner-only SQLite, source storage, audit and Identity v2 tables. It refuses
 an unsafe/symlink root. POSIX verifies owner-only modes. Windows initialization applies native ACL
@@ -129,6 +134,25 @@ deeplaw add ./source.pdf --vault ./vault \
 
 Local/external model compilation requires an exact extractor manifest. External mode additionally
 requires `--confirm-external-disclosure`. Model output remains proposal/quarantine only.
+
+The root `add` route and nested `knowledge source add` route use the same auto-aware Source
+registration service. A successful receipt includes `source_knowledge_status` with stable Source
+Revision IDs and one primary state: `compilation_required`, `compiled`, `stale_or_blocked`, or
+`gap`. `source_registered` is reported separately. Registration never promotes an uncompiled
+Source into authoritative Knowledge.
+
+Default Query Plan v6 remains callable when only Source Revisions exist. It returns a schema-valid,
+bounded `uncompiled_source` Gap instead of raising or silently falling back to v5. The owner can
+then obtain a read-only handoff for the exact revision:
+
+```bash
+deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
+```
+
+The handoff contains the profile hashes, public `knowledge_support`/`knowledge_sink` leaf split,
+happy-path saga steps, and explicit abort operation. It contains no Grant, capability token, model
+call, or write.
 
 ## 3. Sync, watch, rename, and update
 
@@ -331,13 +355,27 @@ deeplaw knowledge gc --vault ./vault --no-dry-run --confirm
 
 deeplaw knowledge forget --vault ./vault --asset-id asset_REPLACE \
   --reason 'Explicit local operator request.' --confirm
+
+deeplaw knowledge forget --vault ./vault \
+  --knowledge-id knowledge_REPLACE \
+  --expected-revision-id knowledgerev_REPLACE \
+  --grant-id grant_REPLACE --idempotency-key owner-forget-1 \
+  --reason 'Owner requested governed Knowledge forgetting.' \
+  --confirm --confirm-no-case-data
+
+deeplaw knowledge forget --vault ./vault \
+  --source-revision-id sourcerev_REPLACE \
+  --reason 'Remove this exact Source Revision from current admission.' --confirm
 ```
 
 Snapshot creation verifies source/database/audit state. Restore targets a new or explicitly
 accepted destination and validates before handoff. GC only removes recognized derived temporary
 orphans within bounds. Forgetting removes current retrieval eligibility and current endpoint
-relations while retaining verifiable audit history and source bytes unless a separately authorized
-retention operation exists.
+relations while retaining verifiable audit history. Target selectors are mutually exclusive and
+never inferred from filenames or titles. Autonomous Knowledge reuse the existing Grant,
+idempotency, CAS, revision, Ledger, projection, and GC coordinator; forgetting Knowledge does not
+delete its protected Source evidence. Source Revision forgetting is a separate lifecycle action
+that removes current admission while retaining immutable stored bytes and audit history.
 
 ## 10. Legacy migration and rollback
 

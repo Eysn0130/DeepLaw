@@ -99,6 +99,35 @@ hashes through the explicit development-v3 fixture. Its report cannot set
 component does not stand in for model-generated cross-document synthesis; neither v1 nor v2 runs
 real Codex, Claude Code, OpenCode, or a competing product.
 
+### Pass 12 continuity evaluator v2
+
+The Pass 12 continuity scorer is a separate, claim-ineligible evaluator design. Its canonical
+development inputs are:
+
+- `benchmarks/evaluator/continuity-qualification-gold-v2.json`;
+- `benchmarks/evaluator/score_continuity_qualification_v2.py`;
+- `contracts/continuity-qualification-gold.v2.schema.json`;
+- `contracts/continuity-human-review.v1.schema.json`.
+
+Candidate prompts and fixtures may not contain the expected action, Gold/marker labels, or exact
+expected/forbidden Statement IDs. Gold and candidate bytes are loaded separately, and an
+independent bilingual Human review must bind the exact SHA-256 of both artifacts before the result
+is scored. Missing, incomplete, non-independent, rejected, or digest-mismatched review fails
+closed. The checked-in Gold remains `development_evaluator_only`, and no real Human review artifact
+is fabricated by tests.
+
+Machine correctness uses selected Statement IDs, a closed action, a closed release state, and gap
+codes. It reports First Correct Action, Decision Preservation, Wrong-State Admission, Recall@K,
+Precision@K, MRR, nDCG, Useful Context Recall, relevant/context characters, redundancy, duplicate
+evidence, Duty Coverage, Gap Correctness, and Provider bytes. Natural-language summary substrings,
+English casing, and translation wording cannot create a pass. Forbidden state and a Provider
+payload above 65,536 bytes remain hard failures.
+
+The v3 repository development corpus may rotate only exact source-byte hashes after an accepted
+current-source correction. Its cases, labels, expected/forbidden IDs, thresholds, and governance
+fields are not changed to fit candidate output. Historical v1 and retained Pass 11 evidence are
+never rebound.
+
 ## Run and verify
 
 The default runner selects protocol v2 and repository development Gold v3. These commands are local

@@ -85,7 +85,7 @@ Pass 11 最终 executed/failed/not-executed 与 artifact 决策见
 
 默认 Help 只展示这条 Basic journey；`--help-advanced`、`--help-admin` 和
 `--help-compatibility` 分别展开专家、管理员和历史兼容入口。连接 Host 前，owner 可生成一个经过
-Vault preflight 的只读合并计划：
+真实、无写入 Context 调用验证的只读合并计划：
 
 ```bash
 uv run deeplaw knowledge host connect --host codex --vault ./vault
@@ -93,7 +93,9 @@ uv run deeplaw knowledge host connect --host codex --vault ./vault
 
 `--host` 也接受 `claude-code` 或 `opencode`。命令只输出需要人工合并的
 `knowledge_support` 配置，不安装或修改 Host，不管理认证或 Host runtime，也不启用
-`knowledge_sink`。输出含 owner 选择的本地 Vault 路径，因此不能直接放入 Provider Capsule、
+`knowledge_sink`。计划分别报告 core/canonical、read seam、compiled Knowledge 与 source-only
+honest Gap；read seam 不可调用时不会报告 ready。输出含 owner 选择的本地 Vault 路径，因此不能
+直接放入 Provider Capsule、
 benchmark receipt 或公开 support bundle。
 
 ## 核心边界
@@ -145,6 +147,16 @@ uv sync --all-extras
 
 # 新 Vault 默认同时安装 Markdown-native autonomous core；不会自动启用写权限
 uv run deeplaw knowledge init --vault ./vault --name my-project --scope project
+
+# Source 注册不冒充 Knowledge；回执明确报告 compilation_required/compiled/stale_or_blocked/gap
+uv run deeplaw knowledge source add --vault ./vault --source ./guide.md \
+  --confirm-no-case-data
+uv run deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
+  --purpose verify --confirm-no-case-data
+
+# 为 exact Source Revision 生成只读、无 Grant 的 split read/sink 编译交接
+uv run deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
 
 # owner 显式创建最小权限 grant；token 只写入 Vault 内 owner-only capability 文件
 uv run deeplaw knowledge sink enable \

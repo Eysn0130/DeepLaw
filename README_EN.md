@@ -93,7 +93,8 @@ executed/failed/not-executed inventory, and unchanged release decision.
 
 Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
 `--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.
-Before connecting a Host, the owner can generate a read-only merge plan after Vault preflight:
+Before connecting a Host, the owner can generate a read-only merge plan after a real, no-write
+Context call:
 
 ```bash
 uv run deeplaw knowledge host connect --host codex --vault ./vault
@@ -101,7 +102,9 @@ uv run deeplaw knowledge host connect --host codex --vault ./vault
 
 `--host` also accepts `claude-code` or `opencode`. The command prints only a `knowledge_support`
 configuration for manual merge. It does not install or modify the Host, manage authentication or
-the Host runtime, or enable `knowledge_sink`. The output contains the owner-selected local Vault
+the Host runtime, or enable `knowledge_sink`. The plan separately reports core/canonical validity,
+the read seam, compiled Knowledge, and a source-only honest Gap; an uncallable read seam is never
+reported ready. The output contains the owner-selected local Vault
 path and therefore must not be copied into a Provider Capsule, benchmark receipt, or public support
 bundle.
 
@@ -164,6 +167,17 @@ Create a Vault. This installs the autonomous core but does not grant mutation pe
 
 ```bash
 deeplaw knowledge init --vault ./vault --name my-project --scope project
+
+# Source registration does not impersonate Knowledge. The receipt reports an explicit
+# compilation_required/compiled/stale_or_blocked/gap state.
+deeplaw knowledge source add --vault ./vault --source ./guide.md \
+  --confirm-no-case-data
+deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
+  --purpose verify --confirm-no-case-data
+
+# Build a read-only, grant-free split read/sink handoff for one exact Source Revision.
+deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
 
 deeplaw knowledge sink enable \
   --vault ./vault \
