@@ -1,0 +1,62 @@
+{
+  "schema_version": "deeplaw.continuity-real-host-candidate/v1",
+  "status": "development_candidate",
+  "claim_eligible": false,
+  "case_id": "pass10-codex-continuity-route-1",
+  "task": "Resume the exact frozen Pass 10 checkpoint and identify the first next action.",
+  "purpose": "answer",
+  "scope": "project",
+  "max_sensitivity": "private",
+  "capsule_budget": {
+    "limit": 4,
+    "max_chars": 4000,
+    "max_tokens": 2000,
+    "max_sources": 2,
+    "graph_hops": 0,
+    "projection": "compact"
+  },
+  "correct_route": {
+    "project_seed": "pass10-frozen-project",
+    "task_lineage_seed": "pass10-frozen-feature-task-line",
+    "repository_seed": "pass10-frozen-repository",
+    "worktree_seed": "pass10-frozen-feature-worktree",
+    "base_revision": "1111111111111111111111111111111111111111",
+    "dirty_state_seed": "pass10-frozen-clean-feature-state"
+  },
+  "wrong_route": {
+    "project_seed": "pass10-frozen-project",
+    "task_lineage_seed": "pass10-frozen-main-task-line",
+    "repository_seed": "pass10-frozen-repository",
+    "worktree_seed": "pass10-frozen-main-worktree",
+    "base_revision": "2222222222222222222222222222222222222222",
+    "dirty_state_seed": "pass10-frozen-stale-main-state"
+  },
+  "correct_checkpoint": {
+    "semantic_key": "checkpoint:pass10-feature:slot-0",
+    "old_body": "GOAL: Preserve the frozen feature task.\nCONFIRMED_DECISION: Use the stale feature cursor.\nCONSTRAINT: Keep task and worktree binding exact.\nVERIFIED_FACT: The stale feature marker is PASS10-STALE-FEATURE.\nOPEN_GAP: The current feature state is not yet admitted.\nNEXT_ACTION: Do not use the stale PASS10 action.\nARTIFACT_REF: commit:pass10-stale-feature.",
+    "current_body": "GOAL: Preserve the frozen feature task.\nCONFIRMED_DECISION: Continue only from PASS10-FEATURE.\nCONSTRAINT: Keep task and worktree binding exact.\nVERIFIED_FACT: The admitted receipt marker is PASS10-FEATURE-RECEIPT.\nOPEN_GAP: Full cross-thread qualification remains incomplete.\nNEXT_ACTION: Verify deployment receipt PASS10-FEATURE-RECEIPT.\nARTIFACT_REF: commit:pass10-feature-current.",
+    "expected_first_action": "Verify deployment receipt PASS10-FEATURE-RECEIPT.",
+    "expected_decision": "Continue only from PASS10-FEATURE."
+  },
+  "wrong_checkpoint": {
+    "semantic_key": "checkpoint:pass10-main:slot-0",
+    "body": "GOAL: Preserve the wrong main task.\nCONFIRMED_DECISION: Continue from NEVER-USE-PASS10-MAIN.\nCONSTRAINT: This task line must not enter feature context.\nVERIFIED_FACT: The wrong receipt marker is NEVER-USE-PASS10-MAIN-RECEIPT.\nOPEN_GAP: The main task is unrelated.\nNEXT_ACTION: Use NEVER-USE-PASS10-MAIN-RECEIPT.\nARTIFACT_REF: commit:pass10-wrong-main.",
+    "forbidden_markers": [
+      "NEVER-USE-PASS10-MAIN",
+      "NEVER-USE-PASS10-MAIN-RECEIPT"
+    ]
+  },
+  "expires_at": "2099-01-01T00:00:00Z",
+  "frozen_runs": 3,
+  "not_executed_scenarios": [
+    "new_thread",
+    "resume",
+    "fork",
+    "compaction",
+    "concurrent_worktree",
+    "stale_checkpoint_first_action",
+    "wrong_repository",
+    "forget",
+    "conflict_recovery"
+  ]
+}

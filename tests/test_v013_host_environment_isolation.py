@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,8 +10,10 @@ from typing import Any
 import pytest
 
 from benchmarks.baselines import official_adapter
+from benchmarks.hosts import run_codex_continuity_qualification as codex_qualification
 from benchmarks.hosts import run_living_wiki_host_harness as living_harness
 from benchmarks.hosts import run_semantic_host_harness as semantic_harness
+from deeplaw.util import canonical_json, sha256_bytes
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 AMBIENT_NAME = "DEEPLAW_TEST_AMBIENT_SECRET"
@@ -410,3 +413,164 @@ def test_phased_semantic_harness_uses_the_same_closed_environment(
     _assert_no_canary(report_path.read_bytes())
     assert captured["argv"] == _command()["argv"]
     assert captured["prompt"]
+
+
+def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "qualification"
+    output_dir.mkdir()
+    runtime = output_dir / "runtime"
+    runtime_bin = runtime / "bin"
+    runtime_bin.mkdir(parents=True)
+    fake_deeplaw = runtime_bin / "deeplaw"
+    fake_deeplaw.write_text(
+        f"#!{Path(sys.executable).resolve()}\n"
+        "import json, os, sys\n"
+        "names = ('DEEPLAW_QUALIFICATION_SECRET_CANARY', "
+        "'DEEPLAW_QUALIFICATION_PROVIDER_CANARY', "
+        "'DEEPLAW_CREDENTIAL_PATH_CANARY', 'CODEX_HOME', "
+        "'OPENAI_API_KEY', 'DEEPSEEK_API_KEY')\n"
+        "print(json.dumps({'present': [name for name in names if name in os.environ], "
+        "'home': os.environ.get('HOME'), 'argv': sys.argv}, sort_keys=True))\n",
+        encoding="utf-8",
+    )
+    fake_deeplaw.chmod(0o700)
+    wrapper = output_dir / "deeplaw-closed-mcp"
+    wrapper.write_text(
+        codex_qualification._wrapper_source(Path(sys.executable)),
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+    environment = {
+        **os.environ,
+        "DEEPLAW_QUALIFICATION_SECRET_CANARY": "secret-canary",
+        "DEEPLAW_QUALIFICATION_PROVIDER_CANARY": "provider-canary",
+        "DEEPLAW_CREDENTIAL_PATH_CANARY": "credential-path-canary",
+        "CODEX_HOME": "credential-home-canary",
+        "OPENAI_API_KEY": "provider-auth-canary",
+        "DEEPSEEK_API_KEY": "deepseek-auth-canary",
+    }
+
+    completed = subprocess.run(
+        [str(wrapper), "knowledge", "mcp", "--stdio", "--vault", "vault"],
+        cwd=output_dir,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+    child = json.loads(completed.stdout)
+    receipt = json.loads(
+        (output_dir / "mcp-environment-receipt.json").read_text(encoding="utf-8")
+    )
+    assert child == {
+        "argv": [
+            "runtime/bin/deeplaw",
+            "knowledge",
+            "mcp",
+            "--stdio",
+            "--vault",
+            "vault",
+        ],
+        "home": "mcp-home",
+        "present": [],
+    }
+    assert receipt == {
+        "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
+        "closed": True,
+        "home_isolated": True,
+        "blocked_names_present": [],
+        "environment_names": receipt["environment_names"],
+        "child_argv": child["argv"],
+    }
+    assert {"HOME", "PATH", "XDG_CONFIG_HOME"}.issubset(
+        receipt["environment_names"]
+    )
+    assert set(receipt["environment_names"]).issubset(
+        codex_qualification._ALLOWED_MCP_ENVIRONMENT_NAMES
+    )
+
+
+def test_codex_qualification_fixture_and_event_receipts_are_bounded(
+    tmp_path: Path,
+) -> None:
+    fixture_path = (
+        REPOSITORY / "benchmarks/v013/continuity-real-host-candidate-v1.json"
+    )
+    fixture = codex_qualification._fixture(fixture_path)
+    vault = tmp_path / "vault"
+    seeded = codex_qualification._seed_vault(vault, fixture)
+    preflight = codex_qualification._preflight(vault, fixture, seeded)
+
+    assert preflight["status"] == "passed"
+    assert preflight["provider_bytes"] <= 65_536
+    assert preflight["wrong_state_admission"] == 0
+    assert preflight["stale_state_admitted"] is False
+    assert preflight["write_performed"] is False
+
+    final = {
+        "first_correct_action": fixture["correct_checkpoint"]["expected_first_action"],
+        "confirmed_decision": fixture["correct_checkpoint"]["expected_decision"],
+        "checkpoint_marker": "PASS10-FEATURE",
+        "wrong_state_seen": False,
+    }
+    events = [
+        {"type": "thread.started", "thread_id": "thread_fixture"},
+        {
+            "type": "item.completed",
+            "item": {
+                "id": "item_tool",
+                "type": "mcp_tool_call",
+                "tool": "deeplaw.knowledge_support",
+                "status": "completed",
+                "arguments": {"operation": "context"},
+                "result": {"schema_version": "synthetic-provider-fixture/v1"},
+            },
+        },
+        {
+            "type": "item.completed",
+            "item": {
+                "id": "item_message",
+                "type": "agent_message",
+                "text": canonical_json(final),
+            },
+        },
+        {
+            "type": "turn.completed",
+            "usage": {
+                "input_tokens": 12,
+                "cached_input_tokens": 4,
+                "output_tokens": 3,
+            },
+        },
+    ]
+    sanitized, tool_calls, parsed_final, provider_output = (
+        codex_qualification._sanitized_events(events)
+    )
+    usage, completed_turns = codex_qualification._usage(events)
+
+    assert sanitized
+    assert tool_calls == [
+        {
+            "tool": "deeplaw.knowledge_support",
+            "status": "completed",
+            "arguments_sha256": sha256_bytes(
+                canonical_json({"operation": "context"}).encode()
+            ),
+            "result_sha256": sha256_bytes(provider_output),
+            "result_bytes": len(provider_output),
+        }
+    ]
+    assert parsed_final == final
+    assert usage == {
+        "status": "provider_reported",
+        "input_tokens": 12,
+        "cached_input_tokens": 4,
+        "output_tokens": 3,
+        "total_tokens": 15,
+    }
+    assert completed_turns == 1
