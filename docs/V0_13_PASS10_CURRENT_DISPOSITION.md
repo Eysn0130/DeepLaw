@@ -2,6 +2,11 @@
 
 Status: **historical candidate evidence only; current qualification invalidated** (2026-08-11).
 
+Current Pass 11 Host disposition moved to
+[`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md):
+three later Codex App Server workflows executed as partial/failed candidate evidence, and no
+operation profile or release claim was admitted. The Pass 10 facts below remain unchanged.
+
 This disposition preserves the Pass 10 facts while preventing historical candidate artifacts from
 being presented as uncontaminated or exact-head qualification. It does not rewrite the retained
 Statement, Codex, or Obsidian files, and it does not permit commit/tree/hash-only rebinding.
@@ -35,7 +40,7 @@ success or current-candidate qualification.
 - No real Codex or OpenCode/DeepSeek qualification may run until those boundaries have executable
   fail-closed tests.
 
-## Pass 11 harness status
+## Pass 11 harness status at the Phase 0 boundary
 
 The development harness now has executable separation tests, but it is not yet a frozen real-Host
 qualification suite:
@@ -53,9 +58,10 @@ qualification suite:
 - the old mixed `codex-continuity-qualification-report/v1` contract is retained only for historical
   receipts.
 
-These checks do not authorize a real-model run. Multi-state thread workflows, candidate wheel and
-Host identity binding, an executed isolation receipt, and the final harness-freeze receipt remain
-pending. No Pass 11 Codex or OpenCode receipt has been executed at this point.
+At this Phase 0 boundary these checks did not authorize a real-model run. Later Pass 11 commits
+froze the App Server token-attribution harness and executed three exact-wheel workflows. Those
+later observations did not pass and are governed by the separate current Pass 11 disposition; they
+do not retroactively validate the Pass 10 artifacts.
 
 ## Release decision
 

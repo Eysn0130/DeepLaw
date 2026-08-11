@@ -58,8 +58,10 @@ same domain services.
 > labels, the expected marker, and an exact ID, while the environment receipt drifted from the
 > current contract. One Obsidian seam
 > executed at the historical b14 candidate. Pass 11 now has local fail-closed tests for
-> candidate/evaluator separation and natural-task discovery, but the real-Host suite is neither
-> frozen nor executed. Broader and exact-head qualification is pending. Human
+> candidate/evaluator separation and natural-task discovery. Three exact-wheel Codex App Server
+> A/B/C/D workflows then produced only partial/failed candidate evidence: the 19-operation C and
+> exact MCP D conditions did not pass, no operation profile was admitted, and the multi-state
+> continuity suite was not executed. Broader and exact-head qualification is pending. Human
 > Gold, final-blind, and cross-platform release qualification are also incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
@@ -72,6 +74,8 @@ Historical aliases and persisted contracts are neither deleted nor deprecated in
 [machine-readable product surface manifest](governance/product-surface-manifest.v1.json).
 The [Pass 10 current disposition](docs/V0_13_PASS10_CURRENT_DISPOSITION.md) records the evidence
 invalidation without rewriting historical files.
+The [Pass 11 token-attribution disposition](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)
+records the three failed/partial Codex candidate workflows and the no-profile decision.
 
 Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
 `--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.

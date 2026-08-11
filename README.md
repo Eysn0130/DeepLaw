@@ -55,8 +55,10 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > `integration_limited`。Pass 10 的 Codex 三次运行因评分标签、expected marker、exact ID 污染与
 > receipt 合同漂移，现仅保留为 historical candidate evidence。Obsidian 的一个 seam 在历史 b14
 > candidate 上执行；
-> Pass 11 已建立 candidate/evaluator 分离与自然任务 discovery 的本地失败闭合测试，但真实 Host
-> 套件尚未冻结或执行。更广任务和 exact-head qualification 仍待完成。Human Gold、final blind
+> Pass 11 已建立 candidate/evaluator 分离与自然任务 discovery 的本地失败闭合测试，并运行了三次
+> exact-wheel Codex App Server A/B/C/D workflow；三次均为 partial/failed candidate evidence，
+> 19-operation C 与 exact MCP D 未通过，未准入 operation profile。多状态 continuity suite 未执行。
+> 更广任务和 exact-head qualification 仍待完成。Human Gold、final blind
 > 与跨平台发布资格也未闭环。
 > 旧版
 > proposal/review 工作流只保留为
@@ -69,6 +71,8 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 [`governance/product-surface-manifest.v1.json`](governance/product-surface-manifest.v1.json)。
 当前证据处置见
 [`docs/V0_13_PASS10_CURRENT_DISPOSITION.md`](docs/V0_13_PASS10_CURRENT_DISPOSITION.md)。
+当前 Codex token-attribution 失败处置见
+[`docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)。
 
 默认 Help 只展示这条 Basic journey；`--help-advanced`、`--help-admin` 和
 `--help-compatibility` 分别展开专家、管理员和历史兼容入口。连接 Host 前，owner 可生成一个经过

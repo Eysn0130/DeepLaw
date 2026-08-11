@@ -99,4 +99,5 @@ persisted. The output directory is outside the repository and evaluator tree.
 
 Provider result bytes remain bounded by 65,536. This is a hard safety ceiling, not a quality target.
 Ledger before/after equality, missing usage, wrong tool, unexpected mutation, path/Secret leak,
-payload overflow, Host/model drift, and candidate/evaluator contamination are hard failures.
+payload overflow, non-empty Host stderr, an App Server `error` notification, Host/model drift, and
+candidate/evaluator contamination are hard failures.

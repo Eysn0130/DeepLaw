@@ -6,8 +6,11 @@ This is not a fresh qualification, release note, or permission to implement ever
 
 Pass 11 current pointers: Pass 10 evidence is invalidated without rewriting its historical files
 by [`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md). Candidate task
-inputs and evaluator-only Gold/scoring are now physically separated, but no real-Host
-qualification has run. The default CLI product journey, layered Help, direct reconcile alias,
+inputs and evaluator-only Gold/scoring are physically separated. Three Codex App Server
+token-attribution workflows ran, but all were partial/failed candidate evidence; no profile was
+admitted and the authorized Codex workflow budget is exhausted. See
+[`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
+No real-Host qualification passed. The default CLI product journey, layered Help, direct reconcile alias,
 read-only Host connection plan, and frozen caller/contract preservation boundary are recorded in
 [`../governance/product-surface-manifest.v1.json`](../governance/product-surface-manifest.v1.json)
 and [`V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md`](V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md).
@@ -325,9 +328,11 @@ and public redownload remain `not_executed` or unresolved.
 
 Pass 11 has added local fail-closed coverage for candidate/evaluator file separation, neutral Host
 output, natural-task discovery without an exact Knowledge ID, wrong-route exclusion, stale-revision
-exclusion, and `workspace_diverged`. This is harness development evidence only: the multi-state
-suite, candidate wheel, real Host identity, and physical evaluator mount are not yet frozen, and no
-Pass 11 real-model run has executed.
+exclusion, and `workspace_diverged`. Three exact-wheel Codex App Server A/B/C/D workflows executed
+as claim-ineligible candidate evidence. None passed all four conditions: the full 19-operation C
+condition failed in every attempt and exact MCP D failed in every attempt. Only attempt 1 B was
+evaluator-scoreable, with First Correct Action `0.0`. The multi-state continuity suite, independent
+Human Gold, physical qualification/final-blind split, and remaining Host matrix are not qualified.
 
 Current disposition remains:
 

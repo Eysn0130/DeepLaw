@@ -700,6 +700,7 @@ def _run_condition(
         }
     }
     model_rerouted = any(method.casefold() == "model/rerouted" for method in methods)
+    host_error_notification = any(method.casefold() == "error" for method in methods)
     mcp_receipt = _environment_receipt(receipt_path) if condition_id == "D" else None
     expected_tool_calls = 0 if condition_id == "A" else 1
     expected_provider = condition_id != "A"
@@ -730,6 +731,10 @@ def _run_condition(
         failure_codes.append("disallowed_tool_observed")
     if model_rerouted:
         failure_codes.append("model_rerouted")
+    if host_error_notification:
+        failure_codes.append("host_error_notification")
+    if stderr["bytes"]:
+        failure_codes.append("host_stderr_observed")
     if condition_id == "D" and mcp_receipt is None:
         failure_codes.append("closed_mcp_environment_not_proven")
     if condition_id != "D" and receipt_path.exists():
