@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from deeplaw.compilation.applicability import applicability_digest, policy_digest
+from deeplaw.compilation.artifacts import read_compilation_artifact
 from deeplaw.compilation.coordinator import CompilationCoordinator, _artifact
 from deeplaw.compilation.models import COMPILER_GRANT_OPERATIONS
 from deeplaw.compilation.profiles import SEMANTIC_DUTIES, compiler_profile
@@ -18,7 +20,10 @@ from deeplaw.evidence import (
 from deeplaw.knowledge_autonomy import (
     SINK_OPERATIONS,
     AutonomousKnowledgeStore,
+    create_autonomous_snapshot,
     initialize_autonomous_core,
+    restore_autonomous_snapshot,
+    verify_autonomous_snapshot,
 )
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
@@ -391,6 +396,32 @@ def test_statement_commit_maps_receipt_and_replay(tmp_path: Path) -> None:
         statement_id_value = store.connection.execute(
             "SELECT statement_id FROM knowledge_statements_v1"
         ).fetchone()["statement_id"]
+        bundled = store.connection.execute(
+            """
+            SELECT artifacts.artifact_role, members.artifact_sha256,
+                   members.bundle_sha256
+            FROM source_compilation_artifact_bundle_members_v1 AS members
+            JOIN source_compilation_artifacts_v1 AS artifacts
+              ON artifacts.artifact_sha256 = members.artifact_sha256
+            ORDER BY members.entry_ordinal
+            """
+        ).fetchall()
+        assert [row["artifact_role"] for row in bundled] == [
+            "statement",
+            "statement_map",
+            "statement_evidence_receipt",
+        ]
+        assert len({row["bundle_sha256"] for row in bundled}) == 1
+        for row in bundled:
+            logical_path = (
+                root
+                / ".deeplaw"
+                / "objects"
+                / "sha256"
+                / row["artifact_sha256"][:2]
+                / row["artifact_sha256"][2:]
+            )
+            assert not logical_path.exists()
         verification = store.verify()
         assert verification["valid"] is True, verification["failures"]
     evidence = StatementEvidenceStore(root)
@@ -403,6 +434,155 @@ def test_statement_commit_maps_receipt_and_replay(tmp_path: Path) -> None:
     assert map_value["status"] == "current"
     assert map_value["is_current"] is True
     assert map_value["maps"][0]["char_start"] == 0
+
+
+def test_statement_bundle_snapshot_restore_and_corruption_detection(tmp_path: Path) -> None:
+    root, grant_id, run_id, _publication, _statement_value = _prepared_v3_run(tmp_path)
+    CompilationCoordinator(root).commit(
+        grant_id=grant_id, compilation_run_id=run_id, confirm_no_case_data=True
+    )
+    snapshot = tmp_path / "statement-bundle-snapshot"
+    create_autonomous_snapshot(root, snapshot)
+    assert verify_autonomous_snapshot(snapshot)["valid"] is True
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.connection.execute(
+            """
+            DELETE FROM source_compilation_artifact_bundle_members_v1
+            WHERE artifact_sha256 = (
+                SELECT artifact_sha256
+                FROM source_compilation_artifact_bundle_members_v1
+                LIMIT 1
+            )
+            """
+        )
+        store.connection.commit()
+        mapping_verification = store.verify()
+    assert mapping_verification["valid"] is False
+    assert any(
+        item["code"] == "source_compilation_artifact_bundle_invalid"
+        for item in mapping_verification["failures"]
+    )
+    restored = tmp_path / "statement-bundle-restored"
+    restore_autonomous_snapshot(restored, snapshot=snapshot, confirm=True)
+    with AutonomousKnowledgeStore(restored, read_only=True) as store:
+        assert store.verify()["valid"] is True
+        bundle_sha256 = store.connection.execute(
+            """
+            SELECT bundle_sha256
+            FROM source_compilation_artifact_bundle_members_v1
+            LIMIT 1
+            """
+        ).fetchone()["bundle_sha256"]
+    bundle_path = (
+        restored
+        / ".deeplaw"
+        / "objects"
+        / "sha256"
+        / bundle_sha256[:2]
+        / bundle_sha256[2:]
+    )
+    bundle_path.write_bytes(bundle_path.read_bytes() + b"tampered")
+    with AutonomousKnowledgeStore(restored, read_only=True) as store:
+        verification = store.verify()
+    assert verification["valid"] is False
+    assert any(
+        item["code"] == "source_compilation_artifact_invalid"
+        for item in verification["failures"]
+    )
+
+
+def test_content_gc_retains_statement_bundle_as_compilation_evidence(tmp_path: Path) -> None:
+    root, grant_id, run_id, _publication, _statement_value = _prepared_v3_run(tmp_path)
+    CompilationCoordinator(root).commit(
+        grant_id=grant_id, compilation_run_id=run_id, confirm_no_case_data=True
+    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        bundle_sha256 = store.connection.execute(
+            """
+            SELECT bundle_sha256
+            FROM source_compilation_artifact_bundle_members_v1
+            LIMIT 1
+            """
+        ).fetchone()["bundle_sha256"]
+    bundle_path = (
+        root
+        / ".deeplaw"
+        / "objects"
+        / "sha256"
+        / bundle_sha256[:2]
+        / bundle_sha256[2:]
+    )
+    os.utime(bundle_path, (0, 0))
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        result = store.garbage_collect_content(
+            dry_run=False,
+            confirm=True,
+            reason="Retain compilation evidence while exercising orphan GC.",
+        )
+        assert bundle_sha256 not in result["removed_orphan_sha256"]
+        verification = store.verify()
+        assert verification["valid"] is True, verification["failures"]
+    assert bundle_path.is_file()
+
+
+def test_legacy_per_artifact_statement_layout_remains_readable(tmp_path: Path) -> None:
+    root, grant_id, run_id, _publication, _statement_value = _prepared_v3_run(tmp_path)
+    CompilationCoordinator(root).commit(
+        grant_id=grant_id, compilation_run_id=run_id, confirm_no_case_data=True
+    )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        members = store.connection.execute(
+            """
+            SELECT members.artifact_sha256, members.bundle_sha256,
+                   artifacts.artifact_role
+            FROM source_compilation_artifact_bundle_members_v1 AS members
+            JOIN source_compilation_artifacts_v1 AS artifacts
+              ON artifacts.artifact_sha256 = members.artifact_sha256
+            ORDER BY members.entry_ordinal
+            """
+        ).fetchall()
+        bundle_sha256 = members[0]["bundle_sha256"]
+        for member in members:
+            payload = read_compilation_artifact(
+                store.connection,
+                root,
+                member["artifact_sha256"],
+                role=member["artifact_role"],
+            )
+            digest_path = (
+                root
+                / ".deeplaw"
+                / "objects"
+                / "sha256"
+                / member["artifact_sha256"][:2]
+                / member["artifact_sha256"][2:]
+            )
+            digest_path.parent.mkdir(parents=True, exist_ok=True)
+            digest_path.write_bytes(payload)
+        store.connection.execute(
+            "DELETE FROM source_compilation_artifact_bundle_members_v1"
+        )
+        store.connection.execute(
+            "DELETE FROM source_compilation_artifacts_v1 WHERE artifact_sha256 = ?",
+            (bundle_sha256,),
+        )
+        store.connection.commit()
+    bundle_path = (
+        root
+        / ".deeplaw"
+        / "objects"
+        / "sha256"
+        / bundle_sha256[:2]
+        / bundle_sha256[2:]
+    )
+    bundle_path.unlink()
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        verification = store.verify()
+        assert verification["valid"] is True, verification["failures"]
+        statement_id_value = store.connection.execute(
+            "SELECT statement_id FROM knowledge_statements_v1"
+        ).fetchone()["statement_id"]
+    assert StatementEvidenceStore(root).statement(statement_id_value)["status"] == "present"
 
 
 def test_statement_map_marks_human_revision_as_historical(tmp_path: Path) -> None:

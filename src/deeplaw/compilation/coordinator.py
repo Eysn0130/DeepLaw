@@ -43,6 +43,7 @@ from ..util import (
     stable_id,
     strict_json_loads,
 )
+from .artifacts import read_compilation_artifact, write_statement_artifact_bundles
 from .models import (
     COMPILATION_BATCH_SCHEMA,
     COMPILATION_PACKET_SCHEMA,
@@ -131,7 +132,12 @@ def _decoded_artifact(
     ).fetchone()
     if row is None or row["artifact_role"] != role:
         raise RuntimeError("source compilation artifact is unavailable")
-    payload = _read_object(store.root, digest)
+    payload = read_compilation_artifact(
+        store.connection,
+        store.root,
+        digest,
+        role=role,
+    )
     if len(payload) != row["byte_size"]:
         raise RuntimeError("source compilation artifact byte size changed")
     value = strict_json_loads(payload)
@@ -2936,6 +2942,8 @@ class CompilationCoordinator:
                 if start < prior_end:
                     raise ValueError("statement body spans overlap")
                 prior_end = end
+            statement_records: list[dict[str, Any]] = []
+            bundled_artifacts: list[tuple[str, dict[str, Any]]] = []
             for statement in statements:
                 statement_id_value = statement["statement_id"]
                 if not isinstance(statement_id_value, str):
@@ -2944,40 +2952,6 @@ class CompilationCoordinator:
                 statement_payload.pop("char_start", None)
                 statement_payload.pop("char_end", None)
                 _validate_contract("knowledge-statement.v1.schema.json", statement_payload)
-                statement_artifact_sha256, _ = _artifact(
-                    store,
-                    value=statement_payload,
-                    role="statement",
-                    created_at=committed_at,
-                )
-                statement_payload_json = canonical_json(statement_payload)
-                store.connection.execute(
-                    """
-                    INSERT INTO knowledge_statements_v1(
-                        statement_id, knowledge_revision_id, ordinal,
-                        statement_text, statement_sha256, statement_type,
-                        support_status, valid_from, valid_to, limitation,
-                        input_set_sha256,
-                        statement_artifact_sha256, statement_json, recorded_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        statement_id_value,
-                        revision_id,
-                        statement["ordinal"],
-                        statement["statement_text"],
-                        statement["statement_sha256"],
-                        statement["statement_type"],
-                        statement["support_status"],
-                        statement["valid_from"],
-                        statement["valid_to"],
-                        statement["limitation"],
-                        statement["input_set_sha256"],
-                        statement_artifact_sha256,
-                        statement_payload_json,
-                        committed_at,
-                    ),
-                )
                 span_start = next(
                     item["char_start"]
                     for item in planned
@@ -3009,51 +2983,7 @@ class CompilationCoordinator:
                     "gaps": statement["gaps"],
                 }
                 _validate_contract("statement-evidence-map.v1.schema.json", map_value)
-                map_sha256, _ = _artifact(
-                    store,
-                    value=map_value,
-                    role="statement_map",
-                    created_at=committed_at,
-                )
-                store.connection.execute(
-                    """
-                    INSERT INTO statement_evidence_maps_v1(
-                        statement_id, knowledge_revision_id, ordinal,
-                        char_start, char_end, statement_sha256, input_set_sha256,
-                        map_sha256, map_artifact_sha256, map_json, recorded_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        statement_id_value,
-                        revision_id,
-                        statement["ordinal"],
-                        span_start,
-                        span_end,
-                        statement["statement_sha256"],
-                        statement["input_set_sha256"],
-                        map_sha256,
-                        map_sha256,
-                        canonical_json(map_value),
-                        committed_at,
-                    ),
-                )
-                ref_ordinal = 1
-                for ref_kind, refs in (
-                    ("source", statement["source_refs"]),
-                    ("knowledge", statement["knowledge_revision_refs"]),
-                    ("relation", statement["relation_revision_refs"]),
-                ):
-                    for reference in refs:
-                        ref_json = canonical_json(reference)
-                        store.connection.execute(
-                            """
-                            INSERT INTO statement_evidence_refs_v1(
-                                statement_id, ref_ordinal, ref_kind, ref_json
-                            ) VALUES (?, ?, ?, ?)
-                            """,
-                            (statement_id_value, ref_ordinal, ref_kind, ref_json),
-                        )
-                        ref_ordinal += 1
+                map_sha256 = sha256_bytes(canonical_json(map_value).encode("utf-8"))
                 receipt_body = {
                     "schema_version": "deeplaw.statement-evidence-receipt/v1",
                     "statement_id": statement_id_value,
@@ -3078,12 +3008,108 @@ class CompilationCoordinator:
                 receipt_digest = sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
                 receipt_value = {**receipt_body, "receipt_sha256": receipt_digest}
                 _validate_contract("statement-evidence-receipt.v1.schema.json", receipt_value)
-                receipt_artifact_sha256, _ = _artifact(
-                    store,
-                    value=receipt_value,
-                    role="statement_evidence_receipt",
+                statement_records.append(
+                    {
+                        "statement": statement,
+                        "statement_payload": statement_payload,
+                        "span_start": span_start,
+                        "span_end": span_end,
+                        "map_value": map_value,
+                        "map_sha256": map_sha256,
+                        "receipt_value": receipt_value,
+                        "receipt_sha256": receipt_digest,
+                    }
+                )
+                bundled_artifacts.extend(
+                    (
+                        ("statement", statement_payload),
+                        ("statement_map", map_value),
+                        ("statement_evidence_receipt", receipt_value),
+                    )
+                )
+
+            artifact_results = iter(
+                write_statement_artifact_bundles(
+                    store.connection,
+                    store.root,
+                    bundled_artifacts,
                     created_at=committed_at,
                 )
+            )
+            for record in statement_records:
+                statement = record["statement"]
+                statement_id_value = statement["statement_id"]
+                statement_artifact_sha256, _ = next(artifact_results)
+                map_artifact_sha256, _ = next(artifact_results)
+                receipt_artifact_sha256, _ = next(artifact_results)
+                if map_artifact_sha256 != record["map_sha256"]:
+                    raise RuntimeError("statement map artifact digest is inconsistent")
+                store.connection.execute(
+                    """
+                    INSERT INTO knowledge_statements_v1(
+                        statement_id, knowledge_revision_id, ordinal,
+                        statement_text, statement_sha256, statement_type,
+                        support_status, valid_from, valid_to, limitation,
+                        input_set_sha256,
+                        statement_artifact_sha256, statement_json, recorded_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        statement_id_value,
+                        revision_id,
+                        statement["ordinal"],
+                        statement["statement_text"],
+                        statement["statement_sha256"],
+                        statement["statement_type"],
+                        statement["support_status"],
+                        statement["valid_from"],
+                        statement["valid_to"],
+                        statement["limitation"],
+                        statement["input_set_sha256"],
+                        statement_artifact_sha256,
+                        canonical_json(record["statement_payload"]),
+                        committed_at,
+                    ),
+                )
+                store.connection.execute(
+                    """
+                    INSERT INTO statement_evidence_maps_v1(
+                        statement_id, knowledge_revision_id, ordinal,
+                        char_start, char_end, statement_sha256, input_set_sha256,
+                        map_sha256, map_artifact_sha256, map_json, recorded_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        statement_id_value,
+                        revision_id,
+                        statement["ordinal"],
+                        record["span_start"],
+                        record["span_end"],
+                        statement["statement_sha256"],
+                        statement["input_set_sha256"],
+                        record["map_sha256"],
+                        map_artifact_sha256,
+                        canonical_json(record["map_value"]),
+                        committed_at,
+                    ),
+                )
+                ref_ordinal = 1
+                for ref_kind, refs in (
+                    ("source", statement["source_refs"]),
+                    ("knowledge", statement["knowledge_revision_refs"]),
+                    ("relation", statement["relation_revision_refs"]),
+                ):
+                    for reference in refs:
+                        ref_json = canonical_json(reference)
+                        store.connection.execute(
+                            """
+                            INSERT INTO statement_evidence_refs_v1(
+                                statement_id, ref_ordinal, ref_kind, ref_json
+                            ) VALUES (?, ?, ?, ?)
+                            """,
+                            (statement_id_value, ref_ordinal, ref_kind, ref_json),
+                        )
+                        ref_ordinal += 1
                 store.connection.execute(
                     """
                     INSERT INTO statement_evidence_receipts_v1(
@@ -3095,11 +3121,11 @@ class CompilationCoordinator:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        receipt_digest,
+                        record["receipt_sha256"],
                         receipt_artifact_sha256,
                         statement_id_value,
                         revision_id,
-                        map_sha256,
+                        record["map_sha256"],
                         statement["statement_sha256"],
                         statement["statement_type"],
                         statement["support_status"],
@@ -3114,6 +3140,12 @@ class CompilationCoordinator:
                     ),
                 )
                 persisted += 1
+            try:
+                next(artifact_results)
+            except StopIteration:
+                pass
+            else:
+                raise RuntimeError("statement artifact bundle result count is inconsistent")
         return persisted
 
     @staticmethod

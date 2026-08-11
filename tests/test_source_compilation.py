@@ -401,7 +401,7 @@ def test_v011_compilation_check_domains_migrate_without_reimport(tmp_path: Path)
             "SELECT COUNT(*) FROM source_compilation_usage_v1"
         ).fetchone()[0]
     tables = {
-        "source_compilation_artifacts_v1": "semantic_receipt",
+        "source_compilation_artifacts_v1": "statement_bundle",
         "source_compilation_usage_v1": "freeze_semantic_inventory",
         "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
     }
@@ -418,6 +418,12 @@ def test_v011_compilation_check_domains_migrate_without_reimport(tmp_path: Path)
                 r",\s*'observation_plan'.*?'synthesis_receipt'",
                 "",
                 current_sql,
+                flags=re.DOTALL,
+            )
+            old_sql = re.sub(
+                r",\s*'statement'.*?'statement_bundle'",
+                "",
+                old_sql,
                 flags=re.DOTALL,
             )
             old_sql = re.sub(

@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from itertools import pairwise
 from typing import Any
 
+from ..compilation.artifacts import read_compilation_artifact
 from ..evidence.statements import (
     MAX_STATEMENT_TEXT_CHARS,
     build_input_set_sha256,
@@ -15,7 +16,6 @@ from ..evidence.statements import (
 from ..knowledge_autonomy import (
     KNOWLEDGE_KINDS,
     AutonomousKnowledgeStore,
-    _read_object,
     _validate_contract,
 )
 from ..knowledge_intelligence import normalize_identity_text
@@ -257,9 +257,13 @@ def _artifact_value(store: AutonomousKnowledgeStore, digest: str, role: str) -> 
         raise RuntimeError("query statement artifact binding is invalid")
     if row["byte_size"] > _MAX_STATEMENT_ARTIFACT_BYTES:
         raise RuntimeError("query statement artifact exceeds its read bound")
-    payload = _read_object(store.root, digest)
-    if len(payload) != row["byte_size"] or sha256_bytes(payload) != digest:
-        raise RuntimeError("query statement artifact bytes are invalid")
+    payload = read_compilation_artifact(
+        store.connection,
+        store.root,
+        digest,
+        role=role,
+        maximum_bytes=_MAX_STATEMENT_ARTIFACT_BYTES,
+    )
     value = strict_json_loads(payload)
     if not isinstance(value, dict):
         raise RuntimeError("query statement artifact is not an object")

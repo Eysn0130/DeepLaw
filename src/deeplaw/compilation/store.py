@@ -10,6 +10,11 @@ from ..knowledge_autonomy import _read_object, _validate_contract, parse_knowled
 from ..knowledge_models import canonical_timestamp
 from ..util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
 from .applicability import applicability_digest, policy_digest
+from .artifacts import (
+    BundleCache,
+    read_compilation_artifact,
+    read_statement_artifact_bundle,
+)
 from .models import (
     COMPILATION_CORE_SCHEMA,
     SEMANTIC_COMPILATION_CORE_SCHEMA,
@@ -107,12 +112,22 @@ def compilation_tables_sql() -> str:
                 'observation_plan', 'semantic_inventory', 'finalization_packet',
                 'publication_plan', 'semantic_receipt', 'synthesis_packet',
                 'synthesis_plan', 'synthesis_receipt', 'statement',
-                'statement_map', 'statement_evidence_receipt'
+                'statement_map', 'statement_evidence_receipt', 'statement_bundle'
             )),
             byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
             media_type TEXT NOT NULL,
             created_at TEXT NOT NULL
         ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS source_compilation_artifact_bundle_members_v1 (
+            artifact_sha256 TEXT PRIMARY KEY
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            bundle_sha256 TEXT NOT NULL
+                REFERENCES source_compilation_artifacts_v1(artifact_sha256),
+            entry_ordinal INTEGER NOT NULL CHECK(entry_ordinal BETWEEN 1 AND 768),
+            CHECK(artifact_sha256 <> bundle_sha256),
+            UNIQUE(bundle_sha256, entry_ordinal)
+        ) STRICT, WITHOUT ROWID;
 
         CREATE TABLE IF NOT EXISTS source_compilation_usage_v1 (
             operation_id TEXT PRIMARY KEY,
@@ -628,6 +643,7 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
             "statement",
             "statement_map",
             "statement_evidence_receipt",
+            "statement_bundle",
         ),
         "source_compilation_usage_v1": "freeze_semantic_inventory",
         "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
@@ -642,7 +658,7 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
                     'observation_plan', 'semantic_inventory', 'finalization_packet',
                     'publication_plan', 'semantic_receipt', 'synthesis_packet',
                     'synthesis_plan', 'synthesis_receipt', 'statement',
-                    'statement_map', 'statement_evidence_receipt'
+                    'statement_map', 'statement_evidence_receipt', 'statement_bundle'
                 )),
                 byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
                 media_type TEXT NOT NULL,
@@ -845,26 +861,71 @@ def verify_compilation_schema(
             failures.append(
                 {"code": "statement_evidence_schema_invalid", "object_id": "core"}
             )
+    bundle_cache: BundleCache = {}
     for artifact in connection.execute(
         """
-        SELECT artifact_sha256, byte_size
+        SELECT artifact_sha256, artifact_role, byte_size
         FROM source_compilation_artifacts_v1
         ORDER BY artifact_sha256
         """
     ):
         digest = artifact["artifact_sha256"]
-        path = root / ".deeplaw" / "objects" / "sha256" / digest[:2] / digest[2:]
-        if (
-            len(digest) != 64
-            or path.is_symlink()
-            or not path.is_file()
-            or path.stat().st_size != artifact["byte_size"]
-            or sha256_file(path) != digest
-        ):
+        try:
+            payload = read_compilation_artifact(
+                connection,
+                root,
+                digest,
+                role=artifact["artifact_role"],
+                bundle_cache=bundle_cache,
+            )
+            if len(digest) != 64 or len(payload) != artifact["byte_size"]:
+                raise RuntimeError("source compilation artifact metadata is invalid")
+        except (OSError, TypeError, ValueError, RuntimeError):
             failures.append(
                 {
                     "code": "source_compilation_artifact_invalid",
                     "object_id": digest,
+                }
+            )
+    for bundle in connection.execute(
+        """
+        SELECT artifact_sha256
+        FROM source_compilation_artifacts_v1
+        WHERE artifact_role = 'statement_bundle'
+        ORDER BY artifact_sha256
+        """
+    ):
+        bundle_sha256 = bundle["artifact_sha256"]
+        try:
+            entries = read_statement_artifact_bundle(
+                connection,
+                root,
+                bundle_sha256,
+                bundle_cache=bundle_cache,
+            )
+            members = connection.execute(
+                """
+                SELECT artifact_sha256, entry_ordinal
+                FROM source_compilation_artifact_bundle_members_v1
+                WHERE bundle_sha256 = ?
+                ORDER BY entry_ordinal
+                """,
+                (bundle_sha256,),
+            ).fetchall()
+            if len(entries) != len(members) or any(
+                member["entry_ordinal"] != ordinal
+                or member["artifact_sha256"] != entry.get("artifact_sha256")
+                for ordinal, (entry, member) in enumerate(
+                    zip(entries, members, strict=True),
+                    start=1,
+                )
+            ):
+                raise RuntimeError("source compilation artifact bundle mapping is invalid")
+        except (OSError, TypeError, ValueError, RuntimeError):
+            failures.append(
+                {
+                    "code": "source_compilation_artifact_bundle_invalid",
+                    "object_id": bundle_sha256,
                 }
             )
     for replay in connection.execute(
@@ -1289,22 +1350,15 @@ def verify_compilation_schema(
             ).fetchone()
             if artifact is None or artifact["artifact_role"] != "statement":
                 raise ValueError("statement artifact role is invalid")
-            statement_path = (
-                root
-                / ".deeplaw"
-                / "objects"
-                / "sha256"
-                / statement_row["statement_artifact_sha256"][:2]
-                / statement_row["statement_artifact_sha256"][2:]
+            statement_payload = read_compilation_artifact(
+                connection,
+                root,
+                statement_row["statement_artifact_sha256"],
+                role="statement",
+                maximum_bytes=256 * 1024,
+                bundle_cache=bundle_cache,
             )
-            if (
-                statement_path.is_symlink()
-                or not statement_path.is_file()
-                or statement_path.stat().st_size != artifact["byte_size"]
-                or sha256_file(statement_path) != statement_row["statement_artifact_sha256"]
-            ):
-                raise ValueError("statement artifact bytes are invalid")
-            statement = strict_json_loads(statement_path.read_bytes())
+            statement = strict_json_loads(statement_payload)
             if not isinstance(statement, dict):
                 raise ValueError("statement artifact is not an object")
             _validate_contract("knowledge-statement.v1.schema.json", statement)
@@ -1386,23 +1440,19 @@ def verify_compilation_schema(
             ).fetchone()
             if map_artifact is None or map_artifact["artifact_role"] != "statement_map":
                 raise ValueError("statement map artifact role is invalid")
-            map_path = (
-                root
-                / ".deeplaw"
-                / "objects"
-                / "sha256"
-                / map_row["map_artifact_sha256"][:2]
-                / map_row["map_artifact_sha256"][2:]
-            )
             if (
-                map_path.is_symlink()
-                or not map_path.is_file()
-                or map_path.stat().st_size != map_artifact["byte_size"]
-                or sha256_file(map_path) != map_row["map_artifact_sha256"]
-                or map_row["map_sha256"] != map_row["map_artifact_sha256"]
+                map_row["map_sha256"] != map_row["map_artifact_sha256"]
             ):
                 raise ValueError("statement map artifact bytes are invalid")
-            map_value = strict_json_loads(map_path.read_bytes())
+            map_payload = read_compilation_artifact(
+                connection,
+                root,
+                map_row["map_artifact_sha256"],
+                role="statement_map",
+                maximum_bytes=256 * 1024,
+                bundle_cache=bundle_cache,
+            )
+            map_value = strict_json_loads(map_payload)
             if not isinstance(map_value, dict):
                 raise ValueError("statement map is not an object")
             _validate_contract("statement-evidence-map.v1.schema.json", map_value)
@@ -1462,22 +1512,15 @@ def verify_compilation_schema(
                 or receipt_artifact["artifact_role"] != "statement_evidence_receipt"
             ):
                 raise ValueError("statement evidence receipt artifact role is invalid")
-            receipt_path = (
-                root
-                / ".deeplaw"
-                / "objects"
-                / "sha256"
-                / receipt_row["artifact_sha256"][:2]
-                / receipt_row["artifact_sha256"][2:]
+            receipt_payload = read_compilation_artifact(
+                connection,
+                root,
+                receipt_row["artifact_sha256"],
+                role="statement_evidence_receipt",
+                maximum_bytes=256 * 1024,
+                bundle_cache=bundle_cache,
             )
-            if (
-                receipt_path.is_symlink()
-                or not receipt_path.is_file()
-                or receipt_path.stat().st_size != receipt_artifact["byte_size"]
-                or sha256_file(receipt_path) != receipt_row["artifact_sha256"]
-            ):
-                raise ValueError("statement evidence receipt artifact bytes are invalid")
-            receipt = strict_json_loads(receipt_path.read_bytes())
+            receipt = strict_json_loads(receipt_payload)
             if not isinstance(receipt, dict):
                 raise ValueError("statement evidence receipt is not an object")
             _validate_contract("statement-evidence-receipt.v1.schema.json", receipt)

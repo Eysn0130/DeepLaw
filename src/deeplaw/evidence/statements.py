@@ -5,9 +5,9 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from ..compilation.artifacts import read_compilation_artifact
 from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
-    _read_object,
     _validate_contract,
 )
 from ..knowledge_models import canonical_timestamp
@@ -425,9 +425,13 @@ def _bounded_artifact(
         raise RuntimeError("statement evidence artifact binding is invalid")
     if row["byte_size"] > MAX_EVIDENCE_ARTIFACT_BYTES:
         raise RuntimeError("statement evidence artifact exceeds its read bound")
-    payload = _read_object(store.root, digest)
-    if len(payload) != row["byte_size"]:
-        raise RuntimeError("statement evidence artifact byte size changed")
+    payload = read_compilation_artifact(
+        store.connection,
+        store.root,
+        digest,
+        role=role,
+        maximum_bytes=MAX_EVIDENCE_ARTIFACT_BYTES,
+    )
     value = strict_json_loads(payload)
     if not isinstance(value, dict):
         raise RuntimeError("statement evidence artifact is not an object")

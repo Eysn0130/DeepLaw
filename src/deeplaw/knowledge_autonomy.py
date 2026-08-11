@@ -8813,6 +8813,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             row["object_sha256"]
             for row in self.connection.execute("SELECT object_sha256 FROM content_objects_v3")
         }
+        known_objects.update(
+            row["artifact_sha256"]
+            for row in self.connection.execute(
+                "SELECT artifact_sha256 FROM source_compilation_artifacts_v1"
+            )
+        )
         orphan_candidates: list[dict[str, Any]] = []
         orphan_budget = max_objects - len(canonical_candidates)
         deferred_orphan_count = 0
