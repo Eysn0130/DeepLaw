@@ -616,6 +616,7 @@ def test_deterministic_fake_host_uses_split_public_compile_seams(
         operation="wiki",
         wiki_action="backlinks",
         wiki_path=f"wiki/sources/{source_ref['source_revision_id']}.md",
+        limit=20,
         vault_path=vault,
     )["result"]
     assert any(claim_id in link for link in backlinks["links"])
