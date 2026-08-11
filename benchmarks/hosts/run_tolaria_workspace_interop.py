@@ -30,6 +30,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 from deeplaw.editor_bridge import validate_editor_write_target
+from deeplaw.subprocess_environment import _build_subprocess_environment
 
 EXPECTED_TOLARIA_COMMIT = "ab01faa6773136a58285d04cb81e2587c11bac85"
 EXPECTED_TOLARIA_LICENSE = "AGPL-3.0-or-later"
@@ -181,17 +182,21 @@ def _run_process(
 
     if not argv:
         raise HarnessError("empty_command")
-    environment = {
-        "PATH": os.environ.get("PATH", os.defpath),
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
-        "LC_ALL": os.environ.get("LC_ALL", os.environ.get("LANG", "C.UTF-8")),
-        "LC_CTYPE": os.environ.get("LC_CTYPE", os.environ.get("LANG", "C.UTF-8")),
-        "PYTHONIOENCODING": "utf-8",
-        "PYTHONUTF8": "1",
-        "CI": "true",
-        "NO_COLOR": "1",
-        "GIT_TERMINAL_PROMPT": "0",
-    }
+    environment = _build_subprocess_environment()
+    environment.setdefault("PATH", os.defpath)
+    locale = environment.get("LC_ALL") or environment.get("LANG") or "C.UTF-8"
+    environment.setdefault("LANG", locale)
+    environment.setdefault("LC_ALL", locale)
+    environment.setdefault("LC_CTYPE", locale)
+    environment.update(
+        {
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1",
+            "CI": "true",
+            "NO_COLOR": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
     try:
         completed = subprocess.run(
             argv,

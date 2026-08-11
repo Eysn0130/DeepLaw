@@ -176,17 +176,60 @@ def test_dirty_tracked_checkout_is_rejected_but_untracked_node_modules_are_irrel
         )
 
 
-def test_node_probe_output_is_relative_and_does_not_echo_absolute_ui_paths(tmp_path: Path) -> None:
+def test_node_probe_output_is_relative_and_does_not_echo_absolute_ui_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     checkout = _probe_fixture(tmp_path)
     vault = tmp_path / "vault"
     note = vault / "notes" / "roundtrip.md"
     note.parent.mkdir(parents=True)
     content = harness._synthetic_note()
     note.write_bytes(harness._synthetic_seed_note())
+    portable = {
+        "SYSTEMROOT": r"C:\Windows",
+        "WINDIR": r"C:\Windows",
+        "COMSPEC": r"C:\Windows\System32\cmd.exe",
+        "PATHEXT": ".COM;.EXE",
+        "TEMP": str(tmp_path / "tmp"),
+        "TMP": str(tmp_path / "tmp"),
+    }
+    for name, value in portable.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DEEPLAW_TEST_AMBIENT_SECRET", "must-not-reach-node")
+    captured: list[dict[str, str]] = []
+    run = subprocess.run
+
+    def _capture_environment(*args: object, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        captured.append(dict(kwargs["env"]))
+        return run(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(harness.subprocess, "run", _capture_environment)
     observed = harness._run_node_probe(checkout, vault, content)
     assert observed["status"] == "passed"
     assert observed["path"] == "notes/roundtrip.md"
     assert str(tmp_path) not in json.dumps(observed)
+    assert len(captured) == 1
+    assert portable.items() <= captured[0].items()
+    assert set(captured[0]) <= {
+        "PATH",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "PYTHONIOENCODING",
+        "PYTHONUTF8",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "CI",
+        "NO_COLOR",
+        "GIT_TERMINAL_PROMPT",
+    }
+    assert "DEEPLAW_TEST_AMBIENT_SECRET" not in captured[0]
 
 
 def test_protected_hash_mutation_is_visible_without_calling_node(tmp_path: Path) -> None:
