@@ -422,7 +422,7 @@ from pathlib import Path
 from deeplaw.subprocess_environment import _build_subprocess_environment
 
 blocked = {blocked}
-child_argv = ["runtime/bin/deeplaw", *sys.argv[1:]]
+child_argv = ["runtime/bin/python", "runtime/bin/deeplaw", *sys.argv[1:]]
 environment = _build_subprocess_environment(
     overrides={{"HOME": "mcp-home"}},
 )
@@ -446,7 +446,7 @@ Path("mcp-environment-receipt.json").write_text(
     json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
     encoding="utf-8",
 )
-os.execve(child_argv[0], child_argv, environment)
+os.execve(sys.executable, child_argv, environment)
 '''
 
 
@@ -735,6 +735,7 @@ def _environment_receipt(path: Path) -> dict[str, Any] | None:
         return None
     value = _load_object(path)
     expected_argv = [
+        "runtime/bin/python",
         "runtime/bin/deeplaw",
         "knowledge",
         "mcp",

@@ -453,7 +453,15 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
     }
 
     completed = subprocess.run(
-        [str(wrapper), "knowledge", "mcp", "--stdio", "--vault", "vault"],
+        [
+            sys.executable,
+            str(wrapper),
+            "knowledge",
+            "mcp",
+            "--stdio",
+            "--vault",
+            "vault",
+        ],
         cwd=output_dir,
         env=environment,
         check=False,
@@ -485,7 +493,7 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
         "home_isolated": True,
         "blocked_names_present": [],
         "environment_names": receipt["environment_names"],
-        "child_argv": child["argv"],
+        "child_argv": ["runtime/bin/python", *child["argv"]],
     }
     assert {"HOME", "PATH", "XDG_CONFIG_HOME"}.issubset(
         receipt["environment_names"]
