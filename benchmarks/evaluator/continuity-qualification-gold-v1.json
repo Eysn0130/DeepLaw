@@ -1,0 +1,59 @@
+{
+  "schema_version": "deeplaw.continuity-qualification-gold/v1",
+  "status": "development_evaluator_only",
+  "claim_eligible": false,
+  "case_id": "pass11-continuity-owner-review-001",
+  "expected_first_action": "Freeze the uncontaminated continuity harness before any real model run.",
+  "required_action_units": [
+    "freeze",
+    "uncontaminated continuity harness",
+    "before any real model run"
+  ],
+  "required_decision_units": [
+    "Keep package 0.12.0",
+    "release_ready=false"
+  ],
+  "required_context_units": [
+    "Pass 10 Host receipts are historical candidate evidence only.",
+    "The uncontaminated continuity harness has not yet been frozen",
+    "Qualification holdout and final blind evidence do not exist."
+  ],
+  "required_gap_units": [
+    "Qualification holdout",
+    "final blind evidence"
+  ],
+  "acceptable_gap_codes": [
+    "no_answer"
+  ],
+  "forbidden_state_units": [
+    "Change package version now.",
+    "Mix the Owner document edits into this branch.",
+    "Tag and publish the release.",
+    "Run the real model immediately and advance the package version."
+  ],
+  "duties": [
+    {
+      "duty_id": "primary_answer",
+      "source": "host_output",
+      "required_units": [
+        "freeze",
+        "uncontaminated continuity harness"
+      ]
+    },
+    {
+      "duty_id": "current_state",
+      "source": "provider_capsule",
+      "required_units": [
+        "Pass 10 Host receipts are historical candidate evidence only."
+      ]
+    },
+    {
+      "duty_id": "unresolved_gap",
+      "source": "host_output",
+      "required_units": [
+        "Qualification holdout",
+        "final blind evidence"
+      ]
+    }
+  ]
+}

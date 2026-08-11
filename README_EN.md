@@ -57,7 +57,9 @@ same domain services.
 > Codex runs are retained only as historical candidate evidence because the prompt exposed scoring
 > labels, the expected marker, and an exact ID, while the environment receipt drifted from the
 > current contract. One Obsidian seam
-> executed at the historical b14 candidate; broader and exact-head qualification is pending. Human
+> executed at the historical b14 candidate. Pass 11 now has local fail-closed tests for
+> candidate/evaluator separation and natural-task discovery, but the real-Host suite is neither
+> frozen nor executed. Broader and exact-head qualification is pending. Human
 > Gold, final-blind, and cross-platform release qualification are also incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived

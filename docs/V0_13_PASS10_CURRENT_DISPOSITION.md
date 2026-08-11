@@ -35,6 +35,28 @@ success or current-candidate qualification.
 - No real Codex or OpenCode/DeepSeek qualification may run until those boundaries have executable
   fail-closed tests.
 
+## Pass 11 harness status
+
+The development harness now has executable separation tests, but it is not yet a frozen real-Host
+qualification suite:
+
+- candidate source material is under `benchmarks/v013/qualification/candidate/`, while Gold and the
+  scorer are under `benchmarks/evaluator/`;
+- the Host response schema and candidate observation contract use neutral task-output fields and do
+  not contain evaluator labels;
+- prompt construction uses a natural-language task plus non-secret task binding, with no exact
+  Knowledge ID or query target;
+- the candidate working directory must be outside the repository/evaluator tree, and the Host
+  configuration exposes only read-only `knowledge_support`;
+- deterministic preflight proves current-state delivery, stale-snapshot Gap behavior, and exclusion
+  of wrong repository, worktree, task-line, and historical-revision state;
+- the old mixed `codex-continuity-qualification-report/v1` contract is retained only for historical
+  receipts.
+
+These checks do not authorize a real-model run. Multi-state thread workflows, candidate wheel and
+Host identity binding, an executed isolation receipt, and the final harness-freeze receipt remain
+pending. No Pass 11 Codex or OpenCode receipt has been executed at this point.
+
 ## Release decision
 
 ```text

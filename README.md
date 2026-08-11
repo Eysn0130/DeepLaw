@@ -55,7 +55,9 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > `integration_limited`。Pass 10 的 Codex 三次运行因评分标签、expected marker、exact ID 污染与
 > receipt 合同漂移，现仅保留为 historical candidate evidence。Obsidian 的一个 seam 在历史 b14
 > candidate 上执行；
-> 更广任务和 exact-head qualification 仍待完成。Human Gold、final blind 与跨平台发布资格也未闭环。
+> Pass 11 已建立 candidate/evaluator 分离与自然任务 discovery 的本地失败闭合测试，但真实 Host
+> 套件尚未冻结或执行。更广任务和 exact-head qualification 仍待完成。Human Gold、final blind
+> 与跨平台发布资格也未闭环。
 > 旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见

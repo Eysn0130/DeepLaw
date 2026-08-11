@@ -313,6 +313,12 @@ Gold, physically isolated qualification/final blind, exact Legal Pack, uncontami
 Codex/OpenCode tasks, required Wiki/Relation scale, final cross-platform artifact chain, signature,
 and public redownload remain `not_executed` or unresolved.
 
+Pass 11 has added local fail-closed coverage for candidate/evaluator file separation, neutral Host
+output, natural-task discovery without an exact Knowledge ID, wrong-route exclusion, stale-revision
+exclusion, and `workspace_diverged`. This is harness development evidence only: the multi-state
+suite, candidate wheel, real Host identity, and physical evaluator mount are not yet frozen, and no
+Pass 11 real-model run has executed.
+
 Current disposition remains:
 
 ```text

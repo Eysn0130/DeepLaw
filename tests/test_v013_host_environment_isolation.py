@@ -507,9 +507,10 @@ def test_codex_qualification_fixture_and_event_receipts_are_bounded(
     tmp_path: Path,
 ) -> None:
     fixture_path = (
-        REPOSITORY / "benchmarks/v013/continuity-real-host-candidate-v1.json"
+        REPOSITORY
+        / "benchmarks/v013/qualification/candidate/continuity-task-suite-v1.json"
     )
-    fixture = codex_qualification._fixture(fixture_path)
+    fixture = codex_qualification._candidate_fixture(fixture_path)
     vault = tmp_path / "vault"
     seeded = codex_qualification._seed_vault(vault, fixture)
     preflight = codex_qualification._preflight(vault, fixture, seeded)
@@ -521,11 +522,13 @@ def test_codex_qualification_fixture_and_event_receipts_are_bounded(
     assert preflight["write_performed"] is False
 
     final = {
-        "first_correct_action": fixture["correct_checkpoint"]["expected_first_action"],
-        "confirmed_decision": fixture["correct_checkpoint"]["expected_decision"],
-        "checkpoint_marker": fixture["correct_checkpoint"]["expected_marker"],
-        "wrong_state_seen": False,
+        "summary": "The candidate remains release closed.",
+        "next_step": "Continue the owner-review preparation.",
+        "preserved_decisions": ["Keep package 0.12.0."],
+        "open_gaps": ["Qualification evidence is incomplete."],
+        "artifact_refs": ["commit:539007a"],
     }
+    provider_capsule = preflight["provider_capsule"]
     events = [
         {"type": "thread.started", "thread_id": "thread_fixture"},
         {
@@ -547,7 +550,11 @@ def test_codex_qualification_fixture_and_event_receipts_are_bounded(
                 "tool": "deeplaw.knowledge_support",
                 "status": "completed",
                 "arguments": {"operation": "context"},
-                "result": {"schema_version": "synthetic-provider-fixture/v1"},
+                "result": {
+                    "schema_version": "deeplaw.knowledge-support-output/v6",
+                    "operation": "context",
+                    "result": provider_capsule,
+                },
             },
         },
         {
@@ -585,6 +592,7 @@ def test_codex_qualification_fixture_and_event_receipts_are_bounded(
         }
     ]
     assert parsed_final == final
+    assert codex_qualification._provider_capsule_from_events(events) == provider_capsule
     assert usage == {
         "status": "provider_reported",
         "input_tokens": 12,

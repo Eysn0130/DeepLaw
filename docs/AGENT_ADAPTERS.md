@@ -30,7 +30,7 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
 | Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; one seam executed at the historical b14 candidate, while broader and exact-head qualification is pending |
 | Tolaria external MCP bridge | **`integration_limited`** | exact v2026-07-22 source contract and real local CLI harness; missing third-party product UI seam |
-| Real model/session tasks on all hosts | **Historical candidate evidence only** | the Pass 10 Codex runs used `gpt-5.6-luna`, but prompt contamination and current receipt-contract rejection prevent qualification; uncontaminated exact-head Codex/OpenCode tasks remain pending |
+| Real model/session tasks on all hosts | **Historical candidate evidence only** | Pass 11 separates candidate observations from evaluator-only Gold and tests natural-task discovery, but the multi-state real-Host suite is not frozen or executed; uncontaminated exact-head Codex/OpenCode tasks remain pending |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from benchmarks.hosts.run_codex_continuity_qualification import (
     _environment_receipt,
-    _prompt,
 )
 from benchmarks.v013.query_graph_scale import verify_report
 
@@ -51,44 +50,13 @@ def test_pass10_environment_receipt_is_rejected_by_current_argv_contract() -> No
     assert _environment_receipt(receipt_path) is None
 
 
-def test_pass10_candidate_prompt_reproduces_evaluator_label_leakage() -> None:
+def test_pass10_candidate_prompt_contamination_remains_bound_as_history() -> None:
     disposition = _load(DISPOSITION)
-    fixture = _load(
-        REPOSITORY / "benchmarks/v013/continuity-real-host-candidate-v1.json"
-    )
-    knowledge_id = "kn_exact_leak_probe"
-    prompt = _prompt(
-        fixture,
-        {
-            "repository_id": "repo",
-            "worktree_id": "worktree",
-            "task_line_id": "task",
-        },
-        knowledge_id,
-    )
-    correct_checkpoint = fixture["correct_checkpoint"]
-    assert isinstance(correct_checkpoint, dict)
-    observed = {
-        "expected_first_action_scoring_instruction": (
-            "first_correct_action" in prompt and "NEXT_ACTION" in prompt
-        ),
-        "expected_first_action_literal": (
-            str(correct_checkpoint["expected_first_action"]) in prompt
-        ),
-        "confirmed_decision_scoring_instruction": (
-            "confirmed_decision" in prompt and "CONFIRMED_DECISION" in prompt
-        ),
-        "confirmed_decision_literal": (
-            str(correct_checkpoint["expected_decision"]) in prompt
-        ),
-        "expected_marker_value": str(correct_checkpoint["expected_marker"]) in prompt,
-        "exact_knowledge_id": knowledge_id in prompt,
-    }
-
     codex = disposition["codex"]
     assert isinstance(codex, dict)
-    assert observed == codex["prompt_contamination"]
-    assert observed == {
+    fixture_path = REPOSITORY / str(codex["fixture_relative_path"])
+    assert _sha256(fixture_path) == codex["fixture_sha256"]
+    assert codex["prompt_contamination"] == {
         "expected_first_action_scoring_instruction": True,
         "expected_first_action_literal": False,
         "confirmed_decision_scoring_instruction": True,
