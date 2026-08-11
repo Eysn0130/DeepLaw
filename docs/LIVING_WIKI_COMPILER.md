@@ -53,6 +53,12 @@ recall, graph, Wiki or context. Validation prepares exact Markdown bytes and rev
 The final `BEGIN IMMEDIATE` transaction publishes every non-proposal Knowledge and relation
 revision, dependencies, outputs, audit event, rebuild work and receipt together.
 
+Statement Evidence keeps a stable digest for every Statement, evidence map and receipt, but new
+commits store those small logical artifacts in deterministic CAS bundles capped at 768 members and
+8 MiB. The additive bundle-member mapping is part of the Ledger persistence contract. Readers first
+resolve that mapping and otherwise fall back to the previous one-digest/one-file layout. Bundle and
+member hashes are both verified; paths and ordinals never become semantic identity.
+
 Projection failure cannot undo canonical knowledge. It leaves the Run at `projection_pending`;
 `resume --project` retries deterministic materialization and verification.
 
@@ -188,7 +194,10 @@ deeplaw knowledge query \
 
 `answer` defaults to `compiled-first-v1`. `verify`, `quote`, `historical` and `legal` default to
 evidence-first behavior. Any source fallback, truncation, gap or rejected candidate is visible in
-the Query Plan and bounded receipt. Query is read-only.
+the Query Plan and bounded receipt. Provider Source references/evidence are typed to exact Source
+Revision, fragment, locator and quote hash. If the complete source passage cannot fit its hard
+budget, it is withheld and the duty remains a Gap rather than returning a truncated passage as
+exact evidence. Query is read-only.
 
 ## Stable Python API
 

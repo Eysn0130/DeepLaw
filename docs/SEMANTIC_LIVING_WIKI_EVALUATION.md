@@ -8,7 +8,8 @@ comparative benchmark claim.
 > development workflow additionally emits
 > `deeplaw.semantic-context-outcome/v2` for the default Query Plan v6 Context surface. It separates
 > owner-local Capsule, Provider Capsule, complete MCP tool-result, selected content and transport
-> metadata bytes; token estimates are named estimates, and token savings remain `not_executed`
+> metadata bytes. The current source-candidate runner does not derive tokens from bytes; token
+> measurement is `not_measured` until a real Host returns a usage receipt, and token savings remain `not_executed`
 > without a frozen equal-duty/equal-budget baseline. This visible, tuning-used report is not Human
 > Gold, external qualification, or release evidence.
 
@@ -179,8 +180,8 @@ successor-only selection, withdrawal exclusion, contradiction applicability, vis
 read-only behavior, Authority invariance, repeat reuse, pagination, and the UTF-8 64 KiB provider
 limit. The historical v1 cost receipt labels its token number as a UTF-8 byte proxy rather than a
 provider-token measurement. The additive v2 cost receipt does not expose `total_query_tokens`: it
-reports Context delivery byte boundaries separately, records an explicitly named token estimate,
-leaves actual Provider input tokens null without a usage receipt, and keeps token savings
+reports Context delivery byte boundaries separately, leaves both token estimate and actual Provider
+input tokens null without a real Host usage receipt, records `token_measurement_method=not_measured`, and keeps token savings
 `not_executed` without a valid comparator.
 
 `benchmarks/semantic/score_semantic_run.py` remains the contract for an optional external real-host

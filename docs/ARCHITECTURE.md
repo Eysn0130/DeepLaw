@@ -286,6 +286,13 @@ The v0.13 source candidate adds four bound layers without changing those authori
   and owner profile. `unknown` or unresolved applicable duties block completeness.
 - Statement Evidence core v1 persists stable statement ordinal/text/hash/type, exact evidence maps,
   independent receipts and dependency staleness in the semantic commit transaction.
+- Statement/map/receipt logical artifacts retain one digest and Ledger reference per Statement, but
+  new commits store their physical bytes in deterministic, bounded CAS bundles (at most 768 members
+  and 8 MiB). The additive bundle-member table maps logical digest to bundle ordinal; old
+  one-digest/one-file candidate Vaults remain readable. Verification hashes the bundle and every
+  extracted logical member, snapshot/restore preserves the same CAS and Ledger identities, and
+  owner content GC treats every compilation-artifact digest as referenced evidence rather than an
+  orphan.
 - Living Wiki projection Profile `standard` (the default) produces no per-object Canvas and pairs
   its file manifest with a v3 Page Registry, Link Index and Stable Resolver. All files are published
   through one crash-recoverable ownership transaction.
@@ -316,6 +323,11 @@ a universal hard-coded ranking by object kind:
   candidate pool. It never selects a fixed global prefix of the Statement table. Discovery and
   Statement truncation are plan/receipt-bound, and a resource-bound truncation is a provider-visible
   Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
+- Provider Capsule v2 and its nested projection type Source references and Source evidence instead
+  of admitting opaque objects. A Source evidence card must bind one exact Source Revision,
+  fragment, locator and quote hash; if the complete passage does not fit the evidence budget, the
+  passage is withheld and the applicable duty remains an explicit Gap rather than receiving a
+  truncated passage labelled exact.
 - working checkpoints use a separate bounded, indexed, rebuildable task-route projection before
   ordinary content discovery. Route identity binds opaque project, repository, stable-worktree,
   and task-line identifiers; checkpoint base/dirty state is a separate snapshot. An exact route

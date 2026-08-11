@@ -92,6 +92,14 @@ interrupted purge. Historical reads report
 `content_purged` instead of inventing the body. User-source deletion and user-private Legal Pack
 deletion remain separate owner operations with their own policies.
 
+The v0.13 source candidate keeps each Statement, evidence map and independent receipt as a logical
+content digest, while new semantic commits physically pack those small JSON artifacts into
+deterministic CAS bundles capped at 768 members and 8 MiB. An additive Ledger mapping binds each
+logical digest to one bundle ordinal. Legacy one-digest/one-file layouts remain readable; neither
+the bundle path nor ordinal becomes Statement identity. Verification checks the bundle hash and
+replays every logical member digest, snapshots preserve both the CAS bundle and mapping, and
+content GC excludes every Ledger-registered compilation artifact from orphan deletion.
+
 ### Markdown Knowledge Objects
 
 The canonical open content of Agent-derived knowledge is UTF-8 Markdown with constrained YAML
@@ -393,6 +401,11 @@ rechecked against current immutable source bytes. Changed or missing bytes fail 
 `contradicts` output retains the exact Relation Revision, stable endpoint IDs and titles, valid-time
 interval, and bounded evidence references; an endpoint-only contested marker is used only when no
 admitted typed relation represents the selected object.
+
+Provider Capsule v2 and its nested projection use typed Source references and Source evidence. A
+Source evidence card binds one exact Source Revision, fragment, locator and quote hash. If the
+complete passage cannot fit the evidence budget, the passage is withheld and the applicable duty
+stays an explicit Gap; a truncated excerpt cannot satisfy an exact-evidence duty.
 
 Local Knowledge Capsule v3 partitions (with explicit v2 compatibility):
 
