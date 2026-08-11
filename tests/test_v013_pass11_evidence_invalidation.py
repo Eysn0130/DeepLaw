@@ -35,7 +35,10 @@ def test_pass10_statement_report_reproduces_gold_binding_failure_when_present() 
         assert _sha256(report_path) == statement["artifact_sha256"]
         assert verify_report(_load(report_path)) == {
             "valid": False,
-            "errors": ["Gold byte binding mismatch"],
+            "errors": [
+                "Gold byte binding mismatch",
+                "candidate source byte binding mismatch",
+            ],
         }
 
 

@@ -24,7 +24,7 @@ The machine-readable observation is
 
 | Evidence | Observation | Current disposition |
 | --- | --- | --- |
-| Statement scale artifact from the b14 candidate chain | Current `verify_report` returns `Gold byte binding mismatch` | historical candidate evidence; not qualification |
+| Statement scale artifact from the b14 candidate chain | The frozen baseline reproduced `Gold byte binding mismatch`; after later source fixes, current-head `verify_report` also returns `candidate source byte binding mismatch` | historical candidate evidence; not qualification |
 | Codex 3-run report at `b14c90e` / tree `9fa784c` | The retained environment receipt lacks the current `runtime/bin/python` child prefix | historical candidate evidence; current verifier rejects it |
 | Codex candidate prompt | It exposes scoring instructions for the expected first action and confirmed decision, the expected marker value, and an exact `knowledge_id`; the first-action and decision literal values are not directly interpolated | contaminated development evidence; not holdout/final blind |
 | Obsidian Desktop receipt at `b14c90e` / tree `9fa784c` | One macOS load/verify/rename/edit/reconcile seam executed | historical candidate evidence; broader and exact-head qualification pending |
