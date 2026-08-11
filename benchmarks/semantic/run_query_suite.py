@@ -762,10 +762,10 @@ def _context_payload_measurement(
         "mcp_tool_result_bytes": mcp_tool_result_bytes,
         "provider_content_bytes": provider_content_bytes,
         "transport_metadata_bytes": max(0, mcp_tool_result_bytes - provider_content_bytes),
-        # MCP is the Agent-facing seam, so its complete tool-result envelope is
-        # the only honest byte basis for this development token estimate.
-        "provider_token_estimate": (mcp_tool_result_bytes + 3) // 4,
-        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        # Bytes remain an independent transport measurement. Provider tokens
+        # are unavailable until a real Host returns its usage receipt.
+        "provider_token_estimate": None,
+        "token_measurement_method": "not_measured",
         "provider_hard_limit_valid": provider_hard_limit_valid,
     }
 
@@ -3074,10 +3074,8 @@ def _context_outcome_report(
         )
         if mcp_tool_result_bytes
         else 0.0,
-        "provider_token_estimate": sum(
-            int(item["context_provider_token_estimate"]) for item in cases
-        ),
-        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "provider_token_estimate": None,
+        "token_measurement_method": "not_measured",
         "actual_provider_input_tokens": None,
         "context_latency_p50_ms": round(median(context_latencies)),
         "context_latency_p95_ms": _percentile(context_latencies, 0.95),
@@ -3764,9 +3762,9 @@ def run(
         "mcp_tool_result_bytes": context_metrics["mcp_tool_result_bytes"],
         "provider_content_bytes": context_metrics["provider_content_bytes"],
         "transport_metadata_bytes": context_metrics["transport_metadata_bytes"],
-        "provider_input_token_estimate": context_metrics["provider_token_estimate"],
+        "provider_input_token_estimate": None,
         "actual_provider_input_tokens": None,
-        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "token_measurement_method": "not_measured",
         "token_savings": context_metrics["token_savings"],
         "budget": {**BUDGET, "cold_or_warm": "warm"},
         "measured_at": recorded_at,

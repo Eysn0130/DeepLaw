@@ -108,8 +108,10 @@
           "description": "Canonical JSON MCP envelope overhead beyond the provider-visible capsule content.",
           "type": "integer", "minimum": 0, "maximum": 65536
         },
-        "provider_token_estimate": {"type": "integer", "minimum": 0},
-        "token_measurement_method": {"const": "utf8_bytes_div_4_estimate"},
+        "provider_token_estimate": {"type": ["integer", "null"], "minimum": 0},
+        "token_measurement_method": {
+          "enum": ["not_measured", "utf8_bytes_div_4_estimate"]
+        },
         "useful_context_recall": {"$ref": "#/$defs/ratio"},
         "false_suppression_rate": {"$ref": "#/$defs/ratio"},
         "required_target_count": {"type": "integer", "minimum": 0},
@@ -243,8 +245,10 @@
           "type": "integer", "minimum": 0
         },
         "transport_overhead_ratio": {"$ref": "#/$defs/ratio"},
-        "provider_token_estimate": {"type": "integer", "minimum": 0},
-        "token_measurement_method": {"const": "utf8_bytes_div_4_estimate"},
+        "provider_token_estimate": {"type": ["integer", "null"], "minimum": 0},
+        "token_measurement_method": {
+          "enum": ["not_measured", "utf8_bytes_div_4_estimate"]
+        },
         "actual_provider_input_tokens": {"type": ["integer", "null"], "minimum": 0},
         "context_latency_p50_ms": {"type": "integer", "minimum": 0},
         "context_latency_p95_ms": {"type": "integer", "minimum": 0},

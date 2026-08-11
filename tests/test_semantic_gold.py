@@ -2060,11 +2060,8 @@ def test_context_measurement_separates_local_provider_and_mcp_boundaries() -> No
             len(canonical_json(mcp).encode("utf-8"))
             - len(canonical_json(provider["capsule"]).encode("utf-8"))
         ),
-        "provider_token_estimate": (
-            len(canonical_json(mcp).encode("utf-8")) + 3
-        )
-        // 4,
-        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "provider_token_estimate": None,
+        "token_measurement_method": "not_measured",
         "provider_hard_limit_valid": True,
     }
 
@@ -2127,7 +2124,7 @@ def test_context_outcome_uses_context_bounds_and_variant_results_not_v5_status()
     assert report["cases"][0]["variant_pass_count"] == 0
 
 
-def test_semantic_context_cost_v2_keeps_bytes_estimates_and_actual_tokens_distinct() -> None:
+def test_semantic_context_cost_v2_does_not_substitute_bytes_for_provider_tokens() -> None:
     value = {
         "schema_version": "deeplaw.semantic-query-cost/v2",
         "gold_id": "semanticgold_0123456789abcdef01234567",
@@ -2140,9 +2137,9 @@ def test_semantic_context_cost_v2_keeps_bytes_estimates_and_actual_tokens_distin
         "mcp_tool_result_bytes": 5_200,
         "provider_content_bytes": 3_900,
         "transport_metadata_bytes": 1_300,
-        "provider_input_token_estimate": 1_200,
+        "provider_input_token_estimate": None,
         "actual_provider_input_tokens": None,
-        "token_measurement_method": "utf8_bytes_div_4_estimate",
+        "token_measurement_method": "not_measured",
         "token_savings": {
             "status": "not_executed",
             "reason_code": "no_frozen_equal_duty_equal_budget_baseline",
@@ -2167,6 +2164,7 @@ def test_semantic_context_cost_v2_keeps_bytes_estimates_and_actual_tokens_distin
         == value
     )
     assert "total_query_tokens" not in value
+    assert value["provider_input_token_estimate"] is None
     assert value["actual_provider_input_tokens"] is None
 
 
