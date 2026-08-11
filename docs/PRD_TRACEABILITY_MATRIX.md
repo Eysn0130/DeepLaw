@@ -302,15 +302,16 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 
 ## Current source-candidate status pointer
 
-Pass 7 is historical development evidence. Pass 8 supersedes it only for the current candidate
-disposition and does not upgrade any PRD row to `Qualified` or `Released`. The current boundary is
-recorded in `docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; Pass 1-7 documents remain immutable
-historical evidence. Pass 8 report hashes name external or temporary artifacts that are not all
-present in the current tree, so those measurements are claim-only unless a tracked artifact and
-runner can reproduce them. Repository-visible development Gold and Context reports are
-tuning-used, not independent holdout evidence. Human Gold, human Wiki task, exact Legal Pack, real
-Codex/OpenCode, actual Provider tokens, required Wiki/Relation scale, 3-OS verification, final
-artifact chain, signature, and public redownload remain `not_executed` or unresolved.
+Pass 1-8 reports remain immutable historical development evidence. The current evidence boundary
+is recorded in `docs/V0_13_PASS10_CURRENT_DISPOSITION.md`. Pass 10's b14 Statement, Codex, and
+Obsidian artifacts are historical candidate evidence: the Statement report fails the current Gold
+byte binding, the Codex environment receipt fails the current child-argv contract, and the Codex
+candidate prompt exposed evaluator labels, the expected marker, and an exact Knowledge ID. Those
+artifacts cannot be promoted by rewriting commit, tree, or hash fields. Repository-visible
+development Gold and Context reports remain tuning-used, not independent holdout evidence. Human
+Gold, physically isolated qualification/final blind, exact Legal Pack, uncontaminated exact-head
+Codex/OpenCode tasks, required Wiki/Relation scale, final cross-platform artifact chain, signature,
+and public redownload remain `not_executed` or unresolved.
 
 Current disposition remains:
 

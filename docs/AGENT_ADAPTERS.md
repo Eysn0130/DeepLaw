@@ -28,9 +28,9 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
-| Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; one real macOS Desktop load/verify/rename/edit/reconcile seam executed, broader Human Gold/holdout/final-blind matrix pending |
+| Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; one seam executed at the historical b14 candidate, while broader and exact-head qualification is pending |
 | Tolaria external MCP bridge | **`integration_limited`** | exact v2026-07-22 source contract and real local CLI harness; missing third-party product UI seam |
-| Real model/session tasks on all hosts | **Partial, not release-eligible** | one frozen Codex task ran three times with explicit `gpt-5.6-luna` and actual usage receipts; the broader continuity matrix plus Claude/OpenCode/DeepSeek tasks remain pending |
+| Real model/session tasks on all hosts | **Historical candidate evidence only** | the Pass 10 Codex runs used `gpt-5.6-luna`, but prompt contamination and current receipt-contract rejection prevent qualification; uncontaminated exact-head Codex/OpenCode tasks remain pending |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
@@ -38,8 +38,9 @@ must separately configure `knowledge_sink` with an owner-created grant limited t
 operations, and the Agent must load the applicable split Skill, normally `deeplaw-compile-source`.
 The scheduled `compile-living-wiki` wrapper is compatibility-only. The opt-in real-host
 harness records unavailable model tasks as `not_executed`. The Pass 10 receipts under
-[`../benchmarks/hosts/evidence/`](../benchmarks/hosts/evidence/) bind the executed Codex and Obsidian
-seams without promoting either surface to Production or Stable.
+[`../benchmarks/hosts/evidence/`](../benchmarks/hosts/evidence/) remain historical candidate
+evidence only; the current invalidation is recorded in
+[`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md).
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate

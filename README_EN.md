@@ -53,10 +53,12 @@ same domain services.
 > **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
 > is the current delivery boundary. The source candidate still packages as `0.12.0` and has
 > `release_ready=false`; default Context uses Query Plan v6, local Capsule v3, and Provider Capsule
-> v2. Obsidian remains a source candidate and Tolaria remains `integration_limited`. One frozen real
-> Codex task has run three times with `gpt-5.6-luna`, and one real Obsidian Desktop
-> load/rename/edit/reconcile seam has executed; the remaining Host/task matrix, Human Gold,
-> final-blind, and cross-platform release qualification are incomplete. The older
+> v2. Obsidian remains a source candidate and Tolaria remains `integration_limited`. The Pass 10
+> Codex runs are retained only as historical candidate evidence because the prompt exposed scoring
+> labels, the expected marker, and an exact ID, while the environment receipt drifted from the
+> current contract. One Obsidian seam
+> executed at the historical b14 candidate; broader and exact-head qualification is pending. Human
+> Gold, final-blind, and cross-platform release qualification are also incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
@@ -66,6 +68,8 @@ The default product story highlights only `init`, `doctor`, `source add`, `compi
 profiles, comparison diagnostics, graph analytics, and low-level Sink operations stay Advanced.
 Historical aliases and persisted contracts are neither deleted nor deprecated in this pass. See the
 [machine-readable product surface manifest](governance/product-surface-manifest.v1.json).
+The [Pass 10 current disposition](docs/V0_13_PASS10_CURRENT_DISPOSITION.md) records the evidence
+invalidation without rewriting historical files.
 
 ## Permanent boundaries
 

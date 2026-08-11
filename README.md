@@ -52,9 +52,11 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > **DeepLaw 2.0 是产品品牌，不是软件版本号。** **本地单用户 Agent Knowledge OS** 是当前交付边界。
 > 当前源码候选的 package 仍为 `0.12.0`，`release_ready=false`；默认 Context 已使用 Query Plan
 > v6 / local Capsule v3 / Provider Capsule v2。Obsidian 仍是 source candidate，Tolaria 仍是
-> `integration_limited`。一个冻结的真实 Codex 任务已用 `gpt-5.6-luna` 运行三次，单次真实
-> Obsidian Desktop load/rename/edit/reconcile seam 也已执行；其余 Host/任务矩阵、Human Gold、
-> final blind 与跨平台发布资格仍未闭环。旧版
+> `integration_limited`。Pass 10 的 Codex 三次运行因评分标签、expected marker、exact ID 污染与
+> receipt 合同漂移，现仅保留为 historical candidate evidence。Obsidian 的一个 seam 在历史 b14
+> candidate 上执行；
+> 更广任务和 exact-head qualification 仍待完成。Human Gold、final blind 与跨平台发布资格也未闭环。
+> 旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
@@ -63,6 +65,8 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 `backup`、`forget` 与 `host connect`。Semantic/Synthesis/backfill、discovery profile、比较诊断、
 图分析和低层 Sink 操作保留在 Advanced；历史 alias 与持久合同本阶段不删除、不弃用。精确分类见
 [`governance/product-surface-manifest.v1.json`](governance/product-surface-manifest.v1.json)。
+当前证据处置见
+[`docs/V0_13_PASS10_CURRENT_DISPOSITION.md`](docs/V0_13_PASS10_CURRENT_DISPOSITION.md)。
 
 ## 核心边界
 

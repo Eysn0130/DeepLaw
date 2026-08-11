@@ -48,10 +48,12 @@ Codex, Claude Code and OpenCode share the same compile Skill. Existing host mani
 silently enable mutation. The OpenCode file is an explicit example overlay and contains a
 placeholder for an owner-created grant.
 
-The Obsidian plugin and Tolaria integration harness are production adapter surfaces over the same
-CLI/MCP domain services. They do not become canonical stores or permission systems. Existing
-Markdown editing and reconcile behavior remains available; root policies determine where an editor
-may write.
+The Obsidian plugin and Tolaria integration harness are non-default source-candidate adapter
+surfaces over the same CLI/MCP domain services. One Obsidian seam executed at the historical b14
+candidate; broader and exact-head qualification is pending, while Tolaria remains
+`integration_limited`. Neither becomes a canonical store or permission system. Existing Markdown
+editing and reconcile behavior remains available; root policies determine where an editor may
+write.
 
 ## Rollback
 
