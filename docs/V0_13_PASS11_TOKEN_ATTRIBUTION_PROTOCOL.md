@@ -25,7 +25,8 @@ All four conditions use the same installed Codex binary, existing ChatGPT login,
 `gpt-5.6-luna`, reasoning `max`, natural-language task, non-secret task binding, structured output,
 hardware, provider network policy, and exact candidate wheel. The Host starts a new thread for each
 condition within one qualification workflow. The prompt directs the Host to use only Context
-operation fields and omit null or unrelated-operation fields; it still contains no expected answer,
+operation fields, include the required `confirm_no_case_data=true` safety assertion for this
+synthetic task, and omit null or unrelated-operation fields; it still contains no expected answer,
 marker, exact knowledge identity, Gold, or scorer material.
 
 | ID | Condition | Purpose |
