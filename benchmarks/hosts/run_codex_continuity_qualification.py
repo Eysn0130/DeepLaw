@@ -485,6 +485,15 @@ def _host_environment(codex_binary: Path, canaries: Mapping[str, str]) -> dict[s
     return environment
 
 
+def _confirmed_login_status(result: subprocess.CompletedProcess[str]) -> bool:
+    observed = {
+        value.strip()
+        for value in (result.stdout, result.stderr)
+        if isinstance(value, str) and value.strip()
+    }
+    return result.returncode == 0 and observed == {_AUTH_STATUS}
+
+
 def _codex_argv() -> list[str]:
     argv = [
         "codex",
@@ -956,13 +965,13 @@ def execute(
     ).stdout.strip()
     login_status = subprocess.run(
         [str(codex_binary), "login", "status"],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         timeout=30,
         env=environment,
-    ).stdout.strip()
-    if login_status != _AUTH_STATUS:
+    )
+    if not _confirmed_login_status(login_status):
         raise RuntimeError("Codex existing ChatGPT login was not confirmed")
     _wrapper, wrapper_sha256 = _prepare_runtime(
         output_dir=output_dir,

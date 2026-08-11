@@ -574,3 +574,19 @@ def test_codex_qualification_fixture_and_event_receipts_are_bounded(
         "total_tokens": 15,
     }
     assert completed_turns == 1
+    assert codex_qualification._confirmed_login_status(
+        subprocess.CompletedProcess(
+            ["codex", "login", "status"],
+            0,
+            stdout="",
+            stderr="Logged in using ChatGPT\n",
+        )
+    )
+    assert not codex_qualification._confirmed_login_status(
+        subprocess.CompletedProcess(
+            ["codex", "login", "status"],
+            0,
+            stdout="caller supplied Logged in using ChatGPT",
+            stderr="",
+        )
+    )
