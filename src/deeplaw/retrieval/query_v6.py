@@ -1353,7 +1353,12 @@ def _source_evidence(
         if remaining <= 0:
             suppressions.append({"candidate_id": key, "reason": "character_budget"})
             continue
-        excerpt = str(row["text"])[: min(remaining, _MAX_EVIDENCE_TEXT)]
+        excerpt = str(row["text"])
+        if len(excerpt) > _MAX_EVIDENCE_TEXT or len(excerpt) > remaining:
+            suppressions.append(
+                {"candidate_id": key, "reason": "exact_source_passage_budget"}
+            )
+            continue
         item = {
             "evidence_id": evidence_id,
             "source_revision_id": source_revision_id,
@@ -1427,7 +1432,7 @@ def _historical_evidence_cards(
                 "evidence_id": evidence_id,
                 "source_revision_id": source_revision_id,
                 "fragment_id": normalized["fragment_id"],
-                "excerpt": str(card.get("excerpt", "")),
+                "excerpt": str(row["text"]),
                 "content_sha256": row["text_sha256"],
                 "source_refs": [normalized],
                 "selection_reason": reason,
@@ -2056,18 +2061,35 @@ def execute_v6(
         if identity_target and as_of is None:
             initial = None
         if initial is not None and as_of is not None:
-            evidence = _historical_evidence_cards(
+            historical_candidates = _historical_evidence_cards(
                 knowledge_store,
                 initial.cards,
                 reason="historical_evidence_first",
                 deduplications=deduplications,
-            )[:evidence_item_limit]
+            )
+            evidence = []
             historical_characters = 0
-            for item in evidence:
+            for item in historical_candidates:
+                if len(evidence) >= evidence_item_limit:
+                    suppressions.append(
+                        {
+                            "candidate_id": item["evidence_id"],
+                            "reason": "source_budget",
+                        }
+                    )
+                    continue
                 excerpt = str(item.get("excerpt", ""))
                 remaining = evidence_character_limit - historical_characters
-                item["excerpt"] = excerpt[:remaining]
-                historical_characters += len(item["excerpt"])
+                if len(excerpt) > _MAX_EVIDENCE_TEXT or len(excerpt) > remaining:
+                    suppressions.append(
+                        {
+                            "candidate_id": item["evidence_id"],
+                            "reason": "exact_source_passage_budget",
+                        }
+                    )
+                    continue
+                historical_characters += len(excerpt)
+                evidence.append(item)
             for item in evidence:
                 key = _source_key(item["source_refs"][0])
                 if key in citation_seen:
@@ -2224,13 +2246,19 @@ def execute_v6(
                     continue
                 excerpt = str(item.get("excerpt", ""))
                 remaining = remaining_characters - selected_historical_characters
-                if remaining <= 0:
+                if (
+                    remaining <= 0
+                    or len(excerpt) > _MAX_EVIDENCE_TEXT
+                    or len(excerpt) > remaining
+                ):
                     suppressions.append(
-                        {"candidate_id": key, "reason": "character_budget"}
+                        {
+                            "candidate_id": key,
+                            "reason": "exact_source_passage_budget",
+                        }
                     )
                     continue
-                item["excerpt"] = excerpt[:remaining]
-                selected_historical_characters += len(item["excerpt"])
+                selected_historical_characters += len(excerpt)
                 evidence_seen[evidence_id] = item
                 citation_seen.add(key)
                 extra.append(item)

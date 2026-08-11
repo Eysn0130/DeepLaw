@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -7,10 +8,11 @@ import pytest
 
 from deeplaw.api import KnowledgeOS
 from deeplaw.compilation.coordinator import CompilationCoordinator
-from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
+from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, _validate_contract
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
+from deeplaw.knowledge_store import KnowledgeVault
 from deeplaw.retrieval import PurposeAwareRetrievalService
-from deeplaw.retrieval.query_v6 import _source_key
+from deeplaw.retrieval.query_v6 import _source_evidence, _source_key
 from deeplaw.util import canonical_json, sha256_bytes, stable_id, strict_json_loads
 from tests.test_v013_statement_evidence import _prepared_v3_run
 
@@ -94,6 +96,35 @@ def test_v6_context_reuses_statement_selection_and_provider_projection(
         assert store.audit_head == audit_head
 
 
+def test_v6_source_evidence_contract_requires_exact_revision_locator_and_quote(
+    tmp_path: Path,
+) -> None:
+    root = _committed_vault(tmp_path)
+    with KnowledgeOS.open(root) as knowledge_os:
+        context = knowledge_os.context.compile(
+            task="A durable source statement.",
+            purpose="verify",
+            confirm_no_case_data=True,
+        )
+    evidence = context["provider_capsule"]["capsule"]["evidence"][0]
+    assert evidence["source_revision_id"] == evidence["source_refs"][0][
+        "source_revision_id"
+    ]
+    assert evidence["fragment_id"] == evidence["source_refs"][0]["fragment_id"]
+    assert evidence["content_sha256"] == evidence["source_refs"][0]["quote_sha256"]
+    assert evidence["source_refs"][0]["locator"]
+
+    missing_locator = deepcopy(context["provider_capsule"])
+    del missing_locator["capsule"]["evidence"][0]["source_refs"][0]["locator"]
+    with pytest.raises(ValueError, match=r"provider-knowledge-capsule\.v2"):
+        _validate_contract("provider-knowledge-capsule.v2.schema.json", missing_locator)
+
+    opaque_evidence = deepcopy(context["provider_capsule"]["capsule"])
+    opaque_evidence["evidence"][0] = {"source_revision_id": evidence["source_revision_id"]}
+    with pytest.raises(ValueError, match=r"knowledge-capsule-projection\.v1"):
+        _validate_contract("knowledge-capsule-projection.v1.schema.json", opaque_evidence)
+
+
 def test_v6_projection_bounds_and_explicit_no_answer_gap(tmp_path: Path) -> None:
     root = _committed_vault(tmp_path)
     service = PurposeAwareRetrievalService(root)
@@ -133,6 +164,55 @@ def test_v6_verify_and_quote_materialize_exact_statement_evidence(
         assert result["evidence"]
         assert result["evidence"][0]["verification"] == "verified_source"
         assert result["evidence"][0]["excerpt"] == "A durable source statement."
+
+
+def test_v6_quote_returns_gap_instead_of_truncated_source_passage(tmp_path: Path) -> None:
+    long_passage = " ".join(f"budget-token-{index}" for index in range(80))
+    root, grant_id, run_id, _publication, _statement_value = _prepared_v3_run(
+        tmp_path,
+        source_text=f"# Source\n{long_passage}",
+        semantic_key="statement:bounded-exact-passage",
+    )
+    CompilationCoordinator(root).commit(
+        grant_id=grant_id,
+        compilation_run_id=run_id,
+        confirm_no_case_data=True,
+    )
+    result = PurposeAwareRetrievalService(root).query(
+        "budget-token-40",
+        purpose="quote",
+        query_plan_version="6",
+        max_chars=200,
+    )
+    assert result["evidence"] == []
+    assert any(
+        gap["code"] == "duty_unresolved" and gap["duty"] == "source_evidence"
+        for gap in result["gaps"]
+    )
+    with (
+        KnowledgeVault(root, read_only=True) as evidence_store,
+        AutonomousKnowledgeStore(root, read_only=True) as knowledge_store,
+    ):
+        statement_json = knowledge_store.connection.execute(
+            "SELECT statement_json FROM knowledge_statements_v1 LIMIT 1"
+        ).fetchone()["statement_json"]
+        suppressions: list[dict[str, str]] = []
+        selected, _ = _source_evidence(
+            evidence_store,
+            knowledge_store,
+            references=strict_json_loads(statement_json)["source_refs"],
+            scope="project",
+            max_sensitivity="private",
+            max_sources=1,
+            max_chars=200,
+            reason="test_exact_source_passage_budget",
+            seen={},
+            represented_keys=set(),
+            deduplications=[],
+            suppressions=suppressions,
+        )
+    assert selected == []
+    assert suppressions[0]["reason"] == "exact_source_passage_budget"
 
 
 def test_v6_evidence_admission_normalizes_and_deduplicates_fragment_identity(

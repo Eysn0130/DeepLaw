@@ -68,6 +68,28 @@ def _strip_private_route_metadata(value: Any) -> Any:
     }
 
 
+def _validate_source_evidence_bindings(capsule: dict[str, Any]) -> None:
+    """Fail closed if a provider evidence card is not bound to one exact reference."""
+
+    evidence = capsule.get("evidence", [])
+    if not isinstance(evidence, list):
+        raise RuntimeError("Query Plan v6 provider evidence is invalid")
+    for item in evidence:
+        if not isinstance(item, dict):
+            raise RuntimeError("Query Plan v6 provider evidence is invalid")
+        references = item.get("source_refs")
+        if not isinstance(references, list) or len(references) != 1:
+            raise RuntimeError("Query Plan v6 provider evidence binding is invalid")
+        reference = references[0]
+        if (
+            not isinstance(reference, dict)
+            or item.get("source_revision_id") != reference.get("source_revision_id")
+            or item.get("fragment_id") != reference.get("fragment_id")
+            or item.get("content_sha256") != reference.get("quote_sha256")
+        ):
+            raise RuntimeError("Query Plan v6 provider evidence binding is invalid")
+
+
 def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
     """Project one v6 retrieval result onto the bounded provider surface."""
 
@@ -94,6 +116,7 @@ def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
         # opaque receipt join key.
         provider_capsule.pop("audit", None)
         provider_capsule["projection"] = "standard"
+    _validate_source_evidence_bindings(provider_capsule)
     provider = {
         "schema_version": PROVIDER_CAPSULE_SCHEMA,
         "purpose": result["purpose"],
