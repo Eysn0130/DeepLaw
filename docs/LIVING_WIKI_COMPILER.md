@@ -3,7 +3,9 @@
 Status: **Current source candidate; package 0.12.0; release_ready=false**, 2026-08-11. Release
 eligibility and exact evidence are tracked in [`V0_13_ACCEPTANCE_MATRIX.md`](V0_13_ACCEPTANCE_MATRIX.md),
 the product surface manifest, and the applicable frozen qualification artifacts. This status does
-not make Obsidian or Tolaria production-qualified.
+not make Obsidian or Tolaria production-qualified. One real macOS Obsidian Desktop
+load/verify/rename/edit/reconcile seam is recorded under `benchmarks/hosts/evidence/`; it is not
+Human Gold, a qualification holdout, or a final blind run.
 
 ## Contract boundary
 

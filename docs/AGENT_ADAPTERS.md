@@ -28,16 +28,18 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
-| Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; real desktop E2E pending |
+| Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; one real macOS Desktop load/verify/rename/edit/reconcile seam executed, broader Human Gold/holdout/final-blind matrix pending |
 | Tolaria external MCP bridge | **`integration_limited`** | exact v2026-07-22 source contract and real local CLI harness; missing third-party product UI seam |
-| Real model/session tasks on all hosts | **External verification pending** | competitive evidence only; no-model lifecycle is not task acceptance |
+| Real model/session tasks on all hosts | **Partial, not release-eligible** | one frozen Codex task ran three times with explicit `gpt-5.6-luna` and actual usage receipts; the broader continuity matrix plus Claude/OpenCode/DeepSeek tasks remain pending |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
 must separately configure `knowledge_sink` with an owner-created grant limited to compilation
 operations, and the Agent must load the applicable split Skill, normally `deeplaw-compile-source`.
 The scheduled `compile-living-wiki` wrapper is compatibility-only. The opt-in real-host
-harness records unavailable model tasks as `not_executed`.
+harness records unavailable model tasks as `not_executed`. The Pass 10 receipts under
+[`../benchmarks/hosts/evidence/`](../benchmarks/hosts/evidence/) bind the executed Codex and Obsidian
+seams without promoting either surface to Production or Stable.
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate

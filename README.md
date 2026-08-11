@@ -52,7 +52,9 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 > **DeepLaw 2.0 是产品品牌，不是软件版本号。** **本地单用户 Agent Knowledge OS** 是当前交付边界。
 > 当前源码候选的 package 仍为 `0.12.0`，`release_ready=false`；默认 Context 已使用 Query Plan
 > v6 / local Capsule v3 / Provider Capsule v2。Obsidian 仍是 source candidate，Tolaria 仍是
-> `integration_limited`，真实 Host、Human Gold、final blind 与跨平台发布资格尚未闭环。旧版
+> `integration_limited`。一个冻结的真实 Codex 任务已用 `gpt-5.6-luna` 运行三次，单次真实
+> Obsidian Desktop load/rename/edit/reconcile seam 也已执行；其余 Host/任务矩阵、Human Gold、
+> final blind 与跨平台发布资格仍未闭环。旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。

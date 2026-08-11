@@ -53,8 +53,10 @@ same domain services.
 > **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
 > is the current delivery boundary. The source candidate still packages as `0.12.0` and has
 > `release_ready=false`; default Context uses Query Plan v6, local Capsule v3, and Provider Capsule
-> v2. Obsidian remains a source candidate, Tolaria remains `integration_limited`, and real-Host,
-> Human Gold, final-blind, and cross-platform release qualification are incomplete. The older
+> v2. Obsidian remains a source candidate and Tolaria remains `integration_limited`. One frozen real
+> Codex task has run three times with `gpt-5.6-luna`, and one real Obsidian Desktop
+> load/rename/edit/reconcile seam has executed; the remaining Host/task matrix, Human Gold,
+> final-blind, and cross-platform release qualification are incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
