@@ -998,7 +998,11 @@ class CodexAppServerClient:
                 self._tool_outputs.append(params[key])
                 return
 
-    def _project_event(self, method: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    def _project_event(
+        self, method: str, params: Mapping[str, Any]
+    ) -> dict[str, Any] | None:
+        if method.startswith(("account/", "remoteControl/")):
+            return None
         event: dict[str, Any] = {"method": method}
         thread_id = _thread_or_turn_id(params, "threadId", "thread_id")
         turn_id = _thread_or_turn_id(params, "turnId", "turn_id")
@@ -1014,7 +1018,10 @@ class CodexAppServerClient:
         disallowed = any(
             label in lowered for label in ("reasoning", "command", "file", "raw", "delta")
         )
-        if disallowed and not ("tool" in lowered and "delta" not in lowered):
+        if (
+            disallowed
+            or (isinstance(item_type, str) and "reasoning" in item_type.casefold())
+        ) and not ("tool" in lowered and "delta" not in lowered):
             event["item_type"] = "disallowed"
         elif item_type is not None:
             event["item_type"] = item_type
@@ -1087,7 +1094,8 @@ class CodexAppServerClient:
         response = self._invoke_dynamic_tool(name, arguments, params)
         self._send_message({"id": request_id, "result": response})
         projected = self._project_event("item/tool/call", params)
-        self._events.append(projected)
+        if projected is not None:
+            self._events.append(projected)
 
     @staticmethod
     def _dynamic_call_fields(params: Mapping[str, Any]) -> tuple[str | None, Any]:

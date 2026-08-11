@@ -24,7 +24,9 @@ These are construction facts only. They do not authorize a runtime profile.
 All four conditions use the same installed Codex binary, existing ChatGPT login, model
 `gpt-5.6-luna`, reasoning `max`, natural-language task, non-secret task binding, structured output,
 hardware, provider network policy, and exact candidate wheel. The Host starts a new thread for each
-condition within one qualification workflow.
+condition within one qualification workflow. The prompt directs the Host to use only Context
+operation fields and omit null or unrelated-operation fields; it still contains no expected answer,
+marker, exact knowledge identity, Gold, or scorer material.
 
 | ID | Condition | Purpose |
 | --- | --- | --- |
@@ -88,7 +90,9 @@ or token. Every condition uses an ephemeral thread. A-C explicitly clear configu
 enables only the generated closed-environment wrapper and verifies its exact child argv. The
 observation binds the wheel hash, runtime executable hash, wrapper hash, Codex binary hash, commit,
 and tree. Sanitized JSONL retains only method/item types, status, opaque-id hashes,
-argument/result hashes and byte counts, usage, and disallowed-tool markers. Raw stdout/stderr,
+argument/result hashes and byte counts, usage, and disallowed-tool markers. Account rate-limit and
+remote-control notifications are discarded rather than projected. A failed tool call is retained
+only as a bounded status/failure-code category, never its raw error or result. Raw stdout/stderr,
 agent reasoning, transcript, environment values, credentials, and absolute paths are not
 persisted. The output directory is outside the repository and evaluator tree.
 

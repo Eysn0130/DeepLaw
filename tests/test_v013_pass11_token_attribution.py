@@ -167,6 +167,8 @@ def test_candidate_prompt_has_no_evaluator_labels_or_exact_identity() -> None:
         "scorer",
     ):
         assert forbidden not in rendered
+    assert "omit null fields" in rendered
+    assert "another operation" in rendered
 
 
 def test_runner_uses_app_server_not_codex_exec() -> None:
