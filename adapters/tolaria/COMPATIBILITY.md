@@ -1,7 +1,7 @@
 # Tolaria compatibility report
 
-Status: `integration_limited`, reviewed at source tag `alpha-v2026.8.10-alpha.0001`, commit
-`ab01faa6773136a58285d04cb81e2587c11bac85` (package `0.1.0`), on 2026-08-11.
+Status: `integration_limited`, reviewed at release tag `v2026-08-11`, annotated-tag commit
+`cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` (package `0.1.0`), on 2026-08-11.
 
 The reviewed Tolaria release is files-first and offline-first. Its current supported integration
 surface is an external stdio MCP server plus a WebSocket UI bridge. Durable external registrations
@@ -30,6 +30,7 @@ Verified locally without a model:
 - temporary source-free Vault Query Plan v6 and legacy context preview with no Ledger mutation;
 - explicit `integration_limited` receipt naming the missing stable Tolaria extension point.
 
-Not yet externally verified: a signed Tolaria desktop binary exercising the complete visible UI
-workflow with a real Agent. That result must remain `not_executed` until the exact host binary and
-model task are run; it is not inferred from this harness or promoted to Authority.
+Not yet externally verified: the released Tolaria desktop binary exercising the complete visible
+UI workflow with a real Agent. Tolaria Desktop was not installed on this machine during Pass 11.
+That result remains `not_executed`; it is not inferred from source inspection or the harness and is
+not promoted to Authority.

@@ -710,8 +710,8 @@ def host_bridge_contract(host: HostFrontend) -> dict[str, Any]:
             "host_surface": "stdio_mcp_config_and_ui_only_open_note",
             "exact_upstream": {
                 "name": "Tolaria",
-                "version": "alpha-v2026.8.10-alpha.0001",
-                "commit": "ab01faa6773136a58285d04cb81e2587c11bac85",
+                "version": "v2026-08-11",
+                "commit": "cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d",
                 "plugin_api_status": "not_available",
                 "stable_active_note_preview_promote": False,
             },

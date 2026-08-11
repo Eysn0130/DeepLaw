@@ -96,8 +96,8 @@ The flow is: Tolaria supplies explicit context → DeepLaw retrieves or compiles
 commits canonical state → Tolaria refreshes/opens the exact projected path. Tolaria's note tools
 never write canonical roots. This preserves its workspace/Agent abstractions without importing
 DeepLaw's governance into the frontend. The compatibility target is Tolaria
-`alpha-v2026.8.10-alpha.0001`, commit
-`ab01faa6773136a58285d04cb81e2587c11bac85` (package `0.1.0`). The exact upstream release exposes no stable
+`v2026-08-11`, annotated-tag commit
+`cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` (package `0.1.0`). The exact upstream release exposes no stable
 third-party active-note preview or promotion UI extension point, so the executable harness reports
 the full product loop as `integration_limited` rather than simulating it. References:
 [Tolaria repository](https://github.com/refactoringhq/tolaria),
