@@ -10,9 +10,9 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
-import os
-import selectors
+import queue
 import subprocess
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
@@ -325,6 +325,14 @@ class CodexAppServerClient:
         self._secret_leak = False
 
         self._process: subprocess.Popen[bytes] | None = None
+        self._output_queue_max_chunks = max(
+            2,
+            (self.max_output_bytes + 4095) // 4096 + 2,
+        )
+        self._output_queue: queue.Queue[
+            tuple[str, bytes | None, BaseException | None]
+        ] = queue.Queue(maxsize=self._output_queue_max_chunks)
+        self._reader_threads: list[threading.Thread] = []
         self._closed = False
         self._initialized = False
         self._next_request_id = 1
@@ -380,6 +388,7 @@ class CodexAppServerClient:
 
     @property
     def secret_leak(self) -> bool:
+        self._drain_available_stderr()
         return self._secret_leak
 
     @property
@@ -427,6 +436,23 @@ class CodexAppServerClient:
         except (OSError, ValueError) as exc:
             self._process = None
             raise CodexAppServerError("unable to start app server") from exc
+        self._output_queue = queue.Queue(maxsize=self._output_queue_max_chunks)
+        self._reader_threads = []
+        for stream_name, stream in (
+            ("stdout", self._process.stdout),
+            ("stderr", self._process.stderr),
+        ):
+            if stream is None:
+                self._fail_closed()
+                raise CodexAppServerError("app server output pipe is unavailable")
+            reader = threading.Thread(
+                target=self._read_output_stream,
+                args=(stream_name, stream),
+                daemon=True,
+                name=f"deeplaw-app-server-{stream_name}",
+            )
+            reader.start()
+            self._reader_threads.append(reader)
         return self
 
     launch = start
@@ -576,12 +602,17 @@ class CodexAppServerClient:
                     process.kill()
                     with suppress(subprocess.TimeoutExpired):
                         process.wait(timeout=0.5)
+            for reader in self._reader_threads:
+                reader.join(timeout=0.2)
             self._drain_available_stderr()
         finally:
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None:
                     with suppress(OSError):
                         stream.close()
+            for reader in self._reader_threads:
+                reader.join(timeout=0.2)
+            self._reader_threads = []
             self._process = None
             self._closed = True
 
@@ -743,6 +774,77 @@ class CodexAppServerClient:
             raise CodexAppServerProtocolError("app server JSONL message is not an object")
         return value
 
+    def _read_output_stream(self, stream_name: str, stream: Any) -> None:
+        """Copy one blocking subprocess pipe into the bounded main-thread queue.
+
+        Windows selectors accept sockets but not anonymous subprocess pipes. Two
+        daemon readers keep the wire transport portable while all parsing,
+        accounting, leak detection, and failure decisions remain serialized in
+        the client thread.
+        """
+
+        try:
+            while True:
+                chunk = stream.read(4096)
+                if not chunk:
+                    self._output_queue.put((stream_name, None, None))
+                    return
+                self._output_queue.put((stream_name, chunk, None))
+        except (OSError, ValueError) as error:
+            self._output_queue.put((stream_name, None, error))
+
+    def _record_output_chunk(
+        self,
+        stream_name: str,
+        chunk: bytes,
+        *,
+        fail_on_limit: bool,
+    ) -> None:
+        self._scan_output_chunk(stream_name, chunk)
+        if stream_name == "stdout":
+            self._stdout_bytes += len(chunk)
+            self._stdout_buffer.extend(chunk)
+            limit_exceeded = (
+                self._stdout_bytes > self.max_stdout_bytes
+                or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
+            )
+        else:
+            self._stderr_bytes += len(chunk)
+            self._stderr_digest.update(chunk)
+            limit_exceeded = (
+                self._stderr_bytes > self.max_stderr_bytes
+                or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
+            )
+        if limit_exceeded and fail_on_limit:
+            self._fail_closed()
+            raise CodexAppServerOutputLimitError(
+                f"app server {stream_name} exceeded byte limit"
+            )
+
+    def _consume_output_event(
+        self,
+        event: tuple[str, bytes | None, BaseException | None],
+        *,
+        fail_on_error: bool,
+        fail_on_limit: bool,
+    ) -> str:
+        stream_name, chunk, error = event
+        if error is not None:
+            if fail_on_error:
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "unable to read app-server output"
+                ) from error
+            return "error"
+        if chunk is None:
+            return "eof"
+        self._record_output_chunk(
+            stream_name,
+            chunk,
+            fail_on_limit=fail_on_limit,
+        )
+        return "data"
+
     def _drain_ready_notifications(self) -> None:
         """Consume already-ready notifications after an immediate compact call."""
 
@@ -750,64 +852,32 @@ class CodexAppServerClient:
         if process is None or process.stdout is None or process.stderr is None:
             return
         deadline = time.monotonic() + 0.05
-        selector = selectors.DefaultSelector()
-        try:
-            selector.register(process.stdout, selectors.EVENT_READ, "stdout")
-            selector.register(process.stderr, selectors.EVENT_READ, "stderr")
-            while time.monotonic() < deadline:
-                newline = self._stdout_buffer.find(b"\n")
-                if newline >= 0:
-                    line = bytes(self._stdout_buffer[:newline])
-                    del self._stdout_buffer[: newline + 1]
-                    if not line.strip():
-                        continue
-                    message = self._decode_message(line)
-                    if "method" in message and "id" not in message:
-                        self._handle_notification(message)
-                        continue
-                    if "method" in message and "id" in message:
-                        self._handle_server_request(message)
-                        continue
-                    self._fail_closed()
-                    raise CodexAppServerProtocolError("unexpected response after compact")
-                ready = selector.select(max(0.0, min(0.01, deadline - time.monotonic())))
-                if not ready:
-                    break
-                for key, _ in ready:
-                    try:
-                        chunk = os.read(key.fileobj.fileno(), 4096)
-                    except OSError:
-                        continue
-                    if not chunk:
-                        with suppress(KeyError):
-                            selector.unregister(key.fileobj)
-                        continue
-                    if key.data == "stdout":
-                        self._scan_output_chunk("stdout", chunk)
-                        self._stdout_bytes += len(chunk)
-                        if (
-                            self._stdout_bytes > self.max_stdout_bytes
-                            or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
-                        ):
-                            self._fail_closed()
-                            raise CodexAppServerOutputLimitError(
-                                "app server stdout exceeded byte limit"
-                            )
-                        self._stdout_buffer.extend(chunk)
-                    else:
-                        self._scan_output_chunk("stderr", chunk)
-                        self._stderr_bytes += len(chunk)
-                        self._stderr_digest.update(chunk)
-                        if (
-                            self._stderr_bytes > self.max_stderr_bytes
-                            or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
-                        ):
-                            self._fail_closed()
-                            raise CodexAppServerOutputLimitError(
-                                "app server stderr exceeded byte limit"
-                            )
-        finally:
-            selector.close()
+        while time.monotonic() < deadline:
+            newline = self._stdout_buffer.find(b"\n")
+            if newline >= 0:
+                line = bytes(self._stdout_buffer[:newline])
+                del self._stdout_buffer[: newline + 1]
+                if not line.strip():
+                    continue
+                message = self._decode_message(line)
+                if "method" in message and "id" not in message:
+                    self._handle_notification(message)
+                    continue
+                if "method" in message and "id" in message:
+                    self._handle_server_request(message)
+                    continue
+                self._fail_closed()
+                raise CodexAppServerProtocolError("unexpected response after compact")
+            wait_for = max(0.0, min(0.01, deadline - time.monotonic()))
+            try:
+                event = self._output_queue.get(timeout=wait_for)
+            except queue.Empty:
+                break
+            self._consume_output_event(
+                event,
+                fail_on_error=True,
+                fail_on_limit=True,
+            )
 
     def _pump(self, deadline: float) -> None:
         process = self._process
@@ -817,100 +887,61 @@ class CodexAppServerClient:
         if remaining <= 0:
             self._fail_closed()
             raise CodexAppServerTimeoutError("app server request timed out")
-        selector = selectors.DefaultSelector()
-        try:
-            selector.register(process.stdout, selectors.EVENT_READ, "stdout")
-            selector.register(process.stderr, selectors.EVENT_READ, "stderr")
-            while True:
-                wait_for = min(remaining, 0.1)
-                ready = selector.select(wait_for)
-                if not ready:
-                    if process.poll() is not None:
-                        # Readable EOF is reported by the selector on the next
-                        # pass; allow that pass to consume any final bytes.
-                        remaining = deadline - time.monotonic()
-                        if remaining <= 0:
-                            self._fail_closed()
-                            raise CodexAppServerTimeoutError("app server closed before response")
-                    else:
-                        remaining = deadline - time.monotonic()
-                        if remaining <= 0:
-                            self._fail_closed()
-                            raise CodexAppServerTimeoutError("app server request timed out")
-                    continue
-                for key, _ in ready:
-                    try:
-                        chunk = os.read(key.fileobj.fileno(), 4096)
-                    except OSError as exc:
-                        self._fail_closed()
-                        raise CodexAppServerProtocolError(
-                            "unable to read app-server output"
-                        ) from exc
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                        if key.data == "stdout":
-                            if self._stdout_buffer:
-                                self._fail_closed()
-                                raise CodexAppServerProtocolError(
-                                    "app server emitted truncated JSONL"
-                                )
-                            self._fail_closed()
-                            raise CodexAppServerProtocolError("app server closed stdout")
-                        continue
-                    if key.data == "stdout":
-                        self._scan_output_chunk("stdout", chunk)
-                        self._stdout_bytes += len(chunk)
-                        if (
-                            self._stdout_bytes > self.max_stdout_bytes
-                            or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
-                        ):
-                            self._fail_closed()
-                            raise CodexAppServerOutputLimitError(
-                                "app server stdout exceeded byte limit"
-                            )
-                        self._stdout_buffer.extend(chunk)
-                    else:
-                        self._scan_output_chunk("stderr", chunk)
-                        self._stderr_bytes += len(chunk)
-                        self._stderr_digest.update(chunk)
-                        if (
-                            self._stderr_bytes > self.max_stderr_bytes
-                            or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
-                        ):
-                            self._fail_closed()
-                            raise CodexAppServerOutputLimitError(
-                                "app server stderr exceeded byte limit"
-                            )
-                if self._stdout_buffer.find(b"\n") >= 0:
-                    return
+        while True:
+            wait_for = min(remaining, 0.1)
+            try:
+                event = self._output_queue.get(timeout=wait_for)
+            except queue.Empty:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     self._fail_closed()
-                    raise CodexAppServerTimeoutError("app server request timed out")
-        finally:
-            selector.close()
+                    message = (
+                        "app server closed before response"
+                        if process.poll() is not None
+                        else "app server request timed out"
+                    )
+                    raise CodexAppServerTimeoutError(message) from None
+                continue
+            stream_name = event[0]
+            outcome = self._consume_output_event(
+                event,
+                fail_on_error=True,
+                fail_on_limit=True,
+            )
+            if outcome == "eof" and stream_name == "stdout":
+                if self._stdout_buffer:
+                    self._fail_closed()
+                    raise CodexAppServerProtocolError(
+                        "app server emitted truncated JSONL"
+                    )
+                self._fail_closed()
+                raise CodexAppServerProtocolError("app server closed stdout")
+            if self._stdout_buffer.find(b"\n") >= 0:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._fail_closed()
+                raise CodexAppServerTimeoutError("app server request timed out")
 
     def _drain_available_stderr(self) -> None:
         process = self._process
         if process is None or process.stderr is None:
             return
-        selector = selectors.DefaultSelector()
-        try:
-            selector.register(process.stderr, selectors.EVENT_READ)
-            while selector.select(0):
-                try:
-                    chunk = os.read(process.stderr.fileno(), 4096)
-                except OSError:
-                    break
-                if not chunk:
-                    break
-                self._scan_output_chunk("stderr", chunk)
-                self._stderr_bytes += len(chunk)
-                self._stderr_digest.update(chunk)
-                if self._stderr_bytes > self.max_stderr_bytes:
-                    break
-        finally:
-            selector.close()
+        deadline = time.monotonic() + (0.01 if process.poll() is None else 0.0)
+        while True:
+            try:
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    event = self._output_queue.get(timeout=remaining)
+                else:
+                    event = self._output_queue.get_nowait()
+            except queue.Empty:
+                return
+            self._consume_output_event(
+                event,
+                fail_on_error=False,
+                fail_on_limit=False,
+            )
 
     def _handle_notification(self, message: Mapping[str, Any]) -> dict[str, Any] | None:
         method = message.get("method")

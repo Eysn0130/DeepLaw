@@ -1664,6 +1664,10 @@ def initialize_autonomous_core(
         evidence = store.evidence_sync
         recovery = store.recovery_sync
         verification = store.verify()
+    if os.name == "nt":
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(root)
     return {
         **manifest,
         "legacy_evidence": evidence,
