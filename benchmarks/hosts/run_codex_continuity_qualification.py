@@ -417,6 +417,7 @@ def _wrapper_source(runtime_python: Path) -> str:
 from __future__ import annotations
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from deeplaw.subprocess_environment import _build_subprocess_environment
@@ -446,7 +447,12 @@ Path("mcp-environment-receipt.json").write_text(
     json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
     encoding="utf-8",
 )
-os.execve(sys.executable, child_argv, environment)
+completed = subprocess.run(
+    [sys.executable, *child_argv[1:]],
+    env=environment,
+    check=False,
+)
+raise SystemExit(completed.returncode)
 '''
 
 
