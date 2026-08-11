@@ -30,7 +30,7 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
 | Obsidian CLI bridge and bundle | **Source candidate / local-only** | strict parsers, picker flow, npm test/check/build/bundle; one seam executed at the historical b14 candidate, while broader and exact-head qualification is pending |
 | Tolaria external MCP bridge | **`integration_limited`** | exact v2026-07-22 source contract and real local CLI harness; missing third-party product UI seam |
-| Real model/session tasks on all hosts | **Failed candidate evidence only** | Three Pass 11 exact-wheel Codex App Server A/B/C/D workflows were partial/failed; C and D failed every time, no profile was admitted, and multi-state Codex plus OpenCode qualification remain unexecuted |
+| Real model/session tasks on all hosts | **Failed candidate evidence only** | Three Pass 11 exact-wheel Codex App Server A/B/C/D workflows were partial/failed; one isolated OpenCode/DeepSeek workflow did not call `knowledge_support` and was `not_scored`; no profile was admitted and multi-state continuity remains unexecuted |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
@@ -43,6 +43,8 @@ evidence only; the current invalidation is recorded in
 [`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md).
 The current Codex token-attribution failure disposition is recorded in
 [`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
+The current OpenCode continuity failure disposition is recorded in
+[`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md).
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate

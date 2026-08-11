@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/opencode-continuity-evaluation.v1.schema.json",
+  "title": "DeepLaw OpenCode Continuity Evaluation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "release_ready",
+    "claim_eligible",
+    "scoring_status",
+    "observation",
+    "evaluator",
+    "metrics",
+    "duplicate_evidence",
+    "redundancy",
+    "hard_failures",
+    "not_executed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.opencode-continuity-evaluation/v1"},
+    "status": {"enum": ["passed", "failed"]},
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false},
+    "scoring_status": {"enum": ["scored", "not_scored"]},
+    "observation": {"$ref": "#/$defs/observation"},
+    "evaluator": {"$ref": "#/$defs/evaluator"},
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "duplicate_evidence": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "redundancy": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hard_failures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "not_executed": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "commit", "tree"],
+      "properties": {
+        "name": {"const": "opencode-continuity-observation.json"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_name", "gold_sha256", "scorer_name", "scorer_sha256"],
+      "properties": {
+        "gold_name": {"const": "continuity-qualification-gold-v1.json"},
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "scorer_name": {"const": "score_opencode_continuity_observation.py"},
+        "scorer_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "metric": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "ratioMetric": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "first_correct_action",
+        "decision_preservation",
+        "wrong_state_admission",
+        "useful_context_recall",
+        "relevant_chars",
+        "context_chars",
+        "relevant_chars_context_chars",
+        "duty_coverage",
+        "gap_correctness"
+      ],
+      "properties": {
+        "first_correct_action": {"$ref": "#/$defs/ratioMetric"},
+        "decision_preservation": {"$ref": "#/$defs/ratioMetric"},
+        "wrong_state_admission": {"$ref": "#/$defs/metric"},
+        "useful_context_recall": {"$ref": "#/$defs/ratioMetric"},
+        "relevant_chars": {"$ref": "#/$defs/metric"},
+        "context_chars": {"$ref": "#/$defs/metric"},
+        "relevant_chars_context_chars": {"$ref": "#/$defs/ratioMetric"},
+        "duty_coverage": {"$ref": "#/$defs/ratioMetric"},
+        "gap_correctness": {"$ref": "#/$defs/ratioMetric"}
+      }
+    }
+  }
+}

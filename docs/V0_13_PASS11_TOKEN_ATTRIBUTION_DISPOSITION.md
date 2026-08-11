@@ -72,9 +72,11 @@ used or claimed.
 - The requested new/resume/fork/compaction/concurrent-worktree/stale/wrong-route/forget/conflict
   continuity workflow was not executed because all three authorized Codex workflows were consumed
   by the failed token-attribution gate.
-- OpenCode/DeepSeek, Living Wiki/Desktop, professional Evidence, Legal Human Gold, final artifact,
-  cross-platform, signature, public redownload, and final-blind gates remain separate pending or
-  blocked work.
+- One later isolated OpenCode/DeepSeek workflow failed without a `knowledge_support` call and is
+  recorded separately in
+  [`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md). Living
+  Wiki/Desktop, professional Evidence, Legal Human Gold, final artifact, cross-platform, signature,
+  public redownload, and final-blind gates remain separate pending or blocked work.
 
 ```text
 release_gate_passed=false

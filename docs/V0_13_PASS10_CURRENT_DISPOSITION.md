@@ -2,10 +2,12 @@
 
 Status: **historical candidate evidence only; current qualification invalidated** (2026-08-11).
 
-Current Pass 11 Host disposition moved to
-[`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md):
-three later Codex App Server workflows executed as partial/failed candidate evidence, and no
-operation profile or release claim was admitted. The Pass 10 facts below remain unchanged.
+Current Pass 11 Host dispositions moved to
+[`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)
+and [`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md): three later
+Codex App Server workflows and one OpenCode/DeepSeek workflow executed as partial/failed candidate
+evidence. No operation profile, continuity qualification, or release claim was admitted. The Pass
+10 facts below remain unchanged.
 
 This disposition preserves the Pass 10 facts while preventing historical candidate artifacts from
 being presented as uncontaminated or exact-head qualification. It does not rewrite the retained

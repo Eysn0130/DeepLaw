@@ -61,7 +61,11 @@ same domain services.
 > candidate/evaluator separation and natural-task discovery. Three exact-wheel Codex App Server
 > A/B/C/D workflows then produced only partial/failed candidate evidence: the 19-operation C and
 > exact MCP D conditions did not pass, no operation profile was admitted, and the multi-state
-> continuity suite was not executed. Broader and exact-head qualification is pending. Human
+> continuity suite was not executed. One isolated OpenCode `1.18.16` /
+> `deepseek-v4-flash` exact-wheel workflow then preserved the security and usage receipts but did
+> not call `knowledge_support`; it produced no Provider Capsule and was independently `not_scored`.
+> The same task is not rerun to manufacture continuity evidence. Broader and exact-head
+> qualification is pending. Human
 > Gold, final-blind, and cross-platform release qualification are also incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
@@ -76,6 +80,8 @@ The [Pass 10 current disposition](docs/V0_13_PASS10_CURRENT_DISPOSITION.md) reco
 invalidation without rewriting historical files.
 The [Pass 11 token-attribution disposition](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)
 records the three failed/partial Codex candidate workflows and the no-profile decision.
+The [Pass 11 OpenCode disposition](docs/V0_13_PASS11_OPENCODE_DISPOSITION.md) records the failed
+isolated DeepSeek task and the evaluator-only `not_scored` result.
 
 Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
 `--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.

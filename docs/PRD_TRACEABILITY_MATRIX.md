@@ -10,7 +10,10 @@ inputs and evaluator-only Gold/scoring are physically separated. Three Codex App
 token-attribution workflows ran, but all were partial/failed candidate evidence; no profile was
 admitted and the authorized Codex workflow budget is exhausted. See
 [`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
-No real-Host qualification passed. The default CLI product journey, layered Help, direct reconcile alias,
+One isolated OpenCode/DeepSeek exact-wheel workflow then failed because it did not call
+`knowledge_support`; its separated evaluator result is `not_scored`. See
+[`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md). No real-Host
+qualification passed. The default CLI product journey, layered Help, direct reconcile alias,
 read-only Host connection plan, and frozen caller/contract preservation boundary are recorded in
 [`../governance/product-surface-manifest.v1.json`](../governance/product-surface-manifest.v1.json)
 and [`V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md`](V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md).
@@ -333,6 +336,9 @@ as claim-ineligible candidate evidence. None passed all four conditions: the ful
 condition failed in every attempt and exact MCP D failed in every attempt. Only attempt 1 B was
 evaluator-scoreable, with First Correct Action `0.0`. The multi-state continuity suite, independent
 Human Gold, physical qualification/final-blind split, and remaining Host matrix are not qualified.
+One later isolated OpenCode `1.18.16` / `deepseek-v4-flash` workflow preserved closed environments,
+usage, and an unchanged Ledger, but emitted no tool call, Provider Capsule, or neutral Host output;
+its independent evaluator result is `not_scored`, and the same task is not repeated.
 
 Current disposition remains:
 
