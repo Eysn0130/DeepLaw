@@ -50,3 +50,20 @@ def test_exact_candidate_receipt_binds_real_captures_without_local_paths() -> No
         payload = (CURRENT.parent / capture["path_hint"]).read_bytes()
         assert capture["byte_size"] == len(payload)
         assert capture["sha256"] == hashlib.sha256(payload).hexdigest()
+
+
+def test_exact_candidate_manifest_binds_every_retained_artifact() -> None:
+    manifest = json.loads(
+        (CURRENT.parent / "SHA256SUMS.json").read_text(encoding="utf-8")
+    )
+    expected = {
+        path.name: path
+        for path in CURRENT.parent.iterdir()
+        if path.is_file() and path.name != "SHA256SUMS.json"
+    }
+
+    assert {item["name"] for item in manifest["artifacts"]} == set(expected)
+    for item in manifest["artifacts"]:
+        payload = expected[item["name"]].read_bytes()
+        assert item["bytes"] == len(payload)
+        assert item["sha256"] == hashlib.sha256(payload).hexdigest()
