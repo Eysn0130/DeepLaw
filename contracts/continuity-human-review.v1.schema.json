@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/continuity-human-review.v1.schema.json",
+  "title": "DeepLaw Continuity Independent Bilingual Human Review v1",
+  "description": "A separate review artifact required for any non-fail-closed continuity result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "review_id",
+    "status",
+    "gold_id",
+    "gold_sha256",
+    "case_id",
+    "candidate_sha256",
+    "reviews",
+    "claim_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.continuity-human-review/v1"},
+    "review_id": {"type": "string", "pattern": "^continuityreview_[0-9a-f]{24}$"},
+    "status": {"const": "independent_bilingual_review_complete"},
+    "gold_id": {"type": "string", "pattern": "^continuitygold_[0-9a-f]{24}$"},
+    "gold_sha256": {"$ref": "#/$defs/sha256"},
+    "case_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "candidate_sha256": {"$ref": "#/$defs/sha256"},
+    "reviews": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "zh"],
+      "properties": {
+        "en": {"$ref": "#/$defs/review"},
+        "zh": {"$ref": "#/$defs/review"}
+      }
+    },
+    "claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewer_id", "independent", "decision", "criterion_results"],
+      "properties": {
+        "reviewer_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "independent": {"const": true},
+        "decision": {"enum": ["pass", "fail"]},
+        "criterion_results": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}
