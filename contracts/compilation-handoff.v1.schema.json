@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/compilation-handoff.v1.schema.json",
+  "title": "DeepLaw Compilation Handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_revision_id", "source_status", "compiler_profile",
+    "boundaries", "sink_operations", "steps", "recommended_skill",
+    "compatibility_skill", "audit_head", "write_performed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.compilation-handoff/v1"},
+    "source_revision_id": {
+      "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+    },
+    "source_status": {
+      "enum": ["compilation_required", "compiled", "stale_or_blocked"]
+    },
+    "compiler_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compiler_profile", "compiler_profile_version", "prompt_template_id",
+        "prompt_config_sha256", "plan_configuration_sha256"
+      ],
+      "properties": {
+        "compiler_profile": {"const": "living-wiki-agent"},
+        "compiler_profile_version": {"const": "3"},
+        "prompt_template_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "prompt_config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "plan_configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read_leaf", "write_leaf", "grant_required", "grant_included",
+        "model_invoked", "write_performed"
+      ],
+      "properties": {
+        "read_leaf": {"const": "knowledge_support"},
+        "write_leaf": {"const": "knowledge_sink"},
+        "grant_required": {"const": true},
+        "grant_included": {"const": false},
+        "model_invoked": {"const": false},
+        "write_performed": {"const": false}
+      }
+    },
+    "sink_operations": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"const": "begin_compilation"},
+        {"const": "stage_semantic_observations"},
+        {"const": "freeze_semantic_inventory"},
+        {"const": "finalize_semantic_compilation"},
+        {"const": "validate_compilation"},
+        {"const": "commit_compilation"},
+        {"const": "resume_compilation"},
+        {"const": "abort_compilation"}
+      ],
+      "items": false
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ordinal", "leaf", "operation", "write"],
+        "properties": {
+          "ordinal": {"type": "integer", "minimum": 1, "maximum": 11},
+          "leaf": {"enum": ["knowledge_support", "knowledge_sink"]},
+          "operation": {"type": "string", "minLength": 1, "maxLength": 100},
+          "write": {"type": "boolean"}
+        }
+      }
+    },
+    "recommended_skill": {"const": "deeplaw-compile-source"},
+    "compatibility_skill": {"const": "compile-living-wiki"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "write_performed": {"const": false}
+  }
+}

@@ -151,7 +151,16 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
             "vault_ready": True,
             "canonical_valid": True,
             "autonomous_core_installed": True,
+            "schema_core_installed": True,
+            "read_seam_callable": True,
+            "compiled_knowledge_available": False,
+            "source_only_honest_gap_available": False,
+            "blocked": False,
         }
+        assert plan["context_preflight"]["status"] == "empty_honest_gap"
+        assert plan["context_preflight"]["provider_payload_bytes"] <= 65_536
+        assert plan["context_preflight"]["write_performed"] is False
+        assert plan["context_preflight"]["audit_head_unchanged"] is True
         rendered = str(plan["configuration"])
         assert "knowledge" in rendered
         assert "mcp" in rendered

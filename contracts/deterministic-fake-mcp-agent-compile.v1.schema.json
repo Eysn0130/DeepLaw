@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/deterministic-fake-mcp-agent-compile.v1.schema.json",
+  "title": "DeepLaw Deterministic Fake MCP Agent Compile Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "host_identity", "model_identity", "read_leaf", "write_leaf",
+    "compiler_profile_version", "query_plan_version", "source_revision_id",
+    "compilation_run_id", "packet_count", "observation_count", "staged_object_count",
+    "semantic_status", "inventory_sha256", "quality_receipt_sha256",
+    "source_summary_revision_id", "validation_sha256", "receipt_sha256",
+    "projection_manifest_sha256", "compiled_result_count", "provider_payload_bytes",
+    "status", "verification_valid", "network_used", "external_credentials_used"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.deterministic-fake-mcp-agent-compile/v1"},
+    "host_identity": {"const": "deeplaw-deterministic-fake-agent"},
+    "model_identity": {"type": "null"},
+    "read_leaf": {"const": "knowledge_support"},
+    "write_leaf": {"const": "knowledge_sink"},
+    "compiler_profile_version": {"const": "3"},
+    "query_plan_version": {"const": "6"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "observation_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "staged_object_count": {"type": "integer", "minimum": 2, "maximum": 100001},
+    "semantic_status": {"enum": ["complete", "partial"]},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "quality_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_summary_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "projection_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compiled_result_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "provider_payload_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+    "status": {"const": "succeeded"},
+    "verification_valid": {"const": true},
+    "network_used": {"const": false},
+    "external_credentials_used": {"const": false}
+  }
+}

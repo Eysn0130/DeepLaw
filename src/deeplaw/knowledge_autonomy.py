@@ -8530,13 +8530,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if not confirm_no_case_data:
             raise ValueError("knowledge sink requires confirmation that no case data is present")
         grant = self._grant(grant_id, operation="forget", request_bytes=0)
-        current = self.get_current(knowledge_id)
+        # Include the terminal head so an exact retry can reach remember()'s
+        # durable idempotency binding before the CAS check. A new key with the
+        # stale expected revision still fails closed in remember().
+        current = self.get_current(knowledge_id, include_inactive=True)
         if current["scope"] != grant["allowed_scope"] or SENSITIVITY_ORDER.index(
             current["sensitivity"]
         ) > SENSITIVITY_ORDER.index(grant["max_sensitivity"]):
             raise KeyError(f"Knowledge Object is unavailable: {knowledge_id}")
-        if current["revision_id"] != expected_revision_id:
-            raise RuntimeError("Knowledge Object compare-and-swap conflict")
         reason = _bounded_string(reason, field="forget reason", maximum=2_000)
         result = self.remember(
             grant_id=grant_id,

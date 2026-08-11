@@ -560,7 +560,15 @@ def _v4_input_schema(
         operation = operation_schema.get("const")
         if operation in embedded:
             field, contract_name = embedded[operation]
-            properties[field] = deepcopy(_contract(contract_name))
+            if operation == "finalize_semantic_compilation":
+                properties[field] = {
+                    "oneOf": [
+                        deepcopy(_contract(contract_name)),
+                        deepcopy(_contract("semantic-publication-plan.v3.schema.json")),
+                    ]
+                }
+            else:
+                properties[field] = deepcopy(_contract(contract_name))
     if operations is not None:
         allowed = set(operations)
         branches = []

@@ -11,6 +11,7 @@
     "read_only",
     "configuration",
     "preflight",
+    "context_preflight",
     "merge_required",
     "authentication_managed",
     "host_runtime_managed",
@@ -34,12 +35,49 @@
       "required": [
         "vault_ready",
         "canonical_valid",
-        "autonomous_core_installed"
+        "autonomous_core_installed",
+        "schema_core_installed",
+        "read_seam_callable",
+        "compiled_knowledge_available",
+        "source_only_honest_gap_available",
+        "blocked"
       ],
       "properties": {
         "vault_ready": {"const": true},
         "canonical_valid": {"const": true},
-        "autonomous_core_installed": {"const": true}
+        "autonomous_core_installed": {"const": true},
+        "schema_core_installed": {"const": true},
+        "read_seam_callable": {"const": true},
+        "compiled_knowledge_available": {"type": "boolean"},
+        "source_only_honest_gap_available": {"type": "boolean"},
+        "blocked": {"const": false}
+      }
+    },
+    "context_preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "gap_codes",
+        "provider_payload_bytes",
+        "write_performed",
+        "audit_head_unchanged"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["compiled_knowledge", "source_only_gap", "empty_honest_gap"]
+        },
+        "gap_codes": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "provider_payload_bytes": {
+          "type": "integer", "minimum": 0, "maximum": 65536
+        },
+        "write_performed": {"const": false},
+        "audit_head_unchanged": {"const": true}
       }
     },
     "merge_required": {"const": true},

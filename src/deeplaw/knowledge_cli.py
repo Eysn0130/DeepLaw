@@ -6,8 +6,6 @@ import os
 import secrets
 import sys
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -17,6 +15,7 @@ from .compilation.models import (
     COMPILER_GRANT_OPERATIONS,
     SEMANTIC_COMPILER_GRANT_OPERATIONS,
 )
+from .compilation_handoff import build_compilation_handoff
 from .context_compiler import compile_context, verify_capsule_file
 from .knowledge_autonomy import (
     FEEDBACK_EVALUATOR_TYPES,
@@ -25,7 +24,6 @@ from .knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
     autonomous_core_installed,
-    initialize_autonomous_core,
     migrate_autonomous_core,
     rollback_autonomous_core,
 )
@@ -94,6 +92,11 @@ from .knowledge_package import (
     export_knowledge_package,
     import_knowledge_package,
     verify_knowledge_package,
+)
+from .knowledge_service import (
+    auto_aware_knowledge_vault,
+    initialize_default_knowledge_vault,
+    source_knowledge_status_for_result,
 )
 from .knowledge_store import (
     RELATION_PREDICATES,
@@ -235,20 +238,6 @@ def _curate_default_help(
     action._choices_actions[:] = [
         by_name[name] for name in _BASIC_KNOWLEDGE_COMMANDS
     ]
-
-
-@contextmanager
-def _command_vault(
-    path: Path,
-    *,
-    read_only: bool,
-) -> Iterator[KnowledgeVault]:
-    """Close a successful legacy write before importing its immutable evidence."""
-    with KnowledgeVault(path, read_only=read_only) as vault:
-        yield vault
-    if not read_only and autonomous_core_installed(path):
-        with AutonomousKnowledgeStore(path, read_only=False):
-            pass
 
 
 def _add_typed_extraction_arguments(parser: argparse.ArgumentParser) -> None:
@@ -670,8 +659,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     forget_target = forget.add_mutually_exclusive_group(required=True)
     forget_target.add_argument("--knowledge-key")
     forget_target.add_argument("--asset-id")
+    forget_target.add_argument("--knowledge-id")
+    forget_target.add_argument("--source-revision-id")
+    forget.add_argument("--expected-revision-id")
+    forget.add_argument("--grant-id")
+    forget.add_argument("--idempotency-key")
     forget.add_argument("--reason", required=True)
     forget.add_argument("--confirm", action="store_true")
+    forget.add_argument("--confirm-no-case-data", action="store_true")
 
     relate = subcommands.add_parser(
         "relate",
@@ -1608,6 +1603,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     compilation_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
     compilation_list.add_argument("--source-revision-id")
+    compilation_handoff = compilation_commands.add_parser(
+        "handoff",
+        help="Build a read-only Source-to-Knowledge Host handoff",
+    )
+    compilation_handoff.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_handoff.add_argument("--source-revision-id", required=True)
     compilation_begin = compilation_commands.add_parser("begin")
     compilation_begin.add_argument("--vault", type=Path, default=default_knowledge_vault())
     compilation_begin.add_argument("--grant-id", required=True)
@@ -2293,26 +2296,25 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         args.autonomy_command = "reconcile"
         command = "autonomy"
     if command == "init":
-        legacy = initialize_knowledge_vault(
+        if args.legacy_review_core:
+            return initialize_knowledge_vault(
+                args.vault,
+                name=args.name,
+                scope=cast(VaultScope, args.scope),
+            )
+        initialized = initialize_default_knowledge_vault(
             args.vault,
             name=args.name,
             scope=cast(VaultScope, args.scope),
         )
-        if args.legacy_review_core:
-            return legacy
-        autonomous = initialize_autonomous_core(
-            args.vault,
-            migration_source="new-vault",
-        )
-        return {
-            "schema_version": "deeplaw.knowledge-vault-initialization/v2",
-            "vault_id": legacy["vault_id"],
-            "legacy_compatibility": legacy,
-            "autonomous_core": autonomous,
-            "active_write_policy": "agent_derived_autonomous",
-        }
+        return initialized
     if command == "compile":
         action = args.compilation_command
+        if action == "handoff":
+            return build_compilation_handoff(
+                args.vault,
+                source_revision_id=args.source_revision_id,
+            )
         knowledge_os = KnowledgeOS.open(args.vault)
         if action == "profile":
             return knowledge_os.compilations.profile(
@@ -3042,6 +3044,40 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             backup=args.backup,
             confirm=args.confirm_rollback,
         )
+    if command == "forget" and args.knowledge_id is not None:
+        if not args.confirm:
+            raise ValueError("autonomous Knowledge Object forgetting requires --confirm")
+        if not args.confirm_no_case_data:
+            raise ValueError(
+                "autonomous Knowledge Object forgetting requires --confirm-no-case-data"
+            )
+        required = {
+            "--expected-revision-id": args.expected_revision_id,
+            "--grant-id": args.grant_id,
+            "--idempotency-key": args.idempotency_key,
+        }
+        missing = [name for name, value in required.items() if value is None]
+        if missing:
+            raise ValueError(
+                "autonomous Knowledge Object forgetting requires " + ", ".join(missing)
+            )
+        with AutonomousKnowledgeStore(args.vault, read_only=False) as store:
+            result = store.forget(
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                knowledge_id=args.knowledge_id,
+                expected_revision_id=args.expected_revision_id,
+                reason=args.reason,
+                confirm_no_case_data=True,
+            )
+        return {**result, "target_type": "autonomous_knowledge"}
+    if command == "forget" and any(
+        value is not None
+        for value in (args.expected_revision_id, args.grant_id, args.idempotency_key)
+    ):
+        raise ValueError(
+            "grant, idempotency, and revision controls apply only to --knowledge-id"
+        )
 
     write_commands = {
         "ingest",
@@ -3082,7 +3118,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         or (command == "gc" and not args.dry_run and not args.orphans)
     )
     command_read_only = command not in write_commands and not nested_write
-    with _command_vault(
+    with auto_aware_knowledge_vault(
         args.vault,
         read_only=command_read_only,
     ) as vault:
@@ -3431,20 +3467,23 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         if command == "source":
             if args.source_command == "add":
                 return _bounded_ingest_receipt(
-                    compile_source(
+                    source_knowledge_status_for_result(
                         vault,
-                        args.source,
-                        source_kind=cast(SourceKind, args.source_kind),
-                        title=args.title,
-                        origin_uri=args.origin_uri,
-                        trust=cast(TrustLevel, args.trust),
-                        sensitivity=cast(Sensitivity, args.sensitivity),
-                        confirm_no_case_data=args.confirm_no_case_data,
-                        pdf_fallback=args.pdf_fallback,
-                        typed_extraction=args.typed_extraction,
-                        typed_extractor_manifest=args.typed_extractor_manifest,
-                        confirm_external_disclosure=args.confirm_external_disclosure,
-                        reference_proposals=args.reference_proposals,
+                        compile_source(
+                            vault,
+                            args.source,
+                            source_kind=cast(SourceKind, args.source_kind),
+                            title=args.title,
+                            origin_uri=args.origin_uri,
+                            trust=cast(TrustLevel, args.trust),
+                            sensitivity=cast(Sensitivity, args.sensitivity),
+                            confirm_no_case_data=args.confirm_no_case_data,
+                            pdf_fallback=args.pdf_fallback,
+                            typed_extraction=args.typed_extraction,
+                            typed_extractor_manifest=args.typed_extractor_manifest,
+                            confirm_external_disclosure=args.confirm_external_disclosure,
+                            reference_proposals=args.reference_proposals,
+                        ),
                     )
                 )
             if args.source_command == "add-dir":
@@ -3785,12 +3824,43 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 confirm=args.confirm,
             ).to_dict()
         if command == "forget":
-            return vault.selectively_forget(
+            if args.source_revision_id is not None:
+                binding = vault.connection.execute(
+                    """
+                    SELECT legacy_source_id
+                    FROM source_revision_bindings_v2
+                    WHERE source_revision_id = ?
+                    """,
+                    (args.source_revision_id,),
+                ).fetchone()
+                if binding is None:
+                    raise KeyError(
+                        f"Source Revision is unavailable: {args.source_revision_id}"
+                    )
+                result = vault.remove_source(
+                    str(binding["legacy_source_id"]),
+                    reason=args.reason,
+                    confirm=args.confirm,
+                )
+                return {
+                    **result,
+                    "target_type": "source_revision",
+                    "source_revision_id": args.source_revision_id,
+                }
+            result = vault.selectively_forget(
                 knowledge_key=args.knowledge_key,
                 asset_id=args.asset_id,
                 reason=args.reason,
                 confirm=args.confirm,
             )
+            return {
+                **result,
+                "target_type": (
+                    "legacy_knowledge_key"
+                    if args.knowledge_key is not None
+                    else "legacy_asset"
+                ),
+            }
         if command == "relate":
             return vault.add_relation(
                 subject_asset_id=args.subject_asset_id,
@@ -3828,7 +3898,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             use_autonomous_context = False
             if has_autonomous_core:
                 with AutonomousKnowledgeStore(args.vault, read_only=True) as store:
-                    use_autonomous_context = bool(
+                    workspace_has_autonomous_state = bool(
                         store.connection.execute(
                             "SELECT COUNT(*) FROM knowledge_objects_v3"
                         ).fetchone()[0]
@@ -3836,6 +3906,9 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                             "SELECT COUNT(*) FROM source_compilation_runs_v1"
                         ).fetchone()[0]
                     )
+                use_autonomous_context = bool(
+                    args.query_plan_version == "6" or workspace_has_autonomous_state
+                )
             if (
                 not use_autonomous_context
                 and (

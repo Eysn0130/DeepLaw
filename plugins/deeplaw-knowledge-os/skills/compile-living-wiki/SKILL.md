@@ -20,6 +20,10 @@ atomic commit, projection, and audit.
    attachments, restricted content, Legal Pack mutation, or authority elevation.
 4. Keep the default Knowledge OS plugin read-only. The separately configured Sink is the only
    canonical mutation path.
+5. Prefer the owner-generated `deeplaw knowledge compile handoff --source-revision-id <exact-id>`
+   as the bounded starting receipt. It is read-only, contains no Grant or capability token, and
+   names the exact profile hashes and split-leaf sequence. Reject a handoff for another revision or
+   one whose Source status is `stale_or_blocked`.
 
 Read [host-configurations.md](references/host-configurations.md) only when configuring or checking
 Codex, Claude Code, or OpenCode.
@@ -41,7 +45,7 @@ Codex, Claude Code, or OpenCode.
    hashes.
 4. Repeat the observation phase until `operation=semantic`,
    `semantic_action=next_packet` returns the end receipt:
-   - create one closed `deeplaw.source-compilation-observation-plan/v3` covering only that packet;
+   - create one closed `deeplaw.source-compilation-observation-plan/v2` covering only that packet;
    - cite exact `source_revision_id`, `fragment_id`, `locator`, and `quote_sha256`;
    - record semantic candidates, aliases, applicability, omissions, ambiguity, contradictions,
      and gaps without publishing them into Recall;

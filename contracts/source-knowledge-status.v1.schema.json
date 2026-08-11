@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-knowledge-status.v1.schema.json",
+  "title": "DeepLaw Source Knowledge Status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "state", "source_registered", "compilation_required",
+    "compiled", "stale_or_blocked", "gap", "source_revision_ids",
+    "successful_compilation_run_ids"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-knowledge-status/v1"},
+    "state": {
+      "enum": ["compilation_required", "compiled", "stale_or_blocked", "gap"]
+    },
+    "source_registered": {"type": "boolean"},
+    "compilation_required": {"type": "boolean"},
+    "compiled": {"type": "boolean"},
+    "stale_or_blocked": {"type": "boolean"},
+    "gap": {"type": "boolean"},
+    "source_revision_ids": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+    },
+    "successful_compilation_run_ids": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"}
+    }
+  }
+}
