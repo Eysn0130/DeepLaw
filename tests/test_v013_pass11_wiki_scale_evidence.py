@@ -74,9 +74,22 @@ def test_pass11_performance_report_is_valid_but_retains_unmet_gates() -> None:
     assert overall["not_executed_count"] == 15
 
 
-def test_pass11_query_graph_report_preserves_relation_and_restore_limits() -> None:
+def test_pass11_query_graph_report_preserves_historical_limits_without_rebinding() -> None:
     report = _load("query-graph-scale-69db28c.json")
-    assert verify_report(report) == {"valid": True, "errors": []}
+    assert verify_report(report) == {
+        "valid": False,
+        "errors": ["Gold byte binding mismatch"],
+    }
+    bindings = report["evidence_bindings"]
+    assert isinstance(bindings, dict)
+    gold = bindings["gold"]
+    assert isinstance(gold, dict)
+    assert gold == {
+        "execution_status": "not_executed",
+        "path": "benchmarks/quality/repository-gold-development-v3.json",
+        "reason": "synthetic scale construction does not read or score Gold",
+        "sha256": "4b64eb8db4c1c81fee3be5a9fd8ef93cb41bd2801f03cf84e34c63a9a3022fa8",
+    }
     assert report["claim_eligible"] is False
     assert report["competitive_claim_eligible"] is False
     assert report["release_gate_passed"] is False

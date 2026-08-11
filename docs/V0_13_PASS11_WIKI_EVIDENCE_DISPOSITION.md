@@ -64,6 +64,13 @@ payloads below 7,061 bytes. Snapshot/restore was executed and valid only at 1k. 
 all three scales remain `not_executed`: the public `add_relation` mutation is rate-bounded and no
 safe audited bulk constructor exists. No private bulk API was added to manufacture a result.
 
+The query/graph report remains byte-for-byte bound to candidate `69db28c`. It explicitly records
+that the synthetic scale construction did not read or score the repository-visible development
+Gold. After the Pass 11 documentation changed and that development Gold was rotated, verification
+from the current checkout correctly returns `Gold byte binding mismatch`. The historical report
+and its manifest were not rebound or rewritten; its measurements are retained as historical
+candidate observations and are not current qualification evidence.
+
 ## Professional Evidence boundary
 
 The exact clean candidate ran:
