@@ -1265,19 +1265,27 @@ def _ledger_head(
     environment: Mapping[str, str],
     cwd: Path,
 ) -> str:
-    result = _run_bounded_process(
-        [deeplaw_executable, "knowledge", "autonomy", "status", "--vault", vault],
-        environment=environment,
-        cwd=cwd,
-        timeout=30,
-    )
-    if result["returncode"] != 0 or result["timed_out"] or result["output_overflow"]:
-        raise QualificationError("installed Vault status command failed")
-    value = _strict_json(result["stdout"])
-    head = value.get("audit_head") if isinstance(value, Mapping) else None
-    if not isinstance(head, str) or _SHA256.fullmatch(head) is None:
-        raise QualificationError("installed Vault status omitted its audit head")
-    return head
+    """Commit both durable audit planes into one path-free observation."""
+
+    heads: dict[str, str] = {}
+    for label, arguments in (
+        ("knowledge", ("knowledge", "inspect", "--vault", vault)),
+        ("autonomous", ("knowledge", "autonomy", "status", "--vault", vault)),
+    ):
+        result = _run_bounded_process(
+            [deeplaw_executable, *arguments],
+            environment=environment,
+            cwd=cwd,
+            timeout=30,
+        )
+        if result["returncode"] != 0 or result["timed_out"] or result["output_overflow"]:
+            raise QualificationError("installed Vault status command failed")
+        value = _strict_json(result["stdout"])
+        head = value.get("audit_head") if isinstance(value, Mapping) else None
+        if not isinstance(head, str) or _SHA256.fullmatch(head) is None:
+            raise QualificationError("installed Vault status omitted its audit head")
+        heads[label] = head
+    return _sha256(_encoded(heads))
 
 
 def _validate_binary(binary: Path) -> str:

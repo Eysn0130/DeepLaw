@@ -349,6 +349,37 @@ def test_token_arithmetic_and_ledger_mutation_fail_closed() -> None:
         runner.validate_ledger_heads("a" * 64, "b" * 64)
 
 
+def test_ledger_head_binds_knowledge_and_autonomous_audits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[object]] = []
+    heads = iter(("a" * 64, "b" * 64))
+
+    def run(arguments, **kwargs):
+        del kwargs
+        calls.append(arguments)
+        return {
+            "returncode": 0,
+            "stdout": json.dumps({"audit_head": next(heads)}).encode("utf-8"),
+            "stderr": b"",
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_bounded_process", run)
+    observed = runner._ledger_head(
+        tmp_path / "deeplaw",
+        tmp_path / "vault",
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+    )
+    expected = hashlib.sha256(
+        runner._encoded({"autonomous": "b" * 64, "knowledge": "a" * 64})
+    ).hexdigest()
+    assert observed == expected
+    assert [call[2] for call in calls] == ["inspect", "autonomy"]
+
+
 def test_source_forget_receipt_requires_retention_and_withdrawal() -> None:
     receipt = {
         "target_type": "source_revision",
