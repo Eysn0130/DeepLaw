@@ -2325,6 +2325,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             self.connection.execute("PRAGMA journal_mode = WAL")
             self.connection.execute("PRAGMA synchronous = FULL")
         self.read_only = read_only
+        self._windows_acl_refresh_required = False
         self._held_file_leases: dict[str, tuple[str, int]] = {}
         self._legacy_source_state_cache: dict[str, dict[str, dict[str, Any]]] = {}
         self.connection.row_factory = sqlite3.Row
@@ -2366,6 +2367,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
     def close(self) -> None:
         self.connection.close()
+        if self._windows_acl_refresh_required and os.name == "nt":
+            self._windows_acl_refresh_required = False
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(self.root)
 
     @property
     def audit_head(self) -> str:
@@ -2639,6 +2645,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             except BaseException:
                 self.connection.rollback()
                 raise
+        if imported and os.name == "nt":
+            self._windows_acl_refresh_required = True
         return {"source_count": source_count, "new_binding_count": imported}
 
     def enable_grant(
