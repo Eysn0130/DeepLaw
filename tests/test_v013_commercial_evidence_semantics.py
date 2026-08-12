@@ -249,12 +249,16 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
         "tests/contracts",
         "historical persisted data",
     }
-    assert {item["category"] for item in surface_manifest["surfaces"]} == {
-        "Recommended",
-        "Advanced",
+    assert {item["product_role"] for item in surface_manifest["surfaces"]} == {
+        "Core",
+        "Driver",
         "Compatibility",
-        "Experimental",
-        "Retire Candidate",
+        "Experiment",
+    }
+    assert {item["lifecycle"] for item in surface_manifest["surfaces"]} == {
+        "Active",
+        "Hidden",
+        "Deferred",
     }
     assert surface_manifest["deprecation_policy"] == {
         "persistent_contracts_deleted_in_pass10": False,

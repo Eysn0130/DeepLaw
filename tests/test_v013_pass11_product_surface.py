@@ -215,8 +215,27 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         for item in manifest["surfaces"]
         if item["surface_id"] == "default.host_connect"
     )
-    assert host_connect["status"] == "current"
+    assert host_connect["product_role"] == "Driver"
+    assert host_connect["lifecycle"] == "Active"
     assert "deeplaw knowledge host connect" in host_connect["bindings"]
+    assert {item["product_role"] for item in manifest["surfaces"]} <= {
+        "Core",
+        "Driver",
+        "Compatibility",
+        "Experiment",
+    }
+    assert {item["lifecycle"] for item in manifest["surfaces"]} <= {
+        "Active",
+        "Hidden",
+        "Deprecated",
+        "Deferred",
+        "Retired",
+    }
+    assert all(
+        legacy not in item
+        for item in manifest["surfaces"]
+        for legacy in ("category", "disposition", "status")
+    )
     assert {item["caller"] for item in manifest["external_callers"]} == {
         "CLI",
         "knowledge_support",

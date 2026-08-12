@@ -137,38 +137,18 @@
       "additionalProperties": false,
       "required": [
         "surface_id",
-        "category",
-        "disposition",
+        "product_role",
+        "lifecycle",
         "default_highlight",
-        "status",
         "bindings",
         "persistent_contract",
         "rationale"
       ],
       "properties": {
         "surface_id": {"$ref": "#/$defs/identifier"},
-        "category": {
-          "enum": [
-            "Recommended",
-            "Advanced",
-            "Compatibility",
-            "Experimental",
-            "Retire Candidate"
-          ]
-        },
-        "disposition": {"enum": ["Retain", "Merge", "Hide", "Deprecate", "Retire", "Defer"]},
+        "product_role": {"enum": ["Core", "Driver", "Compatibility", "Experiment"]},
+        "lifecycle": {"enum": ["Active", "Hidden", "Deprecated", "Deferred", "Retired"]},
         "default_highlight": {"type": "boolean"},
-        "status": {
-          "enum": [
-            "current",
-            "advanced_current",
-            "compatibility_retained",
-            "integration_limited",
-            "source_candidate",
-            "external_verification_pending",
-            "deprecation_blocked"
-          ]
-        },
         "bindings": {
           "type": "array",
           "minItems": 1,
