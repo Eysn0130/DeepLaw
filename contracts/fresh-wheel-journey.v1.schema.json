@@ -5,13 +5,14 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "commit_sha", "tree_sha", "package_version", "wheel",
+    "schema_version", "commit_sha", "tree_sha", "worktree_clean", "package_version", "wheel",
     "runtime", "journey", "provider", "audit", "write_boundaries", "valid"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.fresh-wheel-journey/v1"},
     "commit_sha": {"$ref": "#/$defs/git_sha"},
     "tree_sha": {"$ref": "#/$defs/git_sha"},
+    "worktree_clean": {"const": true},
     "package_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
     "wheel": {
       "type": "object",

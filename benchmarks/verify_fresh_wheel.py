@@ -134,6 +134,16 @@ def _run(interpreter: Path, *arguments: str) -> dict[str, Any]:
 
 
 def _git_identity(repository: Path) -> tuple[str, str]:
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if status.stdout:
+        raise RuntimeError("fresh-wheel verification requires a clean exact-HEAD worktree")
     values: list[str] = []
     for revision in ("HEAD", "HEAD^{tree}"):
         completed = subprocess.run(
@@ -382,7 +392,11 @@ def _compiled_query_hit(query: dict[str, Any]) -> bool:
     )
 
 
-def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
+def verify_fresh_wheel(
+    dist: Path,
+    *,
+    repository: Path | None = None,
+) -> dict[str, Any]:
     wheels = sorted(dist.glob("deeplaw-*.whl"))
     if len(wheels) != 1 or wheels[0].is_symlink() or not wheels[0].is_file():
         raise RuntimeError("fresh-wheel verification requires exactly one wheel")
@@ -391,7 +405,8 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
     if wheel_match is None:
         raise RuntimeError("fresh-wheel filename is invalid")
     package_version = wheel_match.group(1)
-    commit_sha, tree_sha = _git_identity(dist.resolve().parent)
+    repository_root = (repository or Path.cwd()).expanduser().absolute()
+    commit_sha, tree_sha = _git_identity(repository_root)
     with tempfile.TemporaryDirectory(prefix="deeplaw-wheel-smoke-") as temporary:
         root = Path(temporary)
         environment = root / "venv"
@@ -967,6 +982,7 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
         "schema_version": "deeplaw.fresh-wheel-journey/v1",
         "commit_sha": commit_sha,
         "tree_sha": tree_sha,
+        "worktree_clean": True,
         "package_version": package_version,
         "wheel": {
             "name": wheel.name,
@@ -1070,8 +1086,12 @@ def verify_fresh_wheel(dist: Path) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dist", type=Path, default=Path("dist"))
+    parser.add_argument("--repository", type=Path, default=Path.cwd())
     args = parser.parse_args()
-    result = verify_fresh_wheel(args.dist.expanduser().absolute())
+    result = verify_fresh_wheel(
+        args.dist.expanduser().absolute(),
+        repository=args.repository.expanduser().absolute(),
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     if not result["valid"]:
         raise SystemExit(1)
