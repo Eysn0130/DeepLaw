@@ -282,6 +282,20 @@ def test_retained_artifact_is_scanned_before_exclusive_write(tmp_path: Path) -> 
     assert not blocked.exists()
 
 
+def test_artifact_scan_allows_only_false_security_leak_flags(tmp_path: Path) -> None:
+    write_retained_artifact(
+        tmp_path / "safe-security.json",
+        b'{"authentication_material_retained":false,"secret_leak":false}\n',
+        output_root=tmp_path,
+    )
+    with pytest.raises(EvidenceValidationError, match="credential-bearing"):
+        write_retained_artifact(
+            tmp_path / "unsafe-security.json",
+            b'{"secret_leak":true}\n',
+            output_root=tmp_path,
+        )
+
+
 def _report_run(index: int, scenario: str) -> dict[str, object]:
     methods = {
         "cold_start": ["thread/start"],
