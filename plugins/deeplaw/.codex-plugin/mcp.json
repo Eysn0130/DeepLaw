@@ -1,9 +1,0 @@
-{
-  "deeplaw": {
-    "command": "deeplaw",
-    "args": [
-      "mcp",
-      "--stdio"
-    ]
-  }
-}

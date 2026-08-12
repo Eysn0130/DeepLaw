@@ -229,11 +229,13 @@ def build_host_connect_plan(
         plugin_manifest = {
             "configuration_kind": "codex_plugin_manifest",
             "configuration_format": "json",
-            "merge_target": ".codex-plugin/mcp.json",
+            "merge_target": ".mcp.json",
             "configuration": {
-                "deeplaw-knowledge": {
-                    "command": argv[0],
-                    "args": argv[1:],
+                "mcpServers": {
+                    "deeplaw-knowledge": {
+                        "command": argv[0],
+                        "args": argv[1:],
+                    }
                 }
             },
         }

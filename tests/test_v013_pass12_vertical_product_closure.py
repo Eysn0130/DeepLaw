@@ -276,17 +276,19 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
     assert plan["codex_plugin_manifest"] == {
         "configuration_kind": "codex_plugin_manifest",
         "configuration_format": "json",
-        "merge_target": ".codex-plugin/mcp.json",
+        "merge_target": ".mcp.json",
         "configuration": {
-            "deeplaw-knowledge": {
-                "command": "deeplaw",
-                "args": [
-                    "knowledge",
-                    "mcp",
-                    "--stdio",
-                    "--vault",
-                    str(vault.resolve()),
-                ],
+            "mcpServers": {
+                "deeplaw-knowledge": {
+                    "command": "deeplaw",
+                    "args": [
+                        "knowledge",
+                        "mcp",
+                        "--stdio",
+                        "--vault",
+                        str(vault.resolve()),
+                    ],
+                }
             }
         },
     }

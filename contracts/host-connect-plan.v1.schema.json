@@ -287,13 +287,20 @@
       "properties": {
         "configuration_kind": {"const": "codex_plugin_manifest"},
         "configuration_format": {"const": "json"},
-        "merge_target": {"const": ".codex-plugin/mcp.json"},
+        "merge_target": {"const": ".mcp.json"},
         "configuration": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["deeplaw-knowledge"],
+          "required": ["mcpServers"],
           "properties": {
-            "deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}
+            "mcpServers": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["deeplaw-knowledge"],
+              "properties": {
+                "deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}
+              }
+            }
           }
         }
       }

@@ -17,7 +17,7 @@
     "local-first"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.codex-plugin/mcp.json",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "DeepLaw Knowledge OS",
     "shortDescription": "Compile governed local knowledge into bounded Agent context",

@@ -143,12 +143,37 @@ def _load_plugin_specs(repository: Path) -> tuple[PluginSpec, ...]:
         if relative_root != expected_relative:
             raise HostSmokeError(f"Codex marketplace plugin {name} has an unexpected root")
         source_root = repository / relative_root.removeprefix("./")
+        codex_root = source_root / ".codex-plugin"
+        if codex_root.is_symlink() or not codex_root.is_dir():
+            raise HostSmokeError(f"Codex plugin entry directory is invalid for {name}")
+        if sorted(path.name for path in codex_root.iterdir()) != ["plugin.json"]:
+            raise HostSmokeError(
+                f"Codex plugin entry directory must contain only plugin.json for {name}"
+            )
         manifest = _json_file(
-            source_root / ".codex-plugin" / "plugin.json",
+            codex_root / "plugin.json",
             field=f"Codex plugin manifest {name}",
         )
         if manifest.get("name") != name:
             raise HostSmokeError(f"Codex plugin manifest identity differs for {name}")
+        if manifest.get("mcpServers") != "./.mcp.json":
+            raise HostSmokeError(f"Codex plugin MCP manifest path is invalid for {name}")
+        mcp = _json_file(source_root / ".mcp.json", field=f"Codex MCP config {name}")
+        expected_server = "deeplaw" if name == "deeplaw" else "deeplaw-knowledge"
+        expected_args = (
+            ["mcp", "--stdio"]
+            if name == "deeplaw"
+            else ["knowledge", "mcp", "--stdio"]
+        )
+        if mcp != {
+            "mcpServers": {
+                expected_server: {
+                    "command": "deeplaw",
+                    "args": expected_args,
+                }
+            }
+        }:
+            raise HostSmokeError(f"Codex plugin MCP config is invalid for {name}")
         version = _bounded_text(
             manifest.get("version"),
             field=f"Codex plugin {name} version",

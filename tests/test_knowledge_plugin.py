@@ -20,9 +20,7 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     compatibility_mcp = json.loads(
         (root / ".mcp.json").read_text(encoding="utf-8")
     )
-    codex_mcp = json.loads(
-        (root / ".codex-plugin" / "mcp.json").read_text(encoding="utf-8")
-    )
+    codex_mcp = compatibility_mcp
     claude_mcp = json.loads(
         (root / ".claude-plugin" / "mcp.json").read_text(encoding="utf-8")
     )
@@ -41,15 +39,9 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     assert codex["name"] == claude["name"] == "deeplaw-knowledge-os"
     assert openai["policy"]["allow_implicit_invocation"] is False
     assert compiler_openai["policy"]["allow_implicit_invocation"] is False
-    assert codex["mcpServers"] == "./.codex-plugin/mcp.json"
+    assert codex["mcpServers"] == "./.mcp.json"
     assert claude["mcpServers"] == "./.claude-plugin/mcp.json"
-    assert codex_mcp == {
-        "deeplaw-knowledge": {
-            "command": "deeplaw",
-            "args": ["knowledge", "mcp", "--stdio"],
-        }
-    }
-    assert claude_mcp == compatibility_mcp == {
+    assert codex_mcp == claude_mcp == compatibility_mcp == {
         "mcpServers": {
             "deeplaw-knowledge": {
                 "command": "deeplaw",
@@ -94,6 +86,30 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     assert "Never use shell or\nfilesystem tools to run or bypass" in legal_skill
 
 
+def test_codex_plugins_use_only_plugin_json_and_root_mcp_configuration() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    expected = {
+        "deeplaw": ("deeplaw", ["mcp", "--stdio"]),
+        "deeplaw-knowledge-os": (
+            "deeplaw-knowledge",
+            ["knowledge", "mcp", "--stdio"],
+        ),
+    }
+    for plugin_name, (server_name, arguments) in expected.items():
+        root = repository / "plugins" / plugin_name
+        codex_dir = root / ".codex-plugin"
+        assert sorted(path.name for path in codex_dir.iterdir()) == ["plugin.json"]
+        manifest = json.loads((codex_dir / "plugin.json").read_text(encoding="utf-8"))
+        assert manifest["mcpServers"] == "./.mcp.json"
+        mcp = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
+        assert mcp == {
+            "mcpServers": {
+                server_name: {
+                    "command": "deeplaw",
+                    "args": arguments,
+                }
+            }
+        }
 def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
     repository = Path(__file__).resolve().parents[1]
     codex_marketplace = json.loads(
