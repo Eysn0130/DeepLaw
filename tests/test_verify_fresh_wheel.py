@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
 
 from benchmarks.verify_fresh_wheel import (
     _compiled_query_hit,
-    _resume_failure_diagnostic,
+    _sanitize_diagnostic,
 )
 
 
@@ -63,57 +64,38 @@ def test_compiled_query_hit_fails_closed_on_non_compiled_v6_results(mutate) -> N
     assert _compiled_query_hit(query) is False
 
 
+def test_fresh_wheel_driver_does_not_import_source_package() -> None:
+    driver = Path(__file__).resolve().parents[1] / "benchmarks" / "verify_fresh_wheel.py"
+    tree = ast.parse(driver.read_text(encoding="utf-8"))
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+    }
+    assert not any(name == "deeplaw" or name.startswith("deeplaw.") for name in imported)
+
+
 def test_resume_failure_diagnostic_preserves_cause_without_local_path(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     vault = tmp_path / "private" / "vault"
-
-    class FailingCoordinator:
-        def __init__(self, _: Path) -> None:
-            pass
-
-        def resume(self, **_: object) -> None:
-            raise RuntimeError(f"projection failed below {vault / 'wiki'}")
-
-    monkeypatch.setattr(
-        "benchmarks.verify_fresh_wheel.CompilationCoordinator",
-        FailingCoordinator,
+    diagnostic = _sanitize_diagnostic(
+        f"RuntimeError: projection failed below {vault / 'wiki'}",
+        roots=(vault, vault.parent),
     )
 
-    diagnostic = _resume_failure_diagnostic(
-        vault,
-        grant_id="grant_000000000000000000000000",
-        compilation_run_id="compilationrun_000000000000000000000000",
-    )
-
-    assert diagnostic == "RuntimeError:projection failed below <redacted-path>/wiki"
+    assert diagnostic == "RuntimeError: projection failed below <redacted-path>/wiki"
     assert str(tmp_path) not in diagnostic
 
 
-def test_resume_failure_diagnostic_normalizes_redacted_windows_paths(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_resume_failure_diagnostic_normalizes_redacted_windows_paths() -> None:
     vault = Path("C:/Users/private/vault")
-
-    class FailingCoordinator:
-        def __init__(self, _: Path) -> None:
-            pass
-
-        def resume(self, **_: object) -> None:
-            raise RuntimeError(r"projection failed below C:\Users\private\vault\wiki")
-
-    monkeypatch.setattr(
-        "benchmarks.verify_fresh_wheel.CompilationCoordinator",
-        FailingCoordinator,
+    diagnostic = _sanitize_diagnostic(
+        r"RuntimeError: projection failed below C:\Users\private\vault\wiki",
+        roots=(vault,),
     )
 
-    diagnostic = _resume_failure_diagnostic(
-        vault,
-        grant_id="grant_000000000000000000000000",
-        compilation_run_id="compilationrun_000000000000000000000000",
-    )
-
-    assert diagnostic == "RuntimeError:projection failed below <redacted-path>/wiki"
+    assert diagnostic == "RuntimeError: projection failed below <redacted-path>/wiki"
     assert "\\" not in diagnostic
     assert "C:" not in diagnostic

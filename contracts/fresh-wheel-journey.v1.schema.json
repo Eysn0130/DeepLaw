@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/fresh-wheel-journey.v1.schema.json",
+  "title": "DeepLaw installed-wheel public journey receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "commit_sha", "tree_sha", "package_version", "wheel",
+    "runtime", "journey", "provider", "audit", "write_boundaries", "valid"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.fresh-wheel-journey/v1"},
+    "commit_sha": {"$ref": "#/$defs/git_sha"},
+    "tree_sha": {"$ref": "#/$defs/git_sha"},
+    "package_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "wheel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "size_bytes"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^deeplaw-[^/\\\\]+\\.whl$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version", "contract_digests", "contract_inventory_count",
+        "contract_inventory_sha256", "python_version", "platform", "pythonpath",
+        "import_path_class", "import_file_relative_to_environment", "cwd_class",
+        "executable_used"
+      ],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "contract_digests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "compilation-handoff.v1.schema.json",
+            "fresh-wheel-journey.v1.schema.json",
+            "provider-knowledge-capsule.v2.schema.json",
+            "source-knowledge-status.v1.schema.json"
+          ],
+          "properties": {
+            "compilation-handoff.v1.schema.json": {"$ref": "#/$defs/sha256"},
+            "fresh-wheel-journey.v1.schema.json": {"$ref": "#/$defs/sha256"},
+            "provider-knowledge-capsule.v2.schema.json": {"$ref": "#/$defs/sha256"},
+            "source-knowledge-status.v1.schema.json": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "contract_inventory_count": {"type": "integer", "minimum": 1},
+        "contract_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "platform": {"type": "string", "minLength": 1, "maxLength": 300},
+        "pythonpath": {"const": ""},
+        "import_path_class": {"const": "isolated_site_packages"},
+        "import_file_relative_to_environment": {
+          "type": "string",
+          "pattern": "^(Lib|lib)/.+/site-packages/deeplaw/__init__\\.py$"
+        },
+        "cwd_class": {"const": "external_isolated_runtime"},
+        "executable_used": {"const": true}
+      }
+    },
+    "journey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vault_id", "source_id", "source_revision_id", "doctor_ready",
+        "source_status_before_compile", "honest_gap_codes", "handoff_source_status",
+        "review_receipt_valid", "compiler_profile", "compilation_run_id",
+        "compilation_packet_count", "compilation_validation_valid",
+        "compilation_object_count", "compilation_status", "living_wiki_manifest_sha256",
+        "compiled_query_hit", "wiki_drill_down_valid", "source_drill_down_valid",
+        "snapshot_valid", "knowledge_forget_lifecycle", "forgotten_knowledge_excluded",
+        "final_verification_valid", "https_preflight_valid"
+      ],
+      "properties": {
+        "vault_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "source_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "doctor_ready": {"const": true},
+        "source_status_before_compile": {"$ref": "#/$defs/pre_compile_status"},
+        "honest_gap_codes": {
+          "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+          "contains": {"const": "uncompiled_source"},
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "handoff_source_status": {"const": "compilation_required"},
+        "review_receipt_valid": {"const": true},
+        "compiler_profile": {"const": "living-wiki-agent"},
+        "compilation_run_id": {
+          "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+        },
+        "compilation_packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "compilation_validation_valid": {"const": true},
+        "compilation_object_count": {"type": "integer", "minimum": 1},
+        "compilation_status": {"const": "succeeded"},
+        "living_wiki_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "compiled_query_hit": {"const": true},
+        "wiki_drill_down_valid": {"const": true},
+        "source_drill_down_valid": {"const": true},
+        "snapshot_valid": {"const": true},
+        "knowledge_forget_lifecycle": {"const": "forgotten"},
+        "forgotten_knowledge_excluded": {"const": true},
+        "final_verification_valid": {"const": true},
+        "https_preflight_valid": {"const": true}
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capsule_id", "capsule_valid", "provider_bytes", "provider_content_sha256",
+        "delivery_bytes_match", "receipt_excluded_from_provider_content"
+      ],
+      "properties": {
+        "capsule_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "capsule_valid": {"const": true},
+        "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "provider_content_sha256": {"$ref": "#/$defs/sha256"},
+        "delivery_bytes_match": {"const": true},
+        "receipt_excluded_from_provider_content": {"const": true}
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "changed_for_explicit_writes"],
+      "properties": {
+        "before": {"$ref": "#/$defs/sha256"},
+        "after": {"$ref": "#/$defs/sha256"},
+        "changed_for_explicit_writes": {"const": true}
+      }
+    },
+    "write_boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read_leaf", "write_leaf", "grant_required", "hidden_read_write",
+        "explicit_owner_writes"
+      ],
+      "properties": {
+        "read_leaf": {"const": "knowledge_support"},
+        "write_leaf": {"const": "knowledge_sink"},
+        "grant_required": {"const": true},
+        "hidden_read_write": {"const": false},
+        "explicit_owner_writes": {
+          "const": [
+            "init", "source_add", "source_review", "sink_grant_enable",
+            "semantic_compile", "snapshot_create", "knowledge_forget"
+          ]
+        }
+      }
+    },
+    "valid": {"const": true}
+  },
+  "$defs": {
+    "git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pre_compile_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state", "source_registered", "compilation_required", "compiled",
+        "canonical_knowledge_committed", "canonical_knowledge_admissible",
+        "wiki_projection_status", "wiki_projection_pending", "wiki_projection_ready"
+      ],
+      "properties": {
+        "state": {"const": "compilation_required"},
+        "source_registered": {"const": true},
+        "compilation_required": {"const": true},
+        "compiled": {"const": false},
+        "canonical_knowledge_committed": {"const": false},
+        "canonical_knowledge_admissible": {"const": false},
+        "wiki_projection_status": {"const": "not_started"},
+        "wiki_projection_pending": {"const": false},
+        "wiki_projection_ready": {"const": false}
+      }
+    }
+  }
+}
