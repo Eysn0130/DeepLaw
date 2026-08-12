@@ -1439,6 +1439,21 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
                     "max_chars": 8_000,
                 },
             )
+            provider_context = await session.call_tool(
+                "knowledge_support",
+                {
+                    "operation": "context",
+                    "task": "Inspect the bounded provider transport projection.",
+                    "confirm_no_case_data": True,
+                    "purpose": "answer",
+                    "limit": 2,
+                    "max_chars": 1_000,
+                    "max_tokens": 256,
+                    "max_sources": 1,
+                    "graph_hops": 0,
+                    "capsule_projection": "compact",
+                },
+            )
             editor = await session.call_tool(
                 "knowledge_support",
                 {
@@ -1481,6 +1496,16 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
             assert purpose_context.structuredContent["result"]["query_plan"]["policy_id"] == (
                 "evidence-first-v1"
             )
+            assert provider_context.isError is False
+            provider = provider_context.structuredContent["result"]
+            provider_text = canonical_json(provider["capsule"])
+            assert [item.text for item in provider_context.content] == [provider_text]
+            assert len(provider_text.encode("utf-8")) == provider["delivery"][
+                "provider_content_bytes"
+            ]
+            assert '"authority_boundary"' not in provider_text
+            assert '"receipt":' not in provider_text
+            assert '"delivery"' not in provider_text
             assert editor.isError is False
             assert editor.structuredContent["result"]["ephemeral_context"] is True
             assert editor.structuredContent["result"]["persistence_performed"] is False

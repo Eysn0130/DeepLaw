@@ -467,6 +467,13 @@ Python/CLI retain local Capsule v2, and MCP retains output/v3 with Capsule v2/Qu
 semantics. The legacy `deeplaw recall` command remains the `retrieval_fabric` path and is not a v6
 Context alias. Ordinary query/context calls are read-only and never append the Canonical Ledger.
 
+For v6 `query` and `context`, the MCP unstructured `content` text is exactly the canonical JSON of
+the nested Provider Capsule projection counted by `delivery.provider_content_bytes`. The validated
+`structuredContent` retains the complete local output contract for Host/application inspection;
+its outer Authority boundary, delivery record, and receipt wrapper are not duplicated into the
+Provider text block. Host observations must hash and count the actual `content` text rather than
+substituting the larger structured result or a locally reconstructed payload.
+
 `deeplaw knowledge context` is the single recommended Agent entry. `knowledge query` remains an
 owner/operator diagnostic surface; `deeplaw recall`, `knowledge recall`, and autonomy aliases stay
 compatibility or operator surfaces pending a consumer inventory. Working checkpoints are routed

@@ -3367,7 +3367,7 @@ def create_knowledge_mcp_server(
         return [definition]
 
     @server.call_tool(validate_input=True)
-    async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def call_tool(name: str, arguments: dict[str, Any]) -> Any:
         if name != "knowledge_support":
             raise ValueError("unknown DeepLaw knowledge tool")
         runtime = server.request_context.lifespan_context
@@ -3448,7 +3448,7 @@ def create_knowledge_mcp_server(
                             ):
                                 cached = None
                     if cached is not None:
-                        return cached
+                        return _knowledge_mcp_transport_result(cached)
                 response = handle_knowledge_support(
                     operation=operation,
                     query=str(arguments.get("query", "")),
@@ -3538,11 +3538,46 @@ def create_knowledge_mcp_server(
                         operation=operation,
                         max_sensitivity=str(arguments.get("max_sensitivity", "private")),
                     )
-                return response
+                return _knowledge_mcp_transport_result(response)
             except Exception as error:
                 raise provider_safe_exception(error, interface="knowledge_support") from None
 
     return server
+
+
+def _knowledge_mcp_transport_result(response: dict[str, Any]) -> Any:
+    """Keep local structured output separate from exact provider-visible content.
+
+    Query Plan v6 already defines the canonical inner Capsule as the bounded
+    provider surface.  Returning the outer response as a bare mapping makes the
+    MCP SDK synthesize a pretty-printed text block that also contains local
+    authority, receipt, and delivery metadata.  Supply both channels
+    explicitly so Hosts receive the exact canonical Capsule text while local
+    clients retain the schema-validated structured response.
+    """
+
+    if (
+        response.get("schema_version") == "deeplaw.knowledge-support-output/v6"
+        and response.get("operation") in {"query", "context"}
+    ):
+        provider = response.get("result")
+        if not isinstance(provider, dict) or provider.get("schema_version") != (
+            "deeplaw.provider-knowledge-capsule/v2"
+        ):
+            raise RuntimeError("Query Plan v6 MCP provider projection is invalid")
+        capsule = provider.get("capsule")
+        delivery = provider.get("delivery")
+        if not isinstance(capsule, dict) or not isinstance(delivery, dict):
+            raise RuntimeError("Query Plan v6 MCP provider delivery is invalid")
+        provider_text = canonical_json(capsule)
+        provider_bytes = len(provider_text.encode("utf-8"))
+        if (
+            provider_bytes != delivery.get("provider_content_bytes")
+            or provider_bytes > _MAX_MCP_OUTPUT_CHARS
+        ):
+            raise RuntimeError("Query Plan v6 MCP provider byte accounting is invalid")
+        return [types.TextContent(type="text", text=provider_text)], response
+    return response
 
 
 def run_knowledge_mcp(
