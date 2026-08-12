@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deeplaw.dev/contracts/knowledge-support.input.v6.schema.json",
   "title": "DeepLaw Knowledge Support Input v6",
+  "type": "object",
   "oneOf": [
     {"$ref": "knowledge-support.input.v5.schema.json"},
     {

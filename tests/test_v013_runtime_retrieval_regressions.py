@@ -208,6 +208,7 @@ def test_v6_tool_contract_and_instructions_recommend_one_read_path(
     root = _synthetic_vault(tmp_path)
     tool = knowledge_tool_definition(autonomous=True)
     assert tool.inputSchema["$id"].endswith("knowledge-support.input.v6.schema.json")
+    assert tool.inputSchema["type"] == "object"
     query = {
         "operation": "query",
         "query": "bounded task knowledge",
