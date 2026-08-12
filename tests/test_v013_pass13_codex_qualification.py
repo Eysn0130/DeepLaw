@@ -343,6 +343,13 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
     with pytest.raises(qualification.QualificationFailure, match="prohibited capability"):
         qualification._turn_record(result, **kwargs)
 
+    result["events"] = [
+        {"method": "item/agentMessage/delta", "item_type": "disallowed"},
+        {"method": "item/reasoning/delta", "item_type": "disallowed"},
+    ]
+    record, _ = qualification._turn_record(result, **kwargs)
+    assert record["status"] == "passed"
+
     result["events"] = []
     result["final_text"] = json.dumps(
         {

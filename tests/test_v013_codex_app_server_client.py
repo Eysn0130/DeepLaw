@@ -176,6 +176,36 @@ def _fake_server(
                             },
                         },
                     })
+                if MODE == "mcp-failed":
+                    send({
+                        "method": "item/completed",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turnId": "turn-1",
+                            "item": {
+                                "type": "mcpToolCall",
+                                "id": "mcp-failed-1",
+                                "server": "deeplaw",
+                                "tool": "knowledge_support",
+                                "arguments": {
+                                    "operation": "context",
+                                    "task": "/tmp/private-task",
+                                    "confirm_no_case_data": True,
+                                    "query_plan_version": "6",
+                                },
+                                "status": "failed",
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": (
+                                            "Input schema validation error at "
+                                            "/tmp/private-task"
+                                        ),
+                                    }],
+                                },
+                            },
+                        },
+                    })
                 if MODE == "mcp-multi":
                     for call_id, tool_name, query in (
                         ("mcp-1", "knowledge_support", "/tmp/tool-args-one"),
@@ -402,6 +432,26 @@ def test_mcp_tool_observations_are_per_call_and_safe(tmp_path: Path) -> None:
         assert "/tmp/tool-args" not in rendered
         observations[0]["tool_name"] = "mutated"
         assert result.tool_call_observations[0]["tool_name"] == "knowledge_support"
+
+
+def test_failed_mcp_tool_retains_only_safe_argument_and_error_scalars(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="mcp-failed")
+    with client:
+        client.initialize()
+        client.thread_start()
+        result = client.turn_start("thread-1", "hello")
+        assert len(result.tool_call_observations) == 1
+        observation = result.tool_call_observations[0]
+        assert observation["status"] == "failed"
+        assert observation["argument_operation"] == "context"
+        assert observation["argument_task_present"] is True
+        assert observation["argument_task_bytes"] == len(b"/tmp/private-task")
+        assert observation["argument_confirm_no_case_data"] is True
+        assert observation["argument_query_plan_version"] == "6"
+        assert observation["argument_field_count"] == 4
+        assert observation["error_class"] == "input_schema_invalid"
+        assert "/tmp/private-task" not in repr(observation)
+        assert "validation error" not in repr(observation).casefold()
 
 
 def test_resume_fork_and_compact_use_exact_v2_methods(tmp_path: Path) -> None:

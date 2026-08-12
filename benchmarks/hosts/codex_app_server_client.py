@@ -188,6 +188,48 @@ def _safe_label(value: Any) -> str | None:
     return value
 
 
+def _classify_tool_error(value: Any) -> str:
+    """Reduce a tool failure to a closed label without retaining its text."""
+
+    strings: list[str] = []
+
+    def collect(candidate: Any) -> None:
+        if isinstance(candidate, str):
+            strings.append(candidate.casefold())
+        elif isinstance(candidate, Mapping):
+            for item in candidate.values():
+                collect(item)
+        elif isinstance(candidate, Sequence) and not isinstance(
+            candidate, (str, bytes, bytearray)
+        ):
+            for item in candidate:
+                collect(item)
+
+    collect(value)
+    combined = "\n".join(strings)
+    if any(label in combined for label in ("task_binding", "task binding")):
+        return "task_binding_invalid"
+    if any(
+        label in combined
+        for label in (
+            "validation error",
+            "failed validating",
+            "invalid arguments",
+            "invalid input",
+            "input schema",
+            "not valid under any",
+        )
+    ):
+        return "input_schema_invalid"
+    if any(label in combined for label in ("timed out", "timeout")):
+        return "timeout"
+    if any(label in combined for label in ("permission denied", "access denied")):
+        return "policy_denied"
+    if any(label in combined for label in ("vault is not initialized", "vault unavailable")):
+        return "vault_unavailable"
+    return "tool_error"
+
+
 def _thread_or_turn_id(params: Mapping[str, Any], *keys: str) -> str | None:
     value = _find_value(params, *keys)
     if isinstance(value, str) and value:
@@ -1268,9 +1310,19 @@ class CodexAppServerClient:
                 operation = _safe_label(arguments.get("operation"))
                 if operation is not None:
                     observation["argument_operation"] = operation
+                task = arguments.get("task")
+                observation["argument_task_present"] = isinstance(task, str) and bool(
+                    task.strip()
+                )
+                if isinstance(task, str):
+                    observation["argument_task_bytes"] = len(task.encode("utf-8"))
                 observation["argument_confirm_no_case_data"] = (
                     arguments.get("confirm_no_case_data") is True
                 )
+                query_plan_version = _safe_label(arguments.get("query_plan_version"))
+                if query_plan_version is not None:
+                    observation["argument_query_plan_version"] = query_plan_version
+                observation["argument_field_count"] = len(arguments)
                 task_binding = arguments.get("task_binding")
                 if isinstance(task_binding, Mapping):
                     task_digest, _ = _hash_record(task_binding)
@@ -1285,6 +1337,8 @@ class CodexAppServerClient:
             digest, size = _hash_record(structured_content)
             observation["structured_content_sha256"] = digest
             observation["structured_content_bytes"] = size
+        if status == "failed":
+            observation["error_class"] = _classify_tool_error(result)
         return observation
 
     @classmethod

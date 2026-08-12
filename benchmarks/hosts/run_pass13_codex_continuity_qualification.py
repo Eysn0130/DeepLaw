@@ -920,8 +920,7 @@ def _turn_record(
         method = str(event.get("method", "")).casefold()
         tool_name = event.get("tool_name")
         if (
-            event.get("item_type") == "disallowed"
-            or (isinstance(tool_name, str) and tool_name != "knowledge_support")
+            (isinstance(tool_name, str) and tool_name != "knowledge_support")
             or any(
                 label in method
                 for label in ("web_search", "websearch", "shell", "command", "browser", "computer")
