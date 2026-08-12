@@ -14,7 +14,8 @@
     }
   },
   "permission": {
-    "deeplaw_knowledge_*": "deny",
+    "*": "deny",
+    "deeplaw_knowledge_knowledge_support": "allow",
     "skill": {
       "deeplaw-query": "deny",
       "deeplaw-navigate-wiki": "deny",

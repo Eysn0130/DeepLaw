@@ -17,7 +17,7 @@
     "version-aware"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.codex-plugin/mcp.json",
   "interface": {
     "displayName": "DeepLaw 2.0",
     "shortDescription": "Verify Chinese legal sources, versions, and citations",

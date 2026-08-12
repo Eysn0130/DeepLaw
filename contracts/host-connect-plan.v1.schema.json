@@ -9,7 +9,12 @@
     "host",
     "server_leaf",
     "read_only",
+    "configuration_kind",
+    "configuration_format",
+    "merge_targets",
     "configuration",
+    "equivalent_command",
+    "verification_command",
     "preflight",
     "context_preflight",
     "merge_required",
@@ -23,12 +28,31 @@
     "host": {"enum": ["codex", "claude-code", "opencode"]},
     "server_leaf": {"const": "knowledge_support"},
     "read_only": {"const": true},
+    "configuration_kind": {
+      "enum": [
+        "codex_direct_config",
+        "claude_code_project_config",
+        "opencode_project_config"
+      ]
+    },
+    "configuration_format": {"enum": ["toml", "json", "jsonc"]},
+    "merge_targets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
     "configuration": {
       "oneOf": [
-        {"$ref": "#/$defs/codexClaudeConfiguration"},
+        {"$ref": "#/$defs/codexConfiguration"},
+        {"$ref": "#/$defs/claudeConfiguration"},
         {"$ref": "#/$defs/openCodeConfiguration"}
       ]
     },
+    "equivalent_command": {"$ref": "#/$defs/command"},
+    "verification_command": {"$ref": "#/$defs/command"},
+    "codex_plugin_manifest": {"$ref": "#/$defs/codexPluginManifest"},
     "preflight": {
       "type": "object",
       "additionalProperties": false,
@@ -61,7 +85,12 @@
         "gap_codes",
         "provider_payload_bytes",
         "write_performed",
-        "audit_head_unchanged"
+        "audit_head_unchanged",
+        "attestation_scope",
+        "future_task_attested",
+        "real_host_observed",
+        "real_mcp_registration_observed",
+        "caller_confirmation_required_for_future_context"
       ],
       "properties": {
         "status": {
@@ -77,7 +106,12 @@
           "type": "integer", "minimum": 0, "maximum": 65536
         },
         "write_performed": {"const": false},
-        "audit_head_unchanged": {"const": true}
+        "audit_head_unchanged": {"const": true},
+        "attestation_scope": {"const": "fixed_internal_health_probe_only"},
+        "future_task_attested": {"const": false},
+        "real_host_observed": {"const": false},
+        "real_mcp_registration_observed": {"const": false},
+        "caller_confirmation_required_for_future_context": {"const": true}
       }
     },
     "merge_required": {"const": true},
@@ -86,8 +120,59 @@
     "install_performed": {"const": false},
     "write_performed": {"const": false}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"host": {"const": "codex"}}},
+      "then": {
+        "required": ["codex_plugin_manifest"],
+        "properties": {
+          "configuration_kind": {"const": "codex_direct_config"},
+          "configuration_format": {"const": "toml"},
+          "merge_targets": {
+            "const": ["~/.codex/config.toml", ".codex/config.toml"]
+          },
+          "configuration": {"$ref": "#/$defs/codexConfiguration"},
+          "equivalent_command": {"$ref": "#/$defs/codexAddCommand"},
+          "verification_command": {"const": ["codex", "mcp", "list"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"host": {"const": "claude-code"}}},
+      "then": {
+        "properties": {
+          "configuration_kind": {"const": "claude_code_project_config"},
+          "configuration_format": {"const": "json"},
+          "merge_targets": {"const": [".mcp.json"]},
+          "configuration": {"$ref": "#/$defs/claudeConfiguration"},
+          "equivalent_command": {"$ref": "#/$defs/claudeAddCommand"},
+          "verification_command": {"const": ["claude", "mcp", "list"]}
+        },
+        "not": {"required": ["codex_plugin_manifest"]}
+      }
+    },
+    {
+      "if": {"properties": {"host": {"const": "opencode"}}},
+      "then": {
+        "properties": {
+          "configuration_kind": {"const": "opencode_project_config"},
+          "configuration_format": {"const": "jsonc"},
+          "merge_targets": {"const": ["opencode.json", "opencode.jsonc"]},
+          "configuration": {"$ref": "#/$defs/openCodeConfiguration"},
+          "equivalent_command": {"const": []},
+          "verification_command": {"const": ["opencode", "mcp", "list"]}
+        },
+        "not": {"required": ["codex_plugin_manifest"]}
+      }
+    }
+  ],
   "$defs": {
     "argument": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "command": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/argument"}
+    },
     "stdioArguments": {
       "type": "array",
       "minItems": 5,
@@ -115,7 +200,22 @@
       ],
       "items": false
     },
-    "codexClaudeConfiguration": {
+    "codexConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp_servers"],
+      "properties": {
+        "mcp_servers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw-knowledge"],
+          "properties": {
+            "deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}
+          }
+        }
+      }
+    },
+    "claudeConfiguration": {
       "type": "object",
       "additionalProperties": false,
       "required": ["mcpServers"],
@@ -126,13 +226,7 @@
           "required": ["deeplaw-knowledge"],
           "properties": {
             "deeplaw-knowledge": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["command", "args"],
-              "properties": {
-                "command": {"const": "deeplaw"},
-                "args": {"$ref": "#/$defs/stdioArguments"}
-              }
+              "$ref": "#/$defs/stdioServer"
             }
           }
         }
@@ -164,16 +258,85 @@
         "permission": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "deeplaw_knowledge_*",
-            "deeplaw_knowledge_knowledge_support"
-          ],
+          "required": ["*", "deeplaw_knowledge_knowledge_support"],
           "properties": {
-            "deeplaw_knowledge_*": {"const": "deny"},
+            "*": {"const": "deny"},
             "deeplaw_knowledge_knowledge_support": {"const": "allow"}
           }
         }
       }
+    },
+    "stdioServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "args"],
+      "properties": {
+        "command": {"const": "deeplaw"},
+        "args": {"$ref": "#/$defs/stdioArguments"}
+      }
+    },
+    "codexPluginManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configuration_kind",
+        "configuration_format",
+        "merge_target",
+        "configuration"
+      ],
+      "properties": {
+        "configuration_kind": {"const": "codex_plugin_manifest"},
+        "configuration_format": {"const": "json"},
+        "merge_target": {"const": ".codex-plugin/mcp.json"},
+        "configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw-knowledge"],
+          "properties": {
+            "deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}
+          }
+        }
+      }
+    },
+    "codexAddCommand": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {"const": "codex"},
+        {"const": "mcp"},
+        {"const": "add"},
+        {"const": "deeplaw-knowledge"},
+        {"const": "--"},
+        {"const": "deeplaw"},
+        {"const": "knowledge"},
+        {"const": "mcp"},
+        {"const": "--stdio"},
+        {"const": "--vault"},
+        {"$ref": "#/$defs/argument"}
+      ],
+      "items": false
+    },
+    "claudeAddCommand": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "prefixItems": [
+        {"const": "claude"},
+        {"const": "mcp"},
+        {"const": "add"},
+        {"const": "--transport"},
+        {"const": "stdio"},
+        {"const": "deeplaw-knowledge"},
+        {"const": "--"},
+        {"const": "deeplaw"},
+        {"const": "knowledge"},
+        {"const": "mcp"},
+        {"const": "--stdio"},
+        {"const": "--vault"},
+        {"$ref": "#/$defs/argument"}
+      ],
+      "items": false
     }
   }
 }

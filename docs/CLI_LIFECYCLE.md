@@ -139,7 +139,12 @@ The root `add` route and nested `knowledge source add` route use the same auto-a
 registration service. A successful receipt includes `source_knowledge_status` with stable Source
 Revision IDs and one primary state: `compilation_required`, `compiled`, `stale_or_blocked`, or
 `gap`. `source_registered` is reported separately. Registration never promotes an uncompiled
-Source into authoritative Knowledge.
+Source into authoritative Knowledge. The compatibility `compiled` state means canonical Knowledge
+has committed and remains admissible; it does not imply that the derived Living Wiki is ready.
+`canonical_knowledge_committed`, `canonical_knowledge_admissible`, and the independent
+`wiki_projection_status`/`wiki_projection_pending`/`wiki_projection_ready` fields expose that
+distinction. A `projection_pending` Run therefore remains compiled and admissible while explicitly
+reporting that the Wiki projection still needs a bounded retry.
 
 Default Query Plan v6 remains callable when only Source Revisions exist. It returns a schema-valid,
 bounded `uncompiled_source` Gap instead of raising or silently falling back to v5. The owner can
@@ -375,7 +380,10 @@ relations while retaining verifiable audit history. Target selectors are mutuall
 never inferred from filenames or titles. Autonomous Knowledge reuse the existing Grant,
 idempotency, CAS, revision, Ledger, projection, and GC coordinator; forgetting Knowledge does not
 delete its protected Source evidence. Source Revision forgetting is a separate lifecycle action
-that removes current admission while retaining immutable stored bytes and audit history.
+that removes current retrieval/admission while retaining immutable stored bytes and audit history.
+Its receipt states `original_bytes_retained=true`, `history_retained=true`,
+`audit_history_retained=true`, and `bytes_deleted=false`; this lifecycle withdrawal is not an
+irrecoverable byte erasure.
 
 ## 10. Legacy migration and rollback
 

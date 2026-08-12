@@ -17,7 +17,15 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     claude = json.loads(
         (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
     )
-    mcp = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
+    compatibility_mcp = json.loads(
+        (root / ".mcp.json").read_text(encoding="utf-8")
+    )
+    codex_mcp = json.loads(
+        (root / ".codex-plugin" / "mcp.json").read_text(encoding="utf-8")
+    )
+    claude_mcp = json.loads(
+        (root / ".claude-plugin" / "mcp.json").read_text(encoding="utf-8")
+    )
     openai = yaml.safe_load(
         (
             root / "skills" / "use-knowledge-assets" / "agents" / "openai.yaml"
@@ -33,7 +41,15 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     assert codex["name"] == claude["name"] == "deeplaw-knowledge-os"
     assert openai["policy"]["allow_implicit_invocation"] is False
     assert compiler_openai["policy"]["allow_implicit_invocation"] is False
-    assert mcp == {
+    assert codex["mcpServers"] == "./.codex-plugin/mcp.json"
+    assert claude["mcpServers"] == "./.claude-plugin/mcp.json"
+    assert codex_mcp == {
+        "deeplaw-knowledge": {
+            "command": "deeplaw",
+            "args": ["knowledge", "mcp", "--stdio"],
+        }
+    }
+    assert claude_mcp == compatibility_mcp == {
         "mcpServers": {
             "deeplaw-knowledge": {
                 "command": "deeplaw",
@@ -42,7 +58,13 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
         }
     }
     serialized = json.dumps(
-        {"codex": codex, "claude": claude, "mcp": mcp},
+        {
+            "codex": codex,
+            "claude": claude,
+            "codex_mcp": codex_mcp,
+            "claude_mcp": claude_mcp,
+            "compatibility_mcp": compatibility_mcp,
+        },
         sort_keys=True,
     ).lower()
     assert '"law_support"' not in serialized
@@ -109,7 +131,8 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
     agent = (
         repository / "adapters" / "opencode" / "agents" / "deeplaw-knowledge.md"
     ).read_text(encoding="utf-8")
-    assert '"deeplaw_knowledge_*": "deny"' in config
+    assert '"*": "deny"' in config
+    assert '"deeplaw_knowledge_knowledge_support": "allow"' in config
     assert "deeplaw_knowledge_knowledge_support: allow" in agent
     assert "deeplaw_law_support" not in agent
     assert "mode: subagent" in agent

@@ -5,7 +5,10 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "source_revision_id", "source_status", "compiler_profile",
+    "schema_version", "source_revision_id", "source_status",
+    "canonical_knowledge_committed", "canonical_knowledge_admissible",
+    "wiki_projection_status", "wiki_projection_pending", "wiki_projection_ready",
+    "compiler_profile",
     "boundaries", "sink_operations", "steps", "recommended_skill",
     "compatibility_skill", "audit_head", "write_performed"
   ],
@@ -17,6 +20,13 @@
     "source_status": {
       "enum": ["compilation_required", "compiled", "stale_or_blocked"]
     },
+    "canonical_knowledge_committed": {"type": "boolean"},
+    "canonical_knowledge_admissible": {"type": "boolean"},
+    "wiki_projection_status": {
+      "enum": ["not_started", "pending", "ready", "blocked"]
+    },
+    "wiki_projection_pending": {"type": "boolean"},
+    "wiki_projection_ready": {"type": "boolean"},
     "compiler_profile": {
       "type": "object",
       "additionalProperties": false,

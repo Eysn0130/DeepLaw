@@ -46,6 +46,21 @@ def build_compilation_handoff(
         audit_head = store.audit_head
 
     run_states = {str(row["status"]) for row in runs}
+    latest_run_status = str(runs[-1]["status"]) if runs else None
+    canonical_knowledge_committed = bool(run_states & _SUCCESSFUL_STATES)
+    canonical_knowledge_admissible = bool(
+        canonical_knowledge_committed
+        and source["lifecycle_status"] in {"active", "pending"}
+    )
+    wiki_projection_status = (
+        "ready"
+        if latest_run_status == "succeeded"
+        else (
+            "pending"
+            if latest_run_status in {"committed", "projection_pending"}
+            else ("blocked" if latest_run_status in _BLOCKED_STATES else "not_started")
+        )
+    )
     if source["lifecycle_status"] not in {"active", "pending"} or (
         run_states and run_states <= _BLOCKED_STATES
     ):
@@ -82,6 +97,11 @@ def build_compilation_handoff(
         "schema_version": "deeplaw.compilation-handoff/v1",
         "source_revision_id": source_revision_id,
         "source_status": source_status,
+        "canonical_knowledge_committed": canonical_knowledge_committed,
+        "canonical_knowledge_admissible": canonical_knowledge_admissible,
+        "wiki_projection_status": wiki_projection_status,
+        "wiki_projection_pending": wiki_projection_status == "pending",
+        "wiki_projection_ready": wiki_projection_status == "ready",
         "compiler_profile": {
             "compiler_profile": profile["compiler_profile"],
             "compiler_profile_version": profile["compiler_profile_version"],

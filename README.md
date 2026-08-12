@@ -91,10 +91,16 @@ Pass 11 最终 executed/failed/not-executed 与 artifact 决策见
 uv run deeplaw knowledge host connect --host codex --vault ./vault
 ```
 
-`--host` 也接受 `claude-code` 或 `opencode`。命令只输出需要人工合并的
-`knowledge_support` 配置，不安装或修改 Host，不管理认证或 Host runtime，也不启用
+`--host` 也接受 `claude-code` 或 `opencode`。Codex direct plan 输出 TOML
+`mcp_servers`（目标为 `~/.codex/config.toml` 或 trusted-project `.codex/config.toml`），并给出等价
+`codex mcp add ...` 与 `codex mcp list`；Codex plugin 的 JSON manifest 以独立
+`codex_plugin_manifest` 标识。Claude Code 使用 `mcpServers` JSON；OpenCode 使用
+`opencode.json/jsonc` local command array，并默认 deny、只允许精确 read leaf。命令只输出需要人工
+合并的 `knowledge_support` 配置，不安装或修改 Host，不管理认证或 Host runtime，也不启用
 `knowledge_sink`。计划分别报告 core/canonical、read seam、compiled Knowledge 与 source-only
-honest Gap；read seam 不可调用时不会报告 ready。输出含 owner 选择的本地 Vault 路径，因此不能
+honest Gap；read seam 不可调用时不会报告 ready。内部 preflight 仅证明其固定、无模型、无写入健康
+任务，不证明未来用户 task/goal、真实 Host 或 MCP registration；后续 caller 请求仍必须显式
+`confirm_no_case_data`。输出含 owner 选择的本地 Vault 路径，因此不能
 直接放入 Provider Capsule、
 benchmark receipt 或公开 support bundle。
 

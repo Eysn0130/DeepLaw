@@ -63,7 +63,11 @@ resolve that mapping and otherwise fall back to the previous one-digest/one-file
 member hashes are both verified; paths and ordinals never become semantic identity.
 
 Projection failure cannot undo canonical knowledge. It leaves the Run at `projection_pending`;
-`resume --project` retries deterministic materialization and verification.
+`resume --project` retries deterministic materialization and verification. User-facing Source
+status therefore reports canonical commit/admission independently from Wiki projection readiness:
+`projection_pending` remains canonically compiled and admissible, but
+`wiki_projection_pending=true` and `wiki_projection_ready=false`. Only `succeeded` reports the Wiki
+projection ready.
 
 ## Plan and identity rules
 

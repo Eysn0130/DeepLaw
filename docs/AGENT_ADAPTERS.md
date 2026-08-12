@@ -372,15 +372,31 @@ deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
 The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
-core installed. It also executes one bounded, no-write, no-model Context call and verifies that
-the audit head is unchanged. The plan distinguishes compiled Knowledge, a source-only honest Gap,
-and an empty honest Gap; an uncallable read seam is blocked rather than reported ready. It then
-validates and prints a
+core installed. It also executes one fixed, bounded, no-write, no-model Context health probe and
+verifies that the audit head is unchanged. That attestation covers only the fixed internal probe;
+it does not attest a future user task or goal, a real Host launch, or MCP registration. Every later
+caller-supplied Context/ingestion/mutation request still requires its own explicit
+`confirm_no_case_data` confirmation. The plan distinguishes compiled Knowledge, a source-only
+honest Gap, and an empty honest Gap; an uncallable read seam is blocked rather than reported ready.
+It then validates and prints a
 [`host-connect-plan/v1`](../contracts/host-connect-plan.v1.schema.json) document containing only a
-`knowledge_support` stdio configuration. `merge_required=true`: DeepLaw does not write Host
+`knowledge_support` stdio configuration. Codex direct setup is represented as TOML for either
+`~/.codex/config.toml` or trusted-project `.codex/config.toml`, together with the equivalent
+`codex mcp add ...` command and `codex mcp list` verification command. The separately named
+`codex_plugin_manifest` is JSON for the plugin's `.codex-plugin/mcp.json`; it is not Codex direct
+configuration. Claude Code receives its actual `mcpServers` JSON shape. OpenCode receives a local
+MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the exact read leaf allow.
+`merge_required=true`: DeepLaw does not write Host
 configuration, install a Host, manage Host authentication or runtime state, or enable the separate
-`knowledge_sink` process. The OpenCode plan denies the wildcard DeepLaw namespace and allows only
-the exact read-only leaf.
+`knowledge_sink` process.
+
+Owner-side direct verification remains explicit:
+
+```bash
+codex mcp list
+claude mcp list
+opencode mcp list
+```
 
 This is an owner-side setup artifact, not provider-visible context. The plan necessarily contains
 the owner-selected local Vault path. Qualification receipts, Provider Capsules, logs, screenshots,
@@ -393,7 +409,7 @@ that binds the existing compiler profile and the public
 `knowledge_support`/separate `knowledge_sink` saga. It does not include a Grant, call a model, merge
 read and write leaves, or add another coordinator.
 
-Codex development install:
+Codex plugin development install uses the independent `.codex-plugin/mcp.json` manifest:
 
 ```bash
 codex plugin marketplace add /absolute/path/to/DeepLaw

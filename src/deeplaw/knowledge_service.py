@@ -117,13 +117,17 @@ def source_knowledge_status(
         for row in run_rows
         if row["status"] in _SUCCESSFUL_COMPILATION_STATES
     ]
-    latest_by_source: dict[str, str] = {}
+    latest_by_source: dict[str, tuple[str, str]] = {}
     for row in run_rows:
-        latest_by_source[str(row["source_revision_id"])] = str(row["status"])
+        latest_by_source[str(row["source_revision_id"])] = (
+            str(row["compilation_run_id"]),
+            str(row["status"]),
+        )
     registered = bool(lifecycle_rows) and len(lifecycle_rows) == len(selected_revision_ids)
     lifecycle_blocked = any(row["status"] not in {"active", "pending"} for row in lifecycle_rows)
     compilation_blocked = any(
-        status in _BLOCKED_COMPILATION_STATES for status in latest_by_source.values()
+        status in _BLOCKED_COMPILATION_STATES
+        for _, status in latest_by_source.values()
     )
     compiled_revisions = {
         str(row["source_revision_id"])
@@ -134,6 +138,43 @@ def source_knowledge_status(
     stale_or_blocked = lifecycle_blocked or compilation_blocked
     compilation_required = registered and not compiled and not stale_or_blocked
     gap = not registered or (not compiled and not compilation_required and not stale_or_blocked)
+    canonical_knowledge_committed = compiled
+    canonical_knowledge_admissible = compiled and not lifecycle_blocked
+    latest_statuses = [
+        latest_by_source[source_revision_id][1]
+        for source_revision_id in sorted(selected_revision_ids)
+        if source_revision_id in latest_by_source
+    ]
+    projection_pending_run_ids = sorted(
+        run_id
+        for run_id, status in latest_by_source.values()
+        if status in {"committed", "projection_pending"}
+    )
+    wiki_projection_ready = bool(
+        canonical_knowledge_committed
+        and len(latest_statuses) == len(selected_revision_ids)
+        and all(status == "succeeded" for status in latest_statuses)
+    )
+    wiki_projection_pending = bool(
+        canonical_knowledge_committed
+        and not wiki_projection_ready
+        and len(latest_statuses) == len(selected_revision_ids)
+        and all(status in _SUCCESSFUL_COMPILATION_STATES for status in latest_statuses)
+        and projection_pending_run_ids
+    )
+    wiki_projection_status = (
+        "ready"
+        if wiki_projection_ready
+        else (
+            "pending"
+            if wiki_projection_pending
+            else (
+                "blocked"
+                if stale_or_blocked
+                else ("not_started" if registered else "unavailable")
+            )
+        )
+    )
     state = (
         "stale_or_blocked"
         if stale_or_blocked
@@ -149,10 +190,16 @@ def source_knowledge_status(
         "source_registered": registered,
         "compilation_required": compilation_required,
         "compiled": compiled,
+        "canonical_knowledge_committed": canonical_knowledge_committed,
+        "canonical_knowledge_admissible": canonical_knowledge_admissible,
+        "wiki_projection_status": wiki_projection_status,
+        "wiki_projection_pending": wiki_projection_pending,
+        "wiki_projection_ready": wiki_projection_ready,
         "stale_or_blocked": stale_or_blocked,
         "gap": gap,
         "source_revision_ids": sorted(selected_revision_ids),
         "successful_compilation_run_ids": sorted(successful_run_ids),
+        "projection_pending_compilation_run_ids": projection_pending_run_ids,
     }
     _validate_contract("source-knowledge-status.v1.schema.json", result)
     return result

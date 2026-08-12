@@ -50,7 +50,23 @@ def build_host_connect_plan(
     canonical_valid = doctor.get("canonical_valid") is True
     doctor_ready = doctor.get("ready") is True
     if not (doctor_ready and canonical_valid and schema_core_installed):
-        raise RuntimeError("Host connect requires a ready autonomous Knowledge vault")
+        permission_report = doctor.get("permissions", {})
+        checks = doctor.get("checks", {})
+        diagnostic = {
+            "canonical_valid": canonical_valid,
+            "schema_core_installed": schema_core_installed,
+            "permissions_verified": permission_report.get("permissions_verified") is True,
+            "permission_status": permission_report.get("status"),
+            "job_records_valid": checks.get("job_records_valid") is True,
+            "invalid_inbox_artifact_count": len(
+                checks.get("invalid_inbox_artifact_ids", [])
+            ),
+            "doctor_error_count": len(doctor.get("errors", [])),
+        }
+        raise RuntimeError(
+            "Host connect requires a ready autonomous Knowledge vault: "
+            f"{diagnostic}"
+        )
 
     with AutonomousKnowledgeStore(selected_vault, read_only=True) as store:
         audit_before = store.audit_head
@@ -165,10 +181,74 @@ def build_host_connect_plan(
         "provider_payload_bytes": provider_payload_bytes,
         "write_performed": False,
         "audit_head_unchanged": audit_head_unchanged,
+        "attestation_scope": "fixed_internal_health_probe_only",
+        "future_task_attested": False,
+        "real_host_observed": False,
+        "real_mcp_registration_observed": False,
+        "caller_confirmation_required_for_future_context": True,
     }
 
     argv = _server_argv(selected_vault)
-    if selected_host == "opencode":
+    plugin_manifest: dict[str, Any] | None = None
+    if selected_host == "codex":
+        configuration_kind = "codex_direct_config"
+        configuration_format = "toml"
+        merge_targets = ["~/.codex/config.toml", ".codex/config.toml"]
+        configuration = {
+            "mcp_servers": {
+                "deeplaw-knowledge": {
+                    "command": argv[0],
+                    "args": argv[1:],
+                }
+            }
+        }
+        equivalent_command = [
+            "codex",
+            "mcp",
+            "add",
+            "deeplaw-knowledge",
+            "--",
+            *argv,
+        ]
+        verification_command = ["codex", "mcp", "list"]
+        plugin_manifest = {
+            "configuration_kind": "codex_plugin_manifest",
+            "configuration_format": "json",
+            "merge_target": ".codex-plugin/mcp.json",
+            "configuration": {
+                "deeplaw-knowledge": {
+                    "command": argv[0],
+                    "args": argv[1:],
+                }
+            },
+        }
+    elif selected_host == "claude-code":
+        configuration_kind = "claude_code_project_config"
+        configuration_format = "json"
+        merge_targets = [".mcp.json"]
+        configuration = {
+            "mcpServers": {
+                "deeplaw-knowledge": {
+                    "command": argv[0],
+                    "args": argv[1:],
+                }
+            }
+        }
+        equivalent_command = [
+            "claude",
+            "mcp",
+            "add",
+            "--transport",
+            "stdio",
+            "deeplaw-knowledge",
+            "--",
+            *argv,
+        ]
+        verification_command = ["claude", "mcp", "list"]
+    else:
+        configuration_kind = "opencode_project_config"
+        configuration_format = "jsonc"
+        merge_targets = ["opencode.json", "opencode.jsonc"]
         configuration: dict[str, Any] = {
             "mcp": {
                 "deeplaw_knowledge": {
@@ -179,25 +259,23 @@ def build_host_connect_plan(
                 }
             },
             "permission": {
-                "deeplaw_knowledge_*": "deny",
+                "*": "deny",
                 "deeplaw_knowledge_knowledge_support": "allow",
             },
         }
-    else:
-        configuration = {
-            "mcpServers": {
-                "deeplaw-knowledge": {
-                    "command": argv[0],
-                    "args": argv[1:],
-                }
-            }
-        }
+        equivalent_command = []
+        verification_command = ["opencode", "mcp", "list"]
     plan = {
         "schema_version": "deeplaw.host-connect-plan/v1",
         "host": selected_host,
         "server_leaf": "knowledge_support",
         "read_only": True,
+        "configuration_kind": configuration_kind,
+        "configuration_format": configuration_format,
+        "merge_targets": merge_targets,
         "configuration": configuration,
+        "equivalent_command": equivalent_command,
+        "verification_command": verification_command,
         "preflight": preflight,
         "context_preflight": context_preflight,
         "merge_required": True,
@@ -206,6 +284,8 @@ def build_host_connect_plan(
         "install_performed": False,
         "write_performed": False,
     }
+    if plugin_manifest is not None:
+        plan["codex_plugin_manifest"] = plugin_manifest
     schema = _contract()
     Draft202012Validator.check_schema(schema)
     error = next(Draft202012Validator(schema).iter_errors(plan), None)

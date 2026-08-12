@@ -16,6 +16,7 @@ from deeplaw.host_connect import build_host_connect_plan
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_mcp_server import handle_knowledge_support
+from deeplaw.knowledge_service import source_knowledge_status
 from deeplaw.knowledge_sink_mcp_server import handle_knowledge_sink
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 
@@ -207,7 +208,11 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
     with AutonomousKnowledgeStore(vault, read_only=False):
         pass
 
-    plan = build_host_connect_plan(host="codex", vault_path=vault)
+    plans = {
+        host: build_host_connect_plan(host=host, vault_path=vault)
+        for host in ("codex", "claude-code", "opencode")
+    }
+    plan = plans["codex"]
 
     assert plan["preflight"] == {
         "vault_ready": True,
@@ -224,6 +229,100 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
     assert plan["context_preflight"]["provider_payload_bytes"] <= 65_536
     assert plan["context_preflight"]["write_performed"] is False
     assert plan["context_preflight"]["audit_head_unchanged"] is True
+    assert plan["context_preflight"]["attestation_scope"] == (
+        "fixed_internal_health_probe_only"
+    )
+    assert plan["context_preflight"]["future_task_attested"] is False
+    assert plan["context_preflight"]["real_host_observed"] is False
+    assert plan["context_preflight"]["real_mcp_registration_observed"] is False
+    assert plan["context_preflight"][
+        "caller_confirmation_required_for_future_context"
+    ] is True
+
+    assert plan["configuration_kind"] == "codex_direct_config"
+    assert plan["configuration_format"] == "toml"
+    assert plan["merge_targets"] == [
+        "~/.codex/config.toml",
+        ".codex/config.toml",
+    ]
+    assert plan["configuration"] == {
+        "mcp_servers": {
+            "deeplaw-knowledge": {
+                "command": "deeplaw",
+                "args": [
+                    "knowledge",
+                    "mcp",
+                    "--stdio",
+                    "--vault",
+                    str(vault.resolve()),
+                ],
+            }
+        }
+    }
+    assert plan["equivalent_command"] == [
+        "codex",
+        "mcp",
+        "add",
+        "deeplaw-knowledge",
+        "--",
+        "deeplaw",
+        "knowledge",
+        "mcp",
+        "--stdio",
+        "--vault",
+        str(vault.resolve()),
+    ]
+    assert plan["verification_command"] == ["codex", "mcp", "list"]
+    assert plan["codex_plugin_manifest"] == {
+        "configuration_kind": "codex_plugin_manifest",
+        "configuration_format": "json",
+        "merge_target": ".codex-plugin/mcp.json",
+        "configuration": {
+            "deeplaw-knowledge": {
+                "command": "deeplaw",
+                "args": [
+                    "knowledge",
+                    "mcp",
+                    "--stdio",
+                    "--vault",
+                    str(vault.resolve()),
+                ],
+            }
+        },
+    }
+
+    claude = plans["claude-code"]
+    assert claude["configuration_kind"] == "claude_code_project_config"
+    assert claude["configuration_format"] == "json"
+    assert claude["merge_targets"] == [".mcp.json"]
+    assert "mcpServers" in claude["configuration"]
+    assert claude["equivalent_command"][:4] == [
+        "claude",
+        "mcp",
+        "add",
+        "--transport",
+    ]
+    assert claude["verification_command"] == ["claude", "mcp", "list"]
+    assert "codex_plugin_manifest" not in claude
+
+    opencode = plans["opencode"]
+    assert opencode["configuration_kind"] == "opencode_project_config"
+    assert opencode["configuration_format"] == "jsonc"
+    assert opencode["merge_targets"] == ["opencode.json", "opencode.jsonc"]
+    assert opencode["configuration"]["mcp"]["deeplaw_knowledge"]["command"] == [
+        "deeplaw",
+        "knowledge",
+        "mcp",
+        "--stdio",
+        "--vault",
+        str(vault.resolve()),
+    ]
+    assert opencode["configuration"]["permission"] == {
+        "*": "deny",
+        "deeplaw_knowledge_knowledge_support": "allow",
+    }
+    assert opencode["equivalent_command"] == []
+    assert opencode["verification_command"] == ["opencode", "mcp", "list"]
 
 
 def test_host_connect_fails_closed_when_real_context_seam_is_not_callable(
@@ -440,6 +539,13 @@ def test_owner_forget_routes_explicit_asset_knowledge_and_source_targets(
     )
     assert source_receipt["target_type"] == "source_revision"
     assert source_receipt["source_revision_id"] == source_revision_id
+    assert source_receipt["current_retrieval_eligible"] is False
+    assert source_receipt["current_admission_eligible"] is False
+    assert source_receipt["original_bytes_retained"] is True
+    assert source_receipt["history_retained"] is True
+    assert source_receipt["audit_history_retained"] is True
+    assert source_receipt["bytes_deleted"] is False
+    assert source_receipt["canonical_bytes_deleted"] is False
     assert stored_source.is_file()
     with KnowledgeVault(vault, read_only=True) as legacy:
         assert legacy.source_info(source_id)["status"] == "removed"
@@ -483,6 +589,11 @@ def test_compile_handoff_keeps_read_and_sink_boundaries_explicit(
     assert handoff["schema_version"] == "deeplaw.compilation-handoff/v1"
     assert handoff["source_revision_id"] == source_revision_id
     assert handoff["source_status"] == "compilation_required"
+    assert handoff["canonical_knowledge_committed"] is False
+    assert handoff["canonical_knowledge_admissible"] is False
+    assert handoff["wiki_projection_status"] == "not_started"
+    assert handoff["wiki_projection_pending"] is False
+    assert handoff["wiki_projection_ready"] is False
     assert handoff["compiler_profile"]["compiler_profile_version"] == "3"
     assert handoff["boundaries"] == {
         "read_leaf": "knowledge_support",
@@ -570,6 +681,71 @@ def test_deterministic_fake_host_uses_split_public_compile_seams(
     assert report["verification_valid"] is True
     assert report["network_used"] is False
     assert report["external_credentials_used"] is False
+
+    with KnowledgeVault(vault, read_only=True) as legacy:
+        ready_status = source_knowledge_status(
+            legacy,
+            source_revision_ids=(compiled["identity"]["source_revision_id"],),
+        )
+    assert ready_status["compiled"] is True
+    assert ready_status["canonical_knowledge_committed"] is True
+    assert ready_status["canonical_knowledge_admissible"] is True
+    assert ready_status["wiki_projection_status"] == "ready"
+    assert ready_status["wiki_projection_pending"] is False
+    assert ready_status["wiki_projection_ready"] is True
+
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        store.connection.execute(
+            """
+            UPDATE source_compilation_runs_v1
+            SET status = 'projection_pending'
+            WHERE compilation_run_id = ?
+            """,
+            (report["compilation_run_id"],),
+        )
+        store.connection.commit()
+    with KnowledgeVault(vault, read_only=True) as legacy:
+        pending_status = source_knowledge_status(
+            legacy,
+            source_revision_ids=(compiled["identity"]["source_revision_id"],),
+        )
+    assert pending_status["state"] == "compiled"
+    assert pending_status["compiled"] is True
+    assert pending_status["canonical_knowledge_committed"] is True
+    assert pending_status["canonical_knowledge_admissible"] is True
+    assert pending_status["wiki_projection_status"] == "pending"
+    assert pending_status["wiki_projection_pending"] is True
+    assert pending_status["wiki_projection_ready"] is False
+    assert pending_status["projection_pending_compilation_run_ids"] == [
+        report["compilation_run_id"]
+    ]
+    pending_handoff = _json(
+        _run_cli(
+            "knowledge",
+            "compile",
+            "handoff",
+            "--vault",
+            str(vault),
+            "--source-revision-id",
+            compiled["identity"]["source_revision_id"],
+        )
+    )
+    assert pending_handoff["source_status"] == "compiled"
+    assert pending_handoff["canonical_knowledge_committed"] is True
+    assert pending_handoff["canonical_knowledge_admissible"] is True
+    assert pending_handoff["wiki_projection_status"] == "pending"
+    assert pending_handoff["wiki_projection_pending"] is True
+    assert pending_handoff["wiki_projection_ready"] is False
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        store.connection.execute(
+            """
+            UPDATE source_compilation_runs_v1
+            SET status = 'succeeded'
+            WHERE compilation_run_id = ?
+            """,
+            (report["compilation_run_id"],),
+        )
+        store.connection.commit()
 
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
         audit_after_compile = store.audit_head

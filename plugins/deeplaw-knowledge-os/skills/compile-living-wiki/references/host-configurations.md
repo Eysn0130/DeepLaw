@@ -3,9 +3,24 @@
 Keep `knowledge_support` and `knowledge_sink` as separate local stdio processes. Replace
 `<owner-created-grant-id>` locally; never commit the real grant ID or capability token.
 
-## Codex and Claude Code
+## Codex direct configuration
 
-The installed `deeplaw-knowledge-os` plugin supplies the read-only server:
+Codex direct MCP configuration is TOML in `~/.codex/config.toml` or a trusted project's
+`.codex/config.toml`:
+
+```toml
+[mcp_servers.deeplaw-knowledge]
+command = "deeplaw"
+args = ["knowledge", "mcp", "--stdio"]
+```
+
+The equivalent command is `codex mcp add deeplaw-knowledge -- deeplaw knowledge mcp --stdio`;
+verify with `codex mcp list`. The Codex plugin's `.codex-plugin/mcp.json` is an independent plugin
+manifest shape and is not direct `config.toml` configuration.
+
+## Claude Code
+
+Claude Code's project `.mcp.json` uses `mcpServers`:
 
 ```json
 {

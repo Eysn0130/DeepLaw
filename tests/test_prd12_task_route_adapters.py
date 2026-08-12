@@ -166,13 +166,15 @@ def test_codex_and_opencode_static_entries_use_shared_read_only_mcp_surface() ->
         )
     )
     codex_mcp = json.loads(
-        (repository / "plugins/deeplaw-knowledge-os/.mcp.json").read_text(encoding="utf-8")
+        (
+            repository / "plugins/deeplaw-knowledge-os/.codex-plugin/mcp.json"
+        ).read_text(encoding="utf-8")
     )
     opencode_bridge = json.loads(
         (repository / "adapters/opencode/context-bridge.json").read_text(encoding="utf-8")
     )
-    assert codex_manifest["mcpServers"] == "./.mcp.json"
-    server = codex_mcp["mcpServers"]["deeplaw-knowledge"]
+    assert codex_manifest["mcpServers"] == "./.codex-plugin/mcp.json"
+    server = codex_mcp["deeplaw-knowledge"]
     assert server["command"] == "deeplaw"
     assert server["args"] == ["knowledge", "mcp", "--stdio"]
     api_by_name = {entry["name"]: entry for entry in opencode_bridge["domain_apis"]}

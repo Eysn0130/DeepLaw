@@ -1,0 +1,10 @@
+{
+  "deeplaw-knowledge": {
+    "command": "deeplaw",
+    "args": [
+      "knowledge",
+      "mcp",
+      "--stdio"
+    ]
+  }
+}

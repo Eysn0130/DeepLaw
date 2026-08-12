@@ -6,8 +6,10 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "state", "source_registered", "compilation_required",
-    "compiled", "stale_or_blocked", "gap", "source_revision_ids",
-    "successful_compilation_run_ids"
+    "compiled", "canonical_knowledge_committed", "canonical_knowledge_admissible",
+    "wiki_projection_status", "wiki_projection_pending", "wiki_projection_ready",
+    "stale_or_blocked", "gap", "source_revision_ids",
+    "successful_compilation_run_ids", "projection_pending_compilation_run_ids"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.source-knowledge-status/v1"},
@@ -17,6 +19,13 @@
     "source_registered": {"type": "boolean"},
     "compilation_required": {"type": "boolean"},
     "compiled": {"type": "boolean"},
+    "canonical_knowledge_committed": {"type": "boolean"},
+    "canonical_knowledge_admissible": {"type": "boolean"},
+    "wiki_projection_status": {
+      "enum": ["unavailable", "not_started", "pending", "ready", "blocked"]
+    },
+    "wiki_projection_pending": {"type": "boolean"},
+    "wiki_projection_ready": {"type": "boolean"},
     "stale_or_blocked": {"type": "boolean"},
     "gap": {"type": "boolean"},
     "source_revision_ids": {
@@ -26,6 +35,12 @@
       "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
     },
     "successful_compilation_run_ids": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"}
+    },
+    "projection_pending_compilation_run_ids": {
       "type": "array",
       "maxItems": 100000,
       "uniqueItems": true,
