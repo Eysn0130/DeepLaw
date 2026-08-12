@@ -678,6 +678,16 @@ def _harden_stored_source_if_windows(path: Path) -> None:
     harden_windows_private_file(path)
 
 
+def _harden_vault_after_write_if_windows(root: Path) -> None:
+    """Restore the native ACL boundary after a writable Vault session."""
+
+    if os.name != "nt":
+        return
+    from .windows_acl import harden_windows_vault
+
+    harden_windows_vault(root)
+
+
 def _validate_manifest(value: Any) -> dict[str, Any]:
     expected = {
         "schema_version",
@@ -1090,6 +1100,8 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
 
     def close(self) -> None:
         self.connection.close()
+        if not self.read_only:
+            _harden_vault_after_write_if_windows(self.root)
 
     @property
     def vault_id(self) -> str:

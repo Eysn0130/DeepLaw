@@ -141,6 +141,27 @@ def test_source_ingest_reapplies_native_acl_for_new_and_idempotent_bytes(
     assert observed == [stored, stored]
 
 
+def test_writable_vault_close_reapplies_native_acl_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="windows-write-boundary", scope="project")
+    observed: list[Path] = []
+    monkeypatch.setattr(
+        knowledge_store,
+        "_harden_vault_after_write_if_windows",
+        lambda path: observed.append(path),
+    )
+
+    with KnowledgeVault(root, read_only=True):
+        pass
+    with KnowledgeVault(root, read_only=False):
+        pass
+
+    assert observed == [root]
+
+
 @pytest.mark.windows_native
 @pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
 def test_native_windows_source_ingest_remains_owner_only_without_manual_repair(
