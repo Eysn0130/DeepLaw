@@ -831,17 +831,19 @@ def verify_fresh_wheel(
             raise RuntimeError("fresh-wheel compiled Context has no Statement")
         selected_statement = compiled_capsule["statements"][0]
         source_reference = selected_statement["source_refs"][0]
-        wiki_recent = _run(
+        wiki_browse = _run(
             interpreter,
             "knowledge",
             "wiki",
-            "recent",
+            "browse-kind",
             "--vault",
             str(vault),
+            "--kind",
+            "claim",
         )
         wiki_item = next(
             item
-            for item in wiki_recent["items"]
+            for item in wiki_browse["items"]
             if item["knowledge_id"] == selected_statement["knowledge_id"]
         )
         wiki_page = _run(
