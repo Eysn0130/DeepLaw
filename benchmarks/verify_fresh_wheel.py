@@ -44,6 +44,50 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _write_evidence_bundle(
+    receipt: dict[str, Any],
+    *,
+    output_dir: Path,
+    repository: Path,
+) -> dict[str, Any]:
+    """Persist one path-free receipt and its deterministic SHA manifest."""
+
+    selected = output_dir.expanduser().absolute()
+    if selected.exists() or selected.is_relative_to(repository.expanduser().absolute()):
+        raise RuntimeError("fresh-wheel evidence output must be new and outside the repository")
+    if not selected.parent.is_dir() or selected.parent.is_symlink():
+        raise RuntimeError("fresh-wheel evidence output parent is unavailable")
+    receipt_bytes = (_canonical_json(receipt) + "\n").encode("utf-8")
+    if _POSIX_ABSOLUTE_PATH.search(receipt_bytes.decode("utf-8")) or (
+        _WINDOWS_ABSOLUTE_PATH.search(receipt_bytes.decode("utf-8"))
+    ):
+        raise RuntimeError("fresh-wheel receipt contains an absolute path")
+    selected.mkdir()
+    receipt_path = selected / "fresh-wheel-journey.json"
+    receipt_path.write_bytes(receipt_bytes)
+    artifact = {
+        "name": receipt_path.name,
+        "bytes": len(receipt_bytes),
+        "sha256": _sha256_bytes(receipt_bytes),
+    }
+    bundle_binding = {
+        "artifacts": [artifact],
+        "commit": receipt["commit_sha"],
+        "tree": receipt["tree_sha"],
+        "wheel": receipt["wheel"],
+    }
+    manifest = {
+        "schema_version": "deeplaw.fresh-wheel-bundle-manifest/v1",
+        **bundle_binding,
+        "bundle_sha256": _sha256_bytes(
+            _canonical_json(bundle_binding).encode("utf-8")
+        ),
+    }
+    manifest_bytes = (_canonical_json(manifest) + "\n").encode("utf-8")
+    (selected / "SHA256SUMS.json").write_bytes(manifest_bytes)
+    return manifest
+
+
 def _stable_id(prefix: str, *parts: str, length: int = 24) -> str:
     payload = "\x00".join(parts).encode("utf-8")
     return f"{prefix}_{_sha256_bytes(payload)[:length]}"
@@ -1078,11 +1122,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dist", type=Path, default=Path("dist"))
     parser.add_argument("--repository", type=Path, default=Path.cwd())
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
     result = verify_fresh_wheel(
         args.dist.expanduser().absolute(),
         repository=args.repository.expanduser().absolute(),
     )
+    if args.output_dir is not None:
+        _write_evidence_bundle(
+            result,
+            output_dir=args.output_dir,
+            repository=args.repository,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     if not result["valid"]:
         raise SystemExit(1)

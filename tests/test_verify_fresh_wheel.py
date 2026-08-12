@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from jsonschema import Draft202012Validator
 from benchmarks.verify_fresh_wheel import (
     _compiled_query_hit,
     _sanitize_diagnostic,
+    _write_evidence_bundle,
 )
 
 
@@ -127,3 +129,42 @@ def test_resume_failure_diagnostic_normalizes_redacted_windows_paths() -> None:
     assert diagnostic == "RuntimeError: projection failed below <redacted-path>/wiki"
     assert "\\" not in diagnostic
     assert "C:" not in diagnostic
+
+
+def test_fresh_wheel_evidence_bundle_is_path_free_and_hash_bound(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    output = tmp_path / "evidence"
+    receipt = {
+        "commit_sha": "a" * 40,
+        "tree_sha": "b" * 40,
+        "wheel": {
+            "name": "deeplaw-0.12.0-py3-none-any.whl",
+            "sha256": "c" * 64,
+            "size_bytes": 123,
+        },
+    }
+
+    manifest = _write_evidence_bundle(
+        receipt,
+        output_dir=output,
+        repository=repository,
+    )
+
+    receipt_bytes = (output / "fresh-wheel-journey.json").read_bytes()
+    retained_manifest = json.loads((output / "SHA256SUMS.json").read_bytes())
+    assert retained_manifest == manifest
+    assert manifest["artifacts"] == [
+        {
+            "name": "fresh-wheel-journey.json",
+            "bytes": len(receipt_bytes),
+            "sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+        }
+    ]
+    assert str(tmp_path) not in json.dumps(manifest)
+    with pytest.raises(RuntimeError, match="new and outside"):
+        _write_evidence_bundle(
+            receipt,
+            output_dir=repository / "evidence",
+            repository=repository,
+        )
