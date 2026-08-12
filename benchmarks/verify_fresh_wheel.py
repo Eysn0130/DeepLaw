@@ -831,21 +831,6 @@ def verify_fresh_wheel(
             raise RuntimeError("fresh-wheel compiled Context has no Statement")
         selected_statement = compiled_capsule["statements"][0]
         source_reference = selected_statement["source_refs"][0]
-        wiki_browse = _run(
-            interpreter,
-            "knowledge",
-            "wiki",
-            "browse-kind",
-            "--vault",
-            str(vault),
-            "--kind",
-            "claim",
-        )
-        wiki_item = next(
-            item
-            for item in wiki_browse["items"]
-            if item["knowledge_id"] == selected_statement["knowledge_id"]
-        )
         wiki_page = _run(
             interpreter,
             "knowledge",
@@ -854,7 +839,7 @@ def verify_fresh_wheel(
             "--vault",
             str(vault),
             "--wiki-path",
-            wiki_item["workspace_path"],
+            f"wiki/claims/{selected_statement['knowledge_id']}.md",
         )
         source_fragment = _run(
             interpreter,
@@ -946,7 +931,11 @@ def verify_fresh_wheel(
         )
         compiled_query_hit = _compiled_query_hit(compiled_query)
         honest_gap_codes = sorted(
-            gap["code"] for gap in honest_gap["gaps"] if isinstance(gap, dict)
+            {
+                gap["code"]
+                for gap in honest_gap["gaps"]
+                if isinstance(gap, dict)
+            }
         )
         forgotten_excluded = all(
             value not in _canonical_json(after_forget)
