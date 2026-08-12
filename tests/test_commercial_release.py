@@ -309,6 +309,7 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
 
     assert "current-source regression" in ci
     assert "runs-on: ${{ matrix.os }}" in ci
+    assert "    timeout-minutes: 150" in ci
     assert all(system in ci for system in ("ubuntu-latest", "macos-latest", "windows-latest"))
     assert all(version in ci for version in ('"3.11"', '"3.12"', '"3.13"'))
     assert "fail-fast: false" in ci
