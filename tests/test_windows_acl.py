@@ -164,32 +164,6 @@ def test_writable_vault_close_reapplies_native_acl_boundary(
 
 @pytest.mark.windows_native
 @pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
-def test_native_windows_source_ingest_remains_owner_only_without_manual_repair(
-    tmp_path: Path,
-) -> None:
-    root = tmp_path / "vault"
-    source = tmp_path / "source.md"
-    source.write_text("# Decision\nKeep immutable Source bytes private.\n", encoding="utf-8")
-    initialize_knowledge_vault(root, name="windows-source-boundary", scope="project")
-
-    with KnowledgeVault(root, read_only=False) as vault:
-        compile_source(
-            vault,
-            source,
-            source_kind="document",
-            confirm_no_case_data=True,
-        )
-
-    native = native_windows_acl_report(root)
-    permissions = knowledge_vault_permission_report(root)
-    assert native["status"] == "verified", native
-    assert native["permissions_verified"] is True
-    assert permissions["status"] == "verified"
-    assert permissions["permissions_verified"] is True
-
-
-@pytest.mark.windows_native
-@pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
 def test_native_windows_vault_acl_is_owner_only_after_real_ingest(tmp_path: Path) -> None:
     root = tmp_path / "vault"
     initialize_knowledge_vault(root, name="windows-native", scope="project")
@@ -203,6 +177,13 @@ def test_native_windows_vault_acl_is_owner_only_after_real_ingest(tmp_path: Path
             source_kind="document",
             confirm_no_case_data=True,
         )
+    native_after_ingest = native_windows_acl_report(root)
+    permissions_after_ingest = knowledge_vault_permission_report(root)
+    assert native_after_ingest["status"] == "verified", native_after_ingest
+    assert native_after_ingest["permissions_verified"] is True
+    assert permissions_after_ingest["status"] == "verified"
+    assert permissions_after_ingest["permissions_verified"] is True
+
     model_file = root / "models" / "fixture-model.bin"
     model_file.parent.mkdir(parents=True)
     model_file.write_bytes(b"pinned-model-fixture")

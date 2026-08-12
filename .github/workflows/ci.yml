@@ -62,7 +62,7 @@ jobs:
           tests/test_prd12_task_routing_reproduction.py::test_p0c_cli_cold_thread_task_text_only_recovery
           tests/test_v013_runtime_stability.py::test_runtime_stability_smoke_is_schema_bound_and_read_only
           tests/test_v013_pass12_vertical_product_closure.py::test_host_connect_preflight_calls_source_only_context_seam
-          tests/test_windows_acl.py::test_native_windows_source_ingest_remains_owner_only_without_manual_repair
+          tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest
 
       - name: Candidate current-source regression (not release readiness)
         shell: bash
