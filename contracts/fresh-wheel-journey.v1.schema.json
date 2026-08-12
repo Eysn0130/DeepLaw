@@ -59,7 +59,7 @@
         "import_path_class": {"const": "isolated_site_packages"},
         "import_file_relative_to_environment": {
           "type": "string",
-          "pattern": "^(Lib|lib)/.+/site-packages/deeplaw/__init__\\.py$"
+          "pattern": "^(Lib|lib)(/[^/]+)?/site-packages/deeplaw/__init__\\.py$"
         },
         "cwd_class": {"const": "external_isolated_runtime"},
         "executable_used": {"const": true}

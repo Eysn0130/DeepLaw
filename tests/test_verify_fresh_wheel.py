@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from benchmarks.verify_fresh_wheel import (
     _compiled_query_hit,
@@ -74,6 +76,32 @@ def test_fresh_wheel_driver_does_not_import_source_package() -> None:
         for alias in node.names
     }
     assert not any(name == "deeplaw" or name.startswith("deeplaw.") for name in imported)
+
+
+@pytest.mark.parametrize(
+    "relative_import_path",
+    (
+        "Lib/site-packages/deeplaw/__init__.py",
+        "lib/python3.12/site-packages/deeplaw/__init__.py",
+    ),
+)
+def test_fresh_wheel_receipt_accepts_platform_site_packages_layouts(
+    relative_import_path: str,
+) -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[1]
+        / "contracts"
+        / "fresh-wheel-journey.v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    validator = Draft202012Validator(schema)
+
+    runtime_schema = schema["properties"]["runtime"]
+    import_path_schema = runtime_schema["properties"][
+        "import_file_relative_to_environment"
+    ]
+
+    assert list(validator.evolve(schema=import_path_schema).iter_errors(relative_import_path)) == []
 
 
 def test_resume_failure_diagnostic_preserves_cause_without_local_path(
