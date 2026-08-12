@@ -434,6 +434,17 @@ def _metric_evidence(run: Mapping[str, Any]) -> str:
             for turn in run.get("turns", [])
             if isinstance(turn, Mapping)
         ],
+        "mutation_boundaries": [
+            {
+                "kind": boundary.get("kind"),
+                "audit_head_before": boundary.get("audit_head_before"),
+                "audit_head_after": boundary.get("audit_head_after"),
+                "receipt_sha256": boundary.get("receipt_sha256"),
+                "target_sha256": boundary.get("target_sha256"),
+            }
+            for boundary in run.get("mutation_boundaries", [])
+            if isinstance(boundary, Mapping)
+        ],
         "checks": {key: value for key, value in metrics.items() if key != "evidence_sha256"},
     }
     return _sha256(_encoded(payload))
@@ -508,11 +519,16 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             raise EvidenceValidationError("Host run omitted lifecycle methods")
         if host == "codex":
             expected_method_set = _CODEX_METHODS[str(run["scenario"])]
-            if (run_passed and set(methods) != expected_method_set) or not set(
-                methods
-            ).issubset(expected_method_set):
+            if (run_passed and set(methods) != expected_method_set) or (
+                not run_passed
+                and methods != ["not_applicable"]
+                and not set(methods).issubset(expected_method_set)
+            ):
                 raise EvidenceValidationError("Codex run lifecycle method set is invalid")
-        if host == "opencode" and set(methods) != {"opencode/run"}:
+        if host == "opencode" and (
+            (run_passed and set(methods) != {"opencode/run"})
+            or (not run_passed and methods not in (["opencode/run"], ["not_applicable"]))
+        ):
             raise EvidenceValidationError("OpenCode run lifecycle method is invalid")
         turns = run.get("turns")
         if not isinstance(turns, list) or not turns:
@@ -530,18 +546,22 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         )
         if run_passed and turn_methods != expected_turn_methods:
             raise EvidenceValidationError("Host turn lifecycle sequence is invalid")
-        if not run_passed and turn_methods != expected_turn_methods[: len(turn_methods)]:
+        if not run_passed and turn_methods != ("not_applicable",) and (
+            turn_methods != expected_turn_methods[: len(turn_methods)]
+        ):
             raise EvidenceValidationError("failed Host turn lifecycle prefix is invalid")
-        if run.get("new_thread") is not True:
+        if run_passed and run.get("new_thread") is not True:
             raise EvidenceValidationError("qualification scenarios require distinct new tasks")
-        if host == "codex" and run_passed:
+        if run_passed:
             thread_ids = [turn.get("thread_id_sha256") for turn in turns]
             turn_ids = [turn.get("turn_id_sha256") for turn in turns]
             if any(value is None for value in (*thread_ids, *turn_ids)):
-                raise EvidenceValidationError("Codex lifecycle identities are missing")
+                raise EvidenceValidationError("Host lifecycle identities are missing")
             if len(set(turn_ids)) != len(turn_ids):
-                raise EvidenceValidationError("Codex turn identities must be unique")
-            if run["scenario"] == "resume_fork" and thread_ids[-1] == thread_ids[-2]:
+                raise EvidenceValidationError("Host turn identities must be unique")
+            if host == "codex" and run["scenario"] == "resume_fork" and (
+                thread_ids[-1] == thread_ids[-2]
+            ):
                 raise EvidenceValidationError("Codex fork did not create a distinct thread")
         first_read: Mapping[str, Any] | None = None
         retried = False
@@ -583,6 +603,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             if isinstance(usage, Mapping):
                 input_tokens = usage.get("input_tokens")
                 cached_input_tokens = usage.get("cached_input_tokens")
+                cache_write_input_tokens = usage.get("cache_write_input_tokens")
                 output_tokens = usage.get("output_tokens")
                 reasoning_output_tokens = usage.get("reasoning_output_tokens")
                 total = usage.get("total_tokens")
@@ -591,10 +612,27 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                     and not isinstance(input_tokens, bool)
                     and isinstance(output_tokens, int)
                     and not isinstance(output_tokens, bool)
+                    and host == "codex"
                     and total != input_tokens + output_tokens
                 ):
                     raise EvidenceValidationError("provider token arithmetic is inconsistent")
+                opencode_components = (
+                    input_tokens,
+                    cached_input_tokens,
+                    cache_write_input_tokens,
+                    output_tokens,
+                    reasoning_output_tokens,
+                )
                 if (
+                    host == "opencode"
+                    and all(
+                        isinstance(value, int) and not isinstance(value, bool)
+                        for value in opencode_components
+                    )
+                    and total != sum(opencode_components)
+                ):
+                    raise EvidenceValidationError("OpenCode token arithmetic is inconsistent")
+                if host == "codex" and (
                     isinstance(cached_input_tokens, int)
                     and not isinstance(cached_input_tokens, bool)
                     and isinstance(input_tokens, int)
@@ -602,7 +640,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                     and cached_input_tokens > input_tokens
                 ):
                     raise EvidenceValidationError("cached input tokens exceed input tokens")
-                if (
+                if host == "codex" and (
                     isinstance(reasoning_output_tokens, int)
                     and not isinstance(reasoning_output_tokens, bool)
                     and isinstance(output_tokens, int)
@@ -704,6 +742,19 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             ):
                 raise EvidenceValidationError("source forget admission is invalid")
 
+    if host == "opencode":
+        opencode_thread_ids = [
+            run["turns"][0].get("thread_id_sha256")
+            for run in runs
+            if isinstance(run, Mapping)
+            and run.get("status") == "passed"
+            and isinstance(run.get("turns"), list)
+            and run["turns"]
+            and isinstance(run["turns"][0], Mapping)
+        ]
+        if len(set(opencode_thread_ids)) != len(opencode_thread_ids):
+            raise EvidenceValidationError("OpenCode qualification tasks are not distinct")
+
     lifecycle = report.get("lifecycle")
     root_methods = lifecycle.get("methods_observed") if isinstance(lifecycle, Mapping) else None
     required_root = (
@@ -723,7 +774,10 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         raise EvidenceValidationError("root Host lifecycle does not match run evidence")
     if report.get("status") == "executed" and set(root_methods) != required_root:
         raise EvidenceValidationError("root Host lifecycle coverage is incomplete")
-    if not set(root_methods).issubset(required_root):
+    allowed_root = required_root | (
+        {"not_applicable"} if report.get("status") != "executed" else set()
+    )
+    if not set(root_methods).issubset(allowed_root):
         raise EvidenceValidationError("root Host lifecycle contains unexpected methods")
 
     aggregate = report.get("aggregate")
@@ -746,6 +800,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             for field in (
                 "input_tokens",
                 "cached_input_tokens",
+                "cache_write_input_tokens",
                 "output_tokens",
                 "reasoning_output_tokens",
                 "total_tokens",
@@ -760,6 +815,14 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
     if report.get("status") != expected_status:
         raise EvidenceValidationError("Host report status does not match its runs")
     if report.get("status") == "executed":
+        authentication = attestation.get("authentication")
+        if (
+            not isinstance(authentication, Mapping)
+            or authentication.get("checked") is not True
+            or not isinstance(authentication.get("raw_sha256"), str)
+            or authentication.get("raw_bytes", 0) <= 0
+        ):
+            raise EvidenceValidationError("executed Host report lacks authentication proof")
         inventories = (attestation.get("model_inventory"), attestation.get("mcp_inventory"))
         if any(
             not isinstance(item, Mapping)
@@ -776,3 +839,9 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         }
         if any(security.get(field) != value for field, value in required_security.items()):
             raise EvidenceValidationError("executed Host report failed a security boundary")
+        if host == "opencode":
+            availability = attestation.get("availability")
+            if not isinstance(availability, Mapping) or availability.get("status") != "available":
+                raise EvidenceValidationError(
+                    "executed OpenCode report lacks a successful model availability probe"
+                )

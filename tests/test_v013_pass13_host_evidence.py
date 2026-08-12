@@ -334,9 +334,12 @@ def _report_run(index: int, scenario: str) -> dict[str, object]:
                 "usage": {
                     "input_tokens": 10,
                     "cached_input_tokens": 2,
+                    "cache_write_input_tokens": 0,
                     "output_tokens": 4,
                     "reasoning_output_tokens": 1,
-                    "total_tokens": 14,
+                    "total_tokens": 17
+                    if scenario in {"projection_status", "source_forget", "provider_boundary"}
+                    else 14,
                 },
                 "safe_read": {
                     "call_count": 1,
@@ -486,6 +489,9 @@ def _report(host: str) -> dict[str, object]:
                 "status": "existing_login_confirmed" if host == "codex" else "provider_available",
                 "source": "existing_codex_login" if host == "codex" else "process_environment",
                 "auth_file_read": False,
+                "checked": True,
+                "raw_sha256": "c" * 64,
+                "raw_bytes": 50,
             },
             "model_inventory": {
                 "checked": True,
@@ -499,6 +505,24 @@ def _report(host: str) -> dict[str, object]:
                 "raw_sha256": "a" * 64,
                 "raw_bytes": 100,
             },
+            **(
+                {
+                    "availability": {
+                        "status": "available",
+                        "raw_sha256": "b" * 64,
+                        "raw_bytes": 100,
+                        "elapsed_ms": 5,
+                        "input_tokens": 10,
+                        "cached_input_tokens": 2,
+                        "cache_write_input_tokens": 0,
+                        "output_tokens": 4,
+                        "reasoning_output_tokens": 1,
+                        "total_tokens": 17,
+                    }
+                }
+                if host == "opencode"
+                else {}
+            ),
         },
         "lifecycle": {
             "host_owns_threads": True,
@@ -531,9 +555,10 @@ def _report(host: str) -> dict[str, object]:
             "provider_bytes": 100 * len(turns),
             "input_tokens": 10 * len(turns),
             "cached_input_tokens": 2 * len(turns),
+            "cache_write_input_tokens": 0,
             "output_tokens": 4 * len(turns),
             "reasoning_output_tokens": len(turns),
-            "total_tokens": 14 * len(turns),
+            "total_tokens": (17 if host == "opencode" else 14) * len(turns),
             "host_elapsed_ms": 5 * len(turns),
         },
         "not_executed": ["Human review"],

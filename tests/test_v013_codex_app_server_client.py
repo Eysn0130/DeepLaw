@@ -273,6 +273,7 @@ def test_full_lifecycle_dynamic_tool_usage_and_minimal_projection(tmp_path: Path
         assert result.usage == {
             "input_tokens": 10,
             "cached_input_tokens": 2,
+            "cache_write_input_tokens": "unreported",
             "output_tokens": 4,
             "reasoning_output_tokens": 1,
             "total_tokens": 14,
@@ -460,10 +461,17 @@ def test_missing_usage_is_unreported_not_zero(tmp_path: Path) -> None:
         client.initialize()
         client.thread_start()
         result = client.turn_start("thread-1", "hello")
-        assert result.usage == {key: UNREPORTED for key in (
-            "input_tokens", "cached_input_tokens", "output_tokens",
-            "reasoning_output_tokens", "total_tokens",
-        )}
+        assert result.usage == {
+            key: UNREPORTED
+            for key in (
+                "input_tokens",
+                "cached_input_tokens",
+                "cache_write_input_tokens",
+                "output_tokens",
+                "reasoning_output_tokens",
+                "total_tokens",
+            )
+        }
 
 
 def test_output_limit_and_timeout_fail_closed(tmp_path: Path) -> None:

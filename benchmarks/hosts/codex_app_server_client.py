@@ -89,6 +89,7 @@ def _copy_usage(value: Mapping[str, Any]) -> dict[str, Any]:
 _USAGE_KEYS = (
     "input_tokens",
     "cached_input_tokens",
+    "cache_write_input_tokens",
     "output_tokens",
     "reasoning_output_tokens",
     "total_tokens",
@@ -133,6 +134,9 @@ def normalize_token_usage(last: Any) -> dict[str, Any]:
     cached_tokens = _value_from_keys(
         last, "cachedInputTokens", "cached_input_tokens", "cachedInput", "cached_input"
     )
+    cache_write_tokens = _value_from_keys(
+        last, "cacheWriteInputTokens", "cache_write_input_tokens"
+    )
     output_tokens = _value_from_keys(last, "outputTokens", "output_tokens", "output")
     reasoning_tokens = _value_from_keys(
         last,
@@ -146,6 +150,8 @@ def normalize_token_usage(last: Any) -> dict[str, Any]:
         result["input_tokens"] = input_tokens
     if cached_tokens is not None:
         result["cached_input_tokens"] = cached_tokens
+    if cache_write_tokens is not None:
+        result["cache_write_input_tokens"] = cache_write_tokens
     if output_tokens is not None:
         result["output_tokens"] = output_tokens
     if reasoning_tokens is not None:
@@ -852,9 +858,10 @@ class CodexAppServerClient:
                 if (
                     completion is not None
                     and completion.get("kind") == "turn/completed"
+                    and isinstance(completion.get("turn_id"), str)
                     and (
-                    expected_turn_id is None
-                    or completion.get("turn_id") in (None, expected_turn_id)
+                        expected_turn_id is None
+                        or completion.get("turn_id") == expected_turn_id
                     )
                 ):
                     return completion
@@ -1257,6 +1264,17 @@ class CodexAppServerClient:
             digest, size = _hash_record(arguments)
             observation["arguments_sha256"] = digest
             observation["arguments_bytes"] = size
+            if isinstance(arguments, Mapping):
+                operation = _safe_label(arguments.get("operation"))
+                if operation is not None:
+                    observation["argument_operation"] = operation
+                observation["argument_confirm_no_case_data"] = (
+                    arguments.get("confirm_no_case_data") is True
+                )
+                task_binding = arguments.get("task_binding")
+                if isinstance(task_binding, Mapping):
+                    task_digest, _ = _hash_record(task_binding)
+                    observation["argument_task_binding_sha256"] = task_digest
         result = self._first_field(params, item, "result", "output", "contentItems")
         if result is not None:
             digest, size = _hash_record(result)
