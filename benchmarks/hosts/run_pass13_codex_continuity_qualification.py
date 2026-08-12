@@ -400,6 +400,12 @@ def _app_server_argv(
 
 
 def _parse_json_output(stdout: str) -> dict[str, Any]:
+    try:
+        complete = json.loads(stdout)
+    except (TypeError, ValueError):
+        complete = None
+    if isinstance(complete, dict):
+        return complete
     candidates = [line.strip() for line in stdout.splitlines() if line.strip()]
     for candidate in reversed(candidates):
         try:

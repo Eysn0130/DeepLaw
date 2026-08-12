@@ -101,6 +101,12 @@ def test_checkpoint_body_has_exact_governed_labels() -> None:
     ]
 
 
+def test_installed_cli_parser_accepts_pretty_printed_public_json() -> None:
+    assert qualification._parse_json_output('{\n  "schema_version": "fixture/v1"\n}\n') == {
+        "schema_version": "fixture/v1"
+    }
+
+
 def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
