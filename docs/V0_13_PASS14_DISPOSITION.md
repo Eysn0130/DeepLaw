@@ -1,7 +1,7 @@
 # DeepLaw v0.13 Pass 14 disposition
 
-Status: **current-fix implementation locally verified; real Host diagnostic and qualification
-not executed; release remains blocked** (2026-08-13).
+Status: **current-fix implementation locally and in current-source 3-OS CI verified; real Host
+diagnostic and qualification not executed; release remains blocked** (2026-08-13).
 
 This is a Pass 13 correction record, not a release report. Package version remains `0.12.0`,
 `release_ready=false`, and every retained or described result remains `claim_eligible=false`.
@@ -92,18 +92,22 @@ The terminal CI run for the pre-Pass-14 HEAD (`7ef0565b...`) was audited rather 
 - Linux and macOS candidate lanes for Python 3.11, 3.12 and 3.13 passed;
 - the macOS and Windows smoke lanes passed;
 - all three Windows full-regression lanes failed on the same platform-specific Codex argv test
-  assertion after the rest of the suite ran; and
-- the platform-neutral test correction is included in `e81e9c8`, but a current-HEAD three-OS CI
-  result is pending until the branch is pushed and the new run completes.
+  assertion after the rest of the suite ran.
 
-Therefore 3-OS status is not recorded as passed.
+After the platform-neutral correction, GitHub Actions run
+[`31623892815`](https://github.com/Eysn0130/DeepLaw/actions/runs/31623892815) completed successfully
+against commit `3ec85856b3ebc1703bf737c607149af3ca1d248d`. All nine current-source regression
+lanes (Linux, macOS and Windows × Python 3.11, 3.12 and 3.13), both platform smoke jobs and the
+supply-chain/reproducible-release job passed. This closes the Pass 14 current-source 3-OS CI
+regression, including the three previously failing Windows lanes. It is not a substitute for the
+unexecuted real-Host, Human Gold, native platform release-lifecycle or external artifact gates and
+does not make the candidate release-ready.
 
 ## Remaining priorities
 
 - **P0:** Owner-login precondition for the isolated Codex profile; an installed OpenCode 1.x
   binary; one distinct diagnostic per Host; only then the three distinct A/B/C continuity tasks;
-  a schema-valid, path/Secret-free bundle for every executed Host scenario; and a terminal green
-  current-HEAD three-OS CI run.
+  and a schema-valid, path/Secret-free bundle for every executed Host scenario.
 - **P1:** independent Human Gold, exact signed 28-source Legal Pack, qualification holdout, final
   blind run, provenance/signing/public-redownload artifact chain and all remaining Core gates.
 - **P2:** caller/migration/rollback evidence for compatibility wrappers before any deprecation or

@@ -270,7 +270,7 @@ Evidence abbreviations in the table are repository-relative paths:
 |---|---|---|---|---|---|---|---|---|
 | PRD-OPS-001 | One recoverable coordinator for canonical mutations | Implemented | KA, KC | sink/compilation/revision schemas | coordinator/recovery tests | Local only | Future UI must reuse it | Reject parallel mutation logic |
 | PRD-OPS-002 | Verifiable backup of canonical state, capability, and recovery data | Implemented | KS, KA snapshot | backup/snapshot contracts | migration/snapshot tests | Local only | Owner-only snapshot intentionally includes sink capability token material; Provider/API secrets are excluded; it is never a release artifact | Run owner-only restore qualification |
-| PRD-OPS-003 | Derived indexes/views can be deleted and rebuilt | Implemented | CS, WIKI, intelligence | derived manifest v2 | rebuild/equivalence tests | Local synthetic | Current-candidate 3-OS/scale absent | Qualify after product Gold passes |
+| PRD-OPS-003 | Derived indexes/views can be deleted and rebuilt | Implemented | CS, WIKI, intelligence | derived manifest v2 | rebuild/equivalence tests | Local synthetic plus green current-source 3-OS CI | Current-candidate large-scale platform qualification absent | Qualify after product Gold passes |
 | PRD-OPS-004 | Recover post-commit/pre-materialization failure | Implemented | KA pending materialization/recover | recovery event contracts | projection/autonomy recovery tests | Local fault injection | Real crash/process interruption pending | Run interrupted mutation task |
 | PRD-OPS-005 | OKF/AKBP are interchange only | Deferred | No v0.13 runtime | None | None | Research-only UP | No admitted interoperability failure | Route to v0.14/v0.15 research |
 | PRD-OPS-006 | Exports bind exact hashes and exclude secrets/paths | Target | partial package/export code | package v1/manifests | package/security tests | Historical local artifacts only | Fresh current wheel/provenance/redownload absent | Freeze export disclosure and round-trip task |
@@ -286,7 +286,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | Living Wiki | Implemented development chain with partial exact-candidate scale/editor evidence | Independent Human usability, 10k/100k incremental equivalence, RSS, Relation scale, and platform evidence pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
 | Host Integration | Bounded read-seam preflight and split read/sink deterministic Host configuration implemented; current Codex protocol/plugin regressions pass locally | Real isolated Codex/Claude/OpenCode tasks and provider-secret qualification pending; Pass 14 Codex/OpenCode diagnostics were not executed |
-| Portability/Operations | Target with local primitives and a current exact-wheel/fresh-install Darwin journey | Timeline, semantic restore, current green 3 OS CI, provenance/signing, and public redownload pending |
+| Portability/Operations | Target with local primitives, a current exact-wheel/fresh-install Darwin journey and green current-source 3-OS CI | Timeline, semantic restore, native platform release receipts, provenance/signing, and public redownload pending |
 
 ## Pass 14 current-fix addendum
 
@@ -304,9 +304,9 @@ Pass 14 does not upgrade any PRD row to `Qualified` or `Released`.
   orchestration. Their retained artifacts remain path/Secret-free and claim-ineligible by
   contract.
 - The product surface inventory keeps the same rows while separating product role from lifecycle.
-- Local full regression and exact-wheel/plugin preflights passed. Real Host diagnostics, A/B/C
-  continuity receipts, current green 3-OS CI, Human Gold, exact Legal Pack, qualification holdout,
-  final blind and release artifact chain remain open.
+- Local full regression, exact-wheel/plugin preflights and current-source 3-OS CI passed. Real Host
+  diagnostics, A/B/C continuity receipts, Human Gold, exact Legal Pack, native platform release
+  receipts, qualification holdout, final blind and release artifact chain remain open.
 
 ## Pass 5 historical addendum
 

@@ -1,7 +1,7 @@
 # DeepLaw v0.13 platform and source-candidate artifact qualification
 
-Status: **historical local Darwin/package evidence plus a Pass 14 exact-wheel preflight; 3-OS and
-release lifecycle gates remain unmet** (2026-08-13).
+Status: **historical local Darwin/package evidence plus a Pass 14 exact-wheel preflight and green
+current-source 3-OS CI; formal platform release-lifecycle gates remain unmet** (2026-08-13).
 
 The original 2026-08-08 candidate record below remains historical. It is not silently rebound to
 the current implementation.
@@ -86,9 +86,11 @@ journey executed outside the repository:
 | installed runtime | isolated site-packages, version `0.12.0`, 287 contracts, Provider Capsule byte accounting valid |
 | current Codex local plugin lifecycle | marketplace discovery/install/remove/re-add/cache-copy passed with `codex-cli 0.147.0-alpha.1.2`; no model call; `claim_eligible=false` |
 
-The current local full suite reported `1581 passed, 6 skipped`. This is one Darwin environment,
-not a three-OS qualification. The terminal CI run for the prior HEAD had green Linux/macOS
-Python 3.11/3.12/3.13 lanes and three Windows failures caused by one platform-specific test
-assertion. The assertion is corrected in the Pass 14 implementation candidate, but the new
-current-HEAD CI result remains pending. Signing, provenance, public redownload and real Host
-qualification remain `not_executed`; `release_ready=false` and `claim_eligible=false`.
+The current local full suite reported `1581 passed, 6 skipped`. GitHub Actions run
+[`31623892815`](https://github.com/Eysn0130/DeepLaw/actions/runs/31623892815), bound to commit
+`3ec85856b3ebc1703bf737c607149af3ca1d248d`, then passed all nine current-source regression
+lanes (Linux, macOS and Windows × Python 3.11, 3.12 and 3.13), both platform smoke jobs and the
+supply-chain/reproducible-release job. This is current-source CI evidence; it does not upgrade the
+historical 2026-08-08 artifact record, supply missing native platform release receipts, or replace
+formal signing, provenance, public redownload, Human Gold or real-Host qualification. Those gates
+remain `not_executed` or otherwise open; `release_ready=false` and `claim_eligible=false`.
