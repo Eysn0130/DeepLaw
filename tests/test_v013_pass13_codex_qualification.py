@@ -66,11 +66,12 @@ def test_pass13_runner_uses_a_closed_temporary_host_profile(
 
 
 def test_app_server_argv_is_read_only_and_exposes_one_mcp_tool(tmp_path: Path) -> None:
+    codex_binary = Path("/opt/codex")
     argv = qualification._app_server_argv(
-        Path("/opt/codex"),
+        codex_binary,
         mcp_wrapper=tmp_path / "deeplaw-mcp",
     )
-    assert argv[:3] == ["/opt/codex", "app-server", "--stdio"]
+    assert argv[:3] == [str(codex_binary), "app-server", "--stdio"]
     rendered = " ".join(argv)
     assert 'approval_policy="never"' in rendered
     assert 'model="gpt-5.6-luna"' in rendered
