@@ -12,6 +12,7 @@ from benchmarks.hosts.pass13_evidence import (
     analyze_safe_read_calls,
     build_bundle_manifest,
     canonical_json,
+    write_retained_artifact,
 )
 
 
@@ -193,3 +194,28 @@ def test_bundle_manifest_is_path_free_and_binds_each_artifact(tmp_path: Path) ->
             artifacts={"bad": secret},
             forbidden_values=("qualification-secret",),
         )
+
+
+def test_retained_artifact_is_scanned_before_exclusive_write(tmp_path: Path) -> None:
+    target = tmp_path / "sanitized.jsonl"
+    receipt = write_retained_artifact(
+        target,
+        b'{"method":"turn/completed"}\n',
+        forbidden_values=("qualification-secret",),
+    )
+    assert receipt == {
+        "name": "sanitized.jsonl",
+        "bytes": target.stat().st_size,
+        "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+    }
+    with pytest.raises(FileExistsError):
+        write_retained_artifact(target, b"{}\n")
+
+    blocked = tmp_path / "blocked.json"
+    with pytest.raises(EvidenceValidationError, match="forbidden value"):
+        write_retained_artifact(
+            blocked,
+            b'{"value":"qualification-secret"}\n',
+            forbidden_values=("qualification-secret",),
+        )
+    assert not blocked.exists()

@@ -199,6 +199,24 @@ def _scan_artifact(data: bytes, *, forbidden_values: Sequence[str]) -> None:
             raise EvidenceValidationError("artifact contains a forbidden value")
 
 
+def write_retained_artifact(
+    path: Path,
+    data: bytes,
+    *,
+    forbidden_values: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Scan one in-memory artifact before creating its retained file."""
+
+    if not isinstance(path, Path) or path.name != str(path.name) or not path.name:
+        raise EvidenceValidationError("retained artifact path is invalid")
+    if not isinstance(data, bytes) or not data or len(data) > 8 * 1024 * 1024:
+        raise EvidenceValidationError("retained artifact bytes are invalid")
+    _scan_artifact(data, forbidden_values=forbidden_values)
+    with path.open("xb") as stream:
+        stream.write(data)
+    return {"name": path.name, "bytes": len(data), "sha256": _sha256(data)}
+
+
 def build_bundle_manifest(
     *,
     host: str,
