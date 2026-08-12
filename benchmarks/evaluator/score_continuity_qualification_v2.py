@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+
+from jsonschema import Draft202012Validator
 
 from deeplaw.util import canonical_json, sha256_bytes, strict_json_loads
 
@@ -23,6 +26,12 @@ PROVIDER_HARD_LIMIT = 65_536
 MAX_CANDIDATE_BYTES = 256 * 1024
 MAX_GOLD_BYTES = 65_536
 MAX_REVIEW_BYTES = 65_536
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_PROVIDER_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "contracts"
+    / "provider-knowledge-capsule.v2.schema.json"
+)
 
 
 def _object(value: Any, *, label: str) -> dict[str, Any]:
@@ -96,6 +105,7 @@ def _validate_gold(value: Mapping[str, Any]) -> dict[str, Any]:
         "expected_release_state",
         "required_gap_codes",
         "acceptable_gap_codes",
+        "required_duties",
         "human_rubric",
         "historical_evidence_binding",
     }
@@ -134,19 +144,59 @@ def _validate_gold(value: Mapping[str, Any]) -> dict[str, Any]:
     acceptable_gaps = set(value["acceptable_gap_codes"])
     if not required_gaps <= acceptable_gaps:
         raise ValueError("Gold required gap codes must be acceptable")
+    duties = value.get("required_duties")
+    if not isinstance(duties, list) or not duties or len(duties) > 16:
+        raise ValueError("Gold required_duties is invalid")
+    duty_labels: list[str] = []
+    for index, raw_duty in enumerate(duties):
+        duty = _closed_mapping(raw_duty, field=f"Gold required_duties[{index}]")
+        if set(duty) != {
+            "duty_label",
+            "required_statement_ids",
+            "required_gap_codes",
+        }:
+            raise ValueError("Gold required duty fields are not closed")
+        label = duty.get("duty_label")
+        if not isinstance(label, str) or not label:
+            raise ValueError("Gold duty_label is invalid")
+        duty_labels.append(label)
+        duty_statement_ids = _optional_strings(
+            duty.get("required_statement_ids"),
+            field=f"Gold required_duties[{index}].required_statement_ids",
+        )
+        duty_gap_codes = _optional_strings(
+            duty.get("required_gap_codes"),
+            field=f"Gold required_duties[{index}].required_gap_codes",
+        )
+        if not duty_statement_ids and not duty_gap_codes:
+            raise ValueError("Gold required duty must bind a Statement or Gap")
+        if not set(duty_statement_ids) <= expected_ids:
+            raise ValueError("Gold required duty binds an unexpected Statement")
+        if not set(duty_gap_codes) <= required_gaps:
+            raise ValueError("Gold required duty binds a non-required Gap")
+    if len(set(duty_labels)) != len(duty_labels):
+        raise ValueError("Gold duty labels must be unique")
     rubric = _closed_mapping(value.get("human_rubric"), field="Gold human_rubric")
     if set(rubric) != {"en", "zh"}:
         raise ValueError("Gold human_rubric must contain independent en and zh entries")
     for language in ("en", "zh"):
         entry = _closed_mapping(rubric[language], field=f"Gold human_rubric.{language}")
-        if set(entry) != {"criteria", "pass_condition"}:
+        if set(entry) != {"criterion_ids", "criteria", "pass_condition"}:
             raise ValueError(f"Gold human_rubric.{language} is not closed")
+        criterion_ids = _non_empty_strings(
+            entry.get("criterion_ids"),
+            field=f"Gold human_rubric.{language}.criterion_ids",
+        )
         criteria = _non_empty_strings(
             entry.get("criteria"), field=f"Gold human_rubric.{language}.criteria"
         )
         if not isinstance(entry.get("pass_condition"), str) or not entry["pass_condition"]:
             raise ValueError(f"Gold human_rubric.{language}.pass_condition is invalid")
-        if len(criteria) > 16 or len(entry["pass_condition"]) > 1_000:
+        if (
+            len(criteria) > 16
+            or len(criterion_ids) != len(criteria)
+            or len(entry["pass_condition"]) > 1_000
+        ):
             raise ValueError(f"Gold human_rubric.{language} exceeds its bound")
     # There is intentionally no Pass 11 binding in this Gold.  This marker is
     # a structural guard against accidentally treating historical evidence as a
@@ -162,7 +212,12 @@ def load_gold(path: Path) -> dict[str, Any]:
     return _validate_gold(_load_bounded(path, maximum=MAX_GOLD_BYTES, label="Gold"))
 
 
-def _review_entry(value: Any, *, language: str) -> dict[str, Any]:
+def _review_entry(
+    value: Any,
+    *,
+    language: str,
+    expected_criterion_ids: set[str],
+) -> dict[str, Any]:
     entry = _closed_mapping(value, field=f"Human review {language}")
     required = {"reviewer_id", "independent", "decision", "criterion_results"}
     if set(entry) != required:
@@ -178,6 +233,10 @@ def _review_entry(value: Any, *, language: str) -> dict[str, Any]:
     )
     if not criteria or any(not isinstance(item, bool) for item in criteria.values()):
         raise ValueError(f"Human review {language}.criterion_results is invalid")
+    if set(criteria) != expected_criterion_ids:
+        raise ValueError(
+            f"Human review {language}.criterion_results do not bind the Gold rubric"
+        )
     return entry
 
 
@@ -208,11 +267,23 @@ def _validate_human_review(value: Mapping[str, Any], *, gold: Mapping[str, Any])
     for field in ("review_id", "gold_sha256", "candidate_sha256"):
         if not isinstance(value.get(field), str) or not value[field]:
             raise ValueError(f"Human review {field} is invalid")
+    if not _SHA256_PATTERN.fullmatch(str(value["gold_sha256"])) or not (
+        _SHA256_PATTERN.fullmatch(str(value["candidate_sha256"]))
+    ):
+        raise ValueError("Human review digest is invalid")
     reviews = _closed_mapping(value.get("reviews"), field="Human review reviews")
     if set(reviews) != {"en", "zh"}:
         raise ValueError("Human review must contain both en and zh")
-    english = _review_entry(reviews["en"], language="en")
-    chinese = _review_entry(reviews["zh"], language="zh")
+    english = _review_entry(
+        reviews["en"],
+        language="en",
+        expected_criterion_ids=set(gold["human_rubric"]["en"]["criterion_ids"]),
+    )
+    chinese = _review_entry(
+        reviews["zh"],
+        language="zh",
+        expected_criterion_ids=set(gold["human_rubric"]["zh"]["criterion_ids"]),
+    )
     if english["reviewer_id"] == chinese["reviewer_id"]:
         raise ValueError("Human review languages must have independent reviewers")
     return {**dict(value), "reviews": {"en": english, "zh": chinese}}
@@ -298,25 +369,115 @@ def _gap_codes(provider: Any, host_output: Mapping[str, Any]) -> tuple[list[str]
     return sorted(set(values)), True
 
 
-def _provider_bytes(observation: Mapping[str, Any], provider: Any) -> int | None:
+def _observed_provider_bytes(observation: Mapping[str, Any]) -> int | None:
     value = observation.get("provider_bytes")
     if value is None:
         value = observation.get("provider_result_bytes")
     if value is None:
         value = observation.get("provider_payload_bytes")
-    if value is None and isinstance(provider, Mapping):
-        delivery = provider.get("delivery")
-        if isinstance(delivery, Mapping):
-            value = delivery.get("provider_content_bytes")
-        if value is None:
-            capsule = provider.get("capsule")
-            if isinstance(capsule, Mapping):
-                delivery = capsule.get("delivery")
-                if isinstance(delivery, Mapping):
-                    value = delivery.get("provider_content_bytes")
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value
+
+
+def _provider_measurement(
+    provider: Any,
+) -> tuple[int | None, str | None, list[str]]:
+    failures: list[str] = []
+    if not isinstance(provider, Mapping):
+        return None, None, ["provider_capsule_schema_invalid"]
+    capsule = provider.get("capsule")
+    if not isinstance(capsule, Mapping):
+        return None, None, ["provider_capsule_schema_invalid"]
+    content = canonical_json(capsule)
+    provider_bytes = len(content.encode("utf-8"))
+    provider_sha256 = sha256_bytes(content.encode("utf-8"))
+    try:
+        schema = strict_json_loads(_PROVIDER_SCHEMA_PATH.read_bytes())
+        if not isinstance(schema, Mapping):
+            raise ValueError("Provider Capsule schema is invalid")
+        Draft202012Validator.check_schema(schema)
+        error = next(Draft202012Validator(schema).iter_errors(provider), None)
+        if error is not None:
+            failures.append("provider_capsule_schema_invalid")
+    except (OSError, ValueError):
+        failures.append("provider_capsule_schema_invalid")
+    delivery = provider.get("delivery")
+    if not isinstance(delivery, Mapping) or (
+        delivery.get("provider_content_bytes") != provider_bytes
+    ):
+        failures.append("provider_delivery_size_mismatch")
+    return provider_bytes, provider_sha256, failures
+
+
+def _tool_call_metrics(
+    observation: Mapping[str, Any],
+    *,
+    provider_bytes: int | None,
+    provider_sha256: str | None,
+) -> tuple[bool, int, list[str]]:
+    failures: list[str] = []
+    receipt = observation.get("actual_event_receipt")
+    calls = receipt.get("tool_calls") if isinstance(receipt, Mapping) else None
+    if not isinstance(calls, list):
+        return False, 0, ["knowledge_support_call_receipt_invalid"]
+    retry_count = max(0, len(calls) - 1)
+    if not calls:
+        return False, 0, ["knowledge_support_call_missing"]
+    if len(calls) > 2:
+        failures.append("knowledge_support_call_budget_exceeded")
+
+    call_validities: list[bool] = []
+    call_bytes: list[int] = []
+    for ordinal, call in enumerate(calls, start=1):
+        if not isinstance(call, Mapping):
+            failures.append("knowledge_support_call_receipt_invalid")
+            call_validities.append(False)
+            continue
+        tool = call.get("tool")
+        safe_leaf = isinstance(tool, str) and (
+            tool == "knowledge_support" or tool.endswith("_knowledge_support")
+        )
+        safe = bool(
+            call.get("ordinal") == ordinal
+            and safe_leaf
+            and call.get("operation") == "context"
+            and call.get("read_only") is True
+            and call.get("write_performed") is False
+            and call.get("status") in {"completed", "failed"}
+        )
+        if not safe:
+            failures.append("unsafe_or_write_tool_call")
+        value = call.get("provider_bytes")
+        digest = call.get("provider_content_sha256")
+        bounded = isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= (
+            PROVIDER_HARD_LIMIT
+        )
+        digest_valid = isinstance(digest, str) and bool(_SHA256_PATTERN.fullmatch(digest))
+        if not bounded or not digest_valid:
+            failures.append("tool_call_provider_binding_invalid")
+        if bounded:
+            call_bytes.append(value)
+        result_valid = bool(
+            safe
+            and bounded
+            and digest_valid
+            and call.get("status") == "completed"
+            and call.get("result_valid") is True
+            and value == provider_bytes
+            and digest == provider_sha256
+        )
+        call_validities.append(result_valid)
+
+    if not call_validities or not call_validities[-1]:
+        failures.append("final_provider_result_unbound")
+    if len(call_bytes) == 2 and all(
+        value > PROVIDER_HARD_LIMIT // 2 for value in call_bytes
+    ):
+        failures.append("repeated_large_provider_payload")
+    if sum(call_bytes) > PROVIDER_HARD_LIMIT + PROVIDER_HARD_LIMIT // 2:
+        failures.append("tool_call_provider_budget_exceeded")
+    return bool(call_validities and call_validities[0]), retry_count, failures
 
 
 def _candidate_input_values(observation: Mapping[str, Any]) -> list[str]:
@@ -481,6 +642,8 @@ def score_observation(
     host_output = _mapping_or_none(observation.get("host_output"))
     provider = observation.get("provider_capsule")
     failures = _isolation_failures(observation, validated_gold)
+    provider_bytes, provider_sha256, provider_failures = _provider_measurement(provider)
+    failures.extend(provider_failures)
     if observation.get("claim_eligible") is True:
         failures.append("candidate_claim_eligible")
     if observation.get("release_ready") is True:
@@ -540,7 +703,9 @@ def score_observation(
         and isinstance(row.get("statement_id"), str)
         and isinstance(row.get("statement_text", ""), str)
     }
-    context_chars = sum(len(text_by_id.get(statement_id, "")) for statement_id in ids)
+    context_chars = (
+        len(canonical_json(capsule)) if isinstance(capsule, Mapping) else 0
+    )
     relevant_chars = sum(
         len(text_by_id.get(statement_id, ""))
         for statement_id in ids
@@ -592,12 +757,38 @@ def score_observation(
     if unacceptable_gaps:
         failures.append("unacceptable_gap_code")
     gap_correct = float(not missing_gaps and not unacceptable_gaps and gaps_valid)
+    satisfied_duties = [
+        str(duty["duty_label"])
+        for duty in validated_gold["required_duties"]
+        if set(duty["required_statement_ids"]) <= provider_id_set
+        and set(duty["required_gap_codes"]) <= gap_set
+    ]
+    duty_coverage = round(
+        len(satisfied_duties) / len(validated_gold["required_duties"]), 6
+    )
+    if duty_coverage != 1.0:
+        failures.append("required_duty_unsatisfied")
 
-    provider_bytes = _provider_bytes(observation, provider)
-    if provider_bytes is None:
+    observed_provider_bytes = _observed_provider_bytes(observation)
+    observed_provider_sha256 = observation.get("provider_content_sha256")
+    if observed_provider_bytes is None:
         failures.append("provider_payload_size_missing")
-    elif provider_bytes < 0 or provider_bytes > PROVIDER_HARD_LIMIT:
+    elif observed_provider_bytes != provider_bytes:
+        failures.append("provider_payload_size_mismatch")
+    if provider_bytes is None or provider_bytes > PROVIDER_HARD_LIMIT:
         failures.append("provider_payload_overflow")
+    if (
+        not isinstance(observed_provider_sha256, str)
+        or not _SHA256_PATTERN.fullmatch(observed_provider_sha256)
+        or observed_provider_sha256 != provider_sha256
+    ):
+        failures.append("provider_payload_hash_mismatch")
+    first_call_validity, retry_count, tool_failures = _tool_call_metrics(
+        observation,
+        provider_bytes=provider_bytes,
+        provider_sha256=provider_sha256,
+    )
+    failures.extend(tool_failures)
 
     wrong_state_count = len(forbidden_present) + len(unexpected_ids) + int(not release_match)
     if wrong_state_count:
@@ -618,9 +809,14 @@ def score_observation(
         ),
         "redundancy": redundancy,
         "duplicate_evidence": duplicate_evidence,
-        "duty_coverage": useful_recall,
+        "duty_coverage": duty_coverage,
+        "satisfied_duty_labels": satisfied_duties,
         "gap_correctness": gap_correct,
         "provider_bytes": provider_bytes,
+        "observed_provider_bytes": observed_provider_bytes,
+        "provider_content_sha256": provider_sha256,
+        "first_call_validity": first_call_validity,
+        "retry_count": retry_count,
     }
     review_failures = _review_failures(
         human_review,
@@ -638,7 +834,8 @@ def score_observation(
         "claim_eligible": False,
         "human_review_passed": not review_failures,
         "artifact_binding_verified": bool(
-            human_review is not None
+            not review_failures
+            and human_review is not None
             and gold_sha256 is not None
             and candidate_sha256 is not None
             and human_review.get("gold_sha256") == gold_sha256

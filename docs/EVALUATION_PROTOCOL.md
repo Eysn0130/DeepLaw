@@ -116,12 +116,23 @@ is scored. Missing, incomplete, non-independent, rejected, or digest-mismatched 
 closed. The checked-in Gold remains `development_evaluator_only`, and no real Human review artifact
 is fabricated by tests.
 
-Machine correctness uses selected Statement IDs, a closed action, a closed release state, and gap
-codes. It reports First Correct Action, Decision Preservation, Wrong-State Admission, Recall@K,
+Machine correctness uses selected Statement IDs, a closed action, a closed release state, gap
+codes, and explicitly frozen required-duty labels. Duty Coverage is computed per duty from each
+duty's bound Statement IDs and Gap codes; it is not an alias for Statement recall. It reports First
+Correct Action, Decision Preservation, Wrong-State Admission, Recall@K,
 Precision@K, MRR, nDCG, Useful Context Recall, relevant/context characters, redundancy, duplicate
-evidence, Duty Coverage, Gap Correctness, and Provider bytes. Natural-language summary substrings,
-English casing, and translation wording cannot create a pass. Forbidden state and a Provider
-payload above 65,536 bytes remain hard failures.
+evidence, Duty Coverage, Gap Correctness, and Provider bytes. `context_chars` covers the complete
+canonical Provider content, not only Statement text. `provider_bytes` and its SHA-256 are recomputed
+from the exact canonical inner Provider Capsule and must match both the Host observation and
+delivery metadata; receipt, Query Trace, route metadata, and local audit metadata are outside that
+content. Natural-language summary substrings, English casing, and translation wording cannot
+create a pass. Forbidden state and a Provider payload above 65,536 bytes remain hard failures.
+
+Host-call scoring records first-call validity independently. One initial call plus at most one
+safe, read-only, budget-bounded retry is allowed. Zero calls, more than two calls, any write or
+wrong leaf, an invalid final Capsule, repeated large payloads, or aggregate payload overflow hard
+fails. Exact-one-call is therefore observable but is not the sole success definition. Human review
+remains mandatory and claim eligibility remains false even when all machine fields pass.
 
 The v3 repository development corpus may rotate only exact source-byte hashes after an accepted
 current-source correction. Its cases, labels, expected/forbidden IDs, thresholds, and governance

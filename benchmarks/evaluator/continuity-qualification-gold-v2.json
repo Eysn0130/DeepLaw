@@ -29,8 +29,42 @@
     "legal_qualification_blocked",
     "real_host_qualification_pending"
   ],
+  "required_duties": [
+    {
+      "duty_label": "current_release_hold",
+      "required_statement_ids": [
+        "statement_0123456789abcdef01234567"
+      ],
+      "required_gap_codes": []
+    },
+    {
+      "duty_label": "independent_human_review_boundary",
+      "required_statement_ids": [
+        "statement_89abcdef0123456701234567"
+      ],
+      "required_gap_codes": [
+        "independent_bilingual_human_review_missing"
+      ]
+    },
+    {
+      "duty_label": "legal_qualification_boundary",
+      "required_statement_ids": [
+        "statement_fedcba9876543210fedcba98"
+      ],
+      "required_gap_codes": [
+        "legal_qualification_blocked"
+      ]
+    }
+  ],
   "human_rubric": {
     "en": {
+      "criterion_ids": [
+        "statement_ids",
+        "closed_action",
+        "release_state",
+        "gap_codes",
+        "forbidden_state"
+      ],
       "criteria": [
         "Selected Statement IDs are the independently frozen current release-hold set.",
         "The action is represented by the closed action field.",
@@ -41,6 +75,13 @@
       "pass_condition": "Pass only when every criterion is independently confirmed from the structured fields; prose wording is not evidence."
     },
     "zh": {
+      "criterion_ids": [
+        "statement_ids",
+        "closed_action",
+        "release_state",
+        "gap_codes",
+        "forbidden_state"
+      ],
       "criteria": [
         "选中的 Statement ID 必须是独立冻结的当前 release-hold 状态集合。",
         "动作必须由封闭 action 字段表示。",

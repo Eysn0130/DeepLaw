@@ -15,6 +15,7 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 GOLD_PATH = REPOSITORY / "benchmarks/evaluator/continuity-qualification-gold-v2.json"
 GOLD_SCHEMA_PATH = REPOSITORY / "contracts/continuity-qualification-gold.v2.schema.json"
 REVIEW_SCHEMA_PATH = REPOSITORY / "contracts/continuity-human-review.v1.schema.json"
+PROVIDER_SCHEMA_PATH = REPOSITORY / "contracts/provider-knowledge-capsule.v2.schema.json"
 
 
 def _gold() -> dict[str, object]:
@@ -84,21 +85,77 @@ def _observation(gold: dict[str, object], *, language: str = "en") -> dict[str, 
         ]
     )
     statements = [
-        {"statement_id": statement_id, "statement_text": text}
+        {
+            "statement_id": statement_id,
+            "statement_text": text,
+            "statement_type": "factual",
+            "support_status": "supported",
+            "current_supported": True,
+            "freshness": "fresh",
+            "origin": "agent_derived",
+            "authority": "none",
+            "verification": "machine_checked",
+            "legal_authority": False,
+            "source_refs": [],
+        }
         for statement_id, text in zip(gold["expected_statement_ids"], texts, strict=True)
     ]
-    gaps = [{"code": code} for code in gold["required_gap_codes"]]
+    gaps = [
+        {
+            "gap_id": f"querygap_{index:024x}",
+            "code": code,
+            "duty": "unresolved_gap",
+            "message": f"Qualification gap: {code}",
+        }
+        for index, code in enumerate(gold["required_gap_codes"], start=1)
+    ]
+    receipt_id = "queryreceipt_0123456789abcdef01234567"
+    capsule = {
+        "schema_version": "deeplaw.knowledge-capsule-projection/v1",
+        "projection": "compact",
+        "receipt_id": receipt_id,
+        "hard_limit_bytes": 65_536,
+        "statements": statements,
+        "gaps": gaps,
+        "selected_statement_count": len(statements),
+        "selected_source_count": 0,
+    }
+    provider_bytes = len(canonical_json(capsule).encode("utf-8"))
+    provider_sha256 = hashlib.sha256(canonical_json(capsule).encode("utf-8")).hexdigest()
     return {
         "schema_version": "deeplaw.continuity-candidate-observation/v2",
         "case_id": gold["case_id"],
         "candidate": {"task": "Continue the owner review using the available context."},
         "provider_capsule": {
-            "capsule": {
-                "statements": statements,
-                "gaps": gaps,
-            }
+            "schema_version": "deeplaw.provider-knowledge-capsule/v2",
+            "purpose": "answer",
+            "policy_id": "compiled-first-v1",
+            "capsule": capsule,
+            "receipt": {"receipt_id": receipt_id},
+            "delivery": {
+                "hard_limit_bytes": 65_536,
+                "provider_content_bytes": provider_bytes,
+                "projection": "compact",
+                "write_performed": False,
+            },
         },
-        "provider_bytes": 2_048,
+        "provider_bytes": provider_bytes,
+        "provider_content_sha256": provider_sha256,
+        "actual_event_receipt": {
+            "tool_calls": [
+                {
+                    "ordinal": 1,
+                    "tool": "deeplaw_knowledge_knowledge_support",
+                    "operation": "context",
+                    "status": "completed",
+                    "read_only": True,
+                    "write_performed": False,
+                    "result_valid": True,
+                    "provider_bytes": provider_bytes,
+                    "provider_content_sha256": provider_sha256,
+                }
+            ]
+        },
         "host_output": {
             "summary": "中文或英文总结均不参与结构评分。",
             "action": gold["expected_action"],
@@ -127,16 +184,24 @@ def _score(
 def test_v2_gold_and_human_contracts_are_closed_and_evaluator_only() -> None:
     gold_schema = json.loads(GOLD_SCHEMA_PATH.read_text(encoding="utf-8"))
     review_schema = json.loads(REVIEW_SCHEMA_PATH.read_text(encoding="utf-8"))
+    provider_schema = json.loads(PROVIDER_SCHEMA_PATH.read_text(encoding="utf-8"))
     gold = _gold()
     review = _review(gold)
     Draft202012Validator.check_schema(gold_schema)
     Draft202012Validator.check_schema(review_schema)
+    Draft202012Validator.check_schema(provider_schema)
     Draft202012Validator(gold_schema).validate(gold)
     Draft202012Validator(review_schema).validate(review)
+    Draft202012Validator(provider_schema).validate(_observation(gold)["provider_capsule"])
     assert gold["claim_eligible"] is False
     assert gold["candidate_visible_when_frozen"] is False
     assert gold["historical_evidence_binding"] == []
     assert set(gold["human_rubric"]) == {"en", "zh"}
+    assert [duty["duty_label"] for duty in gold["required_duties"]] == [
+        "current_release_hold",
+        "independent_human_review_boundary",
+        "legal_qualification_boundary",
+    ]
     assert gold_schema["additionalProperties"] is False
     assert review_schema["additionalProperties"] is False
 
@@ -149,17 +214,25 @@ def test_chinese_and_english_prose_with_same_structure_score_full() -> None:
     chinese = _score(chinese_observation, gold)
     assert english["status"] == chinese["status"] == "passed"
     assert english["hard_failures"] == chinese["hard_failures"] == []
-    for metrics in (english["metrics"], chinese["metrics"]):
+    for report, observation in (
+        (english, english_observation),
+        (chinese, chinese_observation),
+    ):
+        metrics = report["metrics"]
         assert metrics["first_correct_action"] == 1.0
         assert metrics["decision_preservation"] == 1.0
         assert metrics["wrong_state_admission"] == 0
         assert metrics["recall_at_k"] == metrics["precision_at_k"] == 1.0
         assert metrics["mrr"] == metrics["ndcg"] == 1.0
-        assert metrics["relevant_chars_ratio"] == 1.0
+        assert 0.0 < metrics["relevant_chars_ratio"] < 1.0
         assert metrics["redundancy"] == 0.0
         assert metrics["duplicate_evidence"] == 0
         assert metrics["duty_coverage"] == metrics["gap_correctness"] == 1.0
-        assert metrics["provider_bytes"] == 2_048
+        capsule = observation["provider_capsule"]["capsule"]
+        assert metrics["context_chars"] == len(canonical_json(capsule))
+        assert metrics["provider_bytes"] == len(canonical_json(capsule).encode("utf-8"))
+        assert metrics["first_call_validity"] is True
+        assert metrics["retry_count"] == 0
 
 
 def test_forbidden_statement_id_and_wrong_release_state_are_hard_failures() -> None:
@@ -187,12 +260,18 @@ def test_forbidden_statement_id_and_wrong_release_state_are_hard_failures() -> N
 def test_provider_payload_boundary_and_missing_human_review_fail_closed() -> None:
     gold = _gold()
     observation = _observation(gold)
-    observation["provider_bytes"] = 65_536
-    at_limit = _score(observation, gold)
-    assert "provider_payload_overflow" not in at_limit["hard_failures"]
+    exact_bytes = observation["provider_bytes"]
+    observation["provider_bytes"] = 1
+    mismatch = _score(observation, gold)
+    assert "provider_payload_size_mismatch" in mismatch["hard_failures"]
+    assert mismatch["metrics"]["provider_bytes"] == exact_bytes
+    assert mismatch["metrics"]["observed_provider_bytes"] == 1
 
-    observation["provider_bytes"] = 65_537
-    over_limit = _score(observation, gold)
+    oversized = _observation(gold)
+    oversized["provider_capsule"]["capsule"]["statements"][0]["object_summary"] = {
+        "padding": "x" * 70_000
+    }
+    over_limit = _score(oversized, gold)
     assert "provider_payload_overflow" in over_limit["hard_failures"]
 
     missing_observation = _observation(gold)
@@ -207,6 +286,82 @@ def test_provider_payload_boundary_and_missing_human_review_fail_closed() -> Non
     assert "human_review_missing" in missing_review["hard_failures"]
     assert missing_review["artifact_binding_verified"] is False
     assert missing_review["release_ready"] is False
+
+
+def test_context_chars_cover_full_provider_content_and_duties_are_explicit() -> None:
+    gold = _gold()
+    observation = _observation(gold)
+    report = _score(observation, gold)
+    capsule = observation["provider_capsule"]["capsule"]
+    statement_chars = sum(
+        len(statement["statement_text"]) for statement in capsule["statements"]
+    )
+    assert report["metrics"]["context_chars"] == len(canonical_json(capsule))
+    assert report["metrics"]["context_chars"] > statement_chars
+
+    missing_duty = _observation(gold)
+    missing_duty["provider_capsule"]["capsule"]["gaps"].pop()
+    report = _score(missing_duty, gold)
+    assert report["metrics"]["recall_at_k"] == 1.0
+    assert report["metrics"]["duty_coverage"] < 1.0
+    assert "required_duty_unsatisfied" in report["hard_failures"]
+
+
+def test_bounded_safe_retry_is_separate_from_first_call_validity() -> None:
+    gold = _gold()
+    missing_call = _observation(gold)
+    missing_call["actual_event_receipt"]["tool_calls"] = []
+    missing = _score(missing_call, gold)
+    assert "knowledge_support_call_missing" in missing["hard_failures"]
+
+    retried = _observation(gold)
+    final_call = retried["actual_event_receipt"]["tool_calls"][0]
+    final_call["ordinal"] = 2
+    retried["actual_event_receipt"]["tool_calls"] = [
+        {
+            "ordinal": 1,
+            "tool": "deeplaw_knowledge_knowledge_support",
+            "operation": "context",
+            "status": "failed",
+            "read_only": True,
+            "write_performed": False,
+            "result_valid": False,
+            "provider_bytes": 0,
+            "provider_content_sha256": "0" * 64,
+        },
+        final_call,
+    ]
+    retried_report = _score(retried, gold)
+    assert retried_report["status"] == "passed"
+    assert retried_report["metrics"]["first_call_validity"] is False
+    assert retried_report["metrics"]["retry_count"] == 1
+
+    unsafe = copy.deepcopy(retried)
+    unsafe["actual_event_receipt"]["tool_calls"][1]["write_performed"] = True
+    unsafe_report = _score(unsafe, gold)
+    assert "unsafe_or_write_tool_call" in unsafe_report["hard_failures"]
+
+
+def test_invalid_provider_shape_and_review_digest_fail_closed() -> None:
+    gold = _gold()
+    missing_text = _observation(gold)
+    del missing_text["provider_capsule"]["capsule"]["statements"][0][
+        "statement_text"
+    ]
+    invalid_provider = _score(missing_text, gold)
+    assert "provider_capsule_schema_invalid" in invalid_provider["hard_failures"]
+
+    observation = _observation(gold)
+    invalid_review = _review(gold, observation)
+    invalid_review["gold_sha256"] = "not-a-digest"
+    invalid_review_report = evaluator.score_observation(
+        observation=observation,
+        gold=gold,
+        human_review=invalid_review,
+        gold_sha256="not-a-digest",
+        candidate_sha256=invalid_review["candidate_sha256"],
+    )
+    assert "human_review_invalid" in invalid_review_report["hard_failures"]
 
 
 def test_candidate_cannot_expose_gold_material_or_exact_target_ids() -> None:
