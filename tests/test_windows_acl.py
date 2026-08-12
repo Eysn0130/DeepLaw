@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from deeplaw import windows_acl
+from deeplaw import knowledge_store, windows_acl
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import (
     KnowledgeVault,
@@ -105,6 +105,66 @@ def test_windows_acl_evaluator_rejects_users_everyone_and_reparse_points() -> No
     assert report["entries"][0]["users_rule_count"] == 1
     assert report["entries"][0]["everyone_rule_count"] == 1
     assert any("broad_principal_allow" in item for item in report["errors"])
+
+
+def test_source_ingest_reapplies_native_acl_for_new_and_idempotent_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "vault"
+    source = tmp_path / "source.md"
+    source.write_text("# Decision\nKeep immutable Source bytes private.\n", encoding="utf-8")
+    initialize_knowledge_vault(root, name="windows-source-boundary", scope="project")
+    observed: list[Path] = []
+    monkeypatch.setattr(
+        knowledge_store,
+        "_harden_stored_source_if_windows",
+        lambda path: observed.append(path),
+    )
+
+    with KnowledgeVault(root, read_only=False) as vault:
+        first = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        second = compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+        stored = vault.source_file_path(first["source"]["source_id"])
+
+    assert second["idempotent"] is True
+    assert observed == [stored, stored]
+
+
+@pytest.mark.windows_native
+@pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
+def test_native_windows_source_ingest_remains_owner_only_without_manual_repair(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "vault"
+    source = tmp_path / "source.md"
+    source.write_text("# Decision\nKeep immutable Source bytes private.\n", encoding="utf-8")
+    initialize_knowledge_vault(root, name="windows-source-boundary", scope="project")
+
+    with KnowledgeVault(root, read_only=False) as vault:
+        compile_source(
+            vault,
+            source,
+            source_kind="document",
+            confirm_no_case_data=True,
+        )
+
+    native = native_windows_acl_report(root)
+    permissions = knowledge_vault_permission_report(root)
+    assert native["status"] == "verified", native
+    assert native["permissions_verified"] is True
+    assert permissions["status"] == "verified"
+    assert permissions["permissions_verified"] is True
 
 
 @pytest.mark.windows_native

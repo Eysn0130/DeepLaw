@@ -668,6 +668,16 @@ def knowledge_vault_permission_report(path: str | Path) -> dict[str, Any]:
     }
 
 
+def _harden_stored_source_if_windows(path: Path) -> None:
+    """Keep immutable Source bytes inside the Vault's native ACL boundary."""
+
+    if os.name != "nt":
+        return
+    from .windows_acl import harden_windows_private_file
+
+    harden_windows_private_file(path)
+
+
 def _validate_manifest(value: Any) -> dict[str, Any]:
     expected = {
         "schema_version",
@@ -2451,6 +2461,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 or sha256_file(existing_path) != existing["content_sha256"]
             ):
                 raise RuntimeError("existing knowledge source failed its content-integrity check")
+            _harden_stored_source_if_windows(existing_path)
             asset_rows = self.connection.execute(
                 """
                 SELECT DISTINCT assets.asset_id
@@ -2508,6 +2519,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             raise RuntimeError("existing knowledge source file does not match its content identity")
         else:
             os.chmod(destination, 0o600)
+        _harden_stored_source_if_windows(destination)
         imported_at = utc_now()
         previous_source = self.active_source_for_key(source_key)
         previous_source_id = previous_source["source_id"] if previous_source is not None else None

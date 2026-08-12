@@ -325,6 +325,20 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
     assert opencode["verification_command"] == ["opencode", "mcp", "list"]
 
 
+def test_host_connect_permission_diagnostics_are_bounded_and_path_free() -> None:
+    assert host_connect_module._permission_error_categories(
+        {
+            "native_windows_acl": {
+                "errors": [
+                    "broad_principal_allow:S-1-5-32-545:C:\\private\\vault\\source",
+                    "owner_full_control_missing:C:\\private\\vault\\source",
+                    "broad_principal_allow:S-1-1-0:C:\\private\\vault",
+                ]
+            }
+        }
+    ) == ["broad_principal_allow", "owner_full_control_missing"]
+
+
 def test_host_connect_fails_closed_when_real_context_seam_is_not_callable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

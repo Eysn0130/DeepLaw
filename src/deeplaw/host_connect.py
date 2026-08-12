@@ -13,6 +13,20 @@ from .util import strict_json_loads
 HostName = Literal["codex", "claude-code", "opencode"]
 
 
+def _permission_error_categories(permission_report: dict[str, Any]) -> list[str]:
+    native = permission_report.get("native_windows_acl")
+    errors = native.get("errors") if isinstance(native, dict) else None
+    if not isinstance(errors, list):
+        return []
+    return sorted(
+        {
+            error.split(":", 1)[0]
+            for error in errors
+            if isinstance(error, str) and error
+        }
+    )[:16]
+
+
 def _contract() -> dict[str, Any]:
     name = "host-connect-plan.v1.schema.json"
     packaged = Path(__file__).resolve().parent / "contracts" / name
@@ -57,6 +71,7 @@ def build_host_connect_plan(
             "schema_core_installed": schema_core_installed,
             "permissions_verified": permission_report.get("permissions_verified") is True,
             "permission_status": permission_report.get("status"),
+            "permission_error_categories": _permission_error_categories(permission_report),
             "job_records_valid": checks.get("job_records_valid") is True,
             "invalid_inbox_artifact_count": len(
                 checks.get("invalid_inbox_artifact_ids", [])
