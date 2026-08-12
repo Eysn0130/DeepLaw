@@ -185,7 +185,7 @@
       "required": [
         "operation", "provider_bytes", "provider_sha256", "structured_output_bytes",
         "structured_output_sha256", "delivery_match", "write_performed",
-        "statement_count", "gap_count"
+        "statement_count", "gap_count", "gap_codes"
       ],
       "properties": {
         "operation": {"enum": ["context", "query"]},
@@ -196,7 +196,11 @@
         "delivery_match": {"const": true},
         "write_performed": {"const": false},
         "statement_count": {"type": "integer", "minimum": 0},
-        "gap_count": {"type": "integer", "minimum": 0}
+        "gap_count": {"type": "integer", "minimum": 0},
+        "gap_codes": {
+          "type": "array", "maxItems": 20, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,99}$"}
+        }
       }
     },
     "safeRead": {
@@ -288,7 +292,7 @@
         "first_correct_action", "decision_preservation", "wrong_state_admission",
         "stale_state_rejected", "forgotten_state_admission", "gap_observed",
         "projection_state_correct", "retention_wording_correct",
-        "provider_boundary_correct"
+        "provider_boundary_correct", "evidence_sha256"
       ],
       "properties": {
         "first_correct_action": {"type": ["boolean", "null"]},
@@ -299,19 +303,48 @@
         "gap_observed": {"type": ["boolean", "null"]},
         "projection_state_correct": {"type": ["boolean", "null"]},
         "retention_wording_correct": {"type": ["boolean", "null"]},
-        "provider_boundary_correct": {"type": ["boolean", "null"]}
+        "provider_boundary_correct": {"type": ["boolean", "null"]},
+        "evidence_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "mutationBoundary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "owner_enabled", "read_mcp_write_performed", "audit_changed"],
+      "required": [
+        "kind", "owner_enabled", "read_mcp_write_performed", "audit_changed",
+        "audit_head_before", "audit_head_after", "receipt_sha256", "target_sha256"
+      ],
       "properties": {
         "kind": {"enum": ["none", "seed_checkpoint", "forget"]},
         "owner_enabled": {"type": "boolean"},
         "read_mcp_write_performed": {"const": false},
-        "audit_changed": {"type": "boolean"}
-      }
+        "audit_changed": {"type": "boolean"},
+        "audit_head_before": {"$ref": "#/$defs/sha256"},
+        "audit_head_after": {"$ref": "#/$defs/sha256"},
+        "receipt_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "target_sha256": {"$ref": "#/$defs/nullableSha256"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "none"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "owner_enabled": {"const": false},
+              "audit_changed": {"const": false},
+              "receipt_sha256": {"type": "null"},
+              "target_sha256": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "owner_enabled": {"const": true},
+              "audit_changed": {"const": true},
+              "receipt_sha256": {"$ref": "#/$defs/sha256"},
+              "target_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      ]
     },
     "run": {
       "type": "object",

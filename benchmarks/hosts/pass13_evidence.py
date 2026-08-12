@@ -208,6 +208,13 @@ def _analyze_call(
         "write_performed": False,
         "statement_count": len(statements),
         "gap_count": len(gaps),
+        "gap_codes": sorted(
+            {
+                gap["code"]
+                for gap in gaps
+                if isinstance(gap, Mapping) and isinstance(gap.get("code"), str)
+            }
+        ),
     }
 
 
@@ -262,14 +269,22 @@ def write_retained_artifact(
     path: Path,
     data: bytes,
     *,
+    output_root: Path,
     forbidden_values: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Scan one in-memory artifact before creating its retained file."""
 
+    if not isinstance(output_root, Path) or output_root.is_symlink() or not output_root.is_dir():
+        raise EvidenceValidationError("retained artifact root is invalid")
+    try:
+        root = output_root.resolve(strict=True)
+        parent = path.parent.resolve(strict=True)
+    except OSError as exc:
+        raise EvidenceValidationError("retained artifact root is unavailable") from exc
     if (
         not isinstance(path, Path)
         or _SAFE_ARTIFACT_NAME.fullmatch(path.name) is None
-        or not path.parent.is_dir()
+        or parent != root
         or path.parent.is_symlink()
     ):
         raise EvidenceValidationError("retained artifact path is invalid")
@@ -291,6 +306,7 @@ def build_bundle_manifest(
     commit: str,
     tree: str,
     artifacts: Mapping[str, Path],
+    output_root: Path,
     forbidden_values: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Build a path-free SHA manifest after scanning every retained artifact."""
@@ -299,6 +315,12 @@ def build_bundle_manifest(
         raise EvidenceValidationError("bundle host is unsupported")
     if _GIT_OID.fullmatch(commit) is None or _GIT_OID.fullmatch(tree) is None:
         raise EvidenceValidationError("bundle Git binding is invalid")
+    if not isinstance(output_root, Path) or output_root.is_symlink() or not output_root.is_dir():
+        raise EvidenceValidationError("bundle root is invalid")
+    try:
+        root = output_root.resolve(strict=True)
+    except OSError as exc:
+        raise EvidenceValidationError("bundle root is unavailable") from exc
     if not artifacts or len(artifacts) > 64:
         raise EvidenceValidationError("bundle artifact inventory is invalid")
     rows: list[dict[str, Any]] = []
@@ -313,6 +335,11 @@ def build_bundle_manifest(
         roles.add(role)
         if not isinstance(path, Path) or path.is_symlink() or not path.is_file():
             raise EvidenceValidationError("bundle artifact must be one regular file")
+        try:
+            if path.parent.resolve(strict=True) != root:
+                raise EvidenceValidationError("bundle artifact is outside its output root")
+        except OSError as exc:
+            raise EvidenceValidationError("bundle artifact root is unavailable") from exc
         name = path.name
         if name in names or _SAFE_ARTIFACT_NAME.fullmatch(name) is None:
             raise EvidenceValidationError("bundle artifact name is invalid or duplicated")
@@ -332,6 +359,16 @@ def build_bundle_manifest(
                 "sha256": _sha256(data),
             }
         )
+    required_roles = {
+        "qualification_report",
+        "sanitized_events_run_1",
+        "sanitized_events_run_2",
+        "sanitized_events_run_3",
+    }
+    if host == "opencode":
+        required_roles.add("preflight_receipt")
+    if roles != required_roles:
+        raise EvidenceValidationError("bundle artifact role set is incomplete or unexpected")
     rows.sort(key=lambda row: row["name"])
     return {
         "schema_version": "deeplaw.host-qualification-bundle-manifest/v1",
@@ -355,6 +392,57 @@ _CODEX_METHODS = {
         "thread/compacted",
     },
 }
+_CODEX_TURN_METHODS = {
+    "cold_start": ("thread/start",),
+    "resume_fork": ("thread/start", "thread/resume", "thread/fork"),
+    "compaction_forget": (
+        "thread/start",
+        "thread/compact/start",
+        "thread/compact/start",
+    ),
+}
+_MUTATION_KINDS = {
+    "codex": {
+        "cold_start": ("seed_checkpoint",),
+        "resume_fork": ("seed_checkpoint",),
+        "compaction_forget": ("seed_checkpoint", "forget"),
+    },
+    "opencode": {
+        "projection_status": ("seed_checkpoint",),
+        "source_forget": ("seed_checkpoint", "forget"),
+        "provider_boundary": ("none",),
+    },
+}
+
+
+def _metric_evidence(run: Mapping[str, Any]) -> str:
+    metrics = run.get("metrics")
+    if not isinstance(metrics, Mapping):
+        raise EvidenceValidationError("Host run omitted scenario metrics")
+    payload = {
+        "scenario": run.get("scenario"),
+        "task_sha256": run.get("task_sha256"),
+        "turns": [
+            {
+                "final_response_sha256": turn.get("final_response_sha256"),
+                "provider_sha256": [
+                    item.get("provider_sha256")
+                    for item in turn.get("safe_read", {}).get("provider_payloads", [])
+                    if isinstance(item, Mapping)
+                ],
+            }
+            for turn in run.get("turns", [])
+            if isinstance(turn, Mapping)
+        ],
+        "checks": {key: value for key, value in metrics.items() if key != "evidence_sha256"},
+    }
+    return _sha256(_encoded(payload))
+
+
+def metric_evidence_sha256(run: Mapping[str, Any]) -> str:
+    """Bind scenario checks to the exact retained response/Capsule hashes."""
+
+    return _metric_evidence(run)
 
 
 def _token_aggregate(runs: Sequence[Mapping[str, Any]], field: str) -> int | str:
@@ -370,13 +458,32 @@ def _token_aggregate(runs: Sequence[Mapping[str, Any]], field: str) -> int | str
 
 
 def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
-    """Recompute the cross-field facts that JSON Schema cannot express."""
+    """Validate the full report contract and recompute cross-field facts."""
+
+    _validate_contract(
+        "host-continuity-qualification.v1.schema.json",
+        report,
+        label="Host qualification report",
+    )
 
     host = report.get("host")
     expected_scenarios = _SCENARIO_MATRIX.get(host)
     runs = report.get("runs")
     if expected_scenarios is None or not isinstance(runs, list) or len(runs) != 3:
         raise EvidenceValidationError("Host report must contain its exact scenario matrix")
+    attestation = report.get("host_attestation")
+    security = report.get("security")
+    if not isinstance(attestation, Mapping) or not isinstance(security, Mapping):
+        raise EvidenceValidationError("Host attestation or security receipt is missing")
+    expected_host = {
+        "codex": ("codex", "gpt-5.6-luna", "max"),
+        "opencode": ("opencode", "deepseek/deepseek-v4-flash", "max"),
+    }[str(host)]
+    attested_host = tuple(
+        attestation.get(field) for field in ("binary_name", "model", "reasoning_effort")
+    )
+    if attested_host != expected_host:
+        raise EvidenceValidationError("Host attestation identity is invalid")
     observed = tuple(run.get("scenario") for run in runs if isinstance(run, Mapping))
     indexes = tuple(run.get("run_index") for run in runs if isinstance(run, Mapping))
     if observed != expected_scenarios or indexes != (1, 2, 3):
@@ -392,18 +499,50 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         run_passed = run.get("status") == "passed"
         if run_passed:
             passed_runs += 1
+            if run.get("failure_codes"):
+                raise EvidenceValidationError("passed Host run retained failure codes")
         elif not run.get("failure_codes"):
             raise EvidenceValidationError("failed Host run must retain a failure code")
         methods = run.get("methods_observed")
         if not isinstance(methods, list) or not methods:
             raise EvidenceValidationError("Host run omitted lifecycle methods")
-        if host == "codex" and not _CODEX_METHODS[str(run["scenario"])].issubset(methods):
-            raise EvidenceValidationError("Codex run omitted a required lifecycle method")
+        if host == "codex":
+            expected_method_set = _CODEX_METHODS[str(run["scenario"])]
+            if (run_passed and set(methods) != expected_method_set) or not set(
+                methods
+            ).issubset(expected_method_set):
+                raise EvidenceValidationError("Codex run lifecycle method set is invalid")
         if host == "opencode" and set(methods) != {"opencode/run"}:
             raise EvidenceValidationError("OpenCode run lifecycle method is invalid")
         turns = run.get("turns")
         if not isinstance(turns, list) or not turns:
             raise EvidenceValidationError("Host run omitted turn evidence")
+        turn_statuses = [turn.get("status") for turn in turns if isinstance(turn, Mapping)]
+        if run_passed and (len(turn_statuses) != len(turns) or set(turn_statuses) != {"passed"}):
+            raise EvidenceValidationError("passed Host run contains a failed turn")
+        if not run_passed and "failed" not in turn_statuses:
+            raise EvidenceValidationError("failed Host run does not contain a failed turn")
+        turn_methods = tuple(
+            turn.get("lifecycle_method") for turn in turns if isinstance(turn, Mapping)
+        )
+        expected_turn_methods = (
+            _CODEX_TURN_METHODS[str(run["scenario"])] if host == "codex" else ("opencode/run",)
+        )
+        if run_passed and turn_methods != expected_turn_methods:
+            raise EvidenceValidationError("Host turn lifecycle sequence is invalid")
+        if not run_passed and turn_methods != expected_turn_methods[: len(turn_methods)]:
+            raise EvidenceValidationError("failed Host turn lifecycle prefix is invalid")
+        if run.get("new_thread") is not True:
+            raise EvidenceValidationError("qualification scenarios require distinct new tasks")
+        if host == "codex" and run_passed:
+            thread_ids = [turn.get("thread_id_sha256") for turn in turns]
+            turn_ids = [turn.get("turn_id_sha256") for turn in turns]
+            if any(value is None for value in (*thread_ids, *turn_ids)):
+                raise EvidenceValidationError("Codex lifecycle identities are missing")
+            if len(set(turn_ids)) != len(turn_ids):
+                raise EvidenceValidationError("Codex turn identities must be unique")
+            if run["scenario"] == "resume_fork" and thread_ids[-1] == thread_ids[-2]:
+                raise EvidenceValidationError("Codex fork did not create a distinct thread")
         first_read: Mapping[str, Any] | None = None
         retried = False
         for turn in turns:
@@ -476,13 +615,116 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         if retried:
             bounded_retry_runs += 1
 
+        boundaries = run.get("mutation_boundaries")
+        if not isinstance(boundaries, list):
+            raise EvidenceValidationError("Host run omitted mutation boundaries")
+        kinds = tuple(
+            boundary.get("kind") for boundary in boundaries if isinstance(boundary, Mapping)
+        )
+        expected_kinds = _MUTATION_KINDS[str(host)][str(run["scenario"])]
+        if len(kinds) != len(boundaries) or (
+            run_passed and kinds != expected_kinds
+        ) or (not run_passed and kinds != expected_kinds[: len(kinds)]):
+            raise EvidenceValidationError("Host mutation boundary sequence is invalid")
+        for boundary in boundaries:
+            if not isinstance(boundary, Mapping):
+                raise EvidenceValidationError("Host mutation boundary is invalid")
+            changed = boundary.get("audit_head_before") != boundary.get("audit_head_after")
+            if boundary.get("audit_changed") is not changed:
+                raise EvidenceValidationError("mutation audit change flag is inconsistent")
+            if boundary["kind"] == "none":
+                if boundary.get("owner_enabled") is not False:
+                    raise EvidenceValidationError("no-mutation boundary claims owner enablement")
+            elif (
+                boundary.get("owner_enabled") is not True
+                or boundary.get("receipt_sha256") is None
+                or boundary.get("target_sha256") is None
+            ):
+                raise EvidenceValidationError("owner mutation lacks receipt binding")
+
+        metrics = run.get("metrics")
+        if not isinstance(metrics, Mapping) or metrics.get(
+            "evidence_sha256"
+        ) != _metric_evidence(run):
+            raise EvidenceValidationError("scenario metrics are not bound to response evidence")
+        if run_passed and host == "codex":
+            required_common = {
+                "first_correct_action": True,
+                "wrong_state_admission": 0,
+                "stale_state_rejected": True,
+                "provider_boundary_correct": True,
+            }
+            for field, value in required_common.items():
+                if metrics.get(field) != value:
+                    raise EvidenceValidationError("passed scenario metric is not satisfied")
+            if (
+                run["scenario"] == "resume_fork"
+                and metrics.get("decision_preservation") is not True
+            ):
+                raise EvidenceValidationError("resume/fork decision was not preserved")
+            if run["scenario"] == "compaction_forget" and (
+                metrics.get("forgotten_state_admission") != 0
+                or metrics.get("gap_observed") is not True
+            ):
+                raise EvidenceValidationError("compaction/forget admission is invalid")
+        if run_passed and host == "opencode":
+            provider_payloads = [
+                payload
+                for turn in turns
+                if isinstance(turn, Mapping)
+                for payload in turn.get("safe_read", {}).get("provider_payloads", [])
+                if isinstance(payload, Mapping)
+            ]
+            observed_gap_codes = {
+                code
+                for payload in provider_payloads
+                for code in payload.get("gap_codes", [])
+                if isinstance(code, str)
+            }
+            if metrics.get("provider_boundary_correct") is not True:
+                raise EvidenceValidationError("OpenCode Provider boundary is invalid")
+            if run["scenario"] == "projection_status" and metrics.get(
+                "projection_state_correct"
+            ) is not True:
+                raise EvidenceValidationError("projection status was not reported correctly")
+            if (
+                run["scenario"] == "projection_status"
+                and "uncompiled_source" not in observed_gap_codes
+            ):
+                raise EvidenceValidationError("projection Gap evidence is missing")
+            if run["scenario"] == "source_forget" and metrics.get(
+                "retention_wording_correct"
+            ) is not True:
+                raise EvidenceValidationError("source forget wording was not preserved")
+            if run["scenario"] == "source_forget" and (
+                metrics.get("forgotten_state_admission") != 0
+                or metrics.get("gap_observed") is not True
+                or any(payload.get("statement_count") != 0 for payload in provider_payloads)
+                or not any(payload.get("gap_count", 0) > 0 for payload in provider_payloads)
+            ):
+                raise EvidenceValidationError("source forget admission is invalid")
+
     lifecycle = report.get("lifecycle")
     root_methods = lifecycle.get("methods_observed") if isinstance(lifecycle, Mapping) else None
     required_root = (
         set().union(*_CODEX_METHODS.values()) if host == "codex" else {"not_applicable"}
     )
-    if not isinstance(root_methods, list) or not required_root.issubset(root_methods):
+    observed_method_union = (
+        {
+            method
+            for run in runs
+            for method in run.get("methods_observed", [])
+            if isinstance(method, str)
+        }
+        if host == "codex"
+        else {"not_applicable"}
+    )
+    if not isinstance(root_methods, list) or set(root_methods) != observed_method_union:
+        raise EvidenceValidationError("root Host lifecycle does not match run evidence")
+    if report.get("status") == "executed" and set(root_methods) != required_root:
         raise EvidenceValidationError("root Host lifecycle coverage is incomplete")
+    if not set(root_methods).issubset(required_root):
+        raise EvidenceValidationError("root Host lifecycle contains unexpected methods")
 
     aggregate = report.get("aggregate")
     if not isinstance(aggregate, Mapping):
@@ -493,6 +735,12 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         "first_call_valid_runs": first_call_valid_runs,
         "bounded_retry_runs": bounded_retry_runs,
         "provider_bytes": provider_bytes,
+        "host_elapsed_ms": sum(
+            turn.get("host_elapsed_ms", 0)
+            for run in runs
+            for turn in run.get("turns", [])
+            if isinstance(turn, Mapping)
+        ),
         **{
             field: _token_aggregate(runs, field)
             for field in (
@@ -506,3 +754,25 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
     }
     if any(aggregate.get(field) != value for field, value in expected_aggregate.items()):
         raise EvidenceValidationError("Host aggregate does not match recomputed run evidence")
+    expected_status = (
+        "executed" if passed_runs == 3 else "failed" if passed_runs == 0 else "partial"
+    )
+    if report.get("status") != expected_status:
+        raise EvidenceValidationError("Host report status does not match its runs")
+    if report.get("status") == "executed":
+        inventories = (attestation.get("model_inventory"), attestation.get("mcp_inventory"))
+        if any(
+            not isinstance(item, Mapping)
+            or item.get("checked") is not True
+            or item.get("selected_present") is not True
+            for item in inventories
+        ):
+            raise EvidenceValidationError("executed Host report lacks current inventory proof")
+        required_security = {
+            "mcp_child_closed_environment": True,
+            "only_knowledge_support_enabled": True,
+            "absolute_path_leak": False,
+            "secret_leak": False,
+        }
+        if any(security.get(field) != value for field, value in required_security.items()):
+            raise EvidenceValidationError("executed Host report failed a security boundary")

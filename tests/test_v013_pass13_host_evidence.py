@@ -12,6 +12,7 @@ from benchmarks.hosts.pass13_evidence import (
     analyze_safe_read_calls,
     build_bundle_manifest,
     canonical_json,
+    metric_evidence_sha256,
     validate_host_report_consistency,
     write_retained_artifact,
 )
@@ -123,6 +124,7 @@ def test_safe_reads_recompute_exact_provider_transport_bytes() -> None:
                 "write_performed": False,
                 "statement_count": 1,
                 "gap_count": 0,
+                "gap_codes": [],
             }
         ],
     }
@@ -200,20 +202,32 @@ def test_provider_transport_mismatch_and_outer_metadata_fail_closed() -> None:
 
 def test_bundle_manifest_is_path_free_and_binds_each_artifact(tmp_path: Path) -> None:
     report = tmp_path / "codex-observation.json"
-    events = tmp_path / "codex-run-1-events.sanitized.jsonl"
     report.write_text('{"status":"failed"}\n', encoding="utf-8")
-    events.write_text('{"method":"turn/completed"}\n', encoding="utf-8")
+    event_paths = []
+    for index in range(1, 4):
+        events = tmp_path / f"codex-run-{index}-events.sanitized.jsonl"
+        events.write_text('{"method":"turn/completed"}\n', encoding="utf-8")
+        event_paths.append(events)
 
     manifest = build_bundle_manifest(
         host="codex",
         commit="a" * 40,
         tree="b" * 40,
-        artifacts={"observation": report, "sanitized_events_run_1": events},
+        artifacts={
+            "qualification_report": report,
+            **{
+                f"sanitized_events_run_{index}": path
+                for index, path in enumerate(event_paths, 1)
+            },
+        },
+        output_root=tmp_path,
     )
     assert manifest["schema_version"] == "deeplaw.host-qualification-bundle-manifest/v1"
     assert [row["name"] for row in manifest["artifacts"]] == [
         "codex-observation.json",
         "codex-run-1-events.sanitized.jsonl",
+        "codex-run-2-events.sanitized.jsonl",
+        "codex-run-3-events.sanitized.jsonl",
     ]
     assert str(tmp_path) not in canonical_json(manifest)
     assert manifest["artifacts"][0]["sha256"] == hashlib.sha256(
@@ -236,6 +250,7 @@ def test_bundle_manifest_is_path_free_and_binds_each_artifact(tmp_path: Path) ->
             commit="a" * 40,
             tree="b" * 40,
             artifacts={"bad": secret},
+            output_root=tmp_path,
             forbidden_values=("qualification-secret",),
         )
 
@@ -245,6 +260,7 @@ def test_retained_artifact_is_scanned_before_exclusive_write(tmp_path: Path) -> 
     receipt = write_retained_artifact(
         target,
         b'{"method":"turn/completed"}\n',
+        output_root=tmp_path,
         forbidden_values=("qualification-secret",),
     )
     assert receipt == {
@@ -253,13 +269,14 @@ def test_retained_artifact_is_scanned_before_exclusive_write(tmp_path: Path) -> 
         "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
     }
     with pytest.raises(FileExistsError):
-        write_retained_artifact(target, b"{}\n")
+        write_retained_artifact(target, b"{}\n", output_root=tmp_path)
 
     blocked = tmp_path / "blocked.json"
     with pytest.raises(EvidenceValidationError, match="forbidden value"):
         write_retained_artifact(
             blocked,
             b'{"value":"qualification-secret"}\n',
+            output_root=tmp_path,
             forbidden_values=("qualification-secret",),
         )
     assert not blocked.exists()
@@ -278,15 +295,39 @@ def _report_run(index: int, scenario: str) -> dict[str, object]:
         "source_forget": ["opencode/run"],
         "provider_boundary": ["opencode/run"],
     }[scenario]
-    return {
-        "run_index": index,
-        "scenario": scenario,
-        "status": "passed",
-        "failure_codes": [],
-        "methods_observed": methods,
-        "turns": [
+    turn_methods = {
+        "cold_start": ["thread/start"],
+        "resume_fork": ["thread/start", "thread/resume", "thread/fork"],
+        "compaction_forget": [
+            "thread/start",
+            "thread/compact/start",
+            "thread/compact/start",
+        ],
+        "projection_status": ["opencode/run"],
+        "source_forget": ["opencode/run"],
+        "provider_boundary": ["opencode/run"],
+    }[scenario]
+    turns = []
+    for turn_index, method in enumerate(turn_methods, 1):
+        thread_generation = 0 if scenario != "resume_fork" or turn_index < 3 else 1
+        turns.append(
             {
                 "status": "passed",
+                "lifecycle_method": method,
+                "thread_id_sha256": hashlib.sha256(
+                    f"thread:{scenario}:{thread_generation}".encode()
+                ).hexdigest(),
+                "turn_id_sha256": hashlib.sha256(
+                    f"turn:{scenario}:{turn_index}".encode()
+                ).hexdigest(),
+                "prompt_sha256": hashlib.sha256(
+                    f"prompt:{scenario}:{turn_index}".encode()
+                ).hexdigest(),
+                "final_response_sha256": hashlib.sha256(
+                    f"response:{scenario}:{turn_index}".encode()
+                ).hexdigest(),
+                "final_response_bytes": 40,
+                "host_elapsed_ms": 5,
                 "ledger_audit_head_before": "a" * 64,
                 "ledger_audit_head_after": "a" * 64,
                 "ledger_unchanged": True,
@@ -306,24 +347,161 @@ def _report_run(index: int, scenario: str) -> dict[str, object]:
                         {
                             "operation": "context",
                             "provider_bytes": 100,
+                            "provider_sha256": hashlib.sha256(
+                                f"provider:{scenario}:{turn_index}".encode()
+                            ).hexdigest(),
+                            "structured_output_bytes": 200,
+                            "structured_output_sha256": hashlib.sha256(
+                                f"structured:{scenario}:{turn_index}".encode()
+                            ).hexdigest(),
+                            "delivery_match": True,
+                            "write_performed": False,
+                            "statement_count": 0 if scenario == "source_forget" else 1,
+                            "gap_count": 1
+                            if scenario
+                            in {"compaction_forget", "projection_status", "source_forget"}
+                            else 0,
+                            "gap_codes": {
+                                "compaction_forget": ["forgotten_knowledge"],
+                                "projection_status": ["uncompiled_source"],
+                                "source_forget": ["source_withdrawn"],
+                            }.get(scenario, []),
                         }
                     ],
                 },
+                "sanitized_events": {
+                    "name": f"run-{index}-turn-{turn_index}.jsonl",
+                    "bytes": 20,
+                    "sha256": hashlib.sha256(
+                        f"events:{scenario}:{turn_index}".encode()
+                    ).hexdigest(),
+                },
             }
-        ],
+        )
+    metrics = {
+        "first_correct_action": True,
+        "decision_preservation": True if scenario == "resume_fork" else None,
+        "wrong_state_admission": 0,
+        "stale_state_rejected": True,
+        "forgotten_state_admission": 0
+        if scenario in {"compaction_forget", "source_forget"}
+        else None,
+        "gap_observed": True
+        if scenario in {"compaction_forget", "source_forget"}
+        else None,
+        "projection_state_correct": True if scenario == "projection_status" else None,
+        "retention_wording_correct": True if scenario == "source_forget" else None,
+        "provider_boundary_correct": True,
+        "evidence_sha256": "0" * 64,
     }
+    mutation_kinds = {
+        "cold_start": ("seed_checkpoint",),
+        "resume_fork": ("seed_checkpoint",),
+        "compaction_forget": ("seed_checkpoint", "forget"),
+        "projection_status": ("seed_checkpoint",),
+        "source_forget": ("seed_checkpoint", "forget"),
+        "provider_boundary": ("none",),
+    }[scenario]
+    boundaries = []
+    for boundary_index, kind in enumerate(mutation_kinds, 1):
+        changed = kind != "none"
+        boundaries.append(
+            {
+                "kind": kind,
+                "owner_enabled": changed,
+                "read_mcp_write_performed": False,
+                "audit_changed": changed,
+                "audit_head_before": "b" * 64,
+                "audit_head_after": "c" * 64 if changed else "b" * 64,
+                "receipt_sha256": hashlib.sha256(
+                    f"receipt:{scenario}:{boundary_index}".encode()
+                ).hexdigest()
+                if changed
+                else None,
+                "target_sha256": hashlib.sha256(
+                    f"target:{scenario}:{boundary_index}".encode()
+                ).hexdigest()
+                if changed
+                else None,
+            }
+        )
+    run: dict[str, object] = {
+        "run_index": index,
+        "scenario": scenario,
+        "status": "passed",
+        "failure_codes": [],
+        "task_sha256": hashlib.sha256(f"task:{scenario}".encode()).hexdigest(),
+        "new_thread": True,
+        "methods_observed": methods,
+        "turns": turns,
+        "metrics": metrics,
+        "mutation_boundaries": boundaries,
+    }
+    metrics["evidence_sha256"] = metric_evidence_sha256(run)
+    return run
 
 
-def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> None:
+def _report(host: str) -> dict[str, object]:
+    scenarios = (
+        ("cold_start", "resume_fork", "compaction_forget")
+        if host == "codex"
+        else ("projection_status", "source_forget", "provider_boundary")
+    )
+    runs = [_report_run(index, scenario) for index, scenario in enumerate(scenarios, 1)]
+    turns = [turn for run in runs for turn in run["turns"]]  # type: ignore[index]
     report = {
-        "host": "codex",
+        "schema_version": "deeplaw.host-continuity-qualification/v1",
+        "host": host,
         "status": "executed",
-        "runs": [
-            _report_run(1, "cold_start"),
-            _report_run(2, "resume_fork"),
-            _report_run(3, "compaction_forget"),
-        ],
+        "package_version": "0.12.0",
+        "release_ready": False,
+        "claim_eligible": False,
+        "binding": {
+            "commit": "1" * 40,
+            "tree": "2" * 40,
+            "worktree_clean": True,
+            "wheel_name": "deeplaw-0.12.0-py3-none-any.whl",
+            "wheel_sha256": "3" * 64,
+            "wheel_bytes": 100,
+            "runtime_executable_sha256": "4" * 64,
+            "import_path_class": "isolated_site_packages",
+            "contract_digests": {
+                "host-continuity-qualification.v1.schema.json": "5" * 64,
+                "knowledge-support.output.v6.schema.json": "6" * 64,
+                "provider-knowledge-capsule.v2.schema.json": "7" * 64,
+            },
+        },
+        "environment": {
+            "operating_system": "Darwin",
+            "architecture": "arm64",
+            "python_version": "3.13.7",
+        },
+        "host_attestation": {
+            "binary_name": host,
+            "binary_sha256": "8" * 64,
+            "version": "current",
+            "model": "gpt-5.6-luna" if host == "codex" else "deepseek/deepseek-v4-flash",
+            "reasoning_effort": "max",
+            "authentication": {
+                "status": "existing_login_confirmed" if host == "codex" else "provider_available",
+                "source": "existing_codex_login" if host == "codex" else "process_environment",
+                "auth_file_read": False,
+            },
+            "model_inventory": {
+                "checked": True,
+                "selected_present": True,
+                "raw_sha256": "9" * 64,
+                "raw_bytes": 100,
+            },
+            "mcp_inventory": {
+                "checked": True,
+                "selected_present": True,
+                "raw_sha256": "a" * 64,
+                "raw_bytes": 100,
+            },
+        },
         "lifecycle": {
+            "host_owns_threads": True,
             "methods_observed": [
                 "thread/start",
                 "thread/resume",
@@ -331,20 +509,40 @@ def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> N
                 "thread/compact/start",
                 "thread/compacted",
             ]
+            if host == "codex"
+            else ["not_applicable"],
+            "deeplaw_session_store_created": False,
         },
+        "security": {
+            "mcp_child_closed_environment": True,
+            "only_knowledge_support_enabled": True,
+            "absolute_path_leak": False,
+            "secret_leak": False,
+            "raw_transcript_retained": False,
+            "hidden_reasoning_retained": False,
+            "authentication_material_retained": False,
+        },
+        "runs": runs,
         "aggregate": {
             "passed_runs": 3,
             "failed_runs": 0,
             "first_call_valid_runs": 3,
             "bounded_retry_runs": 0,
-            "provider_bytes": 300,
-            "input_tokens": 30,
-            "cached_input_tokens": 6,
-            "output_tokens": 12,
-            "reasoning_output_tokens": 3,
-            "total_tokens": 42,
+            "provider_bytes": 100 * len(turns),
+            "input_tokens": 10 * len(turns),
+            "cached_input_tokens": 2 * len(turns),
+            "output_tokens": 4 * len(turns),
+            "reasoning_output_tokens": len(turns),
+            "total_tokens": 14 * len(turns),
+            "host_elapsed_ms": 5 * len(turns),
         },
+        "not_executed": ["Human review"],
     }
+    return report
+
+
+def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> None:
+    report = _report("codex")
     validate_host_report_consistency(report)
 
     report["runs"][2]["scenario"] = "cold_start"  # type: ignore[index]
@@ -353,28 +551,7 @@ def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> N
 
 
 def test_report_consistency_rejects_empty_read_and_self_reported_aggregate() -> None:
-    report = {
-        "host": "opencode",
-        "status": "executed",
-        "runs": [
-            _report_run(1, "projection_status"),
-            _report_run(2, "source_forget"),
-            _report_run(3, "provider_boundary"),
-        ],
-        "lifecycle": {"methods_observed": ["not_applicable"]},
-        "aggregate": {
-            "passed_runs": 3,
-            "failed_runs": 0,
-            "first_call_valid_runs": 3,
-            "bounded_retry_runs": 0,
-            "provider_bytes": 300,
-            "input_tokens": 30,
-            "cached_input_tokens": 6,
-            "output_tokens": 12,
-            "reasoning_output_tokens": 3,
-            "total_tokens": 42,
-        },
-    }
+    report = _report("opencode")
     report["runs"][0]["turns"][0]["safe_read"] = {  # type: ignore[index]
         "call_count": 0,
         "first_call_valid": False,
@@ -382,7 +559,7 @@ def test_report_consistency_rejects_empty_read_and_self_reported_aggregate() -> 
         "safe_read_operations": [],
         "provider_payloads": [],
     }
-    with pytest.raises(EvidenceValidationError, match="passed turn"):
+    with pytest.raises(EvidenceValidationError, match="contract"):
         validate_host_report_consistency(report)
 
     report["runs"][0] = _report_run(1, "projection_status")  # type: ignore[index]
