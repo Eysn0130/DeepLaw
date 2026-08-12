@@ -25,6 +25,7 @@ from .knowledge_models import (
     canonical_timestamp,
     utc_now,
 )
+from .knowledge_service import source_knowledge_status_for_result
 from .knowledge_store import KnowledgeVault
 from .util import canonical_json, sha256_bytes, sha256_file, stable_id, strict_json_loads
 
@@ -1097,11 +1098,15 @@ def run_registered_sync(vault: KnowledgeVault) -> dict[str, Any]:
         )
         _write_job(vault, job)
         completed = run_ingest_job(vault, job["job_id"])
+        completed_with_status = source_knowledge_status_for_result(vault, completed)
         jobs.append(
             {
                 "job_id": completed["job_id"],
                 "state": completed["state"],
                 "summary": completed["summary"],
+                "source_knowledge_status": completed_with_status[
+                    "source_knowledge_status"
+                ],
             }
         )
         if completed["state"] == "completed":

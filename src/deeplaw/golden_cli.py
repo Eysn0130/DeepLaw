@@ -921,7 +921,10 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
         cycles: list[dict[str, Any]] = []
         cycle = 0
         while True:
-            with KnowledgeVault(vault_path, read_only=args.dry_run) as vault:
+            with auto_aware_knowledge_vault(
+                vault_path,
+                read_only=args.dry_run,
+            ) as vault:
                 result = (
                     plan_registered_sync(vault)
                     if args.dry_run

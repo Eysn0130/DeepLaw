@@ -9,7 +9,8 @@
     "compiled", "canonical_knowledge_committed", "canonical_knowledge_admissible",
     "wiki_projection_status", "wiki_projection_pending", "wiki_projection_ready",
     "stale_or_blocked", "gap", "source_revision_ids",
-    "successful_compilation_run_ids", "projection_pending_compilation_run_ids"
+    "latest_compilation_attempts", "successful_compilation_run_ids",
+    "projection_pending_compilation_run_ids"
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.source-knowledge-status/v1"},
@@ -33,6 +34,29 @@
       "maxItems": 100000,
       "uniqueItems": true,
       "items": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"}
+    },
+    "latest_compilation_attempts": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_revision_id", "compilation_run_id", "status"],
+        "properties": {
+          "source_revision_id": {
+            "type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"
+          },
+          "compilation_run_id": {
+            "type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"
+          },
+          "status": {
+            "enum": [
+              "planned", "staging", "validating", "ready_to_commit",
+              "committed", "projection_pending", "succeeded", "failed", "aborted"
+            ]
+          }
+        }
+      }
     },
     "successful_compilation_run_ids": {
       "type": "array",

@@ -5,6 +5,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
+from .compilation.status import (
+    ADMISSIBLE_SOURCE_LIFECYCLES,
+    summarize_source_compilation,
+)
 from .knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
@@ -16,11 +20,6 @@ from .knowledge_store import (
     VaultScope,
     initialize_knowledge_vault,
 )
-
-_SUCCESSFUL_COMPILATION_STATES = frozenset(
-    {"committed", "projection_pending", "succeeded"}
-)
-_BLOCKED_COMPILATION_STATES = frozenset({"failed", "aborted"})
 
 
 def initialize_default_knowledge_vault(
@@ -112,55 +111,76 @@ def source_knowledge_status(
             tuple(sorted(selected_revision_ids)),
         ).fetchall()
 
-    successful_run_ids = [
-        str(row["compilation_run_id"])
-        for row in run_rows
-        if row["status"] in _SUCCESSFUL_COMPILATION_STATES
-    ]
-    latest_by_source: dict[str, tuple[str, str]] = {}
-    for row in run_rows:
-        latest_by_source[str(row["source_revision_id"])] = (
-            str(row["compilation_run_id"]),
-            str(row["status"]),
+    lifecycle_by_source: dict[str, list[str]] = {}
+    for row in lifecycle_rows:
+        lifecycle_by_source.setdefault(str(row["source_revision_id"]), []).append(
+            str(row["status"])
         )
-    registered = bool(lifecycle_rows) and len(lifecycle_rows) == len(selected_revision_ids)
-    lifecycle_blocked = any(row["status"] not in {"active", "pending"} for row in lifecycle_rows)
-    compilation_blocked = any(
-        status in _BLOCKED_COMPILATION_STATES
-        for _, status in latest_by_source.values()
+    runs_by_source: dict[str, list[dict[str, Any]]] = {}
+    for row in run_rows:
+        runs_by_source.setdefault(str(row["source_revision_id"]), []).append(
+            dict(row)
+        )
+    registered = bool(selected_revision_ids) and selected_revision_ids <= set(
+        lifecycle_by_source
     )
-    compiled_revisions = {
-        str(row["source_revision_id"])
-        for row in run_rows
-        if row["status"] in _SUCCESSFUL_COMPILATION_STATES
-    }
-    compiled = bool(selected_revision_ids) and selected_revision_ids <= compiled_revisions
-    stale_or_blocked = lifecycle_blocked or compilation_blocked
+    summaries = []
+    for source_revision_id in sorted(selected_revision_ids):
+        lifecycle_values = lifecycle_by_source.get(source_revision_id, [])
+        lifecycle_status = next(
+            (
+                value
+                for value in lifecycle_values
+                if value not in ADMISSIBLE_SOURCE_LIFECYCLES
+            ),
+            lifecycle_values[0] if lifecycle_values else "active",
+        )
+        summaries.append(
+            summarize_source_compilation(
+                source_revision_id=source_revision_id,
+                lifecycle_status=lifecycle_status,
+                runs=runs_by_source.get(source_revision_id, []),
+            )
+        )
+    canonical_knowledge_committed = bool(summaries) and all(
+        summary["canonical_knowledge_committed"] for summary in summaries
+    )
+    canonical_knowledge_admissible = registered and bool(summaries) and all(
+        summary["canonical_knowledge_admissible"] for summary in summaries
+    )
+    compiled = canonical_knowledge_committed
+    stale_or_blocked = any(summary["stale_or_blocked"] for summary in summaries)
     compilation_required = registered and not compiled and not stale_or_blocked
     gap = not registered or (not compiled and not compilation_required and not stale_or_blocked)
-    canonical_knowledge_committed = compiled
-    canonical_knowledge_admissible = compiled and not lifecycle_blocked
-    latest_statuses = [
-        latest_by_source[source_revision_id][1]
-        for source_revision_id in sorted(selected_revision_ids)
-        if source_revision_id in latest_by_source
+    successful_run_ids = sorted(
+        run_id
+        for summary in summaries
+        for run_id in summary["successful_compilation_run_ids"]
+    )
+    latest_compilation_attempts = [
+        attempt
+        for summary in summaries
+        for attempt in summary["latest_compilation_attempts"]
     ]
     projection_pending_run_ids = sorted(
         run_id
-        for run_id, status in latest_by_source.values()
-        if status in {"committed", "projection_pending"}
+        for summary in summaries
+        for run_id in summary["projection_pending_compilation_run_ids"]
     )
     wiki_projection_ready = bool(
         canonical_knowledge_committed
-        and len(latest_statuses) == len(selected_revision_ids)
-        and all(status == "succeeded" for status in latest_statuses)
+        and summaries
+        and all(summary["wiki_projection_ready"] for summary in summaries)
     )
     wiki_projection_pending = bool(
         canonical_knowledge_committed
         and not wiki_projection_ready
-        and len(latest_statuses) == len(selected_revision_ids)
-        and all(status in _SUCCESSFUL_COMPILATION_STATES for status in latest_statuses)
-        and projection_pending_run_ids
+        and summaries
+        and all(
+            summary["wiki_projection_status"] in {"ready", "pending"}
+            for summary in summaries
+        )
+        and any(summary["wiki_projection_pending"] for summary in summaries)
     )
     wiki_projection_status = (
         "ready"
@@ -170,7 +190,10 @@ def source_knowledge_status(
             if wiki_projection_pending
             else (
                 "blocked"
-                if stale_or_blocked
+                if any(
+                    summary["wiki_projection_status"] == "blocked"
+                    for summary in summaries
+                )
                 else ("not_started" if registered else "unavailable")
             )
         )
@@ -198,7 +221,8 @@ def source_knowledge_status(
         "stale_or_blocked": stale_or_blocked,
         "gap": gap,
         "source_revision_ids": sorted(selected_revision_ids),
-        "successful_compilation_run_ids": sorted(successful_run_ids),
+        "latest_compilation_attempts": latest_compilation_attempts,
+        "successful_compilation_run_ids": successful_run_ids,
         "projection_pending_compilation_run_ids": projection_pending_run_ids,
     }
     _validate_contract("source-knowledge-status.v1.schema.json", result)

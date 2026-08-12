@@ -4,10 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from .compilation import compiler_profile
+from .compilation.status import summarize_source_compilation
 from .knowledge_autonomy import AutonomousKnowledgeStore, _validate_contract
-
-_SUCCESSFUL_STATES = frozenset({"committed", "projection_pending", "succeeded"})
-_BLOCKED_STATES = frozenset({"failed", "aborted"})
 
 
 def build_compilation_handoff(
@@ -45,30 +43,11 @@ def build_compilation_handoff(
         ).fetchall()
         audit_head = store.audit_head
 
-    run_states = {str(row["status"]) for row in runs}
-    latest_run_status = str(runs[-1]["status"]) if runs else None
-    canonical_knowledge_committed = bool(run_states & _SUCCESSFUL_STATES)
-    canonical_knowledge_admissible = bool(
-        canonical_knowledge_committed
-        and source["lifecycle_status"] in {"active", "pending"}
+    summary = summarize_source_compilation(
+        source_revision_id=source_revision_id,
+        lifecycle_status=str(source["lifecycle_status"]),
+        runs=[dict(row) for row in runs],
     )
-    wiki_projection_status = (
-        "ready"
-        if latest_run_status == "succeeded"
-        else (
-            "pending"
-            if latest_run_status in {"committed", "projection_pending"}
-            else ("blocked" if latest_run_status in _BLOCKED_STATES else "not_started")
-        )
-    )
-    if source["lifecycle_status"] not in {"active", "pending"} or (
-        run_states and run_states <= _BLOCKED_STATES
-    ):
-        source_status = "stale_or_blocked"
-    elif run_states & _SUCCESSFUL_STATES:
-        source_status = "compiled"
-    else:
-        source_status = "compilation_required"
 
     sink_operations = [
         "begin_compilation",
@@ -96,12 +75,17 @@ def build_compilation_handoff(
     result = {
         "schema_version": "deeplaw.compilation-handoff/v1",
         "source_revision_id": source_revision_id,
-        "source_status": source_status,
-        "canonical_knowledge_committed": canonical_knowledge_committed,
-        "canonical_knowledge_admissible": canonical_knowledge_admissible,
-        "wiki_projection_status": wiki_projection_status,
-        "wiki_projection_pending": wiki_projection_status == "pending",
-        "wiki_projection_ready": wiki_projection_status == "ready",
+        "source_status": summary["source_status"],
+        "canonical_knowledge_committed": summary[
+            "canonical_knowledge_committed"
+        ],
+        "canonical_knowledge_admissible": summary[
+            "canonical_knowledge_admissible"
+        ],
+        "latest_compilation_attempts": summary["latest_compilation_attempts"],
+        "wiki_projection_status": summary["wiki_projection_status"],
+        "wiki_projection_pending": summary["wiki_projection_pending"],
+        "wiki_projection_ready": summary["wiki_projection_ready"],
         "compiler_profile": {
             "compiler_profile": profile["compiler_profile"],
             "compiler_profile_version": profile["compiler_profile_version"],

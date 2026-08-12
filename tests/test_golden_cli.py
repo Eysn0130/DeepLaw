@@ -12,6 +12,7 @@ import pytest
 import deeplaw.source_connectors as source_connectors
 from deeplaw.cli import _parser
 from deeplaw.golden_cli import handle_golden_command
+from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.util import sha256_bytes
@@ -121,6 +122,47 @@ def test_five_command_golden_path_requires_no_internal_ids(tmp_path: Path) -> No
     assert feedback["run"]["valid"] is True
     assert feedback["feedback"]["valid"] is True
     assert feedback["task_success_inferred"] is False
+
+
+def test_golden_sync_reuses_auto_aware_status_coordinator(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    source = tmp_path / "registered.md"
+    source.write_text("# Registered\nThe first revision is governed.\n", encoding="utf-8")
+    _json("init", str(vault), "--project-root", str(tmp_path))
+    initial = _json(
+        "add",
+        str(source),
+        "--vault",
+        str(vault),
+        "--confirm-no-case-data",
+    )
+    initial_source_id = initial["items"][0]["source_id"]
+    with KnowledgeVault(vault, read_only=True) as legacy:
+        source_key = legacy.source_info(initial_source_id)["source_key"]
+
+    source.write_text("# Registered\nThe second revision is governed.\n", encoding="utf-8")
+    synced = _json("sync", "--vault", str(vault))
+
+    assert synced["last"]["state"] == "completed"
+    assert synced["last"]["jobs"][0]["source_knowledge_status"]["state"] == (
+        "compilation_required"
+    )
+    with KnowledgeVault(vault, read_only=True) as legacy:
+        versions = legacy.source_versions(source_key)
+        current_source_id = next(
+            item["source_id"]
+            for item in versions
+            if item["source_id"] != initial_source_id
+        )
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        imported = store.connection.execute(
+            """
+            SELECT COUNT(*) FROM evidence_bindings_v3
+            WHERE legacy_source_id = ?
+            """,
+            (current_source_id,),
+        ).fetchone()[0]
+    assert imported == 1
 
 
 def test_golden_status_doctor_and_failure_streams_are_stable(tmp_path: Path) -> None:
