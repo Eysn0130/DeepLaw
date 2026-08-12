@@ -296,6 +296,15 @@ def test_artifact_scan_allows_only_false_security_leak_flags(tmp_path: Path) -> 
         )
 
 
+def test_artifact_scan_rejects_non_home_absolute_paths(tmp_path: Path) -> None:
+    with pytest.raises(EvidenceValidationError, match="absolute path"):
+        write_retained_artifact(
+            tmp_path / "unsafe-path.json",
+            b'{"diagnostic":"/opt/private/runtime"}\n',
+            output_root=tmp_path,
+        )
+
+
 def _report_run(index: int, scenario: str) -> dict[str, object]:
     methods = {
         "cold_start": ["thread/start"],

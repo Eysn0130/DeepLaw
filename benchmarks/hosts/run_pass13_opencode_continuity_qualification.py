@@ -47,7 +47,8 @@ _ISOLATED_ROOT_PREFIX = "deeplaw-pass13-opencode-"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _ABSOLUTE_PATH = re.compile(
-    rb'(?:^|[\s=:"\'])(?:/(?:Users|home|tmp|private|var)(?:[\s/"\']|$)|[A-Za-z]:[\\/])'
+    rb'(?:^|[\s=:"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s"\'\\]*)?|'
+    rb"[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]"
 )
 _FORBIDDEN_FIELDS = (
     b'"auth_file"',
@@ -1179,6 +1180,7 @@ def build_skeleton_report(
             "operating_system": platform.system(),
             "architecture": platform.machine(),
             "python_version": platform.python_version(),
+            "isolation": pass13_evidence.isolation_receipt(host="opencode"),
         },
         "host_attestation": {
             "binary_name": "opencode",
@@ -2084,6 +2086,7 @@ def _execute_qualification_body(
     )
     artifacts["qualification_report"] = report_path
     preflight_receipt = {
+        "isolation": pass13_evidence.isolation_receipt(host="opencode"),
         "opencode_version_sha256": preflight["version_sha256"],
         "opencode_version_bytes": preflight["version_bytes"],
         "model_inventory": preflight["model_inventory"],
@@ -2166,7 +2169,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
-        execute_qualification(
+        report = execute_qualification(
             candidate_wheel=args.candidate_wheel,
             deeplaw_executable=args.deeplaw_executable,
             output_dir=args.output_dir,
@@ -2177,7 +2180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, QualificationError) as exc:
         print(f"qualification failed: {type(exc).__name__}", file=sys.stderr)
         return 2
-    return 0
+    return 0 if report.get("status") == "executed" else 1
 
 
 if __name__ == "__main__":

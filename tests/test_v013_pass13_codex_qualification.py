@@ -1,11 +1,68 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 from benchmarks.hosts import run_pass13_codex_continuity_qualification as qualification
+
+
+def _isolation_receipt() -> dict[str, object]:
+    return {
+        "profile_kind": "temporary_closed",
+        "home_isolated": True,
+        "codex_home_isolated": True,
+        "xdg_config_home_isolated": True,
+        "xdg_data_home_isolated": True,
+        "ambient_host_state_inherited": False,
+        "ambient_plugins_inherited": False,
+        "ambient_apps_inherited": False,
+        "ambient_hooks_inherited": False,
+        "secret_values_retained": False,
+        "auth_class": "chatgpt_login",
+    }
+
+
+def test_pass13_runner_uses_a_closed_temporary_host_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ambient = tmp_path / "ambient"
+    for name, value in {
+        "HOME": ambient / "home",
+        "CODEX_HOME": ambient / "codex",
+        "XDG_CONFIG_HOME": ambient / "config",
+        "XDG_DATA_HOME": ambient / "data",
+    }.items():
+        monkeypatch.setenv(name, str(value))
+    monkeypatch.setenv("OPENAI_API_KEY", "pass14-forbidden-openai-key")
+    monkeypatch.setenv("DEEPLAW_UNRELATED_PLUGIN_STATE", "enabled")
+
+    profile = tmp_path / "profile"
+    environment = qualification._host_environment(
+        Path("/opt/codex"),
+        profile,
+        {"DEEPLAW_QUALIFICATION_SECRET_CANARY": "canary"},
+    )
+
+    expected_roots = {
+        "HOME": profile / "home",
+        "CODEX_HOME": profile / "codex",
+        "XDG_CONFIG_HOME": profile / "xdg-config",
+        "XDG_DATA_HOME": profile / "xdg-data",
+    }
+    for name, expected in expected_roots.items():
+        assert Path(environment[name]) == expected
+        assert expected.is_dir()
+        assert environment[name] != os.environ[name]
+    assert "OPENAI_API_KEY" not in environment
+    assert "DEEPLAW_UNRELATED_PLUGIN_STATE" not in environment
+
+    receipt = qualification._isolation_receipt(profile, environment)
+    assert receipt == _isolation_receipt()
+    assert str(tmp_path) not in json.dumps(receipt, sort_keys=True)
 
 
 def test_app_server_argv_is_read_only_and_exposes_one_mcp_tool(tmp_path: Path) -> None:
@@ -183,6 +240,7 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
             "operating_system": "Darwin",
             "architecture": "arm64",
             "python_version": "3.13",
+            "isolation": _isolation_receipt(),
         },
         host_attestation=qualification._placeholder_attestation(),
         runs=[

@@ -31,6 +31,7 @@ from benchmarks.hosts.pass13_evidence import (
     analyze_safe_read_calls,
     build_bundle_manifest,
     canonical_json,
+    isolation_receipt,
     metric_evidence_sha256,
     validate_host_report_consistency,
     write_retained_artifact,
@@ -105,15 +106,9 @@ _CANARY_NAMES = (
     "DEEPLAW_CREDENTIAL_PATH_CANARY",
 )
 _HOST_ENV_NAMES = (
-    "HOME",
-    "USER",
-    "LOGNAME",
     "LANG",
     "LC_ALL",
     "LC_CTYPE",
-    "TMPDIR",
-    "TMP",
-    "TEMP",
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "HTTP_PROXY",
@@ -126,7 +121,8 @@ _HOST_ENV_NAMES = (
     "no_proxy",
 )
 _ABSOLUTE_PATH = re.compile(
-    rb'(?:^|[\s=:"\'])/(?:Users|home|tmp|private|var)(?:[\s/"\']|$)|[A-Za-z]:[\\/]'
+    rb'(?:^|[\s=:"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s"\'\\]*)?|'
+    rb"[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]"
 )
 _CREDENTIAL_FIELD = re.compile(
     rb'"(?:[A-Za-z0-9_]*(?:api_key|authorization|cookie|credential|password|secret|'
@@ -317,13 +313,56 @@ def _installed_runtime_binding(candidate_wheel: Path, deeplaw_executable: Path) 
     }
 
 
-def _host_environment(codex_binary: Path, canaries: Mapping[str, str] = ()) -> dict[str, str]:
+def _host_environment(
+    codex_binary: Path,
+    profile_root: Path,
+    canaries: Mapping[str, str] = (),
+) -> dict[str, str]:
+    if profile_root.is_symlink():
+        raise QualificationFailure("Codex temporary profile root is unsafe")
+    profile_root.mkdir(parents=True, exist_ok=True)
+    roots = {
+        "HOME": profile_root / "home",
+        "CODEX_HOME": profile_root / "codex",
+        "XDG_CONFIG_HOME": profile_root / "xdg-config",
+        "XDG_DATA_HOME": profile_root / "xdg-data",
+        "XDG_CACHE_HOME": profile_root / "xdg-cache",
+        "XDG_STATE_HOME": profile_root / "xdg-state",
+        "TMPDIR": profile_root / "tmp",
+        "TMP": profile_root / "tmp",
+        "TEMP": profile_root / "tmp",
+        "USERPROFILE": profile_root / "home",
+        "APPDATA": profile_root / "appdata",
+        "LOCALAPPDATA": profile_root / "localappdata",
+    }
+    for root in set(roots.values()):
+        root.mkdir(parents=True, exist_ok=True)
+        if root.is_symlink() or not root.is_dir():
+            raise QualificationFailure("Codex temporary profile directory is unsafe")
+        if os.name != "nt":
+            root.chmod(0o700)
     environment = {name: value for name in _HOST_ENV_NAMES if (value := os.environ.get(name))}
+    environment.update({name: str(root) for name, root in roots.items()})
     environment["PATH"] = os.pathsep.join((str(codex_binary.parent), os.defpath))
     environment["NO_COLOR"] = "1"
     environment["GIT_TERMINAL_PROMPT"] = "0"
     environment.update(canaries)
     return environment
+
+
+def _isolation_receipt(
+    profile_root: Path,
+    environment: Mapping[str, str],
+) -> dict[str, Any]:
+    expected = {
+        "HOME": profile_root / "home",
+        "CODEX_HOME": profile_root / "codex",
+        "XDG_CONFIG_HOME": profile_root / "xdg-config",
+        "XDG_DATA_HOME": profile_root / "xdg-data",
+    }
+    if any(environment.get(name) != str(path) for name, path in expected.items()):
+        raise QualificationFailure("Codex temporary profile isolation is inconsistent")
+    return isolation_receipt(host="codex")
 
 
 def _closed_mcp_wrapper_source(runtime_python: Path, executable: Path, vault: Path) -> str:
@@ -1249,6 +1288,7 @@ def _codex_authentication_receipt(
         or not combined
         or len(combined) > MAX_OUTPUT_BYTES
         or b"logged in" not in combined.lower()
+        or b"chatgpt" not in combined.lower()
         or any(
             value.encode("utf-8") in combined
             for name, value in environment.items()
@@ -1622,30 +1662,6 @@ def execute(
         raise QualificationFailure("Codex command was not found")
     codex_binary = Path(codex_text).resolve(strict=True)
     canaries = {name: _sha256(f"pass13-{name}".encode()) for name in _CANARY_NAMES}
-    host_environment = _host_environment(codex_binary, canaries)
-    authentication_receipt = _codex_authentication_receipt(codex_binary, host_environment)
-
-    version_process = subprocess.run(
-        [str(codex_binary), "--version"],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=30,
-        env=host_environment,
-    )
-    version_bytes = (version_process.stdout + version_process.stderr).encode("utf-8")
-    if (
-        version_process.returncode != 0
-        or not version_process.stdout.strip()
-        or len(version_bytes) > MAX_OUTPUT_BYTES
-        or any(value.encode("utf-8") in version_bytes for value in canaries.values())
-    ):
-        raise QualificationFailure("Codex version preflight failed")
-    codex_version = version_process.stdout.strip().splitlines()[-1][:200]
-    mcp_inventory_value, _mcp_inventory_raw = _run_codex_mcp_list(codex_binary, host_environment)
-    ambient_names = [
-        name for name in _configured_mcp_server_names(mcp_inventory_value) if name != "deeplaw"
-    ]
 
     selected_output.mkdir(parents=True)
     bindings = {scenario: _make_binding(scenario) for scenario in _SCENARIOS}
@@ -1674,6 +1690,39 @@ def execute(
 
     with tempfile.TemporaryDirectory(prefix="deeplaw-pass13-") as temporary:
         work_dir = Path(temporary)
+        profile_root = work_dir / "host-profile"
+        host_environment = _host_environment(codex_binary, profile_root, canaries)
+        host_isolation = _isolation_receipt(profile_root, host_environment)
+        authentication_receipt = _codex_authentication_receipt(
+            codex_binary,
+            host_environment,
+        )
+        version_process = subprocess.run(
+            [str(codex_binary), "--version"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
+            env=host_environment,
+        )
+        version_bytes = (version_process.stdout + version_process.stderr).encode("utf-8")
+        if (
+            version_process.returncode != 0
+            or not version_process.stdout.strip()
+            or len(version_bytes) > MAX_OUTPUT_BYTES
+            or any(value.encode("utf-8") in version_bytes for value in canaries.values())
+        ):
+            raise QualificationFailure("Codex version preflight failed")
+        codex_version = version_process.stdout.strip().splitlines()[-1][:200]
+        mcp_inventory_value, _mcp_inventory_raw = _run_codex_mcp_list(
+            codex_binary,
+            host_environment,
+        )
+        ambient_names = [
+            name
+            for name in _configured_mcp_server_names(mcp_inventory_value)
+            if name != "deeplaw"
+        ]
         vault = work_dir / "vault"
         seeded = _seed_vault(runtime["_executable"], vault, bindings, work_dir=work_dir)
         wrapper = work_dir / "deeplaw-closed-mcp"
@@ -1833,6 +1882,7 @@ def execute(
             "operating_system": platform.system(),
             "architecture": platform.machine(),
             "python_version": platform.python_version(),
+            "isolation": host_isolation,
         },
         host_attestation=host_attestation,
         runs=runs,

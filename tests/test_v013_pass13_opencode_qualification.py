@@ -523,6 +523,33 @@ def test_cleanup_failure_is_explicit_without_swallowing_original(
 def test_cleanup_rejects_non_runner_owned_target(tmp_path: Path) -> None:
     with pytest.raises(runner.QualificationError, match="runner-owned"):
         runner._cleanup_isolated_root(tmp_path)
+
+
+@pytest.mark.parametrize("status", ["partial", "failed"])
+def test_main_returns_nonzero_for_nonexecuted_report(
+    status: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        runner,
+        "execute_qualification",
+        lambda **_kwargs: {"status": status},
+    )
+    assert runner.main(
+        [
+            "--candidate-wheel",
+            str(tmp_path / "candidate.whl"),
+            "--deeplaw-executable",
+            str(tmp_path / "deeplaw"),
+            "--output-dir",
+            str(tmp_path / "output"),
+            "--opencode-binary",
+            str(tmp_path / "opencode"),
+            "--dotenv",
+            str(tmp_path / ".env"),
+        ]
+    ) == 1
     assert tmp_path.exists()
 
     escaped = tmp_path / f"{runner._ISOLATED_ROOT_PREFIX}fixture"

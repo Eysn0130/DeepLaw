@@ -76,7 +76,7 @@
     "environment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["operating_system", "architecture", "python_version"],
+      "required": ["operating_system", "architecture", "python_version", "isolation"],
       "properties": {
         "operating_system": {"type": "string", "minLength": 1, "maxLength": 100},
         "architecture": {"type": "string", "minLength": 1, "maxLength": 100},

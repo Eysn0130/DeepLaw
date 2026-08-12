@@ -22,8 +22,8 @@ SAFE_READ_OPERATIONS = frozenset({"context", "query"})
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _ABSOLUTE_PATH = re.compile(
-    rb'(?:^|[\s=:\"\'])/(?:Users|home|tmp|private|var)(?:[\s/\"\']|$)|'
-    rb"[A-Za-z]:[\\/]"
+    rb'(?:^|[\s=:\"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s\"\'\\]*)?|'
+    rb"[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]"
 )
 _FORBIDDEN_ARTIFACT_FIELDS = (
     b'"auth_file"',
@@ -50,6 +50,26 @@ _MAX_BUNDLE_BYTES = 32 * 1024 * 1024
 
 class EvidenceValidationError(ValueError):
     """Qualification evidence was incomplete, inconsistent, or unsafe."""
+
+
+def isolation_receipt(*, host: str) -> dict[str, Any]:
+    """Return a path-free receipt for one closed temporary Host profile."""
+
+    if host not in {"codex", "opencode"}:
+        raise EvidenceValidationError("Host isolation receipt has an unsupported host")
+    return {
+        "profile_kind": "temporary_closed",
+        "home_isolated": True,
+        "codex_home_isolated": host == "codex",
+        "xdg_config_home_isolated": True,
+        "xdg_data_home_isolated": True,
+        "ambient_host_state_inherited": False,
+        "ambient_plugins_inherited": False,
+        "ambient_apps_inherited": False,
+        "ambient_hooks_inherited": False,
+        "secret_values_retained": False,
+        "auth_class": "chatgpt_login" if host == "codex" else "deepseek_api_key",
+    }
 
 
 def canonical_json(value: Any) -> str:
