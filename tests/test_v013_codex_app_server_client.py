@@ -100,29 +100,46 @@ def _fake_server(
                 send({"id": request_id, "result": {"thread": {"id": "thread-2"}}})
             elif method == "thread/compact/start":
                 assert message["params"]["threadId"] == "thread-2"
-                send({"id": request_id, "result": {"status": "started"}})
+                send({"id": request_id, "result": {}})
                 if MODE in {"compact-current", "lifecycle"}:
                     time.sleep(0.08)
+                    send({
+                        "method": "item/started",
+                        "params": {
+                            "threadId": "thread-2",
+                            "turnId": "turn-compact-1",
+                            "item": {
+                                "id": "item-compact-1",
+                                "type": "contextCompaction",
+                            },
+                            "startedAtMs": 1,
+                        },
+                    })
+                    send({
+                        "method": "item/completed",
+                        "params": {
+                            "threadId": "thread-2",
+                            "turnId": "turn-compact-1",
+                            "item": {
+                                "id": "item-compact-1",
+                                "type": "contextCompaction",
+                            },
+                            "completedAtMs": 2,
+                        },
+                    })
+                elif MODE == "compact-legacy":
                     send({
                         "method": "thread/compacted",
                         "params": {
                             "threadId": "thread-2",
-                            "turnId": "turn-compact-1",
-                            "compactionId": "compact-1",
-                            "summary": "/tmp/compaction-secret bounded",
+                            "turnId": "turn-compact-legacy",
+                            "compactionId": "compact-legacy",
                         },
                     })
                 elif MODE == "compact-timeout":
                     continue
                 else:
-                    send({
-                        "method": "contextCompaction/started",
-                        "params": {"threadId": "thread-2"},
-                    })
-                    send({
-                        "method": "contextCompaction/completed",
-                        "params": {"threadId": "thread-2"},
-                    })
+                    continue
             elif method == "turn/start":
                 send({"id": request_id, "result": {"turn": {"id": "turn-1"}}})
                 if MODE == "unknown-request":
@@ -371,20 +388,50 @@ def test_mcp_server_status_list_rejects_invalid_page_and_limit(tmp_path: Path) -
         client.mcp_server_status_list(detail="everything")
 
 
-def test_compact_waits_for_current_thread_compacted_notification(tmp_path: Path) -> None:
+def test_compact_waits_for_current_context_compaction_item_lifecycle(
+    tmp_path: Path,
+) -> None:
     client = _client(tmp_path, mode="compact-current")
     with client:
         client.initialize()
         client.thread_start()
         client.thread_fork("thread-1")
-        assert client.compact_thread("thread-2") == {"status": "started"}
-        compacted = [event for event in client.events if event["method"] == "thread/compacted"]
-        assert len(compacted) == 1
-        assert compacted[0]["thread_id_sha256"] == hashlib.sha256(b"thread-2").hexdigest()
-        assert compacted[0]["turn_id_sha256"] == hashlib.sha256(b"turn-compact-1").hexdigest()
-        assert compacted[0]["compaction_id_sha256"] == hashlib.sha256(b"compact-1").hexdigest()
-        assert "/tmp/compaction-secret" not in repr(compacted)
-        assert "bounded" not in repr(compacted)
+        assert client.compact_thread("thread-2") == {}
+        compaction = [
+            event
+            for event in client.events
+            if event.get("item_type") == "contextCompaction"
+        ]
+        assert [event["method"] for event in compaction] == [
+            "item/started",
+            "item/completed",
+        ]
+        assert [event["compaction_status"] for event in compaction] == [
+            "started",
+            "completed",
+        ]
+        assert all(
+            event["thread_id_sha256"] == hashlib.sha256(b"thread-2").hexdigest()
+            for event in compaction
+        )
+        assert all(
+            event["turn_id_sha256"]
+            == hashlib.sha256(b"turn-compact-1").hexdigest()
+            for event in compaction
+        )
+
+
+def test_deprecated_thread_compacted_is_recorded_but_not_qualification_success(
+    tmp_path: Path,
+) -> None:
+    client = _client(tmp_path, mode="compact-legacy", timeout_seconds=0.1)
+    with client:
+        client.initialize()
+        client.thread_start()
+        client.thread_fork("thread-1")
+        with pytest.raises(CodexAppServerTimeoutError):
+            client.thread_compact_start("thread-2")
+        assert any(event["method"] == "thread/compacted" for event in client.events)
 
 
 def test_compact_timeout_fails_closed(tmp_path: Path) -> None:
@@ -463,10 +510,17 @@ def test_resume_fork_and_compact_use_exact_v2_methods(tmp_path: Path) -> None:
         forked = client.thread_fork("thread-1")
         assert forked["thread"]["id"] == "thread-2"
         compacted = client.thread_compact_start("thread-2")
-        assert compacted == {"status": "started"}
+        assert compacted == {}
         # Lifecycle events contain no source payload and retain only method and
         # hashed identity fields.
-        assert client.events[-1]["method"] == "thread/compacted"
+        assert [event["method"] for event in client.events[-2:]] == [
+            "item/started",
+            "item/completed",
+        ]
+        assert all(
+            event["item_type"] == "contextCompaction"
+            for event in client.events[-2:]
+        )
         assert client.events[-1]["thread_id_sha256"] == hashlib.sha256(
             b"thread-2"
         ).hexdigest()

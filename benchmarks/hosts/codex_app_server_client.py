@@ -412,7 +412,9 @@ class CodexAppServerClient:
         self._completed_item_text: str | None = None
         self._tool_outputs: list[Any] = []
         self._tool_call_observations: list[dict[str, Any]] = []
-        self._compacted_notification_keys: set[tuple[str, str]] = set()
+        self._context_compaction_started_keys: set[tuple[str, str, str]] = set()
+        self._context_compaction_completed_keys: set[tuple[str, str, str]] = set()
+        self._legacy_compacted_notification_keys: set[tuple[str, str]] = set()
 
     @property
     def process_id(self) -> int | None:
@@ -683,9 +685,14 @@ class CodexAppServerClient:
         expected_thread_id = payload["threadId"]
         expected_thread_hash = _sha256_text(expected_thread_id)
         deadline = time.monotonic() + self.timeout_seconds
-        self._compacted_notification_keys = {
+        self._context_compaction_started_keys = {
             key
-            for key in self._compacted_notification_keys
+            for key in self._context_compaction_started_keys
+            if key[0] != expected_thread_hash
+        }
+        self._context_compaction_completed_keys = {
+            key
+            for key in self._context_compaction_completed_keys
             if key[0] != expected_thread_hash
         }
         result = self._request_after_initialize("thread/compact/start", payload)
@@ -919,34 +926,36 @@ class CodexAppServerClient:
             )
 
     def _wait_for_compaction(self, *, expected_thread_hash: str, deadline: float) -> None:
-        """Wait for one current ``thread/compacted`` notification for a thread."""
+        """Wait for the current ``contextCompaction`` item lifecycle."""
 
         while True:
             matching = next(
                 (
                     key
-                    for key in self._compacted_notification_keys
+                    for key in self._context_compaction_completed_keys
                     if key[0] == expected_thread_hash
                 ),
                 None,
             )
             if matching is not None:
-                self._compacted_notification_keys.discard(matching)
+                self._context_compaction_started_keys.discard(matching)
+                self._context_compaction_completed_keys.discard(matching)
                 return
             message = self._next_message(deadline)
             if "method" in message and "id" not in message:
                 completion = self._handle_notification(message)
                 if (
                     completion is not None
-                    and completion.get("kind") == "thread/compacted"
+                    and completion.get("kind") == "contextCompaction/completed"
                     and completion.get("thread_id_sha256") == expected_thread_hash
                 ):
-                    self._compacted_notification_keys.discard(
-                        (
-                            expected_thread_hash,
-                            completion["turn_id_sha256"],
-                        )
+                    key = (
+                        expected_thread_hash,
+                        completion["turn_id_sha256"],
+                        completion["item_id_sha256"],
                     )
+                    self._context_compaction_started_keys.discard(key)
+                    self._context_compaction_completed_keys.discard(key)
                     return
                 continue
             if "method" in message and "id" in message:
@@ -1174,6 +1183,49 @@ class CodexAppServerClient:
     def _capture_notification_state(
         self, method: str, params: Mapping[str, Any]
     ) -> dict[str, Any] | None:
+        item = params.get("item") if isinstance(params.get("item"), Mapping) else None
+        item_type = _find_value(item, "type", "itemType", "item_type")
+        if method in {"item/started", "item/completed"} and item_type == "contextCompaction":
+            compact_thread_id = _find_value(params, "threadId", "thread_id")
+            compact_turn_id = _find_value(params, "turnId", "turn_id")
+            compact_item_id = _find_value(item, "id", "itemId", "item_id")
+            if (
+                not isinstance(compact_thread_id, str)
+                or not compact_thread_id
+                or not isinstance(compact_turn_id, str)
+                or not compact_turn_id
+                or not isinstance(compact_item_id, str)
+                or not compact_item_id
+            ):
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "contextCompaction item omitted required lifecycle identity"
+                )
+            key = (
+                _sha256_text(compact_thread_id),
+                _sha256_text(compact_turn_id),
+                _sha256_text(compact_item_id),
+            )
+            if method == "item/started":
+                self._context_compaction_started_keys.add(key)
+                return {
+                    "kind": "contextCompaction/started",
+                    "thread_id_sha256": key[0],
+                    "turn_id_sha256": key[1],
+                    "item_id_sha256": key[2],
+                }
+            if key not in self._context_compaction_started_keys:
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "contextCompaction completed before its started item"
+                )
+            self._context_compaction_completed_keys.add(key)
+            return {
+                "kind": "contextCompaction/completed",
+                "thread_id_sha256": key[0],
+                "turn_id_sha256": key[1],
+                "item_id_sha256": key[2],
+            }
         if method == "thread/compacted":
             compact_thread_id = _find_value(params, "threadId", "thread_id")
             compact_turn_id = _find_value(params, "turnId", "turn_id")
@@ -1186,12 +1238,12 @@ class CodexAppServerClient:
                 self._fail_closed()
                 raise CodexAppServerProtocolError(
                     "thread/compacted omitted required threadId/turnId"
-                )
+            )
             thread_hash = _sha256_text(compact_thread_id)
             turn_hash = _sha256_text(compact_turn_id)
-            self._compacted_notification_keys.add((thread_hash, turn_hash))
+            self._legacy_compacted_notification_keys.add((thread_hash, turn_hash))
             return {
-                "kind": "thread/compacted",
+                "kind": "thread/compacted/deprecated",
                 "thread_id_sha256": thread_hash,
                 "turn_id_sha256": turn_hash,
             }
@@ -1425,6 +1477,16 @@ class CodexAppServerClient:
                 or _find_value(params.get("item"), "status")
             )
             event["compaction_status"] = compaction_status or "completed"
+        elif item_type == "contextCompaction" and method in {
+            "item/started",
+            "item/completed",
+        }:
+            item_id = _find_value(item, "id", "itemId", "item_id")
+            if isinstance(item_id, str) and item_id:
+                event["item_id_sha256"] = _sha256_text(item_id)
+            event["compaction_status"] = (
+                "started" if method == "item/started" else "completed"
+            )
         return event
 
     @staticmethod

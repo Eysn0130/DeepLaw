@@ -52,7 +52,8 @@ _SCENARIO_METHODS = {
     "compaction_forget": (
         "thread/start",
         "thread/compact/start",
-        "thread/compacted",
+        "item/started",
+        "item/completed",
     ),
 }
 _SAFE_READ_OPERATIONS = frozenset({"context", "query"})
@@ -1081,7 +1082,7 @@ def _run_scenario(
         turn(forked_id, "thread/fork", prompt)
     elif scenario == "compaction_forget":
         client.thread_compact_start(thread_id)
-        methods.extend(["thread/compact/start", "thread/compacted"])
+        methods.extend(["thread/compact/start", "item/started", "item/completed"])
         turn(thread_id, "thread/compact/start", prompt)
         if forget_checkpoint is None:
             raise QualificationFailure("compaction_forget omitted owner forget callback")

@@ -80,7 +80,32 @@
       "properties": {
         "operating_system": {"type": "string", "minLength": 1, "maxLength": 100},
         "architecture": {"type": "string", "minLength": 1, "maxLength": 100},
-        "python_version": {"type": "string", "minLength": 1, "maxLength": 100}
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "isolation": {"$ref": "#/$defs/isolation"}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_kind", "home_isolated", "codex_home_isolated",
+        "xdg_config_home_isolated", "xdg_data_home_isolated",
+        "ambient_host_state_inherited", "ambient_plugins_inherited",
+        "ambient_apps_inherited", "ambient_hooks_inherited",
+        "secret_values_retained", "auth_class"
+      ],
+      "properties": {
+        "profile_kind": {"const": "temporary_closed"},
+        "home_isolated": {"const": true},
+        "codex_home_isolated": {"type": "boolean"},
+        "xdg_config_home_isolated": {"const": true},
+        "xdg_data_home_isolated": {"const": true},
+        "ambient_host_state_inherited": {"const": false},
+        "ambient_plugins_inherited": {"const": false},
+        "ambient_apps_inherited": {"const": false},
+        "ambient_hooks_inherited": {"const": false},
+        "secret_values_retained": {"const": false},
+        "auth_class": {"enum": ["chatgpt_login", "deepseek_api_key"]}
       }
     },
     "hostAttestation": {
@@ -160,7 +185,8 @@
           "items": {
             "enum": [
               "thread/start", "thread/resume", "thread/fork",
-              "thread/compact/start", "thread/compacted", "not_applicable"
+              "thread/compact/start", "item/started", "item/completed",
+              "thread/compacted", "not_applicable"
             ]
           }
         },

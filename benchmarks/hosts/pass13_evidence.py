@@ -392,7 +392,8 @@ _CODEX_METHODS = {
     "compaction_forget": {
         "thread/start",
         "thread/compact/start",
-        "thread/compacted",
+        "item/started",
+        "item/completed",
     },
 }
 _CODEX_TURN_METHODS = {

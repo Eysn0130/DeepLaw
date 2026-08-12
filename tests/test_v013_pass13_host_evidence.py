@@ -303,7 +303,8 @@ def _report_run(index: int, scenario: str) -> dict[str, object]:
         "compaction_forget": [
             "thread/start",
             "thread/compact/start",
-            "thread/compacted",
+            "item/started",
+            "item/completed",
         ],
         "projection_status": ["opencode/run"],
         "source_forget": ["opencode/run"],
@@ -492,6 +493,19 @@ def _report(host: str) -> dict[str, object]:
             "operating_system": "Darwin",
             "architecture": "arm64",
             "python_version": "3.13.7",
+            "isolation": {
+                "profile_kind": "temporary_closed",
+                "home_isolated": True,
+                "codex_home_isolated": host == "codex",
+                "xdg_config_home_isolated": True,
+                "xdg_data_home_isolated": True,
+                "ambient_host_state_inherited": False,
+                "ambient_plugins_inherited": False,
+                "ambient_apps_inherited": False,
+                "ambient_hooks_inherited": False,
+                "secret_values_retained": False,
+                "auth_class": "chatgpt_login" if host == "codex" else "deepseek_api_key",
+            },
         },
         "host_attestation": {
             "binary_name": host,
@@ -545,7 +559,8 @@ def _report(host: str) -> dict[str, object]:
                 "thread/resume",
                 "thread/fork",
                 "thread/compact/start",
-                "thread/compacted",
+                "item/started",
+                "item/completed",
             ]
             if host == "codex"
             else ["not_applicable"],
@@ -586,6 +601,25 @@ def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> N
 
     report["runs"][2]["scenario"] = "cold_start"  # type: ignore[index]
     with pytest.raises(EvidenceValidationError, match="scenario matrix"):
+        validate_host_report_consistency(report)
+
+
+def test_legacy_compaction_notification_cannot_prove_current_qualification() -> None:
+    report = _report("codex")
+    run = report["runs"][2]  # type: ignore[index]
+    run["methods_observed"] = [
+        "thread/start",
+        "thread/compact/start",
+        "thread/compacted",
+    ]
+    report["lifecycle"]["methods_observed"] = [  # type: ignore[index]
+        "thread/start",
+        "thread/resume",
+        "thread/fork",
+        "thread/compact/start",
+        "thread/compacted",
+    ]
+    with pytest.raises(EvidenceValidationError, match="lifecycle method"):
         validate_host_report_consistency(report)
 
 
