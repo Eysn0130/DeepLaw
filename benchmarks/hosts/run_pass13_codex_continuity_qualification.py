@@ -9,7 +9,6 @@ bounded counters, and scalar client event projections.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import platform
@@ -18,27 +17,31 @@ import shutil
 import subprocess
 import tempfile
 import time
-import zipfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator
 
 from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
     analyze_safe_read_calls,
-    build_bundle_manifest,
     canonical_json,
     isolation_receipt,
     metric_evidence_sha256,
-    validate_host_report_consistency,
     write_retained_artifact,
 )
+from benchmarks.hosts.pass13_orchestrator import (
+    QualificationOrchestrator,
+)
+from benchmarks.hosts.pass13_orchestrator import (
+    sha256_bytes as _sha256,
+)
+from benchmarks.hosts.pass13_orchestrator import (
+    sha256_file as _sha256_file,
+)
 
-REPORT_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v1"
-PACKAGE_VERSION = "0.12.0"
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "max"
 RUN_COUNT = 3
@@ -157,160 +160,6 @@ class QualificationFailure(RuntimeError):
 
 def _repository() -> Path:
     return Path(__file__).resolve().parents[2]
-
-
-def _sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _git(repository: Path, *args: str) -> str:
-    process = subprocess.run(
-        ["git", *args],
-        cwd=repository,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
-        env={"PATH": os.defpath, "LC_ALL": "C"},
-    )
-    if process.returncode != 0:
-        raise QualificationFailure("Git binding could not be verified")
-    return process.stdout.strip()
-
-
-def _git_binding(repository: Path) -> dict[str, Any]:
-    pyproject = repository / "pyproject.toml"
-    text = pyproject.read_text(encoding="utf-8")
-    match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    version = match.group(1) if match else None
-    status = _git(repository, "status", "--porcelain=v1", "--untracked-files=all")
-    return {
-        "commit": _git(repository, "rev-parse", "HEAD"),
-        "tree": _git(repository, "rev-parse", "HEAD^{tree}"),
-        "worktree_clean": not bool(status),
-        "package_version": version,
-    }
-
-
-def _candidate_output_directory(path: Path, *, repository: Path) -> Path:
-    if path.is_symlink():
-        raise ValueError("qualification output directory must not be a symlink")
-    selected = path.resolve(strict=False)
-    repository = repository.resolve(strict=True)
-    if selected == repository or repository in selected.parents:
-        raise ValueError("qualification output must be outside the repository")
-    if selected.exists() or selected.is_symlink():
-        raise ValueError("qualification output directory must not already exist")
-    return selected
-
-
-def _require_regular(path: Path, *, label: str) -> Path:
-    if path.is_symlink():
-        raise QualificationFailure(f"{label} is not a regular file")
-    selected = path.resolve(strict=True)
-    if selected.is_symlink() or not selected.is_file():
-        raise QualificationFailure(f"{label} is not a regular file")
-    return selected
-
-
-def _runtime_contract_script(contract_names: Sequence[str]) -> str:
-    return (
-        "import hashlib, importlib.resources, importlib.util, json, pathlib\n"
-        "spec = importlib.util.find_spec('deeplaw')\n"
-        "origin = getattr(spec, 'origin', None) if spec else None\n"
-        "if not isinstance(origin, str) or 'site-packages' not in origin:\n"
-        "    raise SystemExit(4)\n"
-        f"names = {list(contract_names)!r}\n"
-        "root = importlib.resources.files('deeplaw').joinpath('contracts')\n"
-        "digests = {}\n"
-        "for name in names:\n"
-        "    data = root.joinpath(name).read_bytes()\n"
-        "    digests[name] = hashlib.sha256(data).hexdigest()\n"
-        "package_root = pathlib.Path(origin).parent\n"
-        "files = {str(path.relative_to(package_root)): "
-        "hashlib.sha256(path.read_bytes()).hexdigest() "
-        "for path in package_root.rglob('*') if path.is_file() and '__pycache__' not in path.parts "
-        "and path.suffix != '.pyc'}\n"
-        "print(json.dumps({'import_path_class': 'isolated_site_packages', "
-        "'contracts': digests, 'files': files}, sort_keys=True, separators=(',', ':')))\n"
-    )
-
-
-def _installed_runtime_binding(candidate_wheel: Path, deeplaw_executable: Path) -> dict[str, Any]:
-    wheel = _require_regular(candidate_wheel, label="candidate wheel")
-    if not wheel.name.startswith(f"deeplaw-{PACKAGE_VERSION}-") or not wheel.name.endswith(".whl"):
-        raise QualificationFailure("candidate wheel must be the exact 0.12.0 DeepLaw wheel")
-    executable = _require_regular(deeplaw_executable, label="installed deeplaw executable")
-    runtime_python = executable.parent / "python"
-    if not runtime_python.exists() or not runtime_python.resolve(strict=True).is_file():
-        raise QualificationFailure("installed deeplaw executable has no adjacent Python")
-    contract_names = (
-        "host-continuity-qualification.v1.schema.json",
-        "host-qualification-bundle-manifest.v1.schema.json",
-        "knowledge-support.input.v6.schema.json",
-        "knowledge-support.output.v6.schema.json",
-        "knowledge-sink.input.v2.schema.json",
-        "provider-knowledge-capsule.v2.schema.json",
-    )
-    try:
-        completed = subprocess.run(
-            [str(runtime_python), "-I", "-c", _runtime_contract_script(contract_names)],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=30,
-            env={"PATH": str(runtime_python.parent), "PYTHONNOUSERSITE": "1"},
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise QualificationFailure("installed wheel import verification failed") from exc
-    if completed.returncode != 0:
-        raise QualificationFailure("installed wheel did not provide isolated DeepLaw contracts")
-    try:
-        observed = json.loads(completed.stdout)
-    except (TypeError, ValueError) as exc:
-        raise QualificationFailure("installed wheel contract receipt was invalid") from exc
-    if (
-        not isinstance(observed, Mapping)
-        or observed.get("import_path_class") != "isolated_site_packages"
-        or not isinstance(observed.get("contracts"), Mapping)
-        or set(observed["contracts"]) != set(contract_names)
-        or not isinstance(observed.get("files"), Mapping)
-    ):
-        raise QualificationFailure("installed wheel contract identity was incomplete")
-    repository_contracts = _repository() / "contracts"
-    for name, digest in observed["contracts"].items():
-        path = repository_contracts / name
-        if not path.is_file() or _sha256_file(path) != digest:
-            raise QualificationFailure("installed wheel contract differs from the exact HEAD")
-    try:
-        with zipfile.ZipFile(wheel) as archive:
-            wheel_files = {
-                name.removeprefix("deeplaw/"): _sha256(archive.read(name))
-                for name in archive.namelist()
-                if name.startswith("deeplaw/") and not name.endswith("/")
-            }
-    except (OSError, zipfile.BadZipFile) as exc:
-        raise QualificationFailure("candidate wheel package inventory is invalid") from exc
-    if not wheel_files or dict(observed["files"]) != wheel_files:
-        raise QualificationFailure("installed DeepLaw package does not match the candidate wheel")
-    return {
-        "wheel_name": wheel.name,
-        "wheel_sha256": _sha256_file(wheel),
-        "wheel_bytes": wheel.stat().st_size,
-        "runtime_executable_sha256": _sha256_file(executable),
-        "import_path_class": "isolated_site_packages",
-        "contract_digests": {name: value for name, value in observed["contracts"].items()},
-        "_executable": executable,
-        "_runtime_python": runtime_python,
-    }
 
 
 def _host_environment(
@@ -1530,93 +1379,6 @@ def _placeholder_run(index: int, scenario: str) -> dict[str, Any]:
     return run
 
 
-def _build_report(
-    *,
-    binding: Mapping[str, Any],
-    environment: Mapping[str, Any],
-    host_attestation: Mapping[str, Any],
-    runs: Sequence[Mapping[str, Any]],
-    lifecycle: Mapping[str, Any],
-    security: Mapping[str, Any],
-) -> dict[str, Any]:
-    passed_runs = sum(run.get("status") == "passed" for run in runs)
-    failed_runs = len(runs) - passed_runs
-    aggregate_fields: dict[str, Any] = {}
-    for field in (
-        "input_tokens",
-        "cached_input_tokens",
-        "cache_write_input_tokens",
-        "output_tokens",
-        "reasoning_output_tokens",
-        "total_tokens",
-    ):
-        values = [turn.get("usage", {}).get(field) for run in runs for turn in run.get("turns", [])]
-        aggregate_fields[field] = (
-            sum(value for value in values if isinstance(value, int))
-            if values and all(isinstance(value, int) for value in values)
-            else "unreported"
-        )
-    provider_bytes = sum(
-        payload.get("provider_bytes", 0)
-        for run in runs
-        for turn in run.get("turns", [])
-        for payload in turn.get("safe_read", {}).get("provider_payloads", [])
-        if isinstance(payload, Mapping)
-    )
-    elapsed = sum(
-        turn.get("host_elapsed_ms", 0)
-        for run in runs
-        for turn in run.get("turns", [])
-        if isinstance(turn.get("host_elapsed_ms"), int)
-    )
-    return {
-        "schema_version": REPORT_SCHEMA_VERSION,
-        "host": "codex",
-        "status": "executed" if failed_runs == 0 else "partial" if passed_runs else "failed",
-        "package_version": PACKAGE_VERSION,
-        "release_ready": False,
-        "claim_eligible": False,
-        "binding": dict(binding),
-        "environment": dict(environment),
-        "host_attestation": dict(host_attestation),
-        "lifecycle": dict(lifecycle),
-        "security": dict(security),
-        "runs": [dict(run) for run in runs],
-        "aggregate": {
-            "passed_runs": passed_runs,
-            "failed_runs": failed_runs,
-            "first_call_valid_runs": sum(
-                run.get("turns", [{}])[0].get("safe_read", {}).get("first_call_valid") is True
-                for run in runs
-            ),
-            "bounded_retry_runs": sum(
-                run.get("turns", [{}])[0].get("safe_read", {}).get("bounded_retry_used") is True
-                for run in runs
-            ),
-            "provider_bytes": provider_bytes,
-            **aggregate_fields,
-            "host_elapsed_ms": elapsed,
-        },
-        "not_executed": [
-            "Human review",
-            "Legal Pack qualification",
-            "OpenCode host",
-            "Desktop host",
-            "scale qualification",
-            "qualification holdout",
-            "final blind",
-            "release decision",
-        ],
-    }
-
-
-def _validate_report(report: Mapping[str, Any]) -> None:
-    schema_path = _repository() / "contracts/host-continuity-qualification.v1.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
-
-
 def _write_artifacts(
     output_dir: Path,
     artifacts: Mapping[str, bytes],
@@ -1650,13 +1412,15 @@ def execute(
     """
 
     repository = _repository()
-    selected_output = _candidate_output_directory(output_dir, repository=repository)
-    binding = _git_binding(repository)
-    if not binding.get("worktree_clean"):
-        raise QualificationFailure("qualification requires a clean exact worktree")
-    if binding.get("package_version") != PACKAGE_VERSION:
-        raise QualificationFailure("qualification requires package version 0.12.0")
-    runtime = _installed_runtime_binding(candidate_wheel, deeplaw_executable)
+    orchestrator = QualificationOrchestrator(
+        host="codex",
+        repository=repository,
+        candidate_wheel=candidate_wheel,
+        deeplaw_executable=deeplaw_executable,
+        output_dir=output_dir.resolve(strict=False),
+        error_type=QualificationFailure,
+    )
+    selected_output, binding, runtime = orchestrator.prepare_candidate()
     codex_text = shutil.which(codex_command)
     if codex_text is None:
         raise QualificationFailure("Codex command was not found")
@@ -1876,7 +1640,7 @@ def execute(
             }
         },
     }
-    report = _build_report(
+    report = orchestrator.build_report(
         binding=report_binding,
         environment={
             "operating_system": platform.system(),
@@ -1892,21 +1656,25 @@ def execute(
             "deeplaw_session_store_created": False,
         },
         security=security,
+        not_executed=[
+            "Human review",
+            "Legal Pack qualification",
+            "OpenCode host",
+            "Desktop host",
+            "scale qualification",
+            "qualification holdout",
+            "final blind",
+            "release decision",
+        ],
     )
     report_bytes = canonical_json(report).encode("utf-8") + b"\n"
     if _ABSOLUTE_PATH.search(report_bytes) or any(
         value.encode("utf-8") in report_bytes for value in canaries.values()
     ):
         raise QualificationFailure("qualification report leaked a path or secret canary")
-    _validate_report(report)
-    try:
-        validate_host_report_consistency(report)
-    except EvidenceValidationError as exc:
-        raise QualificationFailure("qualification report cross-field validation failed") from exc
     artifacts = {"codex-continuity-qualification.json": report_bytes, **all_events}
     _write_artifacts(selected_output, artifacts, forbidden_values=tuple(canaries.values()))
-    manifest = build_bundle_manifest(
-        host="codex",
+    orchestrator.finalize_bundle(
         commit=binding["commit"],
         tree=binding["tree"],
         artifacts={
@@ -1922,18 +1690,6 @@ def execute(
                 ]
             )
         },
-        output_root=selected_output,
-        forbidden_values=tuple(canaries.values()),
-    )
-    manifest_schema = json.loads(
-        (_repository() / "contracts/host-qualification-bundle-manifest.v1.schema.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    Draft202012Validator(manifest_schema, format_checker=FormatChecker()).validate(manifest)
-    _write_artifacts(
-        selected_output,
-        {"SHA256SUMS.json": canonical_json(manifest).encode("utf-8") + b"\n"},
         forbidden_values=tuple(canaries.values()),
     )
     return report

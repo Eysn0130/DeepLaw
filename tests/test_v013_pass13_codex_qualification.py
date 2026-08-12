@@ -220,7 +220,15 @@ def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
 
 
 def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
-    report = qualification._build_report(
+    orchestrator = qualification.QualificationOrchestrator(
+        host="codex",
+        repository=qualification._repository(),
+        candidate_wheel=tmp_path / "candidate.whl",
+        deeplaw_executable=tmp_path / "deeplaw",
+        output_dir=tmp_path / "evidence",
+        error_type=qualification.QualificationFailure,
+    )
+    report = orchestrator.build_report(
         binding={
             "commit": "a" * 40,
             "tree": "b" * 40,
@@ -253,8 +261,8 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
             "deeplaw_session_store_created": False,
         },
         security=qualification._placeholder_security(),
+        not_executed=["OpenCode host"],
     )
-    qualification._validate_report(report)
     assert report["claim_eligible"] is False
     assert report["release_ready"] is False
 

@@ -10,7 +10,6 @@ payloads, credentials, and host paths remain in memory only.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import platform
@@ -22,18 +21,24 @@ import subprocess
 import sys
 import tempfile
 import time
-import zipfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator, FormatChecker, SchemaError, ValidationError
+from jsonschema import Draft202012Validator, ValidationError
 
 from benchmarks.hosts import pass13_evidence
+from benchmarks.hosts.pass13_orchestrator import (
+    PACKAGE_VERSION,
+    QualificationOrchestrator,
+)
+from benchmarks.hosts.pass13_orchestrator import (
+    sha256_bytes as _sha256,
+)
+from benchmarks.hosts.pass13_orchestrator import (
+    sha256_file as _sha256_file,
+)
 
-REPORT_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v1"
-BUNDLE_SCHEMA_VERSION = "deeplaw.host-qualification-bundle-manifest/v1"
-PACKAGE_VERSION = "0.12.0"
 MODEL = "deepseek/deepseek-v4-flash"
 VARIANT = "max"
 OPENCODE_VERSION = "1.18.16"
@@ -147,20 +152,6 @@ def _canonical(value: Any) -> str:
 
 def _encoded(value: Any) -> bytes:
     return _canonical(value).encode("utf-8")
-
-
-def _sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _sha256_file(path: Path) -> str:
-    if path.is_symlink() or not path.is_file():
-        raise QualificationError("file binding is not one regular file")
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _require_sha(value: Any, field: str) -> str:
@@ -905,348 +896,6 @@ def retain_artifact(
         raise QualificationError(str(exc)) from exc
 
 
-def make_bundle_manifest(
-    *,
-    output_dir: Path,
-    commit: str,
-    tree: str,
-    artifacts: Mapping[str, Path],
-    forbidden_values: Sequence[str] = (),
-) -> dict[str, Any]:
-    try:
-        manifest = pass13_evidence.build_bundle_manifest(
-            host="opencode",
-            commit=commit,
-            tree=tree,
-            artifacts=artifacts,
-            output_root=output_dir,
-            forbidden_values=forbidden_values,
-        )
-    except pass13_evidence.EvidenceValidationError as exc:
-        raise QualificationError(str(exc)) from exc
-    if manifest.get("schema_version") != BUNDLE_SCHEMA_VERSION:
-        raise QualificationError("bundle manifest schema version is invalid")
-    schema_path = (
-        Path(__file__).resolve().parents[2]
-        / "contracts"
-        / "host-qualification-bundle-manifest.v1.schema.json"
-    )
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        Draft202012Validator(schema, format_checker=FormatChecker()).validate(manifest)
-    except (OSError, SchemaError, ValidationError) as exc:
-        raise QualificationError("bundle manifest schema validation failed") from exc
-    return manifest
-
-
-def _contract_digests(repository: Path) -> dict[str, str]:
-    names = (
-        "host-continuity-qualification.v1.schema.json",
-        "host-qualification-bundle-manifest.v1.schema.json",
-        "knowledge-support.output.v6.schema.json",
-    )
-    result: dict[str, str] = {}
-    for name in names:
-        path = repository / "contracts" / name
-        result[name] = _sha256_file(path)
-    return result
-
-
-def _git(repository: Path, *arguments: str) -> str:
-    completed = subprocess.run(
-        ["git", *arguments],
-        cwd=str(repository),
-        env={"PATH": os.defpath, "LC_ALL": "C"},
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    if completed.returncode != 0:
-        raise QualificationError(f"git {' '.join(arguments)} failed")
-    return completed.stdout.strip()
-
-
-def _repository_binding(repository: Path) -> dict[str, Any]:
-    project = json.loads("{}")
-    try:
-        import tomllib
-
-        project = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise QualificationError("project metadata is unavailable") from exc
-    version = project.get("project", {}).get("version")
-    if version != PACKAGE_VERSION:
-        raise QualificationError("current worktree package version is not 0.12.0")
-    status = _git(repository, "status", "--porcelain=v1", "--untracked-files=all")
-    if status:
-        raise QualificationError("current worktree is not clean")
-    return {
-        "commit": _git(repository, "rev-parse", "HEAD"),
-        "tree": _git(repository, "rev-parse", "HEAD^{tree}"),
-        "worktree_clean": True,
-        "package_version": version,
-    }
-
-
-def _installed_binding(
-    *,
-    candidate_wheel: Path,
-    deeplaw_executable: Path,
-    repository: Path,
-) -> dict[str, Any]:
-    if candidate_wheel.is_symlink() or not candidate_wheel.is_file():
-        raise QualificationError("candidate wheel is not one regular file")
-    if not candidate_wheel.name.startswith(f"deeplaw-{PACKAGE_VERSION}-") or not (
-        candidate_wheel.name.endswith(".whl")
-    ):
-        raise QualificationError("candidate wheel name is invalid")
-    if deeplaw_executable.is_symlink() or not deeplaw_executable.is_file():
-        raise QualificationError("installed DeepLaw executable is not regular")
-    runtime_python = deeplaw_executable.parent / "python"
-    if not runtime_python.exists() or not runtime_python.resolve(strict=True).is_file():
-        raise QualificationError("installed DeepLaw executable has no adjacent Python")
-    contract_names = (
-        "host-continuity-qualification.v1.schema.json",
-        "host-qualification-bundle-manifest.v1.schema.json",
-        "knowledge-support.input.v6.schema.json",
-        "knowledge-support.output.v6.schema.json",
-        "knowledge-sink.input.v2.schema.json",
-        "provider-knowledge-capsule.v2.schema.json",
-    )
-    script = (
-        "import hashlib, importlib.metadata, importlib.resources, importlib.util, json, pathlib\n"
-        "spec = importlib.util.find_spec('deeplaw')\n"
-        "origin = getattr(spec, 'origin', None) if spec else None\n"
-        "if not isinstance(origin, str) or 'site-packages' not in origin:\n"
-        "    raise SystemExit(4)\n"
-        f"names = {list(contract_names)!r}\n"
-        "root = importlib.resources.files('deeplaw').joinpath('contracts')\n"
-        "digests = {name: hashlib.sha256(root.joinpath(name).read_bytes()).hexdigest() "
-        "for name in names}\n"
-        "package_root = pathlib.Path(origin).parent\n"
-        "files = {str(path.relative_to(package_root)): "
-        "hashlib.sha256(path.read_bytes()).hexdigest() "
-        "for path in package_root.rglob('*') if path.is_file() and '__pycache__' not in path.parts "
-        "and path.suffix != '.pyc'}\n"
-        "print(json.dumps({'version': importlib.metadata.version('deeplaw'), "
-        "'import_path_class': 'isolated_site_packages', 'contracts': digests, 'files': files}, "
-        "sort_keys=True, separators=(',', ':')))\n"
-    )
-    result = _run_bounded_process(
-        [runtime_python, "-I", "-c", script],
-        environment={"PATH": str(runtime_python.parent), "PYTHONNOUSERSITE": "1"},
-        cwd=candidate_wheel.parent,
-        timeout=30,
-    )
-    if result["returncode"] != 0 or result["timed_out"] or result["output_overflow"]:
-        raise QualificationError("installed wheel import verification failed")
-    observed = _strict_json(result["stdout"])
-    if (
-        not isinstance(observed, Mapping)
-        or observed.get("version") != PACKAGE_VERSION
-        or observed.get("import_path_class") != "isolated_site_packages"
-        or not isinstance(observed.get("contracts"), Mapping)
-        or set(observed["contracts"]) != set(contract_names)
-        or not isinstance(observed.get("files"), Mapping)
-    ):
-        raise QualificationError("installed wheel contract identity is incomplete")
-    source_digests = {
-        name: _sha256_file(repository / "contracts" / name) for name in contract_names
-    }
-    if dict(observed["contracts"]) != source_digests:
-        raise QualificationError("installed wheel contracts differ from the exact HEAD")
-    try:
-        with zipfile.ZipFile(candidate_wheel) as archive:
-            wheel_files = {
-                name.removeprefix("deeplaw/"): _sha256(archive.read(name))
-                for name in archive.namelist()
-                if name.startswith("deeplaw/") and not name.endswith("/")
-            }
-    except (OSError, zipfile.BadZipFile) as exc:
-        raise QualificationError("candidate wheel package inventory is invalid") from exc
-    if not wheel_files or dict(observed["files"]) != wheel_files:
-        raise QualificationError("installed DeepLaw package does not match the candidate wheel")
-    return {
-        "wheel_name": candidate_wheel.name,
-        "wheel_sha256": _sha256_file(candidate_wheel),
-        "wheel_bytes": candidate_wheel.stat().st_size,
-        "runtime_executable_sha256": _sha256_file(deeplaw_executable),
-        "import_path_class": "isolated_site_packages",
-        "contract_digests": source_digests,
-    }
-
-
-def build_skeleton_report(
-    *,
-    commit: str,
-    tree: str,
-    wheel_name: str,
-    wheel_sha256: str,
-    wheel_bytes: int,
-    runtime_executable_sha256: str,
-    contract_digests: Mapping[str, str],
-    runs: Sequence[Mapping[str, Any]],
-    not_executed: Sequence[str],
-    binary_sha256: str | None = None,
-    model_inventory: Mapping[str, Any] | None = None,
-    mcp_inventory: Mapping[str, Any] | None = None,
-    availability: Mapping[str, Any] | None = None,
-    mcp_child_closed_environment: bool = True,
-) -> dict[str, Any]:
-    run_rows = [dict(run) for run in runs]
-    passed = sum(row.get("status") == "passed" for row in run_rows)
-    failed = sum(row.get("status") == "failed" for row in run_rows)
-    provider_bytes = 0
-    elapsed = 0
-    first_valid = 0
-    retries = 0
-    token_totals: dict[str, int] = {
-        "input_tokens": 0,
-        "cached_input_tokens": 0,
-        "cache_write_input_tokens": 0,
-        "output_tokens": 0,
-        "reasoning_output_tokens": 0,
-        "total_tokens": 0,
-    }
-    all_numeric = True
-    for row in run_rows:
-        for turn in row.get("turns", []):
-            provider = turn.get("safe_read", {})
-            first_valid += int(provider.get("first_call_valid") is True)
-            retries += int(provider.get("bounded_retry_used") is True)
-            elapsed += int(turn.get("host_elapsed_ms", 0))
-            for payload in provider.get("provider_payloads", []):
-                provider_bytes += int(payload.get("provider_bytes", 0))
-            usage = turn.get("usage", {})
-            for field in token_totals:
-                value = usage.get(field)
-                if isinstance(value, int):
-                    token_totals[field] += value
-                else:
-                    all_numeric = False
-    aggregate: dict[str, Any] = {
-        "passed_runs": passed,
-        "failed_runs": failed,
-        "first_call_valid_runs": first_valid,
-        "bounded_retry_runs": retries,
-        "provider_bytes": provider_bytes,
-        "input_tokens": token_totals["input_tokens"] if all_numeric else "unreported",
-        "cached_input_tokens": token_totals["cached_input_tokens"] if all_numeric else "unreported",
-        "cache_write_input_tokens": token_totals["cache_write_input_tokens"]
-        if all_numeric
-        else "unreported",
-        "output_tokens": token_totals["output_tokens"] if all_numeric else "unreported",
-        "reasoning_output_tokens": token_totals["reasoning_output_tokens"]
-        if all_numeric
-        else "unreported",
-        "total_tokens": token_totals["total_tokens"] if all_numeric else "unreported",
-        "host_elapsed_ms": elapsed,
-    }
-    inventory = dict(
-        model_inventory
-        or {"checked": False, "selected_present": False, "raw_sha256": None, "raw_bytes": 0}
-    )
-    mcp = dict(
-        mcp_inventory
-        or {"checked": False, "selected_present": False, "raw_sha256": None, "raw_bytes": 0}
-    )
-    if len(run_rows) != RUN_COUNT:
-        report_status = "partial"
-    elif all(row.get("status") == "passed" for row in run_rows):
-        report_status = "executed"
-    elif all(row.get("status") == "failed" for row in run_rows):
-        report_status = "failed"
-    else:
-        report_status = "partial"
-    report = {
-        "schema_version": REPORT_SCHEMA_VERSION,
-        "host": "opencode",
-        "status": report_status,
-        "package_version": PACKAGE_VERSION,
-        "release_ready": False,
-        "claim_eligible": False,
-        "binding": {
-            "commit": commit,
-            "tree": tree,
-            "worktree_clean": True,
-            "wheel_name": wheel_name,
-            "wheel_sha256": wheel_sha256,
-            "wheel_bytes": wheel_bytes,
-            "runtime_executable_sha256": runtime_executable_sha256,
-            "import_path_class": "isolated_site_packages",
-            "contract_digests": dict(contract_digests),
-        },
-        "environment": {
-            "operating_system": platform.system(),
-            "architecture": platform.machine(),
-            "python_version": platform.python_version(),
-            "isolation": pass13_evidence.isolation_receipt(host="opencode"),
-        },
-        "host_attestation": {
-            "binary_name": "opencode",
-            "binary_sha256": binary_sha256 or "0" * 64,
-            "version": OPENCODE_VERSION,
-            "model": MODEL,
-            "reasoning_effort": VARIANT,
-            "authentication": {
-                "status": "provider_available",
-                "source": "process_environment",
-                "auth_file_read": False,
-                "checked": availability is not None,
-                "raw_sha256": availability.get("raw_sha256")
-                if availability is not None
-                else None,
-                "raw_bytes": availability.get("raw_bytes", 0)
-                if availability is not None
-                else 0,
-            },
-            "model_inventory": inventory,
-            "mcp_inventory": mcp,
-            **({"availability": dict(availability)} if availability is not None else {}),
-        },
-        "lifecycle": {
-            "host_owns_threads": True,
-            "methods_observed": ["not_applicable"],
-            "deeplaw_session_store_created": False,
-        },
-        "security": {
-            "mcp_child_closed_environment": mcp_child_closed_environment,
-            "only_knowledge_support_enabled": True,
-            "absolute_path_leak": False,
-            "secret_leak": False,
-            "raw_transcript_retained": False,
-            "hidden_reasoning_retained": False,
-            "authentication_material_retained": False,
-        },
-        "runs": run_rows,
-        "aggregate": aggregate,
-        "not_executed": list(dict.fromkeys(not_executed)),
-    }
-    return report
-
-
-def validate_report(report: Mapping[str, Any]) -> None:
-    if not isinstance(report, Mapping) or len(report.get("runs", [])) != RUN_COUNT:
-        raise QualificationError("qualification report requires exactly three runs")
-    encoded = _encoded(report)
-    _forbid_sensitive(encoded)
-    try:
-        pass13_evidence.validate_host_report_consistency(report)
-    except pass13_evidence.EvidenceValidationError as exc:
-        raise QualificationError(str(exc)) from exc
-    schema_path = (
-        Path(__file__).resolve().parents[2]
-        / "contracts"
-        / "host-continuity-qualification.v1.schema.json"
-    )
-    try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        Draft202012Validator.check_schema(schema)
-        Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
-    except (OSError, SchemaError, ValidationError) as exc:
-        raise QualificationError("qualification report schema validation failed") from exc
-
-
 def _write_json(
     path: Path,
     value: Mapping[str, Any],
@@ -1967,7 +1616,16 @@ def _execute_qualification_body(
     source_revision_id: str | None = None,
 ) -> dict[str, Any]:
     repository = Path(__file__).resolve().parents[2]
-    binding = _repository_binding(repository)
+    orchestrator = QualificationOrchestrator(
+        host="opencode",
+        repository=repository,
+        candidate_wheel=candidate_wheel,
+        deeplaw_executable=deeplaw_executable,
+        output_dir=output_dir.resolve(strict=False),
+        error_type=QualificationError,
+    )
+    output_dir, binding, installed = orchestrator.prepare_candidate()
+    output_dir.mkdir(parents=True)
     provider_key = load_deepseek_key(dotenv)
     canaries = {name: _sha256(name.encode("utf-8")) for name in _CANARY_NAMES}
     if root.is_symlink() or not root.is_dir():
@@ -2005,11 +1663,6 @@ def _execute_qualification_body(
     # This config is never retained as an artifact; it is regenerated in the
     # isolated directory for this invocation only.
     binary_sha = _validate_binary(opencode_binary)
-    installed = _installed_binding(
-        candidate_wheel=candidate_wheel,
-        deeplaw_executable=deeplaw_executable,
-        repository=repository,
-    )
     runtime_check = _run_bounded_process(
         [deeplaw_executable, "--version"],
         environment={
@@ -2055,28 +1708,69 @@ def _execute_qualification_body(
             forbidden_values=forbidden_values,
         )
         artifacts[f"sanitized_events_run_{index}"] = path
-    report = build_skeleton_report(
-        commit=binding["commit"],
-        tree=binding["tree"],
-        wheel_name=installed["wheel_name"],
-        wheel_sha256=installed["wheel_sha256"],
-        wheel_bytes=installed["wheel_bytes"],
-        runtime_executable_sha256=installed["runtime_executable_sha256"],
-        contract_digests=installed["contract_digests"],
-        runs=runs,
-        not_executed=["resume", "fork", "compaction", "release_claim", "final_blind_holdout"],
-        binary_sha256=binary_sha,
-        model_inventory=preflight["model_inventory"],
-        mcp_inventory={
-            "checked": True,
-            "selected_present": True,
-            "raw_sha256": preflight["resolved_config"]["raw_sha256"],
-            "raw_bytes": preflight["resolved_config"]["raw_bytes"],
+    report = orchestrator.build_report(
+        binding={
+            "commit": binding["commit"],
+            "tree": binding["tree"],
+            "worktree_clean": True,
+            **{
+                key: installed[key]
+                for key in (
+                    "wheel_name",
+                    "wheel_sha256",
+                    "wheel_bytes",
+                    "runtime_executable_sha256",
+                    "import_path_class",
+                    "contract_digests",
+                )
+            },
         },
-        availability=preflight["availability"],
-        mcp_child_closed_environment=len(wrapper_receipts) == RUN_COUNT,
+        environment={
+            "operating_system": platform.system(),
+            "architecture": platform.machine(),
+            "python_version": platform.python_version(),
+            "isolation": pass13_evidence.isolation_receipt(host="opencode"),
+        },
+        host_attestation={
+            "binary_name": "opencode",
+            "binary_sha256": binary_sha,
+            "version": OPENCODE_VERSION,
+            "model": MODEL,
+            "reasoning_effort": VARIANT,
+            "authentication": {
+                "status": "provider_available",
+                "source": "process_environment",
+                "auth_file_read": False,
+                "checked": True,
+                "raw_sha256": preflight["availability"]["raw_sha256"],
+                "raw_bytes": preflight["availability"]["raw_bytes"],
+            },
+            "model_inventory": preflight["model_inventory"],
+            "mcp_inventory": {
+                "checked": True,
+                "selected_present": True,
+                "raw_sha256": preflight["resolved_config"]["raw_sha256"],
+                "raw_bytes": preflight["resolved_config"]["raw_bytes"],
+            },
+            "availability": dict(preflight["availability"]),
+        },
+        runs=runs,
+        lifecycle={
+            "host_owns_threads": True,
+            "methods_observed": ["not_applicable"],
+            "deeplaw_session_store_created": False,
+        },
+        security={
+            "mcp_child_closed_environment": len(wrapper_receipts) == RUN_COUNT,
+            "only_knowledge_support_enabled": True,
+            "absolute_path_leak": False,
+            "secret_leak": False,
+            "raw_transcript_retained": False,
+            "hidden_reasoning_retained": False,
+            "authentication_material_retained": False,
+        },
+        not_executed=["resume", "fork", "compaction", "release_claim", "final_blind_holdout"],
     )
-    validate_report(report)
     report_path = output_dir / "opencode-continuity-qualification.json"
     retain_artifact(
         report_path,
@@ -2102,18 +1796,10 @@ def _execute_qualification_body(
         forbidden_values=forbidden_values,
     )
     artifacts["preflight_receipt"] = preflight_path
-    manifest = make_bundle_manifest(
-        output_dir=output_dir,
+    orchestrator.finalize_bundle(
         commit=binding["commit"],
         tree=binding["tree"],
         artifacts=artifacts,
-        forbidden_values=forbidden_values,
-    )
-    manifest_path = output_dir / "host-qualification-bundle-manifest.json"
-    retain_artifact(
-        manifest_path,
-        (_canonical(manifest) + "\n").encode("utf-8"),
-        output_root=output_dir,
         forbidden_values=forbidden_values,
     )
     return report
@@ -2130,12 +1816,6 @@ def execute_qualification(
 ) -> dict[str, Any]:
     """Run qualification with an external temporary root and deterministic cleanup."""
 
-    repository = Path(__file__).resolve().parents[2]
-    if output_dir.exists():
-        raise QualificationError("output directory must not already exist")
-    if output_dir.resolve().is_relative_to(repository.resolve()):
-        raise QualificationError("output directory must be outside the repository")
-    output_dir.mkdir(parents=True)
     root = Path(tempfile.mkdtemp(prefix=_ISOLATED_ROOT_PREFIX))
     try:
         result = _execute_qualification_body(

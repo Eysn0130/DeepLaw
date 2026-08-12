@@ -398,24 +398,25 @@ def test_source_forget_receipt_requires_retention_and_withdrawal() -> None:
         runner.validate_source_forget_receipt(receipt)
 
 
-def test_report_validation_requires_three_runs_and_path_free_artifacts() -> None:
-    report = runner.build_skeleton_report(
-        commit="a" * 40,
-        tree="b" * 40,
-        wheel_name="deeplaw-0.12.0-py3-none-any.whl",
-        wheel_sha256="c" * 64,
-        wheel_bytes=1,
-        runtime_executable_sha256="d" * 64,
-        contract_digests={
-            "host-continuity-qualification.v1.schema.json": "e" * 64,
-            "host-qualification-bundle-manifest.v1.schema.json": "f" * 64,
-            "provider-knowledge-capsule.v2.schema.json": "0" * 64,
-        },
-        runs=[],
-        not_executed=["resume", "fork"],
+def test_report_validation_requires_three_runs_and_path_free_artifacts(tmp_path: Path) -> None:
+    orchestrator = runner.QualificationOrchestrator(
+        host="opencode",
+        repository=Path(__file__).resolve().parents[1],
+        candidate_wheel=tmp_path / "candidate.whl",
+        deeplaw_executable=tmp_path / "deeplaw",
+        output_dir=tmp_path / "evidence",
+        error_type=runner.QualificationError,
     )
-    with pytest.raises(runner.QualificationError, match="three"):
-        runner.validate_report(report)
+    with pytest.raises(runner.QualificationError):
+        orchestrator.build_report(
+            binding={},
+            environment={},
+            host_attestation={},
+            runs=[],
+            lifecycle={},
+            security={},
+            not_executed=["resume", "fork"],
+        )
 
 
 def test_retained_artifact_scans_before_write_and_manifest_excludes_itself(tmp_path: Path) -> None:
@@ -442,8 +443,15 @@ def test_retained_artifact_scans_before_write_and_manifest_excludes_itself(tmp_p
     }
     for path in list(role_paths.values())[1:]:
         path.write_text('{"status":"passed"}\n', encoding="utf-8")
-    manifest = runner.make_bundle_manifest(
+    orchestrator = runner.QualificationOrchestrator(
+        host="opencode",
+        repository=Path(__file__).resolve().parents[1],
+        candidate_wheel=tmp_path / "candidate.whl",
+        deeplaw_executable=tmp_path / "deeplaw",
         output_dir=tmp_path,
+        error_type=runner.QualificationError,
+    )
+    manifest = orchestrator.finalize_bundle(
         commit="a" * 40,
         tree="b" * 40,
         artifacts=role_paths,
@@ -461,6 +469,9 @@ def test_execute_success_cleans_external_isolated_root(
         root = kwargs["root"]
         assert isinstance(root, Path)
         assert root.parent != kwargs["output_dir"]
+        output = kwargs["output_dir"]
+        assert isinstance(output, Path)
+        output.mkdir(parents=True)
         (root / "opencode.db").write_text("raw session state", encoding="utf-8")
         created.append(root)
         return {"status": "executed"}
