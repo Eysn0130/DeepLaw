@@ -319,7 +319,7 @@ vault/
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current source candidate** | package `0.12.0`：Query Plan v6、local Capsule v3、Provider Capsule v2、受治理 Compilation/Synthesis、稳定 CLI/MCP/Python 核心；`release_ready=false` |
+| **Current source candidate** | package `0.12.0`：Query Plan v6、local Capsule v3、Provider Capsule v2、受治理 Compilation/Synthesis，以及通过本地 contract regression 的 CLI/MCP/Python 当前实现；`release_ready=false`，不代表 production ready |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
 | **Development evidence** | 公开、维护者可见的协议与 holdout 只构成 claim-ineligible development evidence；Human Gold、qualification holdout 与 final blind 尚未完成 |
 | **Comparative closure pending** | Codex、Claude Code、OpenCode 外部真实模型语义执行和全部具名基线同条件比较均未执行；no-model 宿主生命周期与确定性 Agent 不冒充真实模型，因此 `competitive_claim_eligible=false` |

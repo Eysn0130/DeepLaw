@@ -1,6 +1,6 @@
 # DeepLaw Architecture
 
-Status: **v0.12.0 current architecture**, reviewed 2026-07-30. Historical v0.7 source-derived,
+Status: **v0.12.0 current architecture**, reviewed 2026-08-13. Historical v0.7 source-derived,
 proposal/review, parser, and Legal Pack details remain in
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md), [`DOCUMENT_IR.md`](DOCUMENT_IR.md), and
 [`DEEPLAW_2.md`](DEEPLAW_2.md). They are compatibility components, not the activation policy for
@@ -280,6 +280,27 @@ must remain authoritative for schema validation, identity resolution, source and
 grant and operation checks, scope, sensitivity, Authority, conflict handling, idempotency, atomic
 commit, audit, and recovery.
 
+### Current compilation status semantics
+
+Compilation status is a reduction over immutable attempts and committed revisions, not a synonym
+for the newest attempt. The two public status seams (`source_knowledge_status` and compilation
+handoff) use one domain reducer and expose four independent facts:
+
+- whether any canonical successful Knowledge Revision has been committed;
+- whether that revision is admissible under the current Source lifecycle;
+- the latest compilation attempt status, including a later failure or projection-pending attempt;
+- whether the current Wiki projection is ready, pending, blocked or not started.
+
+A later failed attempt never deletes or rewrites an earlier canonical success. It also is not
+hidden behind a plain `compiled` label: the canonical revision can remain admissible while current
+compilation state is `stale_or_blocked`. A successful attempt with incomplete projection remains
+compiled and admissible while its Wiki status is pending. Withdrawal or another blocking Source
+lifecycle preserves history but makes the committed revision inadmissible.
+
+Golden synchronization, source add and reconciliation all enter through the existing auto-aware
+Vault/domain coordinator and obtain the same status receipt. Golden sync does not define a second
+mutation path or compilation state machine.
+
 The v0.13 source candidate adds four bound layers without changing those authorities:
 
 - Semantic Profile v3 computes dynamic applicability from the registered Source/IR, observations
@@ -458,6 +479,14 @@ shell access can bypass MCP and must be constrained by the host or a separate OS
 
 These isolated processes are deployment and trust boundaries within one governed Knowledge OS.
 They must not evolve into disconnected identity, graph, versioning, or retrieval implementations.
+
+Pass 14 Host qualification code shares one candidate/wheel/contract/report/bundle orchestrator.
+Codex and OpenCode adapters keep only their Host protocol, closed configuration and sanitized event
+interpretation. For the current Codex App Server protocol, `thread/compact/start` returns `{}` and
+completion is the paired `contextCompaction` item lifecycle. Deprecated `thread/compacted` is a
+compatibility input, never qualification evidence. This Host harness is development/qualification
+infrastructure; it does not add a runtime, session store, retrieval engine or mutation authority to
+DeepLaw.
 
 ## Legal Pack isolation
 

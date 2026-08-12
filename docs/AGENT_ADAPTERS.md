@@ -383,8 +383,9 @@ It then validates and prints a
 `knowledge_support` stdio configuration. Codex direct setup is represented as TOML for either
 `~/.codex/config.toml` or trusted-project `.codex/config.toml`, together with the equivalent
 `codex mcp add ...` command and `codex mcp list` verification command. The separately named
-`codex_plugin_manifest` is JSON for the plugin's `.codex-plugin/mcp.json`; it is not Codex direct
-configuration. Claude Code receives its actual `mcpServers` JSON shape. OpenCode receives a local
+`codex_plugin_manifest` is JSON for the plugin-root `.mcp.json`; the `.codex-plugin/plugin.json`
+manifest points to it with `"mcpServers": "./.mcp.json"`. It is not Codex direct configuration.
+Claude Code receives its actual `mcpServers` JSON shape. OpenCode receives a local
 MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the exact read leaf allow.
 `merge_required=true`: DeepLaw does not write Host
 configuration, install a Host, manage Host authentication or runtime state, or enable the separate
@@ -409,12 +410,21 @@ that binds the existing compiler profile and the public
 `knowledge_support`/separate `knowledge_sink` saga. It does not include a Grant, call a model, merge
 read and write leaves, or add another coordinator.
 
-Codex plugin development install uses the independent `.codex-plugin/mcp.json` manifest:
+Codex plugin development install uses the current local marketplace seam. Only `plugin.json` is
+stored below `.codex-plugin/`; bundled MCP configuration is the plugin-root `.mcp.json`:
 
 ```bash
 codex plugin marketplace add /absolute/path/to/DeepLaw
 codex plugin add deeplaw-knowledge-os@deeplaw
 ```
+
+The Pass 14 no-model lifecycle check used a fresh temporary HOME, `CODEX_HOME` and XDG roots,
+discovered both local plugins, installed/removed/re-added them, and compared the cached plugin bytes
+with their source bytes. It passed with `codex-cli 0.147.0-alpha.1.2`, but remains
+`full_host_acceptance=false` and `claim_eligible=false`: no model or MCP session was started.
+The subsequent isolated ChatGPT-login preflight failed closed, so real Codex diagnostic and
+continuity qualification are `not_executed`. No installed OpenCode binary was available for its
+required version/config preflight, so its diagnostic and qualification are also `not_executed`.
 
 Claude Code development load:
 

@@ -15,8 +15,9 @@ args = ["knowledge", "mcp", "--stdio"]
 ```
 
 The equivalent command is `codex mcp add deeplaw-knowledge -- deeplaw knowledge mcp --stdio`;
-verify with `codex mcp list`. The Codex plugin's `.codex-plugin/mcp.json` is an independent plugin
-manifest shape and is not direct `config.toml` configuration.
+verify with `codex mcp list`. For a Codex plugin, `.codex-plugin/plugin.json` points to the
+plugin-root `.mcp.json` with `"mcpServers": "./.mcp.json"`; that bundled configuration is not
+direct `config.toml` configuration.
 
 ## Claude Code
 

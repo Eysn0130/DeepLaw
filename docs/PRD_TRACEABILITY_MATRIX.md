@@ -1,8 +1,17 @@
 # DeepLaw PRD 1.3 traceability matrix
 
 Status: **current source-candidate mapping**, carried forward from the Pass 5 full mapping and
-updated 2026-08-11 with the Pass 8 disposition and PRD 1.3 evidence/Wiki boundary clarification.
+updated 2026-08-13 with the Pass 14 correction boundary.
 This is not a fresh qualification, release note, or permission to implement every Target.
+
+Pass 14 current pointer: the Codex compaction lifecycle, Host isolation, plugin packaging,
+compilation mixed-history reduction, Golden sync caller path, Host orchestration and product
+surface status dimensions were corrected without adding a product surface or knowledge engine.
+An exact implementation-candidate wheel and no-model Codex plugin lifecycle passed locally. Real
+Codex diagnostic remained `not_executed` after isolated ChatGPT-login preflight failed closed;
+OpenCode diagnostic remained `not_executed` because no installed binary was available. See
+[`V0_13_PASS14_DISPOSITION.md`](V0_13_PASS14_DISPOSITION.md). These facts do not upgrade an E2E or
+external-qualification row.
 
 Pass 11 current pointers: Pass 10 evidence is invalidated without rewriting its historical files
 by [`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md). Candidate task
@@ -276,8 +285,28 @@ Evidence abbreviations in the table are repository-relative paths:
 | Continuity/Context | Source-only honest Gap and deterministic Source-to-compiled-Context vertical implemented | Semantic density, fork lifecycle, independent Human Gold, native-memory comparison, and real Hosts pending |
 | Living Wiki | Implemented development chain with partial exact-candidate scale/editor evidence | Independent Human usability, 10k/100k incremental equivalence, RSS, Relation scale, and platform evidence pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
-| Host Integration | Bounded real read-seam preflight and split read/sink deterministic Host implemented | Real isolated Codex/Claude/OpenCode tasks and provider-secret qualification pending |
-| Portability/Operations | Target with local primitives | Timeline, semantic restore, fresh artifacts, 3 OS, reproducibility, SBOM/provenance, and public redownload pending |
+| Host Integration | Bounded read-seam preflight and split read/sink deterministic Host configuration implemented; current Codex protocol/plugin regressions pass locally | Real isolated Codex/Claude/OpenCode tasks and provider-secret qualification pending; Pass 14 Codex/OpenCode diagnostics were not executed |
+| Portability/Operations | Target with local primitives and a current exact-wheel/fresh-install Darwin journey | Timeline, semantic restore, current green 3 OS CI, provenance/signing, and public redownload pending |
+
+## Pass 14 current-fix addendum
+
+Pass 14 does not upgrade any PRD row to `Qualified` or `Released`.
+
+- Both compilation status seams now distinguish committed canonical success, current lifecycle
+  admission, latest attempt and Wiki projection. Success followed by failure preserves the older
+  revision while exposing a blocked/stale current attempt; success followed by projection pending
+  remains admissible but not projection-ready.
+- Golden sync uses the same auto-aware/domain coordinator and status receipt as add/reconcile. No
+  alternate mutation business logic was introduced.
+- Codex qualification accepts the current `{}` compaction response and requires paired
+  `contextCompaction` item events. Deprecated `thread/compacted` cannot satisfy qualification.
+- The two Pass 13 runners now share candidate, exact-wheel, contract, report and bundle
+  orchestration. Their retained artifacts remain path/Secret-free and claim-ineligible by
+  contract.
+- The product surface inventory keeps the same rows while separating product role from lifecycle.
+- Local full regression and exact-wheel/plugin preflights passed. Real Host diagnostics, A/B/C
+  continuity receipts, current green 3-OS CI, Human Gold, exact Legal Pack, qualification holdout,
+  final blind and release artifact chain remain open.
 
 ## Pass 5 historical addendum
 

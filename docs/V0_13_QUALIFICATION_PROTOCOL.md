@@ -1,6 +1,6 @@
 # DeepLaw v0.13 Source-Candidate Qualification Protocol
 
-Status: **protocol frozen; external qualification candidate binding pending** (2026-08-08). The
+Status: **protocol frozen; external qualification candidate binding pending** (2026-08-13). The
 local reproducible source-candidate package is recorded separately, package version remains
 `0.12.0`, and this document does not authorize a release, RC, GA, or a competitive claim.
 
@@ -24,6 +24,29 @@ The repository-visible v0.13 fixtures are development material. A repository fix
 fixture whose filename says `holdout`, is not a qualification holdout or a final blind holdout under
 this protocol. A holdout used for diagnosis, tuning, or repair is automatically downgraded to the
 development layer.
+
+## Pass 14 Host preflight disposition
+
+Pass 14 corrected the current Codex App Server boundary before any new model call. A compaction
+request returns `{}` and is observed through paired `item/started` and `item/completed` events whose
+item type is `contextCompaction`. Deprecated `thread/compacted` may be parsed for compatibility but
+cannot prove qualification success. The Codex and OpenCode runners also share one candidate,
+installed-wheel, report and retained-bundle orchestrator; Host adapters retain only protocol and
+event-specific behavior.
+
+The required real-Host sequence remains diagnostic first, then three distinct continuity tasks.
+It did not start in Pass 14:
+
+- Codex closed authentication preflight failed closed because the temporary profile did not report
+  a ChatGPT login through the official CLI status seam. No authentication file or keychain item was
+  read and no API-key fallback was attempted.
+- No installed OpenCode binary was available for the required version/config preflight. The
+  project dotenv was therefore not read.
+
+Both Host diagnostics and both three-task qualifications are `not_executed`; no canonical Host
+report, manifest or `SHA256SUMS` exists for this pass. The absence of a bundle is intentional and
+must not be replaced by a skeleton report or PR text. See
+[`V0_13_PASS14_DISPOSITION.md`](V0_13_PASS14_DISPOSITION.md).
 
 ## Three isolated data layers
 

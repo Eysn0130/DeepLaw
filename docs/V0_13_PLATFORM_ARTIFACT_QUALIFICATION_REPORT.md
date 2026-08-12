@@ -1,7 +1,10 @@
 # DeepLaw v0.13 platform and source-candidate artifact qualification
 
-Status: **local Darwin/Python matrix and reproducible source-candidate package passed; 3-OS and
-release lifecycle gates remain unmet** (2026-08-08).
+Status: **historical local Darwin/package evidence plus a Pass 14 exact-wheel preflight; 3-OS and
+release lifecycle gates remain unmet** (2026-08-13).
+
+The original 2026-08-08 candidate record below remains historical. It is not silently rebound to
+the current implementation.
 
 ## Candidate binding
 
@@ -67,3 +70,25 @@ authorized. They were not signed or uploaded.
 The reproducible-build tool's local artifact result does not override the product release gate.
 `release_gate_passed=false`, `competitive_claim_eligible=false`, and package version remains
 `0.12.0`.
+
+## Pass 14 current implementation artifact addendum
+
+The clean Pass 14 implementation candidate before evidence documentation was commit
+`e81e9c87e4215de2d26d354051a20678fd9a4ca8`, tree
+`3ff5c44fdbcf0fb1e698f422fa4533e4fee83443`. A fresh constrained wheel build and isolated public
+journey executed outside the repository:
+
+| Artifact / receipt | Result |
+| --- | --- |
+| `deeplaw-0.12.0-py3-none-any.whl` | 1,265,613 bytes; SHA-256 `eb7e77c89a63ee5781c1b57714fcc8d0702e582f6e22dc1ead8611bb7aa08aad` |
+| `fresh-wheel-journey.json` | valid; SHA-256 `1f91299046a88796348146e78c86c2fbe769d66d5cf86997bc741accd26f4cbc` |
+| fresh-wheel bundle | manifest schema `deeplaw.fresh-wheel-bundle-manifest/v1`; bundle SHA-256 `ccc3b692d910b16c8311e07beef3c76c95ef0726b3fc0d38a58ae1569369d2d6` |
+| installed runtime | isolated site-packages, version `0.12.0`, 287 contracts, Provider Capsule byte accounting valid |
+| current Codex local plugin lifecycle | marketplace discovery/install/remove/re-add/cache-copy passed with `codex-cli 0.147.0-alpha.1.2`; no model call; `claim_eligible=false` |
+
+The current local full suite reported `1581 passed, 6 skipped`. This is one Darwin environment,
+not a three-OS qualification. The terminal CI run for the prior HEAD had green Linux/macOS
+Python 3.11/3.12/3.13 lanes and three Windows failures caused by one platform-specific test
+assertion. The assertion is corrected in the Pass 14 implementation candidate, but the new
+current-HEAD CI result remains pending. Signing, provenance, public redownload and real Host
+qualification remain `not_executed`; `release_ready=false` and `claim_eligible=false`.
