@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from deeplaw import persistent_read_runtime
 from deeplaw.knowledge_autonomy import (
     SINK_OPERATIONS,
     AutonomousKnowledgeStore,
@@ -109,6 +110,24 @@ def test_lifespan_snapshot_reuses_verified_source_and_wiki_indexes(
         assert "cursor" in links and "truncation_reason" in links
     finally:
         runtime.close()
+
+
+def test_live_observer_secures_sqlite_read_sidecars(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _vault(tmp_path)
+    observed: list[Path] = []
+    monkeypatch.setattr(
+        persistent_read_runtime,
+        "_harden_windows_sqlite_read_sidecars",
+        lambda database: observed.append(database),
+    )
+
+    observer = _LiveObserver(root)
+    observer.close()
+
+    assert observed == [root / ".deeplaw" / "ledger.sqlite3"]
 
 
 def test_missing_rebuildable_derived_directory_uses_canonical_snapshot(

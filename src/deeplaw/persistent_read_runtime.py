@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import stat
@@ -21,6 +22,19 @@ _MAX_LIVING_WIKI_V2_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_ROOT_MANIFEST_BYTES = 256 * 1024
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_WIKI_PAGE_BYTES = 256 * 1024
+
+
+def _harden_windows_sqlite_read_sidecars(database: Path) -> None:
+    """Keep WAL read sidecars inside the Vault's native ACL boundary."""
+
+    if os.name != "nt":
+        return
+    from .windows_acl import harden_windows_private_file
+
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{database}{suffix}")
+        if sidecar.exists() or sidecar.is_symlink():
+            harden_windows_private_file(sidecar)
 
 
 def _immutable(value: Any) -> Any:
@@ -171,6 +185,7 @@ class _LiveObserver:
             # Do not issue BEGIN here: data_version must describe live state,
             # not a transaction pinned at observer creation time.
             self.identity()
+            _harden_windows_sqlite_read_sidecars(self.database)
         except BaseException:
             self.close()
             raise
