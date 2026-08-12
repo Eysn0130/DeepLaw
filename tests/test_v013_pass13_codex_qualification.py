@@ -62,6 +62,25 @@ def test_ambient_inventory_map_names_are_all_disabled_with_safe_keys() -> None:
     assert "mcp_servers.openaiDeveloperDocs.enabled=false" in argv
 
 
+def test_codex_login_receipt_hashes_status_without_reading_auth_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Completed:
+        returncode = 0
+        stdout = b"Logged in using ChatGPT\n"
+        stderr = b""
+
+    monkeypatch.setattr(qualification.subprocess, "run", lambda *args, **kwargs: Completed())
+    receipt = qualification._codex_authentication_receipt(
+        Path("/opt/codex"), {"PATH": "/usr/bin"}
+    )
+    assert receipt == {
+        "checked": True,
+        "raw_sha256": qualification._sha256(Completed.stdout),
+        "raw_bytes": len(Completed.stdout),
+    }
+
+
 def test_checkpoint_body_has_exact_governed_labels() -> None:
     body = qualification._checkpoint_body(
         "cold_start",

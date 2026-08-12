@@ -1242,7 +1242,7 @@ def _codex_authentication_receipt(
         completed.returncode != 0
         or not combined
         or len(combined) > MAX_OUTPUT_BYTES
-        or b"logged in" not in combined.casefold()
+        or b"logged in" not in combined.lower()
         or any(
             value.encode("utf-8") in combined
             for name, value in environment.items()
