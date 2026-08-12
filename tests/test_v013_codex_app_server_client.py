@@ -27,6 +27,7 @@ def _fake_server(
         """
         import json
         import sys
+        import time
 
         MODE = __MODE__
         STDERR = __STDERR__
@@ -56,6 +57,37 @@ def _fake_server(
                 send({"id": request_id, "result": {"server": "fixture"}})
             elif method == "initialized":
                 continue
+            elif method == "model/list":
+                assert MODE in {"inventory", "inventory-invalid-model"}
+                assert message["params"] == {"includeHidden": True}
+                if MODE == "inventory-invalid-model":
+                    send({"id": request_id, "result": {"data": {}}})
+                else:
+                    send({
+                        "id": request_id,
+                        "result": {
+                            "data": [{"id": "model-fixture", "name": "Fixture"}],
+                            "nextCursor": "model-next",
+                        },
+                    })
+            elif method == "mcpServerStatus/list":
+                assert MODE in {"inventory", "inventory-invalid-mcp"}
+                assert message["params"] == {
+                    "cursor": "cursor-1",
+                    "limit": 2,
+                    "detail": "full",
+                    "threadId": "thread-1",
+                }
+                if MODE == "inventory-invalid-mcp":
+                    send({"id": request_id, "result": {"data": [], "nextCursor": 1}})
+                else:
+                    send({
+                        "id": request_id,
+                        "result": {
+                            "data": [{"name": "deeplaw", "status": "ready"}],
+                            "nextCursor": None,
+                        },
+                    })
             elif method == "thread/start":
                 if MODE == "full":
                     assert "dynamicTools" in message["params"]
@@ -69,8 +101,28 @@ def _fake_server(
             elif method == "thread/compact/start":
                 assert message["params"]["threadId"] == "thread-2"
                 send({"id": request_id, "result": {"status": "started"}})
-                send({"method": "contextCompaction/started", "params": {"threadId": "thread-2"}})
-                send({"method": "contextCompaction/completed", "params": {"threadId": "thread-2"}})
+                if MODE in {"compact-current", "lifecycle"}:
+                    time.sleep(0.08)
+                    send({
+                        "method": "thread/compacted",
+                        "params": {
+                            "threadId": "thread-2",
+                            "turnId": "turn-compact-1",
+                            "compactionId": "compact-1",
+                            "summary": "/tmp/compaction-secret bounded",
+                        },
+                    })
+                elif MODE == "compact-timeout":
+                    continue
+                else:
+                    send({
+                        "method": "contextCompaction/started",
+                        "params": {"threadId": "thread-2"},
+                    })
+                    send({
+                        "method": "contextCompaction/completed",
+                        "params": {"threadId": "thread-2"},
+                    })
             elif method == "turn/start":
                 send({"id": request_id, "result": {"turn": {"id": "turn-1"}}})
                 if MODE == "unknown-request":
@@ -124,6 +176,30 @@ def _fake_server(
                             },
                         },
                     })
+                if MODE == "mcp-multi":
+                    for call_id, tool_name, query in (
+                        ("mcp-1", "knowledge_support", "/tmp/tool-args-one"),
+                        ("mcp-2", "knowledge_search", "/tmp/tool-args-two"),
+                    ):
+                        send({
+                            "method": "item/completed",
+                            "params": {
+                                "threadId": "thread-1",
+                                "turnId": "turn-1",
+                                "item": {
+                                    "type": "mcpToolCall",
+                                    "callId": call_id,
+                                    "server": "deeplaw",
+                                    "tool": tool_name,
+                                    "arguments": {"query": query},
+                                    "status": "completed",
+                                    "result": {
+                                        "content": [{"type": "text", "text": "bounded"}],
+                                        "structuredContent": {"path": query},
+                                    },
+                                },
+                            },
+                        })
                 send({
                     "method": "item/completed",
                     "params": {
@@ -160,13 +236,14 @@ def _client(
     *,
     mode: str = "full",
     stderr: bytes = b"fixture stderr\n",
+    timeout_seconds: float = 3,
     **kwargs: Any,
 ) -> CodexAppServerClient:
     return CodexAppServerClient(
         _fake_server(tmp_path, mode=mode, stderr=stderr),
         environment={"PATH": "/usr/bin", "PYTHONUNBUFFERED": "1"},
         cwd=tmp_path,
-        timeout_seconds=3,
+        timeout_seconds=timeout_seconds,
         **kwargs,
     )
 
@@ -213,6 +290,119 @@ def test_full_lifecycle_dynamic_tool_usage_and_minimal_projection(tmp_path: Path
     assert client.process_id is None
 
 
+def test_model_list_uses_exact_params_and_validates_page(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="inventory")
+    with client:
+        assert client.model_list(include_hidden=True) == {
+            "data": [{"id": "model-fixture", "name": "Fixture"}],
+            "nextCursor": "model-next",
+        }
+
+
+def test_model_list_invalid_page_fails_closed(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="inventory-invalid-model")
+    with client:
+        with pytest.raises(CodexAppServerProtocolError, match="model/list response"):
+            client.model_list(include_hidden=True)
+        assert client.process_id is None
+
+
+def test_mcp_server_status_list_uses_exact_params_and_validates_page(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="inventory")
+    with client:
+        assert client.mcp_server_status_list(
+            cursor="cursor-1",
+            limit=2,
+            detail="full",
+            thread_id="thread-1",
+        ) == {
+            "data": [{"name": "deeplaw", "status": "ready"}],
+            "nextCursor": None,
+        }
+
+
+def test_mcp_server_status_list_rejects_invalid_page_and_limit(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="inventory-invalid-mcp")
+    with client:
+        with pytest.raises(CodexAppServerProtocolError, match="mcpServerStatus/list response"):
+            client.mcp_server_status_list(
+                cursor="cursor-1",
+                limit=2,
+                detail="full",
+                thread_id="thread-1",
+            )
+        assert client.process_id is None
+
+    client = _client(tmp_path, mode="inventory")
+    with pytest.raises(ValueError, match="limit"):
+        client.mcp_server_status_list(limit=-1)
+    with pytest.raises(ValueError, match="detail"):
+        client.mcp_server_status_list(detail="everything")
+
+
+def test_compact_waits_for_current_thread_compacted_notification(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="compact-current")
+    with client:
+        client.initialize()
+        client.thread_start()
+        client.thread_fork("thread-1")
+        assert client.compact_thread("thread-2") == {"status": "started"}
+        compacted = [event for event in client.events if event["method"] == "thread/compacted"]
+        assert len(compacted) == 1
+        assert compacted[0]["thread_id_sha256"] == hashlib.sha256(b"thread-2").hexdigest()
+        assert compacted[0]["turn_id_sha256"] == hashlib.sha256(b"turn-compact-1").hexdigest()
+        assert compacted[0]["compaction_id_sha256"] == hashlib.sha256(b"compact-1").hexdigest()
+        assert "/tmp/compaction-secret" not in repr(compacted)
+        assert "bounded" not in repr(compacted)
+
+
+def test_compact_timeout_fails_closed(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="compact-timeout", timeout_seconds=0.1)
+    with client:
+        client.initialize()
+        client.thread_start()
+        client.thread_fork("thread-1")
+        with pytest.raises(CodexAppServerTimeoutError):
+            client.thread_compact_start("thread-2")
+        assert client.process_id is None
+
+
+def test_mcp_tool_observations_are_per_call_and_safe(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="mcp-multi")
+    with client:
+        client.initialize()
+        client.thread_start()
+        result = client.turn_start("thread-1", "hello")
+        assert len(result.tool_outputs) == 2
+        observations = result.tool_call_observations
+        assert len(observations) == 2
+        assert [item["call_id_sha256"] for item in observations] == [
+            hashlib.sha256(b"mcp-1").hexdigest(),
+            hashlib.sha256(b"mcp-2").hexdigest(),
+        ]
+        assert [item["server"] for item in observations] == ["deeplaw", "deeplaw"]
+        assert [item["tool_name"] for item in observations] == [
+            "knowledge_support",
+            "knowledge_search",
+        ]
+        for item in observations:
+            assert item["status"] == "completed"
+            for field in (
+                "arguments_sha256",
+                "arguments_bytes",
+                "result_sha256",
+                "result_bytes",
+                "structured_content_sha256",
+                "structured_content_bytes",
+            ):
+                assert item[field]
+        rendered = repr(observations) + repr(client.events)
+        assert "bounded" not in rendered
+        assert "/tmp/tool-args" not in rendered
+        observations[0]["tool_name"] = "mutated"
+        assert result.tool_call_observations[0]["tool_name"] == "knowledge_support"
+
+
 def test_resume_fork_and_compact_use_exact_v2_methods(tmp_path: Path) -> None:
     client = _client(tmp_path, mode="lifecycle")
     with client:
@@ -225,10 +415,10 @@ def test_resume_fork_and_compact_use_exact_v2_methods(tmp_path: Path) -> None:
         assert compacted == {"status": "started"}
         # Lifecycle events contain no source payload and retain only method and
         # hashed identity fields.
-        assert [event["method"] for event in client.events[-2:]] == [
-            "contextCompaction/started",
-            "contextCompaction/completed",
-        ]
+        assert client.events[-1]["method"] == "thread/compacted"
+        assert client.events[-1]["thread_id_sha256"] == hashlib.sha256(
+            b"thread-2"
+        ).hexdigest()
 
 
 def test_completed_mcp_result_is_memory_only_and_hashed_in_projection(tmp_path: Path) -> None:

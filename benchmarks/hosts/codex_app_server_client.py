@@ -94,6 +94,11 @@ _USAGE_KEYS = (
     "total_tokens",
 )
 
+# Keep inventory requests bounded even when a caller forwards a server-side
+# page-size option.  The benchmark client must not become an unbounded
+# provider inventory sink.
+_MAX_MCP_SERVER_STATUS_LIMIT = 1000
+
 
 def _empty_usage() -> dict[str, Any]:
     return {key: UNREPORTED for key in _USAGE_KEYS}
@@ -257,6 +262,16 @@ class TurnResult(dict[str, Any]):
     def usage(self) -> dict[str, Any]:
         return dict(self.get("usage", _empty_usage()))
 
+    @property
+    def tool_call_observations(self) -> list[dict[str, Any]]:
+        """Return a defensive copy of safe, per-call tool observations."""
+
+        return [
+            dict(observation)
+            for observation in self.get("tool_call_observations", [])
+            if isinstance(observation, Mapping)
+        ]
+
 
 class CodexAppServerClient:
     """Bounded JSONL client for a caller-supplied Codex App Server fixture.
@@ -348,6 +363,8 @@ class CodexAppServerClient:
         self._final_text_parts: list[str] = []
         self._completed_item_text: str | None = None
         self._tool_outputs: list[Any] = []
+        self._tool_call_observations: list[dict[str, Any]] = []
+        self._compacted_notification_keys: set[tuple[str, str]] = set()
 
     @property
     def process_id(self) -> int | None:
@@ -474,6 +491,91 @@ class CodexAppServerClient:
         self._initialized = True
         return result if isinstance(result, dict) else {"result": result}
 
+    def model_list(
+        self,
+        params: Mapping[str, Any] | None = None,
+        *,
+        include_hidden: bool | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """List the server's current model inventory without persisting it."""
+
+        payload = self._params(params, kwargs)
+        if include_hidden is not None:
+            if type(include_hidden) is not bool:
+                raise ValueError("include_hidden must be a boolean")
+            payload["includeHidden"] = include_hidden
+        if "includeHidden" in payload and type(payload["includeHidden"]) is not bool:
+            raise ValueError("includeHidden must be a boolean")
+        result = self._request_after_initialize("model/list", payload)
+        return self._validate_paged_response(result, "model/list")
+
+    list_models = model_list
+
+    def mcp_server_status_list(
+        self,
+        params: Mapping[str, Any] | None = None,
+        *,
+        cursor: str | None = None,
+        limit: int | None = None,
+        detail: Any = None,
+        thread_id: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """List current MCP server status using bounded, read-only paging."""
+
+        payload = self._params(params, kwargs)
+        explicit = (
+            ("cursor", cursor),
+            ("limit", limit),
+            ("detail", detail),
+            ("threadId", thread_id),
+        )
+        for key, value in explicit:
+            if value is not None:
+                payload[key] = value
+        if "cursor" in payload and not isinstance(payload["cursor"], str):
+            raise ValueError("cursor must be a string")
+        if "threadId" in payload and (
+            not isinstance(payload["threadId"], str) or not payload["threadId"]
+        ):
+            raise ValueError("thread_id must be a non-empty string")
+        if "detail" in payload and payload["detail"] not in {
+            "full",
+            "toolsAndAuthOnly",
+        }:
+            raise ValueError("detail must be full or toolsAndAuthOnly")
+        if "limit" in payload:
+            page_limit = payload["limit"]
+            if (
+                type(page_limit) is not int
+                or page_limit < 0
+                or page_limit > _MAX_MCP_SERVER_STATUS_LIMIT
+            ):
+                raise ValueError(
+                    f"limit must be an integer between 0 and {_MAX_MCP_SERVER_STATUS_LIMIT}"
+                )
+        result = self._request_after_initialize("mcpServerStatus/list", payload)
+        return self._validate_paged_response(result, "mcpServerStatus/list")
+
+    list_mcp_server_status = mcp_server_status_list
+
+    def _validate_paged_response(self, result: Any, method: str) -> dict[str, Any]:
+        if (
+            not isinstance(result, Mapping)
+            or not isinstance(result.get("data"), list)
+            or "nextCursor" not in result
+            or (
+                result.get("nextCursor") is not None
+                and not isinstance(result.get("nextCursor"), str)
+            )
+        ):
+            self._fail_closed()
+            raise CodexAppServerProtocolError(
+                f"{method} response omitted valid data/nextCursor"
+            )
+        return dict(result)
+
     def thread_start(
         self,
         params: Mapping[str, Any] | None = None,
@@ -530,11 +632,19 @@ class CodexAppServerClient:
         **kwargs: Any,
     ) -> dict[str, Any]:
         payload = self._thread_params(thread_id, params, kwargs)
+        expected_thread_id = payload["threadId"]
+        expected_thread_hash = _sha256_text(expected_thread_id)
+        deadline = time.monotonic() + self.timeout_seconds
+        self._compacted_notification_keys = {
+            key
+            for key in self._compacted_notification_keys
+            if key[0] != expected_thread_hash
+        }
         result = self._request_after_initialize("thread/compact/start", payload)
-        # The compact request returns immediately; lifecycle notifications are
-        # commonly already queued by the fixture.  Project only currently ready
-        # notifications without turning this method into a blocking wait.
-        self._drain_ready_notifications()
+        self._wait_for_compaction(
+            expected_thread_hash=expected_thread_hash,
+            deadline=deadline,
+        )
         return result
 
     compact_thread = thread_compact_start
@@ -557,6 +667,7 @@ class CodexAppServerClient:
         self._final_text_parts = []
         self._completed_item_text = None
         self._tool_outputs = []
+        self._tool_call_observations = []
         event_start = len(self._events)
         started_at = time.monotonic()
         response = self._request_after_initialize("turn/start", payload)
@@ -581,6 +692,7 @@ class CodexAppServerClient:
             final_text=final_text,
             final_agent_text=final_text,
             tool_outputs=list(self._tool_outputs),
+            tool_call_observations=[dict(item) for item in self._tool_call_observations],
             usage=usage,
             events=self.sanitized_events[event_start:],
         )
@@ -628,6 +740,7 @@ class CodexAppServerClient:
         for source, target in (
             ("thread_id", "threadId"),
             ("turn_id", "turnId"),
+            ("include_hidden", "includeHidden"),
             ("dynamic_tools", "dynamicTools"),
             ("approval_policy", "approvalPolicy"),
             ("sandbox_mode", "sandbox"),
@@ -736,9 +849,13 @@ class CodexAppServerClient:
             message = self._next_message(deadline)
             if "method" in message and "id" not in message:
                 completion = self._handle_notification(message)
-                if completion is not None and (
+                if (
+                    completion is not None
+                    and completion.get("kind") == "turn/completed"
+                    and (
                     expected_turn_id is None
                     or completion.get("turn_id") in (None, expected_turn_id)
+                    )
                 ):
                     return completion
                 continue
@@ -750,6 +867,45 @@ class CodexAppServerClient:
             self._fail_closed()
             raise CodexAppServerProtocolError(
                 "unexpected response while waiting for turn completion"
+            )
+
+    def _wait_for_compaction(self, *, expected_thread_hash: str, deadline: float) -> None:
+        """Wait for one current ``thread/compacted`` notification for a thread."""
+
+        while True:
+            matching = next(
+                (
+                    key
+                    for key in self._compacted_notification_keys
+                    if key[0] == expected_thread_hash
+                ),
+                None,
+            )
+            if matching is not None:
+                self._compacted_notification_keys.discard(matching)
+                return
+            message = self._next_message(deadline)
+            if "method" in message and "id" not in message:
+                completion = self._handle_notification(message)
+                if (
+                    completion is not None
+                    and completion.get("kind") == "thread/compacted"
+                    and completion.get("thread_id_sha256") == expected_thread_hash
+                ):
+                    self._compacted_notification_keys.discard(
+                        (
+                            expected_thread_hash,
+                            completion["turn_id_sha256"],
+                        )
+                    )
+                    return
+                continue
+            if "method" in message and "id" in message:
+                self._handle_server_request(message)
+                continue
+            self._fail_closed()
+            raise CodexAppServerProtocolError(
+                "unexpected response while waiting for thread compaction"
             )
 
     def _next_message(self, deadline: float) -> dict[str, Any]:
@@ -969,6 +1125,27 @@ class CodexAppServerClient:
     def _capture_notification_state(
         self, method: str, params: Mapping[str, Any]
     ) -> dict[str, Any] | None:
+        if method == "thread/compacted":
+            compact_thread_id = _find_value(params, "threadId", "thread_id")
+            compact_turn_id = _find_value(params, "turnId", "turn_id")
+            if (
+                not isinstance(compact_thread_id, str)
+                or not compact_thread_id
+                or not isinstance(compact_turn_id, str)
+                or not compact_turn_id
+            ):
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "thread/compacted omitted required threadId/turnId"
+                )
+            thread_hash = _sha256_text(compact_thread_id)
+            turn_hash = _sha256_text(compact_turn_id)
+            self._compacted_notification_keys.add((thread_hash, turn_hash))
+            return {
+                "kind": "thread/compacted",
+                "thread_id_sha256": thread_hash,
+                "turn_id_sha256": turn_hash,
+            }
         thread_id = _thread_or_turn_id(params, "threadId", "thread_id")
         turn_id = _thread_or_turn_id(params, "turnId", "turn_id")
         if thread_id is None:
@@ -989,7 +1166,11 @@ class CodexAppServerClient:
                 _find_value(params, "status")
                 or _find_value(params.get("turn"), "status")
             )
-            return {"turn_id": turn_id, "turn_status": status or "completed"}
+            return {
+                "kind": "turn/completed",
+                "turn_id": turn_id,
+                "turn_status": status or "completed",
+            }
         return None
 
     def _capture_agent_text(self, method: str, params: Mapping[str, Any]) -> None:
@@ -1021,13 +1202,86 @@ class CodexAppServerClient:
         item_type = _find_value(item, "type", "itemType", "item_type")
         if not isinstance(item_type, str) or "tool" not in item_type.casefold():
             return
+        output_found = False
         for key in ("result", "output", "content", "contentItems"):
             if isinstance(item, Mapping) and key in item and item[key] is not None:
                 self._tool_outputs.append(item[key])
-                return
+                output_found = True
+                break
             if key in params and params[key] is not None:
                 self._tool_outputs.append(params[key])
-                return
+                output_found = True
+                break
+        observation = self._tool_observation(params, item, include_default_status=True)
+        if output_found or observation:
+            self._tool_call_observations.append(observation)
+
+    def _tool_observation(
+        self,
+        params: Mapping[str, Any],
+        item: Any,
+        *,
+        include_default_status: bool = False,
+    ) -> dict[str, Any]:
+        """Build a scalar-only observation without retaining tool payloads."""
+
+        observation: dict[str, Any] = {}
+        call_id = self._first_field(
+            params,
+            item,
+            "callId",
+            "call_id",
+            "toolCallId",
+            "tool_call_id",
+            "id",
+        )
+        if isinstance(call_id, str) and call_id:
+            observation["call_id_sha256"] = _sha256_text(call_id)
+        server = self._first_field(params, item, "server", "serverName", "server_name")
+        safe_server = _safe_label(server)
+        if safe_server is not None:
+            observation["server"] = safe_server
+        tool_name = self._tool_name(params, item)
+        if tool_name is not None:
+            observation["tool_name"] = tool_name
+        status = _safe_label(
+            self._first_field(params, item, "status", "toolStatus", "tool_status")
+        )
+        if status is None and include_default_status:
+            status = "completed"
+        if status is not None:
+            observation["status"] = status
+
+        arguments = self._first_field(params, item, "arguments", "parameters", "input", "args")
+        if arguments is not None:
+            digest, size = _hash_record(arguments)
+            observation["arguments_sha256"] = digest
+            observation["arguments_bytes"] = size
+        result = self._first_field(params, item, "result", "output", "contentItems")
+        if result is not None:
+            digest, size = _hash_record(result)
+            observation["result_sha256"] = digest
+            observation["result_bytes"] = size
+        structured_content = self._structured_content(params, item, result)
+        if structured_content is not None:
+            digest, size = _hash_record(structured_content)
+            observation["structured_content_sha256"] = digest
+            observation["structured_content_bytes"] = size
+        return observation
+
+    @classmethod
+    def _structured_content(cls, params: Mapping[str, Any], item: Any, result: Any) -> Any:
+        structured = cls._first_field(
+            params,
+            item,
+            "structuredContent",
+            "structured_content",
+        )
+        if structured is not None:
+            return structured
+        if isinstance(result, Mapping):
+            return _find_value(result, "structuredContent", "structured_content")
+        return None
 
     def _project_event(
         self, method: str, params: Mapping[str, Any]
@@ -1080,8 +1334,25 @@ class CodexAppServerClient:
                 digest, size = _hash_record(result)
                 event["result_sha256"] = digest
                 event["result_bytes"] = size
+            if "completed" in lowered:
+                event.update(
+                    self._tool_observation(
+                        params,
+                        item,
+                        include_default_status=True,
+                    )
+                )
         if method == "thread/tokenUsage/updated":
             event["usage"] = self.usage_for(thread_id, turn_id)
+        if method == "thread/compacted":
+            compaction_id = _find_value(params, "compactionId", "compaction_id")
+            if isinstance(compaction_id, str) and compaction_id:
+                event["compaction_id_sha256"] = _sha256_text(compaction_id)
+            compaction_status = _safe_label(
+                _find_value(params, "status")
+                or _find_value(params.get("item"), "status")
+            )
+            event["compaction_status"] = compaction_status or "completed"
         return event
 
     @staticmethod
