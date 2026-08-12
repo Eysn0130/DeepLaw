@@ -20,6 +20,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 from collections.abc import Mapping, Sequence
@@ -42,6 +43,7 @@ MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 PROVIDER_HARD_LIMIT_BYTES = 65_536
 TIMEOUT_SECONDS = 300
 MAX_DOTENV_BYTES = 64 * 1024
+_ISOLATED_ROOT_PREFIX = "deeplaw-pass13-opencode-"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _ABSOLUTE_PATH = re.compile(
@@ -1918,26 +1920,56 @@ def _run_one_scenario(
     return run, analysis["sanitized_events"], wrapper_value
 
 
-def execute_qualification(
+def _cleanup_isolated_root(root: Path) -> None:
+    """Remove one runner-owned temporary root, and fail closed on ambiguity."""
+
+    if not isinstance(root, Path) or not root.name.startswith(_ISOLATED_ROOT_PREFIX):
+        raise QualificationError("isolated runtime cleanup target is not runner-owned")
+    temporary_parent = Path(tempfile.gettempdir()).resolve(strict=True)
+    if root.parent.resolve(strict=True) != temporary_parent:
+        raise QualificationError("isolated runtime cleanup target escaped the temporary root")
+    if not root.exists():
+        return
+    if root.is_symlink() or not root.is_dir():
+        raise QualificationError("isolated runtime cleanup target is unsafe")
+    try:
+        shutil.rmtree(root)
+    except OSError as exc:
+        raise QualificationError("isolated runtime cleanup failed") from exc
+    if root.exists():
+        raise QualificationError("isolated runtime cleanup did not remove its root")
+
+
+def _cleanup_after_qualification(root: Path, original: BaseException | None = None) -> None:
+    """Clean up while preserving any original qualification exception."""
+
+    try:
+        _cleanup_isolated_root(root)
+    except BaseException as cleanup_error:
+        if original is None:
+            raise
+        original.add_note(
+            "SECURITY: isolated OpenCode runtime cleanup failed; qualification was not retained "
+            f"as successful ({type(cleanup_error).__name__})"
+        )
+
+
+def _execute_qualification_body(
     *,
     candidate_wheel: Path,
     deeplaw_executable: Path,
     output_dir: Path,
     opencode_binary: Path,
     dotenv: Path,
+    root: Path,
     source_revision_id: str | None = None,
 ) -> dict[str, Any]:
     repository = Path(__file__).resolve().parents[2]
     binding = _repository_binding(repository)
-    if output_dir.exists():
-        raise QualificationError("output directory must not already exist")
-    if output_dir.resolve().is_relative_to(repository.resolve()):
-        raise QualificationError("output directory must be outside the repository")
-    output_dir.mkdir(parents=True)
     provider_key = load_deepseek_key(dotenv)
     canaries = {name: _sha256(name.encode("utf-8")) for name in _CANARY_NAMES}
-    root = output_dir / "isolated"
-    root.mkdir()
+    if root.is_symlink() or not root.is_dir():
+        raise QualificationError("isolated runtime root is unavailable")
     environment = build_host_environment(
         root=root,
         opencode_binary=opencode_binary,
@@ -2082,6 +2114,42 @@ def execute_qualification(
         forbidden_values=forbidden_values,
     )
     return report
+
+
+def execute_qualification(
+    *,
+    candidate_wheel: Path,
+    deeplaw_executable: Path,
+    output_dir: Path,
+    opencode_binary: Path,
+    dotenv: Path,
+    source_revision_id: str | None = None,
+) -> dict[str, Any]:
+    """Run qualification with an external temporary root and deterministic cleanup."""
+
+    repository = Path(__file__).resolve().parents[2]
+    if output_dir.exists():
+        raise QualificationError("output directory must not already exist")
+    if output_dir.resolve().is_relative_to(repository.resolve()):
+        raise QualificationError("output directory must be outside the repository")
+    output_dir.mkdir(parents=True)
+    root = Path(tempfile.mkdtemp(prefix=_ISOLATED_ROOT_PREFIX))
+    try:
+        result = _execute_qualification_body(
+            candidate_wheel=candidate_wheel,
+            deeplaw_executable=deeplaw_executable,
+            output_dir=output_dir,
+            opencode_binary=opencode_binary,
+            dotenv=dotenv,
+            root=root,
+            source_revision_id=source_revision_id,
+        )
+    except BaseException as original:
+        _cleanup_after_qualification(root, original)
+        raise
+    else:
+        _cleanup_after_qualification(root)
+        return result
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

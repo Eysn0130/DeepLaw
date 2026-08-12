@@ -450,3 +450,83 @@ def test_retained_artifact_scans_before_write_and_manifest_excludes_itself(tmp_p
     )
     assert "bundle-manifest" not in {row["name"] for row in manifest["artifacts"]}
     assert str(tmp_path) not in json.dumps(manifest)
+
+
+def test_execute_success_cleans_external_isolated_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    created: list[Path] = []
+
+    def fake_body(**kwargs: object) -> dict[str, str]:
+        root = kwargs["root"]
+        assert isinstance(root, Path)
+        assert root.parent != kwargs["output_dir"]
+        (root / "opencode.db").write_text("raw session state", encoding="utf-8")
+        created.append(root)
+        return {"status": "executed"}
+
+    monkeypatch.setattr(runner, "_execute_qualification_body", fake_body)
+    output_dir = tmp_path / "retained"
+    result = runner.execute_qualification(
+        candidate_wheel=tmp_path / "candidate.whl",
+        deeplaw_executable=tmp_path / "deeplaw",
+        output_dir=output_dir,
+        opencode_binary=tmp_path / "opencode",
+        dotenv=tmp_path / ".env",
+    )
+    assert result == {"status": "executed"}
+    assert created and not created[0].exists()
+    assert output_dir.is_dir()
+    assert list(output_dir.iterdir()) == []
+
+
+def test_execute_failure_cleans_root_and_preserves_original_exception(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    created: list[Path] = []
+
+    def fake_body(**kwargs: object) -> dict[str, str]:
+        root = kwargs["root"]
+        assert isinstance(root, Path)
+        (root / "session-transcript.db").write_text("raw transcript", encoding="utf-8")
+        created.append(root)
+        raise RuntimeError("original qualification failure")
+
+    monkeypatch.setattr(runner, "_execute_qualification_body", fake_body)
+    with pytest.raises(RuntimeError, match="original qualification failure"):
+        runner.execute_qualification(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "retained-failure",
+            opencode_binary=tmp_path / "opencode",
+            dotenv=tmp_path / ".env",
+        )
+    assert created and not created[0].exists()
+
+
+def test_cleanup_failure_is_explicit_without_swallowing_original(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = Path(runner.tempfile.mkdtemp(prefix=runner._ISOLATED_ROOT_PREFIX))
+
+    def fail_cleanup(_: Path) -> None:
+        raise runner.QualificationError("cleanup backend unavailable")
+
+    monkeypatch.setattr(runner, "_cleanup_isolated_root", fail_cleanup)
+    original = RuntimeError("original failure")
+    runner._cleanup_after_qualification(root, original)
+    assert any("SECURITY" in note for note in getattr(original, "__notes__", []))
+    assert root.exists()
+    runner.shutil.rmtree(root)
+
+
+def test_cleanup_rejects_non_runner_owned_target(tmp_path: Path) -> None:
+    with pytest.raises(runner.QualificationError, match="runner-owned"):
+        runner._cleanup_isolated_root(tmp_path)
+    assert tmp_path.exists()
+
+    escaped = tmp_path / f"{runner._ISOLATED_ROOT_PREFIX}fixture"
+    escaped.mkdir()
+    with pytest.raises(runner.QualificationError, match="escaped"):
+        runner._cleanup_isolated_root(escaped)
+    assert escaped.exists()
