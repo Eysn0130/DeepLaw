@@ -4,6 +4,12 @@ Status: **current source-candidate mapping**, carried forward from the Pass 5 fu
 updated 2026-08-13 with the Pass 15 Kernel acceptance boundary.
 This is not a fresh qualification, release note, or permission to implement every Target.
 
+Pass 15 current pointer: PRD 1.3.1 fixes the v0.13 Kernel distribution and minimum compatibility
+acceptance boundary; active gate classification v3 makes Codex and OpenCode Core without rewriting
+historical v2 or qualification-protocol-v1 bytes; Living Wiki Core behavior is separated from
+optional graph analytics. No real Host or Human Gold task executed, and release remains blocked.
+See [`V0_13_PASS15_DISPOSITION.md`](V0_13_PASS15_DISPOSITION.md).
+
 Pass 14 current pointer: the Codex compaction lifecycle, Host isolation, plugin packaging,
 compilation mixed-history reduction, Golden sync caller path, Host orchestration and product
 surface status dimensions were corrected without adding a product surface or knowledge engine.
@@ -161,7 +167,7 @@ Evidence abbreviations in the table are repository-relative paths:
   `src/deeplaw/search.py`, and `src/deeplaw/mcp_server.py`.
 - `ARCH`: `docs/ARCHITECTURE.md`; `AKO`: `docs/AUTONOMOUS_KNOWLEDGE_OS.md`;
   `DISP`: latest committed pass-specific disposition (currently
-  `docs/V0_13_PASS14_DISPOSITION.md`); `UP`:
+  `docs/V0_13_PASS15_DISPOSITION.md`); `UP`:
   `docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 ## Problem and principle mapping
@@ -385,8 +391,8 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 
 ## Current source-candidate status pointer
 
-Pass 1-14 reports remain immutable historical development evidence. The latest committed evidence
-boundary is `docs/V0_13_PASS14_DISPOSITION.md`; this matrix and the latest committed pass-specific
+Pass 1-15 reports remain immutable evidence snapshots. The latest committed evidence boundary is
+`docs/V0_13_PASS15_DISPOSITION.md`; this matrix and the latest committed pass-specific
 disposition jointly locate current status. Pass 10's b14 Statement, Codex, and Obsidian artifacts
 are historical candidate evidence: the Statement report fails the current Gold
 byte binding, the Codex environment receipt fails the current child-argv contract, and the Codex
