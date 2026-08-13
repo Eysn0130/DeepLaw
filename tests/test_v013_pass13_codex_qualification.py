@@ -312,6 +312,8 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
                 )
             }
 
+    turn_params: list[dict[str, object]] = []
+
     class FakeClient:
         def initialize(self):
             calls.append("initialize")
@@ -322,6 +324,7 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
 
         def turn_start(self, *args, **kwargs):
             calls.append("turn/start")
+            turn_params.append(kwargs["params"])
             return FakeResult(thread_id="t1", turn_id="u1", final_text="{}")
 
         def thread_resume(self, *args, **kwargs):
@@ -361,6 +364,18 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
                 }
             },
         )
+    assert turn_params == [{"outputSchema": qualification._FINAL_RESPONSE_SCHEMA}]
+
+
+def test_codex_failure_codes_are_safe_constant_labels() -> None:
+    assert qualification._safe_failure_code(
+        qualification.QualificationFailure(
+            "bounded final response schema was not satisfied"
+        )
+    ) == "final_response_schema_invalid"
+    assert qualification._safe_failure_code(
+        qualification.QualificationFailure("provider included unsafe arbitrary text")
+    ) == "host_qualification_failure"
 
 
 def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(

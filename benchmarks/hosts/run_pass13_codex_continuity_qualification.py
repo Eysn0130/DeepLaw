@@ -1409,7 +1409,11 @@ def _run_scenario(
         nonlocal pending_compaction_usage
         before = ledger_head()
         started = time.monotonic()
-        result = client.turn_start(thread_id, [{"type": "text", "text": turn_prompt}])
+        result = client.turn_start(
+            thread_id,
+            [{"type": "text", "text": turn_prompt}],
+            params={"outputSchema": _FINAL_RESPONSE_SCHEMA},
+        )
         after = ledger_head()
         record, payload = _turn_record(
             result,
@@ -2072,6 +2076,30 @@ def _placeholder_run(
     return run
 
 
+def _safe_failure_code(exc: BaseException) -> str:
+    if not isinstance(exc, QualificationFailure):
+        code = re.sub(r"[^a-z0-9]+", "_", type(exc).__name__.casefold()).strip("_")
+        return f"host_{code or 'failure'}"
+    message = str(exc)
+    known = {
+        "safe read requires exactly one or two MCP calls": "safe_read_call_count_invalid",
+        "safe read used an unexpected MCP server or tool": "safe_read_tool_failed",
+        "safe read did not bind context, v6, no-case-data confirmation, and the exact task": (
+            "safe_read_task_binding_invalid"
+        ),
+        "App Server turn did not complete successfully": "host_turn_failed",
+        "safe read observation failed validation": "safe_read_output_invalid",
+        "bounded final response schema was not satisfied": "final_response_schema_invalid",
+        "bounded final response contains prohibited data": "final_response_prohibited",
+        "turn response omitted thread or turn identity": "native_identity_missing",
+        "App Server observed a prohibited capability event": "prohibited_capability_observed",
+        "actual Codex provider token usage is missing": "provider_usage_missing",
+        "actual Codex provider token usage is inconsistent": "provider_usage_inconsistent",
+        "read-only turn mutated the ledger": "ledger_changed",
+    }
+    return known.get(message, "host_qualification_failure")
+
+
 def _write_artifacts(
     output_dir: Path,
     artifacts: Mapping[str, bytes],
@@ -2490,13 +2518,15 @@ def execute(
                     }
                     run["metrics"]["evidence_sha256"] = metric_evidence_sha256(run)
             except Exception as exc:
-                code = re.sub(r"[^a-z0-9]+", "_", type(exc).__name__.casefold()).strip("_")
                 run = _placeholder_run(
                     index,
                     reported_scenario,
                     task_family=reported_scenario,
                 )
-                run["failure_codes"] = [f"host_{code or 'failure'}"]
+                run["failure_codes"] = [_safe_failure_code(exc)]
+                run["task_sha256"] = _sha256(
+                    canonical_json(dict(binding)).encode("utf-8")
+                )
             finally:
                 events = client.sanitized_events
                 event_bytes = (
