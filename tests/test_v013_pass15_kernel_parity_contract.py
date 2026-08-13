@@ -10,9 +10,9 @@ from jsonschema import Draft202012Validator
 from benchmarks.release import release_policy
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v4.json"
+CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v5.json"
 CLASSIFICATION_SCHEMA = (
-    REPOSITORY / "contracts/v013-release-gate-classification.v4.schema.json"
+    REPOSITORY / "contracts/v013-release-gate-classification.v5.schema.json"
 )
 
 
@@ -49,8 +49,8 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
     classification = _load(CLASSIFICATION)
     gates = {item["gate_id"]: item for item in classification["gates"]}  # type: ignore[index]
     for gate_id in ("codex", "opencode"):
-        assert "deeplaw.host-continuity-qualification/v1" in gates[gate_id][
-            "accepted_input_schema_versions"
+        assert gates[gate_id]["accepted_input_schema_versions"] == [
+            "deeplaw.host-continuity-qualification/v2"
         ]
         assert gates[gate_id]["minimum_distinct_run_count"] == 3
         assert gates[gate_id]["required_unique_dimensions"] == [
@@ -140,8 +140,13 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
     traceability = (REPOSITORY / "docs/PRD_TRACEABILITY_MATRIX.md").read_text(
         encoding="utf-8"
     )
+    research = (REPOSITORY / "docs/V0_13_UPSTREAM_RESEARCH.md").read_text(
+        encoding="utf-8"
+    )
+    reuse = (REPOSITORY / "docs/UPSTREAM_REUSE.md").read_text(encoding="utf-8")
+    notices = (REPOSITORY / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     for required in (
-        "7531d615216e8cbccf464f66cfbbae3668871c84",
+        "630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc",
         "cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d",
         "Markdown/Wikilink",
         "wrong merge",
@@ -157,10 +162,22 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
     ):
         assert required in protocol
     assert (
+        "OpenWiki released v0.3.1 / `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`"
+        " (peeled commit)"
+    ) in protocol
+    assert (
+        "OpenWiki released v0.3.1 / `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`"
+        " (peeled commit)"
+    ) in traceability
+    for reviewed in (traceability, research, reuse, notices):
+        assert "7531d615216e8cbccf464f66cfbbae3668871c84" in reviewed
+        assert "package-version-0.3.1 review snapshot" in reviewed
+        assert "7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`)" not in reviewed
+    assert (
         "DeepLaw meets the frozen v0.13 Kernel compatibility baseline defined by the "
         "qualification protocol."
     ) in " ".join(protocol.split())
-    assert "v013-gate-classification-v4.json" in traceability
+    assert "v013-gate-classification-v5.json" in traceability
     assert "Human Gold, legal evidence, Context Utility" in traceability
 
     pyproject = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))

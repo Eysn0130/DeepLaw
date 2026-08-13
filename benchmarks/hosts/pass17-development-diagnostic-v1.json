@@ -1,0 +1,16 @@
+{
+  "schema_version": "deeplaw.host-continuity-development-diagnostic/v1",
+  "status": "development_fixture",
+  "source_free": true,
+  "qualification_labels_present": false,
+  "task_case": "native_host_receipt_development_v1",
+  "scenario": "development_diagnostic",
+  "task_prompt": "Continue the source-free development checkpoint through the native Host. Use only bounded read-only DeepLaw context, keep this diagnostic claim-ineligible, and report the next development action.",
+  "checkpoint": {
+    "decision": "Keep claim_eligible=false and release_ready=false for this development diagnostic.",
+    "next_action": "Record the native Host receipt and measured Provider usage.",
+    "verified_fact": "This checkpoint contains source-free development data only.",
+    "open_gap": "Release evidence is outside this development diagnostic.",
+    "marker": "PASS17-DEVELOPMENT-DIAGNOSTIC-4E7C2A91"
+  }
+}

@@ -278,14 +278,38 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
         order.append("receipt")
         return True
 
+    class LocalServer:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+        def resume(self, session_id: str) -> dict[str, str]:
+            return {"id": session_id}
+
     monkeypatch.setattr(runner, "_prepare_scenario_state", prepare)
     monkeypatch.setattr(runner, "_seed_continuity_fixture", seed)
     monkeypatch.setattr(runner, "_run_opencode_command", host_turn)
     monkeypatch.setattr(runner, "analyze_opencode_events", analyze)
     monkeypatch.setattr(runner, "validate_mcp_receipt", validate)
     monkeypatch.setattr(runner, "_ledger_head", lambda *args, **kwargs: "e" * 64)
+    monkeypatch.setattr(runner, "_OpenCodeLocalServer", LocalServer)
+    monkeypatch.setattr(
+        runner,
+        "observe_knowledge_support_tools_list",
+        lambda **kwargs: {"tools_list_observed": True},
+    )
+    monkeypatch.setattr(
+        runner.pass13_evidence,
+        "bind_relevant_chars",
+        lambda safe_read, outputs, relevant_text: safe_read,
+    )
 
-    run, _sanitized, receipts = runner._run_one_scenario(
+    run, _sanitized, receipts, tool_schema = runner._run_one_scenario(
         run_index=1,
         scenario="cold_start",
         opencode_binary=tmp_path / "opencode",
@@ -297,6 +321,7 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
     assert order == ["turn", "receipt"]
     assert run["status"] == "passed"
     assert receipts == [{}]
+    assert tool_schema == {"tools_list_observed": True}
 
 
 def run_git(repository: Path, *args: str) -> str:

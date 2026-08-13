@@ -218,6 +218,15 @@ def test_secret_parser_is_exact_and_never_accepts_ambient_or_duplicates(tmp_path
         dotenv.chmod(0o640)
         with pytest.raises(ValueError, match="invalid"):
             runner.load_deepseek_key(dotenv)
+        dotenv.chmod(0o400)
+        with pytest.raises(ValueError, match="invalid"):
+            runner.load_deepseek_key(dotenv)
+
+
+def test_sensitive_scan_accepts_public_https_but_rejects_private_paths() -> None:
+    runner._forbid_sensitive(b'{"schema":"https://opencode.ai/config.json"}')
+    with pytest.raises(runner.QualificationError, match="absolute path"):
+        runner._forbid_sensitive(b'{"path":"C:\\\\private\\\\runtime"}')
 
 
 def test_permission_and_config_are_exactly_read_only() -> None:
@@ -647,6 +656,7 @@ def test_report_validation_requires_three_runs_and_path_free_artifacts(tmp_path:
             binding={},
             environment={},
             host_attestation={},
+            tool_schema={},
             runs=[],
             lifecycle={},
             security={},

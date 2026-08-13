@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -19,13 +20,20 @@ from jsonschema import (
     SchemaError,
     ValidationError,
 )
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 from benchmarks.hosts import pass13_evidence
 
 PACKAGE_VERSION = "0.12.0"
-REPORT_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v1"
+REPORT_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v2"
 RUNTIME_CONTRACT_NAMES = (
     "host-continuity-qualification.v1.schema.json",
+    "host-continuity-qualification.v2.schema.json",
+    "host-continuity-development-diagnostic.v1.schema.json",
+    "host-continuity-human-gold.v2.schema.json",
+    "host-continuity-pass17-blind-review.v2.schema.json",
+    "host-continuity-pass17-run-score.v2.schema.json",
     "host-qualification-bundle-manifest.v1.schema.json",
     "knowledge-support.input.v6.schema.json",
     "knowledge-support.output.v6.schema.json",
@@ -227,6 +235,54 @@ def installed_runtime_binding(
     }
 
 
+async def _observe_knowledge_support_tools_list(
+    *,
+    command: Path,
+    args: Sequence[str],
+    cwd: Path,
+    environment: Mapping[str, str],
+) -> dict[str, Any]:
+    parameters = StdioServerParameters(
+        command=str(command),
+        args=list(args),
+        cwd=cwd,
+        env=dict(environment),
+    )
+    try:
+        async with asyncio.timeout(30):
+            async with (
+                stdio_client(parameters) as (read_stream, write_stream),
+                ClientSession(read_stream, write_stream) as session,
+            ):
+                await session.initialize()
+                listed = await session.list_tools()
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        raise QualificationOrchestrationError("MCP tools/list observation failed") from exc
+    return pass13_evidence.knowledge_support_tool_schema_receipt(listed.tools)
+
+
+def observe_knowledge_support_tools_list(
+    *,
+    command: Path,
+    args: Sequence[str],
+    cwd: Path,
+    environment: Mapping[str, str],
+) -> dict[str, Any]:
+    """Observe the actual candidate MCP tools/list response in a closed child."""
+
+    try:
+        return asyncio.run(
+            _observe_knowledge_support_tools_list(
+                command=command,
+                args=args,
+                cwd=cwd,
+                environment=environment,
+            )
+        )
+    except pass13_evidence.EvidenceValidationError as exc:
+        raise QualificationOrchestrationError(str(exc)) from exc
+
+
 def _token_aggregate(runs: Sequence[Mapping[str, Any]], field: str) -> int | str:
     values = [
         turn.get("usage", {}).get(field)
@@ -247,19 +303,26 @@ def build_host_report(
     binding: Mapping[str, Any],
     environment: Mapping[str, Any],
     host_attestation: Mapping[str, Any],
+    tool_schema: Mapping[str, Any],
     runs: Sequence[Mapping[str, Any]],
     lifecycle: Mapping[str, Any],
     security: Mapping[str, Any],
     not_executed: Sequence[str],
+    execution_mode: str = "qualification",
 ) -> dict[str, Any]:
     if host not in {"codex", "opencode"}:
         raise QualificationOrchestrationError("Host report identity is invalid")
+    if execution_mode not in {"qualification", "diagnostic"}:
+        raise QualificationOrchestrationError("Host execution mode is invalid")
+    expected_run_count = 3 if execution_mode == "qualification" else 1
     run_rows = [dict(run) for run in runs]
     passed = sum(run.get("status") == "passed" for run in run_rows)
     failed = len(run_rows) - passed
-    if len(run_rows) != 3 or (passed and failed):
+    if len(run_rows) != expected_run_count:
+        raise QualificationOrchestrationError("Host execution mode has an invalid run count")
+    if passed and failed:
         report_status = "partial"
-    elif passed == 3:
+    elif passed == expected_run_count:
         report_status = "executed"
     else:
         report_status = "failed"
@@ -306,6 +369,21 @@ def build_host_report(
     }
     return {
         "schema_version": REPORT_SCHEMA_VERSION,
+        "execution_mode": execution_mode,
+        "qualification_status": (
+            "not_applicable"
+            if execution_mode == "diagnostic"
+            else "passed"
+            if report_status == "executed"
+            else "failed"
+            if report_status == "failed"
+            else "partial"
+        ),
+        "evidence_class": (
+            "qualification_holdout"
+            if execution_mode == "qualification"
+            else "development_diagnostic"
+        ),
         "host": host,
         "status": report_status,
         "package_version": PACKAGE_VERSION,
@@ -314,6 +392,7 @@ def build_host_report(
         "binding": dict(binding),
         "environment": dict(environment),
         "host_attestation": dict(host_attestation),
+        "tool_schema": dict(tool_schema),
         "lifecycle": dict(lifecycle),
         "security": dict(security),
         "runs": run_rows,
@@ -330,6 +409,7 @@ class QualificationOrchestrator:
     deeplaw_executable: Path
     output_dir: Path
     error_type: type[Exception] = QualificationOrchestrationError
+    execution_mode: str = "qualification"
 
     def _translate(self, error: BaseException) -> Exception:
         return self.error_type(str(error))
@@ -356,6 +436,7 @@ class QualificationOrchestrator:
         binding: Mapping[str, Any],
         environment: Mapping[str, Any],
         host_attestation: Mapping[str, Any],
+        tool_schema: Mapping[str, Any],
         runs: Sequence[Mapping[str, Any]],
         lifecycle: Mapping[str, Any],
         security: Mapping[str, Any],
@@ -367,17 +448,19 @@ class QualificationOrchestrator:
                 binding=binding,
                 environment=environment,
                 host_attestation=host_attestation,
+                tool_schema=tool_schema,
                 runs=runs,
                 lifecycle=lifecycle,
                 security=security,
                 not_executed=not_executed,
+                execution_mode=self.execution_mode,
             )
             pass13_evidence.validate_host_report_consistency(report)
             schema = json.loads(
                 (
                     self.repository
                     / "contracts"
-                    / "host-continuity-qualification.v1.schema.json"
+                    / "host-continuity-qualification.v2.schema.json"
                 ).read_text(encoding="utf-8")
             )
             Draft202012Validator.check_schema(schema)

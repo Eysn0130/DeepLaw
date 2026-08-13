@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-continuity-pass17-blind-review.v2.schema.json",
+  "title": "DeepLaw Pass 17 Blind Human Review v2",
+  "description": "Independent review of one anonymized qualification run, bound to the exact candidate wheel and receipt contract. Structural validation cannot prove reviewer identity or independence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "review_id", "status", "reviewed_at", "gold_id",
+    "gold_sha256", "case_id", "anonymized_candidate_sha256", "candidate_wheel_sha256",
+    "qualification_contract_sha256", "blind_label", "reviewer_id", "reviewer_is_human",
+    "independent", "blind_to_host", "blind_to_tool_model", "blind_to_other_runs",
+    "order_randomized", "decision", "criterion_results", "failure_case",
+    "hard_failure_ids", "claim_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-continuity-pass17-blind-review/v2"},
+    "review_id": {"type": "string", "pattern": "^continuityreview_[0-9a-f]{24}$"},
+    "status": {"const": "independent_blind_review_complete"},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "gold_id": {"type": "string", "pattern": "^continuitygold_[0-9a-f]{24}$"},
+    "gold_sha256": {"$ref": "#/$defs/sha256"},
+    "case_id": {"type": "string", "pattern": "^continuity_[a-z0-9_]+_v1$"},
+    "anonymized_candidate_sha256": {"$ref": "#/$defs/sha256"},
+    "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+    "qualification_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "blind_label": {"type": "string", "pattern": "^blindcase_[0-9a-f]{24}$"},
+    "reviewer_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:@-]*$"},
+    "reviewer_is_human": {"const": true},
+    "independent": {"const": true},
+    "blind_to_host": {"const": true},
+    "blind_to_tool_model": {"const": true},
+    "blind_to_other_runs": {"const": true},
+    "order_randomized": {"const": true},
+    "decision": {"enum": ["pass", "fail"]},
+    "criterion_results": {"type": "object", "minProperties": 6, "maxProperties": 12, "propertyNames": {"pattern": "^[a-z][a-z0-9_]{2,63}$"}, "additionalProperties": {"type": "boolean"}},
+    "failure_case": {"type": "boolean"},
+    "hard_failure_ids": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,99}$"}},
+    "claim_eligible": {"const": false}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

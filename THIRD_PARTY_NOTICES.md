@@ -265,10 +265,15 @@ not a substitute for a security sandbox.
 The following projects were reviewed but are not current DeepLaw dependencies
 and have not contributed copied source code:
 
+The current v0.13 Kernel compatibility baseline binds OpenWiki released v0.3.1
+to peeled commit `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`. The reviewed
+coordinate retained in this notice is `7531d615216e8cbccf464f66cfbbae3668871c84`,
+solely as a package-version-0.3.1 review snapshot.
+
 | Project | Commit reviewed | Published license at review | Use in DeepLaw |
 | --- | --- | --- | --- |
 | [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI, public-entity grounding, job-control, and schema-upgrade reference |
-| [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki) | `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) | MIT | Owner-authorized behavioral/reference review under frozen manifest; no source copied or redistributed |
+| [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki) | `7531d615216e8cbccf464f66cfbbae3668871c84` (package-version-0.3.1 review snapshot) | MIT | Owner-authorized behavioral/reference review under frozen manifest; no source copied or redistributed |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Hybrid retrieval, evidence, result-budget, and evaluation reference |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-source, annotation-coordinate, and bounded-MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |

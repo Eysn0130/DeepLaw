@@ -13,8 +13,10 @@ from benchmarks.hosts.pass13_evidence import (
     build_bundle_manifest,
     canonical_json,
     metric_evidence_sha256,
-    validate_host_report_consistency,
     write_retained_artifact,
+)
+from benchmarks.hosts.pass13_evidence import (
+    validate_historical_host_report_consistency_v1 as validate_host_report_consistency,
 )
 
 
@@ -125,6 +127,12 @@ def test_safe_reads_recompute_exact_provider_transport_bytes() -> None:
                 "statement_count": 1,
                 "gap_count": 0,
                 "gap_codes": [],
+                "relevant_chars": 0,
+                "context_chars": len(canonical_json(_capsule())),
+                "relevant_chars_context_chars": 0.0,
+                "evidence_count": 0,
+                "duplicate_evidence_count": 0,
+                "duplicate_evidence_rate": None,
             }
         ],
     }
@@ -303,6 +311,20 @@ def test_artifact_scan_rejects_non_home_absolute_paths(tmp_path: Path) -> None:
             b'{"diagnostic":"/opt/private/runtime"}\n',
             output_root=tmp_path,
         )
+    with pytest.raises(EvidenceValidationError, match="absolute path"):
+        write_retained_artifact(
+            tmp_path / "unsafe-windows-path.json",
+            b'{"diagnostic":"C:\\\\private\\\\runtime"}\n',
+            output_root=tmp_path,
+        )
+
+
+def test_artifact_scan_does_not_treat_https_as_a_windows_drive(tmp_path: Path) -> None:
+    write_retained_artifact(
+        tmp_path / "public-schema-uri.json",
+        b'{"schema":"https://deeplaw.dev/contracts/current.schema.json"}\n',
+        output_root=tmp_path,
+    )
 
 
 def _report_run(index: int, scenario: str) -> dict[str, object]:
@@ -611,6 +633,18 @@ def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> N
     report["runs"][2]["scenario"] = "cold_start"  # type: ignore[index]
     with pytest.raises(EvidenceValidationError, match="scenario matrix"):
         validate_host_report_consistency(report)
+
+
+def test_historical_v1_metric_digest_ignores_absent_v2_native_receipts() -> None:
+    expected = {
+        "cold_start": "fcf1f79017ca545a588855606ac8f8c030b51b4a8ac5407c9eac6a5e2ca37720",
+        "resume_fork": "9227b7bd8e95a9f51a3258fdeb08b19c5caa9582a88b7e34ae75d928a3c6a098",
+        "compaction_forget": "d5cf5cea710e07479627f76ccc8456fb8f858f4119aba30be2dec8c351f2c825",
+    }
+    for index, scenario in enumerate(expected, 1):
+        run = _report_run(index, scenario)
+        assert "native_receipts" not in run
+        assert run["metrics"]["evidence_sha256"] == expected[scenario]
 
 
 def test_legacy_compaction_notification_cannot_prove_current_qualification() -> None:

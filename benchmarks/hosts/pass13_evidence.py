@@ -23,7 +23,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _ABSOLUTE_PATH = re.compile(
     rb'(?:^|[\s=:\"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s\"\'\\]*)?|'
-    rb"[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]"
+    rb'(?:^|[\s="\'(])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]'
 )
 _FORBIDDEN_ARTIFACT_FIELDS = (
     b'"auth_file"',
@@ -206,6 +206,9 @@ def _analyze_call(
     gaps = capsule.get("gaps")
     if not isinstance(statements, list) or not isinstance(gaps, list):
         raise EvidenceValidationError("Provider Capsule statements or gaps are invalid")
+    evidence = capsule.get("evidence", [])
+    if not isinstance(evidence, list):
+        raise EvidenceValidationError("Provider Capsule evidence is invalid")
     if delivery.get("projection") != capsule.get("projection"):
         raise EvidenceValidationError("Provider projection does not match delivery")
     _validate_contract(
@@ -218,6 +221,16 @@ def _analyze_call(
         provider,
         label="Provider Capsule",
     )
+    evidence_keys = [
+        (
+            item.get("source_revision_id"),
+            item.get("fragment_id"),
+            item.get("content_sha256"),
+        )
+        for item in evidence
+        if isinstance(item, Mapping)
+    ]
+    duplicate_evidence_count = len(evidence_keys) - len(set(evidence_keys))
     return str(operation), {
         "operation": operation,
         "provider_bytes": len(provider_bytes),
@@ -234,6 +247,14 @@ def _analyze_call(
                 for gap in gaps
                 if isinstance(gap, Mapping) and isinstance(gap.get("code"), str)
             }
+        ),
+        "relevant_chars": 0,
+        "context_chars": len(provider_text),
+        "relevant_chars_context_chars": 0.0 if provider_text else None,
+        "evidence_count": len(evidence_keys),
+        "duplicate_evidence_count": duplicate_evidence_count,
+        "duplicate_evidence_rate": (
+            duplicate_evidence_count / len(evidence_keys) if evidence_keys else None
         ),
     }
 
@@ -267,6 +288,218 @@ def analyze_safe_read_calls(
         "bounded_retry_used": len(observations) == 2,
         "safe_read_operations": operations,
         "provider_payloads": payloads,
+    }
+
+
+def bind_relevant_chars(
+    safe_read: Mapping[str, Any],
+    tool_outputs: Sequence[Mapping[str, Any]],
+    relevant_text: Sequence[str],
+) -> dict[str, Any]:
+    """Bind exact task-relevant character spans to measured Capsule characters.
+
+    This is a character measurement, not a token estimate.  Overlapping spans
+    are counted once, and the Provider text is checked against the already
+    retained digest before the derived ratio is returned.
+    """
+
+    payloads = safe_read.get("provider_payloads")
+    if not isinstance(payloads, list) or len(payloads) != len(tool_outputs):
+        raise EvidenceValidationError("Provider payload relevance inputs are inconsistent")
+    markers = tuple(
+        dict.fromkeys(
+            item for item in relevant_text if isinstance(item, str) and item
+        )
+    )
+    measured: list[dict[str, Any]] = []
+    for payload, output in zip(payloads, tool_outputs, strict=True):
+        if not isinstance(payload, Mapping) or not isinstance(output, Mapping):
+            raise EvidenceValidationError("Provider relevance input is invalid")
+        provider_text, _structured = _provider_text(output)
+        provider_bytes = provider_text.encode("utf-8")
+        if (
+            payload.get("provider_sha256") != _sha256(provider_bytes)
+            or payload.get("provider_bytes") != len(provider_bytes)
+            or payload.get("context_chars") != len(provider_text)
+        ):
+            raise EvidenceValidationError("Provider relevance text does not match its receipt")
+        covered: set[int] = set()
+        for marker in markers:
+            start = 0
+            while True:
+                position = provider_text.find(marker, start)
+                if position < 0:
+                    break
+                covered.update(range(position, position + len(marker)))
+                start = position + max(1, len(marker))
+        relevant_chars = len(covered)
+        row = dict(payload)
+        row["relevant_chars"] = relevant_chars
+        row["relevant_chars_context_chars"] = (
+            relevant_chars / len(provider_text) if provider_text else None
+        )
+        measured.append(row)
+    result = dict(safe_read)
+    result["provider_payloads"] = measured
+    return result
+
+
+_EXPECTED_KNOWLEDGE_OPERATIONS = (
+    "compilation",
+    "context",
+    "editor_context",
+    "explain",
+    "gaps",
+    "get",
+    "graph",
+    "identity_lookup",
+    "inspect",
+    "lineage",
+    "query",
+    "recall",
+    "search",
+    "semantic",
+    "source",
+    "synthesis",
+    "verify",
+    "wiki",
+    "wiki_lookup",
+)
+
+
+def _operation_names(schema: object) -> tuple[str, ...]:
+    operations: set[str] = set()
+
+    def walk(value: object) -> None:
+        if isinstance(value, Mapping):
+            properties = value.get("properties")
+            if isinstance(properties, Mapping):
+                operation = properties.get("operation")
+                if isinstance(operation, Mapping):
+                    constant = operation.get("const")
+                    if isinstance(constant, str):
+                        operations.add(constant)
+                    choices = operation.get("enum")
+                    if isinstance(choices, Sequence) and not isinstance(choices, str):
+                        operations.update(item for item in choices if isinstance(item, str))
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            for item in value:
+                walk(item)
+
+    walk(schema)
+    return tuple(sorted(operations))
+
+
+def knowledge_support_tool_schema_receipt(tools: Sequence[Any]) -> dict[str, Any]:
+    """Measure the exact self-contained inputSchema returned by MCP tools/list."""
+
+    if len(tools) != 1:
+        raise EvidenceValidationError("tools/list must expose only knowledge_support")
+    tool = tools[0]
+    name = tool.get("name") if isinstance(tool, Mapping) else getattr(tool, "name", None)
+    schema = (
+        tool.get("inputSchema")
+        if isinstance(tool, Mapping)
+        else getattr(tool, "inputSchema", None)
+    )
+    if name != "knowledge_support" or not isinstance(schema, Mapping):
+        raise EvidenceValidationError("tools/list omitted the knowledge_support inputSchema")
+    schema_bytes = _encoded(schema)
+    # The schema itself legitimately names closed fields such as task_binding
+    # and can contain URI identifiers.  It is measured in memory and only its
+    # byte count and digest are retained; raw schema bytes are never reported.
+    operations = _operation_names(schema)
+    if operations != _EXPECTED_KNOWLEDGE_OPERATIONS:
+        raise EvidenceValidationError("tools/list returned an unexpected operation inventory")
+    return {
+        "tools_list_observed": True,
+        "tool_name": "knowledge_support",
+        "input_schema_bytes": len(schema_bytes),
+        "input_schema_sha256": _sha256(schema_bytes),
+        "operation_count": len(operations),
+        "operations": list(operations),
+        "measurement_kind": "canonical_utf8_bytes_not_tokens",
+        "provider_observed_schema_tokens": None,
+    }
+
+
+def native_lifecycle_receipt(
+    *,
+    semantic_task_family: str,
+    transport: str,
+    request_seam: str,
+    requested_operation: str,
+    sanitized_request: Mapping[str, Any],
+    observation_kind: str,
+    methods_observed: Sequence[str],
+    sanitized_observation: Mapping[str, Any] | bytes,
+    current_identity: str,
+    parent_identity: str | None,
+    root_identity: str,
+    relation: str,
+    actual_provider_usage: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Build one path-free receipt from a real native request/observation seam."""
+
+    request_bytes = _encoded(sanitized_request)
+    observation_bytes = (
+        sanitized_observation
+        if isinstance(sanitized_observation, bytes)
+        else _encoded(sanitized_observation)
+    )
+    _scan_artifact(request_bytes, forbidden_values=())
+    _scan_artifact(observation_bytes, forbidden_values=())
+    methods = list(dict.fromkeys(methods_observed))
+    if not methods or any(not isinstance(method, str) or not method for method in methods):
+        raise EvidenceValidationError("native receipt omitted an observed method or response")
+    fields = (
+        "input_tokens",
+        "cached_input_tokens",
+        "cache_write_input_tokens",
+        "output_tokens",
+        "reasoning_output_tokens",
+        "total_tokens",
+    )
+    if actual_provider_usage is not None and any(
+        not isinstance(actual_provider_usage.get(field), int)
+        or isinstance(actual_provider_usage.get(field), bool)
+        or actual_provider_usage[field] < 0
+        for field in fields
+    ):
+        raise EvidenceValidationError("native receipt has invalid actual Provider usage")
+    if not current_identity or not root_identity:
+        raise EvidenceValidationError("native receipt omitted session identity lineage")
+    return {
+        "semantic_task_family": semantic_task_family,
+        "transport": transport,
+        "request_seam": request_seam,
+        "requested_operation": requested_operation,
+        "sanitized_request": {
+            "bytes": len(request_bytes),
+            "sha256": _sha256(request_bytes),
+        },
+        "observation_kind": observation_kind,
+        "methods_observed": methods,
+        "sanitized_raw_observation": {
+            "bytes": len(observation_bytes),
+            "sha256": _sha256(observation_bytes),
+        },
+        "identity_lineage": {
+            "current_sha256": _sha256(current_identity.encode("utf-8")),
+            "parent_sha256": (
+                _sha256(parent_identity.encode("utf-8")) if parent_identity else None
+            ),
+            "root_sha256": _sha256(root_identity.encode("utf-8")),
+            "relation": relation,
+        },
+        "actual_provider_usage": (
+            {field: int(actual_provider_usage[field]) for field in fields}
+            if actual_provider_usage is not None
+            else None
+        ),
+        "claim_eligible": False,
     }
 
 
@@ -402,11 +635,282 @@ def build_bundle_manifest(
     }
 
 
-_SCENARIO_MATRIX = {
-    "codex": ("cold_start", "resume_fork", "compaction_forget"),
-    "opencode": ("cold_start", "resume_fork", "compaction_forget"),
+_QUALIFICATION_SCENARIOS = ("cold_start", "resume_fork", "compaction_forget")
+_DIAGNOSTIC_SCENARIOS = ("development_diagnostic",)
+_NATIVE_REQUESTS = {
+    "codex": {
+        "cold_start": {"thread/start"},
+        "resume_fork": {"thread/start", "thread/resume", "thread/fork"},
+        "compaction_forget": {"thread/start", "thread/compact/start"},
+        "development_diagnostic": {
+            "thread/start",
+            "thread/resume",
+            "thread/fork",
+            "thread/compact/start",
+        },
+    },
+    "opencode": {
+        "cold_start": {"cli.run", "session.get"},
+        "resume_fork": {
+            "cli.run",
+            "cli.run.session",
+            "cli.run.fork",
+            "session.get",
+        },
+        "compaction_forget": {
+            "cli.run",
+            "cli.run.session",
+            "session.get",
+            "session.summarize",
+            "session.messages",
+        },
+        "development_diagnostic": {
+            "cli.run",
+            "cli.run.session",
+            "cli.run.fork",
+            "session.get",
+            "session.summarize",
+            "session.messages",
+        },
+    },
 }
-_CODEX_METHODS = {
+_NATIVE_OBSERVATIONS = {
+    "codex": {
+        "cold_start": {"thread/start"},
+        "resume_fork": {"thread/start", "thread/resume", "thread/fork"},
+        "compaction_forget": {
+            "thread/start",
+            "thread/compact/start",
+            "item/started",
+            "item/completed",
+        },
+        "development_diagnostic": {
+            "thread/start",
+            "thread/resume",
+            "thread/fork",
+            "thread/compact/start",
+            "item/started",
+            "item/completed",
+        },
+    },
+    "opencode": {
+        "cold_start": {"cli.run.json", "session.get"},
+        "resume_fork": {"cli.run.json", "session.get"},
+        "compaction_forget": {
+            "cli.run.json",
+            "session.get",
+            "session.summarize",
+            "session.messages",
+        },
+        "development_diagnostic": {
+            "cli.run.json",
+            "session.get",
+            "session.summarize",
+            "session.messages",
+        },
+    },
+}
+_NATIVE_RECEIPT_SEQUENCE = {
+    "codex": {
+        "cold_start": (("thread/start", "thread/start"),),
+        "resume_fork": (
+            ("thread/start", "thread/start"),
+            ("thread/resume", "thread/resume"),
+            ("thread/fork", "thread/fork"),
+        ),
+        "compaction_forget": (
+            ("thread/start", "thread/start"),
+            ("thread/compact/start", "thread/compact/start"),
+            ("thread/compact/start", "item/started"),
+            ("thread/compact/start", "item/completed"),
+        ),
+        "development_diagnostic": (
+            ("thread/start", "thread/start"),
+            ("thread/resume", "thread/resume"),
+            ("thread/fork", "thread/fork"),
+            ("thread/compact/start", "thread/compact/start"),
+            ("thread/compact/start", "item/started"),
+            ("thread/compact/start", "item/completed"),
+        ),
+    },
+    "opencode": {
+        "cold_start": (
+            ("cli.run", "cli.run.json"),
+            ("session.get", "session.get"),
+        ),
+        "resume_fork": (
+            ("cli.run", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("cli.run.session", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("cli.run.fork", "cli.run.json"),
+            ("session.get", "session.get"),
+        ),
+        "compaction_forget": (
+            ("cli.run", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("session.summarize", "session.summarize"),
+            ("session.messages", "session.messages"),
+            ("cli.run.session", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("cli.run.session", "cli.run.json"),
+            ("session.get", "session.get"),
+        ),
+        "development_diagnostic": (
+            ("cli.run", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("cli.run.session", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("cli.run.fork", "cli.run.json"),
+            ("session.get", "session.get"),
+            ("session.summarize", "session.summarize"),
+            ("session.messages", "session.messages"),
+            ("cli.run.session", "cli.run.json"),
+            ("session.get", "session.get"),
+        ),
+    },
+}
+_NATIVE_RECEIPT_RULES = {
+    "codex": {
+        "thread/start": {
+            "transport": "codex_app_server_jsonrpc",
+            "request_seams": {"thread/start"},
+            "observations": {"thread/start"},
+            "observation_kind": "native_response",
+            "relation": "new",
+        },
+        "thread/resume": {
+            "transport": "codex_app_server_jsonrpc",
+            "request_seams": {"thread/resume"},
+            "observations": {"thread/resume"},
+            "observation_kind": "native_response",
+            "relation": "resume",
+        },
+        "thread/fork": {
+            "transport": "codex_app_server_jsonrpc",
+            "request_seams": {"thread/fork"},
+            "observations": {"thread/fork"},
+            "observation_kind": "native_response",
+            "relation": "fork",
+        },
+        "thread/compact/start": {
+            "transport": "codex_app_server_jsonrpc",
+            "request_seams": {
+                "thread/compact/start",
+                "thread/compact/start notifications",
+            },
+            "observations": {
+                "thread/compact/start",
+                "item/started",
+                "item/completed",
+            },
+            "observation_kind": None,
+            "relation": "same_session",
+        },
+    },
+    "opencode": {
+        "cli.run": {
+            "transport": "opencode_cli",
+            "request_seams": {"opencode run --format json"},
+            "observations": {"cli.run.json"},
+            "observation_kind": "cli_json_record",
+            "relation": "new",
+        },
+        "cli.run.session": {
+            "transport": "opencode_cli",
+            "request_seams": {"opencode run --format json"},
+            "observations": {"cli.run.json"},
+            "observation_kind": "cli_json_record",
+            "relation": "resume",
+        },
+        "cli.run.fork": {
+            "transport": "opencode_cli",
+            "request_seams": {"opencode run --format json"},
+            "observations": {"cli.run.json"},
+            "observation_kind": "cli_json_record",
+            "relation": "fork",
+        },
+        "session.get": {
+            "transport": "opencode_loopback_http",
+            "request_seams": {"GET session/:sessionID"},
+            "observations": {"session.get"},
+            "observation_kind": "native_response",
+            "relation": "same_session",
+        },
+        "session.summarize": {
+            "transport": "opencode_loopback_http",
+            "request_seams": {"POST session/:sessionID/summarize"},
+            "observations": {"session.summarize"},
+            "observation_kind": "native_response",
+            "relation": "same_session",
+        },
+        "session.messages": {
+            "transport": "opencode_loopback_http",
+            "request_seams": {"GET session/:sessionID/message"},
+            "observations": {"session.messages"},
+            "observation_kind": "native_response",
+            "relation": "same_session",
+        },
+    },
+}
+_TURN_METHODS = {
+    "codex": {
+        "cold_start": ("thread/start",),
+        "resume_fork": ("thread/start", "thread/resume", "thread/fork"),
+        "compaction_forget": (
+            "thread/start",
+            "thread/compact/start",
+            "thread/compact/start",
+        ),
+        "development_diagnostic": (
+            "thread/start",
+            "thread/resume",
+            "thread/fork",
+            "thread/compact/start",
+        ),
+    },
+    "opencode": {
+        "cold_start": ("cli.run",),
+        "resume_fork": ("cli.run", "cli.run.session", "cli.run.fork"),
+        "compaction_forget": ("cli.run", "cli.run.session", "cli.run.session"),
+        "development_diagnostic": (
+            "cli.run",
+            "cli.run.session",
+            "cli.run.fork",
+            "cli.run.session",
+        ),
+    },
+}
+_MUTATION_KINDS = {
+    "codex": {
+        "cold_start": ("seed_checkpoint",),
+        "resume_fork": ("seed_checkpoint",),
+        "compaction_forget": ("seed_checkpoint", "forget"),
+        "development_diagnostic": ("seed_checkpoint",),
+    },
+    "opencode": {
+        "cold_start": ("seed_checkpoint",),
+        "resume_fork": ("seed_checkpoint",),
+        "compaction_forget": ("seed_checkpoint", "forget"),
+        "development_diagnostic": ("seed_checkpoint",),
+    },
+}
+
+
+def native_lifecycle_requirements(host: str) -> dict[str, frozenset[str]]:
+    """Return only the actual native observation vocabulary for one Host."""
+
+    scenarios = _NATIVE_OBSERVATIONS.get(host)
+    if scenarios is None:
+        raise EvidenceValidationError("native lifecycle Host is unsupported")
+    return {name: frozenset(value) for name, value in scenarios.items()}
+
+
+_V1_SCENARIO_MATRIX = {
+    "codex": _QUALIFICATION_SCENARIOS,
+    "opencode": _QUALIFICATION_SCENARIOS,
+}
+_V1_CODEX_METHODS = {
     "cold_start": {"thread/start"},
     "resume_fork": {"thread/start", "thread/resume", "thread/fork"},
     "compaction_forget": {
@@ -416,7 +920,7 @@ _CODEX_METHODS = {
         "item/completed",
     },
 }
-_CODEX_TURN_METHODS = {
+_V1_CODEX_TURN_METHODS = {
     "cold_start": ("thread/start",),
     "resume_fork": ("thread/start", "thread/resume", "thread/fork"),
     "compaction_forget": (
@@ -424,18 +928,6 @@ _CODEX_TURN_METHODS = {
         "thread/compact/start",
         "thread/compact/start",
     ),
-}
-_MUTATION_KINDS = {
-    "codex": {
-        "cold_start": ("seed_checkpoint",),
-        "resume_fork": ("seed_checkpoint",),
-        "compaction_forget": ("seed_checkpoint", "forget"),
-    },
-    "opencode": {
-        "cold_start": ("seed_checkpoint",),
-        "resume_fork": ("seed_checkpoint",),
-        "compaction_forget": ("seed_checkpoint", "forget"),
-    },
 }
 
 
@@ -471,6 +963,21 @@ def _metric_evidence(run: Mapping[str, Any]) -> str:
         ],
         "checks": {key: value for key, value in metrics.items() if key != "evidence_sha256"},
     }
+    if "native_receipts" in run:
+        payload["native_receipts"] = [
+            {
+                "requested_operation": receipt.get("requested_operation"),
+                "methods_observed": receipt.get("methods_observed"),
+                "sanitized_request": receipt.get("sanitized_request"),
+                "sanitized_raw_observation": receipt.get(
+                    "sanitized_raw_observation"
+                ),
+                "identity_lineage": receipt.get("identity_lineage"),
+                "actual_provider_usage": receipt.get("actual_provider_usage"),
+            }
+            for receipt in run.get("native_receipts", [])
+            if isinstance(receipt, Mapping)
+        ]
     return _sha256(_encoded(payload))
 
 
@@ -492,8 +999,8 @@ def _token_aggregate(runs: Sequence[Mapping[str, Any]], field: str) -> int | str
     return "unreported"
 
 
-def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
-    """Validate the full report contract and recompute cross-field facts."""
+def validate_historical_host_report_consistency_v1(report: Mapping[str, Any]) -> None:
+    """Validate retained v1 bytes only; v1 is invalid for current qualification."""
 
     _validate_contract(
         "host-continuity-qualification.v1.schema.json",
@@ -502,7 +1009,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
     )
 
     host = report.get("host")
-    expected_scenarios = _SCENARIO_MATRIX.get(host)
+    expected_scenarios = _V1_SCENARIO_MATRIX.get(host)
     runs = report.get("runs")
     if expected_scenarios is None or not isinstance(runs, list) or len(runs) != 3:
         raise EvidenceValidationError("Host report must contain its exact scenario matrix")
@@ -542,7 +1049,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         if not isinstance(methods, list) or not methods:
             raise EvidenceValidationError("Host run omitted lifecycle methods")
         if host == "codex":
-            expected_method_set = _CODEX_METHODS[str(run["scenario"])]
+            expected_method_set = _V1_CODEX_METHODS[str(run["scenario"])]
             if (run_passed and set(methods) != expected_method_set) or (
                 not run_passed
                 and methods != ["not_applicable"]
@@ -550,7 +1057,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             ):
                 raise EvidenceValidationError("Codex run lifecycle method set is invalid")
         if host == "opencode":
-            expected_method_set = _CODEX_METHODS[str(run["scenario"])]
+            expected_method_set = _V1_CODEX_METHODS[str(run["scenario"])]
             if (run_passed and set(methods) != expected_method_set) or (
                 not run_passed
                 and methods != ["not_applicable"]
@@ -568,7 +1075,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         turn_methods = tuple(
             turn.get("lifecycle_method") for turn in turns if isinstance(turn, Mapping)
         )
-        expected_turn_methods = _CODEX_TURN_METHODS[str(run["scenario"])]
+        expected_turn_methods = _V1_CODEX_TURN_METHODS[str(run["scenario"])]
         if run_passed and turn_methods != expected_turn_methods:
             raise EvidenceValidationError("Host turn lifecycle sequence is invalid")
         if not run_passed and turn_methods != ("not_applicable",) and (
@@ -747,7 +1254,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
 
     lifecycle = report.get("lifecycle")
     root_methods = lifecycle.get("methods_observed") if isinstance(lifecycle, Mapping) else None
-    required_root = set().union(*_CODEX_METHODS.values())
+    required_root = set().union(*_V1_CODEX_METHODS.values())
     observed_method_union = {
         method
         for run in runs
@@ -828,4 +1335,523 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             if not isinstance(availability, Mapping) or availability.get("status") != "available":
                 raise EvidenceValidationError(
                     "executed OpenCode report lacks a successful model availability probe"
+                )
+
+
+def _validate_actual_usage(host: str, usage: Mapping[str, Any]) -> None:
+    fields = (
+        "input_tokens",
+        "cached_input_tokens",
+        "cache_write_input_tokens",
+        "output_tokens",
+        "reasoning_output_tokens",
+        "total_tokens",
+    )
+    if any(
+        not isinstance(usage.get(field), int)
+        or isinstance(usage.get(field), bool)
+        or usage[field] < 0
+        for field in fields
+    ):
+        raise EvidenceValidationError("actual Provider token usage is missing")
+    if host == "codex":
+        if (
+            usage["total_tokens"] != usage["input_tokens"] + usage["output_tokens"]
+            or usage["cached_input_tokens"] > usage["input_tokens"]
+            or usage["reasoning_output_tokens"] > usage["output_tokens"]
+        ):
+            raise EvidenceValidationError("Codex Provider token arithmetic is inconsistent")
+    elif usage["total_tokens"] != sum(usage[field] for field in fields[:-1]):
+        raise EvidenceValidationError("OpenCode Provider token arithmetic is inconsistent")
+
+
+def _validate_native_lineage_sequence(
+    host: str, receipts: Sequence[Mapping[str, Any]]
+) -> None:
+    """Require native identity continuity across each observed request seam."""
+
+    active: str | None = None
+    previous_requested: str | None = None
+    for receipt in receipts:
+        requested = receipt.get("requested_operation")
+        lineage = receipt.get("identity_lineage")
+        if not isinstance(requested, str) or not isinstance(lineage, Mapping):
+            raise EvidenceValidationError("native lineage receipt is invalid")
+        current = lineage.get("current_sha256")
+        parent = lineage.get("parent_sha256")
+        root = lineage.get("root_sha256")
+        if not isinstance(current, str) or not isinstance(root, str):
+            raise EvidenceValidationError("native lineage digest is missing")
+        if requested in {"thread/start", "cli.run"}:
+            if active is not None or current != root or parent is not None:
+                raise EvidenceValidationError("native new-session lineage is invalid")
+            active = current
+        elif requested in {"thread/resume", "cli.run.session"}:
+            if active is None or current != active or parent != active:
+                raise EvidenceValidationError("native resume lineage is invalid")
+        elif requested in {"thread/fork", "cli.run.fork"}:
+            if active is None or parent != active or current == active:
+                raise EvidenceValidationError("native fork lineage is invalid")
+            active = current
+        elif requested == "session.get":
+            if active is None or current != active:
+                raise EvidenceValidationError("session.get did not bind the active session")
+            if previous_requested == "cli.run.fork" and parent is None:
+                raise EvidenceValidationError("session.get omitted fork parent lineage")
+        elif requested in {
+            "thread/compact/start",
+            "session.summarize",
+            "session.messages",
+        } and (active is None or current != active):
+            raise EvidenceValidationError("native compaction lineage is invalid")
+        previous_requested = requested
+
+
+def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
+    """Validate the current v2 report without conflating Host vocabularies."""
+
+    _validate_contract(
+        "host-continuity-qualification.v2.schema.json",
+        report,
+        label="current Host receipt",
+    )
+    host = report.get("host")
+    mode = report.get("execution_mode")
+    if host not in {"codex", "opencode"} or mode not in {"qualification", "diagnostic"}:
+        raise EvidenceValidationError("Host receipt mode or identity is invalid")
+    expected_scenarios = (
+        _QUALIFICATION_SCENARIOS if mode == "qualification" else _DIAGNOSTIC_SCENARIOS
+    )
+    expected_evidence = (
+        "qualification_holdout" if mode == "qualification" else "development_diagnostic"
+    )
+    if report.get("evidence_class") != expected_evidence:
+        raise EvidenceValidationError("Host receipt evidence class is invalid")
+    runs = report.get("runs")
+    if not isinstance(runs, list) or len(runs) != len(expected_scenarios):
+        raise EvidenceValidationError("Host receipt has an invalid scenario matrix")
+    if tuple(run.get("scenario") for run in runs if isinstance(run, Mapping)) != (
+        expected_scenarios
+    ):
+        raise EvidenceValidationError("Host receipt scenario order is invalid")
+    if tuple(run.get("run_index") for run in runs if isinstance(run, Mapping)) != tuple(
+        range(1, len(runs) + 1)
+    ):
+        raise EvidenceValidationError("Host receipt run indexes are invalid")
+
+    tool_schema = report.get("tool_schema")
+    if not isinstance(tool_schema, Mapping) or (
+        tuple(tool_schema.get("operations", ())) != _EXPECTED_KNOWLEDGE_OPERATIONS
+        or tool_schema.get("operation_count") != len(_EXPECTED_KNOWLEDGE_OPERATIONS)
+    ):
+        raise EvidenceValidationError("Host receipt tools/list measurement is invalid")
+    attestation = report.get("host_attestation")
+    security = report.get("security")
+    if not isinstance(attestation, Mapping) or not isinstance(security, Mapping):
+        raise EvidenceValidationError("Host attestation or security receipt is missing")
+    expected_host = {
+        "codex": ("codex", "gpt-5.6-luna", "max"),
+        "opencode": ("opencode", "deepseek/deepseek-v4-flash", "max"),
+    }[host]
+    if tuple(
+        attestation.get(field) for field in ("binary_name", "model", "reasoning_effort")
+    ) != expected_host:
+        raise EvidenceValidationError("Host attestation identity is invalid")
+
+    passed_runs = 0
+    provider_bytes = 0
+    first_call_valid_runs = 0
+    bounded_retry_runs = 0
+    requested_union: set[str] = set()
+    observed_union: set[str] = set()
+    transports: set[str] = set()
+    for run in runs:
+        if not isinstance(run, Mapping):
+            raise EvidenceValidationError("Host receipt run is invalid")
+        scenario = str(run["scenario"])
+        if run.get("task_family") != scenario:
+            raise EvidenceValidationError("semantic task family is not explicit")
+        run_passed = run.get("status") == "passed"
+        if run_passed:
+            passed_runs += 1
+            if run.get("failure_codes"):
+                raise EvidenceValidationError("passed Host run retained failure codes")
+        elif not run.get("failure_codes"):
+            raise EvidenceValidationError("failed Host run omitted its failure code")
+
+        methods = run.get("methods_observed")
+        receipts = run.get("native_receipts")
+        if not isinstance(methods, list) or not isinstance(receipts, list):
+            raise EvidenceValidationError("Host run omitted native lifecycle evidence")
+        run_requested: set[str] = set()
+        run_observed: set[str] = set()
+        run_relations: set[str] = set()
+        run_roots: set[str] = set()
+        receipt_sequence: list[tuple[str, str]] = []
+        for receipt in receipts:
+            if not isinstance(receipt, Mapping):
+                raise EvidenceValidationError("native lifecycle receipt is invalid")
+            if receipt.get("semantic_task_family") != scenario:
+                raise EvidenceValidationError("native receipt changed semantic task family")
+            transport = receipt.get("transport")
+            allowed_transports = (
+                {"codex_app_server_jsonrpc"}
+                if host == "codex"
+                else {"opencode_cli", "opencode_loopback_http"}
+            )
+            if transport not in allowed_transports:
+                raise EvidenceValidationError("native receipt used another Host transport")
+            transports.add(str(transport))
+            requested = receipt.get("requested_operation")
+            observed = receipt.get("methods_observed")
+            if not isinstance(requested, str) or not isinstance(observed, list):
+                raise EvidenceValidationError("native request or observation is invalid")
+            rule = _NATIVE_RECEIPT_RULES[host].get(requested)
+            if (
+                rule is None
+                or len(observed) != 1
+                or observed[0] not in rule["observations"]
+                or transport != rule["transport"]
+                or receipt.get("request_seam") not in rule["request_seams"]
+                or receipt.get("identity_lineage", {}).get("relation")
+                != rule["relation"]
+            ):
+                raise EvidenceValidationError(
+                    "native receipt request and observation are not correlated"
+                )
+            expected_kind = rule["observation_kind"]
+            observed_kind = receipt.get("observation_kind")
+            if requested == "thread/compact/start":
+                expected_kind = (
+                    "native_response"
+                    if observed[0] == "thread/compact/start"
+                    else "native_event"
+                )
+            if observed_kind != expected_kind:
+                raise EvidenceValidationError("native observation kind is invalid")
+            run_requested.add(requested)
+            run_observed.update(str(item) for item in observed)
+            receipt_sequence.append((requested, str(observed[0])))
+            usage = receipt.get("actual_provider_usage")
+            lineage = receipt.get("identity_lineage")
+            if not isinstance(lineage, Mapping):
+                raise EvidenceValidationError("native receipt omitted identity lineage")
+            usage_required = (
+                host == "codex"
+                and (
+                    requested in {"thread/start", "thread/resume", "thread/fork"}
+                    or observed[0] == "item/completed"
+                )
+            ) or (
+                host == "opencode"
+                and (requested.startswith("cli.run") or requested == "session.messages")
+            )
+            if usage_required:
+                if not isinstance(usage, Mapping):
+                    raise EvidenceValidationError(
+                        "usage-bearing native observation omitted Provider accounting"
+                    )
+                _validate_actual_usage(host, usage)
+            elif usage is not None:
+                raise EvidenceValidationError(
+                    "non-usage native observation claimed Provider accounting"
+                )
+            run_relations.add(str(lineage.get("relation")))
+            root_sha256 = lineage.get("root_sha256")
+            if isinstance(root_sha256, str):
+                run_roots.add(root_sha256)
+        expected_receipt_sequence = _NATIVE_RECEIPT_SEQUENCE[host][scenario]
+        if run_passed and tuple(receipt_sequence) != expected_receipt_sequence:
+            raise EvidenceValidationError("passed Host run lacks exact native receipt sequence")
+        if not run_passed and tuple(receipt_sequence) != expected_receipt_sequence[
+            : len(receipt_sequence)
+        ]:
+            raise EvidenceValidationError("failed Host run claims a non-native receipt prefix")
+        expected_requests = _NATIVE_REQUESTS[host][scenario]
+        expected_observations = _NATIVE_OBSERVATIONS[host][scenario]
+        if run_passed and (
+            run_requested != expected_requests or run_observed != expected_observations
+        ):
+            raise EvidenceValidationError("passed Host run lacks exact native lifecycle coverage")
+        if not run_passed and (
+            not run_requested.issubset(expected_requests)
+            or not run_observed.issubset(expected_observations)
+        ):
+            raise EvidenceValidationError("failed Host run claims an unexpected native operation")
+        if set(methods) != run_observed:
+            raise EvidenceValidationError("methods_observed is not an actual observation union")
+        if len(run_roots) > 1:
+            raise EvidenceValidationError("native session lineage has multiple roots")
+        if run_passed:
+            _validate_native_lineage_sequence(host, receipts)
+        required_relations = {
+            "cold_start": {"new", "same_session"},
+            "resume_fork": {"new", "resume", "fork", "same_session"},
+            "compaction_forget": {"new", "resume", "same_session"},
+            "development_diagnostic": {"new", "resume", "fork", "same_session"},
+        }[scenario]
+        if run_passed and not ({"new"} <= run_relations <= required_relations):
+            raise EvidenceValidationError("native session lineage relation is invalid")
+        if run_passed and scenario in {
+            "resume_fork",
+            "development_diagnostic",
+        } and not {"resume", "fork"}.issubset(run_relations):
+            raise EvidenceValidationError("resume/fork lineage is incomplete")
+
+        turns = run.get("turns")
+        if not isinstance(turns, list) or not turns:
+            raise EvidenceValidationError("Host run omitted turn evidence")
+        turn_statuses = [turn.get("status") for turn in turns if isinstance(turn, Mapping)]
+        if run_passed and (len(turn_statuses) != len(turns) or set(turn_statuses) != {"passed"}):
+            raise EvidenceValidationError("passed Host run contains a failed turn")
+        if not run_passed and "failed" not in turn_statuses:
+            raise EvidenceValidationError("failed Host run lacks a failed turn")
+        turn_methods = tuple(
+            turn.get("lifecycle_method") for turn in turns if isinstance(turn, Mapping)
+        )
+        expected_turn_methods = _TURN_METHODS[host][scenario]
+        if run_passed and turn_methods != expected_turn_methods:
+            raise EvidenceValidationError("Host turn request sequence is invalid")
+        if not run_passed and turn_methods != ("not_applicable",) and (
+            turn_methods != expected_turn_methods[: len(turn_methods)]
+        ):
+            raise EvidenceValidationError("failed Host turn request prefix is invalid")
+        if run_passed and run.get("new_thread") is not True:
+            raise EvidenceValidationError("Host run did not begin with a new native session")
+        turn_thread_ids = {
+            turn.get("thread_id_sha256")
+            for turn in turns
+            if isinstance(turn, Mapping) and isinstance(turn.get("thread_id_sha256"), str)
+        }
+        receipt_thread_ids = {
+            receipt.get("identity_lineage", {}).get("current_sha256")
+            for receipt in receipts
+            if isinstance(receipt, Mapping)
+            and isinstance(receipt.get("identity_lineage"), Mapping)
+        }
+        if run_passed and not receipt_thread_ids.issubset(turn_thread_ids):
+            raise EvidenceValidationError("native receipt lineage is not bound to turn identity")
+        first_read: Mapping[str, Any] | None = None
+        retried = False
+        for turn in turns:
+            if not isinstance(turn, Mapping):
+                raise EvidenceValidationError("Host turn evidence is invalid")
+            before = turn.get("ledger_audit_head_before")
+            after = turn.get("ledger_audit_head_after")
+            unchanged = turn.get("ledger_unchanged")
+            if unchanged is not (before == after):
+                raise EvidenceValidationError("turn ledger unchanged flag is inconsistent")
+            if turn.get("status") == "passed" and unchanged is not True:
+                raise EvidenceValidationError("passed read-only turn changed the Ledger")
+            safe_read = turn.get("safe_read")
+            if not isinstance(safe_read, Mapping):
+                raise EvidenceValidationError("Host turn omitted safe-read evidence")
+            count = safe_read.get("call_count")
+            operations = safe_read.get("safe_read_operations")
+            payloads = safe_read.get("provider_payloads")
+            if not isinstance(operations, list) or not isinstance(payloads, list):
+                raise EvidenceValidationError("safe-read arrays are invalid")
+            if count != len(operations) or count != len(payloads):
+                raise EvidenceValidationError("safe-read call count is inconsistent")
+            if turn.get("status") == "passed" and count not in {1, 2}:
+                raise EvidenceValidationError("passed turn requires one or two safe reads")
+            if safe_read.get("bounded_retry_used") is not (count == 2):
+                raise EvidenceValidationError("bounded retry flag is inconsistent")
+            if turn.get("status") == "passed" and safe_read.get("first_call_valid") is not True:
+                raise EvidenceValidationError("passed turn lacks first-call validity")
+            if first_read is None:
+                first_read = safe_read
+            retried = retried or count == 2
+            for payload in payloads:
+                if not isinstance(payload, Mapping):
+                    raise EvidenceValidationError("Provider payload measurement is invalid")
+                context_chars = payload.get("context_chars")
+                relevant_chars = payload.get("relevant_chars")
+                ratio = payload.get("relevant_chars_context_chars")
+                evidence_count = payload.get("evidence_count")
+                duplicate_evidence_count = payload.get("duplicate_evidence_count")
+                duplicate_evidence_rate = payload.get("duplicate_evidence_rate")
+                if (
+                    not isinstance(context_chars, int)
+                    or not isinstance(relevant_chars, int)
+                    or relevant_chars > context_chars
+                    or ratio
+                    != (relevant_chars / context_chars if context_chars else None)
+                    or not isinstance(evidence_count, int)
+                    or not isinstance(duplicate_evidence_count, int)
+                    or duplicate_evidence_count > evidence_count
+                    or duplicate_evidence_rate
+                    != (
+                        duplicate_evidence_count / evidence_count
+                        if evidence_count
+                        else None
+                    )
+                ):
+                    raise EvidenceValidationError(
+                        "Provider character or duplicate-evidence accounting is inconsistent"
+                    )
+                provider_bytes += int(payload.get("provider_bytes", 0))
+            usage = turn.get("usage")
+            if turn.get("status") == "passed":
+                if not isinstance(usage, Mapping):
+                    raise EvidenceValidationError("passed turn omitted Provider usage")
+                _validate_actual_usage(host, usage)
+        if first_read is not None and first_read.get("first_call_valid") is True:
+            first_call_valid_runs += 1
+        if retried:
+            bounded_retry_runs += 1
+
+        boundaries = run.get("mutation_boundaries")
+        if not isinstance(boundaries, list):
+            raise EvidenceValidationError("Host run omitted mutation boundaries")
+        kinds = tuple(
+            boundary.get("kind") for boundary in boundaries if isinstance(boundary, Mapping)
+        )
+        expected_kinds = _MUTATION_KINDS[host][scenario]
+        if len(kinds) != len(boundaries) or (
+            run_passed and kinds != expected_kinds
+        ) or (not run_passed and kinds != expected_kinds[: len(kinds)]):
+            raise EvidenceValidationError("Host mutation boundary sequence is invalid")
+        for boundary in boundaries:
+            if not isinstance(boundary, Mapping):
+                raise EvidenceValidationError("Host mutation boundary is invalid")
+            changed = boundary.get("audit_head_before") != boundary.get("audit_head_after")
+            if boundary.get("audit_changed") is not changed:
+                raise EvidenceValidationError("mutation audit change flag is inconsistent")
+
+        metrics = run.get("metrics")
+        if not isinstance(metrics, Mapping) or metrics.get("evidence_sha256") != _metric_evidence(
+            run
+        ):
+            raise EvidenceValidationError("scenario metrics are not bound to receipt evidence")
+        metric_fields = (
+            "first_correct_action",
+            "decision_preservation",
+            "wrong_state_admission",
+            "stale_state_rejected",
+            "forgotten_state_admission",
+            "gap_observed",
+            "projection_state_correct",
+            "retention_wording_correct",
+            "provider_boundary_correct",
+        )
+        if mode == "diagnostic":
+            if any(metrics.get(field) is not None for field in metric_fields):
+                raise EvidenceValidationError("diagnostic contains qualification scoring")
+        elif run_passed:
+            required_common = {
+                "first_correct_action": True,
+                "wrong_state_admission": 0,
+                "stale_state_rejected": True,
+                "provider_boundary_correct": True,
+            }
+            if any(metrics.get(field) != value for field, value in required_common.items()):
+                raise EvidenceValidationError("passed qualification metric is not satisfied")
+            if scenario == "resume_fork" and metrics.get("decision_preservation") is not True:
+                raise EvidenceValidationError("resume/fork decision was not preserved")
+            if scenario == "compaction_forget" and (
+                metrics.get("forgotten_state_admission") != 0
+                or metrics.get("gap_observed") is not True
+            ):
+                raise EvidenceValidationError("compaction/forget admission is invalid")
+        requested_union.update(run_requested)
+        observed_union.update(run_observed)
+
+    lifecycle = report.get("lifecycle")
+    if not isinstance(lifecycle, Mapping):
+        raise EvidenceValidationError("root native lifecycle receipt is missing")
+    if set(lifecycle.get("common_task_families", [])) != set(expected_scenarios):
+        raise EvidenceValidationError("root semantic task families are inconsistent")
+    if set(lifecycle.get("transport_seams", [])) != transports:
+        raise EvidenceValidationError("root transport seams are inconsistent")
+    if set(lifecycle.get("requested_operations", [])) != requested_union:
+        raise EvidenceValidationError("root requested operations are inconsistent")
+    if set(lifecycle.get("methods_observed", [])) != observed_union:
+        raise EvidenceValidationError("root native observations are inconsistent")
+
+    aggregate = report.get("aggregate")
+    if not isinstance(aggregate, Mapping):
+        raise EvidenceValidationError("Host aggregate is missing")
+    expected_aggregate = {
+        "passed_runs": passed_runs,
+        "failed_runs": len(runs) - passed_runs,
+        "first_call_valid_runs": first_call_valid_runs,
+        "bounded_retry_runs": bounded_retry_runs,
+        "provider_bytes": provider_bytes,
+        "host_elapsed_ms": sum(
+            turn.get("host_elapsed_ms", 0)
+            for run in runs
+            for turn in run.get("turns", [])
+            if isinstance(turn, Mapping)
+        ),
+        **{
+            field: _token_aggregate(runs, field)
+            for field in (
+                "input_tokens",
+                "cached_input_tokens",
+                "cache_write_input_tokens",
+                "output_tokens",
+                "reasoning_output_tokens",
+                "total_tokens",
+            )
+        },
+    }
+    if any(aggregate.get(field) != value for field, value in expected_aggregate.items()):
+        raise EvidenceValidationError("Host aggregate does not match receipt evidence")
+    expected_status = (
+        "executed"
+        if passed_runs == len(runs)
+        else "failed"
+        if passed_runs == 0
+        else "partial"
+    )
+    if report.get("status") != expected_status:
+        raise EvidenceValidationError("Host receipt status does not match its runs")
+    expected_qualification_status = (
+        "not_applicable"
+        if mode == "diagnostic"
+        else "passed"
+        if expected_status == "executed"
+        else "failed"
+        if expected_status == "failed"
+        else "partial"
+    )
+    if report.get("qualification_status") != expected_qualification_status:
+        raise EvidenceValidationError("qualification status is inconsistent")
+    if mode == "diagnostic" and not {"qualification", "Human Gold"}.issubset(
+        set(report.get("not_executed", []))
+    ):
+        raise EvidenceValidationError("diagnostic did not exclude qualification and Human Gold")
+
+    if report.get("status") == "executed":
+        authentication = attestation.get("authentication")
+        if (
+            not isinstance(authentication, Mapping)
+            or authentication.get("checked") is not True
+            or not isinstance(authentication.get("raw_sha256"), str)
+            or authentication.get("raw_bytes", 0) <= 0
+        ):
+            raise EvidenceValidationError("executed Host receipt lacks authentication proof")
+        inventories = (attestation.get("model_inventory"), attestation.get("mcp_inventory"))
+        if any(
+            not isinstance(item, Mapping)
+            or item.get("checked") is not True
+            or item.get("selected_present") is not True
+            for item in inventories
+        ):
+            raise EvidenceValidationError("executed Host receipt lacks inventory proof")
+        required_security = {
+            "mcp_child_closed_environment": True,
+            "only_knowledge_support_enabled": True,
+            "absolute_path_leak": False,
+            "secret_leak": False,
+            "cleanup_complete": True,
+        }
+        if any(security.get(field) != value for field, value in required_security.items()):
+            raise EvidenceValidationError("executed Host receipt failed a security boundary")
+        if host == "opencode":
+            availability = attestation.get("availability")
+            if not isinstance(availability, Mapping) or availability.get("status") != "available":
+                raise EvidenceValidationError(
+                    "executed OpenCode receipt lacks a successful availability probe"
                 )

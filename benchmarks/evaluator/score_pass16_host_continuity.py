@@ -1,4 +1,4 @@
-"""Fail-closed Pass 16 Human Gold preflight and Host run scorer.
+"""Fail-closed Pass 17 Human Gold preflight and Host run scorer.
 
 This evaluator only consumes owner-supplied artifacts.  It never creates a Gold
 case, reviewer identity, model output, or Provider result.  A structurally valid
@@ -23,24 +23,29 @@ from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
     validate_host_report_consistency,
 )
+from benchmarks.hosts.pass13_orchestrator import (
+    QualificationOrchestrationError,
+    repository_binding,
+    sha256_file,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 TASK_CASES_PATH = REPOSITORY / "benchmarks" / "hosts" / "pass16-continuity-task-cases-v1.json"
-GOLD_SCHEMA_PATH = REPOSITORY / "contracts" / "host-continuity-human-gold.v1.schema.json"
+GOLD_SCHEMA_PATH = REPOSITORY / "contracts" / "host-continuity-human-gold.v2.schema.json"
 TASK_SCHEMA_PATH = REPOSITORY / "contracts" / "host-continuity-task-cases.v1.schema.json"
 QUALIFICATION_SCHEMA_PATH = (
-    REPOSITORY / "contracts" / "host-continuity-qualification.v1.schema.json"
+    REPOSITORY / "contracts" / "host-continuity-qualification.v2.schema.json"
 )
 REVIEW_SCHEMA_PATH = (
-    REPOSITORY / "contracts" / "host-continuity-pass16-blind-review.v1.schema.json"
+    REPOSITORY / "contracts" / "host-continuity-pass17-blind-review.v2.schema.json"
 )
-SCORE_SCHEMA_PATH = REPOSITORY / "contracts" / "host-continuity-pass16-run-score.v1.schema.json"
+SCORE_SCHEMA_PATH = REPOSITORY / "contracts" / "host-continuity-pass17-run-score.v2.schema.json"
 
-GOLD_SCHEMA_VERSION = "deeplaw.host-continuity-human-gold/v1"
-SCORE_SCHEMA_VERSION = "deeplaw.host-continuity-pass16-run-score/v1"
-HUMAN_REVIEW_SCHEMA_VERSION = "deeplaw.host-continuity-pass16-blind-review/v1"
+GOLD_SCHEMA_VERSION = "deeplaw.host-continuity-human-gold/v2"
+SCORE_SCHEMA_VERSION = "deeplaw.host-continuity-pass17-run-score/v2"
+HUMAN_REVIEW_SCHEMA_VERSION = "deeplaw.host-continuity-pass17-blind-review/v2"
 TASK_SCHEMA_VERSION = "deeplaw.host-continuity-task-cases/v1"
-QUALIFICATION_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v1"
+QUALIFICATION_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v2"
 HOSTS = ("codex", "opencode")
 SCENARIOS = ("cold_start", "resume_fork", "compaction_forget")
 PROVIDER_HARD_LIMIT = 65_536
@@ -53,7 +58,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _ABSOLUTE_PATH = re.compile(
     r"(?:^|[\s=:\"'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s\"'\\]*)?|"
-    r"[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]"
+    r'(?:^|[\s="\'(])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]'
 )
 _CREDENTIAL_FIELD = re.compile(
     r'"(?:[A-Za-z0-9_]*(?:api_key|authorization|cookie|credential|password|secret|'
@@ -254,6 +259,11 @@ def _gold_receipt(gold: Mapping[str, Any], *, gold_data: bytes, task_data: bytes
         "gold_bytes": len(gold_data),
         "task_cases_sha256": _sha256(task_data),
         "task_cases_bytes": len(task_data),
+        "candidate_commit": gold.get("candidate_commit"),
+        "candidate_tree": gold.get("candidate_tree"),
+        "candidate_wheel_sha256": gold.get("candidate_wheel_sha256"),
+        "qualification_contract_version": gold.get("qualification_contract_version"),
+        "qualification_contract_sha256": gold.get("qualification_contract_sha256"),
         "case_count": 3,
         # This is intentionally explicit: shape, hash, and cross-file binding
         # cannot prove that the claimed human author or freeze was genuine.
@@ -267,6 +277,7 @@ def load_human_gold(
     *,
     task_cases_path: Path | None = None,
     repository: Path | None = None,
+    candidate_wheel_path: Path | None = None,
 ) -> dict[str, Any]:
     """Load one external Gold without manufacturing or asserting authenticity."""
 
@@ -288,6 +299,26 @@ def load_human_gold(
         raise HumanGoldValidationError(str(exc)) from exc
     if gold.get("claim_eligible") is not False:
         raise HumanGoldValidationError("Human Gold cannot be claim-eligible")
+    if gold.get("schema_version") != GOLD_SCHEMA_VERSION:
+        raise HumanGoldValidationError("Human Gold schema version is not current")
+    if candidate_wheel_path is None:
+        raise HumanGoldValidationError("Human Gold requires an exact candidate wheel binding")
+    try:
+        candidate = repository_binding(repository_root)
+        wheel_sha256 = sha256_file(Path(candidate_wheel_path))
+        expected_contract_sha256 = _sha256(QUALIFICATION_SCHEMA_PATH.read_bytes())
+    except (OSError, QualificationOrchestrationError) as exc:
+        raise HumanGoldValidationError("Human Gold candidate binding is unavailable") from exc
+    if (
+        gold.get("candidate_commit") != candidate["commit"]
+        or gold.get("candidate_tree") != candidate["tree"]
+        or gold.get("candidate_wheel_sha256") != wheel_sha256
+        or gold.get("qualification_contract_version") != QUALIFICATION_SCHEMA_VERSION
+        or gold.get("qualification_contract_sha256") != expected_contract_sha256
+    ):
+        raise HumanGoldValidationError(
+            "Human Gold does not bind the exact candidate and current receipt contract"
+        )
     task_cases, task_data = _task_cases(selected_task_cases)
     try:
         gold_frozen_at = datetime.fromisoformat(str(gold.get("frozen_at")))
@@ -336,13 +367,26 @@ def human_gold_receipt(
     *,
     task_cases_path: Path | None = None,
     repository: Path | None = None,
+    candidate_wheel_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return only a path-free structural receipt for a validated Gold file."""
 
     selected_task_cases = TASK_CASES_PATH if task_cases_path is None else Path(task_cases_path)
-    gold, gold_data = _read_bounded(Path(path), maximum=MAX_GOLD_BYTES, label="Human Gold")
+    before, before_data = _read_bounded(
+        Path(path), maximum=MAX_GOLD_BYTES, label="Human Gold"
+    )
     # Re-run all preconditions, including repository externality and exact case binding.
-    load_human_gold(path, task_cases_path=selected_task_cases, repository=repository)
+    gold = load_human_gold(
+        path,
+        task_cases_path=selected_task_cases,
+        repository=repository,
+        candidate_wheel_path=candidate_wheel_path,
+    )
+    observed, gold_data = _read_bounded(
+        Path(path), maximum=MAX_GOLD_BYTES, label="Human Gold"
+    )
+    if before != gold or observed != gold or before_data != gold_data:
+        raise HumanGoldValidationError("Human Gold changed after validation")
     _, task_data = _task_cases(selected_task_cases)
     return _gold_receipt(gold, gold_data=gold_data, task_data=task_data)
 
@@ -352,10 +396,25 @@ def load_human_gold_with_receipt(
     *,
     task_cases_path: Path | None = None,
     repository: Path | None = None,
+    candidate_wheel_path: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    gold = load_human_gold(path, task_cases_path=task_cases_path, repository=repository)
-    receipt = human_gold_receipt(path, task_cases_path=task_cases_path, repository=repository)
-    return gold, receipt
+    before, before_data = _read_bounded(
+        Path(path), maximum=MAX_GOLD_BYTES, label="Human Gold"
+    )
+    gold = load_human_gold(
+        path,
+        task_cases_path=task_cases_path,
+        repository=repository,
+        candidate_wheel_path=candidate_wheel_path,
+    )
+    observed, gold_data = _read_bounded(
+        Path(path), maximum=MAX_GOLD_BYTES, label="Human Gold"
+    )
+    if before != gold or observed != gold or before_data != gold_data:
+        raise HumanGoldValidationError("Human Gold changed after validation")
+    selected_task_cases = TASK_CASES_PATH if task_cases_path is None else Path(task_cases_path)
+    _, task_data = _task_cases(selected_task_cases)
+    return gold, _gold_receipt(gold, gold_data=gold_data, task_data=task_data)
 
 
 def _scan_untrusted(value: Any) -> tuple[bool, bool]:
@@ -402,6 +461,12 @@ def _load_report_input(value: Any, *, host: str) -> tuple[dict[str, Any], list[s
         failures.append("host_report_invalid")
     if report.get("schema_version") != QUALIFICATION_SCHEMA_VERSION:
         failures.append("host_report_invalid")
+    if (
+        report.get("execution_mode") != "qualification"
+        or report.get("evidence_class") != "qualification_holdout"
+        or report.get("qualification_status") == "not_applicable"
+    ):
+        failures.extend(("development_diagnostic_ineligible", "host_report_invalid"))
     try:
         validate_host_report_consistency(report)
     except (EvidenceValidationError, KeyError, TypeError, ValueError):
@@ -446,7 +511,7 @@ def _reviews_by_key(reviews: Any) -> dict[tuple[str, str], Any]:
                         result[(key, nested_key)] = nested_value
     elif isinstance(reviews, Sequence) and not isinstance(reviews, (str, bytes, bytearray)):
         # A tuple (host, task_case, review) is accepted for caller convenience;
-        # review JSON itself remains the closed Pass 16 blind-review/v1 shape.
+        # Review JSON itself remains the closed Pass 17 blind-review/v2 shape.
         for row in reviews:
             if isinstance(row, tuple) and len(row) == 3:
                 host, task_case, review = row
@@ -462,6 +527,8 @@ def _review_failures(
     gold_sha256: str,
     task_case: Mapping[str, Any],
     candidate_sha256: Any,
+    candidate_wheel_sha256: Any,
+    qualification_contract_sha256: str,
 ) -> tuple[list[str], dict[str, Any] | None]:
     failures: list[str] = []
     if not isinstance(review, Mapping):
@@ -483,6 +550,10 @@ def _review_failures(
         failures.append("evidence_binding_missing")
     elif selected.get("anonymized_candidate_sha256") != candidate_sha256:
         failures.append("review_candidate_digest_mismatch")
+    if selected.get("candidate_wheel_sha256") != candidate_wheel_sha256:
+        failures.append("review_candidate_wheel_mismatch")
+    if selected.get("qualification_contract_sha256") != qualification_contract_sha256:
+        failures.append("review_contract_mismatch")
     rubric = task_case.get("rubric")
     criteria = selected.get("criterion_results")
     expected = _rubric_ids(rubric if isinstance(rubric, Mapping) else {})
@@ -667,7 +738,7 @@ def _run_extra_failures(
     failures: list[str] = []
     if values["first_correct_action"] is not True:
         failures.append("first_correct_action_miss")
-    # Pass 16 intentionally does not inherit the older nullable semantics:
+    # Current qualification intentionally does not inherit the older nullable semantics:
     # Decision Preservation=null is a threshold miss, including cold starts.
     if values["decision_preservation"] is not True:
         failures.append("decision_preservation_miss")
@@ -713,7 +784,7 @@ def _stable_run_id(*, host: str, task_case: str, commit: Any, tree: Any) -> str:
     digest = _sha256(
         _canonical({"host": host, "task_case": task_case, "commit": commit, "tree": tree})
     )
-    return f"pass16run_{digest[:24]}"
+    return f"pass17run_{digest[:24]}"
 
 
 def _empty_run(scenario: str) -> dict[str, Any]:
@@ -738,6 +809,8 @@ def _score_one(
     gold_sha256: str,
     candidate_commit: Any,
     candidate_tree: Any,
+    candidate_wheel_sha256: Any,
+    qualification_contract_sha256: str,
     cross_binding_failures: Sequence[str],
 ) -> dict[str, Any]:
     scenario = str(task_case.get("scenario"))
@@ -763,6 +836,8 @@ def _score_one(
         gold_sha256=gold_sha256,
         task_case=task_case,
         candidate_sha256=metrics.get("evidence_sha256"),
+        candidate_wheel_sha256=candidate_wheel_sha256,
+        qualification_contract_sha256=qualification_contract_sha256,
     )
     failures = sorted(
         set(
@@ -832,6 +907,13 @@ def _score_one(
     failures = sorted(set(failures))
     return {
         "schema_version": SCORE_SCHEMA_VERSION,
+        "evidence_class": "qualification_holdout",
+        "qualification_contract_sha256": qualification_contract_sha256,
+        "candidate_wheel_sha256": (
+            candidate_wheel_sha256
+            if isinstance(candidate_wheel_sha256, str)
+            else "0" * 64
+        ),
         "run_id": _stable_run_id(
             host=host,
             task_case=task_case_id,
@@ -875,7 +957,7 @@ def _score_one(
 
 
 def _validate_score(score: Mapping[str, Any]) -> None:
-    _schema(SCORE_SCHEMA_PATH, score, label="Pass 16 run score")
+    _schema(SCORE_SCHEMA_PATH, score, label="Pass 17 run score")
 
 
 def score_reports(
@@ -886,6 +968,7 @@ def score_reports(
     gold_path: Path | None = None,
     task_cases_path: Path | None = None,
     repository: Path | None = None,
+    candidate_wheel_path: Path | None = None,
 ) -> dict[str, Any]:
     """Score exactly six Host/scenario runs and return path-free receipts.
 
@@ -896,9 +979,12 @@ def score_reports(
     """
 
     if gold_path is None:
-        raise HumanGoldValidationError("Pass 16 scoring requires an external Gold file")
+        raise HumanGoldValidationError("Pass 17 scoring requires an external Gold file")
     loaded_gold, gold_receipt = load_human_gold_with_receipt(
-        Path(gold_path), task_cases_path=task_cases_path, repository=repository
+        Path(gold_path),
+        task_cases_path=task_cases_path,
+        repository=repository,
+        candidate_wheel_path=candidate_wheel_path,
     )
     if gold is not None and dict(gold) != loaded_gold:
         raise HumanGoldValidationError("caller Gold mapping does not match external Gold bytes")
@@ -939,6 +1025,21 @@ def score_reports(
     global_binding_failures: list[str] = []
     if bindings["codex"] != bindings["opencode"]:
         global_binding_failures.append("candidate_binding_mismatch")
+    for report in loaded_reports.values():
+        binding = report.get("binding") if isinstance(report, Mapping) else None
+        contract_digests = (
+            binding.get("contract_digests") if isinstance(binding, Mapping) else None
+        )
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("commit") != gold.get("candidate_commit")
+            or binding.get("tree") != gold.get("candidate_tree")
+            or binding.get("wheel_sha256") != gold.get("candidate_wheel_sha256")
+            or not isinstance(contract_digests, Mapping)
+            or contract_digests.get("host-continuity-qualification.v2.schema.json")
+            != gold.get("qualification_contract_sha256")
+        ):
+            global_binding_failures.append("candidate_gold_binding_mismatch")
     if (
         platforms["codex"] is not None
         and platforms["opencode"] is not None
@@ -993,6 +1094,14 @@ def score_reports(
                 gold_sha256=str(gold_receipt["gold_sha256"]),
                 candidate_commit=bindings[host][0],
                 candidate_tree=bindings[host][1],
+                candidate_wheel_sha256=(
+                    report.get("binding", {}).get("wheel_sha256")
+                    if isinstance(report.get("binding"), Mapping)
+                    else None
+                ),
+                qualification_contract_sha256=str(
+                    gold_receipt["qualification_contract_sha256"]
+                ),
                 cross_binding_failures=global_binding_failures,
             )
             try:
@@ -1046,6 +1155,7 @@ def score_files(
     codex_report: Path,
     opencode_report: Path,
     gold_path: Path,
+    candidate_wheel_path: Path,
     review_paths: Mapping[tuple[str, str], Path],
     task_cases_path: Path | None = None,
     repository: Path | None = None,
@@ -1059,14 +1169,16 @@ def score_files(
         reports,
         reviews,
         gold_path=Path(gold_path),
+        candidate_wheel_path=Path(candidate_wheel_path),
         task_cases_path=task_cases_path,
         repository=repository,
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Score Pass 16 Host continuity runs")
+    parser = argparse.ArgumentParser(description="Score Pass 17 Host continuity runs")
     parser.add_argument("--gold", required=True, type=Path)
+    parser.add_argument("--candidate-wheel", required=True, type=Path)
     parser.add_argument("--codex-report", required=True, type=Path)
     parser.add_argument("--opencode-report", required=True, type=Path)
     parser.add_argument("--review", action="append", default=[], type=str, metavar="HOST:CASE=PATH")
@@ -1089,6 +1201,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         codex_report=arguments.codex_report,
         opencode_report=arguments.opencode_report,
         gold_path=arguments.gold,
+        candidate_wheel_path=arguments.candidate_wheel,
         review_paths=review_paths,
         task_cases_path=arguments.task_cases,
         repository=arguments.repository,

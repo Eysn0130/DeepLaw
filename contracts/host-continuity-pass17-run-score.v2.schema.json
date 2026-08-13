@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-continuity-pass17-run-score.v2.schema.json",
+  "title": "DeepLaw Pass 17 Host Continuity Run Score v2",
+  "description": "Path-free release-closed score for one qualification-holdout run. Development diagnostics are not admissible.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_class", "qualification_contract_sha256",
+    "candidate_wheel_sha256", "run_id", "task_case", "scenario", "host",
+    "tool_version", "model", "platform", "candidate_commit", "candidate_tree",
+    "provider_bytes", "input_tokens", "cached_input_tokens", "cache_write_input_tokens",
+    "output_tokens", "reasoning_output_tokens", "total_tokens", "first_correct_action",
+    "decision_preservation", "wrong_state_admission", "stale_state_rejected",
+    "forgotten_state_admission", "gap_observed", "blind_review_refs", "failure_cases",
+    "hard_failures", "status", "release_ready", "claim_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-continuity-pass17-run-score/v2"},
+    "evidence_class": {"const": "qualification_holdout"},
+    "qualification_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+    "run_id": {"type": "string", "pattern": "^pass17run_[0-9a-f]{24}$"},
+    "task_case": {"type": "string", "pattern": "^continuity_[a-z0-9_]+_v1$"},
+    "scenario": {"enum": ["cold_start", "resume_fork", "compaction_forget"]},
+    "host": {"enum": ["codex", "opencode"]},
+    "tool_version": {"type": "string", "minLength": 1, "maxLength": 200},
+    "model": {"type": "string", "minLength": 1, "maxLength": 200},
+    "platform": {"$ref": "#/$defs/platform"},
+    "candidate_commit": {"$ref": "#/$defs/gitOid"},
+    "candidate_tree": {"$ref": "#/$defs/gitOid"},
+    "provider_bytes": {"type": ["integer", "null"], "minimum": 0, "maximum": 524288},
+    "input_tokens": {"$ref": "#/$defs/token"},
+    "cached_input_tokens": {"$ref": "#/$defs/token"},
+    "cache_write_input_tokens": {"$ref": "#/$defs/token"},
+    "output_tokens": {"$ref": "#/$defs/token"},
+    "reasoning_output_tokens": {"$ref": "#/$defs/token"},
+    "total_tokens": {"$ref": "#/$defs/token"},
+    "first_correct_action": {"type": ["boolean", "null"]},
+    "decision_preservation": {"type": ["boolean", "null"]},
+    "wrong_state_admission": {"type": ["integer", "null"], "minimum": 0},
+    "stale_state_rejected": {"type": ["boolean", "null"]},
+    "forgotten_state_admission": {"type": ["integer", "null"], "minimum": 0},
+    "gap_observed": {"type": ["boolean", "null"]},
+    "blind_review_refs": {"oneOf": [{"$ref": "#/$defs/reviewRefs"}, {"type": "null"}]},
+    "failure_cases": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,99}$"}},
+    "hard_failures": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,99}$"}},
+    "status": {"enum": ["passed", "failed"]},
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "token": {"oneOf": [{"type": "integer", "minimum": 0}, {"const": "unreported"}]},
+    "platform": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operating_system", "architecture", "python_version"],
+      "properties": {
+        "operating_system": {"type": "string", "minLength": 1, "maxLength": 100},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "reviewRefs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["review_id", "gold_id", "gold_sha256", "candidate_sha256"],
+      "properties": {
+        "review_id": {"type": "string", "pattern": "^continuityreview_[0-9a-f]{24}$"},
+        "gold_id": {"type": "string", "pattern": "^continuitygold_[0-9a-f]{24}$"},
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

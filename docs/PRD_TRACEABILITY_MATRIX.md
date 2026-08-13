@@ -47,7 +47,7 @@ The current artifact and final executed/failed/not-executed decision are recorde
 - Upstream research SHA-256:
   `00dfab0dfed139f5d81982061a75896f29552f56a125aa83bec57f0c6a860967`.
 - Pass 8 reviewed upstream coordinates are OpenWiki
-  `7531d615216e8cbccf464f66cfbbae3668871c84` (`v0.3.1`) and Tolaria
+  `7531d615216e8cbccf464f66cfbbae3668871c84` (`package-version-0.3.1 review snapshot`) and Tolaria
   `ab01faa6773136a58285d04cb81e2587c11bac85`. These are frozen review/external-probe
   coordinates, not dependency pins or assertions about either upstream's current HEAD.
 - Branch: `codex/v013-pass8-lean-qualification`; Pass 8 final code candidate commit/tree:
@@ -93,7 +93,7 @@ Core gates; it does not add a general `parity` capability or gate.
 
 | Frozen reference/category | Required Kernel behavior | Existing release-blocking Core gates | Excluded comparison scope |
 | --- | --- | --- | --- |
-| OpenWiki `v0.3.1` / `7531d615216e8cbccf464f66cfbbae3668871c84` | Source/repository to maintainable Wiki; full/incremental equivalence; idempotent update; user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms` | UI, connector/provider breadth, ecosystem scale, overall maturity |
+| OpenWiki released v0.3.1 / `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc` (peeled commit) | Source/repository to maintainable Wiki; full/incremental equivalence; idempotent update; user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms` | UI, connector/provider breadth, ecosystem scale, overall maturity |
 | Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Markdown/Wikilink read; controlled edit; conflict/reconcile; source successor; wrong-merge rejection | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation` | Desktop GUI, visual design, Tauri/React runtime |
 | Obsidian public format/API help accessed 2026-08-11; `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Markdown, Wikilink, alias, backlink/outlink, rename/move, edit/reconcile on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation` | UI, commercial Sync, plugin marketplace, complete Canvas UX |
 | LLM Wiki behavior category | Agent generate/update with provenance, revision, Authority, scope, sensitivity, Ledger, and immutable Source Revision | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | No product comparison without an exact named project/version |
@@ -108,10 +108,11 @@ gate. Third-party desktop visual E2E is also not a Kernel release gate, while re
 Markdown/Wikilink/alias/link/rename/edit/reconcile behavior remains Core.
 
 The active classification is
-`../benchmarks/release/v013-gate-classification-v4.json`: Codex and OpenCode are both Core,
+`../benchmarks/release/v013-gate-classification-v5.json`: Codex and OpenCode are both Core,
 required, and release-blocking; Claude, Timeline, and semantic restore remain optional and
-`not_claimed`. Pass 16 version-rotated the historical v3 classification without rewriting it and
-bound OpenCode to exact tool version `1.18.16`; this prerequisite is not a Host result. Native Host
+`not_claimed`. Pass 17 preserves the historical v4 bytes and rotates only the two active Host
+inputs from receipt v1 to v2; v1 is historical and invalid for current qualification. OpenCode
+remains bound to exact tool version `1.18.16`; this prerequisite is not a Host result. Native Host
 qualification is separate from the nine-row Linux/macOS/Windows artifact gate. Human Gold, legal evidence, Context Utility,
 scale, three-OS evidence, and the provenance/signing/public-redownload artifact chain continue to
 block release.

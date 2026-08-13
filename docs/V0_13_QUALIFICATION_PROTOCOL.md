@@ -33,11 +33,11 @@ mapped existing Core gates; there is no generic `parity` gate.
 
 | Reference/baseline | Required in-scope Kernel behavior tasks | Existing Core gates and evidence | Explicitly outside this baseline |
 | --- | --- | --- | --- |
-| OpenWiki `v0.3.1` / `7531d615216e8cbccf464f66cfbbae3668871c84` | Compile a source/repository into a maintainable Wiki; prove full/incremental equivalence, idempotent update, and user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms`; public CLI/MCP receipts over the exact candidate | OpenWiki UI, provider/connector breadth, ecosystem size, or overall product comparison |
+| OpenWiki released v0.3.1 / `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc` (peeled commit) | Compile a source/repository into a maintainable Wiki; prove full/incremental equivalence, idempotent update, and user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms`; public CLI/MCP receipts over the exact candidate | OpenWiki UI, provider/connector breadth, ecosystem size, or overall product comparison |
 | Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Read Markdown/Wikilinks; perform controlled edits; detect conflict and reconcile; preserve source-successor identity and reject a wrong merge | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation`; real-file/editor receipts | Tolaria Desktop GUI, visual design, and its Tauri/React runtime |
 | Obsidian official public format/API help, accessed 2026-08-11; API snapshot `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation`; real-file/editor receipts | Obsidian UI, commercial Sync, plugin marketplace, and complete Canvas UX |
 | LLM Wiki behavior category (not a comparator project) | An Agent can generate and update knowledge while provenance, revision, Authority, scope, sensitivity, and Ledger state remain explicit; the original Source Revision is never rewritten | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | Any named-product or superiority statement unless an exact project and version are separately frozen |
-| Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale-checkpoint and wrong-task-line rejection | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens from `deeplaw.host-continuity-qualification/v1` | Codex Agent Runtime ownership, UI, marketplace, or a static/no-model Host smoke |
+| Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale-checkpoint and wrong-task-line rejection | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens from `deeplaw.host-continuity-qualification/v2` | Codex Agent Runtime ownership, UI, marketplace, or a static/no-model Host smoke |
 | OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | The same three real Host task families and wrong-state challenges as Codex, under independently isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcome metrics and actual Provider bytes/tokens through the shared Host continuity contract | OpenCode runtime, UI, ecosystem, or a projection/configuration-only smoke |
 
 The Codex and OpenCode Host task mechanics may use different public lifecycle methods, but they
@@ -91,6 +91,37 @@ Human Gold is frozen. Static version, isolated configuration, login/provider pre
 inventory checks cannot substitute for any real Host run. See
 [`V0_13_PASS16_DISPOSITION.md`](V0_13_PASS16_DISPOSITION.md) for the exact candidate and
 `not_executed` gate disposition.
+
+## Pass 17 native receipt and diagnostic boundary
+
+`deeplaw.host-continuity-qualification/v1` is historical and
+`invalidated-for-current-qualification`: its exact bytes remain unchanged, but its shared
+validator reused Codex lifecycle names for OpenCode. Current Host qualification and active gate
+classification v5 accept only `deeplaw.host-continuity-qualification/v2`. The v2 receipt keeps
+the common semantic task family separate from the transport/request seam, native requested
+operation, actually observed response or event, sanitized request/observation digests, identity
+lineage, and actual Provider usage. A semantic scenario name is never native observation evidence.
+
+The required diagnostic-first sequence now has an independent `diagnostic` mode on the same Host
+runner and orchestration path. It uses the repository-visible, source-free development fixture
+`benchmarks/hosts/pass17-development-diagnostic-v1.json`; it does not read Human Gold or
+qualification labels and does not emit a qualification score. Every diagnostic report is fixed to
+`claim_eligible=false`, `qualification_status=not_applicable`, and
+`evidence_class=development_diagnostic`. Active Host gates require three distinct qualification
+runs, `qualification_holdout`/`final_blind` corpus roles, and applicable status, so diagnostic
+evidence cannot satisfy them.
+
+One diagnostic invocation contains one development run on the existing Host engine. That run
+observes new, resume, fork, and native compaction seams: Codex records its App Server response plus
+the two `contextCompaction` item events, while OpenCode records CLI JSON separately from
+`session.get`, `session.summarize`, and `session.messages` HTTP responses. It performs no forget
+mutation; every model turn must leave the Ledger head unchanged.
+
+Qualification mode remains fail closed: repository-external Human Gold v2 must be loaded before
+candidate preparation or any Host/model start and must bind the exact task-case digest, clean
+candidate commit/tree, wheel SHA-256, and Host receipt v2 digest. The blind-review and run-score v2
+contracts bind the same wheel and receipt contract. These structural declarations do not prove
+human authorship or independence; that provenance remains an external owner responsibility.
 
 ## Three isolated data layers
 

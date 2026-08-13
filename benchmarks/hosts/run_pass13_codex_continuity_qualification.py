@@ -24,18 +24,21 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.hosts import pass16_continuity_cases
+from benchmarks.hosts import pass16_continuity_cases, pass17_development_diagnostic
 from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
     analyze_safe_read_calls,
+    bind_relevant_chars,
     canonical_json,
     isolation_receipt,
     metric_evidence_sha256,
+    native_lifecycle_receipt,
     write_retained_artifact,
 )
 from benchmarks.hosts.pass13_orchestrator import (
     QualificationOrchestrator,
+    observe_knowledge_support_tools_list,
 )
 from benchmarks.hosts.pass13_orchestrator import (
     sha256_bytes as _sha256,
@@ -112,7 +115,7 @@ _HOST_ENV_NAMES = (
 )
 _ABSOLUTE_PATH = re.compile(
     rb'(?:^|[\s=:"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s"\'\\]*)?|'
-    rb"[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]"
+    rb'(?:^|[\s="\'(])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]'
 )
 _CREDENTIAL_FIELD = re.compile(
     rb'"(?:[A-Za-z0-9_]*(?:api_key|authorization|cookie|credential|password|secret|'
@@ -406,6 +409,7 @@ def _create_git_task_repository(
     root: Path,
     *,
     task_line: str,
+    development: bool = False,
 ) -> tuple[Path, Path, dict[str, Any], dict[str, Any]]:
     """Create one real task repository and detached concurrent worktree."""
 
@@ -430,14 +434,28 @@ def _create_git_task_repository(
         return completed.stdout.strip()
 
     git("init", "--quiet")
-    git("config", "user.email", "qualification@localhost")
-    git("config", "user.name", "DeepLaw Qualification")
+    git(
+        "config",
+        "user.email",
+        "development@localhost" if development else "qualification@localhost",
+    )
+    git("config", "user.name", "DeepLaw Development" if development else "DeepLaw Qualification")
     (repository / "TASK.md").write_text(
-        "Pass 16 local no-case-data qualification task.\n", encoding="utf-8"
+        (
+            "Pass 17 local source-free development diagnostic.\n"
+            if development
+            else "Pass 16 local no-case-data qualification task.\n"
+        ),
+        encoding="utf-8",
     )
     (repository / ".gitignore").write_text("vault/\n", encoding="utf-8")
     git("add", "TASK.md", ".gitignore")
-    git("commit", "--quiet", "-m", "initial qualification task")
+    git(
+        "commit",
+        "--quiet",
+        "-m",
+        "initial development diagnostic" if development else "initial qualification task",
+    )
     concurrent = root / "concurrent-worktree"
     git("worktree", "add", "--quiet", "--detach", str(concurrent))
     primary_binding = pass16_continuity_cases.git_binding(
@@ -792,6 +810,151 @@ def _seed_vault(
     return {"grant_id": grant_id, "checkpoints": checkpoints}
 
 
+def _seed_development_vault(
+    executable: Path,
+    vault: Path,
+    binding: Mapping[str, Any],
+    fixture: Mapping[str, Any],
+    *,
+    work_dir: Path,
+) -> dict[str, Any]:
+    """Seed one source-free development checkpoint through the public CLI."""
+
+    _run_installed_cli(
+        executable,
+        [
+            "knowledge",
+            "init",
+            "--vault",
+            str(vault),
+            "--name",
+            "pass17-codex-development",
+            "--scope",
+            "project",
+        ],
+        cwd=work_dir,
+    )
+    enabled = _run_installed_cli(
+        executable,
+        [
+            "knowledge",
+            "sink",
+            "enable",
+            "--vault",
+            str(vault),
+            "--writer-id",
+            "pass17-codex-development-runner",
+            "--scope",
+            "project",
+            "--max-sensitivity",
+            "private",
+            "--operation",
+            "record_run",
+            "--operation",
+            "remember",
+        ],
+        cwd=work_dir,
+    )
+    grant_id = _extract(enabled, "grant_id", "grantId")
+    checkpoint = fixture.get("checkpoint")
+    if not isinstance(grant_id, str) or not grant_id or not isinstance(checkpoint, Mapping):
+        raise QualificationFailure("development fixture setup is invalid")
+    before = _ledger_head(executable, vault, work_dir=work_dir)
+    run_id = "run-pass17-development-diagnostic"
+    receipts = [
+        _write_sink_request(
+            executable,
+            vault,
+            grant_id,
+            {
+                "operation": "record_run",
+                "idempotency_key": "pass17-development-run",
+                "confirm_no_case_data": True,
+                "run_id": run_id,
+                "task": "Source-free native Host development diagnostic.",
+                "host_id": "codex-app-server-pass17-development",
+                "model_id": MODEL,
+                "status": "succeeded",
+                "scope": "project",
+                "sensitivity": "private",
+                "run_metadata": {"task_binding": dict(binding)},
+            },
+            work_dir=work_dir,
+        )
+    ]
+    remembered = _write_sink_request(
+        executable,
+        vault,
+        grant_id,
+        {
+            "operation": "remember",
+            "idempotency_key": "pass17-development-checkpoint",
+            "confirm_no_case_data": True,
+            "title": "Pass 17 source-free development checkpoint",
+            "body": "\n".join(
+                [
+                    "GOAL: Run the source-free native Host development diagnostic.",
+                    f"CONFIRMED_DECISION: {checkpoint['decision']}",
+                    "CONSTRAINT: Use governed read-only context and no case data.",
+                    f"VERIFIED_FACT: {checkpoint['verified_fact']}",
+                    f"OPEN_GAP: {checkpoint['open_gap']}",
+                    f"NEXT_ACTION: {checkpoint['next_action']}",
+                    f"ROUTE_MARKER: {checkpoint['marker']}",
+                    f"BINDING_DIGEST: {binding['binding_sha256']}",
+                ]
+            ),
+            "kind": "memory",
+            "memory_type": "working",
+            "semantic_key": "checkpoint:pass17:development-diagnostic",
+            "expires_at": "2099-01-01T00:00:00Z",
+            "scope": "project",
+            "sensitivity": "private",
+            "run_id": run_id,
+            "model_id": MODEL,
+            "tool_id": "codex-app-server-pass17-development",
+            "tags": ["pass17", "development", "diagnostic"],
+        },
+        work_dir=work_dir,
+    )
+    receipts.append(remembered)
+    knowledge_id = _extract(remembered, "knowledge_id", "knowledgeId")
+    revision_id = _extract(remembered, "revision_id", "revisionId")
+    if not isinstance(knowledge_id, str) or not isinstance(revision_id, str):
+        raise QualificationFailure("development checkpoint omitted CAS identity")
+    after = _ledger_head(executable, vault, work_dir=work_dir)
+    if before == after:
+        raise QualificationFailure("development checkpoint did not change the Ledger")
+    return {
+        "grant_id": grant_id,
+        "checkpoints": {
+            "cold_start": {
+                "knowledge_id": knowledge_id,
+                "revision_id": revision_id,
+                "run_id": run_id,
+                "task_case": fixture["task_case"],
+                "current_marker": checkpoint["marker"],
+                "stale_marker": None,
+                "expected_decision": checkpoint["decision"],
+                "expected_next_action": checkpoint["next_action"],
+                "forbidden_markers": [],
+                "forgotten_marker": None,
+                "seed_boundary": {
+                    "kind": "seed_checkpoint",
+                    "owner_enabled": True,
+                    "read_mcp_write_performed": False,
+                    "audit_changed": True,
+                    "audit_head_before": before,
+                    "audit_head_after": after,
+                    "receipt_sha256": _sha256(
+                        canonical_json(receipts).encode("utf-8")
+                    ),
+                    "target_sha256": _sha256(knowledge_id.encode("utf-8")),
+                },
+            }
+        },
+    }
+
+
 def _checkpoint_body(
     scenario: str,
     *,
@@ -1009,12 +1172,26 @@ def _turn_record(
         raise QualificationFailure(
             "safe read did not bind context, no-case-data confirmation, and the exact task"
         )
-    try:
-        safe_read = analyze_safe_read_calls(observations, outputs)
-    except EvidenceValidationError as exc:
-        raise QualificationFailure("safe read observation failed validation") from exc
     if _result_value(result, "status") != "completed":
         raise QualificationFailure("App Server turn did not complete successfully")
+    try:
+        safe_read = analyze_safe_read_calls(observations, outputs)
+        safe_read = bind_relevant_chars(
+            safe_read,
+            outputs,
+            tuple(
+                value
+                for value in (
+                    expected_decision,
+                    expected_next_action,
+                    current_marker,
+                    forgotten_marker if post_forget_phase else None,
+                )
+                if isinstance(value, str) and value
+            ),
+        )
+    except EvidenceValidationError as exc:
+        raise QualificationFailure("safe read observation failed validation") from exc
     final = _parse_final(_result_value(result, "final_text", ""))
     if final is None:
         raise QualificationFailure("bounded final response schema was not satisfied")
@@ -1136,14 +1313,18 @@ def _run_scenario(
     forget_checkpoint: Callable[[], Any] | None,
     expectations: Mapping[str, Any] | None = None,
     case: Mapping[str, Any] | None = None,
+    task_family: str | None = None,
 ) -> dict[str, Any]:
     if scenario not in _SCENARIOS:
         raise ValueError("unsupported Pass 16 scenario")
     turns: list[dict[str, Any]] = []
     methods: list[str] = []
+    native_receipts: list[dict[str, Any]] = []
     marker_values: list[dict[str, Any]] = []
     pending_compaction_usage: dict[str, int] | None = None
     expectations = expectations or {}
+    semantic_task_family = task_family or scenario
+    development = semantic_task_family == "development_diagnostic"
     seed_boundary = expectations.get("seed_boundary")
     if not isinstance(seed_boundary, Mapping):
         raise QualificationFailure("scenario omitted its owner seed boundary")
@@ -1191,6 +1372,72 @@ def _run_scenario(
         turns.append(record)
         marker_values.append(payload)
 
+    def compact(active_thread_id: str) -> None:
+        nonlocal pending_compaction_usage
+        event_offset = len(client.sanitized_events)
+        compacted = client.thread_compact_start(active_thread_id)
+        compact_events = [
+            event
+            for event in client.sanitized_events[event_offset:]
+            if event.get("method") in {"item/started", "item/completed"}
+            and event.get("compaction_status") in {"started", "completed"}
+        ]
+        if [event.get("method") for event in compact_events] != [
+            "item/started",
+            "item/completed",
+        ]:
+            raise QualificationFailure("contextCompaction native events are incomplete")
+        pending_compaction_usage = _require_actual_usage(
+            _result_value(client, "last_compaction_usage", _empty_usage())
+        )
+        methods.extend(["thread/compact/start", "item/started", "item/completed"])
+        native_receipts.append(
+            native_lifecycle_receipt(
+                semantic_task_family=semantic_task_family,
+                transport="codex_app_server_jsonrpc",
+                request_seam="thread/compact/start",
+                requested_operation="thread/compact/start",
+                sanitized_request={
+                    "thread_id_sha256": _sha256(active_thread_id.encode("utf-8"))
+                },
+                observation_kind="native_response",
+                methods_observed=["thread/compact/start"],
+                sanitized_observation={
+                    "response": "accepted",
+                    "response_shape": sorted(compacted),
+                },
+                current_identity=active_thread_id,
+                parent_identity=active_thread_id,
+                root_identity=thread_id,
+                relation="same_session",
+                actual_provider_usage=None,
+            )
+        )
+        for compact_event in compact_events:
+            native_receipts.append(
+                native_lifecycle_receipt(
+                    semantic_task_family=semantic_task_family,
+                    transport="codex_app_server_jsonrpc",
+                    request_seam="thread/compact/start notifications",
+                    requested_operation="thread/compact/start",
+                    sanitized_request={
+                        "thread_id_sha256": _sha256(active_thread_id.encode("utf-8"))
+                    },
+                    observation_kind="native_event",
+                    methods_observed=[str(compact_event["method"])],
+                    sanitized_observation={"event": compact_event},
+                    current_identity=active_thread_id,
+                    parent_identity=active_thread_id,
+                    root_identity=thread_id,
+                    relation="same_session",
+                    actual_provider_usage=(
+                        pending_compaction_usage
+                        if compact_event["method"] == "item/completed"
+                        else None
+                    ),
+                )
+            )
+
     started = client.thread_start(
         {
             "model": MODEL,
@@ -1203,21 +1450,88 @@ def _run_scenario(
     thread_id = _thread_id(started)
     methods.append("thread/start")
     turn(thread_id, "thread/start", prompt)
-    if scenario == "resume_fork":
+    native_receipts.append(
+        native_lifecycle_receipt(
+            semantic_task_family=semantic_task_family,
+            transport="codex_app_server_jsonrpc",
+            request_seam="thread/start",
+            requested_operation="thread/start",
+            sanitized_request={
+                "model": MODEL,
+                "effort": REASONING_EFFORT,
+                "approval_policy": "never",
+                "sandbox": "read-only",
+                "ephemeral": True,
+            },
+            observation_kind="native_response",
+            methods_observed=["thread/start"],
+            sanitized_observation={
+                "response": "thread",
+                "thread_id_sha256": _sha256(thread_id.encode("utf-8")),
+            },
+            current_identity=thread_id,
+            parent_identity=None,
+            root_identity=thread_id,
+            relation="new",
+            actual_provider_usage=turns[-1]["usage"],
+        )
+    )
+    if scenario == "resume_fork" or development:
         resumed = client.thread_resume(thread_id)
         methods.append("thread/resume")
         resumed_id = _thread_id(resumed)
         turn(resumed_id, "thread/resume", prompt)
+        native_receipts.append(
+            native_lifecycle_receipt(
+                semantic_task_family=semantic_task_family,
+                transport="codex_app_server_jsonrpc",
+                request_seam="thread/resume",
+                requested_operation="thread/resume",
+                sanitized_request={"thread_id_sha256": _sha256(thread_id.encode("utf-8"))},
+                observation_kind="native_response",
+                methods_observed=["thread/resume"],
+                sanitized_observation={
+                    "response": "thread",
+                    "thread_id_sha256": _sha256(resumed_id.encode("utf-8")),
+                },
+                current_identity=resumed_id,
+                parent_identity=thread_id,
+                root_identity=thread_id,
+                relation="resume",
+                actual_provider_usage=turns[-1]["usage"],
+            )
+        )
         forked = client.thread_fork(resumed_id)
         methods.append("thread/fork")
         forked_id = _thread_id(forked)
         turn(forked_id, "thread/fork", prompt)
-    elif scenario == "compaction_forget":
-        client.thread_compact_start(thread_id)
-        pending_compaction_usage = _require_actual_usage(
-            _result_value(client, "last_compaction_usage", _empty_usage())
+        native_receipts.append(
+            native_lifecycle_receipt(
+                semantic_task_family=semantic_task_family,
+                transport="codex_app_server_jsonrpc",
+                request_seam="thread/fork",
+                requested_operation="thread/fork",
+                sanitized_request={
+                    "thread_id_sha256": _sha256(resumed_id.encode("utf-8"))
+                },
+                observation_kind="native_response",
+                methods_observed=["thread/fork"],
+                sanitized_observation={
+                    "response": "thread",
+                    "thread_id_sha256": _sha256(forked_id.encode("utf-8")),
+                },
+                current_identity=forked_id,
+                parent_identity=resumed_id,
+                root_identity=thread_id,
+                relation="fork",
+                actual_provider_usage=turns[-1]["usage"],
+            )
         )
-        methods.extend(["thread/compact/start", "item/started", "item/completed"])
+        if development:
+            compact(forked_id)
+            turn(forked_id, "thread/compact/start", prompt)
+    elif scenario == "compaction_forget":
+        compact(thread_id)
         turn(thread_id, "thread/compact/start", prompt)
         if forget_checkpoint is None:
             raise QualificationFailure("compaction_forget omitted owner forget callback")
@@ -1326,6 +1640,8 @@ def _run_scenario(
         "task_sha256": _sha256(canonical_json(dict(task_binding)).encode("utf-8")),
         "new_thread": True,
         "methods_observed": methods,
+        "task_family": semantic_task_family,
+        "native_receipts": native_receipts,
         "turns": turns,
         "metrics": {**metrics, "evidence_sha256": "0" * 64},
         "mutation_boundaries": mutation_boundaries,
@@ -1634,18 +1950,23 @@ def _placeholder_security() -> dict[str, Any]:
         "raw_transcript_retained": False,
         "hidden_reasoning_retained": False,
         "authentication_material_retained": False,
+        "cleanup_complete": False,
     }
 
 
-def _placeholder_run(index: int, scenario: str) -> dict[str, Any]:
+def _placeholder_run(
+    index: int, scenario: str, *, task_family: str | None = None
+) -> dict[str, Any]:
     run = {
         "run_index": index,
         "scenario": scenario,
+        "task_family": task_family or scenario,
         "status": "failed",
         "failure_codes": ["not_executed"],
         "task_sha256": "0" * 64,
         "new_thread": False,
-        "methods_observed": ["not_applicable"],
+        "methods_observed": [],
+        "native_receipts": [],
         "turns": [
             {
                 "status": "failed",
@@ -1764,16 +2085,63 @@ def _prepare_codex_scenario(
     }
 
 
+def _prepare_codex_diagnostic(
+    *,
+    run_root: Path,
+    fixture: Mapping[str, Any],
+    codex_binary: Path,
+    runtime_executable: Path,
+    runtime_python: Path,
+    ambient_servers: Sequence[str],
+) -> dict[str, Any]:
+    run_root.mkdir(parents=True, exist_ok=True)
+    repository, concurrent, binding, concurrent_binding = _create_git_task_repository(
+        run_root,
+        task_line=str(fixture["task_case"]),
+        development=True,
+    )
+    vault = repository / "vault"
+    seeded = _seed_development_vault(
+        runtime_executable,
+        vault,
+        binding,
+        fixture,
+        work_dir=repository,
+    )
+    wrapper = run_root / "deeplaw-closed-mcp"
+    wrapper.write_text(
+        _closed_mcp_wrapper_source(runtime_python, runtime_executable, vault),
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+    return {
+        "case": dict(fixture),
+        "repository": repository,
+        "concurrent": concurrent,
+        "binding": binding,
+        "concurrent_binding": concurrent_binding,
+        "vault": vault,
+        "seeded": seeded,
+        "wrapper": wrapper,
+        "app_argv": _app_server_argv(
+            codex_binary,
+            mcp_wrapper=wrapper,
+            ambient_servers=ambient_servers,
+        ),
+    }
+
+
 def execute(
     *,
     candidate_wheel: Path,
     deeplaw_executable: Path,
     output_dir: Path,
     profile_root: Path,
-    human_gold_path: Path,
+    human_gold_path: Path | None,
     codex_command: str = "codex",
+    mode: str = "qualification",
 ) -> dict[str, Any]:
-    """Execute the three current Host lifecycle scenarios.
+    """Execute current qualification or one claim-ineligible diagnostic.
 
     This function intentionally performs no authentication-file access.  The
     Host process may use its existing login through the explicitly supplied
@@ -1782,19 +2150,32 @@ def execute(
 
     repository = _repository()
     profile_root = _validate_profile_root(profile_root, repository=repository)
-    # This structural check runs before any App Server/model process can start.
-    # Human authorship and independence remain external reviewer attestations.
-    from benchmarks.evaluator.score_pass16_host_continuity import (
-        HumanGoldValidationError,
-        load_human_gold,
-    )
+    if mode not in {"qualification", "diagnostic"}:
+        raise QualificationFailure("Codex execution mode is invalid")
+    if mode == "diagnostic" and human_gold_path is not None:
+        raise QualificationFailure("Codex diagnostic must not receive Human Gold")
+    if mode == "qualification":
+        # This structural check runs before candidate preparation or any Host/model
+        # process. Human authorship and independence remain reviewer attestations.
+        from benchmarks.evaluator.score_pass16_host_continuity import (
+            HumanGoldValidationError,
+            load_human_gold,
+        )
 
-    try:
-        load_human_gold(Path(human_gold_path), repository=repository)
-    except HumanGoldValidationError as exc:
-        raise QualificationFailure(
-            "Codex qualification requires frozen external Human Gold"
-        ) from exc
+        if human_gold_path is None:
+            raise QualificationFailure(
+                "Codex qualification requires frozen external Human Gold"
+            )
+        try:
+            load_human_gold(
+                Path(human_gold_path),
+                repository=repository,
+                candidate_wheel_path=candidate_wheel,
+            )
+        except HumanGoldValidationError as exc:
+            raise QualificationFailure(
+                "Codex qualification requires frozen external Human Gold"
+            ) from exc
     orchestrator = QualificationOrchestrator(
         host="codex",
         repository=repository,
@@ -1802,18 +2183,24 @@ def execute(
         deeplaw_executable=deeplaw_executable,
         output_dir=output_dir.resolve(strict=False),
         error_type=QualificationFailure,
+        execution_mode=mode,
     )
     selected_output, candidate_binding, runtime = orchestrator.prepare_candidate()
     codex_text = shutil.which(codex_command)
     if codex_text is None:
         raise QualificationFailure("Codex command was not found")
     codex_binary = Path(codex_text).resolve(strict=True)
-    canaries = {name: _sha256(f"pass16-{name}".encode()) for name in _CANARY_NAMES}
+    canaries = {
+        name: _sha256(f"pass17-{mode}-{name}".encode()) for name in _CANARY_NAMES
+    }
 
     selected_output.mkdir(parents=True)
     runs: list[dict[str, Any]] = []
     lifecycle_methods: set[str] = set()
+    lifecycle_requests: set[str] = set()
+    lifecycle_transports: set[str] = set()
     all_events: dict[str, bytes] = {}
+    tool_schema: dict[str, Any] | None = None
     security = _placeholder_security()
     security.update(
         {
@@ -1835,7 +2222,15 @@ def execute(
     }
 
     cases = pass16_continuity_cases.cases_by_scenario()
-    with tempfile.TemporaryDirectory(prefix="deeplaw-pass16-") as temporary:
+    diagnostic_fixture = (
+        pass17_development_diagnostic.load_fixture() if mode == "diagnostic" else None
+    )
+    run_specs = (
+        [(scenario, scenario) for scenario in _SCENARIOS]
+        if mode == "qualification"
+        else [("development_diagnostic", "cold_start")]
+    )
+    with tempfile.TemporaryDirectory(prefix="deeplaw-pass17-") as temporary:
         work_dir = Path(temporary)
         host_environment = _host_environment(codex_binary, profile_root, canaries)
         host_isolation = _isolation_receipt(profile_root, host_environment)
@@ -1862,19 +2257,46 @@ def execute(
             if name != "deeplaw"
         ]
         states: dict[str, dict[str, Any]] = {}
-        for index, scenario in enumerate(_SCENARIOS, 1):
-            states[scenario] = _prepare_codex_scenario(
-                run_root=work_dir / f"run-{index}",
-                case=cases[scenario],
-                codex_binary=codex_binary,
-                runtime_executable=runtime["_executable"],
-                runtime_python=runtime["_runtime_python"],
-                ambient_servers=ambient_names,
-            )
+        for index, (reported_scenario, engine_scenario) in enumerate(run_specs, 1):
+            if mode == "qualification":
+                states[reported_scenario] = _prepare_codex_scenario(
+                    run_root=work_dir / f"run-{index}",
+                    case=cases[engine_scenario],
+                    codex_binary=codex_binary,
+                    runtime_executable=runtime["_executable"],
+                    runtime_python=runtime["_runtime_python"],
+                    ambient_servers=ambient_names,
+                )
+            else:
+                if not isinstance(diagnostic_fixture, Mapping):
+                    raise QualificationFailure("development diagnostic fixture is missing")
+                states[reported_scenario] = _prepare_codex_diagnostic(
+                    run_root=work_dir / f"run-{index}",
+                    fixture=diagnostic_fixture,
+                    codex_binary=codex_binary,
+                    runtime_executable=runtime["_executable"],
+                    runtime_python=runtime["_runtime_python"],
+                    ambient_servers=ambient_names,
+                )
 
         # Inventory is gathered from the same app-server protocol used by the
         # three lifecycle runs.  Raw pages are hashed in memory and discarded.
-        inventory_state = states[_SCENARIOS[0]]
+        inventory_state = states[run_specs[0][0]]
+        try:
+            tool_schema = observe_knowledge_support_tools_list(
+                command=inventory_state["wrapper"],
+                args=(),
+                cwd=inventory_state["repository"],
+                environment={
+                    "PATH": os.defpath,
+                    "LANG": "C.UTF-8",
+                    "LC_ALL": "C.UTF-8",
+                    "NO_COLOR": "1",
+                    "GIT_TERMINAL_PROMPT": "0",
+                },
+            )
+        except Exception as exc:
+            raise QualificationFailure("knowledge_support tools/list observation failed") from exc
         inventory_client = CodexAppServerClient(
             inventory_state["app_argv"],
             host_environment,
@@ -1904,9 +2326,9 @@ def execute(
             if inventory_client.secret_leak:
                 security["secret_leak"] = True
 
-        for index, scenario in enumerate(_SCENARIOS, 1):
-            state = states[scenario]
-            checkpoint = state["seeded"]["checkpoints"][scenario]
+        for index, (reported_scenario, engine_scenario) in enumerate(run_specs, 1):
+            state = states[reported_scenario]
+            checkpoint = state["seeded"]["checkpoints"][engine_scenario]
             repository = state["repository"]
             vault = state["vault"]
             binding = state["binding"]
@@ -1936,24 +2358,61 @@ def execute(
                         work_dir=repository,
                     )
 
+                if mode == "qualification":
+                    selected_prompt = _prompt(
+                        engine_scenario,
+                        binding,
+                        case=state["case"],
+                    )
+                else:
+                    selected_prompt = (
+                        pass17_development_diagnostic.candidate_prompt(state["case"])
+                        + " The canonical task binding is "
+                        + canonical_json(dict(binding))
+                        + ". confirm_no_case_data=true. Return only bounded JSON with "
+                        "summary, next_step, preserved_decisions, and open_gaps."
+                    )
                 run = _run_scenario(
                     client=client,
-                    scenario=scenario,
+                    scenario=engine_scenario,
                     task_binding=binding,
-                    prompt=_prompt(scenario, binding, case=state["case"]),
+                    prompt=selected_prompt,
                     ledger_head=lambda vault=vault, repository=repository: _ledger_head(
                         runtime["_executable"], vault, work_dir=repository
                     ),
-                    forget_checkpoint=forget if scenario == "compaction_forget" else None,
+                    forget_checkpoint=(
+                        forget if engine_scenario == "compaction_forget" else None
+                    ),
                     expectations=checkpoint,
-                    case=state["case"],
+                    case=state["case"] if mode == "qualification" else None,
+                    task_family=reported_scenario,
                 )
                 after = _ledger_head(runtime["_executable"], vault, work_dir=repository)
-                if before != after and scenario != "compaction_forget":
+                if before != after and engine_scenario != "compaction_forget":
                     raise QualificationFailure("read-only lifecycle changed the ledger")
+                if mode == "diagnostic":
+                    run["scenario"] = "development_diagnostic"
+                    run["task_family"] = "development_diagnostic"
+                    run["metrics"] = {
+                        "first_correct_action": None,
+                        "decision_preservation": None,
+                        "wrong_state_admission": None,
+                        "stale_state_rejected": None,
+                        "forgotten_state_admission": None,
+                        "gap_observed": None,
+                        "projection_state_correct": None,
+                        "retention_wording_correct": None,
+                        "provider_boundary_correct": None,
+                        "evidence_sha256": "0" * 64,
+                    }
+                    run["metrics"]["evidence_sha256"] = metric_evidence_sha256(run)
             except Exception as exc:
                 code = re.sub(r"[^a-z0-9]+", "_", type(exc).__name__.casefold()).strip("_")
-                run = _placeholder_run(index, scenario)
+                run = _placeholder_run(
+                    index,
+                    reported_scenario,
+                    task_family=reported_scenario,
+                )
                 run["failure_codes"] = [f"host_{code or 'failure'}"]
             finally:
                 events = client.sanitized_events
@@ -1981,15 +2440,32 @@ def execute(
                         set(run.get("failure_codes", [])) | set(leak_codes)
                     )
             run["run_index"] = index
-            run["scenario"] = scenario
-            run["turns"] = run.get("turns", _placeholder_run(index, scenario)["turns"])
+            run["scenario"] = reported_scenario
+            run["task_family"] = reported_scenario
+            run["turns"] = run.get(
+                "turns",
+                _placeholder_run(
+                    index,
+                    reported_scenario,
+                    task_family=reported_scenario,
+                )["turns"],
+            )
             for turn in run["turns"]:
                 turn["sanitized_events"]["name"] = event_name
                 turn["sanitized_events"]["bytes"] = len(event_bytes)
                 turn["sanitized_events"]["sha256"] = _sha256(event_bytes)
             lifecycle_methods.update(run.get("methods_observed", []))
+            for receipt in run.get("native_receipts", []):
+                if isinstance(receipt, Mapping):
+                    requested = receipt.get("requested_operation")
+                    transport = receipt.get("transport")
+                    if isinstance(requested, str):
+                        lifecycle_requests.add(requested)
+                    if isinstance(transport, str):
+                        lifecycle_transports.add(transport)
             runs.append(run)
 
+    security["cleanup_complete"] = True
     security["only_knowledge_support_enabled"] = bool(status_inventory["selected_present"])
     host_attestation = {
         "binary_name": "codex",
@@ -2024,6 +2500,8 @@ def execute(
             }
         },
     }
+    if not isinstance(tool_schema, Mapping):
+        raise QualificationFailure("knowledge_support tools/list receipt is missing")
     report = orchestrator.build_report(
         binding=report_binding,
         environment={
@@ -2033,59 +2511,79 @@ def execute(
             "isolation": host_isolation,
         },
         host_attestation=host_attestation,
+        tool_schema=tool_schema,
         runs=runs,
         lifecycle={
             "host_owns_threads": True,
-            "methods_observed": sorted(lifecycle_methods) or ["not_applicable"],
+            "common_task_families": [item[0] for item in run_specs],
+            "transport_seams": sorted(lifecycle_transports),
+            "requested_operations": sorted(lifecycle_requests),
+            "methods_observed": sorted(lifecycle_methods),
             "deeplaw_session_store_created": False,
         },
         security=security,
-        not_executed=[
-            "Human review",
-            "Legal Pack qualification",
-            "OpenCode host",
-            "Desktop host",
-            "scale qualification",
-            "qualification holdout",
-            "final blind",
-            "release decision",
-        ],
+        not_executed=(
+            [
+                "Human review",
+                "Legal Pack qualification",
+                "OpenCode host",
+                "Desktop host",
+                "scale qualification",
+                "qualification holdout",
+                "final blind",
+                "release decision",
+            ]
+            if mode == "qualification"
+            else [
+                "qualification",
+                "Human Gold",
+                "blind scoring",
+                "release decision",
+            ]
+        ),
     )
     report_bytes = canonical_json(report).encode("utf-8") + b"\n"
     if _ABSOLUTE_PATH.search(report_bytes) or any(
         value.encode("utf-8") in report_bytes for value in canaries.values()
     ):
-        raise QualificationFailure("qualification report leaked a path or secret canary")
-    artifacts = {"codex-continuity-qualification.json": report_bytes, **all_events}
-    _write_artifacts(selected_output, artifacts, forbidden_values=tuple(canaries.values()))
-    orchestrator.finalize_bundle(
-        commit=candidate_binding["commit"],
-        tree=candidate_binding["tree"],
-        artifacts={
-            role: selected_output / name
-            for role, name in (
-                [("qualification_report", "codex-continuity-qualification.json")]
-                + [
-                    (
-                        f"sanitized_events_run_{index}",
-                        f"codex-run-{index}-events.sanitized.jsonl",
-                    )
-                    for index in range(1, RUN_COUNT + 1)
-                ]
-            )
-        },
-        forbidden_values=tuple(canaries.values()),
+        raise QualificationFailure("Host receipt leaked a path or secret canary")
+    report_name = (
+        "codex-continuity-qualification.json"
+        if mode == "qualification"
+        else "codex-development-diagnostic.json"
     )
+    artifacts = {report_name: report_bytes, **all_events}
+    _write_artifacts(selected_output, artifacts, forbidden_values=tuple(canaries.values()))
+    if mode == "qualification":
+        orchestrator.finalize_bundle(
+            commit=candidate_binding["commit"],
+            tree=candidate_binding["tree"],
+            artifacts={
+                role: selected_output / name
+                for role, name in (
+                    [("qualification_report", report_name)]
+                    + [
+                        (
+                            f"sanitized_events_run_{index}",
+                            f"codex-run-{index}-events.sanitized.jsonl",
+                        )
+                        for index in range(1, RUN_COUNT + 1)
+                    ]
+                )
+            },
+            forbidden_values=tuple(canaries.values()),
+        )
     return report
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run Pass 16 Codex continuity qualification")
+    parser = argparse.ArgumentParser(description="Run current Codex Host receipt workflow")
+    parser.add_argument("--mode", choices=("qualification", "diagnostic"), default="qualification")
     parser.add_argument("--candidate-wheel", required=True)
     parser.add_argument("--deeplaw-executable", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--profile-root", required=True)
-    parser.add_argument("--human-gold", required=True)
+    parser.add_argument("--human-gold")
     parser.add_argument("--codex-command", default="codex")
     return parser
 
@@ -2097,8 +2595,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         deeplaw_executable=Path(args.deeplaw_executable),
         output_dir=Path(args.output_dir),
         profile_root=Path(args.profile_root),
-        human_gold_path=Path(args.human_gold),
+        human_gold_path=Path(args.human_gold) if args.human_gold else None,
         codex_command=args.codex_command,
+        mode=args.mode,
     )
     print(canonical_json(report))
     return 0 if report["status"] == "executed" else 1

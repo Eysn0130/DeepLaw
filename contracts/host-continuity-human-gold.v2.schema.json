@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-continuity-human-gold.v2.schema.json",
+  "title": "DeepLaw External Independent Host Continuity Human Gold v2",
+  "description": "Repository-external Human Gold bound before Host output to exact task cases, candidate wheel, candidate Git state, and the current Host receipt contract. Structural validation cannot prove human authorship or independence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "frozen_at", "gold_id", "author_id",
+    "author_is_human", "independent", "model_outputs_seen_before_freeze",
+    "development_tuning_material", "candidate_visible_when_frozen",
+    "claim_eligible", "task_cases_sha256", "candidate_commit", "candidate_tree",
+    "candidate_wheel_sha256", "qualification_contract_version",
+    "qualification_contract_sha256", "task_cases"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-continuity-human-gold/v2"},
+    "status": {"const": "independent_human_gold_frozen"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "gold_id": {"type": "string", "pattern": "^continuitygold_[0-9a-f]{24}$"},
+    "author_id": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:@-]*$"},
+    "author_is_human": {"const": true},
+    "independent": {"const": true},
+    "model_outputs_seen_before_freeze": {"const": false},
+    "development_tuning_material": {"const": false},
+    "candidate_visible_when_frozen": {
+      "description": "No candidate Host/model output was visible when Gold was frozen; exact wheel and Git binding metadata are still required.",
+      "const": false
+    },
+    "claim_eligible": {"const": false},
+    "task_cases_sha256": {"$ref": "#/$defs/sha256"},
+    "candidate_commit": {"$ref": "#/$defs/gitOid"},
+    "candidate_tree": {"$ref": "#/$defs/gitOid"},
+    "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+    "qualification_contract_version": {"const": "deeplaw.host-continuity-qualification/v2"},
+    "qualification_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "task_cases": {"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "marker": {"type": "string", "pattern": "^PASS16-[A-Z0-9-]{16,100}$"},
+    "postForget": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["forgotten_marker", "require_gap", "maximum_admission_count"],
+          "properties": {
+            "forgotten_marker": {"$ref": "#/$defs/marker"},
+            "require_gap": {"const": true},
+            "maximum_admission_count": {"const": 0}
+          }
+        }
+      ]
+    },
+    "rubric": {
+      "type": "object", "additionalProperties": false,
+      "required": ["criterion_ids", "criteria", "pass_condition"],
+      "properties": {
+        "criterion_ids": {"type": "array", "minItems": 6, "maxItems": 12, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"}},
+        "criteria": {"type": "array", "minItems": 6, "maxItems": 12, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "pass_condition": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": ["task_case", "scenario", "current_decision", "next_action", "forbidden_markers", "post_forget", "rubric"],
+      "properties": {
+        "task_case": {"type": "string", "pattern": "^continuity_[a-z0-9_]+_v1$"},
+        "scenario": {"enum": ["cold_start", "resume_fork", "compaction_forget"]},
+        "current_decision": {"type": "string", "minLength": 1, "maxLength": 500},
+        "next_action": {"type": "string", "minLength": 1, "maxLength": 500},
+        "forbidden_markers": {"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": {"$ref": "#/$defs/marker"}},
+        "post_forget": {"$ref": "#/$defs/postForget"},
+        "rubric": {"$ref": "#/$defs/rubric"}
+      }
+    }
+  }
+}

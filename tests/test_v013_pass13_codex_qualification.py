@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.hosts import pass13_evidence
 from benchmarks.hosts import run_pass13_codex_continuity_qualification as qualification
 
 
@@ -221,6 +222,8 @@ def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
 
 
 def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
+    from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+
     orchestrator = qualification.QualificationOrchestrator(
         host="codex",
         repository=qualification._repository(),
@@ -251,14 +254,23 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
             "python_version": "3.13",
             "isolation": _isolation_receipt(),
         },
-        host_attestation=qualification._placeholder_attestation(),
+        host_attestation={
+            **qualification._placeholder_attestation(),
+            "version": qualification.CODEX_VERSION,
+        },
+        tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
+            [knowledge_tool_definition(autonomous=True)]
+        ),
         runs=[
             qualification._placeholder_run(index, scenario)
             for index, scenario in enumerate(("cold_start", "resume_fork", "compaction_forget"), 1)
         ],
         lifecycle={
             "host_owns_threads": True,
-            "methods_observed": ["not_applicable"],
+            "common_task_families": ["cold_start", "resume_fork", "compaction_forget"],
+            "transport_seams": [],
+            "requested_operations": [],
+            "methods_observed": [],
             "deeplaw_session_store_created": False,
         },
         security=qualification._placeholder_security(),
@@ -368,6 +380,11 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
             "safe_read_operations": ["context"],
             "provider_payloads": [{"write_performed": False, "gap_count": 0}],
         },
+    )
+    monkeypatch.setattr(
+        qualification,
+        "bind_relevant_chars",
+        lambda safe_read, outputs, relevant_text: safe_read,
     )
     result = {
         "status": "failed",

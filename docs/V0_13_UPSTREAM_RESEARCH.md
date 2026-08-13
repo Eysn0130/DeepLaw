@@ -16,7 +16,8 @@ not dependency pins or release inputs.
 | OpenDeepWiki | [`a71a441a017bb3b8d1a0064afbdf22a3ad9d5383`](https://github.com/AIDotNet/OpenDeepWiki/tree/a71a441a017bb3b8d1a0064afbdf22a3ad9d5383) on `main` | MIT; concepts only in this change | Guided page families, hierarchy and navigation planning |
 | Guanlan | [`1394a41454559f2f5373719c808fed9fe872dd88`](https://github.com/jin-bo/guanlan/tree/1394a41454559f2f5373719c808fed9fe872dd88) on `main` | Apache-2.0; concepts only in this change | Local incremental Markdown Wiki, immutable raw inputs, link checks, maintenance commands and read-only MCP |
 | Obsidian Help | `067a3b99f6d24da95bf8dafcbe1c39e3ee71b10a` on `master` | no repository-wide SPDX license asserted; reference only | Open Markdown, properties, Wikilinks, backlinks, graph and Canvas user surfaces |
-| OpenWiki | [`7531d615216e8cbccf464f66cfbbae3668871c84`](https://github.com/langchain-ai/openwiki/tree/7531d615216e8cbccf464f66cfbbae3668871c84) on `main` | MIT (`LICENSE` at the exact commit); no code reuse | Layered CLI/agent/provider/connector architecture and bounded read-only MCP connector policy |
+| OpenWiki released v0.3.1 | [`630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`](https://github.com/langchain-ai/openwiki/tree/630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc) (peeled commit) | MIT; no code reuse | Frozen Kernel compatibility baseline identity |
+| OpenWiki review snapshot | [`7531d615216e8cbccf464f66cfbbae3668871c84`](https://github.com/langchain-ai/openwiki/tree/7531d615216e8cbccf464f66cfbbae3668871c84) (package-version-0.3.1 review snapshot) | MIT (`LICENSE` at the exact commit); no code reuse | Layered CLI/agent/provider/connector architecture and bounded read-only MCP connector policy |
 | Google OKF / Knowledge Catalog | [`374e0bc4c644310ff56cdf9c0fe81eccdec862b0`](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/374e0bc4c644310ff56cdf9c0fe81eccdec862b0) on `main` | Apache-2.0 (`LICENSE.md` and `okf/LICENSE.md`); no code reuse | OKF v0.2 Markdown/YAML interchange and catalog `EntryLink` projection |
 | Obsidian API | [`cc1744324150c632416857c98964f87b1574a5fc`](https://github.com/obsidianmd/obsidian-api/tree/cc1744324150c632416857c98964f87b1574a5fc) on `master`; exact package `obsidian@1.13.2` | MIT (`LICENSE.md`/`package.json`); no application implementation reuse | Public plugin type surface (`App`, `Vault`, `Workspace`, `MetadataCache`) and Canvas data types |
 | Tolaria | [`4cced2027998c4affdf65385f9683b7e8a03c041`](https://github.com/refactoringhq/tolaria/tree/4cced2027998c4affdf65385f9683b7e8a03c041) on `main` | AGPL-3.0 (`LICENSE`); no code reuse | Files-first Markdown vault, dynamic Wikilink relationships, and external MCP/editor boundary |
@@ -31,13 +32,18 @@ not dependency pins or release inputs.
 The existing `docs/UPSTREAM_CAPABILITY_MATRIX.md` remains the broader retrieval, graph and memory
 comparison. This report is a v0.13 delta rather than a replacement.
 
+The qualification baseline binds OpenWiki released v0.3.1 to peeled commit
+`630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`. The separately reviewed
+`7531d615216e8cbccf464f66cfbbae3668871c84` coordinate is retained only as a
+package-version-0.3.1 review snapshot for the notes below.
+
 ## Exact-commit evidence and audit notes
 
 Each commit link below resolves to a public GitHub commit object with the stated full SHA. License
 and interface links use the same SHA; they are research evidence only and are not copied into the
 DeepLaw package.
 
-- **OpenWiki — `langchain-ai/openwiki@7531d615216e8cbccf464f66cfbbae3668871c84`.** The exact
+- **OpenWiki package-version-0.3.1 review snapshot — `langchain-ai/openwiki@7531d615216e8cbccf464f66cfbbae3668871c84`.** The exact
   [`commit`](https://github.com/langchain-ai/openwiki/commit/7531d615216e8cbccf464f66cfbbae3668871c84)
   contains an MIT `LICENSE`. Its
   [`architecture/overview.md`](https://raw.githubusercontent.com/langchain-ai/openwiki/7531d615216e8cbccf464f66cfbbae3668871c84/openwiki/architecture/overview.md)
@@ -248,7 +254,7 @@ smaller PRD was automatically better.
   cross-session recall. This invalidates any product thesis that Host memory is simply absent.
   DeepLaw's defensible job is portable, project- and task-lineage-specific state plus governed
   evidence, not duplicating preference or transcript recall.
-- [OpenWiki at `7531d615216e8cbccf464f66cfbbae3668871c84`](https://github.com/langchain-ai/openwiki/tree/7531d615216e8cbccf464f66cfbbae3668871c84)
+- [OpenWiki package-version-0.3.1 review snapshot at `7531d615216e8cbccf464f66cfbbae3668871c84`](https://github.com/langchain-ai/openwiki/tree/7531d615216e8cbccf464f66cfbbae3668871c84)
   now demonstrates self-maintaining code/personal Wikis, source connectors, CI updates, a graph
   viewer and OKF output. Those features validate open Wiki demand but do not prove generated pages
   are complete, authoritative or safe to promote. DeepLaw does not copy its broad connector,
