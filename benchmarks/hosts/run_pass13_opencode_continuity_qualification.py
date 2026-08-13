@@ -2184,6 +2184,41 @@ def _empty_analysis(code: str) -> dict[str, Any]:
     }
 
 
+def _safe_failure_code(exc: QualificationError) -> str:
+    """Map known failures to stable labels without retaining exception text."""
+
+    known = {
+        "OpenCode task process failed": "host_task_process_failed",
+        "OpenCode output exceeds the bounded limit": "host_output_overflow",
+        "OpenCode emitted an error event": "host_error_event",
+        "unknown OpenCode event type": "host_event_type_invalid",
+        "OpenCode must emit exactly one bounded final response": (
+            "final_response_count_invalid"
+        ),
+        "final response schema is invalid": "final_response_schema_invalid",
+        "MCP call lacks the exact safe context and task-binding attestation": (
+            "safe_read_task_binding_invalid"
+        ),
+        "qualification requires one or two safe read calls": (
+            "safe_read_call_count_invalid"
+        ),
+        "safe read used an unexpected MCP server": "safe_read_tool_failed",
+        "safe read used an unexpected tool": "safe_read_tool_failed",
+        "safe read did not complete": "safe_read_tool_failed",
+        "actual OpenCode provider token usage is missing": "provider_usage_missing",
+        "token usage arithmetic is inconsistent": "provider_usage_inconsistent",
+        "OpenCode session or message identity is missing": "native_identity_missing",
+        "OpenCode resume changed the session identity": "native_identity_mismatch",
+        "OpenCode session.get lineage is invalid": "native_lineage_invalid",
+        "OpenCode local session server is unavailable": "native_session_server_missing",
+        "MCP wrapper receipt is missing": "mcp_child_receipt_missing",
+        "MCP wrapper receipt is invalid": "mcp_child_receipt_invalid",
+        "read-only OpenCode turn changed the ledger": "ledger_changed",
+        "repeated large Provider payloads are not bounded": "provider_payload_repeated",
+    }
+    return known.get(str(exc), "host_qualification_failure")
+
+
 def _compaction_usage_from_messages(messages: Sequence[Any]) -> dict[str, int]:
     """Read actual AI-compaction usage from the public session message API."""
 
@@ -2735,7 +2770,8 @@ def _run_one_scenario(
             # cold_start intentionally stops after one fresh Host session.
             pass
     except QualificationError as exc:
-        failure = _empty_analysis(type(exc).__name__)
+        safe_failure_code = _safe_failure_code(exc)
+        failure = _empty_analysis(safe_failure_code)
         sanitized.append(failure["sanitized_events"])
         # A partially observed lifecycle is not presented as a valid prefix;
         # retain one explicit failed receipt so shared evidence validation cannot
@@ -2774,7 +2810,7 @@ def _run_one_scenario(
                 if isinstance(method, str)
             }
         )
-        failure_codes = [type(exc).__name__]
+        failure_codes = [safe_failure_code]
     else:
         methods = sorted(
             {

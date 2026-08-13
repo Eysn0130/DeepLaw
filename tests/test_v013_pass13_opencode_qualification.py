@@ -493,6 +493,15 @@ def test_no_model_availability_probe_is_separate_and_sanitized() -> None:
         )
 
 
+def test_opencode_failure_codes_are_safe_constant_labels() -> None:
+    assert runner._safe_failure_code(
+        runner.QualificationError("final response schema is invalid")
+    ) == "final_response_schema_invalid"
+    assert runner._safe_failure_code(
+        runner.QualificationError("provider included unsafe arbitrary text")
+    ) == "host_qualification_failure"
+
+
 def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:
     one = runner.analyze_opencode_events(
         _events(_tool_output()), expected_task_binding=_TASK_BINDING
