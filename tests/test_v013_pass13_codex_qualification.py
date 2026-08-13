@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -243,6 +244,13 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
             "runtime_executable_sha256": "d" * 64,
             "import_path_class": "isolated_site_packages",
             "contract_digests": {
+                "host-continuity-qualification.v2.schema.json": hashlib.sha256(
+                    (
+                        qualification._repository()
+                        / "contracts"
+                        / "host-continuity-qualification.v2.schema.json"
+                    ).read_bytes()
+                ).hexdigest(),
                 "knowledge-support.input.v6.schema.json": "e" * 64,
                 "knowledge-support.output.v6.schema.json": "f" * 64,
                 "knowledge-sink.input.v2.schema.json": "0" * 64,

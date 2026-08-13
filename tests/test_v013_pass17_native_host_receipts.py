@@ -341,7 +341,13 @@ def _failed_diagnostic_report(tmp_path: Path) -> dict[str, object]:
             "import_path_class": "isolated_site_packages",
             "contract_digests": {
                 "host-continuity-qualification.v1.schema.json": "5" * 64,
-                "host-continuity-qualification.v2.schema.json": "6" * 64,
+                "host-continuity-qualification.v2.schema.json": hashlib.sha256(
+                    (
+                        REPOSITORY
+                        / "contracts"
+                        / "host-continuity-qualification.v2.schema.json"
+                    ).read_bytes()
+                ).hexdigest(),
                 "host-continuity-development-diagnostic.v1.schema.json": "7" * 64,
             },
         },
@@ -395,6 +401,18 @@ def test_development_diagnostic_is_not_scorer_or_gate_eligible(tmp_path: Path) -
     assert gate["minimum_distinct_run_count"] == 3 > len(report["runs"])
     assert "development" not in gate["required_corpus_roles"]
     assert gate["allowed_applicability"] == ["applicable"]
+
+
+def test_current_v2_receipt_rejects_a_stale_contract_binding(tmp_path: Path) -> None:
+    report = _failed_diagnostic_report(tmp_path)
+    report["binding"]["contract_digests"][  # type: ignore[index]
+        "host-continuity-qualification.v2.schema.json"
+    ] = "0" * 64
+    with pytest.raises(
+        pass13_evidence.EvidenceValidationError,
+        match="current v2 contract bytes",
+    ):
+        pass13_evidence.validate_host_report_consistency(report)
 
 
 def test_historical_v1_receipt_bytes_are_frozen_and_currently_invalidated() -> None:

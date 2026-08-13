@@ -1421,6 +1421,23 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
     mode = report.get("execution_mode")
     if host not in {"codex", "opencode"} or mode not in {"qualification", "diagnostic"}:
         raise EvidenceValidationError("Host receipt mode or identity is invalid")
+    binding = report.get("binding")
+    contract_digests = (
+        binding.get("contract_digests") if isinstance(binding, Mapping) else None
+    )
+    current_contract = (
+        Path(__file__).resolve().parents[2]
+        / "contracts"
+        / "host-continuity-qualification.v2.schema.json"
+    )
+    if (
+        not isinstance(contract_digests, Mapping)
+        or contract_digests.get("host-continuity-qualification.v2.schema.json")
+        != _sha256(current_contract.read_bytes())
+    ):
+        raise EvidenceValidationError(
+            "Host receipt is not bound to the current v2 contract bytes"
+        )
     expected_scenarios = (
         _QUALIFICATION_SCENARIOS if mode == "qualification" else _DIAGNOSTIC_SCENARIOS
     )
