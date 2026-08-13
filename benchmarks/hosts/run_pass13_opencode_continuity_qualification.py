@@ -187,8 +187,10 @@ def _candidate_prompt(
         raise QualificationError("candidate task binding is inconsistent")
     return (
         pass16_continuity_cases.candidate_prompt(case, phase=phase)
-        + " Use these exact knowledge_support arguments: "
+        + " Use this complete JSON object as the exact knowledge_support arguments: "
         + _canonical(_context_call_arguments(case, task_binding))
+        + ". Copy every key and value unchanged; do not add, remove, rename, infer, or "
+        "rewrite any field"
         + ". End with the required bare four-key JSON object only; do not use a code fence, "
         "prefix, or suffix."
     )
@@ -321,6 +323,12 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
                 "variant": VARIANT,
                 "steps": 4,
                 "permission": permission,
+                "prompt": (
+                    "When the user supplies a complete JSON object for knowledge_support "
+                    "arguments, copy every key and value unchanged. Do not add, remove, "
+                    "rename, infer, or rewrite fields. Invoke only knowledge_support, and "
+                    "return only the requested bare JSON response object."
+                ),
             }
         },
         "mcp": {
@@ -2804,8 +2812,10 @@ def _run_one_scenario(
     compaction_usage: dict[str, int | str] | None = None
     prompt = (
         pass17_development_diagnostic.candidate_prompt(selected_case)
-        + " Use these exact knowledge_support arguments: "
+        + " Use this complete JSON object as the exact knowledge_support arguments: "
         + _canonical(_context_call_arguments(selected_case, primary_binding))
+        + ". Copy every key and value unchanged; do not add, remove, rename, infer, or "
+        "rewrite any field"
         + ". End with the required bare four-key JSON object only; do not use a code fence, "
         "prefix, or suffix."
         if development

@@ -65,6 +65,13 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
     )
     assert pass13_evidence.canonical_json(expected_call) in bound
     assert expected_call["query_plan_version"] == "6"
+    assert "complete JSON object" in bound
+    assert "Copy every key and value unchanged" in bound
+    development_config = opencode_runner.build_opencode_config(
+        agent_name="development"
+    )
+    system_prompt = development_config["agent"]["development"]["prompt"]
+    assert "copy every key and value unchanged" in system_prompt.casefold()
 
 
 def test_opencode_runner_and_shared_validator_use_native_not_codex_vocabulary() -> None:

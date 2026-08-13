@@ -244,6 +244,9 @@ def test_permission_and_config_are_exactly_read_only() -> None:
     assert config["small_model"] == runner.MODEL
     assert config["permission"] == permission
     assert config["agent"]["qualification"]["permission"] == permission  # type: ignore[index]
+    prompt = config["agent"]["qualification"]["prompt"]  # type: ignore[index]
+    assert "copy every key and value unchanged" in prompt.casefold()
+    assert "do not add, remove, rename, infer, or rewrite fields" in prompt.casefold()
     assert set(config["mcp"]) == {"deeplaw_knowledge"}  # type: ignore[arg-type]
 
 
