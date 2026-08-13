@@ -454,6 +454,16 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
             qualification._turn_record(result, **kwargs)
         observation[required_field] = retained
 
+    result["events"] = [
+        {
+            "method": "mcpServer/startupStatus/updated",
+            "item_status": "ready",
+            "server_name": "deeplaw",
+        }
+    ]
+    record, _ = qualification._turn_record(result, **kwargs)
+    assert record["status"] == "passed"
+
     result["events"] = [{"method": "web_search", "item_type": "webSearch"}]
     with pytest.raises(qualification.QualificationFailure, match="prohibited capability"):
         qualification._turn_record(result, **kwargs)

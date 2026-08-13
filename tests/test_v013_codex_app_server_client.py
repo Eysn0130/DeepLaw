@@ -609,6 +609,19 @@ def test_output_limit_and_timeout_fail_closed(tmp_path: Path) -> None:
         client.initialize()
     assert client.process_id is None
 
+
+def test_mcp_startup_name_is_not_projected_as_a_tool(tmp_path: Path) -> None:
+    client = _client(tmp_path, mode="missing-usage")
+    event = client._project_event(
+        "mcpServer/startupStatus/updated",
+        {"name": "deeplaw", "status": "ready"},
+    )
+    assert event == {
+        "method": "mcpServer/startupStatus/updated",
+        "item_status": "ready",
+        "server_name": "deeplaw",
+    }
+
     hanging = CodexAppServerClient(
         [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
         environment={},

@@ -1455,9 +1455,18 @@ class CodexAppServerClient:
                 turn_status = "completed"
             if turn_status is not None:
                 event["turn_status"] = turn_status
-        tool_name = self._tool_name(params, item)
+        is_tool_event = "tool" in lowered or (
+            isinstance(item_type, str) and "tool" in item_type.casefold()
+        )
+        tool_name = self._tool_name(params, item) if is_tool_event else None
         if tool_name is not None:
             event["tool_name"] = tool_name
+        if method == "mcpServer/startupStatus/updated":
+            server_name = _safe_label(
+                _find_value(params, "name", "serverName", "server_name")
+            )
+            if server_name is not None:
+                event["server_name"] = server_name
         if tool_name is not None or "tool" in lowered:
             parameters = self._first_field(params, item, "arguments", "parameters", "input", "args")
             result = self._first_field(params, item, "result", "output", "contentItems")
