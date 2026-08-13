@@ -117,6 +117,7 @@ def _event(call_index: int = 1, *, output: dict[str, object] | None = None) -> d
                     "operation": selected["structuredContent"]["operation"],  # type: ignore[index]
                     "task": "Pass 13 fixture",
                     "confirm_no_case_data": True,
+                    "query_plan_version": "6",
                     "task_binding": _TASK_BINDING,
                 },
                 # OpenCode 1.18.16 stores the joined MCP text content in the
@@ -515,6 +516,9 @@ def test_opencode_failure_codes_are_safe_constant_labels() -> None:
     assert runner._safe_failure_code(
         runner.QualificationError("OpenCode fork final response schema is invalid")
     ) == "cli_fork_final_response_schema_invalid"
+    assert runner._safe_failure_code(
+        runner.QualificationError("MCP call lacks the exact public v6 context arguments")
+    ) == "safe_read_call_shape_invalid"
 
 
 def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:
@@ -548,7 +552,7 @@ def test_analyzer_rejects_provider_canonical_mismatch_and_unsafe_operation() -> 
         )
 
     unsafe = _tool_output(operation="semantic")
-    with pytest.raises(runner.QualificationError, match="safe context"):
+    with pytest.raises(runner.QualificationError, match="public v6"):
         runner.analyze_opencode_events(_events(unsafe), expected_task_binding=_TASK_BINDING)
 
     error = _events(_tool_output()) + b'{"type":"error","error":"provider failed"}\n'
@@ -585,7 +589,7 @@ def test_analyzer_classifies_native_projection_and_final_json_separately() -> No
 def test_analyzer_requires_the_exact_task_binding() -> None:
     wrong = dict(_TASK_BINDING)
     wrong["binding_sha256"] = "f" * 64
-    with pytest.raises(runner.QualificationError, match="task-binding"):
+    with pytest.raises(runner.QualificationError, match="public v6"):
         runner.analyze_opencode_events(
             _events(_tool_output()), expected_task_binding=wrong
         )
@@ -598,7 +602,7 @@ def test_error_tool_event_validates_call_shape_before_status() -> None:
         **_TASK_BINDING,
         "binding_sha256": "f" * 64,
     }
-    with pytest.raises(runner.QualificationError, match="task-binding"):
+    with pytest.raises(runner.QualificationError, match="public v6"):
         runner.analyze_opencode_events(
             (json.dumps(event, separators=(",", ":")) + "\n").encode("utf-8"),
             expected_task_binding=_TASK_BINDING,

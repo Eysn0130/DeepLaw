@@ -60,6 +60,11 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
         opencode_runner.pass16_continuity_cases.task_case("cold_start"), binding
     )
     assert bound.endswith("do not use a code fence, prefix, or suffix.")
+    expected_call = opencode_runner._context_call_arguments(
+        opencode_runner.pass16_continuity_cases.task_case("cold_start"), binding
+    )
+    assert pass13_evidence.canonical_json(expected_call) in bound
+    assert expected_call["query_plan_version"] == "6"
 
 
 def test_opencode_runner_and_shared_validator_use_native_not_codex_vocabulary() -> None:

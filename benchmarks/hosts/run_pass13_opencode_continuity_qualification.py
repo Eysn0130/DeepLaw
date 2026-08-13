@@ -159,6 +159,21 @@ SCENARIO_TASKS = {
 }
 
 
+def _context_call_arguments(
+    case: Mapping[str, Any], task_binding: Mapping[str, Any]
+) -> dict[str, Any]:
+    task = case.get("task_case")
+    if not isinstance(task, str) or not task:
+        raise QualificationError("Host fixture task case is invalid")
+    return {
+        "operation": "context",
+        "task": task,
+        "confirm_no_case_data": True,
+        "query_plan_version": "6",
+        "task_binding": dict(task_binding),
+    }
+
+
 def _candidate_prompt(
     case: Mapping[str, Any],
     task_binding: Mapping[str, Any],
@@ -172,8 +187,8 @@ def _candidate_prompt(
         raise QualificationError("candidate task binding is inconsistent")
     return (
         pass16_continuity_cases.candidate_prompt(case, phase=phase)
-        + " The canonical task_binding argument is "
-        + _canonical(dict(task_binding))
+        + " Use these exact knowledge_support arguments: "
+        + _canonical(_context_call_arguments(case, task_binding))
         + ". End with the required bare four-key JSON object only; do not use a code fence, "
         "prefix, or suffix."
     )
@@ -795,6 +810,7 @@ def _native_tool_arguments(
     event: Mapping[str, Any],
     *,
     expected_task_binding: Mapping[str, Any],
+    expected_task: str | None = None,
 ) -> tuple[Mapping[str, Any], Mapping[str, Any], str]:
     part = event.get("part")
     if not isinstance(part, Mapping):
@@ -809,12 +825,22 @@ def _native_tool_arguments(
     if (
         not isinstance(arguments, Mapping)
         or arguments.get("operation") != "context"
+        or not isinstance(arguments.get("task"), str)
+        or not arguments.get("task")
+        or (expected_task is not None and arguments.get("task") != expected_task)
         or arguments.get("confirm_no_case_data") is not True
+        or arguments.get("query_plan_version") != "6"
         or arguments.get("task_binding") != dict(expected_task_binding)
+        or set(arguments)
+        != {
+            "operation",
+            "task",
+            "confirm_no_case_data",
+            "query_plan_version",
+            "task_binding",
+        }
     ):
-        raise QualificationError(
-            "MCP call lacks the exact safe context and task-binding attestation"
-        )
+        raise QualificationError("MCP call lacks the exact public v6 context arguments")
     return part, arguments, call_id
 
 
@@ -824,9 +850,12 @@ def _native_tool_observation(
     provider_text: str,
     *,
     expected_task_binding: Mapping[str, Any],
+    expected_task: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     _part, arguments, call_id = _native_tool_arguments(
-        event, expected_task_binding=expected_task_binding
+        event,
+        expected_task_binding=expected_task_binding,
+        expected_task=expected_task,
     )
     provider_bytes = provider_text.encode("utf-8")
     statements = capsule.get("statements")
@@ -988,6 +1017,7 @@ def analyze_opencode_events(
     data: bytes,
     *,
     expected_task_binding: Mapping[str, Any],
+    expected_task: str | None = None,
     forbidden_values: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Parse only the bounded event fields needed for Pass 16 qualification."""
@@ -1035,7 +1065,9 @@ def analyze_opencode_events(
             # error state.  This separates model call-shape failures from an
             # execution failure without reading or retaining the error text.
             _native_tool_arguments(
-                event, expected_task_binding=expected_task_binding
+                event,
+                expected_task_binding=expected_task_binding,
+                expected_task=expected_task,
             )
             if state.get("status") != "completed":
                 raise QualificationError("tool call did not complete")
@@ -1045,6 +1077,7 @@ def analyze_opencode_events(
                 capsule,
                 provider_text,
                 expected_task_binding=expected_task_binding,
+                expected_task=expected_task,
             )
             observations.append(observation)
             payloads.append(payload)
@@ -2400,6 +2433,9 @@ def _safe_failure_code(exc: QualificationError) -> str:
         "MCP call lacks the exact safe context and task-binding attestation": (
             "safe_read_task_binding_invalid"
         ),
+        "MCP call lacks the exact public v6 context arguments": (
+            "safe_read_call_shape_invalid"
+        ),
         "qualification requires one or two safe read calls": (
             "safe_read_call_count_invalid"
         ),
@@ -2706,8 +2742,8 @@ def _run_one_scenario(
     compaction_usage: dict[str, int | str] | None = None
     prompt = (
         pass17_development_diagnostic.candidate_prompt(selected_case)
-        + " The canonical task_binding argument is "
-        + _canonical(dict(primary_binding))
+        + " Use these exact knowledge_support arguments: "
+        + _canonical(_context_call_arguments(selected_case, primary_binding))
         + ". End with the required bare four-key JSON object only; do not use a code fence, "
         "prefix, or suffix."
         if development
@@ -2763,6 +2799,7 @@ def _run_one_scenario(
             analysis = analyze_opencode_events(
                 result["stdout"],
                 expected_task_binding=primary_binding,
+                expected_task=str(selected_case["task_case"]),
                 forbidden_values=forbidden_values,
             )
         except QualificationError as exc:
