@@ -264,7 +264,7 @@ administration, or permission changes.
 
 | Status | Capability |
 | --- | --- |
-| **Current source candidate** | package `0.12.0`: Query Plan v6, local Capsule v3, Provider Capsule v2, governed Compilation/Synthesis, and stable CLI/MCP/Python core; `release_ready=false` |
+| **Current source candidate** | package `0.12.0`: Query Plan v6, local Capsule v3, Provider Capsule v2, governed Compilation/Synthesis, and source-candidate CLI/MCP/Python contracts backed by local contract-regression evidence; `release_ready=false`, which does not mean production ready |
 | **Compatibility** | v0.7 Source IR, reviewed source-derived Knowledge Assets, Proposal Inbox, Workbench, and Retrieval Fabric remain available in their explicit compatibility partition |
 | **Development evidence** | Public maintainer-visible protocols and holdouts are claim-ineligible development evidence; Human Gold, qualification holdout, and final blind remain incomplete |
 | **Comparative closure pending** | External real-model semantic execution for Codex, Claude Code, and OpenCode and all same-condition named-baseline runs remain unexecuted. No-model host lifecycle and the deterministic Agent are not represented as model evidence; `competitive_claim_eligible=false` |
