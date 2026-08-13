@@ -137,10 +137,7 @@ def _native_receipts(
         current = identities[turn_index]
         usage_observed = (
             host == "codex"
-            and (
-                requested in {"thread/start", "thread/resume", "thread/fork"}
-                or observed == "item/completed"
-            )
+            and requested in {"thread/start", "thread/resume", "thread/fork"}
         ) or (
             host == "opencode"
             and (requested.startswith("cli.run") or requested == "session.messages")
@@ -931,5 +928,32 @@ def test_non_usage_native_response_cannot_claim_inferred_zero_tokens(
     with pytest.raises(
         pass13_evidence.EvidenceValidationError,
         match="non-usage native observation",
+    ):
+        pass13_evidence.validate_host_report_consistency(changed)
+
+
+def test_codex_compaction_context_snapshot_cannot_claim_provider_usage(
+    fixture_bundle: FixtureBundle,
+) -> None:
+    _gold_path, codex, _opencode, _reviews = fixture_bundle
+    changed = copy.deepcopy(codex)
+    run = changed["runs"][2]
+    completed = next(
+        receipt
+        for receipt in run["native_receipts"]
+        if receipt["methods_observed"] == ["item/completed"]
+    )
+    completed["actual_provider_usage"] = {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 6735,
+    }
+    run["metrics"]["evidence_sha256"] = pass13_evidence.metric_evidence_sha256(run)
+    with pytest.raises(
+        pass13_evidence.EvidenceValidationError,
+        match="non-usage native observation claimed Provider accounting",
     ):
         pass13_evidence.validate_host_report_consistency(changed)

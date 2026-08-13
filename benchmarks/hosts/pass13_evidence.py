@@ -1540,10 +1540,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 raise EvidenceValidationError("native receipt omitted identity lineage")
             usage_required = (
                 host == "codex"
-                and (
-                    requested in {"thread/start", "thread/resume", "thread/fork"}
-                    or observed[0] == "item/completed"
-                )
+                and requested in {"thread/start", "thread/resume", "thread/fork"}
             ) or (
                 host == "opencode"
                 and (requested.startswith("cli.run") or requested == "session.messages")

@@ -1172,16 +1172,6 @@ def _require_actual_usage(value: Mapping[str, Any]) -> dict[str, int]:
     return usage
 
 
-def _merge_actual_usage(
-    first: Mapping[str, Any], second: Mapping[str, Any]
-) -> dict[str, int]:
-    left = _require_actual_usage(first)
-    right = _require_actual_usage(second)
-    return _require_actual_usage(
-        {field: left[field] + right[field] for field in _empty_usage()}
-    )
-
-
 def _result_value(result: Any, name: str, default: Any = None) -> Any:
     if isinstance(result, Mapping):
         return result.get(name, default)
@@ -1400,7 +1390,6 @@ def _run_scenario(
     methods: list[str] = []
     native_receipts: list[dict[str, Any]] = []
     marker_values: list[dict[str, Any]] = []
-    pending_compaction_usage: dict[str, int] | None = None
     expectations = expectations or {}
     semantic_task_family = task_family or scenario
     development = semantic_task_family == "development_diagnostic"
@@ -1416,7 +1405,6 @@ def _run_scenario(
         *,
         post_forget_phase: bool = False,
     ) -> None:
-        nonlocal pending_compaction_usage
         before = ledger_head()
         started = time.monotonic()
         result = client.turn_start(
@@ -1447,17 +1435,11 @@ def _run_scenario(
             post_forget_phase=post_forget_phase,
             require_task_binding=not development,
         )
-        if pending_compaction_usage is not None:
-            record["usage"] = _merge_actual_usage(
-                pending_compaction_usage, record["usage"]
-            )
-            pending_compaction_usage = None
         record["host_elapsed_ms"] = round((time.monotonic() - started) * 1000)
         turns.append(record)
         marker_values.append(payload)
 
     def compact(active_thread_id: str) -> None:
-        nonlocal pending_compaction_usage
         event_offset = len(client.sanitized_events)
         compacted = client.thread_compact_start(active_thread_id)
         compact_events = [
@@ -1471,9 +1453,6 @@ def _run_scenario(
             "item/completed",
         ]:
             raise QualificationFailure("contextCompaction native events are incomplete")
-        pending_compaction_usage = _require_actual_usage(
-            _result_value(client, "last_compaction_usage", _empty_usage())
-        )
         methods.extend(["thread/compact/start", "item/started", "item/completed"])
         native_receipts.append(
             native_lifecycle_receipt(
@@ -1514,11 +1493,12 @@ def _run_scenario(
                     parent_identity=active_thread_id,
                     root_identity=thread_id,
                     relation="same_session",
-                    actual_provider_usage=(
-                        pending_compaction_usage
-                        if compact_event["method"] == "item/completed"
-                        else None
-                    ),
+                    # ``thread/tokenUsage/updated.last.totalTokens`` is the
+                    # active context size after compaction, not exact upstream
+                    # completion usage.  Do not relabel that snapshot as
+                    # Provider accounting when ``rawResponse/completed`` was
+                    # not actually observed.
+                    actual_provider_usage=None,
                 )
             )
 
