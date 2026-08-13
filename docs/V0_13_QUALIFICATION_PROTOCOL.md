@@ -88,7 +88,9 @@ OpenCode model task. Active gate classification v4 records that exact version wh
 historical v3 bytes. This prerequisite binding is not a Host result: the three OpenCode task
 families and Human Gold scoring remain `not_executed` until an independent repository-external
 Human Gold is frozen. Static version, isolated configuration, login/provider presence, or model
-inventory checks cannot substitute for any real Host run.
+inventory checks cannot substitute for any real Host run. See
+[`V0_13_PASS16_DISPOSITION.md`](V0_13_PASS16_DISPOSITION.md) for the exact candidate and
+`not_executed` gate disposition.
 
 ## Three isolated data layers
 
