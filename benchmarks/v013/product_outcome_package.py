@@ -1126,12 +1126,12 @@ def build_synthetic_fixture(root: Path) -> dict[str, Any]:
             }
         ).encode("utf-8")
     )
-    paths["classification"] = root / "classification" / "v013-gate-classification-v2.json"
+    paths["classification"] = root / "classification" / "v013-gate-classification-v3.json"
     paths["classification"].write_bytes(
         canonical_json(
             {
-                "schema_version": "deeplaw.v013-release-gate-classification/v2",
-                "classification_id": "deeplaw-v013-commercial-gates-v2",
+                "schema_version": "deeplaw.v013-release-gate-classification/v3",
+                "classification_id": "deeplaw-v013-commercial-gates-v3",
             }
         ).encode("utf-8")
     )
@@ -1264,7 +1264,7 @@ def build_synthetic_fixture(root: Path) -> dict[str, Any]:
         paths["classification"],
         "classification-manifest",
         "classification_manifest",
-        "deeplaw.v013-release-gate-classification/v2",
+        "deeplaw.v013-release-gate-classification/v3",
         ["classification_binding"],
     )
     add(
@@ -1348,7 +1348,7 @@ def build_synthetic_fixture(root: Path) -> dict[str, Any]:
         input_raw = input_path.read_bytes()
         input_id = f"input-{product}"
         gate: dict[str, Any] = {
-            "schema_version": "deeplaw.provenance-bound-gate-result/v1",
+            "schema_version": "deeplaw.provenance-bound-gate-result/v2",
             "gate_id": PRODUCT_GATE_IDS[product],
             "category": "Core",
             "validator_id": f"deeplaw.v013.validator.{product}",
@@ -1364,8 +1364,8 @@ def build_synthetic_fixture(root: Path) -> dict[str, Any]:
                 "file_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
             },
             "classification_binding": {
-                "classification_id": "deeplaw-v013-commercial-gates-v2",
-                "classification_schema_version": "deeplaw.v013-release-gate-classification/v2",
+                "classification_id": "deeplaw-v013-commercial-gates-v3",
+                "classification_schema_version": "deeplaw.v013-release-gate-classification/v3",
                 "classification_sha256": classification_sha,
             },
             "candidate_binding": {
@@ -1435,7 +1435,7 @@ def build_synthetic_fixture(root: Path) -> dict[str, Any]:
             result_path,
             f"gate-{product}",
             "provenance_gate_result",
-            "deeplaw.provenance-bound-gate-result/v1",
+            "deeplaw.provenance-bound-gate-result/v2",
             [f"outcome:{product}:gate_result"],
         )
         add(
@@ -1504,7 +1504,7 @@ def build_synthetic_fixture(root: Path) -> dict[str, Any]:
             "frozen": True,
         },
         "classification_binding": {
-            "classification_id": "deeplaw-v013-commercial-gates-v2",
+            "classification_id": "deeplaw-v013-commercial-gates-v3",
             "classification_artifact_id": "classification-manifest",
             "classification_sha256": classification_sha,
             "frozen": True,

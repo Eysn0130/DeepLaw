@@ -22,9 +22,9 @@ from benchmarks.release.semantic_evidence import SemanticEvidenceError, validate
 REPOSITORY = Path(__file__).resolve().parents[1]
 CONTRACTS = REPOSITORY / "contracts"
 CLASSIFICATION_PATH = (
-    REPOSITORY / "benchmarks/release/v013-gate-classification-v2.json"
+    REPOSITORY / "benchmarks/release/v013-gate-classification-v3.json"
 )
-GATE_RESULT_SCHEMA_VERSION = "deeplaw.provenance-bound-gate-result/v1"
+GATE_RESULT_SCHEMA_VERSION = "deeplaw.provenance-bound-gate-result/v2"
 
 
 def _load(path: Path) -> dict[str, object]:
@@ -35,9 +35,9 @@ def _load(path: Path) -> dict[str, object]:
 
 def test_provenance_contracts_and_development_classification_are_closed() -> None:
     schemas = [
-        _load(CONTRACTS / "provenance-bound-gate-result.v1.schema.json"),
-        _load(CONTRACTS / "commercial-evidence-report.v2.schema.json"),
-        _load(CONTRACTS / "v013-release-gate-classification.v2.schema.json"),
+        _load(CONTRACTS / "provenance-bound-gate-result.v2.schema.json"),
+        _load(CONTRACTS / "commercial-evidence-report.v3.schema.json"),
+        _load(CONTRACTS / "v013-release-gate-classification.v3.schema.json"),
     ]
     for schema in schemas:
         Draft202012Validator.check_schema(schema)
@@ -97,11 +97,11 @@ def test_codex_gate_freezes_exact_host_model_runner_and_distinct_runs() -> None:
     ]
     assert codex["constraints"] == {
         "host": "codex",
-        "tool_version": "0.145.0",
+        "tool_version": "0.147.0-alpha.1.2",
         "model_id": "gpt-5.6-luna",
-        "argv_prefix": ["codex", "exec", "--ephemeral"],
+        "argv_prefix": ["codex", "app-server", "--stdio"],
     }
-    assert "deeplaw.real-semantic-host-report/v2" in (
+    assert "deeplaw.host-continuity-qualification/v1" in (
         codex["accepted_input_schema_versions"]
     )
 
@@ -118,7 +118,7 @@ def test_deferred_and_competitive_gates_are_not_claimed_not_passed() -> None:
 
 
 def test_classification_contract_cannot_enable_assembly() -> None:
-    schema = _load(CONTRACTS / "v013-release-gate-classification.v2.schema.json")
+    schema = _load(CONTRACTS / "v013-release-gate-classification.v3.schema.json")
     classification = _load(CLASSIFICATION_PATH)
 
     enabled = deepcopy(classification)
@@ -126,8 +126,8 @@ def test_classification_contract_cannot_enable_assembly() -> None:
     assert list(Draft202012Validator(schema).iter_errors(enabled))
 
 
-def test_v2_report_references_gate_results_instead_of_embedding_observations() -> None:
-    schema = _load(CONTRACTS / "commercial-evidence-report.v2.schema.json")
+def test_v3_report_references_gate_results_instead_of_embedding_observations() -> None:
+    schema = _load(CONTRACTS / "commercial-evidence-report.v3.schema.json")
     gate_reference = schema["$defs"]["gateResultReference"]  # type: ignore[index]
     assert set(gate_reference["required"]) == {"gate_id", "category", "result"}
     report_properties = set(schema["properties"])  # type: ignore[arg-type]
@@ -145,13 +145,13 @@ def test_v2_report_references_gate_results_instead_of_embedding_observations() -
     }.isdisjoint(report_properties)
 
 
-def test_v2_aggregation_remains_disabled_until_every_core_validator_is_ready() -> None:
+def test_v3_aggregation_remains_disabled_until_every_core_validator_is_ready() -> None:
     with pytest.raises(SemanticEvidenceError, match="aggregation is disabled"):
-        validate_report({"schema_version": "deeplaw.commercial-evidence-report/v2"})
+        validate_report({"schema_version": "deeplaw.commercial-evidence-report/v3"})
 
 
 def test_gate_result_requires_file_and_record_provenance_for_every_raw_input() -> None:
-    schema = _load(CONTRACTS / "provenance-bound-gate-result.v1.schema.json")
+    schema = _load(CONTRACTS / "provenance-bound-gate-result.v2.schema.json")
     input_provenance = schema["$defs"]["inputProvenance"]  # type: ignore[index]
     assert set(input_provenance["required"]) == {
         "input_id",
@@ -242,7 +242,7 @@ def _valid_gate_result(root: Path) -> dict[str, object]:
         },
         "classification_binding": {
             "classification_id": "test.classification",
-            "classification_schema_version": "deeplaw.v013-release-gate-classification/v2",
+            "classification_schema_version": "deeplaw.v013-release-gate-classification/v3",
             "classification_sha256": "a" * 64,
         },
         "candidate_binding": {

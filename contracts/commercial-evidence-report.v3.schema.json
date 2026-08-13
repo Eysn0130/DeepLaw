@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-evidence-report.v3.schema.json",
+  "title": "DeepLaw v0.13 provenance-bound commercial evidence report v3",
+  "description": "A closed collection of references to provenance-bound Gate Result files. Gate observations and release decisions are not self-reported here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_kind",
+    "report_id",
+    "candidate_binding",
+    "protocol_binding",
+    "threshold_binding",
+    "gold_binding",
+    "corpus",
+    "classification_binding",
+    "gate_results",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.commercial-evidence-report/v3"},
+    "report_kind": {"const": "v013_provenance_bound_gate_collection"},
+    "report_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "threshold_binding": {"$ref": "#/$defs/thresholdBinding"},
+    "gold_binding": {"$ref": "#/$defs/goldBinding"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "classification_binding": {"$ref": "#/$defs/classificationBinding"},
+    "gate_results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/gateResultReference"}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,512}$"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["Core", "Capability", "Competitive Claim"]
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_commit",
+        "candidate_tree",
+        "candidate_wheel_sha256",
+        "candidate_sdist_sha256"
+      ],
+      "properties": {
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_sha256", "frozen"],
+      "properties": {
+        "protocol_id": {"$ref": "#/$defs/identifier"},
+        "protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "thresholdBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold_id", "threshold_sha256", "frozen"],
+      "properties": {
+        "threshold_id": {"$ref": "#/$defs/identifier"},
+        "threshold_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "goldBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_sha256", "role", "source", "frozen"],
+      "properties": {
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "role": {
+          "type": "string",
+          "enum": ["development_gold", "qualification_gold", "final_blind_gold"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["repository", "repository_external"]
+        },
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source", "sha256", "frozen"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["development", "qualification_holdout", "final_blind"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["repository", "repository_external"]
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "classificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification_id", "classification_schema_version", "classification_sha256"],
+      "properties": {
+        "classification_id": {"$ref": "#/$defs/identifier"},
+        "classification_schema_version": {
+          "const": "deeplaw.v013-release-gate-classification/v3"
+        },
+        "classification_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "gateResultReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "category", "result"],
+      "properties": {
+        "gate_id": {"$ref": "#/$defs/identifier"},
+        "category": {"$ref": "#/$defs/category"},
+        "result": {"$ref": "#/$defs/resultArtifact"}
+      }
+    },
+    "resultArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "byte_size",
+        "file_sha256",
+        "schema_version",
+        "record_sha256",
+        "artifact_kind"
+      ],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/relativePath"},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 100000000000},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "schema_version": {
+          "const": "deeplaw.provenance-bound-gate-result/v2"
+        },
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact_kind": {"const": "provenance-bound-gate-result"}
+      }
+    }
+  }
+}

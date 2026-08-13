@@ -18,7 +18,11 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.release.release_policy import validate_manifest_for_release
+from benchmarks.release.release_policy import (
+    V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH,
+    V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION,
+    validate_manifest_for_release,
+)
 from benchmarks.release.semantic_evidence import (
     SemanticEvidenceError,
     canonical_json,
@@ -29,14 +33,9 @@ from benchmarks.release.semantic_evidence import (
 MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / (
     "commercial-release-manifest.v6.schema.json"
 )
-CLASSIFICATION_V2_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / (
-    "v013-release-gate-classification.v2.schema.json"
-)
 LEGACY_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v1"
-PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v2"
-PROVENANCE_CLASSIFICATION_SCHEMA_VERSION = (
-    "deeplaw.v013-release-gate-classification/v2"
-)
+PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v3"
+PROVENANCE_CLASSIFICATION_SCHEMA_VERSION = V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION
 _INPUT_FIELDS = {"schema_version", "environment", "release", "bindings", "artifacts"}
 _DERIVED_FIELDS = {
     "semantic_evidence",
@@ -118,7 +117,7 @@ def _verify_inventory(document: Mapping[str, Any], assets_root: Path) -> None:
 
 def _validate_provenance_classification(classification: Mapping[str, Any]) -> None:
     try:
-        schema = _load_json(CLASSIFICATION_V2_SCHEMA_PATH)
+        schema = _load_json(V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH)
         Draft202012Validator.check_schema(schema)
         errors = sorted(
             Draft202012Validator(schema).iter_errors(classification),
@@ -181,11 +180,11 @@ def assemble_manifest(
         )
     if report_schema_version != PROVENANCE_REPORT_SCHEMA_VERSION:
         raise V013CommercialReleaseError(
-            "v0.13 assembler requires provenance-bound commercial evidence report v2"
+            "v0.13 assembler requires provenance-bound commercial evidence report v3"
         )
     if classification.get("schema_version") != PROVENANCE_CLASSIFICATION_SCHEMA_VERSION:
         raise V013CommercialReleaseError(
-            "v0.13 assembler requires provenance-bound gate classification v2"
+            "v0.13 assembler requires provenance-bound gate classification v3"
         )
     _validate_provenance_classification(classification)
     assembly_policy = classification["assembly_policy"]

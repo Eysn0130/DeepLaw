@@ -1,7 +1,7 @@
-# DeepLaw PRD 1.3 traceability matrix
+# DeepLaw PRD 1.3.1 traceability matrix
 
 Status: **current source-candidate mapping**, carried forward from the Pass 5 full mapping and
-updated 2026-08-13 with the Pass 14 correction boundary.
+updated 2026-08-13 with the Pass 15 Kernel acceptance boundary.
 This is not a fresh qualification, release note, or permission to implement every Target.
 
 Pass 14 current pointer: the Codex compaction lifecycle, Host isolation, plugin packaging,
@@ -36,8 +36,8 @@ The current artifact and final executed/failed/not-executed decision are recorde
 
 ## Frozen audit boundary
 
-- PRD revision: `1.3`; SHA-256:
-  `f83bf5a9b29eef9b0af80034b2190266f1ba74edc5c56f422289ab3a49aed9b5`.
+- PRD revision: `1.3.1`; SHA-256:
+  `101f7af07837d0370da60656f10386ae046d55974e73a84db0dace0700cfacfc`.
 - Upstream research SHA-256:
   `00dfab0dfed139f5d81982061a75896f29552f56a125aa83bec57f0c6a860967`.
 - Pass 8 reviewed upstream coordinates are OpenWiki
@@ -79,6 +79,38 @@ The current artifact and final executed/failed/not-executed decision are recorde
   final-blind holdout hashes, candidate wheel hash, and source-candidate binding remain unset.
   Repository-external Gold content was not read in this audit.
 
+## v0.13 frozen Kernel compatibility acceptance map
+
+This table is the PRD outcome map for the normative task definition in
+`V0_13_QUALIFICATION_PROTOCOL.md`. Passing is derived from the named task evidence and existing
+Core gates; it does not add a general `parity` capability or gate.
+
+| Frozen reference/category | Required Kernel behavior | Existing release-blocking Core gates | Excluded comparison scope |
+| --- | --- | --- | --- |
+| OpenWiki `v0.3.1` / `7531d615216e8cbccf464f66cfbbae3668871c84` | Source/repository to maintainable Wiki; full/incremental equivalence; idempotent update; user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms` | UI, connector/provider breadth, ecosystem scale, overall maturity |
+| Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Markdown/Wikilink read; controlled edit; conflict/reconcile; source successor; wrong-merge rejection | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation` | Desktop GUI, visual design, Tauri/React runtime |
+| Obsidian public format/API help accessed 2026-08-11; `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Markdown, Wikilink, alias, backlink/outlink, rename/move, edit/reconcile on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation` | UI, commercial Sync, plugin marketplace, complete Canvas UX |
+| LLM Wiki behavior category | Agent generate/update with provenance, revision, Authority, scope, sensitivity, Ledger, and immutable Source Revision | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | No product comparison without an exact named project/version |
+| Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Cold/new; resume/fork/concurrent worktree; compaction/forget; stale-checkpoint and wrong-task-line rejection; First Correct Action, Decision Preservation, Wrong-State Admission, actual Provider bytes/tokens | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget` | GUI, marketplace, Agent Runtime ownership, synthetic/no-model evidence |
+| OpenCode / `deepseek/deepseek-v4-flash`; installed version unbound | Same three real Host task families and measures as Codex, with isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget` | Cannot pass before exact tool binding and real execution; UI/runtime/ecosystem excluded |
+
+For v0.13 the releasable product is the complete Kernel distribution: wheel/sdist, CLI, the
+read-only `knowledge_support`, grant-controlled `knowledge_sink`, separate read-only `law_support`,
+contracts, migrations, local governed stores, Living Wiki projection, Host/plugin drivers, and
+required security/provenance artifacts. A first-party GUI is outside v0.13 and is not a release
+gate. Third-party desktop visual E2E is also not a Kernel release gate, while real-file
+Markdown/Wikilink/alias/link/rename/edit/reconcile behavior remains Core.
+
+The active classification is
+`../benchmarks/release/v013-gate-classification-v3.json`: Codex and OpenCode are both Core,
+required, and release-blocking; Claude, Timeline, and semantic restore remain optional and
+`not_claimed`. OpenCode's null tool-version constraint is an unresolved candidate-binding
+prerequisite, not a wildcard: the gate cannot pass until an exact installed version is frozen and
+the classification is version-rotated rather than rewritten. Native Host qualification is separate
+from the nine-row Linux/macOS/Windows artifact gate. Human Gold, legal evidence, Context Utility,
+scale, three-OS evidence, and the provenance/signing/public-redownload artifact chain continue to
+block release.
+
 ## Continuity Pass 2 development boundary
 
 Pass 2 is a follow-up to the retained **Pass 1** implementation boundary above. Pass 1 hashes,
@@ -100,8 +132,8 @@ Three reproduced defects and minimum repairs are mapped here before the row-leve
 The route projection is derived/rebuildable. The continuity correction introduces no new
 canonical Knowledge table, migration, or sink schema, and `knowledge-sink.input/v2` bytes remain
 unchanged. This is a semantic compatibility boundary only. Core gates are not lowered; deferred
-Capability gates may remain `not_claimed` when
-not declared (Timeline, semantic restore, and Claude/OpenCode), while the Competitive Claim gate is
+Capability gates may remain `not_claimed` when not declared (Timeline, semantic restore, and
+Claude), while Codex and OpenCode are declared Core Host gates. The Competitive Claim gate is
 independent of kernel evidence.
 
 ## Status and evidence rules
@@ -128,7 +160,8 @@ Evidence abbreviations in the table are repository-relative paths:
   `src/deeplaw/wiki_coverage.py`; `LEGAL`: `src/deeplaw/store.py`,
   `src/deeplaw/search.py`, and `src/deeplaw/mcp_server.py`.
 - `ARCH`: `docs/ARCHITECTURE.md`; `AKO`: `docs/AUTONOMOUS_KNOWLEDGE_OS.md`;
-  `DISP`: `docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; `UP`:
+  `DISP`: latest committed pass-specific disposition (currently
+  `docs/V0_13_PASS14_DISPOSITION.md`); `UP`:
   `docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 ## Problem and principle mapping
@@ -285,7 +318,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | Continuity/Context | Source-only honest Gap and deterministic Source-to-compiled-Context vertical implemented | Semantic density, fork lifecycle, independent Human Gold, native-memory comparison, and real Hosts pending |
 | Living Wiki | Implemented development chain with partial exact-candidate scale/editor evidence | Independent Human usability, 10k/100k incremental equivalence, RSS, Relation scale, and platform evidence pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
-| Host Integration | Bounded read-seam preflight and split read/sink deterministic Host configuration implemented; current Codex protocol/plugin regressions pass locally | Real isolated Codex/Claude/OpenCode tasks and provider-secret qualification pending; Pass 14 Codex/OpenCode diagnostics were not executed |
+| Host Integration | Bounded read-seam preflight and split read/sink deterministic Host configuration implemented; current Codex/OpenCode protocol and plugin regressions pass locally | Codex and OpenCode/DeepSeek are Core and real isolated three-task qualification remains pending; Claude is optional/not_claimed; Pass 14 Codex/OpenCode diagnostics were not executed |
 | Portability/Operations | Target with local primitives, a current exact-wheel/fresh-install Darwin journey and green current-source 3-OS CI | Timeline, semantic restore, native platform release receipts, provenance/signing, and public redownload pending |
 
 ## Pass 14 current-fix addendum
@@ -332,7 +365,7 @@ Pass 5 does not upgrade any PRD row to `Qualified` or `Released`.
 | Gate class | Rule | Pass 5 status |
 |---|---|---|
 | **Core** | Required; no core safety, integrity, legal, boundary, scale, platform, or supply-chain gate may be lowered | Kernel correction does not lower a Core gate; required external evidence remains `not_executed` |
-| **Capability** | May remain `not_claimed` when the capability is not declared | Run Timeline and semantic restore remain deferred; Claude/OpenCode remain `not_claimed` unless support is explicitly declared; E2E continuity remains `Target` |
+| **Capability** | May remain `not_claimed` when the capability is not declared | Run Timeline and semantic restore remain deferred; Claude remains `not_claimed`; Codex and OpenCode are not Capability gates |
 | **Competitive Claim** | Independent named-comparator/host evidence; kernel evidence cannot satisfy it | Independent gate remains false and `not_executed`; no superiority/SOTA claim |
 
 The remaining six pytest skip dispositions are explicit non-results, not passes or silent
@@ -352,9 +385,10 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 
 ## Current source-candidate status pointer
 
-Pass 1-8 reports remain immutable historical development evidence. The current evidence boundary
-is recorded in `docs/V0_13_PASS10_CURRENT_DISPOSITION.md`. Pass 10's b14 Statement, Codex, and
-Obsidian artifacts are historical candidate evidence: the Statement report fails the current Gold
+Pass 1-14 reports remain immutable historical development evidence. The latest committed evidence
+boundary is `docs/V0_13_PASS14_DISPOSITION.md`; this matrix and the latest committed pass-specific
+disposition jointly locate current status. Pass 10's b14 Statement, Codex, and Obsidian artifacts
+are historical candidate evidence: the Statement report fails the current Gold
 byte binding, the Codex environment receipt fails the current child-argv contract, and the Codex
 candidate prompt exposed evaluator labels, the expected marker, and an exact Knowledge ID. Those
 artifacts cannot be promoted by rewriting commit, tree, or hash fields. Repository-visible

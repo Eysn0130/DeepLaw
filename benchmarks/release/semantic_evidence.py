@@ -31,7 +31,8 @@ RELEASE_MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts"
 )
 CLASSIFICATION_PATH = Path(__file__).with_name("v013-gate-classification-v1.json")
 REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v1"
-PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v2"
+PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v3"
+HISTORICAL_PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v2"
 OBSERVATION_SCHEMA_VERSION = "deeplaw.commercial-gate-observation/v1"
 STATUS_VALUES = frozenset(
     {"passed", "failed", "not_applicable", "not_executed", "not_claimed"}
@@ -589,9 +590,12 @@ def validate_report(
 
     document = _as_document(report)
     _check_bounds_and_secrets(document)
-    if document.get("schema_version") == PROVENANCE_REPORT_SCHEMA_VERSION:
+    if document.get("schema_version") in {
+        HISTORICAL_PROVENANCE_REPORT_SCHEMA_VERSION,
+        PROVENANCE_REPORT_SCHEMA_VERSION,
+    }:
         raise SemanticEvidenceError(
-            "provenance-bound report v2 aggregation is disabled until every Core raw-artifact "
+            "provenance-bound report aggregation is disabled until every Core raw-artifact "
             "validator is implemented"
         )
     _schema_validate(document)

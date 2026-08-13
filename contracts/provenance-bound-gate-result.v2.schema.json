@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/provenance-bound-gate-result.v2.schema.json",
+  "title": "DeepLaw provenance-bound commercial Gate Result v2",
+  "description": "Closed Gate Result receipt whose derived observations and every input are provenance-bound. It is not a release decision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gate_id",
+    "category",
+    "validator_id",
+    "validator_version",
+    "validator_source",
+    "validator_executable",
+    "classification_binding",
+    "candidate_binding",
+    "protocol_binding",
+    "threshold_binding",
+    "gold_binding",
+    "corpus",
+    "status",
+    "executions",
+    "run_ids",
+    "unique_dimensions",
+    "metrics",
+    "hard_failures",
+    "failures",
+    "redaction",
+    "inputs",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.provenance-bound-gate-result/v2"},
+    "gate_id": {"$ref": "#/$defs/identifier"},
+    "category": {"$ref": "#/$defs/category"},
+    "validator_id": {"$ref": "#/$defs/identifier"},
+    "validator_version": {"$ref": "#/$defs/version"},
+    "validator_source": {"$ref": "#/$defs/validatorFileBinding"},
+    "validator_executable": {"$ref": "#/$defs/validatorFileBinding"},
+    "classification_binding": {"$ref": "#/$defs/classificationBinding"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "threshold_binding": {"$ref": "#/$defs/thresholdBinding"},
+    "gold_binding": {"$ref": "#/$defs/goldBinding"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "status": {"$ref": "#/$defs/status"},
+    "executions": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {"$ref": "#/$defs/execution"}
+    },
+    "run_ids": {
+      "type": "array",
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "unique_dimensions": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/uniqueDimension"}
+    },
+    "metrics": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/metric"}
+    },
+    "hard_failures": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/hardFailure"}
+    },
+    "failures": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/failure"}
+    },
+    "redaction": {"$ref": "#/$defs/redaction"},
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/inputProvenance"}
+    },
+    "result_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,512}$"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["Core", "Capability", "Competitive Claim"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["passed", "failed", "not_applicable", "not_executed", "not_claimed"]
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_commit",
+        "candidate_tree",
+        "candidate_wheel_sha256",
+        "candidate_sdist_sha256"
+      ],
+      "properties": {
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_sha256", "frozen"],
+      "properties": {
+        "protocol_id": {"$ref": "#/$defs/identifier"},
+        "protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "thresholdBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold_id", "threshold_sha256", "frozen"],
+      "properties": {
+        "threshold_id": {"$ref": "#/$defs/identifier"},
+        "threshold_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "goldBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_sha256", "role", "source", "frozen"],
+      "properties": {
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "role": {
+          "type": "string",
+          "enum": ["development_gold", "qualification_gold", "final_blind_gold"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["repository", "repository_external"]
+        },
+        "frozen": {"const": true}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source", "sha256", "frozen"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["development", "qualification_holdout", "final_blind"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["repository", "repository_external"]
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "classificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification_id", "classification_schema_version", "classification_sha256"],
+      "properties": {
+        "classification_id": {"$ref": "#/$defs/identifier"},
+        "classification_schema_version": {
+          "const": "deeplaw.v013-release-gate-classification/v3"
+        },
+        "classification_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "uniqueDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "values"],
+      "properties": {
+        "dimension": {"$ref": "#/$defs/identifier"},
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "input_refs",
+        "argv",
+        "exit_code",
+        "os_name",
+        "os_version",
+        "python_version",
+        "tool_name",
+        "tool_version",
+        "model_id",
+        "dimensions"
+      ],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "input_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "exit_code": {"type": "integer", "minimum": 0, "maximum": 255},
+        "os_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "os_version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "tool_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "tool_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "model_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200},
+        "dimensions": {"$ref": "#/$defs/dimensions"}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "observed", "minimum", "maximum", "input_refs"],
+      "properties": {
+        "metric": {"$ref": "#/$defs/identifier"},
+        "observed": {"type": "number"},
+        "minimum": {"type": ["number", "null"]},
+        "maximum": {"type": ["number", "null"]},
+        "input_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {"$ref": "#/$defs/identifier"},
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "hardFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "count", "maximum_allowed", "input_refs"],
+      "properties": {
+        "failure_id": {"$ref": "#/$defs/identifier"},
+        "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "maximum_allowed": {"const": 0},
+        "input_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "severity", "reason_code", "input_refs"],
+      "properties": {
+        "failure_id": {"$ref": "#/$defs/identifier"},
+        "severity": {"enum": ["hard", "soft"]},
+        "reason_code": {"$ref": "#/$defs/identifier"},
+        "input_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secret_canary_count",
+        "private_path_count",
+        "output_redacted",
+        "input_refs"
+      ],
+      "properties": {
+        "secret_canary_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "private_path_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "output_redacted": {"type": "boolean"},
+        "input_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "inputProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_id",
+        "relative_path",
+        "byte_size",
+        "file_sha256",
+        "schema_version",
+        "record_sha256",
+        "artifact_kind"
+      ],
+      "properties": {
+        "input_id": {"$ref": "#/$defs/identifier"},
+        "relative_path": {"$ref": "#/$defs/relativePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "schema_version": {"$ref": "#/$defs/version"},
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact_kind": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "validatorFileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "file_sha256"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/relativePath"},
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "file_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

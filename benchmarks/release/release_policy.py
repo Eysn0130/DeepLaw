@@ -18,6 +18,16 @@ from typing import Any
 
 V5_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v5"
 V6_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v6"
+V013_ACTIVE_CLASSIFICATION_PATH = Path(__file__).with_name(
+    "v013-gate-classification-v3.json"
+)
+V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH = Path(__file__).resolve().parents[2] / (
+    "contracts/v013-release-gate-classification.v3.schema.json"
+)
+V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION = (
+    "deeplaw.v013-release-gate-classification/v3"
+)
+V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v3"
 
 _SEMVER_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -63,10 +73,11 @@ V013_CORE_GATE_IDS = frozenset(
         "reproducible_supply_chain",
         "human_gold_isolation",
         "codex",
+        "opencode",
         "selective_forget",
     }
 )
-V013_CAPABILITY_GATE_IDS = frozenset({"timeline", "semantic_restore", "claude", "opencode"})
+V013_CAPABILITY_GATE_IDS = frozenset({"timeline", "semantic_restore", "claude"})
 V013_COMPETITIVE_GATE_IDS = frozenset(
     {"comparative_incremental_benefit", "superiority", "sota"}
 )

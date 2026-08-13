@@ -278,12 +278,12 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
     assert {
         item["gate_id"] for item in CLASSIFICATION["gates"] if item["category"] == "Core"
     } == set(CORE_GATES)
-    assert set(CORE_GATES) == release_policy.V013_CORE_GATE_IDS
+    assert set(CORE_GATES) == release_policy.V013_CORE_GATE_IDS - {"opencode"}
     assert {
         item["gate_id"]
         for item in CLASSIFICATION["gates"]
         if item["category"] == "Capability"
-    } == release_policy.V013_CAPABILITY_GATE_IDS
+    } == release_policy.V013_CAPABILITY_GATE_IDS | {"opencode"}
     assert {
         item["gate_id"]
         for item in CLASSIFICATION["gates"]
@@ -597,12 +597,12 @@ def test_v013_provenance_assembler_remains_disabled_until_core_validators_exist(
     template, _report_value, root = _release_inputs(tmp_path)
     report_path = root / "evidence/semantic-report.json"
     report_path.write_text(
-        json.dumps({"schema_version": "deeplaw.commercial-evidence-report/v2"}),
+        json.dumps({"schema_version": "deeplaw.commercial-evidence-report/v3"}),
         encoding="utf-8",
     )
     classification_path = root / "evidence/classification.json"
     classification_path.write_bytes(
-        (REPOSITORY / "benchmarks/release/v013-gate-classification-v2.json").read_bytes()
+        (REPOSITORY / "benchmarks/release/v013-gate-classification-v3.json").read_bytes()
     )
     for logical_path, path in (
         ("evidence/semantic-report.json", report_path),

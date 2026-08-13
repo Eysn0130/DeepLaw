@@ -1,6 +1,6 @@
 """Deterministic, candidate-only validation for provenance-bound Gate Results.
 
-This module validates one ``provenance-bound-gate-result/v1`` envelope.  It is deliberately
+This module validates one ``provenance-bound-gate-result/v2`` envelope.  It is deliberately
 not a release assembler and does not consume the commercial evidence collection contract.
 Every check is local and fail-closed: referenced files are reopened, their bytes and record
 digests are recomputed, and all derived run/dimension/reference fields are checked against the
@@ -20,8 +20,8 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
-SCHEMA_VERSION = "deeplaw.provenance-bound-gate-result/v1"
-SCHEMA_FILENAME = "provenance-bound-gate-result.v1.schema.json"
+SCHEMA_VERSION = "deeplaw.provenance-bound-gate-result/v2"
+SCHEMA_FILENAME = "provenance-bound-gate-result.v2.schema.json"
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR_SOURCE_RELATIVE_PATH = "benchmarks/release/provenance_gate_result.py"
 MAX_FILE_BYTES = 64 * 1024 * 1024
