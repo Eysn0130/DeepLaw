@@ -454,6 +454,15 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
             qualification._turn_record(result, **kwargs)
         observation[required_field] = retained
 
+    retained_binding = observation.pop("argument_task_binding_sha256")
+    unbound_record, _ = qualification._turn_record(
+        result,
+        **kwargs,
+        require_task_binding=False,
+    )
+    assert unbound_record["status"] == "passed"
+    observation["argument_task_binding_sha256"] = retained_binding
+
     result["events"] = [
         {
             "method": "mcpServer/startupStatus/updated",

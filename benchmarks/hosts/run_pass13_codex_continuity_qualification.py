@@ -946,7 +946,6 @@ def _seed_development_vault(
                     f"OPEN_GAP: {checkpoint['open_gap']}",
                     f"NEXT_ACTION: {checkpoint['next_action']}",
                     f"ROUTE_MARKER: {checkpoint['marker']}",
-                    f"BINDING_DIGEST: {binding['binding_sha256']}",
                 ]
             ),
             "kind": "memory",
@@ -955,7 +954,6 @@ def _seed_development_vault(
             "expires_at": "2099-01-01T00:00:00Z",
             "scope": "project",
             "sensitivity": "private",
-            "run_id": run_id,
             "model_id": MODEL,
             "tool_id": "codex-app-server-pass17-development",
             "tags": ["pass17", "development", "diagnostic"],
@@ -1098,17 +1096,19 @@ def _prompt(
 def _context_call_arguments(
     *,
     task: str,
-    binding: Mapping[str, Any],
+    binding: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     if not task or len(task) > 5000:
         raise QualificationFailure("knowledge_support context task is invalid")
-    return {
+    arguments: dict[str, Any] = {
         "operation": "context",
         "task": task,
         "confirm_no_case_data": True,
         "query_plan_version": "6",
-        "task_binding": dict(binding),
     }
+    if binding is not None:
+        arguments["task_binding"] = dict(binding)
+    return arguments
 
 
 def _parse_final(value: Any) -> dict[str, Any] | None:
@@ -1214,6 +1214,7 @@ def _turn_record(
     forgotten_marker: str | None = None,
     expected_task_binding: Mapping[str, Any],
     post_forget_phase: bool = False,
+    require_task_binding: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     observations = list(_result_value(result, "tool_call_observations", []) or [])
     outputs = list(_result_value(result, "tool_outputs", []) or [])
@@ -1235,7 +1236,11 @@ def _turn_record(
         or observation.get("argument_task_present") is not True
         or observation.get("argument_confirm_no_case_data") is not True
         or observation.get("argument_query_plan_version") != "6"
-        or observation.get("argument_task_binding_sha256") != expected_binding_sha256
+        or (
+            observation.get("argument_task_binding_sha256") != expected_binding_sha256
+            if require_task_binding
+            else observation.get("argument_task_binding_sha256") is not None
+        )
         for observation in observations
     ):
         raise QualificationFailure(
@@ -1435,6 +1440,7 @@ def _run_scenario(
             ),
             expected_task_binding=task_binding,
             post_forget_phase=post_forget_phase,
+            require_task_binding=not development,
         )
         if pending_compaction_usage is not None:
             record["usage"] = _merge_actual_usage(
@@ -2496,7 +2502,7 @@ def execute(
                 else:
                     diagnostic_call = _context_call_arguments(
                         task=str(state["case"]["task_case"]),
-                        binding=binding,
+                        binding=None,
                     )
                     selected_prompt = (
                         pass17_development_diagnostic.candidate_prompt(state["case"])

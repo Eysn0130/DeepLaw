@@ -79,6 +79,17 @@ def test_codex_context_prompt_uses_the_complete_public_v6_call_shape() -> None:
     expected = {**arguments, "task": "continuity_cold_new_v1"}
     assert pass13_evidence.canonical_json(expected) in prompt
 
+    diagnostic_arguments = codex_runner._context_call_arguments(
+        task="source_free_development_task",
+        binding=None,
+    )
+    assert diagnostic_arguments == {
+        "operation": "context",
+        "task": "source_free_development_task",
+        "confirm_no_case_data": True,
+        "query_plan_version": "6",
+    }
+
 
 def test_diagnostic_mode_is_reachable_before_external_human_gold() -> None:
     protocol = (REPOSITORY / "docs/V0_13_QUALIFICATION_PROTOCOL.md").read_text(
