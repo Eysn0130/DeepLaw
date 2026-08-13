@@ -2599,6 +2599,21 @@ def _merge_usage(
     )
 
 
+def _account_turn_usage(
+    native_turn_usage: Mapping[str, Any],
+    pending_compaction_usage: Mapping[str, Any] | None,
+) -> tuple[dict[str, int | str], dict[str, int]]:
+    """Keep aggregate turn cost complete without double-counting native receipts."""
+
+    native = _require_actual_usage(native_turn_usage)
+    aggregate = (
+        _merge_usage(pending_compaction_usage, native)
+        if pending_compaction_usage is not None
+        else native
+    )
+    return aggregate, native
+
+
 def _marker_check(
     analysis: Mapping[str, Any],
     *,
@@ -2889,9 +2904,10 @@ def _run_one_scenario(
         session_id = observed_session
         if root_session_id is None:
             root_session_id = observed_session
-        usage = analysis["usage"]
+        usage, native_turn_usage = _account_turn_usage(
+            analysis["usage"], compaction_usage
+        )
         if compaction_usage is not None:
-            usage = _merge_usage(compaction_usage, usage)
             compaction_usage = None
             analysis["usage"] = usage
         if not development:
@@ -2955,7 +2971,7 @@ def _run_one_scenario(
                 parent_identity=previous_session_id,
                 root_identity=root_session_id,
                 relation=relation,
-                actual_provider_usage=usage,
+                actual_provider_usage=native_turn_usage,
             )
         )
         if server is None:

@@ -142,6 +142,17 @@ def _native_receipts(
             host == "opencode"
             and (requested.startswith("cli.run") or requested == "session.messages")
         )
+        actual_usage = turns[turn_index]["usage"] if usage_observed else None
+        if (
+            host == "opencode"
+            and scenario == "compaction_forget"
+            and requested == "cli.run.session"
+            and turn_index == 1
+        ):
+            actual_usage = {
+                field: turns[turn_index]["usage"][field] - turns[0]["usage"][field]
+                for field in turns[turn_index]["usage"]
+            }
         return pass13_evidence.native_lifecycle_receipt(
             semantic_task_family=scenario,
             transport=transport,
@@ -159,7 +170,7 @@ def _native_receipts(
             ),
             root_identity=root,
             relation=relation,
-            actual_provider_usage=(turns[turn_index]["usage"] if usage_observed else None),
+            actual_provider_usage=actual_usage,
         )
 
     if host == "codex":
@@ -378,6 +389,10 @@ def _run(host: str, index: int, scenario: str) -> dict[str, Any]:
                 },
             }
         )
+    if host == "opencode" and scenario == "compaction_forget":
+        turns[1]["usage"] = {
+            field: 2 * value for field, value in turns[1]["usage"].items()
+        }
     metrics = {
         "first_correct_action": True,
         "decision_preservation": True,
@@ -932,6 +947,27 @@ def test_non_usage_native_response_cannot_claim_inferred_zero_tokens(
     with pytest.raises(
         pass13_evidence.EvidenceValidationError,
         match="non-usage native observation",
+    ):
+        pass13_evidence.validate_host_report_consistency(changed)
+
+
+def test_opencode_native_usage_must_reconcile_with_turn_evidence(
+    fixture_bundle: FixtureBundle,
+) -> None:
+    _gold_path, _codex, opencode, _reviews = fixture_bundle
+    changed = copy.deepcopy(opencode)
+    run = changed["runs"][0]
+    cli_run = next(
+        receipt
+        for receipt in run["native_receipts"]
+        if receipt["requested_operation"] == "cli.run"
+    )
+    cli_run["actual_provider_usage"]["input_tokens"] += 1
+    cli_run["actual_provider_usage"]["total_tokens"] += 1
+    run["metrics"]["evidence_sha256"] = pass13_evidence.metric_evidence_sha256(run)
+    with pytest.raises(
+        pass13_evidence.EvidenceValidationError,
+        match="native Provider usage does not reconcile",
     ):
         pass13_evidence.validate_host_report_consistency(changed)
 

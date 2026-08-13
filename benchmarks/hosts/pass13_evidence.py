@@ -1467,6 +1467,14 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
     requested_union: set[str] = set()
     observed_union: set[str] = set()
     transports: set[str] = set()
+    usage_fields = (
+        "input_tokens",
+        "cached_input_tokens",
+        "cache_write_input_tokens",
+        "output_tokens",
+        "reasoning_output_tokens",
+        "total_tokens",
+    )
     for run in runs:
         if not isinstance(run, Mapping):
             raise EvidenceValidationError("Host receipt run is invalid")
@@ -1490,6 +1498,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         run_relations: set[str] = set()
         run_roots: set[str] = set()
         receipt_sequence: list[tuple[str, str]] = []
+        native_usage_totals = {field: 0 for field in usage_fields}
         for receipt in receipts:
             if not isinstance(receipt, Mapping):
                 raise EvidenceValidationError("native lifecycle receipt is invalid")
@@ -1551,6 +1560,8 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                         "usage-bearing native observation omitted Provider accounting"
                     )
                 _validate_actual_usage(host, usage)
+                for field in usage_fields:
+                    native_usage_totals[field] += int(usage[field])
             elif usage is not None:
                 raise EvidenceValidationError(
                     "non-usage native observation claimed Provider accounting"
@@ -1632,6 +1643,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             raise EvidenceValidationError("native receipt lineage is not bound to turn identity")
         first_read: Mapping[str, Any] | None = None
         retried = False
+        turn_usage_totals = {field: 0 for field in usage_fields}
         for turn in turns:
             if not isinstance(turn, Mapping):
                 raise EvidenceValidationError("Host turn evidence is invalid")
@@ -1695,6 +1707,12 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 if not isinstance(usage, Mapping):
                     raise EvidenceValidationError("passed turn omitted Provider usage")
                 _validate_actual_usage(host, usage)
+                for field in usage_fields:
+                    turn_usage_totals[field] += int(usage[field])
+        if host == "opencode" and run_passed and native_usage_totals != turn_usage_totals:
+            raise EvidenceValidationError(
+                "OpenCode native Provider usage does not reconcile with turn evidence"
+            )
         if first_read is not None and first_read.get("first_call_valid") is True:
             first_call_valid_runs += 1
         if retried:

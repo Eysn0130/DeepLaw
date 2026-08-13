@@ -639,6 +639,9 @@ def test_compaction_usage_comes_from_one_public_summary_message() -> None:
     ]
     usage = runner._compaction_usage_from_messages(messages)
     assert usage["total_tokens"] == 17
+    aggregate, native_turn = runner._account_turn_usage(usage, usage)
+    assert aggregate["total_tokens"] == 34
+    assert native_turn["total_tokens"] == 17
     with pytest.raises(runner.QualificationError, match="one actual compaction"):
         runner._compaction_usage_from_messages(messages[:1])
 
