@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import inspect
 import json
 from pathlib import Path
@@ -25,6 +26,13 @@ CODEX_NATIVE_VOCABULARY = {
     "item/started",
     "item/completed",
 }
+DIAGNOSTIC_EVIDENCE = (
+    REPOSITORY
+    / "benchmarks"
+    / "hosts"
+    / "evidence"
+    / "pass17-native-host-diagnostics-2026-08-13"
+)
 
 
 def test_development_fixture_is_source_free_and_has_no_qualification_labels() -> None:
@@ -35,6 +43,97 @@ def test_development_fixture_is_source_free_and_has_no_qualification_labels() ->
     encoded = json.dumps(fixture, ensure_ascii=False, sort_keys=True).casefold()
     for forbidden in ("human gold", "qualification_holdout", "blind_score", "expected_score"):
         assert forbidden not in encoded
+
+
+def test_importing_diagnostic_runners_does_not_read_qualification_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("diagnostic runner import read qualification labels")
+
+    monkeypatch.setattr(pass17_development_diagnostic, "load_fixture", forbidden)
+    from benchmarks.hosts import pass16_continuity_cases
+
+    monkeypatch.setattr(pass16_continuity_cases, "load_cases", forbidden)
+    monkeypatch.setattr(pass16_continuity_cases, "cases_by_scenario", forbidden)
+    monkeypatch.setattr(pass16_continuity_cases, "task_case", forbidden)
+
+    importlib.reload(codex_runner)
+    importlib.reload(opencode_runner)
+
+    assert tuple(codex_runner.SCENARIO_TASKS) == codex_runner.SCENARIOS
+    assert tuple(opencode_runner.SCENARIO_TASKS) == opencode_runner.SCENARIOS
+
+
+@pytest.mark.parametrize("host", ("codex", "opencode"))
+def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
+    host: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from benchmarks.hosts import pass16_continuity_cases
+
+    class ReachedHostStart(RuntimeError):
+        pass
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("diagnostic pre-Host path read qualification labels")
+
+    output = tmp_path / "output"
+    runtime = {
+        "_executable": tmp_path / "deeplaw",
+        "_runtime_python": tmp_path / "python",
+    }
+    binding = {"commit": "1" * 40, "tree": "2" * 40}
+    monkeypatch.setattr(pass16_continuity_cases, "load_cases", forbidden)
+    monkeypatch.setattr(pass16_continuity_cases, "cases_by_scenario", forbidden)
+    monkeypatch.setattr(pass16_continuity_cases, "task_case", forbidden)
+    monkeypatch.setattr(
+        QualificationOrchestrator,
+        "prepare_candidate",
+        lambda self: (output, binding, runtime),
+    )
+
+    if host == "codex":
+        profile = tmp_path / "codex-profile"
+        profile.mkdir()
+        binary = tmp_path / "codex"
+        binary.write_bytes(b"codex fixture")
+        monkeypatch.setattr(codex_runner.shutil, "which", lambda command: str(binary))
+        monkeypatch.setattr(
+            codex_runner,
+            "_host_environment",
+            lambda *args, **kwargs: (_ for _ in ()).throw(ReachedHostStart()),
+        )
+        with pytest.raises(ReachedHostStart):
+            codex_runner.execute(
+                candidate_wheel=tmp_path / "candidate.whl",
+                deeplaw_executable=tmp_path / "deeplaw",
+                output_dir=output,
+                profile_root=profile,
+                human_gold_path=None,
+                mode="diagnostic",
+            )
+    else:
+        root = tmp_path / "opencode-root"
+        root.mkdir()
+        monkeypatch.setattr(opencode_runner, "load_deepseek_key", lambda path: "test-key")
+        monkeypatch.setattr(
+            opencode_runner,
+            "_validate_binary",
+            lambda binary: (_ for _ in ()).throw(ReachedHostStart()),
+        )
+        with pytest.raises(ReachedHostStart):
+            opencode_runner._execute_qualification_body(
+                candidate_wheel=tmp_path / "candidate.whl",
+                deeplaw_executable=tmp_path / "deeplaw",
+                output_dir=output,
+                opencode_binary=tmp_path / "opencode",
+                dotenv=tmp_path / "owner.env",
+                human_gold_path=None,
+                root=root,
+                mode="diagnostic",
+            )
 
 
 def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> None:
@@ -425,3 +524,29 @@ def test_historical_v1_receipt_bytes_are_frozen_and_currently_invalidated() -> N
     )
     assert "invalidated-for-current-qualification" in protocol
     assert "deeplaw.host-continuity-qualification/v2" in protocol
+
+
+def test_retained_pass17_diagnostics_are_current_v2_and_claim_ineligible() -> None:
+    expected = {
+        "codex-development-diagnostic.json": (
+            "ecadcd9ad32efffc38219cee1a59d157e91b04ca5c064d6455e87f8f7d33f391",
+            CODEX_NATIVE_VOCABULARY,
+        ),
+        "opencode-development-diagnostic.json": (
+            "7d75179b43398d2c6a2d077e1a72c8b1a4d6c41436f83bf719a44fa96448e9eb",
+            {"cli.run.json", "session.get", "session.summarize", "session.messages"},
+        ),
+    }
+    for name, (digest, methods) in expected.items():
+        path = DIAGNOSTIC_EVIDENCE / name
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+        report = json.loads(path.read_text(encoding="utf-8"))
+        pass13_evidence.validate_host_report_consistency(report)
+        assert report["status"] == "executed"
+        assert report["qualification_status"] == "not_applicable"
+        assert report["evidence_class"] == "development_diagnostic"
+        assert report["claim_eligible"] is False
+        assert report["release_ready"] is False
+        assert set(report["lifecycle"]["methods_observed"]) == methods
+        assert report["security"]["secret_leak"] is False
+        assert report["security"]["absolute_path_leak"] is False

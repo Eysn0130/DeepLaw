@@ -113,16 +113,23 @@ evidence cannot satisfy them.
 
 For Codex diagnostic only, the Host may inherit the existing ChatGPT login location after an
 official `codex login status` check because current Codex stores authentication under
-`CODEX_HOME`. All diagnostic threads are ephemeral, non-DeepLaw capabilities remain disabled,
-and the DeepLaw MCP child still receives the closed allowlist environment. Qualification retains
-the separate owner-created closed profile and fails before candidate preparation without its
-frozen external Human Gold.
+`CODEX_HOME`. The diagnostic root is persisted only so the official resume/fork seams can be
+observed, then removed through the official `thread/delete` seam; cleanup must complete.
+Non-DeepLaw capabilities remain disabled, and the DeepLaw MCP child still receives the closed
+allowlist environment. Qualification retains the separate owner-created closed profile and fails
+before candidate preparation without its frozen external Human Gold.
 
 One diagnostic invocation contains one development run on the existing Host engine. That run
 observes new, resume, fork, and native compaction seams: Codex records its App Server response plus
 the two `contextCompaction` item events, while OpenCode records CLI JSON separately from
 `session.get`, `session.summarize`, and `session.messages` HTTP responses. It performs no forget
 mutation; every model turn must leave the Ledger head unchanged.
+
+Pass 17 executed one such source-free development diagnostic on each Host. Both reports are
+`claim_eligible=false` and cannot satisfy a gate. The repository-external Human Gold location was
+empty, so the six qualification tasks and independent blind scoring remain `not_executed`. Exact
+receipt hashes, Provider bytes/tokens, tools/list bytes, and the final blocked disposition are in
+[`V0_13_PASS17_DISPOSITION.md`](V0_13_PASS17_DISPOSITION.md).
 
 Qualification mode remains fail closed: repository-external Human Gold v2 must be loaded before
 candidate preparation or any Host/model start and must bind the exact task-case digest, clean

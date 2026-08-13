@@ -151,12 +151,7 @@ _FINAL_RESPONSE_SCHEMA: dict[str, Any] = {
 # The task-case file is frozen before any model output.  Keep the prompt map as
 # a compatibility seam for tests, while all runtime lifecycle code obtains the
 # complete case (markers, checkpoint text, and binding) from the loader below.
-SCENARIO_TASKS = {
-    scenario: pass16_continuity_cases.candidate_prompt(
-        pass16_continuity_cases.task_case(scenario)
-    )
-    for scenario in SCENARIOS
-}
+SCENARIO_TASKS = pass16_continuity_cases.lazy_candidate_prompts()
 
 
 def _context_call_arguments(

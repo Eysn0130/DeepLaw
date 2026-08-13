@@ -1,8 +1,15 @@
 # DeepLaw PRD 1.3.1 traceability matrix
 
 Status: **current source-candidate mapping**, carried forward from the Pass 5 full mapping and
-updated 2026-08-13 with the Pass 15 Kernel acceptance boundary.
+updated 2026-08-13 with the Pass 17 native Host receipt and diagnostic boundary.
 This is not a fresh qualification, release note, or permission to implement every Target.
+
+Pass 17 current pointer: Host receipt v1 remains historical and invalid for current qualification;
+v2 separates semantic task family, transport/request seam, native request, actual observation,
+sanitized digest, lineage, and actual Provider usage. One source-free development diagnostic ran
+on each of Codex and OpenCode and both remain claim-ineligible. The external Human Gold directory
+was empty, so all six qualification tasks and blind scoring remain `not_executed`; all Core gates
+remain open. See [`V0_13_PASS17_DISPOSITION.md`](V0_13_PASS17_DISPOSITION.md).
 
 Pass 15 current pointer: PRD 1.3.1 fixes the v0.13 Kernel distribution and minimum compatibility
 acceptance boundary; active gate classification v3 makes Codex and OpenCode Core without rewriting
@@ -167,7 +174,7 @@ Evidence abbreviations in the table are repository-relative paths:
   `src/deeplaw/search.py`, and `src/deeplaw/mcp_server.py`.
 - `ARCH`: `docs/ARCHITECTURE.md`; `AKO`: `docs/AUTONOMOUS_KNOWLEDGE_OS.md`;
   `DISP`: latest committed pass-specific disposition (currently
-  `docs/V0_13_PASS15_DISPOSITION.md`); `UP`:
+  `docs/V0_13_PASS17_DISPOSITION.md`); `UP`:
   `docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 ## Problem and principle mapping

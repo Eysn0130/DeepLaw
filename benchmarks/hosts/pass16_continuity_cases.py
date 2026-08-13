@@ -12,7 +12,7 @@ import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,27 @@ _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 
 class ContinuityCaseError(ValueError):
     """The frozen task-case input or a Host binding is invalid."""
+
+
+class _LazyCandidatePrompts(Mapping[str, str]):
+    """Expose the historical prompt map without reading qualification input on import."""
+
+    def __getitem__(self, scenario: str) -> str:
+        if scenario not in SCENARIOS:
+            raise KeyError(scenario)
+        return candidate_prompt(task_case(scenario))
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(SCENARIOS)
+
+    def __len__(self) -> int:
+        return len(SCENARIOS)
+
+
+def lazy_candidate_prompts() -> Mapping[str, str]:
+    """Return a mapping that loads qualification cases only when a prompt is requested."""
+
+    return _LazyCandidatePrompts()
 
 
 def _canonical(value: Any) -> str:

@@ -69,12 +69,7 @@ _SCENARIO_METHODS = {
     ),
 }
 _SAFE_READ_OPERATIONS = frozenset({"context", "query"})
-SCENARIO_TASKS = {
-    scenario: pass16_continuity_cases.candidate_prompt(
-        pass16_continuity_cases.task_case(scenario)
-    )
-    for scenario in SCENARIOS
-}
+SCENARIO_TASKS = pass16_continuity_cases.lazy_candidate_prompts()
 _DISABLED_CAPABILITIES = (
     "shell_tool",
     "unified_exec",
@@ -2332,7 +2327,11 @@ def execute(
         "raw_bytes": 0,
     }
 
-    cases = pass16_continuity_cases.cases_by_scenario()
+    cases = (
+        pass16_continuity_cases.cases_by_scenario()
+        if mode == "qualification"
+        else {}
+    )
     diagnostic_fixture = (
         pass17_development_diagnostic.load_fixture() if mode == "diagnostic" else None
     )
