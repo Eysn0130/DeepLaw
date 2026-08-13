@@ -51,14 +51,44 @@
         "properties": {
           "qualification_status": {"const": "not_applicable"},
           "evidence_class": {"const": "development_diagnostic"},
-          "runs": {"minItems": 1, "maxItems": 1}
+          "runs": {"minItems": 1, "maxItems": 1},
+          "environment": {
+            "properties": {
+              "isolation": {
+                "oneOf": [
+                  {"$ref": "#/$defs/closedIsolation"},
+                  {"$ref": "#/$defs/codexExistingLoginDiagnosticIsolation"}
+                ]
+              }
+            }
+          }
         }
       },
       "else": {
         "properties": {
           "evidence_class": {"const": "qualification_holdout"},
           "qualification_status": {"enum": ["passed", "failed", "partial"]},
-          "runs": {"minItems": 3, "maxItems": 3}
+          "runs": {"minItems": 3, "maxItems": 3},
+          "environment": {
+            "properties": {
+              "isolation": {"$ref": "#/$defs/closedIsolation"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"host": {"const": "opencode"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "properties": {
+              "isolation": {"$ref": "#/$defs/closedIsolation"}
+            }
+          }
         }
       }
     }
@@ -130,6 +160,12 @@
       }
     },
     "isolation": {
+      "oneOf": [
+        {"$ref": "#/$defs/closedIsolation"},
+        {"$ref": "#/$defs/codexExistingLoginDiagnosticIsolation"}
+      ]
+    },
+    "closedIsolation": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -151,6 +187,30 @@
         "ambient_hooks_inherited": {"const": false},
         "secret_values_retained": {"const": false},
         "auth_class": {"enum": ["chatgpt_login", "deepseek_api_key"]}
+      }
+    },
+    "codexExistingLoginDiagnosticIsolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_kind", "home_isolated", "codex_home_isolated",
+        "xdg_config_home_isolated", "xdg_data_home_isolated",
+        "ambient_host_state_inherited", "ambient_plugins_inherited",
+        "ambient_apps_inherited", "ambient_hooks_inherited",
+        "secret_values_retained", "auth_class"
+      ],
+      "properties": {
+        "profile_kind": {"const": "temporary_closed_with_existing_login"},
+        "home_isolated": {"const": false},
+        "codex_home_isolated": {"const": false},
+        "xdg_config_home_isolated": {"const": true},
+        "xdg_data_home_isolated": {"const": true},
+        "ambient_host_state_inherited": {"const": true},
+        "ambient_plugins_inherited": {"const": false},
+        "ambient_apps_inherited": {"const": false},
+        "ambient_hooks_inherited": {"const": false},
+        "secret_values_retained": {"const": false},
+        "auth_class": {"const": "chatgpt_login"}
       }
     },
     "inventory": {

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from benchmarks.evaluator import score_pass16_host_continuity as scorer
 from benchmarks.hosts import pass13_evidence, pass17_development_diagnostic
@@ -140,6 +141,84 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
                 root=root,
                 mode="diagnostic",
             )
+
+
+def test_codex_diagnostic_inherits_existing_login_but_keeps_other_roots_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ambient_home = tmp_path / "ambient-home"
+    ambient_codex = tmp_path / "ambient-codex"
+    ambient_home.mkdir()
+    ambient_codex.mkdir()
+    monkeypatch.setenv("HOME", str(ambient_home))
+    monkeypatch.setenv("CODEX_HOME", str(ambient_codex))
+    monkeypatch.setenv("OPENAI_API_KEY", "forbidden-api-key")
+    profile = tmp_path / "diagnostic-profile"
+
+    environment = codex_runner._host_environment(
+        Path("/opt/codex"),
+        profile,
+        inherit_existing_login=True,
+    )
+
+    assert environment["HOME"] == str(ambient_home.resolve())
+    assert environment["CODEX_HOME"] == str(ambient_codex.resolve())
+    assert environment["XDG_CONFIG_HOME"] == str(profile / "xdg-config")
+    assert environment["XDG_DATA_HOME"] == str(profile / "xdg-data")
+    assert "OPENAI_API_KEY" not in environment
+    assert codex_runner._isolation_receipt(
+        profile,
+        environment,
+        inherit_existing_login=True,
+    ) == {
+        "profile_kind": "temporary_closed_with_existing_login",
+        "home_isolated": False,
+        "codex_home_isolated": False,
+        "xdg_config_home_isolated": True,
+        "xdg_data_home_isolated": True,
+        "ambient_host_state_inherited": True,
+        "ambient_plugins_inherited": False,
+        "ambient_apps_inherited": False,
+        "ambient_hooks_inherited": False,
+        "secret_values_retained": False,
+        "auth_class": "chatgpt_login",
+    }
+
+
+def test_v2_allows_existing_login_only_for_codex_diagnostic(tmp_path: Path) -> None:
+    report = _failed_diagnostic_report(tmp_path)
+    report["environment"]["isolation"] = {
+        "profile_kind": "temporary_closed_with_existing_login",
+        "home_isolated": False,
+        "codex_home_isolated": False,
+        "xdg_config_home_isolated": True,
+        "xdg_data_home_isolated": True,
+        "ambient_host_state_inherited": True,
+        "ambient_plugins_inherited": False,
+        "ambient_apps_inherited": False,
+        "ambient_hooks_inherited": False,
+        "secret_values_retained": False,
+        "auth_class": "chatgpt_login",
+    }
+    schema = json.loads(
+        (REPOSITORY / "contracts/host-continuity-qualification.v2.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    validator = Draft202012Validator(schema)
+    assert list(validator.iter_errors(report)) == []
+
+    report["host"] = "opencode"
+    errors = list(validator.iter_errors(report))
+    assert any("isolation" in error.absolute_path for error in errors)
+
+    report["host"] = "codex"
+    report["execution_mode"] = "qualification"
+    report["qualification_status"] = "partial"
+    report["evidence_class"] = "qualification_holdout"
+    errors = list(validator.iter_errors(report))
+    assert any("isolation" in error.absolute_path for error in errors)
 
 
 def _failed_diagnostic_report(tmp_path: Path) -> dict[str, object]:

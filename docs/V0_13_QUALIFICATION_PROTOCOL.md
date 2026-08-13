@@ -111,6 +111,13 @@ qualification labels and does not emit a qualification score. Every diagnostic r
 runs, `qualification_holdout`/`final_blind` corpus roles, and applicable status, so diagnostic
 evidence cannot satisfy them.
 
+For Codex diagnostic only, the Host may inherit the existing ChatGPT login location after an
+official `codex login status` check because current Codex stores authentication under
+`CODEX_HOME`. All diagnostic threads are ephemeral, non-DeepLaw capabilities remain disabled,
+and the DeepLaw MCP child still receives the closed allowlist environment. Qualification retains
+the separate owner-created closed profile and fails before candidate preparation without its
+frozen external Human Gold.
+
 One diagnostic invocation contains one development run on the existing Host engine. That run
 observes new, resume, fork, and native compaction seams: Codex records its App Server response plus
 the two `contextCompaction` item events, while OpenCode records CLI JSON separately from

@@ -245,6 +245,8 @@ def _host_environment(
     codex_binary: Path,
     profile_root: Path,
     canaries: Mapping[str, str] = (),
+    *,
+    inherit_existing_login: bool = False,
 ) -> dict[str, str]:
     # Keep this helper usable in the legacy unit seam while execute() performs
     # the strict owner-profile existence check before entering its work tempdir.
@@ -266,6 +268,17 @@ def _host_environment(
             root.chmod(0o700)
     environment = {name: value for name in _HOST_ENV_NAMES if (value := os.environ.get(name))}
     environment.update({name: str(root) for name, root in roots.items()})
+    if inherit_existing_login:
+        ambient_home = _resolved_path(os.environ.get("HOME") or Path.home())
+        ambient_codex = _resolved_path(
+            os.environ.get("CODEX_HOME")
+            or ((ambient_home / ".codex") if ambient_home is not None else "")
+        )
+        if ambient_home is None or ambient_codex is None:
+            raise QualificationFailure("Codex existing login location is unavailable")
+        environment["HOME"] = str(ambient_home)
+        environment["CODEX_HOME"] = str(ambient_codex)
+        environment["USERPROFILE"] = str(ambient_home)
     environment["PATH"] = os.pathsep.join((str(codex_binary.parent), os.defpath))
     environment["NO_COLOR"] = "1"
     environment["GIT_TERMINAL_PROMPT"] = "0"
@@ -276,15 +289,48 @@ def _host_environment(
 def _isolation_receipt(
     profile_root: Path,
     environment: Mapping[str, str],
+    *,
+    inherit_existing_login: bool = False,
 ) -> dict[str, Any]:
     expected = {
-        "HOME": profile_root / "home",
-        "CODEX_HOME": profile_root / "codex",
         "XDG_CONFIG_HOME": profile_root / "xdg-config",
         "XDG_DATA_HOME": profile_root / "xdg-data",
     }
+    if not inherit_existing_login:
+        expected.update(
+            {
+                "HOME": profile_root / "home",
+                "CODEX_HOME": profile_root / "codex",
+            }
+        )
     if any(environment.get(name) != str(path) for name, path in expected.items()):
         raise QualificationFailure("Codex temporary profile isolation is inconsistent")
+    if inherit_existing_login:
+        ambient_home = _resolved_path(os.environ.get("HOME") or Path.home())
+        ambient_codex = _resolved_path(
+            os.environ.get("CODEX_HOME")
+            or ((ambient_home / ".codex") if ambient_home is not None else "")
+        )
+        if (
+            ambient_home is None
+            or ambient_codex is None
+            or environment.get("HOME") != str(ambient_home)
+            or environment.get("CODEX_HOME") != str(ambient_codex)
+        ):
+            raise QualificationFailure("Codex existing login inheritance is inconsistent")
+        return {
+            "profile_kind": "temporary_closed_with_existing_login",
+            "home_isolated": False,
+            "codex_home_isolated": False,
+            "xdg_config_home_isolated": True,
+            "xdg_data_home_isolated": True,
+            "ambient_host_state_inherited": True,
+            "ambient_plugins_inherited": False,
+            "ambient_apps_inherited": False,
+            "ambient_hooks_inherited": False,
+            "secret_values_retained": False,
+            "auth_class": "chatgpt_login",
+        }
     return isolation_receipt(host="codex")
 
 
@@ -2232,8 +2278,18 @@ def execute(
     )
     with tempfile.TemporaryDirectory(prefix="deeplaw-pass17-") as temporary:
         work_dir = Path(temporary)
-        host_environment = _host_environment(codex_binary, profile_root, canaries)
-        host_isolation = _isolation_receipt(profile_root, host_environment)
+        inherit_existing_login = mode == "diagnostic"
+        host_environment = _host_environment(
+            codex_binary,
+            profile_root,
+            canaries,
+            inherit_existing_login=inherit_existing_login,
+        )
+        host_isolation = _isolation_receipt(
+            profile_root,
+            host_environment,
+            inherit_existing_login=inherit_existing_login,
+        )
         version_process = subprocess.run(
             [str(codex_binary), "--version"],
             capture_output=True,
