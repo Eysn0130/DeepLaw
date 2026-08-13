@@ -25,6 +25,41 @@ fixture whose filename says `holdout`, is not a qualification holdout or a final
 this protocol. A holdout used for diagnosis, tuning, or repair is automatically downgraded to the
 development layer.
 
+## Frozen minimum Kernel compatibility map
+
+Minimum Kernel compatibility parity is a release acceptance requirement and has not yet been
+qualified. It is derived only from the following frozen, version-bound behavior tasks and their
+mapped existing Core gates; there is no generic `parity` gate.
+
+| Reference/baseline | Required in-scope Kernel behavior tasks | Existing Core gates and evidence | Explicitly outside this baseline |
+| --- | --- | --- | --- |
+| OpenWiki `v0.3.1` / `7531d615216e8cbccf464f66cfbbae3668871c84` | Compile a source/repository into a maintainable Wiki; prove full/incremental equivalence, idempotent update, and user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms`; public CLI/MCP receipts over the exact candidate | OpenWiki UI, provider/connector breadth, ecosystem size, or overall product comparison |
+| Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Read Markdown/Wikilinks; perform controlled edits; detect conflict and reconcile; preserve source-successor identity and reject a wrong merge | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation`; real-file/editor receipts | Tolaria Desktop GUI, visual design, and its Tauri/React runtime |
+| Obsidian official public format/API help, accessed 2026-08-11; API snapshot `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation`; real-file/editor receipts | Obsidian UI, commercial Sync, plugin marketplace, and complete Canvas UX |
+| LLM Wiki behavior category (not a comparator project) | An Agent can generate and update knowledge while provenance, revision, Authority, scope, sensitivity, and Ledger state remain explicit; the original Source Revision is never rewritten | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | Any named-product or superiority statement unless an exact project and version are separately frozen |
+| Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale-checkpoint and wrong-task-line rejection | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens from `deeplaw.host-continuity-qualification/v1` | Codex Agent Runtime ownership, UI, marketplace, or a static/no-model Host smoke |
+| OpenCode / `deepseek/deepseek-v4-flash`; exact installed OpenCode version pending | The same three real Host task families and wrong-state challenges as Codex, under independently isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcome metrics and actual Provider bytes/tokens through the shared Host continuity contract | Passing before the installed tool version is candidate-bound; OpenCode runtime, UI, ecosystem, or a projection/configuration-only smoke |
+
+The Codex and OpenCode Host task mechanics may use different public lifecycle methods, but they
+must cover the same three behavior families. A static configuration check, synthetic test,
+deterministic/no-model smoke, or provider-usage estimate cannot satisfy a real-Host task. Native
+Host evidence may execute on the Owner-authorized machine; it neither replaces nor requires reuse
+of the same credential for the separate Linux/macOS/Windows artifact qualification gate.
+
+Before every mapped task and mapped Core gate passes, the only permitted statement is:
+
+> Minimum Kernel compatibility parity is a release acceptance requirement and has not yet been qualified.
+
+After every mapped task and mapped Core gate passes on the frozen candidate, the only permitted
+positive statement is:
+
+> DeepLaw meets the frozen v0.13 Kernel compatibility baseline defined by the qualification protocol.
+
+Neither state permits claims that DeepLaw as a whole equals or exceeds OpenWiki, Tolaria, Obsidian,
+or any LLM Wiki, or that it is perfect, SOTA, leading, fully verified, or generally superior.
+Competitive Claim gates remain optional and `not_claimed`; Kernel compatibility does not satisfy
+them.
+
 ## Pass 14 Host preflight disposition
 
 Pass 14 corrected the current Codex App Server boundary before any new model call. A compaction

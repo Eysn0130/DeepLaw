@@ -1,14 +1,15 @@
 # DeepLaw Product Requirements
 
 Status: **normative product-direction baseline**  
-PRD revision: **1.3**
-Reviewed: **2026-08-11**
+PRD revision: **1.3.1**
+Reviewed: **2026-08-13**
 
 This document defines why DeepLaw exists, which user outcomes it owns, the stable product
 boundaries, and the evidence required before scope may expand. It is intentionally smaller and
-more stable than an implementation specification. Current candidate, release, and qualification
-status lives in `docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; research snapshots live in
-`docs/V0_13_UPSTREAM_RESEARCH.md`.
+more stable than an implementation specification. Current implementation and release status are
+located jointly by `docs/PRD_TRACEABILITY_MATRIX.md` and the latest committed pass-specific
+disposition; historical Pass dispositions are immutable evidence snapshots and no longer represent
+current status. Research snapshots live in `docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 Runtime facts remain authoritative in `src/deeplaw`, tests, JSON Schemas, SQLite migrations,
 `pyproject.toml`, and `uv.lock`. A requirement marked `Target` is not shipped merely because it is
@@ -222,6 +223,14 @@ The Knowledge OS kernel is limited to four responsibilities:
 
 CLI, MCP, editors, Wiki projections, indexes, model-assisted planners, and Host adapters are
 drivers around this kernel. They MUST NOT duplicate its business rules.
+
+For v0.13, the releasable product is the DeepLaw Kernel distribution: the Python wheel and sdist,
+CLI, read-only `knowledge_support` MCP, grant-controlled `knowledge_sink` MCP, `law_support` MCP,
+contracts, migrations, local governed stores, Living Wiki projection, Host/plugin drivers, and
+required security and provenance artifacts. A first-party GUI is not included in the v0.13 release
+scope and is not a v0.13 release gate. This exclusion does not defer or reduce the core human/Agent
+Living Wiki behavior, source-native evidence behavior, Host interoperability, or bounded Knowledge
+Capsule requirements.
 
 ## 7. Required product workflows
 
@@ -645,6 +654,14 @@ operational history or hidden model reasoning.
 Thresholds and budgets are frozen in the applicable Evaluation Protocol before holdout results are
 read. This PRD defines the required outcome families, not mutable benchmark tuning constants.
 
+For v0.13 acceptance, minimum ecosystem capability parity means passing a frozen, named,
+version-bound set of in-scope Kernel behavior tasks through DeepLaw's public interfaces, as mapped
+by `docs/V0_13_QUALIFICATION_PROTOCOL.md` and `docs/PRD_TRACEABILITY_MATRIX.md`. It does not mean
+parity in first-party GUI, visual design, marketplace size, connector breadth, ecosystem size,
+Agent runtime ownership, or overall product maturity. Passing permits the statement that DeepLaw
+meets the frozen v0.13 Kernel compatibility baseline; it does not establish general superiority
+over a comparator.
+
 ### 11.1 Task continuity
 
 - First Correct Action;
@@ -729,10 +746,11 @@ remain zero.
 ## 12. Current-status boundary
 
 This PRD does not carry mutable release status, package version, benchmark thresholds, or a
-candidate-specific checklist. The authoritative current disposition is
-`docs/V0_13_PASS8_RELEASE_DISPOSITION.md`; thresholds and holdout rules live in the applicable
-evaluation protocol. A capability is not shipped, qualified, or claim-eligible merely because its
-target appears here.
+candidate-specific checklist. Current implementation and release status are located jointly by
+`docs/PRD_TRACEABILITY_MATRIX.md` and the latest committed pass-specific disposition. Historical
+Pass dispositions are immutable evidence snapshots and no longer represent current status;
+thresholds and holdout rules live in the applicable evaluation protocol. A capability is not
+shipped, qualified, or claim-eligible merely because its target appears here.
 
 ## 13. Explicit non-goals and frozen scope
 
