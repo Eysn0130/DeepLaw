@@ -184,7 +184,7 @@ def assemble_manifest(
         )
     if classification.get("schema_version") != PROVENANCE_CLASSIFICATION_SCHEMA_VERSION:
         raise V013CommercialReleaseError(
-            "v0.13 assembler requires provenance-bound gate classification v3"
+            "v0.13 assembler requires the active provenance-bound gate classification"
         )
     _validate_provenance_classification(classification)
     assembly_policy = classification["assembly_policy"]

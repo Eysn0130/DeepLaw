@@ -415,6 +415,7 @@ class CodexAppServerClient:
         self._context_compaction_started_keys: set[tuple[str, str, str]] = set()
         self._context_compaction_completed_keys: set[tuple[str, str, str]] = set()
         self._legacy_compacted_notification_keys: set[tuple[str, str]] = set()
+        self._last_compaction_identity: tuple[str, str] | None = None
 
     @property
     def process_id(self) -> int | None:
@@ -465,6 +466,13 @@ class CodexAppServerClient:
     @property
     def last_usage(self) -> dict[str, Any]:
         return self.usage
+
+    @property
+    def last_compaction_usage(self) -> dict[str, Any]:
+        identity = self._last_compaction_identity
+        if identity is None:
+            return _empty_usage()
+        return dict(self._usage_by_key.get(identity, _empty_usage()))
 
     def usage_for(self, thread_id: str | None = None, turn_id: str | None = None) -> dict[str, Any]:
         if thread_id is None:
@@ -695,11 +703,13 @@ class CodexAppServerClient:
             for key in self._context_compaction_completed_keys
             if key[0] != expected_thread_hash
         }
+        self._last_compaction_identity = None
         result = self._request_after_initialize("thread/compact/start", payload)
         self._wait_for_compaction(
             expected_thread_hash=expected_thread_hash,
             deadline=deadline,
         )
+        self._drain_ready_notifications()
         return result
 
     compact_thread = thread_compact_start
@@ -1219,6 +1229,7 @@ class CodexAppServerClient:
                 raise CodexAppServerProtocolError(
                     "contextCompaction completed before its started item"
                 )
+            self._last_compaction_identity = (compact_thread_id, compact_turn_id)
             self._context_compaction_completed_keys.add(key)
             return {
                 "kind": "contextCompaction/completed",

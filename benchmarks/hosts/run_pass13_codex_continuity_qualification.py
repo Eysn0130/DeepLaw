@@ -1,9 +1,10 @@
-"""Run the installed-wheel Codex App Server Pass 13 qualification candidate.
+"""Run the installed-wheel Codex App Server Pass 16 qualification candidate.
 
 The runner owns only the Host-side lifecycle and evidence boundary.  It starts a
-fresh temporary Vault through the installed ``deeplaw`` executable, keeps all
-raw sink/MCP/Host values in memory, and retains only schema-validated hashes,
-bounded counters, and scalar client event projections.
+fresh temporary Vault through the installed ``deeplaw`` executable, uses only an
+owner-provided isolated Codex profile, keeps all raw sink/MCP/Host values in
+memory, and retains only schema-validated hashes, bounded counters, and scalar
+client event projections.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from benchmarks.hosts import pass16_continuity_cases
 from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
@@ -44,12 +46,15 @@ from benchmarks.hosts.pass13_orchestrator import (
 
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "max"
+CODEX_VERSION = "codex-cli 0.147.0-alpha.1.2"
 RUN_COUNT = 3
 TIMEOUT_SECONDS = 300.0
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+PROVIDER_HARD_LIMIT_BYTES = 65_536
 MAX_MCP_STATUS_LIMIT = 1000
 
-_SCENARIOS = ("cold_start", "resume_fork", "compaction_forget")
+_SCENARIOS = pass16_continuity_cases.SCENARIOS
+SCENARIOS = _SCENARIOS
 _SCENARIO_METHODS = {
     "cold_start": ("thread/start",),
     "resume_fork": ("thread/start", "thread/resume", "thread/fork"),
@@ -61,30 +66,12 @@ _SCENARIO_METHODS = {
     ),
 }
 _SAFE_READ_OPERATIONS = frozenset({"context", "query"})
-_QUALIFICATION_MARKERS = {
-    "cold_start": {
-        "decision": "Keep release_ready=false until the Host qualification gates pass.",
-        "next_action": "Record the bounded Codex Host receipts before any release decision.",
-    },
-    "resume_fork": {
-        "decision": (
-            "Preserve the owner-approved read-only qualification route across resume and fork."
-        ),
-        "next_action": "Compare each Host lifecycle receipt and keep the route unchanged.",
-    },
-    "compaction_forget": {
-        "decision": (
-            "Forget the owner-directed working checkpoint before continuing the qualification."
-        ),
-        "next_action": "Report the post-forget gap and do not reuse the forgotten checkpoint.",
-    },
+SCENARIO_TASKS = {
+    scenario: pass16_continuity_cases.candidate_prompt(
+        pass16_continuity_cases.task_case(scenario)
+    )
+    for scenario in SCENARIOS
 }
-_DISTRACTOR_MARKERS = {
-    "wrong_task": "PASS13-FORBIDDEN-WRONG-TASK",
-    "wrong_worktree": "PASS13-FORBIDDEN-WRONG-WORKTREE",
-    "stale_snapshot": "PASS13-FORBIDDEN-STALE-SNAPSHOT",
-}
-_FORGOTTEN_MARKER = "PASS13-FORGOTTEN-CHECKPOINT"
 _DISABLED_CAPABILITIES = (
     "shell_tool",
     "unified_exec",
@@ -162,15 +149,8 @@ def _repository() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _host_environment(
-    codex_binary: Path,
-    profile_root: Path,
-    canaries: Mapping[str, str] = (),
-) -> dict[str, str]:
-    if profile_root.is_symlink():
-        raise QualificationFailure("Codex temporary profile root is unsafe")
-    profile_root.mkdir(parents=True, exist_ok=True)
-    roots = {
+def _profile_roots(profile_root: Path) -> dict[str, Path]:
+    return {
         "HOME": profile_root / "home",
         "CODEX_HOME": profile_root / "codex",
         "XDG_CONFIG_HOME": profile_root / "xdg-config",
@@ -184,11 +164,102 @@ def _host_environment(
         "APPDATA": profile_root / "appdata",
         "LOCALAPPDATA": profile_root / "localappdata",
     }
+
+
+def _resolved_path(value: str | Path) -> Path | None:
+    try:
+        return Path(value).expanduser().resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _validate_profile_root(
+    profile_root: Path,
+    *,
+    repository: Path | None = None,
+    allow_create: bool = False,
+) -> Path:
+    """Validate an explicit, owner-created profile root without reading its contents."""
+
+    profile = Path(profile_root)
+    if not profile.is_absolute():
+        raise QualificationFailure("Codex qualification profile root must be absolute")
+    if profile.is_symlink():
+        raise QualificationFailure("Codex qualification profile root must not be a symlink")
+    exists = profile.exists()
+    if exists and not profile.is_dir():
+        raise QualificationFailure("Codex qualification profile root must already exist")
+    if not exists and not allow_create:
+        raise QualificationFailure("Codex qualification profile root must already exist")
+    try:
+        resolved = profile.resolve(strict=exists)
+        repository_path = (repository or _repository()).resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationFailure("Codex qualification profile root is unavailable") from exc
+    try:
+        resolved.relative_to(repository_path)
+    except ValueError:
+        pass
+    else:
+        raise QualificationFailure(
+            "Codex qualification profile root must be outside the repository"
+        )
+
+    ambient_paths: set[Path] = set()
+    for candidate in (
+        Path.home(),
+        Path.home() / ".codex",
+        os.environ.get("HOME"),
+        os.environ.get("CODEX_HOME"),
+    ):
+        if candidate:
+            candidate_path = _resolved_path(candidate)
+            if candidate_path is not None:
+                ambient_paths.add(candidate_path)
+    if resolved in ambient_paths:
+        raise QualificationFailure(
+            "Codex qualification profile root must differ from ambient HOME/CODEX_HOME"
+        )
+
+    # The profile itself may be outside the ambient roots while one of the
+    # child roots aliases an ambient HOME/CODEX_HOME.  Reject that collision
+    # before creating any missing non-authentication directories.
+    for root in _profile_roots(resolved).values():
+        if _resolved_path(root) in ambient_paths:
+            raise QualificationFailure(
+                "Codex qualification profile roots must differ from ambient HOME/CODEX_HOME"
+            )
+    if not exists:
+        try:
+            profile.mkdir(parents=True)
+        except OSError as exc:
+            raise QualificationFailure("Codex qualification profile root is unavailable") from exc
+        return _validate_profile_root(profile, repository=repository)
+    return resolved
+
+
+def _host_environment(
+    codex_binary: Path,
+    profile_root: Path,
+    canaries: Mapping[str, str] = (),
+) -> dict[str, str]:
+    # Keep this helper usable in the legacy unit seam while execute() performs
+    # the strict owner-profile existence check before entering its work tempdir.
+    profile_root = _validate_profile_root(profile_root, allow_create=True)
+    roots = _profile_roots(profile_root)
     for root in set(roots.values()):
-        root.mkdir(parents=True, exist_ok=True)
+        if root.is_symlink():
+            raise QualificationFailure("Codex qualification profile directory is unsafe")
+        existed = root.exists()
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise QualificationFailure(
+                "Codex qualification profile directory is unavailable"
+            ) from exc
         if root.is_symlink() or not root.is_dir():
-            raise QualificationFailure("Codex temporary profile directory is unsafe")
-        if os.name != "nt":
+            raise QualificationFailure("Codex qualification profile directory is unsafe")
+        if not existed and os.name != "nt":
             root.chmod(0o700)
     environment = {name: value for name in _HOST_ENV_NAMES if (value := os.environ.get(name))}
     environment.update({name: str(root) for name, root in roots.items()})
@@ -331,22 +402,80 @@ def _run_installed_cli(
     return _parse_json_output(completed.stdout)
 
 
-def _make_binding(scenario: str) -> dict[str, Any]:
-    def digest(label: str) -> str:
-        return _sha256(label.encode("utf-8"))
+def _create_git_task_repository(
+    root: Path,
+    *,
+    task_line: str,
+) -> tuple[Path, Path, dict[str, Any], dict[str, Any]]:
+    """Create one real task repository and detached concurrent worktree."""
 
-    value: dict[str, Any] = {
-        "schema_version": "deeplaw.task-context-binding/v1",
-        "project_sha256": digest("pass13-project"),
-        "task_lineage_sha256": digest(f"pass13-task-{scenario}"),
-        "parent_task_lineage_sha256": None,
-        "repository_sha256": digest("pass13-repository"),
-        "worktree_sha256": digest(f"pass13-worktree-{scenario}"),
-        "base_revision": digest("pass13-base")[:40],
-        "dirty_state_sha256": digest(f"pass13-dirty-{scenario}"),
-    }
-    value["binding_sha256"] = _sha256(canonical_json(value).encode("utf-8"))
-    return value
+    repository = root / "task-repository"
+    repository.mkdir(parents=True, exist_ok=True)
+
+    def git(*arguments: str, cwd: Path = repository) -> str:
+        try:
+            completed = subprocess.run(
+                ["git", *arguments],
+                cwd=cwd,
+                env={"PATH": os.defpath, "LC_ALL": "C", "GIT_TERMINAL_PROMPT": "0"},
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise QualificationFailure("temporary Git task repository command failed") from exc
+        if completed.returncode != 0 or completed.stderr:
+            raise QualificationFailure("temporary Git task repository command failed")
+        return completed.stdout.strip()
+
+    git("init", "--quiet")
+    git("config", "user.email", "qualification@localhost")
+    git("config", "user.name", "DeepLaw Qualification")
+    (repository / "TASK.md").write_text(
+        "Pass 16 local no-case-data qualification task.\n", encoding="utf-8"
+    )
+    (repository / ".gitignore").write_text("vault/\n", encoding="utf-8")
+    git("add", "TASK.md", ".gitignore")
+    git("commit", "--quiet", "-m", "initial qualification task")
+    concurrent = root / "concurrent-worktree"
+    git("worktree", "add", "--quiet", "--detach", str(concurrent))
+    primary_binding = pass16_continuity_cases.git_binding(
+        repository, task_line=task_line
+    )
+    concurrent_binding = pass16_continuity_cases.git_binding(
+        repository, task_line=task_line, worktree=concurrent
+    )
+    if primary_binding["base_revision"] != concurrent_binding["base_revision"]:
+        raise QualificationFailure("concurrent worktree does not bind the same base revision")
+    if primary_binding["worktree_sha256"] == concurrent_binding["worktree_sha256"]:
+        raise QualificationFailure("concurrent worktree binding is not independent")
+    return repository, concurrent, primary_binding, concurrent_binding
+
+
+def _make_binding(
+    scenario: str,
+    *,
+    repository: Path | None = None,
+    worktree: Path | None = None,
+) -> dict[str, Any]:
+    """Compatibility seam returning a binding derived from a real Git repository."""
+
+    case = pass16_continuity_cases.task_case(scenario)
+    if repository is not None:
+        return pass16_continuity_cases.git_binding(
+            repository,
+            task_line=str(case["task_case"]),
+            worktree=worktree,
+        )
+    with tempfile.TemporaryDirectory(prefix="deeplaw-pass16-binding-") as temporary:
+        repository, _concurrent, _primary, _concurrent_binding = _create_git_task_repository(
+            Path(temporary), task_line=str(case["task_case"])
+        )
+        return pass16_continuity_cases.git_binding(
+            repository,
+            task_line=str(case["task_case"]),
+        )
 
 
 def _extract(value: Any, *keys: str) -> Any:
@@ -402,6 +531,8 @@ def _seed_vault(
     bindings: Mapping[str, Mapping[str, Any]],
     *,
     work_dir: Path,
+    cases: Mapping[str, Mapping[str, Any]] | None = None,
+    challenge_bindings: Mapping[str, Mapping[str, Mapping[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     _run_installed_cli(
         executable,
@@ -411,7 +542,7 @@ def _seed_vault(
             "--vault",
             str(vault),
             "--name",
-            "pass13-codex",
+            "pass16-codex",
             "--scope",
             "project",
         ],
@@ -426,7 +557,7 @@ def _seed_vault(
             "--vault",
             str(vault),
             "--writer-id",
-            "pass13-codex-runner",
+            "pass16-codex-runner",
             "--scope",
             "project",
             "--max-sensitivity",
@@ -445,21 +576,39 @@ def _seed_vault(
         raise QualificationFailure("owner sink enable did not return a grant")
     checkpoints: dict[str, dict[str, Any]] = {}
     expires_at = "2099-01-01T00:00:00Z"
+    selected_cases = cases or {
+        scenario: pass16_continuity_cases.task_case(scenario) for scenario in bindings
+    }
+    selected_challenge_bindings = challenge_bindings or {}
     for scenario, binding in bindings.items():
+        case = selected_cases.get(scenario)
+        if not isinstance(case, Mapping):
+            raise QualificationFailure("Pass 16 task case is missing")
+        current = case.get("current_checkpoint")
+        stale = case.get("stale_checkpoint")
+        challenges = case.get("wrong_state_challenges")
+        if (
+            not isinstance(current, Mapping)
+            or not isinstance(stale, Mapping)
+            or not isinstance(challenges, list)
+        ):
+            raise QualificationFailure("Pass 16 task case checkpoints are invalid")
+        markers = pass16_continuity_cases.marker_values(case)
+        include_case_details = cases is not None
         seed_before = _ledger_head(executable, vault, work_dir=work_dir)
         seed_receipts: list[Mapping[str, Any]] = []
-        run_id = f"run-pass13-{scenario}"
+        run_id = f"run-pass16-{scenario}"
         recorded = _write_sink_request(
             executable,
             vault,
             grant_id,
             {
                 "operation": "record_run",
-                "idempotency_key": f"pass13-{scenario}-run",
+                "idempotency_key": f"pass16-{scenario}-run",
                 "confirm_no_case_data": True,
                 "run_id": run_id,
-                "task": f"Pass 13 owner qualification run for {scenario}.",
-                "host_id": "codex-app-server-pass13",
+                "task": f"Pass 16 owner qualification run for {scenario}.",
+                "host_id": "codex-app-server-pass16",
                 "model_id": MODEL,
                 "status": "succeeded",
                 "scope": "project",
@@ -475,27 +624,30 @@ def _seed_vault(
             grant_id,
             {
                 "operation": "remember",
-                "idempotency_key": f"pass13-{scenario}-stale-checkpoint",
+                "idempotency_key": f"pass16-{scenario}-stale-checkpoint",
                 "confirm_no_case_data": True,
-                "title": f"Pass 13 {scenario} stale checkpoint",
+                "title": f"Pass 16 {scenario} stale checkpoint",
                 "body": _checkpoint_body(
                     scenario,
-                    decision="Do not use the stale checkpoint decision.",
-                    next_action=f"Do not reuse {_FORGOTTEN_MARKER}.",
-                    verified=f"The stale marker is {_FORGOTTEN_MARKER}.",
-                    gap="The current route must replace this stale revision.",
-                    artifact=f"pass13-{scenario}-stale",
+                    decision=str(stale["decision"]),
+                    next_action=str(stale["next_action"]),
+                    verified=str(stale["verified_fact"]),
+                    gap=str(stale["open_gap"]),
+                    artifact=f"pass16-{scenario}-stale",
+                    marker=str(stale["marker"]) if include_case_details else None,
+                    route="stale" if include_case_details else None,
+                    binding=binding if include_case_details else None,
                 ),
                 "kind": "memory",
                 "memory_type": "working",
-                "semantic_key": f"checkpoint:pass13:{scenario}",
+                "semantic_key": f"checkpoint:pass16:{scenario}",
                 "expires_at": expires_at,
                 "scope": "project",
                 "sensitivity": "private",
                 "run_id": run_id,
                 "model_id": MODEL,
-                "tool_id": "codex-app-server-pass13",
-                "tags": ["pass13", "qualification", scenario, "stale"],
+                "tool_id": "codex-app-server-pass16",
+                "tags": ["pass16", "qualification", scenario, "stale"],
             },
             work_dir=work_dir,
         )
@@ -510,20 +662,26 @@ def _seed_vault(
             grant_id,
             {
                 "operation": "remember",
-                "idempotency_key": f"pass13-{scenario}-checkpoint",
+                "idempotency_key": f"pass16-{scenario}-checkpoint",
                 "confirm_no_case_data": True,
-                "title": f"Pass 13 {scenario} working checkpoint",
+                "title": f"Pass 16 {scenario} working checkpoint",
                 "body": _checkpoint_body(
                     scenario,
-                    decision=_QUALIFICATION_MARKERS[scenario]["decision"],
-                    next_action=_QUALIFICATION_MARKERS[scenario]["next_action"],
-                    verified="The owner-authorized qualification route is current.",
-                    gap="Independent holdout and blind evidence remain unexecuted.",
-                    artifact=f"pass13-{scenario}-checkpoint",
+                    decision=str(current["decision"]),
+                    next_action=str(current["next_action"]),
+                    verified=str(current["verified_fact"]),
+                    gap=str(current["open_gap"]),
+                    artifact=f"pass16-{scenario}-checkpoint",
+                    marker=str(current["marker"]) if include_case_details else None,
+                    forget_marker=(
+                        markers.get("forgotten") if include_case_details else None
+                    ),
+                    route="current" if include_case_details else None,
+                    binding=binding if include_case_details else None,
                 ),
                 "kind": "memory",
                 "memory_type": "working",
-                "semantic_key": f"checkpoint:pass13:{scenario}",
+                "semantic_key": f"checkpoint:pass16:{scenario}",
                 "expires_at": expires_at,
                 "knowledge_id": stale_knowledge_id,
                 "expected_revision_id": stale_revision_id,
@@ -531,8 +689,8 @@ def _seed_vault(
                 "sensitivity": "private",
                 "run_id": run_id,
                 "model_id": MODEL,
-                "tool_id": "codex-app-server-pass13",
-                "tags": ["pass13", "qualification", scenario],
+                "tool_id": "codex-app-server-pass16",
+                "tags": ["pass16", "qualification", scenario],
             },
             work_dir=work_dir,
         )
@@ -545,29 +703,43 @@ def _seed_vault(
             "knowledge_id": knowledge_id,
             "revision_id": revision_id,
             "run_id": run_id,
-            "expected_decision": _QUALIFICATION_MARKERS[scenario]["decision"],
-            "expected_next_action": _QUALIFICATION_MARKERS[scenario]["next_action"],
-            "forbidden_markers": list(_DISTRACTOR_MARKERS.values()),
-            "forgotten_marker": _FORGOTTEN_MARKER,
+            "task_case": str(case.get("task_case", f"continuity_{scenario}_v1")),
+            "current_marker": markers["current"],
+            "stale_marker": markers["stale"],
+            "expected_decision": str(current["decision"]),
+            "expected_next_action": str(current["next_action"]),
+            "forbidden_markers": list(pass16_continuity_cases.forbidden_markers(case)),
+            "forgotten_marker": markers.get("forgotten"),
         }
-        for dimension, marker in _DISTRACTOR_MARKERS.items():
-            distractor_run_id = f"run-pass13-{scenario}-{dimension}"
+        for challenge in challenges:
+            if not isinstance(challenge, Mapping):
+                raise QualificationFailure("Pass 16 wrong-state challenge is invalid")
+            dimension = str(challenge["challenge"])
+            # The stale checkpoint is already the superseded revision of the
+            # current semantic identity. A second active stale route with the
+            # current binding would make correct admission impossible.
+            if dimension == "stale_checkpoint" and include_case_details:
+                continue
+            marker = str(challenge["marker"])
+            distractor_run_id = f"run-pass16-{scenario}-{dimension}"
+            route_bindings = selected_challenge_bindings.get(scenario, {})
+            distractor_binding = route_bindings.get(dimension, binding)
             distractor_run = _write_sink_request(
                 executable,
                 vault,
                 grant_id,
                 {
                     "operation": "record_run",
-                    "idempotency_key": f"pass13-{scenario}-{dimension}-run",
+                    "idempotency_key": f"pass16-{scenario}-{dimension}-run",
                     "confirm_no_case_data": True,
                     "run_id": distractor_run_id,
-                    "task": f"Pass 13 isolated {dimension} route for {scenario}.",
-                    "host_id": "codex-app-server-pass13",
+                    "task": f"Pass 16 isolated {dimension} route for {scenario}.",
+                    "host_id": "codex-app-server-pass16",
                     "model_id": MODEL,
                     "status": "succeeded",
                     "scope": "project",
                     "sensitivity": "private",
-                    "run_metadata": {"task_binding": _make_binding(f"{scenario}-{dimension}")},
+                    "run_metadata": {"task_binding": dict(distractor_binding)},
                 },
                 work_dir=work_dir,
             )
@@ -578,27 +750,30 @@ def _seed_vault(
                 grant_id,
                 {
                     "operation": "remember",
-                    "idempotency_key": f"pass13-{scenario}-{dimension}",
+                    "idempotency_key": f"pass16-{scenario}-{dimension}",
                     "confirm_no_case_data": True,
-                    "title": f"Pass 13 {scenario} route distractor",
+                    "title": f"Pass 16 {scenario} route distractor",
                     "body": _checkpoint_body(
                         scenario,
-                        decision=f"Use {marker} only for an unrelated route.",
-                        next_action=f"Never admit {marker} into the current route.",
-                        verified=f"The route marker is {marker}.",
-                        gap="The route does not match the current task binding.",
-                        artifact=f"pass13-{scenario}-{dimension}",
+                        decision=f"Do not admit {marker} into this route.",
+                        next_action=f"Reject unrelated {dimension} state.",
+                        verified=f"The {dimension} route is unrelated to this task.",
+                        gap="The current route remains owner-authorized.",
+                        artifact=f"pass16-{scenario}-{dimension}",
+                        marker=marker if include_case_details else None,
+                        route=dimension if include_case_details else None,
+                        binding=distractor_binding if include_case_details else None,
                     ),
                     "kind": "memory",
                     "memory_type": "working",
-                    "semantic_key": f"checkpoint:pass13:{scenario}:{dimension}",
+                    "semantic_key": f"checkpoint:pass16:{scenario}:{dimension}",
                     "expires_at": expires_at,
                     "scope": "project",
                     "sensitivity": "private",
                     "run_id": distractor_run_id,
                     "model_id": MODEL,
-                    "tool_id": "codex-app-server-pass13",
-                    "tags": ["pass13", "qualification", scenario, dimension],
+                    "tool_id": "codex-app-server-pass16",
+                    "tags": ["pass16", "qualification", scenario, dimension],
                 },
                 work_dir=work_dir,
             )
@@ -625,16 +800,28 @@ def _checkpoint_body(
     verified: str,
     gap: str,
     artifact: str,
+    marker: str | None = None,
+    forget_marker: str | None = None,
+    route: str | None = None,
+    binding: Mapping[str, Any] | None = None,
 ) -> str:
     return "\n".join(
-        (
-            f"GOAL: Complete the Pass 13 {scenario} owner qualification.",
+        [
+            f"GOAL: Complete the Pass 16 {scenario} owner qualification.",
             f"CONFIRMED_DECISION: {decision}",
-            "CONSTRAINT: Use only governed read-only context and do not publish.",
+            "CONSTRAINT: Use only governed read-only context and no case data.",
             f"VERIFIED_FACT: {verified}",
             f"OPEN_GAP: {gap}",
             f"NEXT_ACTION: {next_action}",
             f"ARTIFACT_REF: {artifact}.",
+        ]
+        + ([f"ROUTE_MARKER: {marker}"] if marker else [])
+        + ([f"FORGET_MARKER: {forget_marker}"] if forget_marker else [])
+        + ([f"ROUTE_KIND: {route}"] if route else [])
+        + (
+            [f"BINDING_DIGEST: {binding['binding_sha256']}"]
+            if isinstance(binding, Mapping) and isinstance(binding.get("binding_sha256"), str)
+            else []
         )
     )
 
@@ -653,11 +840,11 @@ def _forget_checkpoint(
         grant_id,
         {
             "operation": "forget",
-            "idempotency_key": "pass13-compaction-forget",
+            "idempotency_key": "pass16-compaction-forget",
             "confirm_no_case_data": True,
             "knowledge_id": checkpoint["knowledge_id"],
             "expected_revision_id": checkpoint["revision_id"],
-            "reason": "Owner-directed Pass 13 checkpoint forgetting.",
+            "reason": "Owner-directed Pass 16 checkpoint forgetting.",
         },
         work_dir=work_dir,
     )
@@ -675,15 +862,22 @@ def _ledger_head(executable: Path, vault: Path, *, work_dir: Path) -> str:
     return head
 
 
-def _prompt(scenario: str, binding: Mapping[str, Any], *, post_forget: bool = False) -> str:
-    state = " after the owner-forget operation" if post_forget else ""
+def _prompt(
+    scenario: str,
+    binding: Mapping[str, Any],
+    *,
+    post_forget: bool = False,
+    case: Mapping[str, Any] | None = None,
+) -> str:
+    selected_case = pass16_continuity_cases.task_case(scenario) if case is None else case
+    prompt = pass16_continuity_cases.candidate_prompt(
+        selected_case,
+        phase="post_forget" if post_forget else "current",
+    )
     return (
-        f"Continue the no-case-data Pass 13 {scenario} qualification task{state}. "
-        "Use exactly one read-only knowledge_support context call; retry once only "
-        "if the first safe read is insufficient. Never use another tool or operation. "
-        "The canonical task binding is "
-        f"{canonical_json(dict(binding))}. confirm_no_case_data=true. "
-        "Return only bounded JSON with summary, next_step, preserved_decisions, and open_gaps."
+        f"{prompt} The canonical task binding is {canonical_json(dict(binding))}. "
+        "confirm_no_case_data=true. Return only bounded JSON with summary, next_step, "
+        "preserved_decisions, and open_gaps."
     )
 
 
@@ -727,6 +921,38 @@ def _empty_usage() -> dict[str, Any]:
     }
 
 
+def _require_actual_usage(value: Mapping[str, Any]) -> dict[str, int]:
+    """Require actual App Server provider accounting for every retained turn."""
+
+    fields = tuple(_empty_usage())
+    if any(
+        not isinstance(value.get(field), int)
+        or isinstance(value.get(field), bool)
+        or int(value[field]) < 0
+        for field in fields
+    ):
+        raise QualificationFailure("actual Codex provider token usage is missing")
+    usage = {field: int(value[field]) for field in fields}
+    if (
+        usage["total_tokens"]
+        != usage["input_tokens"] + usage["output_tokens"]
+        or usage["cached_input_tokens"] > usage["input_tokens"]
+        or usage["reasoning_output_tokens"] > usage["output_tokens"]
+    ):
+        raise QualificationFailure("actual Codex provider token usage is inconsistent")
+    return usage
+
+
+def _merge_actual_usage(
+    first: Mapping[str, Any], second: Mapping[str, Any]
+) -> dict[str, int]:
+    left = _require_actual_usage(first)
+    right = _require_actual_usage(second)
+    return _require_actual_usage(
+        {field: left[field] + right[field] for field in _empty_usage()}
+    )
+
+
 def _result_value(result: Any, name: str, default: Any = None) -> Any:
     if isinstance(result, Mapping):
         return result.get(name, default)
@@ -753,6 +979,8 @@ def _turn_record(
     expected_decision: str | None = None,
     expected_next_action: str | None = None,
     forbidden_markers: Sequence[str] = (),
+    stale_marker: str | None = None,
+    current_marker: str | None = None,
     forgotten_marker: str | None = None,
     expected_task_binding: Mapping[str, Any],
     post_forget_phase: bool = False,
@@ -816,6 +1044,7 @@ def _turn_record(
             )
         ):
             raise QualificationFailure("App Server observed a prohibited capability event")
+    usage = _require_actual_usage(usage)
     event_bytes = b"".join(canonical_json(event).encode("utf-8") + b"\n" for event in safe_events)
     if not event_bytes:
         event_bytes = b'{"method":"not_applicable"}\n'
@@ -837,39 +1066,44 @@ def _turn_record(
     }
     if ledger_before != ledger_after:
         raise QualificationFailure("read-only turn mutated the ledger")
+    marker_values = [*outputs, final]
     marker_payload = {
         "expected_decision": (
             bool(
                 expected_decision
-                and any(_contains_marker(output, expected_decision) for output in outputs)
+                and any(_contains_marker(value, expected_decision) for value in marker_values)
             )
             and expected_decision in final.get("preserved_decisions", [])
         ),
         "expected_next_action": bool(
             expected_next_action
-            and any(_contains_marker(output, expected_next_action) for output in outputs)
+            and any(_contains_marker(value, expected_next_action) for value in marker_values)
             and final.get("next_step") == expected_next_action
         ),
         "forbidden_absent": not any(
-            _contains_marker(output, marker) for output in outputs for marker in forbidden_markers
+            _contains_marker(value, marker)
+            for value in marker_values
+            for marker in forbidden_markers
         ),
-        "stale_absent": not any(
-            _contains_marker(output, _DISTRACTOR_MARKERS["stale_snapshot"]) for output in outputs
-        ),
+        "stale_absent": not stale_marker
+        or not any(_contains_marker(value, stale_marker) for value in marker_values),
         "forgotten_absent": not bool(
             forgotten_marker
-            and any(_contains_marker(output, forgotten_marker) for output in outputs)
+            and any(_contains_marker(value, forgotten_marker) for value in marker_values)
         ),
         "expected_state_absent": not post_forget_phase
         or not any(
-            _contains_marker(output, marker)
-            for output in outputs
-            for marker in (expected_decision, expected_next_action)
+            _contains_marker(value, marker)
+            for value in marker_values
+            for marker in (current_marker, expected_decision)
             if marker
         ),
+        "current_present": not current_marker
+        or any(_contains_marker(value, current_marker) for value in marker_values),
         "gap_observed": any(
             payload.get("gap_count", 0) > 0 for payload in safe_read.get("provider_payloads", [])
-        ),
+        )
+        and bool(final.get("open_gaps")),
     }
     return record, {
         "bytes": event_bytes,
@@ -901,12 +1135,14 @@ def _run_scenario(
     ledger_head: Callable[[], str],
     forget_checkpoint: Callable[[], Any] | None,
     expectations: Mapping[str, Any] | None = None,
+    case: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if scenario not in _SCENARIOS:
-        raise ValueError("unsupported Pass 13 scenario")
+        raise ValueError("unsupported Pass 16 scenario")
     turns: list[dict[str, Any]] = []
     methods: list[str] = []
     marker_values: list[dict[str, Any]] = []
+    pending_compaction_usage: dict[str, int] | None = None
     expectations = expectations or {}
     seed_boundary = expectations.get("seed_boundary")
     if not isinstance(seed_boundary, Mapping):
@@ -920,6 +1156,7 @@ def _run_scenario(
         *,
         post_forget_phase: bool = False,
     ) -> None:
+        nonlocal pending_compaction_usage
         before = ledger_head()
         started = time.monotonic()
         result = client.turn_start(thread_id, [{"type": "text", "text": turn_prompt}])
@@ -937,12 +1174,19 @@ def _run_scenario(
                 None if post_forget_phase else expectations.get("expected_next_action")
             ),
             forbidden_markers=expectations.get("forbidden_markers", ()),
+            stale_marker=expectations.get("stale_marker"),
+            current_marker=expectations.get("current_marker"),
             forgotten_marker=(
                 expectations.get("forgotten_marker") if scenario == "compaction_forget" else None
             ),
             expected_task_binding=task_binding,
             post_forget_phase=post_forget_phase,
         )
+        if pending_compaction_usage is not None:
+            record["usage"] = _merge_actual_usage(
+                pending_compaction_usage, record["usage"]
+            )
+            pending_compaction_usage = None
         record["host_elapsed_ms"] = round((time.monotonic() - started) * 1000)
         turns.append(record)
         marker_values.append(payload)
@@ -970,6 +1214,9 @@ def _run_scenario(
         turn(forked_id, "thread/fork", prompt)
     elif scenario == "compaction_forget":
         client.thread_compact_start(thread_id)
+        pending_compaction_usage = _require_actual_usage(
+            _result_value(client, "last_compaction_usage", _empty_usage())
+        )
         methods.extend(["thread/compact/start", "item/started", "item/completed"])
         turn(thread_id, "thread/compact/start", prompt)
         if forget_checkpoint is None:
@@ -1005,19 +1252,23 @@ def _run_scenario(
         turn(
             thread_id,
             "thread/compact/start",
-            _prompt(scenario, task_binding, post_forget=True),
+            _prompt(scenario, task_binding, post_forget=True, case=case),
             post_forget_phase=True,
         )
-    correct_action_values = (
+    preservation_values = (
         marker_values[:-1] if scenario == "compaction_forget" else marker_values
     )
     metrics = {
         "first_correct_action": all(
-            payload["expected_next_action"] for payload in correct_action_values
+            turn_record["safe_read"].get("first_call_valid") is True
+            for turn_record in turns
         ),
         "decision_preservation": (
-            all(payload["expected_decision"] for payload in marker_values)
-            if scenario == "resume_fork"
+            all(
+                payload["expected_decision"] and payload["expected_next_action"]
+                for payload in preservation_values
+            )
+            if preservation_values
             else None
         ),
         "wrong_state_admission": (
@@ -1037,10 +1288,20 @@ def _run_scenario(
         ),
         "projection_state_correct": None,
         "retention_wording_correct": None,
-        "provider_boundary_correct": all(
-            payload.get("write_performed") is False
-            for record in turns
-            for payload in record["safe_read"].get("provider_payloads", [])
+        "provider_boundary_correct": bool(
+            payloads := [
+                payload
+                for record in turns
+                for payload in record["safe_read"].get("provider_payloads", [])
+                if isinstance(payload, Mapping)
+            ]
+        )
+        and all(
+            payload.get("delivery_match") is True
+            and payload.get("write_performed") is False
+            and isinstance(payload.get("provider_bytes"), int)
+            and 0 < payload["provider_bytes"] <= PROVIDER_HARD_LIMIT_BYTES
+            for payload in payloads
         ),
     }
     failure_codes = []
@@ -1146,6 +1407,48 @@ def _codex_authentication_receipt(
     ):
         raise QualificationFailure("Codex existing login was not confirmed")
     return {"checked": True, "raw_sha256": _sha256(combined), "raw_bytes": len(combined)}
+
+
+def _validate_codex_version(
+    completed: Any,
+    *,
+    canaries: Mapping[str, str] = (),
+) -> str:
+    """Accept only the exact pinned Codex CLI version on stdout."""
+
+    stdout_value = getattr(completed, "stdout", None)
+    stderr_value = getattr(completed, "stderr", None)
+    if isinstance(stdout_value, bytes):
+        stdout = stdout_value
+    elif isinstance(stdout_value, str):
+        stdout = stdout_value.encode("utf-8")
+    else:
+        stdout = b""
+    if isinstance(stderr_value, bytes):
+        stderr = stderr_value
+    elif isinstance(stderr_value, str):
+        stderr = stderr_value.encode("utf-8")
+    else:
+        stderr = b""
+    version_bytes = stdout + stderr
+    expected_stdout = {
+        CODEX_VERSION.encode("utf-8"),
+        (CODEX_VERSION + "\n").encode("utf-8"),
+        (CODEX_VERSION + "\r\n").encode("utf-8"),
+    }
+    canary_values = tuple(
+        value
+        for value in (canaries.values() if isinstance(canaries, Mapping) else ())
+        if isinstance(value, str)
+    )
+    if (
+        getattr(completed, "returncode", None) != 0
+        or stdout not in expected_stdout
+        or len(version_bytes) > MAX_OUTPUT_BYTES
+        or any(value.encode("utf-8") in version_bytes for value in canary_values)
+    ):
+        raise QualificationFailure("Codex version preflight failed")
+    return CODEX_VERSION
 
 
 def _configured_mcp_server_names(value: Any) -> list[str]:
@@ -1397,11 +1700,77 @@ def _write_artifacts(
     return records
 
 
+def _prepare_codex_scenario(
+    *,
+    run_root: Path,
+    case: Mapping[str, Any],
+    codex_binary: Path,
+    runtime_executable: Path,
+    runtime_python: Path,
+    ambient_servers: Sequence[str],
+) -> dict[str, Any]:
+    """Prepare one isolated Pass 16 vault, Git task, worktree, and MCP route."""
+
+    scenario = str(case.get("scenario", ""))
+    if scenario not in SCENARIOS:
+        raise QualificationFailure("unsupported Pass 16 scenario")
+    run_root.mkdir(parents=True, exist_ok=True)
+    repository, concurrent, primary_binding, concurrent_binding = _create_git_task_repository(
+        run_root,
+        task_line=str(case["task_case"]),
+    )
+    wrong_task_binding = pass16_continuity_cases.git_binding(
+        repository,
+        task_line=f"{case['task_case']}:wrong-task-line",
+    )
+    bindings = {scenario: primary_binding}
+    challenge_bindings = {
+        scenario: {
+            "stale_checkpoint": primary_binding,
+            "wrong_task_line": wrong_task_binding,
+            "wrong_worktree": concurrent_binding,
+        }
+    }
+    vault = repository / "vault"
+    seeded = _seed_vault(
+        runtime_executable,
+        vault,
+        bindings,
+        work_dir=repository,
+        cases={scenario: case},
+        challenge_bindings=challenge_bindings,
+    )
+    wrapper = run_root / "deeplaw-closed-mcp"
+    wrapper.write_text(
+        _closed_mcp_wrapper_source(runtime_python, runtime_executable, vault),
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+    app_argv = _app_server_argv(
+        codex_binary,
+        mcp_wrapper=wrapper,
+        ambient_servers=ambient_servers,
+    )
+    return {
+        "case": dict(case),
+        "repository": repository,
+        "concurrent": concurrent,
+        "binding": primary_binding,
+        "concurrent_binding": concurrent_binding,
+        "vault": vault,
+        "seeded": seeded,
+        "wrapper": wrapper,
+        "app_argv": app_argv,
+    }
+
+
 def execute(
     *,
     candidate_wheel: Path,
     deeplaw_executable: Path,
     output_dir: Path,
+    profile_root: Path,
+    human_gold_path: Path,
     codex_command: str = "codex",
 ) -> dict[str, Any]:
     """Execute the three current Host lifecycle scenarios.
@@ -1412,6 +1781,20 @@ def execute(
     """
 
     repository = _repository()
+    profile_root = _validate_profile_root(profile_root, repository=repository)
+    # This structural check runs before any App Server/model process can start.
+    # Human authorship and independence remain external reviewer attestations.
+    from benchmarks.evaluator.score_pass16_host_continuity import (
+        HumanGoldValidationError,
+        load_human_gold,
+    )
+
+    try:
+        load_human_gold(Path(human_gold_path), repository=repository)
+    except HumanGoldValidationError as exc:
+        raise QualificationFailure(
+            "Codex qualification requires frozen external Human Gold"
+        ) from exc
     orchestrator = QualificationOrchestrator(
         host="codex",
         repository=repository,
@@ -1420,15 +1803,14 @@ def execute(
         output_dir=output_dir.resolve(strict=False),
         error_type=QualificationFailure,
     )
-    selected_output, binding, runtime = orchestrator.prepare_candidate()
+    selected_output, candidate_binding, runtime = orchestrator.prepare_candidate()
     codex_text = shutil.which(codex_command)
     if codex_text is None:
         raise QualificationFailure("Codex command was not found")
     codex_binary = Path(codex_text).resolve(strict=True)
-    canaries = {name: _sha256(f"pass13-{name}".encode()) for name in _CANARY_NAMES}
+    canaries = {name: _sha256(f"pass16-{name}".encode()) for name in _CANARY_NAMES}
 
     selected_output.mkdir(parents=True)
-    bindings = {scenario: _make_binding(scenario) for scenario in _SCENARIOS}
     runs: list[dict[str, Any]] = []
     lifecycle_methods: set[str] = set()
     all_events: dict[str, bytes] = {}
@@ -1452,15 +1834,11 @@ def execute(
         "raw_bytes": 0,
     }
 
-    with tempfile.TemporaryDirectory(prefix="deeplaw-pass13-") as temporary:
+    cases = pass16_continuity_cases.cases_by_scenario()
+    with tempfile.TemporaryDirectory(prefix="deeplaw-pass16-") as temporary:
         work_dir = Path(temporary)
-        profile_root = work_dir / "host-profile"
         host_environment = _host_environment(codex_binary, profile_root, canaries)
         host_isolation = _isolation_receipt(profile_root, host_environment)
-        authentication_receipt = _codex_authentication_receipt(
-            codex_binary,
-            host_environment,
-        )
         version_process = subprocess.run(
             [str(codex_binary), "--version"],
             capture_output=True,
@@ -1469,15 +1847,11 @@ def execute(
             timeout=30,
             env=host_environment,
         )
-        version_bytes = (version_process.stdout + version_process.stderr).encode("utf-8")
-        if (
-            version_process.returncode != 0
-            or not version_process.stdout.strip()
-            or len(version_bytes) > MAX_OUTPUT_BYTES
-            or any(value.encode("utf-8") in version_bytes for value in canaries.values())
-        ):
-            raise QualificationFailure("Codex version preflight failed")
-        codex_version = version_process.stdout.strip().splitlines()[-1][:200]
+        codex_version = _validate_codex_version(version_process, canaries=canaries)
+        authentication_receipt = _codex_authentication_receipt(
+            codex_binary,
+            host_environment,
+        )
         mcp_inventory_value, _mcp_inventory_raw = _run_codex_mcp_list(
             codex_binary,
             host_environment,
@@ -1487,24 +1861,24 @@ def execute(
             for name in _configured_mcp_server_names(mcp_inventory_value)
             if name != "deeplaw"
         ]
-        vault = work_dir / "vault"
-        seeded = _seed_vault(runtime["_executable"], vault, bindings, work_dir=work_dir)
-        wrapper = work_dir / "deeplaw-closed-mcp"
-        wrapper.write_text(
-            _closed_mcp_wrapper_source(runtime["_runtime_python"], runtime["_executable"], vault),
-            encoding="utf-8",
-        )
-        wrapper.chmod(0o700)
-        app_argv = _app_server_argv(
-            codex_binary, mcp_wrapper=wrapper, ambient_servers=ambient_names
-        )
+        states: dict[str, dict[str, Any]] = {}
+        for index, scenario in enumerate(_SCENARIOS, 1):
+            states[scenario] = _prepare_codex_scenario(
+                run_root=work_dir / f"run-{index}",
+                case=cases[scenario],
+                codex_binary=codex_binary,
+                runtime_executable=runtime["_executable"],
+                runtime_python=runtime["_runtime_python"],
+                ambient_servers=ambient_names,
+            )
 
         # Inventory is gathered from the same app-server protocol used by the
         # three lifecycle runs.  Raw pages are hashed in memory and discarded.
+        inventory_state = states[_SCENARIOS[0]]
         inventory_client = CodexAppServerClient(
-            app_argv,
+            inventory_state["app_argv"],
             host_environment,
-            cwd=work_dir,
+            cwd=inventory_state["repository"],
             timeout_seconds=TIMEOUT_SECONDS,
             max_output_bytes=MAX_OUTPUT_BYTES,
             forbidden_output_values=tuple(canaries.values()),
@@ -1531,40 +1905,50 @@ def execute(
                 security["secret_leak"] = True
 
         for index, scenario in enumerate(_SCENARIOS, 1):
-            checkpoint = seeded["checkpoints"][scenario]
+            state = states[scenario]
+            checkpoint = state["seeded"]["checkpoints"][scenario]
+            repository = state["repository"]
+            vault = state["vault"]
+            binding = state["binding"]
             client = CodexAppServerClient(
-                app_argv,
+                state["app_argv"],
                 host_environment,
-                cwd=work_dir,
+                cwd=repository,
                 timeout_seconds=TIMEOUT_SECONDS,
                 max_output_bytes=MAX_OUTPUT_BYTES,
                 forbidden_output_values=tuple(canaries.values()),
             )
             try:
                 client.initialize()
-                before = _ledger_head(runtime["_executable"], vault, work_dir=work_dir)
+                before = _ledger_head(runtime["_executable"], vault, work_dir=repository)
 
-                def forget(checkpoint: Mapping[str, Any] = checkpoint) -> Any:
+                def forget(
+                    checkpoint: Mapping[str, Any] = checkpoint,
+                    state: Mapping[str, Any] = state,
+                    vault: Path = vault,
+                    repository: Path = repository,
+                ) -> Any:
                     return _forget_checkpoint(
                         runtime["_executable"],
                         vault,
-                        seeded["grant_id"],
+                        state["seeded"]["grant_id"],
                         checkpoint,
-                        work_dir=work_dir,
+                        work_dir=repository,
                     )
 
                 run = _run_scenario(
                     client=client,
                     scenario=scenario,
-                    task_binding=bindings[scenario],
-                    prompt=_prompt(scenario, bindings[scenario]),
-                    ledger_head=lambda: _ledger_head(
-                        runtime["_executable"], vault, work_dir=work_dir
+                    task_binding=binding,
+                    prompt=_prompt(scenario, binding, case=state["case"]),
+                    ledger_head=lambda vault=vault, repository=repository: _ledger_head(
+                        runtime["_executable"], vault, work_dir=repository
                     ),
                     forget_checkpoint=forget if scenario == "compaction_forget" else None,
                     expectations=checkpoint,
+                    case=state["case"],
                 )
-                after = _ledger_head(runtime["_executable"], vault, work_dir=work_dir)
+                after = _ledger_head(runtime["_executable"], vault, work_dir=repository)
                 if before != after and scenario != "compaction_forget":
                     raise QualificationFailure("read-only lifecycle changed the ledger")
             except Exception as exc:
@@ -1623,8 +2007,8 @@ def execute(
         "mcp_inventory": status_inventory,
     }
     report_binding = {
-        "commit": binding["commit"],
-        "tree": binding["tree"],
+        "commit": candidate_binding["commit"],
+        "tree": candidate_binding["tree"],
         "worktree_clean": True,
         **{
             key: value
@@ -1675,8 +2059,8 @@ def execute(
     artifacts = {"codex-continuity-qualification.json": report_bytes, **all_events}
     _write_artifacts(selected_output, artifacts, forbidden_values=tuple(canaries.values()))
     orchestrator.finalize_bundle(
-        commit=binding["commit"],
-        tree=binding["tree"],
+        commit=candidate_binding["commit"],
+        tree=candidate_binding["tree"],
         artifacts={
             role: selected_output / name
             for role, name in (
@@ -1696,10 +2080,12 @@ def execute(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run Pass 13 Codex continuity qualification")
+    parser = argparse.ArgumentParser(description="Run Pass 16 Codex continuity qualification")
     parser.add_argument("--candidate-wheel", required=True)
     parser.add_argument("--deeplaw-executable", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--profile-root", required=True)
+    parser.add_argument("--human-gold", required=True)
     parser.add_argument("--codex-command", default="codex")
     return parser
 
@@ -1710,6 +2096,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         candidate_wheel=Path(args.candidate_wheel),
         deeplaw_executable=Path(args.deeplaw_executable),
         output_dir=Path(args.output_dir),
+        profile_root=Path(args.profile_root),
+        human_gold_path=Path(args.human_gold),
         codex_command=args.codex_command,
     )
     print(canonical_json(report))

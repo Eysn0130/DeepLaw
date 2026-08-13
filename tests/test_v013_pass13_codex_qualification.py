@@ -392,7 +392,14 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
             }
         ],
         "tool_outputs": [{}],
-        "usage": qualification._empty_usage(),
+        "usage": {
+            "input_tokens": 10,
+            "cached_input_tokens": 2,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 5,
+            "reasoning_output_tokens": 1,
+            "total_tokens": 15,
+        },
         "events": [],
     }
     kwargs = {
@@ -416,6 +423,18 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
     ]
     record, _ = qualification._turn_record(result, **kwargs)
     assert record["status"] == "passed"
+
+    result["usage"] = qualification._empty_usage()
+    with pytest.raises(qualification.QualificationFailure, match="actual Codex provider"):
+        qualification._turn_record(result, **kwargs)
+    result["usage"] = {
+        "input_tokens": 10,
+        "cached_input_tokens": 2,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5,
+        "reasoning_output_tokens": 1,
+        "total_tokens": 15,
+    }
 
     result["events"] = []
     result["final_text"] = json.dumps(

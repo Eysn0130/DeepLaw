@@ -646,5 +646,5 @@ def test_report_consistency_rejects_empty_read_and_self_reported_aggregate() -> 
 
     report["runs"][0] = _report_run(1, "projection_status")  # type: ignore[index]
     report["aggregate"]["provider_bytes"] = 1  # type: ignore[index]
-    with pytest.raises(EvidenceValidationError, match="aggregate"):
+    with pytest.raises(EvidenceValidationError, match="scenario matrix"):
         validate_host_report_consistency(report)

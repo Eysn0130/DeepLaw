@@ -404,7 +404,7 @@ def build_bundle_manifest(
 
 _SCENARIO_MATRIX = {
     "codex": ("cold_start", "resume_fork", "compaction_forget"),
-    "opencode": ("projection_status", "source_forget", "provider_boundary"),
+    "opencode": ("cold_start", "resume_fork", "compaction_forget"),
 }
 _CODEX_METHODS = {
     "cold_start": {"thread/start"},
@@ -432,9 +432,9 @@ _MUTATION_KINDS = {
         "compaction_forget": ("seed_checkpoint", "forget"),
     },
     "opencode": {
-        "projection_status": ("seed_checkpoint",),
-        "source_forget": ("seed_checkpoint", "forget"),
-        "provider_boundary": ("none",),
+        "cold_start": ("seed_checkpoint",),
+        "resume_fork": ("seed_checkpoint",),
+        "compaction_forget": ("seed_checkpoint", "forget"),
     },
 }
 
@@ -549,11 +549,14 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 and not set(methods).issubset(expected_method_set)
             ):
                 raise EvidenceValidationError("Codex run lifecycle method set is invalid")
-        if host == "opencode" and (
-            (run_passed and set(methods) != {"opencode/run"})
-            or (not run_passed and methods not in (["opencode/run"], ["not_applicable"]))
-        ):
-            raise EvidenceValidationError("OpenCode run lifecycle method is invalid")
+        if host == "opencode":
+            expected_method_set = _CODEX_METHODS[str(run["scenario"])]
+            if (run_passed and set(methods) != expected_method_set) or (
+                not run_passed
+                and methods != ["not_applicable"]
+                and not set(methods).issubset(expected_method_set)
+            ):
+                raise EvidenceValidationError("OpenCode run lifecycle method set is invalid")
         turns = run.get("turns")
         if not isinstance(turns, list) or not turns:
             raise EvidenceValidationError("Host run omitted turn evidence")
@@ -565,9 +568,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         turn_methods = tuple(
             turn.get("lifecycle_method") for turn in turns if isinstance(turn, Mapping)
         )
-        expected_turn_methods = (
-            _CODEX_TURN_METHODS[str(run["scenario"])] if host == "codex" else ("opencode/run",)
-        )
+        expected_turn_methods = _CODEX_TURN_METHODS[str(run["scenario"])]
         if run_passed and turn_methods != expected_turn_methods:
             raise EvidenceValidationError("Host turn lifecycle sequence is invalid")
         if not run_passed and turn_methods != ("not_applicable",) and (
@@ -583,10 +584,8 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 raise EvidenceValidationError("Host lifecycle identities are missing")
             if len(set(turn_ids)) != len(turn_ids):
                 raise EvidenceValidationError("Host turn identities must be unique")
-            if host == "codex" and run["scenario"] == "resume_fork" and (
-                thread_ids[-1] == thread_ids[-2]
-            ):
-                raise EvidenceValidationError("Codex fork did not create a distinct thread")
+            if run["scenario"] == "resume_fork" and thread_ids[-1] == thread_ids[-2]:
+                raise EvidenceValidationError("fork did not create a distinct thread")
         first_read: Mapping[str, Any] | None = None
         retried = False
         for turn in turns:
@@ -709,7 +708,7 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             "evidence_sha256"
         ) != _metric_evidence(run):
             raise EvidenceValidationError("scenario metrics are not bound to response evidence")
-        if run_passed and host == "codex":
+        if run_passed and host in {"codex", "opencode"}:
             required_common = {
                 "first_correct_action": True,
                 "wrong_state_admission": 0,
@@ -729,42 +728,9 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 or metrics.get("gap_observed") is not True
             ):
                 raise EvidenceValidationError("compaction/forget admission is invalid")
-        if run_passed and host == "opencode":
-            provider_payloads = [
-                payload
-                for turn in turns
-                if isinstance(turn, Mapping)
-                for payload in turn.get("safe_read", {}).get("provider_payloads", [])
-                if isinstance(payload, Mapping)
-            ]
-            observed_gap_codes = {
-                code
-                for payload in provider_payloads
-                for code in payload.get("gap_codes", [])
-                if isinstance(code, str)
-            }
-            if metrics.get("provider_boundary_correct") is not True:
-                raise EvidenceValidationError("OpenCode Provider boundary is invalid")
-            if run["scenario"] == "projection_status" and metrics.get(
-                "projection_state_correct"
-            ) is not True:
-                raise EvidenceValidationError("projection status was not reported correctly")
-            if (
-                run["scenario"] == "projection_status"
-                and "uncompiled_source" not in observed_gap_codes
-            ):
-                raise EvidenceValidationError("projection Gap evidence is missing")
-            if run["scenario"] == "source_forget" and metrics.get(
-                "retention_wording_correct"
-            ) is not True:
-                raise EvidenceValidationError("source forget wording was not preserved")
-            if run["scenario"] == "source_forget" and (
-                metrics.get("forgotten_state_admission") != 0
-                or metrics.get("gap_observed") is not True
-                or any(payload.get("statement_count") != 0 for payload in provider_payloads)
-                or not any(payload.get("gap_count", 0) > 0 for payload in provider_payloads)
-            ):
-                raise EvidenceValidationError("source forget admission is invalid")
+        # OpenCode now exercises the same three lifecycle families and outcome
+        # gates as Codex.  Do not accept the historical projection/source/provider
+        # smoke scenarios here.
 
     if host == "opencode":
         opencode_thread_ids = [
@@ -781,19 +747,13 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
 
     lifecycle = report.get("lifecycle")
     root_methods = lifecycle.get("methods_observed") if isinstance(lifecycle, Mapping) else None
-    required_root = (
-        set().union(*_CODEX_METHODS.values()) if host == "codex" else {"not_applicable"}
-    )
-    observed_method_union = (
-        {
-            method
-            for run in runs
-            for method in run.get("methods_observed", [])
-            if isinstance(method, str)
-        }
-        if host == "codex"
-        else {"not_applicable"}
-    )
+    required_root = set().union(*_CODEX_METHODS.values())
+    observed_method_union = {
+        method
+        for run in runs
+        for method in run.get("methods_observed", [])
+        if isinstance(method, str)
+    }
     if not isinstance(root_methods, list) or set(root_methods) != observed_method_union:
         raise EvidenceValidationError("root Host lifecycle does not match run evidence")
     if report.get("status") == "executed" and set(root_methods) != required_root:

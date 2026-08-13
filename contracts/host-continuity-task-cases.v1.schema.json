@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-continuity-task-cases.v1.schema.json",
+  "title": "DeepLaw Host Continuity Task Cases v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "frozen_at", "model_outputs_seen_before_freeze",
+    "development_tuning_material", "hosts", "task_cases", "scoring_rules"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-continuity-task-cases/v1"},
+    "status": {"const": "qualification_input_frozen"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "model_outputs_seen_before_freeze": {"const": false},
+    "development_tuning_material": {"const": false},
+    "hosts": {
+      "type": "array",
+      "const": ["codex", "opencode"]
+    },
+    "task_cases": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/taskCase"}
+    },
+    "scoring_rules": {"$ref": "#/$defs/scoringRules"}
+  },
+  "$defs": {
+    "taskCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_case", "scenario", "task_prompt", "current_checkpoint",
+        "stale_checkpoint", "wrong_state_challenges", "required_human_review",
+        "post_forget_requirement"
+      ],
+      "properties": {
+        "task_case": {
+          "type": "string",
+          "pattern": "^continuity_[a-z0-9_]+_v1$"
+        },
+        "scenario": {
+          "enum": ["cold_start", "resume_fork", "compaction_forget"]
+        },
+        "task_prompt": {"type": "string", "minLength": 40, "maxLength": 2000},
+        "current_checkpoint": {"$ref": "#/$defs/checkpoint"},
+        "stale_checkpoint": {"$ref": "#/$defs/checkpoint"},
+        "wrong_state_challenges": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/challenge"}
+        },
+        "required_human_review": {"$ref": "#/$defs/humanReview"},
+        "post_forget_requirement": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["forgotten_marker", "require_gap", "maximum_admission_count"],
+              "properties": {
+                "forgotten_marker": {"$ref": "#/$defs/marker"},
+                "require_gap": {"const": true},
+                "maximum_admission_count": {"const": 0}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "next_action", "verified_fact", "open_gap", "marker"],
+      "properties": {
+        "decision": {"type": "string", "minLength": 1, "maxLength": 500},
+        "next_action": {"type": "string", "minLength": 1, "maxLength": 500},
+        "verified_fact": {"type": "string", "minLength": 1, "maxLength": 500},
+        "open_gap": {"type": "string", "minLength": 1, "maxLength": 500},
+        "marker": {"$ref": "#/$defs/marker"}
+      }
+    },
+    "challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["challenge", "marker", "maximum_admission_count"],
+      "properties": {
+        "challenge": {"enum": ["stale_checkpoint", "wrong_task_line", "wrong_worktree"]},
+        "marker": {"$ref": "#/$defs/marker"},
+        "maximum_admission_count": {"const": 0}
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_ids", "criteria", "pass_condition"],
+      "properties": {
+        "criterion_ids": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"}
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "pass_condition": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "marker": {
+      "type": "string",
+      "pattern": "^PASS16-[A-Z0-9-]{16,100}$"
+    },
+    "scoringRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_first_correct_action", "minimum_decision_preservation",
+        "maximum_wrong_state_admission", "maximum_stale_state_admission",
+        "maximum_forgotten_state_admission", "require_actual_provider_bytes",
+        "require_actual_provider_tokens", "hard_failures"
+      ],
+      "properties": {
+        "minimum_first_correct_action": {"const": 1},
+        "minimum_decision_preservation": {"const": 1},
+        "maximum_wrong_state_admission": {"const": 0},
+        "maximum_stale_state_admission": {"const": 0},
+        "maximum_forgotten_state_admission": {"const": 0},
+        "require_actual_provider_bytes": {"const": true},
+        "require_actual_provider_tokens": {"const": true},
+        "hard_failures": {
+          "type": "array",
+          "minItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "wrong_state_admission", "secret_leak", "hidden_write",
+              "wrong_authority", "provider_payload_overflow", "model_substitution",
+              "tool_version_mismatch", "human_gold_threshold_miss"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

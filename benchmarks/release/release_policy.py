@@ -19,15 +19,15 @@ from typing import Any
 V5_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v5"
 V6_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v6"
 V013_ACTIVE_CLASSIFICATION_PATH = Path(__file__).with_name(
-    "v013-gate-classification-v3.json"
+    "v013-gate-classification-v4.json"
 )
 V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH = Path(__file__).resolve().parents[2] / (
-    "contracts/v013-release-gate-classification.v3.schema.json"
+    "contracts/v013-release-gate-classification.v4.schema.json"
 )
 V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION = (
-    "deeplaw.v013-release-gate-classification/v3"
+    "deeplaw.v013-release-gate-classification/v4"
 )
-V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v3"
+V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v4"
 
 _SEMVER_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")

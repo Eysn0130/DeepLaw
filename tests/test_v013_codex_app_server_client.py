@@ -104,6 +104,23 @@ def _fake_server(
                 if MODE in {"compact-current", "lifecycle"}:
                     time.sleep(0.08)
                     send({
+                        "method": "thread/tokenUsage/updated",
+                        "params": {
+                            "threadId": "thread-2",
+                            "turnId": "turn-compact-1",
+                            "tokenUsage": {
+                                "last": {
+                                    "inputTokens": 12,
+                                    "cachedInputTokens": 3,
+                                    "cacheWriteInputTokens": 0,
+                                    "outputTokens": 4,
+                                    "reasoningOutputTokens": 1,
+                                    "totalTokens": 16,
+                                }
+                            },
+                        },
+                    })
+                    send({
                         "method": "item/started",
                         "params": {
                             "threadId": "thread-2",
@@ -419,6 +436,14 @@ def test_compact_waits_for_current_context_compaction_item_lifecycle(
             == hashlib.sha256(b"turn-compact-1").hexdigest()
             for event in compaction
         )
+        assert client.last_compaction_usage == {
+            "input_tokens": 12,
+            "cached_input_tokens": 3,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 4,
+            "reasoning_output_tokens": 1,
+            "total_tokens": 16,
+        }
 
 
 def test_deprecated_thread_compacted_is_recorded_but_not_qualification_success(

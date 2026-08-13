@@ -10,9 +10,9 @@ from jsonschema import Draft202012Validator
 from benchmarks.release import release_policy
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v3.json"
+CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v4.json"
 CLASSIFICATION_SCHEMA = (
-    REPOSITORY / "contracts/v013-release-gate-classification.v3.schema.json"
+    REPOSITORY / "contracts/v013-release-gate-classification.v4.schema.json"
 )
 
 
@@ -66,7 +66,7 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         "model_id": "gpt-5.6-luna",
         "argv_prefix": ["codex", "app-server", "--stdio"],
     }
-    assert gates["opencode"]["constraints"]["tool_version"] is None
+    assert gates["opencode"]["constraints"]["tool_version"] == "1.18.16"
 
 
 def test_living_wiki_core_is_not_bundled_with_optional_graph_analytics() -> None:
@@ -160,7 +160,7 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
         "DeepLaw meets the frozen v0.13 Kernel compatibility baseline defined by the "
         "qualification protocol."
     ) in " ".join(protocol.split())
-    assert "v013-gate-classification-v3.json" in traceability
+    assert "v013-gate-classification-v4.json" in traceability
     assert "Human Gold, legal evidence, Context Utility" in traceability
 
     pyproject = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))

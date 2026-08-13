@@ -38,7 +38,7 @@ mapped existing Core gates; there is no generic `parity` gate.
 | Obsidian official public format/API help, accessed 2026-08-11; API snapshot `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation`; real-file/editor receipts | Obsidian UI, commercial Sync, plugin marketplace, and complete Canvas UX |
 | LLM Wiki behavior category (not a comparator project) | An Agent can generate and update knowledge while provenance, revision, Authority, scope, sensitivity, and Ledger state remain explicit; the original Source Revision is never rewritten | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | Any named-product or superiority statement unless an exact project and version are separately frozen |
 | Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale-checkpoint and wrong-task-line rejection | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens from `deeplaw.host-continuity-qualification/v1` | Codex Agent Runtime ownership, UI, marketplace, or a static/no-model Host smoke |
-| OpenCode / `deepseek/deepseek-v4-flash`; exact installed OpenCode version pending | The same three real Host task families and wrong-state challenges as Codex, under independently isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcome metrics and actual Provider bytes/tokens through the shared Host continuity contract | Passing before the installed tool version is candidate-bound; OpenCode runtime, UI, ecosystem, or a projection/configuration-only smoke |
+| OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | The same three real Host task families and wrong-state challenges as Codex, under independently isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcome metrics and actual Provider bytes/tokens through the shared Host continuity contract | OpenCode runtime, UI, ecosystem, or a projection/configuration-only smoke |
 
 The Codex and OpenCode Host task mechanics may use different public lifecycle methods, but they
 must cover the same three behavior families. A static configuration check, synthetic test,
@@ -82,6 +82,13 @@ Both Host diagnostics and both three-task qualifications are `not_executed`; no 
 report, manifest or `SHA256SUMS` exists for this pass. The absence of a bundle is intentional and
 must not be replaced by a skeleton report or PR text. See
 [`V0_13_PASS14_DISPOSITION.md`](V0_13_PASS14_DISPOSITION.md).
+
+Pass 16 later bound the official `opencode-ai@1.18.16` installation coordinate before any new
+OpenCode model task. Active gate classification v4 records that exact version while preserving the
+historical v3 bytes. This prerequisite binding is not a Host result: the three OpenCode task
+families and Human Gold scoring remain `not_executed` until an independent repository-external
+Human Gold is frozen. Static version, isolated configuration, login/provider presence, or model
+inventory checks cannot substitute for any real Host run.
 
 ## Three isolated data layers
 

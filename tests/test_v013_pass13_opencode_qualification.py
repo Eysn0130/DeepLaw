@@ -8,7 +8,19 @@ from pathlib import Path
 import pytest
 
 from benchmarks.hosts import pass13_evidence
-from benchmarks.hosts import run_pass13_opencode_continuity_qualification as runner
+from benchmarks.hosts import (
+    run_pass13_opencode_continuity_qualification as runner,
+)
+from deeplaw.task_context import build_task_context_binding
+
+_TASK_BINDING = build_task_context_binding(
+    "1" * 64,
+    "2" * 64,
+    repository_sha256="3" * 64,
+    worktree_sha256="4" * 64,
+    base_revision="5" * 40,
+    dirty_state_sha256="6" * 64,
+)
 
 
 def _capsule(marker: str = "NEXT_ACTION") -> dict[str, object]:
@@ -105,6 +117,7 @@ def _event(call_index: int = 1, *, output: dict[str, object] | None = None) -> d
                     "operation": selected["structuredContent"]["operation"],  # type: ignore[index]
                     "task": "Pass 13 fixture",
                     "confirm_no_case_data": True,
+                    "task_binding": _TASK_BINDING,
                 },
                 "output": pass13_evidence.canonical_json(selected),
             },
@@ -138,7 +151,14 @@ def _events(*outputs: dict[str, object]) -> bytes:
             {
                 "type": "text",
                 "part": {
-                    "text": pass13_evidence.canonical_json({"summary": "bounded"})
+                    "text": pass13_evidence.canonical_json(
+                        {
+                            "summary": "bounded",
+                            "next_step": "NEXT_ACTION",
+                            "preserved_decisions": ["CURRENT_DECISION"],
+                            "open_gaps": [],
+                        }
+                    )
                 },
                 "sessionID": "session-fixture",
                 "messageID": "message-final",
@@ -175,6 +195,7 @@ def _availability_events() -> bytes:
 def test_secret_parser_is_exact_and_never_accepts_ambient_or_duplicates(tmp_path: Path) -> None:
     dotenv = tmp_path / ".env"
     dotenv.write_text("# comment\nDEEPSEEK_API_KEY='qualification-secret'\n", encoding="utf-8")
+    dotenv.chmod(0o600)
     assert runner.load_deepseek_key(dotenv) == "qualification-secret"
 
     dotenv.write_text("DEEPSEEK_API_KEY=one\nDEEPSEEK_API_KEY=two\n", encoding="utf-8")
@@ -184,6 +205,19 @@ def test_secret_parser_is_exact_and_never_accepts_ambient_or_duplicates(tmp_path
     dotenv.write_text("OTHER=ambient\n", encoding="utf-8")
     with pytest.raises(ValueError, match="invalid"):
         runner.load_deepseek_key(dotenv)
+
+    dotenv.write_text(
+        "DEEPSEEK_API_KEY=qualification-secret\nOTHER=not-qualification-only\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid"):
+        runner.load_deepseek_key(dotenv)
+
+    if os.name != "nt":
+        dotenv.write_text("DEEPSEEK_API_KEY=qualification-secret\n", encoding="utf-8")
+        dotenv.chmod(0o640)
+        with pytest.raises(ValueError, match="invalid"):
+            runner.load_deepseek_key(dotenv)
 
 
 def test_permission_and_config_are_exactly_read_only() -> None:
@@ -286,6 +320,134 @@ def test_model_inventory_requires_selected_model_and_keeps_only_hashes() -> None
         runner.parse_model_inventory(b"deepseek/deepseek-chat\n", returncode=0)
 
 
+def test_session_identity_is_safe_for_cli_and_loopback_paths() -> None:
+    assert "session-fixture" in runner._opencode_cli_turn_args(
+        session_id="session-fixture"
+    )
+    assert (
+        runner._session_id_from_events(b'{"sessionID":"session-fixture"}\n')
+        == "session-fixture"
+    )
+    for invalid in ("../session", "session/value", "session value", "session%2fvalue"):
+        with pytest.raises(runner.QualificationError, match="session identity"):
+            runner._opencode_cli_turn_args(session_id=invalid)
+        with pytest.raises(runner.QualificationError, match="session identity"):
+            runner._session_id_from_events(
+                (json.dumps({"sessionID": invalid}) + "\n").encode("utf-8")
+            )
+
+
+def test_preflight_uses_the_isolated_provider_for_static_inventory_and_rejects_leaks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider_key = "qualification-secret"
+    resolved = runner.build_opencode_config()
+    calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    def run_command(
+        binary: Path,
+        *,
+        args: tuple[str, ...],
+        environment: dict[str, str],
+        cwd: Path,
+    ) -> dict[str, object]:
+        del binary, cwd
+        calls.append((args, environment))
+        if args == ("--version",):
+            stdout = b"1.18.16\n"
+        elif args == ("--pure", "models", "deepseek"):
+            stdout = b"deepseek/deepseek-v4-flash\n"
+        else:
+            assert args == ("--pure", "debug", "config")
+            stdout = runner._encoded(resolved)
+        return {
+            "stdout": stdout,
+            "stderr": b"",
+            "returncode": 0,
+            "elapsed_ms": 1,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_opencode_command", run_command)
+    monkeypatch.setattr(
+        runner,
+        "_probe_model_availability",
+        lambda *args, **kwargs: {"status": "available"},
+    )
+    receipt = runner.preflight_opencode(
+        binary=tmp_path / "opencode",
+        environment={"DEEPSEEK_API_KEY": provider_key},
+        cwd=tmp_path,
+        provider_key=provider_key,
+    )
+    models_call = next(call for call in calls if call[0][1:3] == ("models", "deepseek"))
+    assert models_call[1]["DEEPSEEK_API_KEY"] == provider_key
+    assert receipt["model_inventory"]["selected_present"] is True  # type: ignore[index]
+
+    def leaking_command(
+        binary: Path,
+        *,
+        args: tuple[str, ...],
+        environment: dict[str, str],
+        cwd: Path,
+    ) -> dict[str, object]:
+        result = run_command(binary, args=args, environment=environment, cwd=cwd)
+        if args == ("--pure", "models", "deepseek"):
+            result["stdout"] = (
+                b"deepseek/deepseek-v4-flash\n" + provider_key.encode("utf-8")
+            )
+        return result
+
+    monkeypatch.setattr(runner, "_run_opencode_command", leaking_command)
+    with pytest.raises(runner.QualificationError, match="forbidden value"):
+        runner.preflight_opencode(
+            binary=tmp_path / "opencode",
+            environment={"DEEPSEEK_API_KEY": provider_key},
+            cwd=tmp_path,
+            provider_key=provider_key,
+        )
+
+
+def test_preflight_rejects_a_secret_resolved_into_debug_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider_key = "qualification-secret"
+    resolved = runner.build_opencode_config()
+    resolved["provider"]["deepseek"]["options"]["apiKey"] = provider_key  # type: ignore[index]
+
+    def run_command(
+        binary: Path,
+        *,
+        args: tuple[str, ...],
+        environment: dict[str, str],
+        cwd: Path,
+    ) -> dict[str, object]:
+        del binary, environment, cwd
+        outputs = {
+            ("--version",): b"1.18.16\n",
+            ("--pure", "models", "deepseek"): b"deepseek/deepseek-v4-flash\n",
+            ("--pure", "debug", "config"): runner._encoded(resolved),
+        }
+        return {
+            "stdout": outputs[args],
+            "stderr": b"",
+            "returncode": 0,
+            "elapsed_ms": 1,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_opencode_command", run_command)
+    with pytest.raises(runner.QualificationError, match="forbidden value"):
+        runner.preflight_opencode(
+            binary=tmp_path / "opencode",
+            environment={"DEEPSEEK_API_KEY": provider_key},
+            cwd=tmp_path,
+            provider_key=provider_key,
+        )
+
+
 def test_no_model_availability_probe_is_separate_and_sanitized() -> None:
     receipt = runner.parse_availability_result(
         stdout=_availability_events(),
@@ -296,40 +458,113 @@ def test_no_model_availability_probe_is_separate_and_sanitized() -> None:
     assert receipt["raw_bytes"] == len(_availability_events())
     assert receipt["elapsed_ms"] == 27
     assert 'status":"ok' not in json.dumps(receipt)
-    with pytest.raises(runner.QualificationError, match="unexpected event"):
+    with pytest.raises(runner.QualificationError, match=r"forbidden field|unexpected event"):
         runner.parse_availability_result(
             stdout=_events(_tool_output()), returncode=0, elapsed_ms=1
         )
 
 
 def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:
-    one = runner.analyze_opencode_events(_events(_tool_output()))
+    one = runner.analyze_opencode_events(
+        _events(_tool_output()), expected_task_binding=_TASK_BINDING
+    )
     assert one["safe_read"]["call_count"] == 1  # type: ignore[index]
     assert one["usage"]["total_tokens"] == 17  # type: ignore[index]
 
     two = runner.analyze_opencode_events(
-        _events(_insufficient_output(), _tool_output(marker="SECOND"))
+        _events(_insufficient_output(), _tool_output(marker="SECOND")),
+        expected_task_binding=_TASK_BINDING,
     )
     assert two["safe_read"]["call_count"] == 2  # type: ignore[index]
     assert two["safe_read"]["bounded_retry_used"] is True  # type: ignore[index]
 
     with pytest.raises(runner.QualificationError, match="one or two"):
-        runner.analyze_opencode_events(_events(_tool_output(), _tool_output(), _tool_output()))
+        runner.analyze_opencode_events(
+            _events(_tool_output(), _tool_output(), _tool_output()),
+            expected_task_binding=_TASK_BINDING,
+        )
 
 
 def test_analyzer_rejects_provider_canonical_mismatch_and_unsafe_operation() -> None:
     mismatched = _tool_output()
     mismatched["content"][0]["text"] = json.dumps(_capsule())  # type: ignore[index]
     with pytest.raises(runner.QualificationError, match="canonical"):
-        runner.analyze_opencode_events(_events(mismatched))
+        runner.analyze_opencode_events(
+            _events(mismatched), expected_task_binding=_TASK_BINDING
+        )
 
     unsafe = _tool_output(operation="semantic")
     with pytest.raises(runner.QualificationError, match="safe context"):
-        runner.analyze_opencode_events(_events(unsafe))
+        runner.analyze_opencode_events(_events(unsafe), expected_task_binding=_TASK_BINDING)
 
     error = _events(_tool_output()) + b'{"type":"error","error":"provider failed"}\n'
     with pytest.raises(runner.QualificationError, match="error event"):
-        runner.analyze_opencode_events(error)
+        runner.analyze_opencode_events(error, expected_task_binding=_TASK_BINDING)
+
+
+def test_analyzer_requires_the_exact_task_binding() -> None:
+    wrong = dict(_TASK_BINDING)
+    wrong["binding_sha256"] = "f" * 64
+    with pytest.raises(runner.QualificationError, match="task-binding"):
+        runner.analyze_opencode_events(
+            _events(_tool_output()), expected_task_binding=wrong
+        )
+
+
+def test_compaction_usage_comes_from_one_public_summary_message() -> None:
+    tokens = {
+        "input": 10,
+        "cache": {"read": 2, "write": 0},
+        "output": 4,
+        "reasoning": 1,
+        "total": 17,
+    }
+    messages = [
+        {"info": {"role": "assistant", "summary": False, "tokens": tokens}},
+        {"info": {"role": "assistant", "summary": True, "tokens": tokens}},
+    ]
+    usage = runner._compaction_usage_from_messages(messages)
+    assert usage["total_tokens"] == 17
+    with pytest.raises(runner.QualificationError, match="one actual compaction"):
+        runner._compaction_usage_from_messages(messages[:1])
+
+
+def test_machine_markers_require_the_final_decision_and_post_forget_gap() -> None:
+    case = runner.pass16_continuity_cases.task_case("compaction_forget")
+    current = case["current_checkpoint"]
+    analysis = {
+        "provider_values": [
+            {
+                "decision": current["decision"],
+                "next_action": current["next_action"],
+                "marker": current["marker"],
+            }
+        ],
+        "final_value": {
+            "summary": "bounded",
+            "next_step": current["next_action"],
+            "preserved_decisions": [current["decision"]],
+            "open_gaps": [],
+        },
+        "safe_read": {"provider_payloads": [{"gap_count": 0}]},
+    }
+    before = runner._marker_check(analysis, case=case)
+    assert before["expected_decision"] is True
+    assert before["expected_next_action"] is True
+    assert before["forbidden_admission_count"] == 0
+
+    analysis["final_value"] = {
+        "summary": "gap after forget",
+        "next_step": current["next_action"],
+        "preserved_decisions": [],
+        "open_gaps": ["No current checkpoint is admitted."],
+    }
+    analysis["provider_values"] = [{"gaps": [{"code": "insufficient_context"}]}]
+    analysis["safe_read"] = {"provider_payloads": [{"gap_count": 1}]}
+    after = runner._marker_check(analysis, case=case, post_forget=True)
+    assert after["forgotten_admission_count"] == 0
+    assert after["expected_state_absent"] is True
+    assert after["gap_observed"] is True
 
 
 def test_token_arithmetic_and_ledger_mutation_fail_closed() -> None:
@@ -484,6 +719,7 @@ def test_execute_success_cleans_external_isolated_root(
         output_dir=output_dir,
         opencode_binary=tmp_path / "opencode",
         dotenv=tmp_path / ".env",
+        human_gold_path=tmp_path / "human-gold.json",
     )
     assert result == {"status": "executed"}
     assert created and not created[0].exists()
@@ -511,6 +747,7 @@ def test_execute_failure_cleans_root_and_preserves_original_exception(
             output_dir=tmp_path / "retained-failure",
             opencode_binary=tmp_path / "opencode",
             dotenv=tmp_path / ".env",
+            human_gold_path=tmp_path / "human-gold.json",
         )
     assert created and not created[0].exists()
 
@@ -559,6 +796,8 @@ def test_main_returns_nonzero_for_nonexecuted_report(
             str(tmp_path / "opencode"),
             "--dotenv",
             str(tmp_path / ".env"),
+            "--human-gold",
+            str(tmp_path / "human-gold.json"),
         ]
     ) == 1
     assert tmp_path.exists()

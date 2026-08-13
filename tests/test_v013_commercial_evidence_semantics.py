@@ -602,7 +602,7 @@ def test_v013_provenance_assembler_remains_disabled_until_core_validators_exist(
     )
     classification_path = root / "evidence/classification.json"
     classification_path.write_bytes(
-        (REPOSITORY / "benchmarks/release/v013-gate-classification-v3.json").read_bytes()
+        release_policy.V013_ACTIVE_CLASSIFICATION_PATH.read_bytes()
     )
     for logical_path, path in (
         ("evidence/semantic-report.json", report_path),

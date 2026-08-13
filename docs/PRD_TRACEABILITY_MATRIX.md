@@ -98,7 +98,7 @@ Core gates; it does not add a general `parity` capability or gate.
 | Obsidian public format/API help accessed 2026-08-11; `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Markdown, Wikilink, alias, backlink/outlink, rename/move, edit/reconcile on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation` | UI, commercial Sync, plugin marketplace, complete Canvas UX |
 | LLM Wiki behavior category | Agent generate/update with provenance, revision, Authority, scope, sensitivity, Ledger, and immutable Source Revision | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | No product comparison without an exact named project/version |
 | Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Cold/new; resume/fork/concurrent worktree; compaction/forget; stale-checkpoint and wrong-task-line rejection; First Correct Action, Decision Preservation, Wrong-State Admission, actual Provider bytes/tokens | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget` | GUI, marketplace, Agent Runtime ownership, synthetic/no-model evidence |
-| OpenCode / `deepseek/deepseek-v4-flash`; installed version unbound | Same three real Host task families and measures as Codex, with isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget` | Cannot pass before exact tool binding and real execution; UI/runtime/ecosystem excluded |
+| OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | Same three real Host task families and measures as Codex, with isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget` | Cannot pass before real execution and independent Human Gold; UI/runtime/ecosystem excluded |
 
 For v0.13 the releasable product is the complete Kernel distribution: wheel/sdist, CLI, the
 read-only `knowledge_support`, grant-controlled `knowledge_sink`, separate read-only `law_support`,
@@ -108,12 +108,11 @@ gate. Third-party desktop visual E2E is also not a Kernel release gate, while re
 Markdown/Wikilink/alias/link/rename/edit/reconcile behavior remains Core.
 
 The active classification is
-`../benchmarks/release/v013-gate-classification-v3.json`: Codex and OpenCode are both Core,
+`../benchmarks/release/v013-gate-classification-v4.json`: Codex and OpenCode are both Core,
 required, and release-blocking; Claude, Timeline, and semantic restore remain optional and
-`not_claimed`. OpenCode's null tool-version constraint is an unresolved candidate-binding
-prerequisite, not a wildcard: the gate cannot pass until an exact installed version is frozen and
-the classification is version-rotated rather than rewritten. Native Host qualification is separate
-from the nine-row Linux/macOS/Windows artifact gate. Human Gold, legal evidence, Context Utility,
+`not_claimed`. Pass 16 version-rotated the historical v3 classification without rewriting it and
+bound OpenCode to exact tool version `1.18.16`; this prerequisite is not a Host result. Native Host
+qualification is separate from the nine-row Linux/macOS/Windows artifact gate. Human Gold, legal evidence, Context Utility,
 scale, three-OS evidence, and the provenance/signing/public-redownload artifact chain continue to
 block release.
 
