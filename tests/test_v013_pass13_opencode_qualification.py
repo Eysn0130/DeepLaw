@@ -346,12 +346,13 @@ def test_session_identity_is_safe_for_cli_and_loopback_paths() -> None:
             )
 
 
-def test_preflight_uses_the_isolated_provider_for_static_inventory_and_rejects_leaks(
+def test_preflight_keeps_provider_secret_out_of_static_inspection_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     provider_key = "qualification-secret"
     resolved = runner.build_opencode_config()
     calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
+    availability_environments: list[dict[str, str]] = []
 
     def run_command(
         binary: Path,
@@ -379,19 +380,38 @@ def test_preflight_uses_the_isolated_provider_for_static_inventory_and_rejects_l
         }
 
     monkeypatch.setattr(runner, "_run_opencode_command", run_command)
-    monkeypatch.setattr(
-        runner,
-        "_probe_model_availability",
-        lambda *args, **kwargs: {"status": "available"},
-    )
+
+    def availability(*args, **kwargs):
+        del args
+        availability_environments.append(dict(kwargs["environment"]))
+        return {"status": "available"}
+
+    monkeypatch.setattr(runner, "_probe_model_availability", availability)
     receipt = runner.preflight_opencode(
         binary=tmp_path / "opencode",
-        environment={"DEEPSEEK_API_KEY": provider_key},
+        environment={
+            "DEEPSEEK_API_KEY": provider_key,
+            **{name: f"canary-{name}" for name in runner._CANARY_NAMES},
+        },
         cwd=tmp_path,
         provider_key=provider_key,
     )
-    models_call = next(call for call in calls if call[0][1:3] == ("models", "deepseek"))
-    assert models_call[1]["DEEPSEEK_API_KEY"] == provider_key
+    assert calls
+    assert all("DEEPSEEK_API_KEY" not in environment for _args, environment in calls)
+    assert all(
+        set(runner._CANARY_NAMES).isdisjoint(environment)
+        for _args, environment in calls
+    )
+    assert len(availability_environments) == 1
+    availability_environment = availability_environments[0]
+    assert availability_environment["DEEPSEEK_API_KEY"] == provider_key
+    assert all(
+        availability_environment[name] == f"canary-{name}"
+        for name in runner._CANARY_NAMES
+    )
+    assert availability_environment["OPENCODE_CONFIG"].endswith(
+        "availability-opencode.json"
+    )
     assert receipt["model_inventory"]["selected_present"] is True  # type: ignore[index]
 
     def leaking_command(

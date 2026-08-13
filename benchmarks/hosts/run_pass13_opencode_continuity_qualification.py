@@ -1916,7 +1916,17 @@ def preflight_opencode(
         for name, value in environment.items()
         if name == _PROVIDER_ENV_NAME or name in _CANARY_NAMES
     )
-    version = _run_opencode_command(binary, args=("--version",), environment=environment, cwd=cwd)
+    inspection_environment = {
+        name: value
+        for name, value in environment.items()
+        if name != _PROVIDER_ENV_NAME and name not in _CANARY_NAMES
+    }
+    version = _run_opencode_command(
+        binary,
+        args=("--version",),
+        environment=inspection_environment,
+        cwd=cwd,
+    )
     _forbid_sensitive(version["stdout"] + version["stderr"], forbidden_values)
     version_text = version["stdout"].decode("utf-8", errors="replace").strip()
     if (
@@ -1927,7 +1937,7 @@ def preflight_opencode(
     models = _run_opencode_command(
         binary,
         args=("--pure", "models", "deepseek"),
-        environment=environment,
+        environment=inspection_environment,
         cwd=cwd,
     )
     _forbid_sensitive(
@@ -1938,7 +1948,7 @@ def preflight_opencode(
     config = _run_opencode_command(
         binary,
         args=("--pure", "debug", "config"),
-        environment=environment,
+        environment=inspection_environment,
         cwd=cwd,
     )
     if config["returncode"] != 0:
