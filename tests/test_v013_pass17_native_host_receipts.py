@@ -529,11 +529,11 @@ def test_historical_v1_receipt_bytes_are_frozen_and_currently_invalidated() -> N
 def test_retained_pass17_diagnostics_are_current_v2_and_claim_ineligible() -> None:
     expected = {
         "codex-development-diagnostic.json": (
-            "ecadcd9ad32efffc38219cee1a59d157e91b04ca5c064d6455e87f8f7d33f391",
+            "67525ea327a8a031c1895ac2501aea9ec25e2c1f436720efd454d240f21e566f",
             CODEX_NATIVE_VOCABULARY,
         ),
         "opencode-development-diagnostic.json": (
-            "7d75179b43398d2c6a2d077e1a72c8b1a4d6c41436f83bf719a44fa96448e9eb",
+            "fa2223b90aada9838657f9b7b943061c1ba53d40bb362fd731f1532adcd259b7",
             {"cli.run.json", "session.get", "session.summarize", "session.messages"},
         ),
     }

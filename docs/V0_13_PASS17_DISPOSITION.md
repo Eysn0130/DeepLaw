@@ -24,6 +24,13 @@ compaction `session.messages` usage is retained once in native receipts while th
 and aggregate still include the complete cost. The shared validator now requires OpenCode native
 usage totals to reconcile with turn evidence.
 
+Final diff review found that both runner modules still loaded qualification task cases during
+import, and Codex diagnostic also built the qualification case map before selecting its mode. The
+first pair of real development receipts therefore remained claim-ineligible and was superseded.
+After making the compatibility prompt map lazy and loading qualification cases only inside
+qualification mode, both real diagnostics were rerun once. Only the post-fix receipts below are
+retained as current Pass 17 development evidence.
+
 ## Receipt contract migration and historical disposition
 
 `deeplaw.host-continuity-qualification/v1` remains byte-for-byte historical and is
@@ -61,8 +68,8 @@ release_ready=false
 
 | Field | Codex | OpenCode |
 | --- | --- | --- |
-| Report SHA-256 | `ecadcd9ad32efffc38219cee1a59d157e91b04ca5c064d6455e87f8f7d33f391` | `7d75179b43398d2c6a2d077e1a72c8b1a4d6c41436f83bf719a44fa96448e9eb` |
-| Candidate commit/tree | `2b98f8a67c06894adeed4c6e92933f220f865652` / `91af53a154111376d4422e51f279ddc58d6fa849` | `23a7d6f23677398f730d09433c0607927549d726` / `657def9eb0dda81927bdafee6d5171982a5c794d` |
+| Report SHA-256 | `67525ea327a8a031c1895ac2501aea9ec25e2c1f436720efd454d240f21e566f` | `fa2223b90aada9838657f9b7b943061c1ba53d40bb362fd731f1532adcd259b7` |
+| Candidate commit/tree | `7fbc0a1a6a57c339e986f5e042d037b9d7f51ab1` / `ed16bfcb1646b4c6e200cc84a55037d81d42b0dc` | same exact clean candidate |
 | Candidate wheel | `deeplaw-0.12.0-py3-none-any.whl`; SHA-256 `8d7dde262ecce64e5e4dfdfdf81005a79e4dd64462c4bb3adf35b9091728631e`; 1,289,188 bytes | same exact wheel bytes |
 | Host/tool | `codex-cli 0.147.0-alpha.1.2`; binary SHA-256 `9f6748b4ab10ffc92c28b9ccedae89e61a302bbc011df7d276ee38f55906e481` | `opencode-ai@1.18.16`; binary SHA-256 `a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f` |
 | Model | `gpt-5.6-luna`; reasoning `max`; existing ChatGPT login checked only through `codex login status` | `deepseek/deepseek-v4-flash`; variant `max`; provider key read only by the runner from the owner-only external file |
@@ -98,18 +105,18 @@ independently:
 | Provider Capsule calls | 4 | 8 (two bounded reads per turn) |
 | Bytes per Capsule | 1,404 | 1,162 |
 | Aggregate Provider Capsule bytes | 5,616 | 9,296 |
-| Actual input tokens | 57,027 | 29,790 |
-| Actual cached-input tokens | 40,192 | 143,872 |
+| Actual input tokens | 47,263 | 30,503 |
+| Actual cached-input tokens | 40,960 | 148,736 |
 | Actual cache-write-input tokens | 0 | 0 |
-| Actual output tokens | 2,103 | 4,950 |
-| Actual reasoning-output tokens | 1,458 | 1,638 |
-| Actual total tokens | 59,130 | 180,250 |
+| Actual output tokens | 1,567 | 5,307 |
+| Actual reasoning-output tokens | 977 | 2,837 |
+| Actual total tokens | 48,830 | 187,383 |
 
 Codex reports cached input as a subset of input and reasoning as a subset of output, so its total
 is input plus output. OpenCode reports cache read and reasoning as additive Provider fields, so its
 total is the sum of all five component fields. OpenCode also performed a separate sanitized model
-availability probe: input `315`, cached input `0`, cache write `0`, output `3`, reasoning `58`,
-total `376`; these numbers are not folded into the diagnostic-task aggregate above.
+availability probe: input `315`, cached input `0`, cache write `0`, output `3`, reasoning `36`,
+total `354`; these numbers are not folded into the diagnostic-task aggregate above.
 
 All Codex Capsules contained 0 Statements, 0 Evidence items, duplicate Evidence count 0,
 RelevantChars/ContextChars `0/1404`, and explicit Gap codes `duty_unresolved`, `no_answer`, and
@@ -175,7 +182,18 @@ git diff --check
 uv run pytest
 ```
 
-Final full-suite result: `1697 passed, 6 skipped in 508.63s`. The six skips are unchanged
+Final full-suite result: `1697 passed, 6 skipped in 523.12s`. The six skips are unchanged
 non-results: native Windows ACLs, native Windows junctions, unavailable exact historical v0.6
 wheel, the 10,000- and 100,000-Statement full stress lanes, and the 500/5,000 relation-edge bulk
 fixture.
+
+Non-result failures were not hidden. An intermediate full suite returned `1690 passed, 4 failed,
+6 skipped` after `docs/AGENT_ADAPTERS.md` was edited despite its repository-development Gold hash;
+the unrelated edit was restored and the four affected tests then returned `34 passed`. One focused
+command referenced the nonexistent `tests/test_v013_gate_classification.py` and exited during
+collection; the corrected focused command returned `81 passed`, and the final expanded focused
+set returned `84 passed`. During the post-fix Codex rerun, invoking the file path directly failed
+with `ModuleNotFoundError: No module named 'benchmarks'`; the package-module entry then failed
+closed because its output directory had been pre-created. Both exited before Host/model start. The
+empty runner-owned directories were removed non-recursively, and the single real Codex diagnostic
+then executed. The OpenCode post-fix rerun executed once.
