@@ -764,7 +764,10 @@ def _native_provider_capsule(state: Mapping[str, Any]) -> tuple[Mapping[str, Any
     raw = output.encode("utf-8")
     if len(raw) > PROVIDER_HARD_LIMIT_BYTES:
         raise QualificationError("OpenCode native Provider projection exceeds its bound")
-    value = _strict_json(output)
+    try:
+        value = _strict_json(output)
+    except QualificationError as exc:
+        raise QualificationError("OpenCode native Provider projection is invalid") from exc
     if not isinstance(value, Mapping) or output != _canonical(value):
         raise QualificationError("OpenCode native Provider projection is not canonical")
     try:
@@ -1054,7 +1057,10 @@ def analyze_opencode_events(
                 raise QualificationError("final response exceeds the bounded limit")
             final_response_sha256 = _sha256(final_raw)
             final_response_bytes = len(final_raw)
-            parsed = _strict_json(text)
+            try:
+                parsed = _strict_json(text)
+            except QualificationError as exc:
+                raise QualificationError("final response schema is invalid") from exc
             try:
                 Draft202012Validator(_FINAL_RESPONSE_SCHEMA).validate(parsed)
             except ValidationError as exc:

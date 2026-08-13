@@ -550,6 +550,32 @@ def test_analyzer_rejects_provider_canonical_mismatch_and_unsafe_operation() -> 
         runner.analyze_opencode_events(error, expected_task_binding=_TASK_BINDING)
 
 
+def test_analyzer_classifies_native_projection_and_final_json_separately() -> None:
+    native = _event()
+    native["part"]["state"]["output"] = "not-json"  # type: ignore[index]
+    rows = [native, *_events(_tool_output()).splitlines()[1:]]
+    with pytest.raises(runner.QualificationError, match="native Provider projection"):
+        runner.analyze_opencode_events(
+            b"\n".join(
+                row
+                if isinstance(row, bytes)
+                else json.dumps(row, separators=(",", ":")).encode("utf-8")
+                for row in rows
+            )
+            + b"\n",
+            expected_task_binding=_TASK_BINDING,
+        )
+
+    events = _events(_tool_output()).splitlines()
+    final = json.loads(events[-1])
+    final["part"]["text"] = "not-json"
+    events[-1] = json.dumps(final, separators=(",", ":")).encode("utf-8")
+    with pytest.raises(runner.QualificationError, match="final response schema"):
+        runner.analyze_opencode_events(
+            b"\n".join(events) + b"\n", expected_task_binding=_TASK_BINDING
+        )
+
+
 def test_analyzer_requires_the_exact_task_binding() -> None:
     wrong = dict(_TASK_BINDING)
     wrong["binding_sha256"] = "f" * 64
