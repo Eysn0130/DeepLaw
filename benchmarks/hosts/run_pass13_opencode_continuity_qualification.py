@@ -743,25 +743,57 @@ def _analyze_availability_events(
     return _sum_usages(usages)
 
 
-def _event_tool_output(state: Mapping[str, Any]) -> Mapping[str, Any]:
+def _native_provider_capsule(state: Mapping[str, Any]) -> tuple[Mapping[str, Any], str]:
+    """Validate the exact Provider text projection exposed by OpenCode 1.18.16.
+
+    OpenCode's MCP adapter returns the complete ``CallToolResult`` internally,
+    then stores and emits only the joined MCP text content in
+    ``tool_use.part.state.output``.  The native JSON event therefore cannot
+    attest unobserved ``structuredContent`` bytes.
+    """
+
+    metadata = state.get("metadata")
     output = state.get("output")
-    if isinstance(output, (str, bytes)):
-        output = _strict_json(output)
-    if not isinstance(output, Mapping):
-        raise QualificationError("completed MCP output is not an object")
-    content = output.get("content")
-    structured = output.get("structuredContent")
-    if not isinstance(content, list) or len(content) != 1 or not isinstance(structured, Mapping):
-        raise QualificationError("completed MCP output has no exact Provider transport")
-    return output
+    if (
+        not isinstance(metadata, Mapping)
+        or metadata.get("truncated") is not False
+        or not isinstance(output, str)
+        or not output
+    ):
+        raise QualificationError("OpenCode native Provider projection is invalid")
+    raw = output.encode("utf-8")
+    if len(raw) > PROVIDER_HARD_LIMIT_BYTES:
+        raise QualificationError("OpenCode native Provider projection exceeds its bound")
+    value = _strict_json(output)
+    if not isinstance(value, Mapping) or output != _canonical(value):
+        raise QualificationError("OpenCode native Provider projection is not canonical")
+    try:
+        contract = json.loads(
+            (
+                Path(__file__).resolve().parents[2]
+                / "contracts"
+                / "provider-knowledge-capsule.v2.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        definitions = contract["$defs"]
+        capsule_contract = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            **definitions["capsule"],
+            "$defs": definitions,
+        }
+        Draft202012Validator(capsule_contract).validate(value)
+    except (KeyError, OSError, TypeError, ValueError, ValidationError) as exc:
+        raise QualificationError("OpenCode native Provider projection is invalid") from exc
+    return value, output
 
 
-def _tool_observation(
+def _native_tool_observation(
     event: Mapping[str, Any],
-    output: Mapping[str, Any],
+    capsule: Mapping[str, Any],
+    provider_text: str,
     *,
     expected_task_binding: Mapping[str, Any],
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     part = event.get("part")
     if not isinstance(part, Mapping):
         raise QualificationError("tool event part is invalid")
@@ -772,11 +804,8 @@ def _tool_observation(
     if not isinstance(call_id, str) or not call_id:
         raise QualificationError("tool event call id is missing")
     arguments = state.get("input", {})
-    structured = output.get("structuredContent")
     if (
         not isinstance(arguments, Mapping)
-        or not isinstance(structured, Mapping)
-        or arguments.get("operation") != structured.get("operation")
         or arguments.get("operation") != "context"
         or arguments.get("confirm_no_case_data") is not True
         or arguments.get("task_binding") != dict(expected_task_binding)
@@ -784,20 +813,127 @@ def _tool_observation(
         raise QualificationError(
             "MCP call lacks the exact safe context and task-binding attestation"
         )
-    result_bytes = _encoded(output)
-    structured_bytes = _encoded(output["structuredContent"])
-    return {
+    provider_bytes = provider_text.encode("utf-8")
+    statements = capsule.get("statements")
+    gaps = capsule.get("gaps")
+    evidence = capsule.get("evidence", [])
+    if not isinstance(statements, list) or not isinstance(gaps, list):
+        raise QualificationError("Provider Capsule statements or gaps are invalid")
+    if not isinstance(evidence, list):
+        raise QualificationError("Provider Capsule evidence is invalid")
+    evidence_keys = [
+        (
+            item.get("source_revision_id"),
+            item.get("fragment_id"),
+            item.get("content_sha256"),
+        )
+        for item in evidence
+        if isinstance(item, Mapping)
+    ]
+    duplicate_evidence_count = len(evidence_keys) - len(set(evidence_keys))
+    observation = {
         "call_id_sha256": _sha256(call_id.encode("utf-8")),
         "server": "deeplaw",
         "tool_name": "knowledge_support",
         "status": "completed",
         "arguments_sha256": _sha256(_encoded(arguments)),
         "arguments_bytes": len(_encoded(arguments)),
-        "result_sha256": _sha256(result_bytes),
-        "result_bytes": len(result_bytes),
-        "structured_content_sha256": _sha256(structured_bytes),
-        "structured_content_bytes": len(structured_bytes),
+        "result_sha256": _sha256(provider_bytes),
+        "result_bytes": len(provider_bytes),
     }
+    payload = {
+        "operation": "context",
+        "provider_bytes": len(provider_bytes),
+        "provider_sha256": _sha256(provider_bytes),
+        # OpenCode's native JSON event exposes only the exact MCP text
+        # projection.  Null is evidence that structuredContent was not
+        # observed, not an estimate or reconstruction.
+        "structured_output_bytes": None,
+        "structured_output_sha256": None,
+        "delivery_match": True,
+        "write_performed": False,
+        "statement_count": len(statements),
+        "gap_count": len(gaps),
+        "gap_codes": sorted(
+            {
+                gap["code"]
+                for gap in gaps
+                if isinstance(gap, Mapping) and isinstance(gap.get("code"), str)
+            }
+        ),
+        "relevant_chars": 0,
+        "context_chars": len(provider_text),
+        "relevant_chars_context_chars": 0.0 if provider_text else None,
+        "evidence_count": len(evidence_keys),
+        "duplicate_evidence_count": duplicate_evidence_count,
+        "duplicate_evidence_rate": (
+            duplicate_evidence_count / len(evidence_keys) if evidence_keys else None
+        ),
+    }
+    return observation, payload
+
+
+def _analyze_native_safe_reads(
+    observations: Sequence[Mapping[str, Any]], payloads: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    if len(observations) not in {1, 2} or len(payloads) != len(observations):
+        raise QualificationError("qualification requires one or two safe read calls")
+    call_ids = [observation.get("call_id_sha256") for observation in observations]
+    if len(set(call_ids)) != len(call_ids):
+        raise QualificationError("safe read call identities must be unique")
+    if len(payloads) == 2 and payloads[0].get("gap_count") == 0:
+        raise QualificationError("bounded retry requires an insufficient first Provider Capsule")
+    return {
+        "call_count": len(observations),
+        "first_call_valid": True,
+        "bounded_retry_used": len(observations) == 2,
+        "safe_read_operations": ["context"] * len(observations),
+        "provider_payloads": [dict(payload) for payload in payloads],
+    }
+
+
+def _bind_native_relevant_chars(
+    safe_read: Mapping[str, Any],
+    provider_texts: Sequence[str],
+    relevant_text: Sequence[str],
+) -> dict[str, Any]:
+    payloads = safe_read.get("provider_payloads")
+    if not isinstance(payloads, list) or len(payloads) != len(provider_texts):
+        raise QualificationError("Provider payload relevance inputs are inconsistent")
+    markers = tuple(
+        dict.fromkeys(item for item in relevant_text if isinstance(item, str) and item)
+    )
+    measured: list[dict[str, Any]] = []
+    for payload, provider_text in zip(payloads, provider_texts, strict=True):
+        if not isinstance(payload, Mapping) or not isinstance(provider_text, str):
+            raise QualificationError("Provider relevance input is invalid")
+        provider_bytes = provider_text.encode("utf-8")
+        if (
+            payload.get("provider_sha256") != _sha256(provider_bytes)
+            or payload.get("provider_bytes") != len(provider_bytes)
+            or payload.get("context_chars") != len(provider_text)
+        ):
+            raise QualificationError("Provider relevance text does not match its receipt")
+        covered: set[int] = set()
+        for marker in markers:
+            start = 0
+            while True:
+                position = provider_text.find(marker, start)
+                if position < 0:
+                    break
+                covered.update(range(position, position + len(marker)))
+                start = position + max(1, len(marker))
+        relevant_chars = len(covered)
+        measured.append(
+            {
+                **dict(payload),
+                "relevant_chars": relevant_chars,
+                "relevant_chars_context_chars": (
+                    relevant_chars / len(provider_text) if provider_text else None
+                ),
+            }
+        )
+    return {**dict(safe_read), "provider_payloads": measured}
 
 
 def _contains_marker(value: Any, marker: str) -> bool:
@@ -848,8 +984,9 @@ def analyze_opencode_events(
     # every task-binding field and never preserves the raw tool arguments.
     _forbid_sensitive(data, forbidden_values, allow_task_binding=True)
     observations: list[dict[str, Any]] = []
-    outputs: list[Mapping[str, Any]] = []
+    payloads: list[dict[str, Any]] = []
     provider_values: list[Mapping[str, Any]] = []
+    provider_texts: list[str] = []
     sanitized: list[dict[str, Any]] = []
     usages: list[dict[str, int | str]] = []
     final_response_sha256: str | None = None
@@ -879,16 +1016,17 @@ def analyze_opencode_events(
             state = part.get("state")
             if not isinstance(state, Mapping) or state.get("status") != "completed":
                 raise QualificationError("tool call did not complete")
-            output = _event_tool_output(state)
-            observations.append(
-                _tool_observation(
-                    event,
-                    output,
-                    expected_task_binding=expected_task_binding,
-                )
+            capsule, provider_text = _native_provider_capsule(state)
+            observation, payload = _native_tool_observation(
+                event,
+                capsule,
+                provider_text,
+                expected_task_binding=expected_task_binding,
             )
-            outputs.append(output)
-            provider_values.append(output)
+            observations.append(observation)
+            payloads.append(payload)
+            provider_values.append(capsule)
+            provider_texts.append(provider_text)
             sanitized.append(
                 {
                     "type": "tool_use",
@@ -942,10 +1080,7 @@ def analyze_opencode_events(
     if len(session_ids) != 1 or not message_ids:
         raise QualificationError("OpenCode session or message identity is missing")
     usage = _require_actual_usage(_sum_usages(usages))
-    try:
-        safe_read = pass13_evidence.analyze_safe_read_calls(observations, outputs)
-    except pass13_evidence.EvidenceValidationError as exc:
-        raise QualificationError(str(exc)) from exc
+    safe_read = _analyze_native_safe_reads(observations, payloads)
     if len(safe_read["provider_payloads"]) > 1 and any(
         int(payload["provider_bytes"]) > PROVIDER_HARD_LIMIT_BYTES // 2
         for payload in safe_read["provider_payloads"]
@@ -962,6 +1097,9 @@ def analyze_opencode_events(
         # Provider values remain in memory for marker/outcome evaluation only;
         # no caller may place this field in retained report/artifact objects.
         "provider_values": provider_values,
+        # Exact native text projections remain in memory only so task-relevant
+        # character accounting can bind to the already measured hashes.
+        "provider_texts": provider_texts,
         "thread_id_sha256": _sha256(next(iter(session_ids)).encode("utf-8")),
         "turn_id_sha256": _sha256(_encoded(sorted(message_ids))),
         "sanitized_events": sanitized_bytes,
@@ -2206,6 +2344,13 @@ def _safe_failure_code(exc: QualificationError) -> str:
         "completed MCP output has no exact Provider transport": (
             "safe_read_output_invalid"
         ),
+        "OpenCode native Provider projection is invalid": "provider_capsule_invalid",
+        "OpenCode native Provider projection exceeds its bound": (
+            "provider_capsule_overflow"
+        ),
+        "OpenCode native Provider projection is not canonical": (
+            "provider_capsule_transport_mismatch"
+        ),
         "step finish part is invalid": "provider_usage_invalid",
         "OpenCode token usage is missing": "provider_usage_missing",
         "OpenCode must emit exactly one bounded final response": (
@@ -2588,9 +2733,9 @@ def _run_one_scenario(
         if not isinstance(relevant_checkpoint, Mapping):
             raise QualificationError("Host fixture checkpoint is invalid")
         try:
-            analysis["safe_read"] = pass13_evidence.bind_relevant_chars(
+            analysis["safe_read"] = _bind_native_relevant_chars(
                 analysis["safe_read"],
-                analysis["provider_values"],
+                analysis["provider_texts"],
                 tuple(
                     str(relevant_checkpoint[field])
                     for field in ("decision", "next_action", "marker")

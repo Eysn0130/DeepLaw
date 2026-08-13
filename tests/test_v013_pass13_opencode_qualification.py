@@ -119,7 +119,10 @@ def _event(call_index: int = 1, *, output: dict[str, object] | None = None) -> d
                     "confirm_no_case_data": True,
                     "task_binding": _TASK_BINDING,
                 },
-                "output": pass13_evidence.canonical_json(selected),
+                # OpenCode 1.18.16 stores the joined MCP text content in the
+                # native tool event, not the complete CallToolResult object.
+                "output": selected["content"][0]["text"],  # type: ignore[index]
+                "metadata": {"truncated": False},
             },
         },
         "sessionID": "session-fixture",
@@ -513,6 +516,7 @@ def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:
         _events(_tool_output()), expected_task_binding=_TASK_BINDING
     )
     assert one["safe_read"]["call_count"] == 1  # type: ignore[index]
+    assert one["safe_read"]["provider_payloads"][0]["structured_output_bytes"] is None  # type: ignore[index]
     assert one["usage"]["total_tokens"] == 17  # type: ignore[index]
 
     two = runner.analyze_opencode_events(

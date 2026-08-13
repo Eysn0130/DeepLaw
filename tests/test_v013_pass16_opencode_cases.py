@@ -268,10 +268,13 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
             "turn_id_sha256": "2" * 64,
             "final_response_sha256": "3" * 64,
             "final_response_bytes": 1,
-            "final_value": final,
-            "provider_values": [current["decision"], current["next_action"]],
-            "sanitized_events": b'{"type":"safe"}\n',
-        }
+                "final_value": final,
+                "provider_values": [current["decision"], current["next_action"]],
+                "provider_texts": [
+                    f"{current['decision']} {current['next_action']} {current['marker']}"
+                ],
+                "sanitized_events": b'{"type":"safe"}\n',
+            }
 
     def validate(receipt: object, **kwargs: object) -> bool:
         assert receipt_path.is_file()
@@ -304,8 +307,8 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
         lambda **kwargs: {"tools_list_observed": True},
     )
     monkeypatch.setattr(
-        runner.pass13_evidence,
-        "bind_relevant_chars",
+        runner,
+        "_bind_native_relevant_chars",
         lambda safe_read, outputs, relevant_text: safe_read,
     )
 

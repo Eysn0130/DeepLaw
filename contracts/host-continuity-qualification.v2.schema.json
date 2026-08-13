@@ -376,8 +376,12 @@
         "operation": {"enum": ["context", "query"]},
         "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
         "provider_sha256": {"$ref": "#/$defs/sha256"},
-        "structured_output_bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
-        "structured_output_sha256": {"$ref": "#/$defs/sha256"},
+        "structured_output_bytes": {
+          "type": ["integer", "null"], "minimum": 1, "maximum": 262144
+        },
+        "structured_output_sha256": {
+          "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
         "delivery_match": {"const": true},
         "write_performed": {"const": false},
         "statement_count": {"type": "integer", "minimum": 0},
