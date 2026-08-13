@@ -2346,6 +2346,9 @@ def _safe_failure_code(exc: QualificationError) -> str:
         "tool event call id is missing": "host_tool_event_invalid",
         "disallowed tool was invoked": "disallowed_tool_invoked",
         "tool call did not complete": "safe_read_tool_failed",
+        "OpenCode new-session tool call did not complete": "cli_run_tool_failed",
+        "OpenCode resume tool call did not complete": "cli_resume_tool_failed",
+        "OpenCode fork tool call did not complete": "cli_fork_tool_failed",
         "completed MCP output is not an object": "safe_read_output_invalid",
         "completed MCP output has no exact Provider transport": (
             "safe_read_output_invalid"
@@ -2726,11 +2729,24 @@ def _run_one_scenario(
         )
         if result["returncode"] != 0 or result["timed_out"] or result["output_overflow"]:
             raise QualificationError("OpenCode task process failed")
-        analysis = analyze_opencode_events(
-            result["stdout"],
-            expected_task_binding=primary_binding,
-            forbidden_values=forbidden_values,
-        )
+        try:
+            analysis = analyze_opencode_events(
+                result["stdout"],
+                expected_task_binding=primary_binding,
+                forbidden_values=forbidden_values,
+            )
+        except QualificationError as exc:
+            if str(exc) == "tool call did not complete":
+                stage = {
+                    "cli.run": "new-session",
+                    "cli.run.session": "resume",
+                    "cli.run.fork": "fork",
+                }.get(requested_operation)
+                if stage is not None:
+                    raise QualificationError(
+                        f"OpenCode {stage} tool call did not complete"
+                    ) from exc
+            raise
         relevant_checkpoint = (
             selected_case.get("checkpoint")
             if development

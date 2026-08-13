@@ -509,6 +509,9 @@ def test_opencode_failure_codes_are_safe_constant_labels() -> None:
     assert runner._safe_failure_code(
         runner.QualificationError("current Provider Capsule is missing")
     ) == "provider_capsule_invalid"
+    assert runner._safe_failure_code(
+        runner.QualificationError("OpenCode resume tool call did not complete")
+    ) == "cli_resume_tool_failed"
 
 
 def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:
