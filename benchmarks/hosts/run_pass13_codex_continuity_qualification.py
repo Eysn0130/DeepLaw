@@ -1376,6 +1376,12 @@ def _thread_id(value: Any) -> str:
     raise QualificationFailure("thread lifecycle response omitted identity")
 
 
+def _thread_is_ephemeral(scenario: str, *, development: bool) -> bool:
+    """Resume requires a persisted root under the official App Server API."""
+
+    return scenario != "resume_fork" and not development
+
+
 def _run_scenario(
     *,
     client: Any,
@@ -1516,13 +1522,14 @@ def _run_scenario(
                 )
             )
 
+    thread_ephemeral = _thread_is_ephemeral(scenario, development=development)
     started = client.thread_start(
         {
             "model": MODEL,
             "effort": REASONING_EFFORT,
             "approvalPolicy": "never",
             "sandbox": "read-only",
-            "ephemeral": True,
+            "ephemeral": thread_ephemeral,
         }
     )
     thread_id = _thread_id(started)
@@ -1539,7 +1546,7 @@ def _run_scenario(
                 "effort": REASONING_EFFORT,
                 "approval_policy": "never",
                 "sandbox": "read-only",
-                "ephemeral": True,
+                "ephemeral": thread_ephemeral,
             },
             observation_kind="native_response",
             methods_observed=["thread/start"],
@@ -2329,6 +2336,7 @@ def execute(
         {
             "mcp_child_closed_environment": True,
             "only_knowledge_support_enabled": True,
+            "cleanup_complete": True,
         }
     )
     model_inventory = {
@@ -2554,6 +2562,13 @@ def execute(
                     canonical_json(dict(binding)).encode("utf-8")
                 )
             finally:
+                cleanup_ok = client.cleanup_persisted_threads()
+                if not cleanup_ok:
+                    security["cleanup_complete"] = False
+                    run["status"] = "failed"
+                    run["failure_codes"] = sorted(
+                        set(run.get("failure_codes", [])) | {"host_cleanup_incomplete"}
+                    )
                 events = client.sanitized_events
                 event_bytes = (
                     b"".join(
@@ -2605,7 +2620,6 @@ def execute(
                         lifecycle_transports.add(transport)
             runs.append(run)
 
-    security["cleanup_complete"] = True
     security["only_knowledge_support_enabled"] = bool(status_inventory["selected_present"])
     host_attestation = {
         "binary_name": "codex",

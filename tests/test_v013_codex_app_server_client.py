@@ -13,6 +13,7 @@ from benchmarks.hosts.codex_app_server_client import (
     CodexAppServerClient,
     CodexAppServerOutputLimitError,
     CodexAppServerProtocolError,
+    CodexAppServerRequestError,
     CodexAppServerTimeoutError,
 )
 
@@ -91,10 +92,18 @@ def _fake_server(
             elif method == "thread/start":
                 if MODE == "full":
                     assert "dynamicTools" in message["params"]
+                if MODE == "request-error-cleanup":
+                    assert message["params"]["ephemeral"] is False
                 send({"id": request_id, "result": {"thread": {"id": "thread-1"}}})
             elif method == "thread/resume":
                 assert message["params"]["threadId"] == "thread-1"
-                send({"id": request_id, "result": {"thread": {"id": "thread-1"}}})
+                if MODE == "request-error-cleanup":
+                    send({
+                        "id": request_id,
+                        "error": {"code": -32000, "message": "fixture-private-error"},
+                    })
+                else:
+                    send({"id": request_id, "result": {"thread": {"id": "thread-1"}}})
             elif method == "thread/fork":
                 assert message["params"]["threadId"] == "thread-1"
                 send({"id": request_id, "result": {"thread": {"id": "thread-2"}}})
@@ -157,6 +166,14 @@ def _fake_server(
                     continue
                 else:
                     continue
+            elif method == "thread/delete":
+                assert MODE == "request-error-cleanup"
+                assert message["params"] == {"threadId": "thread-1"}
+                send({"id": request_id, "result": {}})
+                send({
+                    "method": "thread/deleted",
+                    "params": {"threadId": "thread-1"},
+                })
             elif method == "turn/start":
                 send({"id": request_id, "result": {"turn": {"id": "turn-1"}}})
                 if MODE == "unknown-request":
@@ -549,6 +566,22 @@ def test_resume_fork_and_compact_use_exact_v2_methods(tmp_path: Path) -> None:
         assert client.events[-1]["thread_id_sha256"] == hashlib.sha256(
             b"thread-2"
         ).hexdigest()
+
+
+def test_request_error_keeps_connection_alive_for_persisted_thread_cleanup(
+    tmp_path: Path,
+) -> None:
+    client = _client(tmp_path, mode="request-error-cleanup")
+    with client:
+        client.initialize()
+        client.thread_start({"ephemeral": False})
+        assert client.cleanup_complete is False
+        with pytest.raises(CodexAppServerRequestError, match="returned an error"):
+            client.thread_resume("thread-1")
+        assert client.process_id is not None
+        assert client.cleanup_persisted_threads() is True
+        assert client.cleanup_complete is True
+        assert any(event["method"] == "thread/deleted" for event in client.events)
 
 
 def test_completed_mcp_result_is_memory_only_and_hashed_in_projection(tmp_path: Path) -> None:

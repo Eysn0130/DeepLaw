@@ -367,6 +367,23 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
     assert turn_params == [{"outputSchema": qualification._FINAL_RESPONSE_SCHEMA}]
 
 
+@pytest.mark.parametrize(
+    ("scenario", "development", "expected"),
+    [
+        ("cold_start", False, True),
+        ("compaction_forget", False, True),
+        ("resume_fork", False, False),
+        ("cold_start", True, False),
+    ],
+)
+def test_only_resume_lifecycles_use_persisted_threads(
+    scenario: str,
+    development: bool,
+    expected: bool,
+) -> None:
+    assert qualification._thread_is_ephemeral(scenario, development=development) is expected
+
+
 def test_codex_failure_codes_are_safe_constant_labels() -> None:
     assert qualification._safe_failure_code(
         qualification.QualificationFailure(

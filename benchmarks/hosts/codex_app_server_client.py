@@ -31,6 +31,10 @@ class CodexAppServerProtocolError(CodexAppServerError):
     """The child emitted an invalid or unsupported protocol message."""
 
 
+class CodexAppServerRequestError(CodexAppServerError):
+    """The child returned a valid JSON-RPC application error."""
+
+
 class CodexAppServerTimeoutError(CodexAppServerError):
     """The child did not produce the expected response before the deadline."""
 
@@ -41,6 +45,7 @@ class CodexAppServerOutputLimitError(CodexAppServerError):
 
 AppServerError = CodexAppServerError
 ProtocolError = CodexAppServerProtocolError
+RequestError = CodexAppServerRequestError
 TimeoutError = CodexAppServerTimeoutError
 OutputLimitError = CodexAppServerOutputLimitError
 
@@ -408,6 +413,8 @@ class CodexAppServerClient:
         self._latest_usage = _empty_usage()
         self._active_thread_id: str | None = None
         self._active_turn_id: str | None = None
+        self._persistent_thread_ids: list[str] = []
+        self._cleanup_complete = True
         self._final_text_parts: list[str] = []
         self._completed_item_text: str | None = None
         self._tool_outputs: list[Any] = []
@@ -458,6 +465,10 @@ class CodexAppServerClient:
     def secret_leak(self) -> bool:
         self._drain_available_stderr()
         return self._secret_leak
+
+    @property
+    def cleanup_complete(self) -> bool:
+        return self._cleanup_complete
 
     @property
     def usage(self) -> dict[str, Any]:
@@ -645,10 +656,18 @@ class CodexAppServerClient:
         selected_tools = self.dynamic_tools if dynamic_tools is None else dynamic_tools
         if selected_tools is not None:
             payload["dynamicTools"] = self._dynamic_tools_payload(selected_tools)
+        persistent = payload.get("ephemeral") is not True
+        if persistent:
+            # Once a persistent creation request is sent, cleanup is incomplete
+            # until the returned root identity is deleted successfully.  A
+            # malformed or failed response cannot silently claim cleanup.
+            self._cleanup_complete = False
         result = self._request_after_initialize("thread/start", payload)
         thread_id = _thread_id_from_response(result)
         if thread_id:
             self._active_thread_id = thread_id
+            if persistent and thread_id not in self._persistent_thread_ids:
+                self._persistent_thread_ids.append(thread_id)
         return result
 
     start_thread = thread_start
@@ -667,6 +686,42 @@ class CodexAppServerClient:
         return result
 
     resume_thread = thread_resume
+
+    def thread_delete(
+        self,
+        thread_id: str | Mapping[str, Any],
+        params: Mapping[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        payload = self._thread_params(thread_id, params, kwargs)
+        deleted_id = payload["threadId"]
+        result = self._request_after_initialize("thread/delete", payload)
+        if not isinstance(result, Mapping):
+            self._fail_closed()
+            raise CodexAppServerProtocolError("thread/delete response was invalid")
+        self._persistent_thread_ids = [
+            candidate
+            for candidate in self._persistent_thread_ids
+            if candidate != deleted_id
+        ]
+        self._cleanup_complete = not self._persistent_thread_ids
+        self._drain_ready_notifications()
+        return dict(result)
+
+    delete_thread = thread_delete
+
+    def cleanup_persisted_threads(self) -> bool:
+        """Delete tracked persisted roots without retaining response payloads."""
+
+        if not self._persistent_thread_ids:
+            return self._cleanup_complete
+        for thread_id in tuple(self._persistent_thread_ids):
+            try:
+                self.thread_delete(thread_id)
+            except CodexAppServerError:
+                self._cleanup_complete = False
+                return False
+        return self._cleanup_complete
 
     def thread_fork(
         self,
@@ -900,8 +955,21 @@ class CodexAppServerClient:
                 self._fail_closed()
                 raise CodexAppServerProtocolError("response id did not match request")
             if "error" in message:
-                self._fail_closed()
-                raise CodexAppServerProtocolError("app server returned an error")
+                error = message.get("error")
+                if (
+                    "result" in message
+                    or not isinstance(error, Mapping)
+                    or type(error.get("code")) is not int
+                    or not isinstance(error.get("message"), str)
+                ):
+                    self._fail_closed()
+                    raise CodexAppServerProtocolError(
+                        "app server returned an invalid error"
+                    )
+                # A valid request error is not framing corruption.  Keep the
+                # connection alive so callers can issue bounded cleanup, and
+                # never include the provider-supplied message in the exception.
+                raise CodexAppServerRequestError("app server returned an error")
             if "result" not in message:
                 self._fail_closed()
                 raise CodexAppServerProtocolError("response omitted result")
@@ -1640,9 +1708,11 @@ __all__ = [
     "CodexAppServerError",
     "CodexAppServerOutputLimitError",
     "CodexAppServerProtocolError",
+    "CodexAppServerRequestError",
     "CodexAppServerTimeoutError",
     "OutputLimitError",
     "ProtocolError",
+    "RequestError",
     "TimeoutError",
     "TurnResult",
     "normalize_token_usage",
