@@ -2879,9 +2879,11 @@ def _run_one_scenario(
         session_info = server.resume(observed_session)
         response_session = _extract_value(session_info, "id", "sessionID", "sessionId")
         parent_session = _extract_value(session_info, "parentID", "parentId", "parent_id")
-        if response_session != observed_session or (
-            fork and parent_session != previous_session_id
-        ):
+        # OpenCode 1.18.16 Session.fork clones the session without persisting a
+        # parentID.  The fork predecessor is therefore attested by the exact
+        # CLI request above; session.get must not be made to claim a native
+        # parent field that the pinned Host does not return.
+        if response_session != observed_session or (fork and parent_session is not None):
             raise QualificationError("OpenCode session.get lineage is invalid")
         native_receipts.append(
             pass13_evidence.native_lifecycle_receipt(
@@ -2902,6 +2904,7 @@ def _run_one_scenario(
                         if isinstance(parent_session, str) and parent_session
                         else None
                     ),
+                    "parent_id_present": bool(parent_session),
                 },
                 current_identity=observed_session,
                 parent_identity=(

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts import pass13_evidence
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
     analyze_safe_read_calls,
@@ -654,6 +655,50 @@ def test_historical_v1_metric_digest_ignores_absent_v2_native_receipts() -> None
         run = _report_run(index, scenario)
         assert "native_receipts" not in run
         assert run["metrics"]["evidence_sha256"] == expected[scenario]
+
+
+def test_opencode_fork_lineage_uses_cli_predecessor_not_fabricated_get_parent() -> None:
+    root = "a" * 64
+    forked = "b" * 64
+    receipts = [
+        {
+            "requested_operation": "cli.run",
+            "identity_lineage": {
+                "current_sha256": root,
+                "parent_sha256": None,
+                "root_sha256": root,
+            },
+        },
+        {
+            "requested_operation": "session.get",
+            "identity_lineage": {
+                "current_sha256": root,
+                "parent_sha256": None,
+                "root_sha256": root,
+            },
+        },
+        {
+            "requested_operation": "cli.run.fork",
+            "identity_lineage": {
+                "current_sha256": forked,
+                "parent_sha256": root,
+                "root_sha256": root,
+            },
+        },
+        {
+            "requested_operation": "session.get",
+            "identity_lineage": {
+                "current_sha256": forked,
+                "parent_sha256": None,
+                "root_sha256": root,
+            },
+        },
+    ]
+    pass13_evidence._validate_native_lineage_sequence("opencode", receipts)
+
+    receipts[-1]["identity_lineage"]["parent_sha256"] = root
+    with pytest.raises(EvidenceValidationError, match="unsupported parent lineage"):
+        pass13_evidence._validate_native_lineage_sequence("opencode", receipts)
 
 
 def test_legacy_compaction_notification_cannot_prove_current_qualification() -> None:

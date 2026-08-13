@@ -152,7 +152,11 @@ def _native_receipts(
             methods_observed=[observed],
             sanitized_observation={"observed": observed},
             current_identity=current,
-            parent_identity=root if relation != "new" else None,
+            parent_identity=(
+                None
+                if host == "opencode" and requested == "session.get"
+                else root if relation != "new" else None
+            ),
             root_identity=root,
             relation=relation,
             actual_provider_usage=(turns[turn_index]["usage"] if usage_observed else None),

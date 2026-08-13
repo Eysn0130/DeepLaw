@@ -1373,7 +1373,6 @@ def _validate_native_lineage_sequence(
     """Require native identity continuity across each observed request seam."""
 
     active: str | None = None
-    previous_requested: str | None = None
     for receipt in receipts:
         requested = receipt.get("requested_operation")
         lineage = receipt.get("identity_lineage")
@@ -1398,15 +1397,16 @@ def _validate_native_lineage_sequence(
         elif requested == "session.get":
             if active is None or current != active:
                 raise EvidenceValidationError("session.get did not bind the active session")
-            if previous_requested == "cli.run.fork" and parent is None:
-                raise EvidenceValidationError("session.get omitted fork parent lineage")
+            if host == "opencode" and parent is not None:
+                raise EvidenceValidationError(
+                    "OpenCode 1.18.16 session.get claimed an unsupported parent lineage"
+                )
         elif requested in {
             "thread/compact/start",
             "session.summarize",
             "session.messages",
         } and (active is None or current != active):
             raise EvidenceValidationError("native compaction lineage is invalid")
-        previous_requested = requested
 
 
 def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
