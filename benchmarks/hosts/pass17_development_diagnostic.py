@@ -49,6 +49,8 @@ def candidate_prompt(fixture: Mapping[str, Any]) -> str:
     return (
         f"{prompt.strip()} Use exactly one safe read-only knowledge_support context call; "
         "retry at most once only when the first bounded Provider Capsule is insufficient. "
-        "Set confirm_no_case_data=true and do not invoke any other tool. Return only the "
-        "bounded JSON response required by the Host."
+        "Set confirm_no_case_data=true and do not invoke any other tool. Return exactly one "
+        "JSON object and no Markdown: "
+        '{"summary":"string","next_step":"string","preserved_decisions":["string"],'
+        '"open_gaps":["string"]}. Use no other keys.'
     )

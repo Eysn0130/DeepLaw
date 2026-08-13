@@ -37,6 +37,23 @@ def test_development_fixture_is_source_free_and_has_no_qualification_labels() ->
         assert forbidden not in encoded
 
 
+def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> None:
+    diagnostic = pass17_development_diagnostic.candidate_prompt(
+        pass17_development_diagnostic.load_fixture()
+    )
+    qualification = opencode_runner.pass16_continuity_cases.candidate_prompt(
+        opencode_runner.pass16_continuity_cases.task_case("cold_start")
+    )
+    expected = (
+        '{"summary":"string","next_step":"string","preserved_decisions":["string"],'
+        '"open_gaps":["string"]}'
+    )
+    for prompt in (diagnostic, qualification):
+        assert expected in prompt
+        assert "no Markdown" in prompt
+        assert "Use no other keys" in prompt
+
+
 def test_opencode_runner_and_shared_validator_use_native_not_codex_vocabulary() -> None:
     runner_source = inspect.getsource(opencode_runner._run_one_scenario)
     fabricated = sorted(
