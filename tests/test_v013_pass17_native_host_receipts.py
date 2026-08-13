@@ -239,6 +239,33 @@ def test_v2_allows_existing_login_only_for_codex_diagnostic(tmp_path: Path) -> N
     assert any("isolation" in error.absolute_path for error in errors)
 
 
+def test_codex_event_receipt_is_bound_before_metric_digest() -> None:
+    run = codex_runner._placeholder_run(
+        1,
+        "development_diagnostic",
+        task_family="development_diagnostic",
+    )
+    original = run["metrics"]["evidence_sha256"]
+    run["scenario"] = "finalized_development_diagnostic"
+    event_bytes = b'{"method":"thread/started"}\n'
+
+    codex_runner._bind_run_event_receipt(
+        run,
+        event_name="codex-run-1-events.sanitized.jsonl",
+        event_bytes=event_bytes,
+    )
+
+    assert run["turns"][0]["sanitized_events"] == {
+        "name": "codex-run-1-events.sanitized.jsonl",
+        "bytes": len(event_bytes),
+        "sha256": hashlib.sha256(event_bytes).hexdigest(),
+    }
+    assert run["metrics"]["evidence_sha256"] != original
+    assert run["metrics"]["evidence_sha256"] == pass13_evidence.metric_evidence_sha256(
+        run
+    )
+
+
 def _failed_diagnostic_report(tmp_path: Path) -> dict[str, object]:
     orchestrator = QualificationOrchestrator(
         host="codex",

@@ -2100,6 +2100,28 @@ def _safe_failure_code(exc: BaseException) -> str:
     return known.get(message, "host_qualification_failure")
 
 
+def _bind_run_event_receipt(
+    run: dict[str, Any],
+    *,
+    event_name: str,
+    event_bytes: bytes,
+) -> None:
+    turns = run.get("turns")
+    metrics = run.get("metrics")
+    if not isinstance(turns, list) or not isinstance(metrics, dict):
+        raise QualificationFailure("Host run omitted event-bound metrics")
+    receipt = {
+        "name": event_name,
+        "bytes": len(event_bytes),
+        "sha256": _sha256(event_bytes),
+    }
+    for turn in turns:
+        if not isinstance(turn, dict):
+            raise QualificationFailure("Host run turn is invalid")
+        turn["sanitized_events"] = dict(receipt)
+    metrics["evidence_sha256"] = metric_evidence_sha256(run)
+
+
 def _write_artifacts(
     output_dir: Path,
     artifacts: Mapping[str, bytes],
@@ -2563,10 +2585,11 @@ def execute(
                     task_family=reported_scenario,
                 )["turns"],
             )
-            for turn in run["turns"]:
-                turn["sanitized_events"]["name"] = event_name
-                turn["sanitized_events"]["bytes"] = len(event_bytes)
-                turn["sanitized_events"]["sha256"] = _sha256(event_bytes)
+            _bind_run_event_receipt(
+                run,
+                event_name=event_name,
+                event_bytes=event_bytes,
+            )
             lifecycle_methods.update(run.get("methods_observed", []))
             for receipt in run.get("native_receipts", []):
                 if isinstance(receipt, Mapping):
