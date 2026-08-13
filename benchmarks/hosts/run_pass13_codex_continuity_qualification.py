@@ -859,7 +859,6 @@ def _seed_vault(
 def _seed_development_vault(
     executable: Path,
     vault: Path,
-    binding: Mapping[str, Any],
     fixture: Mapping[str, Any],
     *,
     work_dir: Path,
@@ -923,7 +922,6 @@ def _seed_development_vault(
                 "status": "succeeded",
                 "scope": "project",
                 "sensitivity": "private",
-                "run_metadata": {"task_binding": dict(binding)},
             },
             work_dir=work_dir,
         )
@@ -954,6 +952,7 @@ def _seed_development_vault(
             "expires_at": "2099-01-01T00:00:00Z",
             "scope": "project",
             "sensitivity": "private",
+            "run_id": run_id,
             "model_id": MODEL,
             "tool_id": "codex-app-server-pass17-development",
             "tags": ["pass17", "development", "diagnostic"],
@@ -2229,7 +2228,6 @@ def _prepare_codex_diagnostic(
     seeded = _seed_development_vault(
         runtime_executable,
         vault,
-        binding,
         fixture,
         work_dir=repository,
     )
