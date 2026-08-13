@@ -53,6 +53,14 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
         assert "no Markdown" in prompt
         assert "Use no other keys" in prompt
 
+    binding = opencode_runner.pass16_continuity_cases.git_binding(
+        REPOSITORY, task_line="pass17-prompt-test"
+    )
+    bound = opencode_runner._candidate_prompt(
+        opencode_runner.pass16_continuity_cases.task_case("cold_start"), binding
+    )
+    assert bound.endswith("do not use a code fence, prefix, or suffix.")
+
 
 def test_opencode_runner_and_shared_validator_use_native_not_codex_vocabulary() -> None:
     runner_source = inspect.getsource(opencode_runner._run_one_scenario)

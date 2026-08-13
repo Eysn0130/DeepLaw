@@ -174,7 +174,8 @@ def _candidate_prompt(
         pass16_continuity_cases.candidate_prompt(case, phase=phase)
         + " The canonical task_binding argument is "
         + _canonical(dict(task_binding))
-        + "."
+        + ". End with the required bare four-key JSON object only; do not use a code fence, "
+        "prefix, or suffix."
     )
 
 
@@ -2368,6 +2369,15 @@ def _safe_failure_code(exc: QualificationError) -> str:
         "OpenCode new-session tool call did not complete": "cli_run_tool_failed",
         "OpenCode resume tool call did not complete": "cli_resume_tool_failed",
         "OpenCode fork tool call did not complete": "cli_fork_tool_failed",
+        "OpenCode new-session final response schema is invalid": (
+            "cli_run_final_response_schema_invalid"
+        ),
+        "OpenCode resume final response schema is invalid": (
+            "cli_resume_final_response_schema_invalid"
+        ),
+        "OpenCode fork final response schema is invalid": (
+            "cli_fork_final_response_schema_invalid"
+        ),
         "completed MCP output is not an object": "safe_read_output_invalid",
         "completed MCP output has no exact Provider transport": (
             "safe_read_output_invalid"
@@ -2698,7 +2708,8 @@ def _run_one_scenario(
         pass17_development_diagnostic.candidate_prompt(selected_case)
         + " The canonical task_binding argument is "
         + _canonical(dict(primary_binding))
-        + "."
+        + ". End with the required bare four-key JSON object only; do not use a code fence, "
+        "prefix, or suffix."
         if development
         else _candidate_prompt(selected_case, primary_binding)
     )
@@ -2755,15 +2766,19 @@ def _run_one_scenario(
                 forbidden_values=forbidden_values,
             )
         except QualificationError as exc:
-            if str(exc) == "tool call did not complete":
-                stage = {
-                    "cli.run": "new-session",
-                    "cli.run.session": "resume",
-                    "cli.run.fork": "fork",
-                }.get(requested_operation)
-                if stage is not None:
+            stage = {
+                "cli.run": "new-session",
+                "cli.run.session": "resume",
+                "cli.run.fork": "fork",
+            }.get(requested_operation)
+            if stage is not None:
+                if str(exc) == "tool call did not complete":
                     raise QualificationError(
                         f"OpenCode {stage} tool call did not complete"
+                    ) from exc
+                if str(exc) == "final response schema is invalid":
+                    raise QualificationError(
+                        f"OpenCode {stage} final response schema is invalid"
                     ) from exc
             raise
         relevant_checkpoint = (
