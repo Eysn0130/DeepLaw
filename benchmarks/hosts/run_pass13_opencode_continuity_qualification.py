@@ -790,13 +790,11 @@ def _native_provider_capsule(state: Mapping[str, Any]) -> tuple[Mapping[str, Any
     return value, output
 
 
-def _native_tool_observation(
+def _native_tool_arguments(
     event: Mapping[str, Any],
-    capsule: Mapping[str, Any],
-    provider_text: str,
     *,
     expected_task_binding: Mapping[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[Mapping[str, Any], Mapping[str, Any], str]:
     part = event.get("part")
     if not isinstance(part, Mapping):
         raise QualificationError("tool event part is invalid")
@@ -816,6 +814,19 @@ def _native_tool_observation(
         raise QualificationError(
             "MCP call lacks the exact safe context and task-binding attestation"
         )
+    return part, arguments, call_id
+
+
+def _native_tool_observation(
+    event: Mapping[str, Any],
+    capsule: Mapping[str, Any],
+    provider_text: str,
+    *,
+    expected_task_binding: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    _part, arguments, call_id = _native_tool_arguments(
+        event, expected_task_binding=expected_task_binding
+    )
     provider_bytes = provider_text.encode("utf-8")
     statements = capsule.get("statements")
     gaps = capsule.get("gaps")
@@ -1017,7 +1028,15 @@ def analyze_opencode_events(
             if tool != TOOL_NAME:
                 raise QualificationError("disallowed tool was invoked")
             state = part.get("state")
-            if not isinstance(state, Mapping) or state.get("status") != "completed":
+            if not isinstance(state, Mapping):
+                raise QualificationError("tool event state is invalid")
+            # Validate public tool arguments even when OpenCode reports an
+            # error state.  This separates model call-shape failures from an
+            # execution failure without reading or retaining the error text.
+            _native_tool_arguments(
+                event, expected_task_binding=expected_task_binding
+            )
+            if state.get("status") != "completed":
                 raise QualificationError("tool call did not complete")
             capsule, provider_text = _native_provider_capsule(state)
             observation, payload = _native_tool_observation(

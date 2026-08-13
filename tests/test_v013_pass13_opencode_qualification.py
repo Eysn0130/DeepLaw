@@ -588,6 +588,27 @@ def test_analyzer_requires_the_exact_task_binding() -> None:
         )
 
 
+def test_error_tool_event_validates_call_shape_before_status() -> None:
+    event = _event()
+    event["part"]["state"]["status"] = "error"  # type: ignore[index]
+    event["part"]["state"]["input"]["task_binding"] = {  # type: ignore[index]
+        **_TASK_BINDING,
+        "binding_sha256": "f" * 64,
+    }
+    with pytest.raises(runner.QualificationError, match="task-binding"):
+        runner.analyze_opencode_events(
+            (json.dumps(event, separators=(",", ":")) + "\n").encode("utf-8"),
+            expected_task_binding=_TASK_BINDING,
+        )
+
+    event["part"]["state"]["input"]["task_binding"] = _TASK_BINDING  # type: ignore[index]
+    with pytest.raises(runner.QualificationError, match="did not complete"):
+        runner.analyze_opencode_events(
+            (json.dumps(event, separators=(",", ":")) + "\n").encode("utf-8"),
+            expected_task_binding=_TASK_BINDING,
+        )
+
+
 def test_compaction_usage_comes_from_one_public_summary_message() -> None:
     tokens = {
         "input": 10,
