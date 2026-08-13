@@ -247,6 +247,8 @@ def test_permission_and_config_are_exactly_read_only() -> None:
     prompt = config["agent"]["qualification"]["prompt"]  # type: ignore[index]
     assert "copy every key and value unchanged" in prompt.casefold()
     assert "do not add, remove, rename, infer, or rewrite fields" in prompt.casefold()
+    assert "every response string non-empty and at most 200 characters" in prompt
+    assert "each response array to one through three items" in prompt
     assert set(config["mcp"]) == {"deeplaw_knowledge"}  # type: ignore[arg-type]
 
 

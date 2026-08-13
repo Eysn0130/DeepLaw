@@ -156,7 +156,8 @@ def candidate_prompt(case: Mapping[str, Any], *, phase: str = "current") -> str:
         "Set confirm_no_case_data=true and do not invoke any other tool. Return exactly one "
         "JSON object and no Markdown: "
         '{"summary":"string","next_step":"string","preserved_decisions":["string"],'
-        '"open_gaps":["string"]}. Use no other keys.'
+        '"open_gaps":["string"]}. Use no other keys. Keep every string non-empty and at most '
+        "200 characters; keep each array to one through three items."
         f"{suffix}"
     )
     lowered = result.casefold()

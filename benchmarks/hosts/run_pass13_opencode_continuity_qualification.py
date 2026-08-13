@@ -327,7 +327,9 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
                     "When the user supplies a complete JSON object for knowledge_support "
                     "arguments, copy every key and value unchanged. Do not add, remove, "
                     "rename, infer, or rewrite fields. Invoke only knowledge_support, and "
-                    "return only the requested bare JSON response object."
+                    "return only the requested bare JSON response object. Keep every response "
+                    "string non-empty and at most 200 characters, and each response array to "
+                    "one through three items."
                 ),
             }
         },

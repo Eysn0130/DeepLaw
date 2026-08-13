@@ -52,6 +52,8 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
         assert expected in prompt
         assert "no Markdown" in prompt
         assert "Use no other keys" in prompt
+        assert "every string non-empty and at most 200 characters" in prompt
+        assert "each array to one through three items" in prompt
 
     binding = opencode_runner.pass16_continuity_cases.git_binding(
         REPOSITORY, task_line="pass17-prompt-test"
@@ -67,11 +69,14 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
     assert expected_call["query_plan_version"] == "6"
     assert "complete JSON object" in bound
     assert "Copy every key and value unchanged" in bound
+    assert "every string non-empty and at most 200 characters" in bound
+    assert "each array to one through three items" in bound
     development_config = opencode_runner.build_opencode_config(
         agent_name="development"
     )
     system_prompt = development_config["agent"]["development"]["prompt"]
     assert "copy every key and value unchanged" in system_prompt.casefold()
+    assert "every response string non-empty and at most 200 characters" in system_prompt
 
 
 def test_opencode_runner_and_shared_validator_use_native_not_codex_vocabulary() -> None:
