@@ -514,8 +514,8 @@ def test_opencode_failure_codes_are_safe_constant_labels() -> None:
         runner.QualificationError("OpenCode resume tool call did not complete")
     ) == "cli_resume_tool_failed"
     assert runner._safe_failure_code(
-        runner.QualificationError("OpenCode fork final response schema is invalid")
-    ) == "cli_fork_final_response_schema_invalid"
+        runner.QualificationError("OpenCode fork final response used a code fence")
+    ) == "cli_fork_final_response_fenced"
     assert runner._safe_failure_code(
         runner.QualificationError("MCP call lacks the exact public v6 context arguments")
     ) == "safe_read_call_shape_invalid"
@@ -580,7 +580,16 @@ def test_analyzer_classifies_native_projection_and_final_json_separately() -> No
     final = json.loads(events[-1])
     final["part"]["text"] = "not-json"
     events[-1] = json.dumps(final, separators=(",", ":")).encode("utf-8")
-    with pytest.raises(runner.QualificationError, match="final response schema"):
+    with pytest.raises(runner.QualificationError, match="not a JSON object"):
+        runner.analyze_opencode_events(
+            b"\n".join(events) + b"\n", expected_task_binding=_TASK_BINDING
+        )
+
+    final["part"]["text"] = pass13_evidence.canonical_json(
+        {"summary": "only one field"}
+    )
+    events[-1] = json.dumps(final, separators=(",", ":")).encode("utf-8")
+    with pytest.raises(runner.QualificationError, match="required field"):
         runner.analyze_opencode_events(
             b"\n".join(events) + b"\n", expected_task_binding=_TASK_BINDING
         )

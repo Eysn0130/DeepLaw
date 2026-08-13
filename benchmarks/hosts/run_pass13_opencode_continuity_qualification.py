@@ -1113,11 +1113,26 @@ def analyze_opencode_events(
             try:
                 parsed = _strict_json(text)
             except QualificationError as exc:
-                raise QualificationError("final response schema is invalid") from exc
+                stripped = text.strip()
+                if stripped.startswith("```"):
+                    code = "final response used a code fence"
+                elif not stripped.startswith("{"):
+                    code = "final response is not a JSON object"
+                else:
+                    code = "final response JSON syntax is invalid"
+                raise QualificationError(code) from exc
             try:
                 Draft202012Validator(_FINAL_RESPONSE_SCHEMA).validate(parsed)
             except ValidationError as exc:
-                raise QualificationError("final response schema is invalid") from exc
+                code = {
+                    "required": "final response omitted a required field",
+                    "additionalProperties": "final response added an unsupported field",
+                    "type": "final response field type is invalid",
+                    "minLength": "final response field bound is invalid",
+                    "maxLength": "final response field bound is invalid",
+                    "maxItems": "final response field bound is invalid",
+                }.get(str(exc.validator), "final response contract is invalid")
+                raise QualificationError(code) from exc
             final_value = parsed
             text_count += 1
             sanitized.append(
@@ -2505,6 +2520,38 @@ def _safe_failure_code(exc: QualificationError) -> str:
         "read-only OpenCode turn changed the ledger": "ledger_changed",
         "repeated large Provider payloads are not bounded": "provider_payload_repeated",
     }
+    for stage, stage_code in (
+        ("new-session", "cli_run"),
+        ("resume", "cli_resume"),
+        ("fork", "cli_fork"),
+    ):
+        stage_failures = {
+            f"OpenCode {stage} final response used a code fence": (
+                f"{stage_code}_final_response_fenced"
+            ),
+            f"OpenCode {stage} final response is not a JSON object": (
+                f"{stage_code}_final_response_not_json"
+            ),
+            f"OpenCode {stage} final response JSON syntax is invalid": (
+                f"{stage_code}_final_response_json_invalid"
+            ),
+            f"OpenCode {stage} final response omitted a required field": (
+                f"{stage_code}_final_response_required_field_missing"
+            ),
+            f"OpenCode {stage} final response added an unsupported field": (
+                f"{stage_code}_final_response_extra_field"
+            ),
+            f"OpenCode {stage} final response field type is invalid": (
+                f"{stage_code}_final_response_type_invalid"
+            ),
+            f"OpenCode {stage} final response field bound is invalid": (
+                f"{stage_code}_final_response_bound_invalid"
+            ),
+            f"OpenCode {stage} final response contract is invalid": (
+                f"{stage_code}_final_response_contract_invalid"
+            ),
+        }
+        known.update(stage_failures)
     return known.get(str(exc), "host_qualification_failure")
 
 
@@ -2813,9 +2860,9 @@ def _run_one_scenario(
                     raise QualificationError(
                         f"OpenCode {stage} tool call did not complete"
                     ) from exc
-                if str(exc) == "final response schema is invalid":
+                if str(exc).startswith("final response "):
                     raise QualificationError(
-                        f"OpenCode {stage} final response schema is invalid"
+                        f"OpenCode {stage} {exc}"
                     ) from exc
             raise
         relevant_checkpoint = (
