@@ -62,6 +62,24 @@ def test_single_diagnostic_covers_each_native_lifecycle_seam() -> None:
     }
 
 
+def test_codex_context_prompt_uses_the_complete_public_v6_call_shape() -> None:
+    binding = codex_runner._make_binding("cold_start")
+    arguments = codex_runner._context_call_arguments(
+        task="source_free_development_task",
+        binding=binding,
+    )
+    assert arguments == {
+        "operation": "context",
+        "task": "source_free_development_task",
+        "confirm_no_case_data": True,
+        "query_plan_version": "6",
+        "task_binding": binding,
+    }
+    prompt = codex_runner._prompt("cold_start", binding)
+    expected = {**arguments, "task": "continuity_cold_new_v1"}
+    assert pass13_evidence.canonical_json(expected) in prompt
+
+
 def test_diagnostic_mode_is_reachable_before_external_human_gold() -> None:
     protocol = (REPOSITORY / "docs/V0_13_QUALIFICATION_PROTOCOL.md").read_text(
         encoding="utf-8"

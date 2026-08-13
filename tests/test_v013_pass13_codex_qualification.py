@@ -404,7 +404,9 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
                 "tool_name": "knowledge_support",
                 "status": "completed",
                 "argument_operation": "context",
+                "argument_task_present": True,
                 "argument_confirm_no_case_data": True,
+                "argument_query_plan_version": "6",
                 "argument_task_binding_sha256": binding_sha256,
             }
         ],
@@ -430,6 +432,13 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
         qualification._turn_record(result, **kwargs)
 
     result["status"] = "completed"
+    observation = result["tool_call_observations"][0]
+    for required_field in ("argument_task_present", "argument_query_plan_version"):
+        retained = observation.pop(required_field)
+        with pytest.raises(qualification.QualificationFailure, match="did not bind"):
+            qualification._turn_record(result, **kwargs)
+        observation[required_field] = retained
+
     result["events"] = [{"method": "web_search", "item_type": "webSearch"}]
     with pytest.raises(qualification.QualificationFailure, match="prohibited capability"):
         qualification._turn_record(result, **kwargs)

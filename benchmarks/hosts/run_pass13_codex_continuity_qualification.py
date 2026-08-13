@@ -1083,11 +1083,32 @@ def _prompt(
         selected_case,
         phase="post_forget" if post_forget else "current",
     )
+    call = _context_call_arguments(
+        task=str(selected_case["task_case"]),
+        binding=binding,
+    )
     return (
-        f"{prompt} The canonical task binding is {canonical_json(dict(binding))}. "
-        "confirm_no_case_data=true. Return only bounded JSON with summary, next_step, "
+        f"{prompt} Call knowledge_support with exactly these arguments: "
+        f"{canonical_json(call)}. Retry at most once only if the first bounded Provider "
+        "Capsule is insufficient. Return only bounded JSON with summary, next_step, "
         "preserved_decisions, and open_gaps."
     )
+
+
+def _context_call_arguments(
+    *,
+    task: str,
+    binding: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not task or len(task) > 5000:
+        raise QualificationFailure("knowledge_support context task is invalid")
+    return {
+        "operation": "context",
+        "task": task,
+        "confirm_no_case_data": True,
+        "query_plan_version": "6",
+        "task_binding": dict(binding),
+    }
 
 
 def _parse_final(value: Any) -> dict[str, Any] | None:
@@ -1211,12 +1232,14 @@ def _turn_record(
     )
     if any(
         observation.get("argument_operation") != "context"
+        or observation.get("argument_task_present") is not True
         or observation.get("argument_confirm_no_case_data") is not True
+        or observation.get("argument_query_plan_version") != "6"
         or observation.get("argument_task_binding_sha256") != expected_binding_sha256
         for observation in observations
     ):
         raise QualificationFailure(
-            "safe read did not bind context, no-case-data confirmation, and the exact task"
+            "safe read did not bind context, v6, no-case-data confirmation, and the exact task"
         )
     if _result_value(result, "status") != "completed":
         raise QualificationFailure("App Server turn did not complete successfully")
@@ -2421,11 +2444,15 @@ def execute(
                         case=state["case"],
                     )
                 else:
+                    diagnostic_call = _context_call_arguments(
+                        task=str(state["case"]["task_case"]),
+                        binding=binding,
+                    )
                     selected_prompt = (
                         pass17_development_diagnostic.candidate_prompt(state["case"])
-                        + " The canonical task binding is "
-                        + canonical_json(dict(binding))
-                        + ". confirm_no_case_data=true. Return only bounded JSON with "
+                        + " Call knowledge_support with exactly these arguments: "
+                        + canonical_json(diagnostic_call)
+                        + ". Return only bounded JSON with "
                         "summary, next_step, preserved_decisions, and open_gaps."
                     )
                 run = _run_scenario(
