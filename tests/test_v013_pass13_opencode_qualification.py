@@ -500,6 +500,12 @@ def test_opencode_failure_codes_are_safe_constant_labels() -> None:
     assert runner._safe_failure_code(
         runner.QualificationError("provider included unsafe arbitrary text")
     ) == "host_qualification_failure"
+    assert runner._safe_failure_code(
+        runner.QualificationError("evidence contains a forbidden value")
+    ) == "secret_or_canary_leak"
+    assert runner._safe_failure_code(
+        runner.QualificationError("current Provider Capsule is missing")
+    ) == "provider_capsule_invalid"
 
 
 def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:

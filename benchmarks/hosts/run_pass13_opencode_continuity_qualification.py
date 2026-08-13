@@ -2188,13 +2188,31 @@ def _safe_failure_code(exc: QualificationError) -> str:
     """Map known failures to stable labels without retaining exception text."""
 
     known = {
+        "evidence contains an absolute path": "absolute_path_leak",
+        "evidence contains a forbidden field": "unsafe_evidence_field",
+        "evidence contains a forbidden value": "secret_or_canary_leak",
         "OpenCode task process failed": "host_task_process_failed",
         "OpenCode output exceeds the bounded limit": "host_output_overflow",
+        "OpenCode event is not valid JSON": "host_event_json_invalid",
+        "OpenCode event is not an object": "host_event_object_invalid",
         "OpenCode emitted an error event": "host_error_event",
         "unknown OpenCode event type": "host_event_type_invalid",
+        "tool event part is invalid": "host_tool_event_invalid",
+        "tool event state is invalid": "host_tool_event_invalid",
+        "tool event call id is missing": "host_tool_event_invalid",
+        "disallowed tool was invoked": "disallowed_tool_invoked",
+        "tool call did not complete": "safe_read_tool_failed",
+        "completed MCP output is not an object": "safe_read_output_invalid",
+        "completed MCP output has no exact Provider transport": (
+            "safe_read_output_invalid"
+        ),
+        "step finish part is invalid": "provider_usage_invalid",
+        "OpenCode token usage is missing": "provider_usage_missing",
         "OpenCode must emit exactly one bounded final response": (
             "final_response_count_invalid"
         ),
+        "final response text is invalid": "final_response_schema_invalid",
+        "final response exceeds the bounded limit": "final_response_overflow",
         "final response schema is invalid": "final_response_schema_invalid",
         "MCP call lacks the exact safe context and task-binding attestation": (
             "safe_read_task_binding_invalid"
@@ -2205,12 +2223,64 @@ def _safe_failure_code(exc: QualificationError) -> str:
         "safe read used an unexpected MCP server": "safe_read_tool_failed",
         "safe read used an unexpected tool": "safe_read_tool_failed",
         "safe read did not complete": "safe_read_tool_failed",
+        "safe read call identities must be unique": "safe_read_identity_invalid",
+        "safe read observation is invalid": "safe_read_observation_invalid",
+        "bounded retry requires an insufficient first Provider Capsule": (
+            "safe_read_retry_invalid"
+        ),
+        "MCP result observation does not match in-memory output": (
+            "safe_read_receipt_mismatch"
+        ),
+        "structured MCP output exceeds its local bound": "safe_read_output_overflow",
+        "structured output observation does not match MCP result": (
+            "safe_read_receipt_mismatch"
+        ),
+        "safe read must use the current MCP output schema": (
+            "safe_read_contract_invalid"
+        ),
+        "knowledge_support operation is not a safe read": "safe_read_operation_invalid",
+        "current Provider Capsule is missing": "provider_capsule_invalid",
+        "Provider Capsule delivery is invalid": "provider_capsule_invalid",
+        "Provider text is not the exact canonical inner Capsule": (
+            "provider_capsule_transport_mismatch"
+        ),
+        "Provider byte accounting does not match delivery": (
+            "provider_capsule_accounting_invalid"
+        ),
+        "read-only Provider delivery reported a write": "hidden_write_detected",
+        "Provider Capsule statements or gaps are invalid": "provider_capsule_invalid",
+        "Provider Capsule evidence is invalid": "provider_capsule_invalid",
+        "Provider projection does not match delivery": "provider_capsule_invalid",
+        "Provider payload relevance inputs are inconsistent": (
+            "provider_relevance_invalid"
+        ),
+        "Provider relevance input is invalid": "provider_relevance_invalid",
+        "Provider relevance text does not match its receipt": (
+            "provider_relevance_receipt_mismatch"
+        ),
         "actual OpenCode provider token usage is missing": "provider_usage_missing",
         "token usage arithmetic is inconsistent": "provider_usage_inconsistent",
         "OpenCode session or message identity is missing": "native_identity_missing",
+        "OpenCode task output omitted one stable session identity": (
+            "native_identity_missing"
+        ),
+        "OpenCode task output contained an unsafe session identity": (
+            "native_identity_invalid"
+        ),
         "OpenCode resume changed the session identity": "native_identity_mismatch",
         "OpenCode session.get lineage is invalid": "native_lineage_invalid",
         "OpenCode local session server is unavailable": "native_session_server_missing",
+        "OpenCode local server exited before readiness": "native_session_server_failed",
+        "OpenCode local server readiness timed out": "native_session_server_failed",
+        "OpenCode local server request is invalid": "native_request_invalid",
+        "OpenCode local server request failed": "native_request_failed",
+        "OpenCode local server response exceeds its bound": "native_response_overflow",
+        "OpenCode local server response is not JSON": "native_response_invalid",
+        "OpenCode resume response is invalid": "native_response_invalid",
+        "OpenCode session messages response is invalid": "native_response_invalid",
+        "OpenCode summarize response is invalid": "native_response_invalid",
+        "OpenCode compaction session identity is missing": "native_identity_missing",
+        "OpenCode compaction token usage is unreported": "provider_usage_missing",
         "MCP wrapper receipt is missing": "mcp_child_receipt_missing",
         "MCP wrapper receipt is invalid": "mcp_child_receipt_invalid",
         "read-only OpenCode turn changed the ledger": "ledger_changed",
