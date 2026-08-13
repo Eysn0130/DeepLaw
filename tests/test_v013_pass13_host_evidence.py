@@ -293,15 +293,24 @@ def test_retained_artifact_is_scanned_before_exclusive_write(tmp_path: Path) -> 
 def test_artifact_scan_allows_only_false_security_leak_flags(tmp_path: Path) -> None:
     write_retained_artifact(
         tmp_path / "safe-security.json",
-        b'{"authentication_material_retained":false,"secret_leak":false}\n',
+        (
+            b'{"authentication_material_retained":false,"secret_leak":false,'
+            b'"secret_values_retained":false}\n'
+        ),
         output_root=tmp_path,
     )
-    with pytest.raises(EvidenceValidationError, match="credential-bearing"):
-        write_retained_artifact(
-            tmp_path / "unsafe-security.json",
-            b'{"secret_leak":true}\n',
-            output_root=tmp_path,
-        )
+    for unsafe in (
+        b'{"secret_leak":true}\n',
+        b'{"secret_values_retained":true}\n',
+    ):
+        target = tmp_path / f"unsafe-security-{hashlib.sha256(unsafe).hexdigest()}.json"
+        with pytest.raises(EvidenceValidationError, match="credential-bearing"):
+            write_retained_artifact(
+                target,
+                unsafe,
+                output_root=tmp_path,
+            )
+        assert not target.exists()
 
 
 def test_artifact_scan_rejects_non_home_absolute_paths(tmp_path: Path) -> None:

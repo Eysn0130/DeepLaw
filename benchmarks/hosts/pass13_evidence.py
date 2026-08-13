@@ -509,8 +509,10 @@ def _scan_artifact(data: bytes, *, forbidden_values: Sequence[str]) -> None:
     lowered = data.lower()
     if any(field in lowered for field in _FORBIDDEN_ARTIFACT_FIELDS):
         raise EvidenceValidationError("artifact contains a forbidden evidence field")
-    credential_scan = data.replace(b'"secret_leak":false', b'"safe_flag":false').replace(
-        b'"authentication_material_retained":false', b'"safe_flag":false'
+    credential_scan = (
+        data.replace(b'"secret_leak":false', b'"safe_flag":false')
+        .replace(b'"authentication_material_retained":false', b'"safe_flag":false')
+        .replace(b'"secret_values_retained":false', b'"safe_flag":false')
     )
     if _CREDENTIAL_FIELD.search(credential_scan):
         raise EvidenceValidationError("artifact contains a credential-bearing field")
