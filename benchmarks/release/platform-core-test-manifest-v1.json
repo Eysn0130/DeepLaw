@@ -15,6 +15,13 @@
             "name": "test_native_windows_acl_rejects_directory_junction"
           },
           "node_id": "tests/test_windows_acl.py::test_native_windows_acl_rejects_directory_junction"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_windows_acl",
+            "name": "test_host_connect_and_launcher_reject_junction_ancestor"
+          },
+          "node_id": "tests/test_windows_acl.py::test_host_connect_and_launcher_reject_junction_ancestor"
         }
       ],
       "selection": "windows_native on non-Windows",
@@ -9486,15 +9493,22 @@
             "name": "test_native_windows_acl_rejects_directory_junction"
           },
           "node_id": "tests/test_windows_acl.py::test_native_windows_acl_rejects_directory_junction"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_windows_acl",
+            "name": "test_host_connect_and_launcher_reject_junction_ancestor"
+          },
+          "node_id": "tests/test_windows_acl.py::test_host_connect_and_launcher_reject_junction_ancestor"
         }
       ],
-      "count": 1341,
+      "count": 1342,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "ef5a9372297495e8283ca65df9a2910b328296c8e457f3bfeab9669ef5abdb4a"
+      "sha256": "271b888509c605c741f85713d5d5b9cb444237331725018f1fb648f4ba54d46d"
     }
   },
-  "manifest_sha256": "abd08efc2b61a75d3be9f9f131ffbebacdc0fd008dd7d4a0d82e0ab0cd7491bf",
+  "manifest_sha256": "05a4924d3baad6354c811996f0298ce469d646093ec83871039afb3872f1e1d3",
   "schema_version": "deeplaw.platform-core-test-manifest/v1",
   "selection": {
     "common": "not qualification and not windows_native",

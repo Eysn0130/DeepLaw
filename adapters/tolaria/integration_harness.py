@@ -48,7 +48,8 @@ def main() -> int:
     # APIs.  No host binary, model, network, Grant, or canonical mutation is
     # inferred from this deterministic run.
     with tempfile.TemporaryDirectory(prefix="deeplaw-tolaria-harness-") as temporary:
-        vault = Path(temporary) / "vault"
+        temporary_root = Path(temporary).resolve(strict=True)
+        vault = temporary_root / "vault"
         initialized = _run_cli(
             "knowledge",
             "--format",
@@ -118,7 +119,11 @@ def main() -> int:
         )
         merged = merge_standard_mcp_config(
             {"mcpServers": {"tolaria": {"command": "node", "args": ["index.js"]}}},
-            tolaria_mcp_servers(deeplaw_executable="deeplaw", vault_path=vault),
+            tolaria_mcp_servers(
+                deeplaw_executable="deeplaw",
+                vault_path=vault,
+                owner_home=temporary_root / "owner-home",
+            ),
         )
         open_request = tolaria_open_note_request("wiki/index.md", vault_path=vault)
 

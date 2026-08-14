@@ -27,6 +27,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from benchmarks.hosts.run_codex_continuity_qualification import (
     _CANARY_NAMES,
     _DISABLED_CAPABILITIES,
+    _bind_runtime_vault,
     _candidate_fixture,
     _candidate_output_directory,
     _confirmed_login_status,
@@ -337,7 +338,11 @@ def _condition_placeholder(condition_id: str, failure: str) -> dict[str, Any]:
     }
 
 
-def _app_server_argv(codex_binary: Path, condition_id: str) -> list[str]:
+def _app_server_argv(
+    codex_binary: Path,
+    condition_id: str,
+    vault_id: str = "vault_" + "0" * 24,
+) -> list[str]:
     if condition_id not in CONDITIONS:
         raise ValueError("unknown token-attribution condition")
     argv = [
@@ -360,8 +365,9 @@ def _app_server_argv(codex_binary: Path, condition_id: str) -> list[str]:
                 'mcp_servers.deeplaw.command="./deeplaw-closed-mcp"',
                 "--config",
                 (
-                    'mcp_servers.deeplaw.args=["knowledge","mcp","--stdio",'
-                    '"--vault","vault"]'
+                    'mcp_servers.deeplaw.args=["knowledge","mcp",'
+                    '"--closed-environment","--stdio","--expected-vault-id",'
+                    f'"{vault_id}"]'
                 ),
                 "--config",
                 'mcp_servers.deeplaw.enabled_tools=["knowledge_support"]',
@@ -514,6 +520,7 @@ def _run_condition(
     input_schema: Mapping[str, Any] | None,
     preflight: Mapping[str, Any],
     canary_values: Sequence[str],
+    vault_id: str,
 ) -> tuple[dict[str, Any], bool, bool]:
     from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
 
@@ -560,7 +567,7 @@ def _run_condition(
     receipt_path.unlink(missing_ok=True)
     audit_before = _ledger_head(vault)
     client = CodexAppServerClient(
-        _app_server_argv(codex_binary, condition_id),
+        _app_server_argv(codex_binary, condition_id, vault_id),
         environment,
         cwd=output_dir,
         timeout_seconds=TIMEOUT_SECONDS,
@@ -849,6 +856,7 @@ def execute(
     )
     vault = selected_output / "vault"
     seeded = _seed_vault(vault, fixture)
+    vault_id = _bind_runtime_vault(output_dir=selected_output, vault=vault)
     preflight = _preflight(vault, fixture, seeded)
     full = full_input_schema()
     schemas = _schema_map(full)
@@ -874,6 +882,7 @@ def execute(
             input_schema=inputs[condition_id],
             preflight=preflight,
             canary_values=tuple(canaries.values()),
+            vault_id=vault_id,
         )
         conditions.append(condition)
         secret_leaks.append(secret_leak)

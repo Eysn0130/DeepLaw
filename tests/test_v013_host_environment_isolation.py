@@ -13,6 +13,9 @@ from benchmarks.baselines import official_adapter
 from benchmarks.hosts import run_codex_continuity_qualification as codex_qualification
 from benchmarks.hosts import run_living_wiki_host_harness as living_harness
 from benchmarks.hosts import run_semantic_host_harness as semantic_harness
+from deeplaw.host_runtime import bind_owner_vault
+from deeplaw.knowledge_autonomy import initialize_autonomous_core
+from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.util import canonical_json, sha256_bytes
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -415,7 +418,7 @@ def test_phased_semantic_harness_uses_the_same_closed_environment(
     assert captured["prompt"]
 
 
-def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
+def test_codex_qualification_shim_delegates_to_production_closed_launcher(
     tmp_path: Path,
 ) -> None:
     output_dir = tmp_path / "qualification"
@@ -426,13 +429,8 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
     fake_deeplaw = runtime_bin / "deeplaw"
     fake_deeplaw.write_text(
         f"#!{Path(sys.executable).resolve()}\n"
-        "import json, os, sys\n"
-        "names = ('DEEPLAW_QUALIFICATION_SECRET_CANARY', "
-        "'DEEPLAW_QUALIFICATION_PROVIDER_CANARY', "
-        "'DEEPLAW_CREDENTIAL_PATH_CANARY', 'CODEX_HOME', "
-        "'OPENAI_API_KEY', 'DEEPSEEK_API_KEY')\n"
-        "print(json.dumps({'present': [name for name in names if name in os.environ], "
-        "'home': os.environ.get('HOME'), 'argv': sys.argv}, sort_keys=True))\n",
+        "import json, sys\n"
+        "print(json.dumps({'argv': sys.argv}, sort_keys=True))\n",
         encoding="utf-8",
     )
     fake_deeplaw.chmod(0o700)
@@ -442,6 +440,11 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
         encoding="utf-8",
     )
     wrapper.chmod(0o700)
+    vault = output_dir / "vault"
+    initialize_knowledge_vault(vault, name="qualification-shim", scope="project")
+    initialize_autonomous_core(vault)
+    binding = bind_owner_vault(vault, owner_home=output_dir / "mcp-owner")
+    vault_id = binding["vault_id"]
     environment = {
         **os.environ,
         "DEEPLAW_QUALIFICATION_SECRET_CANARY": "secret-canary",
@@ -458,9 +461,10 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
             str(wrapper),
             "knowledge",
             "mcp",
+            "--closed-environment",
             "--stdio",
-            "--vault",
-            "vault",
+            "--expected-vault-id",
+            vault_id,
         ],
         cwd=output_dir,
         env=environment,
@@ -480,12 +484,11 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
             "runtime/bin/deeplaw",
             "knowledge",
             "mcp",
+            "--closed-environment",
             "--stdio",
-            "--vault",
-            "vault",
-        ],
-        "home": "mcp-home",
-        "present": [],
+            "--expected-vault-id",
+            vault_id,
+        ]
     }
     assert receipt == {
         "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
@@ -493,7 +496,7 @@ def test_codex_qualification_wrapper_closes_real_mcp_child_environment(
         "home_isolated": True,
         "blocked_names_present": [],
         "environment_names": receipt["environment_names"],
-        "child_argv": ["runtime/bin/python", *child["argv"]],
+        "child_argv": child["argv"],
     }
     assert {"HOME", "PATH", "XDG_CONFIG_HOME"}.issubset(
         receipt["environment_names"]

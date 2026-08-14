@@ -313,7 +313,13 @@ def test_mcp_receipt_proves_provider_and_auth_are_absent() -> None:
             {"DEEPSEEK_API_KEY", *runner._CANARY_NAMES}
         ),
         "blocked_child_names_present": [],
-        "child_argv": ["deeplaw", "knowledge", "mcp", "--stdio", "--vault", "vault"],
+        "child_argv": [
+            "deeplaw",
+            "knowledge",
+            "mcp",
+            "--closed-environment",
+            "--stdio",
+        ],
         "wrapper_sha256": "a" * 64,
         "child_executable_sha256": "b" * 64,
         "environment_sha256": "c" * 64,

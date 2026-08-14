@@ -59,6 +59,9 @@ def test_default_knowledge_help_shows_journey_not_state_machine() -> None:
     knowledge = _command_parser("knowledge")
     help_text = knowledge.format_help()
     assert "Basic journey" in help_text
+    assert _subparsers(knowledge).metavar == (
+        "{init,doctor,source,compile,reconcile,task,host,context,wiki,snapshot,forget}"
+    )
     for command in (
         "init",
         "doctor",
@@ -66,6 +69,7 @@ def test_default_knowledge_help_shows_journey_not_state_machine() -> None:
         "compile",
         "reconcile",
         "host",
+        "task",
         "context",
         "wiki",
         "snapshot",
@@ -139,12 +143,18 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
         audit_before = store.audit_head
 
     for host in ("codex", "claude-code", "opencode"):
-        plan = build_host_connect_plan(host=host, vault_path=vault)
+        plan = build_host_connect_plan(
+            host=host,
+            vault_path=vault,
+            owner_home=tmp_path / "owner-home",
+        )
         assert plan["schema_version"] == "deeplaw.host-connect-plan/v2"
         assert plan["host"] == host
         assert plan["server_leaf"] == "knowledge_support"
         assert plan["read_only"] is True
-        assert plan["write_performed"] is False
+        assert plan["write_performed"] is True
+        assert plan["owner_local_binding"]["configured"] is True
+        assert plan["owner_local_binding"]["path_included"] is False
         assert plan["authentication_managed"] is False
         assert plan["host_runtime_managed"] is False
         assert plan["preflight"] == {
@@ -190,6 +200,20 @@ def test_host_connect_is_a_real_cli_surface() -> None:
     assert parsed.knowledge_command == "host"
     assert parsed.host_command == "connect"
 
+    task = cli._parser().parse_args(
+        [
+            "knowledge",
+            "task",
+            "start",
+            "--project",
+            "DeepLaw",
+            "--task",
+            "Continue the bounded task.",
+        ]
+    )
+    assert task.knowledge_command == "task"
+    assert task.task_command == "start"
+
 
 def test_product_manifest_records_current_surface_and_preserves_callers() -> None:
     schema = json.loads(
@@ -209,6 +233,7 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         "snapshot",
         "forget",
         "host connect",
+        "task continuity",
     ]
     host_connect = next(
         item
@@ -218,6 +243,13 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
     assert host_connect["product_role"] == "Driver"
     assert host_connect["lifecycle"] == "Active"
     assert "deeplaw knowledge host connect" in host_connect["bindings"]
+    assert "contracts/host-connect-plan.v2.schema.json" in host_connect["bindings"]
+    compatibility_contracts = next(
+        item
+        for item in manifest["surfaces"]
+        if item["surface_id"] == "compatibility.legacy_contracts"
+    )["bindings"]
+    assert "contracts/host-connect-plan.v1.schema.json" in compatibility_contracts
     assert {item["product_role"] for item in manifest["surfaces"]} <= {
         "Core",
         "Driver",

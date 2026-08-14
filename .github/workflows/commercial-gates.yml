@@ -302,7 +302,7 @@ jobs:
           npm install --global --prefix "${RUNNER_TEMP}/host-clis" \
             @openai/codex@0.145.0 \
             @anthropic-ai/claude-code@2.1.220 \
-            opencode-ai@1.18.8
+            opencode-ai@1.18.16
           echo "${RUNNER_TEMP}/host-clis/bin" >> "${GITHUB_PATH}"
 
       - name: Run isolated lifecycle and MCP handshake without a model
@@ -316,7 +316,7 @@ jobs:
             --deeplaw "${RUNNER_TEMP}/host-runtime/bin/deeplaw" \
             --codex-version 0.145.0 \
             --claude-version 2.1.220 \
-            --opencode-version 1.18.8 \
+            --opencode-version 1.18.16 \
             --output "${RUNNER_TEMP}/no-model-host-acceptance.json"
 
       - name: Assert no-model smoke is not model task acceptance

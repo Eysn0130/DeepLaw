@@ -296,7 +296,7 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
     exact_ci_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
     assert commercial.count(exact_commercial_ref) == 7
     assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
-    assert ci.count(exact_ci_ref) == 3
+    assert ci.count(exact_ci_ref) == 5
     assert "  pull_request:" not in commercial
     assert "qualification and not windows_native" in commercial
     assert 'marker: not qualification' in commercial

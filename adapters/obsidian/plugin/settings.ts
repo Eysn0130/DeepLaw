@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: DeepLawSettings = {
   compilerGrantId: "",
   defaultScope: "project",
   maxSensitivity: "private",
-  readOnlyMcpCommand: "deeplaw knowledge mcp --autonomous"
+  readOnlyMcpCommand: "deeplaw knowledge mcp --closed-environment --stdio"
 };
 
 export class DeepLawSettingTab extends PluginSettingTab {

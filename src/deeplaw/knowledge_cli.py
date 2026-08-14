@@ -148,6 +148,7 @@ _BASIC_KNOWLEDGE_COMMANDS = (
     "source",
     "compile",
     "reconcile",
+    "task",
     "host",
     "context",
     "wiki",
@@ -271,7 +272,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         help="Operate the local Markdown-native Agent Knowledge OS",
         description=(
             "Basic journey: init -> doctor -> source add -> compile -> reconcile -> "
-            "host context -> wiki/source drill-down -> snapshot/forget"
+            "task start -> host context -> wiki/source drill-down -> checkpoint/snapshot/forget"
         ),
         epilog=(
             "Use --help-advanced, --help-admin, or --help-compatibility for the "
@@ -1981,6 +1982,53 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     sink_mcp.add_argument("--expected-vault-id")
 
+    task_driver = subcommands.add_parser(
+        "task",
+        help="Drive bounded task-handle continuity without storing Host transcripts",
+    )
+    task_commands = task_driver.add_subparsers(dest="task_command", required=True)
+    task_start = task_commands.add_parser("start")
+    task_start.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_start.add_argument("--project", required=True)
+    task_start.add_argument("--task", dest="task_text", required=True)
+    task_start.add_argument("--workspace", type=Path, default=Path.cwd())
+    for action in ("resume", "compaction"):
+        task_read = task_commands.add_parser(action)
+        task_read.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        task_read.add_argument("--task-handle", required=True)
+        task_read.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_fork = task_commands.add_parser("fork")
+    task_fork.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_fork.add_argument("--task-handle", required=True)
+    task_fork.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_fork.add_argument(
+        "--mode",
+        choices=("continue-parent", "child-task"),
+        required=True,
+    )
+    task_fork.add_argument("--child-task")
+    task_checkpoint = task_commands.add_parser("checkpoint")
+    task_checkpoint.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_checkpoint.add_argument("--task-handle", required=True)
+    task_checkpoint.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_checkpoint.add_argument("--grant-id", required=True)
+    task_checkpoint.add_argument("--idempotency-key", required=True)
+    task_checkpoint.add_argument("--summary", required=True)
+    task_checkpoint.add_argument("--next-action", required=True)
+    task_checkpoint.add_argument("--expires-at", required=True)
+    task_checkpoint.add_argument("--decision", action="append", default=[])
+    task_checkpoint.add_argument("--gap", action="append", default=[])
+    task_checkpoint.add_argument("--artifact-ref", action="append", default=[])
+    task_checkpoint.add_argument("--confirm-no-case-data", action="store_true")
+    task_forget = task_commands.add_parser("forget")
+    task_forget.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_forget.add_argument("--task-handle", required=True)
+    task_forget.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_forget.add_argument("--grant-id", required=True)
+    task_forget.add_argument("--idempotency-key", required=True)
+    task_forget.add_argument("--reason", required=True)
+    task_forget.add_argument("--confirm-no-case-data", action="store_true")
+
     host = subcommands.add_parser(
         "host",
         help="Build a read-only Host connection plan without managing Host auth/runtime",
@@ -1996,9 +2044,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         required=True,
     )
     host_connect.add_argument("--vault", type=Path, default=default_knowledge_vault())
-    host_connect.add_argument(
+    host_task = host_connect.add_mutually_exclusive_group()
+    host_task.add_argument(
         "--task-binding",
         help="Canonical opaque task-context binding embedded in the generated launcher",
+    )
+    host_task.add_argument(
+        "--task-handle",
+        help="Stable opaque task handle resolved by the launcher at Host start",
     )
 
     mcp = subcommands.add_parser(
@@ -2014,9 +2067,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         help="Launch the fixed knowledge_support child with an isolated environment",
     )
     mcp.add_argument("--expected-vault-id")
-    mcp.add_argument(
+    mcp_task = mcp.add_mutually_exclusive_group()
+    mcp_task.add_argument(
         "--task-binding",
         help="Canonical opaque task-context binding used by read-only query/context calls",
+    )
+    mcp_task.add_argument(
+        "--task-handle",
+        help="Stable opaque task handle resolved against the current Git worktree",
     )
     _curate_default_help(subcommands)
 
@@ -2306,6 +2364,63 @@ def _parse_task_binding_argument(value: str | None) -> dict[str, Any] | None:
 
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
+    if command == "task":
+        from .task_continuity import (
+            checkpoint_task,
+            forget_task,
+            fork_task,
+            resume_task,
+            start_task,
+        )
+
+        if args.task_command == "start":
+            return start_task(
+                vault_path=args.vault,
+                project=args.project,
+                task=args.task_text,
+                workspace=args.workspace,
+            )
+        if args.task_command in {"resume", "compaction"}:
+            return resume_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                operation=args.task_command,
+            )
+        if args.task_command == "fork":
+            return fork_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                mode=args.mode,
+                child_task=args.child_task,
+            )
+        if args.task_command == "checkpoint":
+            return checkpoint_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                summary=args.summary,
+                next_action=args.next_action,
+                expires_at=args.expires_at,
+                decisions=tuple(args.decision),
+                gaps=tuple(args.gap),
+                artifact_refs=tuple(args.artifact_ref),
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "forget":
+            return forget_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                reason=args.reason,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        raise ValueError(f"unsupported task continuity action: {args.task_command}")
     if command == "host":
         from .host_connect import build_host_connect_plan
 
@@ -2315,6 +2430,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             host=args.host,
             vault_path=args.vault,
             task_binding=_parse_task_binding_argument(args.task_binding),
+            task_handle=args.task_handle,
         )
     if command == "reconcile":
         args.autonomy_command = "reconcile"
@@ -2938,10 +3054,20 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 return None
             from .knowledge_sink_mcp_server import run_knowledge_sink_mcp
 
+            selected_vault = args.vault
+            if args.expected_vault_id is not None:
+                from .host_runtime import resolve_knowledge_vault
+
+                selected_vault = resolve_knowledge_vault(
+                    selected_vault,
+                    expected_vault_id=args.expected_vault_id,
+                    require_existing=True,
+                )
+
             run_knowledge_sink_mcp(
                 grant_id=args.grant_id,
                 transport="stdio" if args.stdio else args.transport,
-                vault_path=args.vault,
+                vault_path=selected_vault,
             )
             return None
         if action == "apply":
@@ -3063,6 +3189,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             model_root=args.model_root,
         )
     if command == "mcp":
+        if args.task_handle is not None and os.environ.get("DEEPLAW_TASK_BINDING"):
+            raise ValueError("task handle and inherited task binding are mutually exclusive")
         task_binding = _parse_task_binding_argument(
             args.task_binding or os.environ.get("DEEPLAW_TASK_BINDING")
         )
@@ -3074,13 +3202,26 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 vault_path=args.vault,
                 expected_vault_id=args.expected_vault_id,
                 task_binding=task_binding,
+                task_handle=args.task_handle,
             )
             return None
+        if args.task_handle is not None:
+            raise ValueError("task handle requires the closed production launcher")
         from .knowledge_mcp_server import run_knowledge_mcp
+
+        selected_vault = args.vault
+        if args.expected_vault_id is not None:
+            from .host_runtime import resolve_knowledge_vault
+
+            selected_vault = resolve_knowledge_vault(
+                selected_vault,
+                expected_vault_id=args.expected_vault_id,
+                require_existing=True,
+            )
 
         run_knowledge_mcp(
             transport="stdio" if args.stdio else args.transport,
-            vault_path=args.vault,
+            vault_path=selected_vault,
             default_task_binding=task_binding,
         )
         return None

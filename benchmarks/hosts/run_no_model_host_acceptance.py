@@ -748,7 +748,7 @@ def _opencode_acceptance(
             "transport": "version-bound local adapter projection",
         },
         "official_cli_boundary": (
-            "OpenCode 1.18.8 validates native config, agent, skill, and MCP states; "
+            "OpenCode 1.18.16 validates native config, agent, skill, and MCP states; "
             "adapter files are installed, upgraded, disabled, and removed locally because "
             "OpenCode exposes no marketplace remove command for this configuration form."
         ),
@@ -853,7 +853,7 @@ def main() -> int:
     parser.add_argument("--deeplaw", default="deeplaw")
     parser.add_argument("--codex-version", default="0.145.0")
     parser.add_argument("--claude-version", default="2.1.220")
-    parser.add_argument("--opencode-version", default="1.18.8")
+    parser.add_argument("--opencode-version", default="1.18.16")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:

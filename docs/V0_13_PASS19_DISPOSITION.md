@@ -1,5 +1,11 @@
 # DeepLaw v0.13 Pass 19 current-fix disposition
 
+> Pass 20 correction: the Pass 19 “new/resume/post-compaction” fixture exercised repeated process
+> restarts through the same read helper. It is deterministic restart/data-plane recovery evidence,
+> not native Host lifecycle evidence. Pass 20 also supersedes duplicated Host Connect path checks
+> and manual multi-hash setup with the shared resolver and opaque task handle described in
+> `V0_13_PASS20_DISPOSITION.md`; historical Pass 19 hashes and results below are unchanged.
+
 Status: **current source-candidate / pre-qualification fix; not a release or qualification
 report**. Package remains `0.12.0`; `release_ready=false`; `claim_eligible=false`.
 

@@ -201,6 +201,9 @@ def test_editor_context_is_ephemeral_and_does_not_mutate_the_ledger(
 def test_tolaria_mcp_merge_preserves_settings_and_fails_on_collision(
     tmp_path: Path,
 ) -> None:
+    vault = tmp_path / "vault"
+    initialize_knowledge_vault(vault, name="tolaria-host", scope="project")
+    initialize_autonomous_core(vault)
     existing = {
         "theme": "system",
         "mcpServers": {
@@ -210,9 +213,10 @@ def test_tolaria_mcp_merge_preserves_settings_and_fails_on_collision(
     }
     servers = tolaria_mcp_servers(
         deeplaw_executable="deeplaw",
-        vault_path=tmp_path / "vault",
+        vault_path=vault,
         compiler_grant_id="grant_" + "a" * 24,
         include_law_support=True,
+        owner_home=tmp_path / "owner-home",
     )
     merged = merge_standard_mcp_config(existing, servers)
     assert merged["theme"] == "system"
@@ -223,6 +227,11 @@ def test_tolaria_mcp_merge_preserves_settings_and_fails_on_collision(
         "deeplaw_knowledge_sink",
         "deeplaw_law",
     }
+    rendered = json.dumps(servers, sort_keys=True)
+    assert "--closed-environment" in rendered
+    assert "--expected-vault-id" in rendered
+    assert "--vault" not in rendered
+    assert str(vault.resolve()) not in rendered
     assert existing["mcpServers"].keys() == {"tolaria", "unrelated"}
     with pytest.raises(FileExistsError, match="different settings"):
         merge_standard_mcp_config(
@@ -277,6 +286,10 @@ def test_tolaria_setup_cli_writes_new_private_config_without_echoing_contents(
 ) -> None:
     existing = tmp_path / "existing.json"
     output = tmp_path / "merged.json"
+    vault = tmp_path / "vault"
+    initialize_knowledge_vault(vault, name="tolaria-setup", scope="project")
+    initialize_autonomous_core(vault)
+    environment = {**os.environ, "DEEPLAW_HOME": str(tmp_path / "owner-home")}
     existing.write_text(
         json.dumps(
             {
@@ -296,9 +309,10 @@ def test_tolaria_setup_cli_writes_new_private_config_without_echoing_contents(
             "--output",
             str(output),
             "--vault",
-            str(tmp_path / "vault"),
+            str(vault),
         ],
         cwd=REPOSITORY,
+        env=environment,
         check=True,
         capture_output=True,
         text=True,
@@ -330,9 +344,10 @@ def test_tolaria_setup_cli_writes_new_private_config_without_echoing_contents(
             "--output",
             str(output),
             "--vault",
-            str(tmp_path / "vault"),
+            str(vault),
         ],
         cwd=REPOSITORY,
+        env=environment,
         capture_output=True,
         text=True,
         timeout=30,

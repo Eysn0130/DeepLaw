@@ -351,9 +351,10 @@ environment = {{
     "PYTHONUTF8": "1",
     "NO_COLOR": "1",
     "GIT_TERMINAL_PROMPT": "0",
+    "DEEPLAW_KNOWLEDGE_VAULT": "vault",
 }}
 completed = subprocess.run(
-    [{str(executable)!r}, "knowledge", "mcp", "--stdio", "--vault", {str(vault)!r}],
+    [{str(executable)!r}, "knowledge", "mcp", "--closed-environment", "--stdio"],
     env=environment,
     check=False,
 )

@@ -249,10 +249,29 @@
         "environment_names": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$", "maxLength": 100}
+          "items": {"type": "string", "pattern": "^(?:[A-Z][A-Z0-9_]*|__CF_USER_TEXT_ENCODING)$", "maxLength": 100}
         },
         "child_argv": {
-          "const": ["runtime/bin/python", "runtime/bin/deeplaw", "knowledge", "mcp", "--stdio", "--vault", "vault"]
+          "oneOf": [
+            {
+              "const": ["runtime/bin/python", "runtime/bin/deeplaw", "knowledge", "mcp", "--stdio", "--vault", "vault"]
+            },
+            {
+              "type": "array",
+              "minItems": 7,
+              "maxItems": 7,
+              "prefixItems": [
+                {"const": "runtime/bin/deeplaw"},
+                {"const": "knowledge"},
+                {"const": "mcp"},
+                {"const": "--closed-environment"},
+                {"const": "--stdio"},
+                {"const": "--expected-vault-id"},
+                {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"}
+              ],
+              "items": false
+            }
+          ]
         }
       }
     },

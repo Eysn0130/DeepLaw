@@ -209,7 +209,11 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
         pass
 
     plans = {
-        host: build_host_connect_plan(host=host, vault_path=vault)
+        host: build_host_connect_plan(
+            host=host,
+            vault_path=vault,
+            owner_home=tmp_path / "owner-home",
+        )
         for host in ("codex", "claude-code", "opencode")
     }
     plan = plans["codex"]
@@ -342,7 +346,11 @@ def test_host_connect_fails_closed_when_real_context_seam_is_not_callable(
 
     monkeypatch.setattr(host_connect_module.KnowledgeOS, "open", staticmethod(fail_open))
     with pytest.raises(RuntimeError, match="Host connect blocked"):
-        build_host_connect_plan(host="codex", vault_path=vault)
+        build_host_connect_plan(
+            host="codex",
+            vault_path=vault,
+            owner_home=tmp_path / "owner-home",
+        )
 
 
 def test_host_connect_loads_contract_from_installed_package_layout(

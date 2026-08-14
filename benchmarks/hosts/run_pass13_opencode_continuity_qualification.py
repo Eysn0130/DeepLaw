@@ -107,6 +107,7 @@ EXPECTED_HOST_ENVIRONMENT_NAMES = frozenset(
         "DEEPSEEK_API_KEY",
         "NO_COLOR",
         "GIT_TERMINAL_PROMPT",
+        "DEEPLAW_KNOWLEDGE_VAULT",
         "CI",
         *_CANARY_NAMES,
     }
@@ -333,11 +334,6 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
                 "type": "local",
                 "command": [
                     "./deeplaw-closed-mcp",
-                    "knowledge",
-                    "mcp",
-                    "--stdio",
-                    "--vault",
-                    "vault",
                 ],
                 "enabled": True,
                 "timeout": 60_000,
@@ -385,6 +381,7 @@ def build_host_environment(
         "DEEPSEEK_API_KEY": provider_key,
         "NO_COLOR": "1",
         "GIT_TERMINAL_PROMPT": "0",
+        "DEEPLAW_KNOWLEDGE_VAULT": "vault",
         "CI": "1",
     }
     if canaries:
@@ -440,7 +437,14 @@ def validate_mcp_receipt(
         or blocked
         or not isinstance(blocked_host, list)
         or not {_PROVIDER_ENV_NAME, *_CANARY_NAMES}.issubset(set(blocked_host))
-        or argv != ["deeplaw", "knowledge", "mcp", "--stdio", "--vault", "vault"]
+        or argv
+        != [
+            "deeplaw",
+            "knowledge",
+            "mcp",
+            "--closed-environment",
+            "--stdio",
+        ]
     ):
         raise QualificationError("MCP child environment receipt is not closed")
     for field in ("wrapper_sha256", "child_executable_sha256", "environment_sha256"):
@@ -501,7 +505,9 @@ receipt_path.write_text(json.dumps({{
     "environment_names": sorted(child_environment),
     "blocked_host_names_present": blocked_host_present,
     "blocked_child_names_present": blocked_child_present,
-    "child_argv": ["deeplaw", "knowledge", "mcp", "--stdio", "--vault", "vault"],
+    "child_argv": [
+        "deeplaw", "knowledge", "mcp", "--closed-environment", "--stdio"
+    ],
     "wrapper_sha256": hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),
     "child_executable_sha256": hashlib.sha256(child_executable.read_bytes()).hexdigest(),
     "environment_sha256": hashlib.sha256(
@@ -511,7 +517,7 @@ receipt_path.write_text(json.dumps({{
 if blocked_child_present:
     raise SystemExit(91)
 os.execve({str(deeplaw_executable)!r}, [
-    {str(deeplaw_executable)!r}, "knowledge", "mcp", "--stdio", "--vault", "vault"
+    {str(deeplaw_executable)!r}, "knowledge", "mcp", "--closed-environment", "--stdio"
 ], child_environment)
 """
     path.write_text(script, encoding="utf-8")
@@ -2188,15 +2194,7 @@ def preflight_opencode(
         not isinstance(mcp_entry, Mapping)
         or mcp_entry.get("type") != "local"
         or mcp_entry.get("enabled") is not True
-        or mcp_entry.get("command")
-        != [
-            "./deeplaw-closed-mcp",
-            "knowledge",
-            "mcp",
-            "--stdio",
-            "--vault",
-            "vault",
-        ]
+        or mcp_entry.get("command") != ["./deeplaw-closed-mcp"]
         or mcp_entry.get("timeout") != 60_000
     ):
         raise QualificationError("resolved config did not enable the exact DeepLaw MCP")
@@ -2345,11 +2343,6 @@ def _prepare_scenario_state(
         config["mcp"]["deeplaw_knowledge"]["command"] = [  # type: ignore[index]
             sys.executable,
             str(wrapper),
-            "knowledge",
-            "mcp",
-            "--stdio",
-            "--vault",
-            "vault",
         ]
     config_path = run_root / "opencode.json"
     config_path.write_text(_canonical(config) + "\n", encoding="utf-8")
@@ -2369,6 +2362,7 @@ def _prepare_scenario_state(
             "LOCALAPPDATA": str(run_root / "localappdata"),
             "OPENCODE_CONFIG": str(config_path),
             "OPENCODE_CONFIG_DIR": str(run_root / "opencode-config"),
+            "DEEPLAW_KNOWLEDGE_VAULT": "vault",
         }
     )
     return environment, receipt

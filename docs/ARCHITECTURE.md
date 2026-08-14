@@ -481,9 +481,20 @@ Official static and generated Host configurations enter these leaves through the
 closed launcher on the existing CLI commands. It creates an isolated HOME/USERPROFILE/XDG/temp
 root, copies only portable process values plus explicit DeepLaw data/task settings, and can dispatch
 only `knowledge_support`, `law_support`, or an owner-granted `knowledge_sink`. Host/provider auth,
-plugin/hook state and credential paths do not enter the child. Host Connect Plan v2 keeps the local
-Vault path outside generated configuration and checks the selected Vault's opaque identity before
-starting the read process.
+plugin/hook state and credential paths do not enter the child. One shared Host runtime resolver is
+the sole owner of ancestor link/reparse, ownership, permission, Vault identity and closed argv
+rules. Host Connect Plan v2 registers a private owner-local Vault-ID-to-path binding; generated
+configuration stays path-free. Both launcher parent and raw MCP child independently verify the
+opaque expected Vault ID.
+
+The host-neutral task driver compiles a user-selected project/task and current Git worktree into one
+opaque task handle, then reconstructs the existing task-context binding on every operation. It adds
+no table, Knowledge kind, relation, Host runtime or daemon. Start/resume/compaction are read-only;
+checkpoint/forget enter only through a separate owner-granted `knowledge_sink` and an explicit
+success/idempotency boundary. Fork is either continue-parent or child-task. Host session/thread IDs
+remain optional route metadata, never Knowledge identity, and compaction reacquires a verified
+Capsule rather than copying transcripts. This guarantees deterministic data-plane recovery, not
+native Host lifecycle continuity; the latter remains qualification work.
 
 These isolated processes are deployment and trust boundaries within one governed Knowledge OS.
 They must not evolve into disconnected identity, graph, versioning, or retrieval implementations.

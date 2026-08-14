@@ -7,10 +7,15 @@ from typing import Any, Literal, cast
 from jsonschema import Draft202012Validator
 
 from .api import KnowledgeOS
+from .host_runtime import (
+    bind_owner_vault,
+    build_closed_mcp_argv,
+    resolve_knowledge_vault,
+)
 from .knowledge_autonomy import AutonomousKnowledgeStore
 from .knowledge_maintenance import knowledge_doctor
 from .task_context import normalize_task_context_binding
-from .util import canonical_json, strict_json_loads
+from .util import strict_json_loads
 
 HostName = Literal["codex", "claude-code", "opencode"]
 
@@ -44,19 +49,14 @@ def _server_argv(
     *,
     vault_id: str,
     task_binding: Mapping[str, Any] | None,
+    task_handle: str | None,
 ) -> list[str]:
-    argv = [
-        "deeplaw",
-        "knowledge",
-        "mcp",
-        "--closed-environment",
-        "--stdio",
-        "--expected-vault-id",
-        vault_id,
-    ]
-    if task_binding is not None:
-        argv.extend(("--task-binding", canonical_json(task_binding)))
-    return argv
+    return build_closed_mcp_argv(
+        surface="knowledge_support",
+        expected_vault_id=vault_id,
+        task_binding=task_binding,
+        task_handle=task_handle,
+    )
 
 
 def build_host_connect_plan(
@@ -64,8 +64,10 @@ def build_host_connect_plan(
     host: str,
     vault_path: str | Path,
     task_binding: Mapping[str, Any] | None = None,
+    task_handle: str | None = None,
+    owner_home: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Build one read-only MCP configuration without changing Host state."""
+    """Bind one owner-selected vault and build a path-free read-only Host plan."""
 
     if host not in {"codex", "claude-code", "opencode"}:
         raise ValueError("host must be codex, claude-code, or opencode")
@@ -74,7 +76,14 @@ def build_host_connect_plan(
         task_binding,
         allow_none=True,
     )
-    selected_vault = Path(vault_path).expanduser().absolute()
+    if selected_task_binding is not None and task_handle is not None:
+        raise ValueError("task binding and task handle are mutually exclusive")
+    selected_vault = resolve_knowledge_vault(
+        vault_path,
+        expected_vault_id=None,
+        require_existing=True,
+        owner_home=owner_home,
+    )
     doctor = knowledge_doctor(selected_vault)
     autonomous = doctor.get("checks", {}).get("autonomous_core", {})
     schema_core_installed = autonomous.get("installed") is True
@@ -224,7 +233,17 @@ def build_host_connect_plan(
     argv = _server_argv(
         vault_id=vault_id,
         task_binding=selected_task_binding,
+        task_handle=task_handle,
     )
+    selected_task_handle: dict[str, Any] | None = None
+    if task_handle is not None:
+        from .task_continuity import decode_task_handle
+
+        selected_task_handle = decode_task_handle(
+            task_handle,
+            expected_vault_id=vault_id,
+        )
+    owner_binding = bind_owner_vault(selected_vault, owner_home=owner_home)
     plugin_manifest: dict[str, Any] | None = None
     if selected_host == "codex":
         configuration_kind = "codex_direct_config"
@@ -314,10 +333,21 @@ def build_host_connect_plan(
             "expected_vault_id": vault_id,
             "value_included": False,
         },
+        "owner_local_binding": {
+            "configured": owner_binding["owner_local_binding_written"],
+            "path_included": owner_binding["path_included"],
+            "binding_store_sha256": owner_binding["binding_store_sha256"],
+        },
         "task_binding_configured": selected_task_binding is not None,
         "task_binding_sha256": (
             selected_task_binding["binding_sha256"]
             if selected_task_binding is not None
+            else None
+        ),
+        "task_handle_configured": selected_task_handle is not None,
+        "task_handle_sha256": (
+            selected_task_handle["task_handle_sha256"]
+            if selected_task_handle is not None
             else None
         ),
         "configuration_kind": configuration_kind,
@@ -332,7 +362,7 @@ def build_host_connect_plan(
         "authentication_managed": False,
         "host_runtime_managed": False,
         "install_performed": False,
-        "write_performed": False,
+        "write_performed": True,
     }
     if plugin_manifest is not None:
         plan["codex_plugin_manifest"] = plugin_manifest

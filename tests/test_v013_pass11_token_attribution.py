@@ -194,7 +194,8 @@ def test_app_server_argv_closes_mcp_except_for_exact_d_condition() -> None:
     assert "mcp_servers={}" in argv
     assert 'mcp_servers.deeplaw.command="./deeplaw-closed-mcp"' in argv
     assert (
-        'mcp_servers.deeplaw.args=["knowledge","mcp","--stdio","--vault","vault"]'
+        'mcp_servers.deeplaw.args=["knowledge","mcp","--closed-environment",'
+        '"--stdio","--expected-vault-id","vault_000000000000000000000000"]'
         in argv
     )
     assert 'mcp_servers.deeplaw.enabled_tools=["knowledge_support"]' in argv
@@ -272,6 +273,11 @@ def test_execute_assembles_contract_valid_report_without_host(
         lambda *_args: {"provider_capsule": provider, "ledger_audit_head": ledger},
     )
     monkeypatch.setattr(attribution, "_ledger_head", lambda _vault: ledger)
+    monkeypatch.setattr(
+        attribution,
+        "_bind_runtime_vault",
+        lambda **_kwargs: "vault_" + "9" * 24,
+    )
 
     def fake_condition(**kwargs: object) -> tuple[dict[str, object], bool, bool]:
         condition_id = str(kwargs["condition_id"])
@@ -314,13 +320,13 @@ def test_execute_assembles_contract_valid_report_without_host(
                 "blocked_names_present": [],
                 "environment_names": ["HOME", "PATH", "XDG_CONFIG_HOME"],
                 "child_argv": [
-                    "runtime/bin/python",
                     "runtime/bin/deeplaw",
                     "knowledge",
                     "mcp",
+                    "--closed-environment",
                     "--stdio",
-                    "--vault",
-                    "vault",
+                    "--expected-vault-id",
+                    "vault_" + "9" * 24,
                 ],
             }
         return condition, False, False

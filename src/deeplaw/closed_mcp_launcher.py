@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 from collections.abc import Iterator, Mapping
@@ -11,20 +10,19 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Literal, cast
+from typing import Literal
 
-from .knowledge_autonomy import AutonomousKnowledgeStore
-from .knowledge_store import default_knowledge_vault
+from .host_runtime import (
+    closed_mcp_surface,
+    resolve_knowledge_vault,
+    safe_existing_path,
+)
 from .store import default_home
 from .subprocess_environment import _build_subprocess_environment
 from .task_context import normalize_task_context_binding
 from .util import canonical_json
 
 ClosedMCPSurface = Literal["knowledge_support", "knowledge_sink", "law_support"]
-
-_SURFACES = frozenset({"knowledge_support", "knowledge_sink", "law_support"})
-_GRANT_ID = re.compile(r"^grant_[0-9a-f]{24}$")
-
 
 @dataclass(frozen=True)
 class ClosedMCPEnvironment:
@@ -33,76 +31,7 @@ class ClosedMCPEnvironment:
     cwd: str
     environment: dict[str, str]
     allowed_environment_names: frozenset[str]
-
-
-def _closed_surface(value: str) -> ClosedMCPSurface:
-    if value not in _SURFACES:
-        raise ValueError("DeepLaw MCP surface is invalid")
-    return cast(ClosedMCPSurface, value)
-
-
-def _safe_existing_path(value: str | Path, *, directory: bool, label: str) -> Path:
-    """Resolve one data path while rejecting links, junctions, and reparse points."""
-
-    selected = Path(value).expanduser().absolute()
-    try:
-        resolved = selected.resolve(strict=True)
-        stat_result = selected.stat(follow_symlinks=False)
-    except (OSError, RuntimeError):
-        raise RuntimeError(f"selected {label} is unavailable") from None
-    reparse_flag = getattr(stat_result, "st_file_attributes", 0) & 0x400
-    if (
-        os.path.normcase(str(selected)) != os.path.normcase(str(resolved))
-        or selected.is_symlink()
-        or reparse_flag
-        or (directory and not selected.is_dir())
-        or (not directory and not selected.is_file())
-    ):
-        raise RuntimeError(f"selected {label} is unsafe")
-    return resolved
-
-
-def _safe_directory_path(
-    value: str | Path,
-    *,
-    label: str,
-    require_existing: bool,
-) -> Path:
-    selected = Path(value).expanduser().absolute()
-    try:
-        resolved = selected.resolve(strict=False)
-    except (OSError, RuntimeError):
-        raise RuntimeError(f"selected {label} is unavailable") from None
-    if os.path.normcase(str(selected)) != os.path.normcase(str(resolved)):
-        raise RuntimeError(f"selected {label} is unsafe")
-    if selected.exists():
-        return _safe_existing_path(selected, directory=True, label=label)
-    if require_existing:
-        raise RuntimeError(f"selected {label} is unavailable")
-    return selected
-
-
-def _knowledge_vault(
-    vault_path: str | Path | None,
-    *,
-    expected_vault_id: str | None,
-    require_existing: bool,
-) -> Path:
-    configured = vault_path or os.environ.get("DEEPLAW_KNOWLEDGE_VAULT")
-    selected = _safe_directory_path(
-        configured or default_knowledge_vault(),
-        label="Knowledge Vault",
-        require_existing=require_existing or expected_vault_id is not None,
-    )
-    if expected_vault_id is not None:
-        try:
-            with AutonomousKnowledgeStore(selected, read_only=True) as store:
-                observed_vault_id = store.vault_id
-        except Exception:
-            raise RuntimeError("selected Knowledge Vault is invalid") from None
-        if observed_vault_id != expected_vault_id:
-            raise RuntimeError("selected Knowledge Vault identity does not match")
-    return selected
+    expected_vault_id: str | None
 
 
 def _explicit_law_environment() -> dict[str, str]:
@@ -120,7 +49,7 @@ def _explicit_law_environment() -> dict[str, str]:
     if os.path.normcase(str(selected_home)) != os.path.normcase(str(resolved_home)):
         raise RuntimeError("selected DeepLaw data home is unsafe")
     if selected_home.exists():
-        selected_home = _safe_existing_path(
+        selected_home = safe_existing_path(
             selected_home,
             directory=True,
             label="DeepLaw data home",
@@ -133,12 +62,12 @@ def _explicit_law_environment() -> dict[str, str]:
         value = os.environ.get(name)
         if value:
             environment[name] = str(
-                _safe_existing_path(value, directory=False, label=label)
+                safe_existing_path(value, directory=False, label=label)
             )
     if os.environ.get("DEEPLAW_LAW_FEDERATED_KNOWLEDGE") == "1":
         environment["DEEPLAW_LAW_FEDERATED_KNOWLEDGE"] = "1"
         environment["DEEPLAW_KNOWLEDGE_VAULT"] = str(
-            _knowledge_vault(
+            resolve_knowledge_vault(
                 None,
                 expected_vault_id=None,
                 require_existing=True,
@@ -154,24 +83,43 @@ def closed_mcp_environment(
     vault_path: str | Path | None = None,
     expected_vault_id: str | None = None,
     task_binding: Mapping[str, object] | None = None,
+    task_handle: str | None = None,
 ) -> Iterator[ClosedMCPEnvironment]:
     """Yield the closed environment for one enumerated DeepLaw MCP surface."""
 
-    selected_surface = _closed_surface(surface)
+    selected_surface = closed_mcp_surface(surface)
     explicit: dict[str, str]
+    child_expected_vault_id: str | None = None
     if selected_surface in {"knowledge_support", "knowledge_sink"}:
-        selected_vault = _knowledge_vault(
+        selected_vault = resolve_knowledge_vault(
             vault_path,
             expected_vault_id=expected_vault_id,
             require_existing=selected_surface == "knowledge_sink",
         )
         explicit = {"DEEPLAW_KNOWLEDGE_VAULT": str(selected_vault)}
+        if (selected_vault / "vault.json").is_file():
+            from .knowledge_store import KnowledgeVault
+
+            with KnowledgeVault(selected_vault, read_only=True) as store:
+                child_expected_vault_id = store.vault_id
     else:
         if vault_path is not None or expected_vault_id is not None:
             raise ValueError("law_support does not accept a Knowledge Vault argument")
         explicit = _explicit_law_environment()
 
     normalized_binding = normalize_task_context_binding(task_binding, allow_none=True)
+    if normalized_binding is not None and task_handle is not None:
+        raise ValueError("task binding and task handle are mutually exclusive")
+    if task_handle is not None:
+        if selected_surface != "knowledge_support":
+            raise ValueError("task handle is accepted only by knowledge_support")
+        from .task_continuity import binding_for_task_handle
+
+        normalized_binding = binding_for_task_handle(
+            task_handle,
+            vault_path=selected_vault,
+            workspace=Path.cwd(),
+        )
     if normalized_binding is not None:
         if selected_surface != "knowledge_support":
             raise ValueError("task binding is accepted only by knowledge_support")
@@ -205,6 +153,7 @@ def closed_mcp_environment(
             cwd=str(work),
             environment=environment,
             allowed_environment_names=frozenset(environment),
+            expected_vault_id=child_expected_vault_id,
         )
 
 
@@ -214,15 +163,24 @@ def launch_closed_mcp(
     vault_path: str | Path | None = None,
     expected_vault_id: str | None = None,
     task_binding: Mapping[str, object] | None = None,
+    task_handle: str | None = None,
     grant_id: str | None = None,
 ) -> None:
     """Launch one fixed DeepLaw MCP child; arbitrary commands are not accepted."""
 
-    selected_surface = _closed_surface(surface)
+    selected_surface = closed_mcp_surface(surface)
     if selected_surface == "knowledge_sink":
-        if not isinstance(grant_id, str) or not _GRANT_ID.fullmatch(grant_id):
-            raise ValueError("knowledge_sink requires a valid owner grant identity")
-        child_arguments = ["knowledge", "sink", "mcp", "--grant-id", grant_id, "--stdio"]
+        from .host_runtime import build_closed_mcp_argv
+
+        closed_argv = build_closed_mcp_argv(
+            surface=selected_surface,
+            grant_id=grant_id,
+        )
+        child_arguments = [
+            argument
+            for argument in closed_argv[1:]
+            if argument != "--closed-environment"
+        ]
     elif selected_surface == "knowledge_support":
         if grant_id is not None:
             raise ValueError("knowledge_support does not accept a grant identity")
@@ -237,7 +195,12 @@ def launch_closed_mcp(
         vault_path=vault_path,
         expected_vault_id=expected_vault_id,
         task_binding=task_binding,
+        task_handle=task_handle,
     ) as launch:
+        if launch.expected_vault_id is not None:
+            child_arguments.extend(
+                ("--expected-vault-id", launch.expected_vault_id)
+            )
         completed = subprocess.run(
             [sys.executable, "-m", "deeplaw", *child_arguments],
             cwd=launch.cwd,

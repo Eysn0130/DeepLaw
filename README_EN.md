@@ -102,11 +102,31 @@ uv run deeplaw knowledge host connect --host codex --vault ./vault
 
 `--host` also accepts `claude-code` or `opencode`. The command prints only a `knowledge_support`
 configuration for manual merge. It does not install or modify the Host, manage authentication or
-the Host runtime, or enable `knowledge_sink`. The plan separately reports core/canonical validity,
+the Host runtime, or enable `knowledge_sink`. Host Connect records the private Vault-ID-to-path
+binding in DeepLaw's owner-local configuration, but writes neither Host configuration nor canonical
+Knowledge. The plan separately reports core/canonical validity,
 the read seam, compiled Knowledge, and a source-only honest Gap; an uncallable read seam is never
 reported ready. The output contains the owner-selected local Vault
-path and therefore must not be copied into a Provider Capsule, benchmark receipt, or public support
-bundle.
+identity but no Vault path. Do not copy the owner-local binding file, a task handle, or Host
+configuration into a Provider Capsule, benchmark receipt, or public support bundle.
+
+Ordinary continuity no longer requires users to construct a multi-hash task binding. In a Git
+worktree, generate one stable opaque handle that contains no project/task text or path, then give
+that same handle to Host Connect:
+
+```bash
+uv run deeplaw knowledge task start --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+uv run deeplaw knowledge host connect --host codex --vault ./vault \
+  --task-handle taskh_REPLACE_WITH_RETURNED_HANDLE
+```
+
+`task resume`, `task compaction`, and explicit
+`task fork --mode continue-parent|child-task` revalidate the Vault, repo/worktree, and current Git
+snapshot; a wrong task, stale checkpoint, or post-forget resume returns a GAP. Checkpoint and forget
+still require a separate owner-created `knowledge_sink` grant, an idempotency key, and case-data
+confirmation. This driver proves deterministic data-plane recovery only; native Host lifecycle
+qualification remains pending.
 
 ## Permanent boundaries
 
@@ -252,13 +272,15 @@ lexical fallback remains available.
 
 | Process / leaf | Permission | Purpose |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | Read-only | input/output v6; recommended query/context/source/wiki/verify, default Query Plan v6, explicit v5 compatibility |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | input v5 / output v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
-| `deeplaw mcp --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
+| `deeplaw knowledge mcp --closed-environment --stdio` / `knowledge_support` | Read-only | input/output v6; recommended query/context/source/wiki/verify, default Query Plan v6, explicit v5 compatibility |
+| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | input v5 / output v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
+| `deeplaw mcp --closed-environment --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
 
 The default Knowledge OS plugin registers only `knowledge_support`. A sink requires an owner-created
 grant and a separate host process. Neither query server exposes import, deletion, signing, source
 administration, or permission changes.
+Raw MCP CLI commands without `--closed-environment` remain owner-local diagnostic and compatibility
+entries only; they are not production Host configuration examples.
 
 ## Implemented scope and evidence boundary
 

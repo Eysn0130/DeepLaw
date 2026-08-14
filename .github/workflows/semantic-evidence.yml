@@ -87,7 +87,7 @@ jobs:
           uv pip install --python "${RUNNER_TEMP}/semantic-runtime/bin/python" "${wheels[0]}"
           npm install --global --prefix "${RUNNER_TEMP}/host-cli" \
             @anthropic-ai/claude-code@2.1.220 \
-            opencode-ai@1.18.8
+            opencode-ai@1.18.16
           mkdir -p "${RUNNER_TEMP}/semantic-evidence"
 
       - name: Prepare frozen pending Gold corpus
@@ -146,7 +146,7 @@ jobs:
             --not-executed-reason "External real-model semantic execution is not required and was not executed." \
             --output "${evidence}/claude-code-real-model-not-executed.json"
           uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
-            --host opencode --host-version 1.18.8 --model-identity not_executed \
+            --host opencode --host-version 1.18.16 --model-identity not_executed \
             --grant-id "${grant_id}" --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
             --corpus "${corpus}" --network-policy offline \
             --host-discovery-status discovered --version-command "opencode --version" \

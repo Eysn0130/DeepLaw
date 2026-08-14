@@ -146,6 +146,41 @@ def test_closed_launcher_rejects_arbitrary_surface_and_linked_vault(
         pass
 
 
+def test_host_connect_and_launcher_reject_the_same_linked_vault_ancestor(
+    tmp_path: Path,
+) -> None:
+    from deeplaw.closed_mcp_launcher import closed_mcp_environment
+    from deeplaw.host_connect import build_host_connect_plan
+    from deeplaw.knowledge_autonomy import initialize_autonomous_core
+    from deeplaw.knowledge_store import initialize_knowledge_vault
+
+    real_parent = tmp_path / "real-parent"
+    vault = real_parent / "vault"
+    initialize_knowledge_vault(vault, name="linked-ancestor", scope="project")
+    initialize_autonomous_core(vault)
+    linked_parent = tmp_path / "linked-parent"
+    try:
+        linked_parent.symlink_to(real_parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlink creation is unavailable")
+    selected_vault = linked_parent / "vault"
+
+    with (
+        pytest.raises(RuntimeError, match="selected Knowledge Vault is unsafe"),
+        closed_mcp_environment(
+            surface="knowledge_support",
+            vault_path=selected_vault,
+        ),
+    ):
+        pass
+    with pytest.raises(RuntimeError, match="selected Knowledge Vault is unsafe"):
+        build_host_connect_plan(
+            host="codex",
+            vault_path=selected_vault,
+            owner_home=tmp_path / "owner-home",
+        )
+
+
 def test_closed_read_launcher_preserves_missing_vault_discovery_boundary(
     tmp_path: Path,
 ) -> None:
@@ -200,6 +235,7 @@ def test_generated_host_config_is_path_free_and_carries_task_binding(
         host="codex",
         vault_path=vault,
         task_binding=_binding(),
+        owner_home=tmp_path / "owner-home",
     )
 
     rendered = canonical_json(plan)
@@ -215,3 +251,63 @@ def test_generated_host_config_is_path_free_and_carries_task_binding(
     assert "--expected-vault-id" in rendered
     assert "--task-binding" in rendered
     assert str(vault.resolve()) not in rendered
+
+
+def test_closed_launcher_revalidates_expected_vault_identity_in_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deeplaw.closed_mcp_launcher import launch_closed_mcp
+    from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
+    from deeplaw.knowledge_store import initialize_knowledge_vault
+
+    vault = tmp_path / "vault"
+    initialize_knowledge_vault(vault, name="child-revalidation", scope="project")
+    initialize_autonomous_core(vault)
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        expected_vault_id = store.vault_id
+    observed: list[str] = []
+
+    class _Completed:
+        returncode = 0
+
+    def record_run(argv: list[str], **_: object) -> _Completed:
+        observed.extend(argv)
+        return _Completed()
+
+    monkeypatch.setattr("deeplaw.closed_mcp_launcher.subprocess.run", record_run)
+    launch_closed_mcp(
+        surface="knowledge_support",
+        vault_path=vault,
+        expected_vault_id=expected_vault_id,
+    )
+
+    assert observed[-2:] == ["--expected-vault-id", expected_vault_id]
+
+
+def test_owner_local_vault_binding_resolves_custom_vault_without_host_path(
+    tmp_path: Path,
+) -> None:
+    from deeplaw.host_runtime import bind_owner_vault, resolve_knowledge_vault
+    from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
+    from deeplaw.knowledge_store import initialize_knowledge_vault
+
+    vault = tmp_path / "custom-vault"
+    owner_home = tmp_path / "owner-home"
+    initialize_knowledge_vault(vault, name="owner-binding", scope="project")
+    initialize_autonomous_core(vault)
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        expected_vault_id = store.vault_id
+
+    receipt = bind_owner_vault(vault, owner_home=owner_home)
+    resolved = resolve_knowledge_vault(
+        None,
+        expected_vault_id=expected_vault_id,
+        require_existing=True,
+        owner_home=owner_home,
+    )
+
+    assert receipt["vault_id"] == expected_vault_id
+    assert receipt["owner_local_binding_written"] is True
+    assert resolved == vault.resolve()
+    assert str(vault.resolve()) not in canonical_json(receipt)

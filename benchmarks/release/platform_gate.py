@@ -45,6 +45,7 @@ WINDOWS_NATIVE_TESTS = frozenset(
     {
         "test_native_windows_vault_acl_is_owner_only_after_real_ingest",
         "test_native_windows_acl_rejects_directory_junction",
+        "test_host_connect_and_launcher_reject_junction_ancestor",
     }
 )
 

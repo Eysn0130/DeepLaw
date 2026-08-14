@@ -27,6 +27,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_codex_continuity_qualification import (
     _FORBIDDEN_PROVIDER_FIELDS,
+    _bind_runtime_vault,
     _candidate_fixture,
     _candidate_output_directory,
     _environment_receipt,
@@ -156,7 +157,7 @@ def _permission() -> dict[str, str]:
     return {"*": "deny", TOOL_NAME: "allow"}
 
 
-def _opencode_config() -> dict[str, Any]:
+def _opencode_config(vault_id: str = "vault_" + "0" * 24) -> dict[str, Any]:
     permission = _permission()
     return {
         "$schema": "https://opencode.ai/config.json",
@@ -193,9 +194,10 @@ def _opencode_config() -> dict[str, Any]:
                     "./deeplaw-closed-mcp",
                     "knowledge",
                     "mcp",
+                    "--closed-environment",
                     "--stdio",
-                    "--vault",
-                    "vault",
+                    "--expected-vault-id",
+                    vault_id,
                 ],
                 "enabled": True,
                 "timeout": 60_000,
@@ -295,7 +297,7 @@ def _actual_argv(opencode_binary: Path) -> list[str]:
 
 
 def _preflight_opencode(
-    *, root: Path, opencode_binary: Path, node_binary: Path
+    *, root: Path, opencode_binary: Path, node_binary: Path, vault_id: str
 ) -> dict[str, Any]:
     if _managed_config_present():
         raise RuntimeError("OpenCode managed configuration is present")
@@ -330,7 +332,7 @@ def _preflight_opencode(
         config = strict_json_loads(resolved.stdout)
     except (TypeError, ValueError) as error:
         raise RuntimeError("OpenCode resolved configuration was not JSON") from error
-    expected = _opencode_config()
+    expected = _opencode_config(vault_id)
     if (
         resolved.returncode != 0
         or bool(resolved.stderr)
@@ -746,7 +748,10 @@ def execute(
         output_dir=output_dir,
         deeplaw_executable=deeplaw_executable,
     )
-    config = _opencode_config()
+    vault = output_dir / "vault"
+    seeded = _seed_vault(vault, fixture)
+    vault_id = _bind_runtime_vault(output_dir=output_dir, vault=vault)
+    config = _opencode_config(vault_id)
     (output_dir / "opencode.json").write_text(
         canonical_json(config) + "\n", encoding="utf-8"
     )
@@ -754,9 +759,8 @@ def execute(
         root=output_dir,
         opencode_binary=opencode_binary,
         node_binary=node_binary,
+        vault_id=vault_id,
     )
-    vault = output_dir / "vault"
-    seeded = _seed_vault(vault, fixture)
     capsule_preflight = _preflight(vault, fixture, seeded)
     prompt = _prompt(fixture, seeded["task_binding"])
     provider_key = _load_deepseek_key(dotenv_path)

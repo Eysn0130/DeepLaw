@@ -238,6 +238,7 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
         "snapshot",
         "forget",
         "host connect",
+        "task continuity",
     ]
     assert {item["caller"] for item in surface_manifest["external_callers"]} == {
         "CLI",

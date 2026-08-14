@@ -3,7 +3,8 @@
 This produces a candidate observation, not scored or release evidence.  It uses
 the existing Codex ChatGPT login only at the trusted Host boundary and starts
 the read-only DeepLaw MCP server through a generated closed-environment
-wrapper.  Raw Host output is hashed and discarded; only path-free, secret-free
+runtime shim into the production launcher.  Raw Host output is hashed and discarded;
+only path-free, secret-free
 event receipts are persisted.
 """
 
@@ -27,6 +28,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_living_wiki_host_harness import _run_bounded_process
 from benchmarks.release.evidence import repository_binding
+from deeplaw.host_runtime import bind_owner_vault
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.retrieval.capsule import assemble_v6_context
@@ -76,8 +78,13 @@ _ALLOWED_MCP_ENVIRONMENT_NAMES = frozenset(
         "HOME",
         "USERPROFILE",
         "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME",
         "NO_COLOR",
         "GIT_TERMINAL_PROMPT",
+        "DEEPLAW_KNOWLEDGE_VAULT",
+        "__CF_USER_TEXT_ENCODING",
     }
 )
 _FORBIDDEN_PROVIDER_FIELDS = (
@@ -453,42 +460,36 @@ def _wrapper_source(runtime_python: Path) -> str:
 from __future__ import annotations
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
-from deeplaw.subprocess_environment import _build_subprocess_environment
+from deeplaw.closed_mcp_launcher import closed_mcp_environment
 
 blocked = {blocked}
-child_argv = ["runtime/bin/python", "runtime/bin/deeplaw", *sys.argv[1:]]
-environment = _build_subprocess_environment(
-    overrides={{"HOME": "mcp-home"}},
-)
-environment.update({{
-    "PATH": os.defpath,
-    "XDG_CONFIG_HOME": "mcp-home/config",
-    "PYTHONIOENCODING": "utf-8",
-    "PYTHONUTF8": "1",
-    "NO_COLOR": "1",
-    "GIT_TERMINAL_PROMPT": "0",
-}})
+os.environ["DEEPLAW_HOME"] = "mcp-owner"
+arguments = sys.argv[1:]
+expected_index = arguments.index("--expected-vault-id")
+expected_vault_id = arguments[expected_index + 1]
+surface = "knowledge_sink" if arguments[:3] == ["knowledge", "sink", "mcp"] else "knowledge_support"
+with closed_mcp_environment(
+    surface=surface,
+    expected_vault_id=expected_vault_id,
+) as launch:
+    environment_names = sorted(launch.allowed_environment_names)
+    home_isolated = launch.environment.get("HOME") != os.environ.get("HOME")
+child_argv = ["runtime/bin/deeplaw", *arguments]
 receipt = {{
     "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
     "closed": True,
-    "home_isolated": environment.get("HOME") == "mcp-home",
-    "blocked_names_present": sorted(name for name in blocked if name in environment),
-    "environment_names": sorted(environment),
+    "home_isolated": home_isolated,
+    "blocked_names_present": sorted(name for name in blocked if name in environment_names),
+    "environment_names": environment_names,
     "child_argv": child_argv,
 }}
 Path("mcp-environment-receipt.json").write_text(
     json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
     encoding="utf-8",
 )
-completed = subprocess.run(
-    [sys.executable, *child_argv[1:]],
-    env=environment,
-    check=False,
-)
-raise SystemExit(completed.returncode)
+os.execv("runtime/bin/deeplaw", child_argv)
 '''
 
 
@@ -509,6 +510,11 @@ def _prepare_runtime(
     wrapper.chmod(0o700)
     (output_dir / "mcp-home" / "config").mkdir(parents=True)
     return wrapper, _sha256_file(wrapper)
+
+
+def _bind_runtime_vault(*, output_dir: Path, vault: Path) -> str:
+    receipt = bind_owner_vault(vault, owner_home=output_dir / "mcp-owner")
+    return str(receipt["vault_id"])
 
 
 def _host_environment(codex_binary: Path, canaries: Mapping[str, str]) -> dict[str, str]:
@@ -536,7 +542,7 @@ def _confirmed_login_status(result: subprocess.CompletedProcess[str]) -> bool:
     return result.returncode == 0 and observed == {_AUTH_STATUS}
 
 
-def _codex_argv() -> list[str]:
+def _codex_argv(vault_id: str = "vault_" + "0" * 24) -> list[str]:
     argv = [
         "codex",
         "exec",
@@ -562,7 +568,11 @@ def _codex_argv() -> list[str]:
         "--config",
         'mcp_servers.deeplaw.command="./deeplaw-closed-mcp"',
         "--config",
-        'mcp_servers.deeplaw.args=["knowledge","mcp","--stdio","--vault","vault"]',
+        (
+            'mcp_servers.deeplaw.args=["knowledge","mcp",'
+            '"--closed-environment","--stdio","--expected-vault-id",'
+            f'"{vault_id}"]'
+        ),
         "--config",
         'mcp_servers.deeplaw.enabled_tools=["knowledge_support"]',
         "--config",
@@ -753,14 +763,13 @@ def _environment_receipt(path: Path) -> dict[str, Any] | None:
     if not path.is_file() or path.is_symlink() or path.stat().st_size > 16_384:
         return None
     value = _load_object(path)
-    expected_argv = [
-        "runtime/bin/python",
+    expected_prefix = [
         "runtime/bin/deeplaw",
         "knowledge",
         "mcp",
+        "--closed-environment",
         "--stdio",
-        "--vault",
-        "vault",
+        "--expected-vault-id",
     ]
     environment_names = value.get("environment_names")
     if (
@@ -768,7 +777,11 @@ def _environment_receipt(path: Path) -> dict[str, Any] | None:
         or value.get("closed") is not True
         or value.get("home_isolated") is not True
         or value.get("blocked_names_present") != []
-        or value.get("child_argv") != expected_argv
+        or not isinstance(value.get("child_argv"), list)
+        or value["child_argv"][: len(expected_prefix)] != expected_prefix
+        or len(value["child_argv"]) != len(expected_prefix) + 1
+        or not isinstance(value["child_argv"][-1], str)
+        or not re.fullmatch(r"vault_[0-9a-f]{24}", value["child_argv"][-1])
         or not isinstance(environment_names, list)
         or len(environment_names) != len(set(environment_names))
         or not {"HOME", "PATH", "XDG_CONFIG_HOME"}.issubset(environment_names)
@@ -1043,8 +1056,9 @@ def execute(
     )
     vault = output_dir / "vault"
     seeded = _seed_vault(vault, fixture)
+    vault_id = _bind_runtime_vault(output_dir=output_dir, vault=vault)
     preflight = _preflight(vault, fixture, seeded)
-    argv = _codex_argv()
+    argv = _codex_argv(vault_id)
     prompt = _prompt(fixture, seeded["task_binding"])
     runs: list[dict[str, Any]] = []
     canary_leak = False
@@ -1079,9 +1093,10 @@ def execute(
             "./deeplaw-closed-mcp",
             "knowledge",
             "mcp",
+            "--closed-environment",
             "--stdio",
-            "--vault",
-            "vault",
+            "--expected-vault-id",
+            vault_id,
         ],
     }
     report = {

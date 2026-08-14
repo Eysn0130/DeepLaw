@@ -97,12 +97,27 @@ uv run deeplaw knowledge host connect --host codex --vault ./vault
 `codex_plugin_manifest` 标识。Claude Code 使用 `mcpServers` JSON；OpenCode 使用
 `opencode.json/jsonc` local command array，并默认 deny、只允许精确 read leaf。命令只输出需要人工
 合并的 `knowledge_support` 配置，不安装或修改 Host，不管理认证或 Host runtime，也不启用
-`knowledge_sink`。计划分别报告 core/canonical、read seam、compiled Knowledge 与 source-only
+`knowledge_sink`。Host Connect 会在 DeepLaw 自己的 owner-local 配置中登记 Vault ID 与路径的私有
+绑定，但不会写 Host 配置或 canonical Knowledge。计划分别报告 core/canonical、read seam、compiled Knowledge 与 source-only
 honest Gap；read seam 不可调用时不会报告 ready。内部 preflight 仅证明其固定、无模型、无写入健康
 任务，不证明未来用户 task/goal、真实 Host 或 MCP registration；后续 caller 请求仍必须显式
-`confirm_no_case_data`。输出含 owner 选择的本地 Vault 路径，因此不能
-直接放入 Provider Capsule、
-benchmark receipt 或公开 support bundle。
+`confirm_no_case_data`。输出是 path-free 的，仅携带 opaque expected Vault ID；不得把 owner-local
+绑定文件、task handle 或 Host 配置复制到 Provider Capsule、benchmark receipt 或公开 support bundle。
+
+普通任务连续性不再要求用户手工构造 task binding 的多组 hash。先在 Git worktree 中生成一个稳定、
+不含项目名、任务原文或路径的 opaque handle，再把同一 handle 交给 Host Connect：
+
+```bash
+uv run deeplaw knowledge task start --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+uv run deeplaw knowledge host connect --host codex --vault ./vault \
+  --task-handle taskh_REPLACE_WITH_RETURNED_HANDLE
+```
+
+`task resume`、`task compaction` 与显式的 `task fork --mode continue-parent|child-task` 会重新验证
+Vault、repo/worktree 和当前 Git snapshot；wrong task、stale checkpoint 与 forget 后恢复返回 GAP。
+checkpoint/forget 仍要求独立的 `knowledge_sink` owner grant、幂等键和案件数据边界确认。该 driver
+只证明 deterministic data-plane recovery；native Host start/resume/fork/compaction 仍待真实资格验证。
 
 ## 核心边界
 
@@ -308,12 +323,13 @@ vault/
 
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | input/output v6：推荐 query/context/source/wiki/verify；默认 Query Plan v6，v5 仅显式兼容 |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | input v5 / output v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
-| `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
+| `deeplaw knowledge mcp --closed-environment --stdio` / `knowledge_support` | 只读 | input/output v6：推荐 query/context/source/wiki/verify；默认 Query Plan v6，v5 仅显式兼容 |
+| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | input v5 / output v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
+| `deeplaw mcp --closed-environment --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主
 配置中单独添加进程和具体 grant ID；插件、Skill、检索内容和模型都不能自行创建 grant 或扩大权限。
+不带 `--closed-environment` 的 raw MCP CLI 仅保留给 owner 的本地诊断和兼容调用，不应写入 Host 配置。
 
 ## 已实现、兼容与未宣称
 

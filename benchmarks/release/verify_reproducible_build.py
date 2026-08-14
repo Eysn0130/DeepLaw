@@ -49,6 +49,7 @@ _REQUIRED_WHEEL_PATHS = (
     "deeplaw/contracts/retrieval-regression-suite.v1.schema.json",
     "deeplaw/contracts/skill-bundle.v1.schema.json",
     "deeplaw/contracts/source-snapshot.v1.schema.json",
+    "deeplaw/contracts/task-handle.v1.schema.json",
     "deeplaw/contracts/typed-compiler-benchmark.v1.schema.json",
     "deeplaw/contracts/typed-compiler-benchmark-input.v1.schema.json",
 )
@@ -61,6 +62,7 @@ _REQUIRED_SDIST_PATHS = (
     "benchmarks/hosts/codex-plugin-smoke-2026-07-28.json",
     "benchmarks/hosts/run_codex_plugin_smoke.py",
     "benchmarks/hosts/run_no_model_host_acceptance.py",
+    "benchmarks/hosts/run_production_launcher_registration.py",
     "benchmarks/hosts/pass16-continuity-task-cases-v1.json",
     "benchmarks/hosts/pass16_continuity_cases.py",
     "benchmarks/hosts/pass17-development-diagnostic-v1.json",
@@ -105,6 +107,7 @@ _REQUIRED_SDIST_PATHS = (
     "benchmarks/release/platform_gate.py",
     "benchmarks/release/post_release_verify.py",
     "benchmarks/release/release_policy.py",
+    "benchmarks/release/retained_artifact_manifest.py",
     "benchmarks/release/run_distribution_lifecycle.py",
     "benchmarks/release/semantic_evidence.py",
     "benchmarks/release/v013-gate-classification-v1.json",

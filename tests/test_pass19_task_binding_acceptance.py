@@ -1,4 +1,4 @@
-"""No-model public-path acceptance for Pass 19 task continuity."""
+"""No-model deterministic restart/data-plane recovery for Pass 19 bindings."""
 
 from __future__ import annotations
 
@@ -211,7 +211,7 @@ def _gap_codes(provider: dict[str, Any]) -> set[str]:
     }
 
 
-def test_public_closed_mcp_task_checkpoint_continuity_and_forget(
+def test_public_closed_mcp_deterministic_restart_and_forget(
     tmp_path: Path,
 ) -> None:
     vault = tmp_path / "vault"
@@ -283,10 +283,10 @@ def test_public_closed_mcp_task_checkpoint_continuity_and_forget(
         assert _selected_ids(unbound, known) == set()
         assert "task_binding_required" in _gap_codes(unbound)
 
-        for lifecycle in ("new", "resume", "compaction"):
+        for restart in ("restart-1", "restart-2", "restart-3"):
             admitted = await _read_context(vault=vault, vault_id=vault_id, binding=main)
             assert admitted is not None
-            assert _selected_ids(admitted, known) == {main_id}, lifecycle
+            assert _selected_ids(admitted, known) == {main_id}, restart
         forked = await _read_context(vault=vault, vault_id=vault_id, binding=fork)
         assert forked is not None
         assert _selected_ids(forked, known) == {main_id}

@@ -4181,6 +4181,41 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if prior and any(row["route_sha256"] != route_sha256 for row in prior):
             raise RuntimeError("checkpoint_head_conflict: task route identity cannot change")
 
+    def checkpoint_route_head_for_write(
+        self,
+        *,
+        task_binding: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Return the sole current checkpoint head needed for an explicit CAS write."""
+
+        binding = normalize_task_context_binding(task_binding, allow_none=False)
+        if not self._checkpoint_route_projection_exists():
+            return {"status": "index_unavailable"}
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            ORDER BY knowledge_id
+            LIMIT 3
+            """,
+            (task_route_sha256(binding),),
+        ).fetchall()
+        if len(rows) > 1:
+            return {"status": "head_conflict"}
+        if not rows:
+            return {"status": "not_found"}
+        head = rows[0]
+        if not self._checkpoint_route_projection_row_is_current(head):
+            return {"status": "index_unavailable"}
+        return {
+            "status": "exact",
+            "knowledge_id": head["knowledge_id"],
+            "revision_id": head["revision_id"],
+        }
+
     def _checkpoint_route_projection_row_is_current(self, row: sqlite3.Row) -> bool:
         """Fail closed when a bounded lookup encounters stale derived state."""
 

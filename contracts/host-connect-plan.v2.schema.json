@@ -11,8 +11,11 @@
     "read_only",
     "vault_id",
     "data_binding",
+    "owner_local_binding",
     "task_binding_configured",
     "task_binding_sha256",
+    "task_handle_configured",
+    "task_handle_sha256",
     "configuration_kind",
     "configuration_format",
     "merge_targets",
@@ -43,8 +46,28 @@
         "value_included": {"const": false}
       }
     },
+    "owner_local_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "path_included", "binding_store_sha256"],
+      "properties": {
+        "configured": {"const": true},
+        "path_included": {"const": false},
+        "binding_store_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
     "task_binding_configured": {"type": "boolean"},
     "task_binding_sha256": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      ]
+    },
+    "task_handle_configured": {"type": "boolean"},
+    "task_handle_sha256": {
       "oneOf": [
         {"type": "null"},
         {"type": "string", "pattern": "^[0-9a-f]{64}$"}
@@ -136,13 +159,30 @@
     "authentication_managed": {"const": false},
     "host_runtime_managed": {"const": false},
     "install_performed": {"const": false},
-    "write_performed": {"const": false}
+    "write_performed": {"const": true}
   },
   "allOf": [
     {
       "if": {"properties": {"task_binding_configured": {"const": true}}},
-      "then": {"properties": {"task_binding_sha256": {"type": "string"}}},
+      "then": {
+        "properties": {
+          "task_binding_sha256": {"type": "string"},
+          "task_handle_configured": {"const": false},
+          "task_handle_sha256": {"type": "null"}
+        }
+      },
       "else": {"properties": {"task_binding_sha256": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"task_handle_configured": {"const": true}}},
+      "then": {
+        "properties": {
+          "task_handle_sha256": {"type": "string"},
+          "task_binding_configured": {"const": false},
+          "task_binding_sha256": {"type": "null"}
+        }
+      },
+      "else": {"properties": {"task_handle_sha256": {"type": "null"}}}
     },
     {
       "if": {"properties": {"host": {"const": "codex"}}},
@@ -190,6 +230,11 @@
   "$defs": {
     "argument": {"type": "string", "minLength": 1, "maxLength": 8192},
     "vaultId": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "taskHandle": {
+      "type": "string",
+      "pattern": "^taskh_[A-Za-z0-9_-]+$",
+      "maxLength": 2048
+    },
     "command": {
       "type": "array",
       "maxItems": 32,
@@ -219,6 +264,18 @@
             {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
           ],
           "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "prefixItems": [
+            {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-handle"}, {"$ref": "#/$defs/taskHandle"}
+          ],
+          "items": false
         }
       ]
     },
@@ -244,6 +301,18 @@
             {"const": "--closed-environment"}, {"const": "--stdio"},
             {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
             {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
+          ],
+          "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-handle"}, {"$ref": "#/$defs/taskHandle"}
           ],
           "items": false
         }
@@ -369,6 +438,20 @@
             {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
           ],
           "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 14,
+          "maxItems": 14,
+          "prefixItems": [
+            {"const": "codex"}, {"const": "mcp"}, {"const": "add"},
+            {"const": "deeplaw-knowledge"}, {"const": "--"},
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-handle"}, {"$ref": "#/$defs/taskHandle"}
+          ],
+          "items": false
         }
       ]
     },
@@ -400,6 +483,21 @@
             {"const": "--closed-environment"}, {"const": "--stdio"},
             {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
             {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
+          ],
+          "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "prefixItems": [
+            {"const": "claude"}, {"const": "mcp"}, {"const": "add"},
+            {"const": "--transport"}, {"const": "stdio"},
+            {"const": "deeplaw-knowledge"}, {"const": "--"},
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-handle"}, {"$ref": "#/$defs/taskHandle"}
           ],
           "items": false
         }

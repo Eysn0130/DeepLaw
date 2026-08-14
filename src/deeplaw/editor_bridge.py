@@ -215,8 +215,11 @@ def tolaria_mcp_servers(
     vault_path: str | Path,
     compiler_grant_id: str | None = None,
     include_law_support: bool = False,
+    owner_home: str | Path | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Return standard-MCP entries without mutating a host configuration."""
+    """Bind one vault owner-locally and return path-free standard-MCP entries."""
+    from .host_runtime import bind_owner_vault, build_closed_mcp_argv
+
     if not isinstance(deeplaw_executable, str) or not deeplaw_executable:
         raise ValueError("DeepLaw executable must not contain arguments")
     executable_path = Path(deeplaw_executable)
@@ -225,14 +228,17 @@ def tolaria_mcp_servers(
         and not executable_path.is_absolute()
     ):
         raise ValueError("DeepLaw executable must not contain arguments")
-    root = Path(vault_path).expanduser().absolute()
-    if not root.is_absolute() or root.is_symlink():
-        raise ValueError("DeepLaw Vault must be an absolute non-symlink path")
-    root_text = str(root)
+    binding = bind_owner_vault(vault_path, owner_home=owner_home)
+    vault_id = binding["vault_id"]
+    support = build_closed_mcp_argv(
+        surface="knowledge_support",
+        executable=deeplaw_executable,
+        expected_vault_id=vault_id,
+    )
     servers: dict[str, dict[str, Any]] = {
         "deeplaw_knowledge": {
-            "command": deeplaw_executable,
-            "args": ["knowledge", "mcp", "--vault", root_text, "--stdio"],
+            "command": support[0],
+            "args": support[1:],
         }
     }
     if compiler_grant_id is not None:
@@ -243,23 +249,21 @@ def tolaria_mcp_servers(
             or "\x00" in compiler_grant_id
         ):
             raise ValueError("compiler grant identity is invalid")
-        servers["deeplaw_knowledge_sink"] = {
-            "command": deeplaw_executable,
-            "args": [
-                "knowledge",
-                "sink",
-                "mcp",
-                "--vault",
-                root_text,
-                "--grant-id",
-                compiler_grant_id,
-                "--stdio",
-            ],
-        }
+        sink = build_closed_mcp_argv(
+            surface="knowledge_sink",
+            executable=deeplaw_executable,
+            expected_vault_id=vault_id,
+            grant_id=compiler_grant_id,
+        )
+        servers["deeplaw_knowledge_sink"] = {"command": sink[0], "args": sink[1:]}
     if include_law_support:
+        law = build_closed_mcp_argv(
+            surface="law_support",
+            executable=deeplaw_executable,
+        )
         servers["deeplaw_law"] = {
-            "command": deeplaw_executable,
-            "args": ["mcp", "--stdio"],
+            "command": law[0],
+            "args": law[1:],
         }
     return servers
 

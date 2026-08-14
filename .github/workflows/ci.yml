@@ -63,6 +63,7 @@ jobs:
           tests/test_v013_runtime_stability.py::test_runtime_stability_smoke_is_schema_bound_and_read_only
           tests/test_v013_pass12_vertical_product_closure.py::test_host_connect_preflight_calls_source_only_context_seam
           tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest
+          tests/test_windows_acl.py::test_host_connect_and_launcher_reject_junction_ancestor
 
       - name: Candidate current-source regression (not release readiness)
         shell: bash
@@ -180,6 +181,98 @@ jobs:
 
       - name: Check patch whitespace
         run: git diff --check
+
+  candidate-distributions:
+    name: Retain exact candidate wheel and sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Build and bind exact candidate artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv sync --frozen --extra dev
+          uv build --build-constraints benchmarks/release/build-constraints.txt
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --dist dist \
+            --output dist/retained-artifact-manifest.json
+
+      - name: Retain exact wheel, sdist, and identity manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-distributions
+          if-no-files-found: error
+          retention-days: 30
+          path: dist/
+
+  retained-wheel-lifecycle:
+    name: Download retained wheel and run production launcher lifecycle
+    needs: candidate-distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+
+      - name: Download exact retained candidate artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: candidate-distributions
+          path: ${{ runner.temp }}/candidate-dist
+
+      - name: Verify retained identity and install exact wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.retained_artifact_manifest \
+            --repository . \
+            --dist "${RUNNER_TEMP}/candidate-dist" \
+            --output "${RUNNER_TEMP}/candidate-dist/retained-artifact-manifest.json" \
+            --verify
+          uv venv "${RUNNER_TEMP}/retained-venv" --python 3.12 --seed
+          uv pip install \
+            --python "${RUNNER_TEMP}/retained-venv/bin/python" \
+            "${RUNNER_TEMP}"/candidate-dist/deeplaw-0.12.0-*.whl
+          "${RUNNER_TEMP}/retained-venv/bin/python" \
+            benchmarks/hosts/run_production_launcher_registration.py \
+            --deeplaw-executable "${RUNNER_TEMP}/retained-venv/bin/deeplaw" \
+            --codex-command deeplaw-ci-codex-not-installed \
+            --opencode-command deeplaw-ci-opencode-not-installed \
+            --output "${RUNNER_TEMP}/retained-launcher-registration.json"
+
+      - name: Upload retained-wheel launcher receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: retained-wheel-launcher-registration
+          if-no-files-found: error
+          retention-days: 30
+          path: ${{ runner.temp }}/retained-launcher-registration.json
 
   supply-chain:
     name: Supply chain and reproducible release

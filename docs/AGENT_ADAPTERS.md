@@ -171,10 +171,14 @@ pins both available scopes at startup. Restart it after an official update or a
 private mutation; after either managed epoch changes, the old process rejects
 later reads in that scope when its pinned epoch no longer matches.
 
-The closed Knowledge Asset launcher selects one vault through the owner-set
-`DEEPLAW_KNOWLEDGE_VAULT` or an explicit local `--vault`; generated Host configuration contains
-neither the path nor its value. `--expected-vault-id` binds the path selected at launch and fails
-closed if it resolves to another Vault. It opens the vault read-only for each
+The closed Knowledge Asset launcher and Host Connect use the same resolver for ancestor
+symlink/junction/reparse rejection, owner, permission and Vault-identity checks. Host Connect binds
+the owner-selected path to its opaque Vault ID in a private owner-local DeepLaw configuration;
+generated Host configuration contains only `--expected-vault-id`, never a Vault path or binding
+file location. The launcher resolves that ID through the private binding and the raw child
+revalidates the same expected ID after process creation, closing the parent/child TOCTOU seam. An
+explicit local `--vault` remains an owner diagnostic/compatibility input, not a production Host
+configuration. The process opens the vault read-only for each
 operation, verifies its closed identities and audit chains, and never mutates
 knowledge. An untouched v0.7 Vault advertises the v1 reviewed-asset contract;
 an autonomous v0.9 Vault advertises v3 with source-derived and Agent-derived
@@ -377,13 +381,16 @@ deeplaw knowledge host connect --host claude-code --vault ./vault
 deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
-For task-continuity setup, add one canonical opaque binding. The Host/owner integration derives
-the registered project, repository, stable worktree, task-line, base revision and dirty-snapshot
-identities; DeepLaw validates them but does not infer them from CWD, branch names or task text:
+For task-continuity setup, an ordinary user generates one host-neutral opaque handle. DeepLaw
+normalizes the chosen project/task labels, derives only digests for project, task lineage,
+repository and worktree, and recomputes the base revision and bounded dirty snapshot from the
+selected Git worktree. The user does not construct the binding hashes:
 
 ```bash
+deeplaw knowledge task start --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
 deeplaw knowledge host connect --host codex --vault ./vault \
-  --task-binding '<canonical-deeplaw.task-context-binding/v1-json>'
+  --task-handle taskh_REPLACE_WITH_RETURNED_HANDLE
 ```
 
 The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
@@ -402,14 +409,14 @@ It then validates and prints a
 manifest points to it with `"mcpServers": "./.mcp.json"`. It is not Codex direct configuration.
 Claude Code receives its actual `mcpServers` JSON shape. OpenCode receives a local
 MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the exact read leaf allow.
-`merge_required=true`: DeepLaw does not write Host
-configuration, install a Host, manage Host authentication or runtime state, or enable the separate
-`knowledge_sink` process. The plan does not contain the Vault path. It names
-`DEEPLAW_KNOWLEDGE_VAULT` with `value_included=false`, binds `--expected-vault-id`, and uses the
-fixed closed launcher. An optional task binding is embedded as opaque canonical JSON and its digest
-is recorded; static manifests may instead receive the same canonical value from the owner/Host as
-`DEEPLAW_TASK_BINDING`. A configured launcher binding is a fixed read boundary: a call cannot
-replace it with another line.
+`merge_required=true`: DeepLaw does not write Host configuration, install a Host, manage Host
+authentication or runtime state, or enable the separate `knowledge_sink` process. It does perform
+one narrowly scoped owner-local DeepLaw configuration write that binds the opaque Vault ID to the
+selected path; the plan reports that write explicitly. The plan itself is path-free, binds
+`--expected-vault-id`, and uses the fixed closed launcher. An optional task handle is converted to
+the existing canonical task binding only after the selected worktree and current Git snapshot are
+revalidated. The compatibility `--task-binding` form remains available for existing callers. A
+configured launcher binding is a fixed read boundary: a call cannot replace it with another line.
 
 Owner-side direct verification remains explicit:
 
@@ -420,10 +427,23 @@ opencode mcp list
 ```
 
 This is an owner-side setup artifact, not provider-visible context. The owner-selected local Vault
-path remains only in the Host environment and never appears in the generated plan. Qualification
+path remains only in the private DeepLaw owner binding and child environment; it never appears in
+the generated plan. Qualification
 receipts, Provider Capsules, logs, screenshots, and public support bundles also omit it. Adapters
 continue to delegate retrieval, admission, governance, and persistence to the shared domain
 services.
+
+The shipped MCP caller inventory is closed as follows:
+
+- static Codex/Claude plugin manifests for `deeplaw` and `deeplaw-knowledge-os`, plus the three
+  OpenCode samples, invoke the fixed launcher;
+- Host Connect v2 and Tolaria generated configurations use the shared resolver/config builder;
+- the Obsidian display-only MCP setting, Codex plugin smoke, no-model registration check and editor
+  integration harness show or exercise the same production command;
+- current Codex/OpenCode continuity and token-attribution runners, and retained Pass 13
+  compatibility runners, delegate their MCP child to the production launcher;
+- raw `law_support`, `knowledge_support`, and `knowledge_sink` stdio commands remain explicit
+  owner diagnostic/compatibility seams and are not emitted into production Host configuration.
 
 For owner/Host compilation orchestration, the command
 `deeplaw knowledge compile handoff --source-revision-id <exact-id>` produces a read-only receipt
@@ -573,11 +593,12 @@ deeplaw knowledge sink enable \
 Only then may the owner add a separate host MCP entry whose command is:
 
 ```text
-DEEPLAW_KNOWLEDGE_VAULT=<owner-vault> deeplaw knowledge sink mcp \
-  --closed-environment --grant-id <exact-grant-id> --stdio
+deeplaw knowledge sink mcp --closed-environment \
+  --expected-vault-id <opaque-vault-id> --grant-id <exact-grant-id> --stdio
 ```
 
-Do not commit a Vault path, grant ID, or capability token. Never add this
+The owner first establishes the private Vault-ID binding through `knowledge host connect`; the Host
+configuration itself stays path-free. Do not commit a Vault path, grant ID, or capability token. Never add this
 server to the default plugin manifest. The server exposes exactly one
 `knowledge_sink` leaf; its closed request requires an idempotency key and
 `confirm_no_case_data=true`. A model, retrieved page, Skill, or router cannot
@@ -594,15 +615,18 @@ does not store a transcript, hidden reasoning, complete log, authentication stat
 Selective withdrawal uses the same separately authorized Sink's `forget` operation with the exact
 current revision and owner reason.
 
-Each new MCP process can restore the same line when it receives the same registered binding. This
-covers a new thread, resume and post-compaction restart. A fork can recover the same current line
-when its binding preserves the route and snapshot while recording its opaque parent lineage.
+Each new MCP process can deterministically recover the same admitted data-plane line when it
+receives the same validated handle/binding. `task resume` and `task compaction` both reacquire a
+fresh bounded Capsule and never copy a transcript. Fork mode is explicit: `continue-parent` keeps
+the handle, while `child-task` creates a different lineage with an opaque parent digest.
 Concurrent worktrees remain distinct. Changed base/dirty snapshots return `workspace_diverged` or
 `stale_checkpoint`; wrong or ambiguous task lines and forgotten checkpoints return bounded Gaps
 without guessing. Without an exact binding, only a unique task-text route may be recovered; that
 compatibility path cannot prove the caller's current workspace snapshot and therefore is not a
 substitute for Host binding. Fork merge/conflict reconciliation, transcript crawling, background
-checkpointing and semantic whole-session restore are not implemented.
+checkpointing and semantic whole-session restore are not implemented. Static MCP has no native
+Host lifecycle metadata, so local start/resume/compaction tests are deterministic restart/data-plane
+recovery only. Native Host start/resume/fork/compaction remains a real qualification claim.
 
 ## Client and case workspaces remain outside DeepLaw
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from deeplaw import knowledge_store, windows_acl
+from deeplaw.knowledge_autonomy import initialize_autonomous_core
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import (
     KnowledgeVault,
@@ -239,3 +240,47 @@ def test_native_windows_acl_rejects_directory_junction(tmp_path: Path) -> None:
     assert report["permissions_verified"] is False
     assert report["reparse_points_absent"] is False
     assert any("reparse_point_present" in item for item in report["errors"])
+
+
+@pytest.mark.windows_native
+@pytest.mark.skipif(os.name != "nt", reason="requires a native Windows junction")
+def test_host_connect_and_launcher_reject_junction_ancestor(tmp_path: Path) -> None:
+    from deeplaw.closed_mcp_launcher import closed_mcp_environment
+    from deeplaw.host_connect import build_host_connect_plan
+
+    real_parent = tmp_path / "real-parent"
+    vault = real_parent / "vault"
+    initialize_knowledge_vault(vault, name="windows-host-junction", scope="project")
+    initialize_autonomous_core(vault)
+    junction_parent = tmp_path / "junction-parent"
+    process = subprocess.run(
+        [
+            "cmd.exe",
+            "/d",
+            "/c",
+            "mklink",
+            "/J",
+            str(junction_parent),
+            str(real_parent),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert process.returncode == 0, process.stdout + process.stderr
+    selected_vault = junction_parent / "vault"
+
+    with (
+        pytest.raises(RuntimeError, match="selected Knowledge Vault is unsafe"),
+        closed_mcp_environment(
+            surface="knowledge_support",
+            vault_path=selected_vault,
+        ),
+    ):
+        pass
+    with pytest.raises(RuntimeError, match="selected Knowledge Vault is unsafe"):
+        build_host_connect_plan(
+            host="codex",
+            vault_path=selected_vault,
+            owner_home=tmp_path / "owner-home",
+        )
