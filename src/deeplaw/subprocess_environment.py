@@ -31,18 +31,33 @@ _INHERITED_NAMES = (
     "COMSPEC",
     "PATHEXT",
 )
-_OVERRIDE_NAMES = frozenset({"HOME", "PYTHONPATH"})
+_OVERRIDE_NAMES = frozenset(
+    {
+        "HOME",
+        "PYTHONPATH",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "XDG_CACHE_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME",
+    }
+)
 
 
 def _build_subprocess_environment(
     *,
     overrides: Mapping[str, str] | None = None,
+    platform_name: str | None = None,
 ) -> dict[str, str]:
     """Return a closed environment for a local Python subprocess.
 
-    ``overrides`` is limited to isolated ``HOME`` and ``PYTHONPATH`` values;
-    the caller must explicitly provide those paths when it needs them.  A
-    missing inherited value remains missing rather than being fabricated.
+    ``overrides`` is limited to caller-owned interpreter, profile, XDG, and
+    temporary paths.  A missing inherited value remains missing rather than
+    being fabricated.  ``platform_name`` exists only so the Windows profile
+    mapping can be regression-tested without mutating process-global
+    ``os.name``.
     """
 
     environment = {
@@ -62,7 +77,7 @@ def _build_subprocess_environment(
         if not isinstance(name, str) or not isinstance(value, str) or "\x00" in value:
             raise ValueError("subprocess environment overrides must be text values")
         environment[name] = value
-        if name == "HOME" and os.name == "nt":
+        if name == "HOME" and (platform_name or os.name) == "nt":
             # ``pathlib.Path.home`` consults USERPROFILE on Windows.  This is an
             # isolated caller-owned value, not inherited ambient profile state.
             environment["USERPROFILE"] = value

@@ -11,10 +11,11 @@ Codex direct MCP configuration is TOML in `~/.codex/config.toml` or a trusted pr
 ```toml
 [mcp_servers.deeplaw-knowledge]
 command = "deeplaw"
-args = ["knowledge", "mcp", "--stdio"]
+args = ["knowledge", "mcp", "--closed-environment", "--stdio"]
 ```
 
-The equivalent command is `codex mcp add deeplaw-knowledge -- deeplaw knowledge mcp --stdio`;
+The equivalent command is
+`codex mcp add deeplaw-knowledge -- deeplaw knowledge mcp --closed-environment --stdio`;
 verify with `codex mcp list`. For a Codex plugin, `.codex-plugin/plugin.json` points to the
 plugin-root `.mcp.json` with `"mcpServers": "./.mcp.json"`; that bundled configuration is not
 direct `config.toml` configuration.
@@ -28,7 +29,7 @@ Claude Code's project `.mcp.json` uses `mcpServers`:
   "mcpServers": {
     "deeplaw-knowledge": {
       "command": "deeplaw",
-      "args": ["knowledge", "mcp", "--stdio"]
+      "args": ["knowledge", "mcp", "--closed-environment", "--stdio"]
     }
   }
 }
@@ -42,7 +43,7 @@ Add the Sink only to an explicit compiler profile or project-local owner configu
     "deeplaw-knowledge-sink": {
       "command": "deeplaw",
       "args": [
-        "knowledge", "sink", "mcp",
+        "knowledge", "sink", "mcp", "--closed-environment",
         "--grant-id", "<owner-created-grant-id>",
         "--stdio"
       ]
@@ -65,13 +66,15 @@ Merge, do not replace, the existing OpenCode configuration. Keep the read-only s
   "mcp": {
     "deeplaw_knowledge": {
       "type": "local",
-      "command": ["deeplaw", "knowledge", "mcp", "--stdio"],
+      "command": [
+        "deeplaw", "knowledge", "mcp", "--closed-environment", "--stdio"
+      ],
       "enabled": true
     },
     "deeplaw_knowledge_sink": {
       "type": "local",
       "command": [
-        "deeplaw", "knowledge", "sink", "mcp",
+        "deeplaw", "knowledge", "sink", "mcp", "--closed-environment",
         "--grant-id", "<owner-created-grant-id>", "--stdio"
       ],
       "enabled": true
@@ -88,6 +91,10 @@ read-only profile's wildcard denial. Do not grant shell, arbitrary file writes, 
 administration, or Legal Pack mutation.
 
 ## Preflight
+
+Set `DEEPLAW_KNOWLEDGE_VAULT` only in the owner/Host environment. Do not commit its value. For a
+task-continuity read profile, provide the canonical opaque `DEEPLAW_TASK_BINDING` or generate a
+path-free bound configuration with `deeplaw knowledge host connect --task-binding ...`.
 
 Run these owner-side checks before a compiler task:
 

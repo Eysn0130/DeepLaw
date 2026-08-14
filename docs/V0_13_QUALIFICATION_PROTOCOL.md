@@ -137,6 +137,23 @@ candidate commit/tree, wheel SHA-256, and Host receipt v2 digest. The blind-revi
 contracts bind the same wheel and receipt contract. These structural declarations do not prove
 human authorship or independence; that provenance remains an external owner responsibility.
 
+## Pass 19 launcher and task-binding precondition
+
+Future Host qualification must use the production fixed-target closed MCP launcher or a runner
+wrapper proven equivalent by the same canary. The DeepLaw child receives isolated
+HOME/USERPROFILE/XDG/temp roots, portable bootstrap variables, explicit DeepLaw data selection and
+the canonical opaque task binding only. Codex authentication, OpenCode/DeepSeek provider secrets,
+`.env` contents and credential paths remain Host-only. Generated configuration and reports contain
+no local Vault path, and the runtime-selected Vault must match the expected opaque Vault identity.
+
+Every new/resume/fork/compaction read must bind the registered project, repository, stable
+worktree, task line, base and dirty snapshot. A successful checkpoint is written only through the
+separate owner-granted Sink at an explicit successful boundary (`record_run` then working-memory
+`remember`). Query/Context and all read-MCP qualification probes must leave the Ledger unchanged.
+Wrong, stale, ambiguous and forgotten state must fail closed. The no-model Pass 19 acceptance
+fixture is development regression evidence only; it cannot satisfy any real-Host, Human Gold or
+blind-review gate.
+
 ## Three isolated data layers
 
 The layers are mutually exclusive and have different residency and visibility rules:

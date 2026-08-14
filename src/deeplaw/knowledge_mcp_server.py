@@ -507,6 +507,7 @@ class _KnowledgeRuntime:
     vault_path: Path
     lock: RLock
     persistent: PersistentReadRuntime | None = None
+    default_task_binding: dict[str, Any] | None = None
     query_receipts: OrderedDict[str, dict[str, Any]] = dataclass_field(
         default_factory=OrderedDict
     )
@@ -3333,11 +3334,16 @@ def handle_knowledge_support(
 def create_knowledge_mcp_server(
     *,
     vault_path: str | Path | None = None,
+    default_task_binding: Mapping[str, Any] | None = None,
 ) -> Server[_KnowledgeRuntime]:
     selected_path = (
         Path(vault_path).expanduser().absolute()
         if vault_path is not None
         else default_knowledge_vault()
+    )
+    selected_task_binding = normalize_task_context_binding(
+        default_task_binding,
+        allow_none=True,
     )
 
     @asynccontextmanager
@@ -3347,6 +3353,7 @@ def create_knowledge_mcp_server(
             vault_path=selected_path,
             lock=RLock(),
             persistent=persistent,
+            default_task_binding=selected_task_binding,
         )
         try:
             yield runtime
@@ -3383,6 +3390,19 @@ def create_knowledge_mcp_server(
                         arguments["task_binding"],
                         allow_none=True,
                     )
+                    if (
+                        runtime.default_task_binding is not None
+                        and arguments["task_binding"] != runtime.default_task_binding
+                    ):
+                        raise PermissionError(
+                            "MCP task binding does not match the fixed launcher binding"
+                        )
+                elif (
+                    operation in {"query", "context"}
+                    and runtime.default_task_binding is not None
+                ):
+                    arguments = dict(arguments)
+                    arguments["task_binding"] = dict(runtime.default_task_binding)
                 try:
                     observed_snapshot = (
                         runtime.persistent.get_snapshot(operation=operation)
@@ -3584,12 +3604,16 @@ def run_knowledge_mcp(
     *,
     transport: str = "stdio",
     vault_path: str | Path | None = None,
+    default_task_binding: Mapping[str, Any] | None = None,
 ) -> None:
     if transport != "stdio":
         raise ValueError("DeepLaw Knowledge Assets supports only local stdio MCP")
 
     async def serve() -> None:
-        server = create_knowledge_mcp_server(vault_path=vault_path)
+        server = create_knowledge_mcp_server(
+            vault_path=vault_path,
+            default_task_binding=default_task_binding,
+        )
         async with stdio_server() as (read_stream, write_stream):
             await server.run(
                 read_stream,

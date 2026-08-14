@@ -176,7 +176,12 @@ def test_codex_and_opencode_static_entries_use_shared_read_only_mcp_surface() ->
     assert codex_manifest["mcpServers"] == "./.mcp.json"
     server = codex_mcp["mcpServers"]["deeplaw-knowledge"]
     assert server["command"] == "deeplaw"
-    assert server["args"] == ["knowledge", "mcp", "--stdio"]
+    assert server["args"] == [
+        "knowledge",
+        "mcp",
+        "--closed-environment",
+        "--stdio",
+    ]
     api_by_name = {entry["name"]: entry for entry in opencode_bridge["domain_apis"]}
     assert api_by_name["knowledge_support"] == {
         "name": "knowledge_support",

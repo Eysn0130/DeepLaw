@@ -7,9 +7,9 @@ collapsed into either query surface:
 
 | Product | Plugin | Process | Single leaf |
 | --- | --- | --- | --- |
-| Chinese Legal Pack | `deeplaw` | `deeplaw mcp --stdio` | `law_support` |
-| Knowledge Asset core | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --stdio` | `knowledge_support` |
-| Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --grant-id … --stdio` | `knowledge_sink` |
+| Chinese Legal Pack | `deeplaw` | `deeplaw mcp --closed-environment --stdio` | `law_support` |
+| Knowledge Asset core | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --closed-environment --stdio` | `knowledge_support` |
+| Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` | `knowledge_sink` |
 
 This document describes adapter behavior only. Corpus building, release
 governance, and retrieval internals are separate concerns.
@@ -57,10 +57,10 @@ competitive evidence program.
 
 ## Stable boundary
 
-The Legal Pack process command is:
+The production Legal Pack launcher command is:
 
 ```text
-deeplaw mcp --stdio
+deeplaw mcp --closed-environment --stdio
 ```
 
 The common server key is `deeplaw`. Hosts add different prefixes to MCP tools,
@@ -140,10 +140,13 @@ PDF catalog build. A project-only `uv sync` is insufficient when the Agent
 launches the plugin from another working directory unless its environment also
 exposes that project's `.venv/bin`.
 
-The raw MCP process inherits the launcher environment, so a production Host configuration must use
-the repository's closed-environment wrapper and pass only the explicitly required DeepLaw
-configuration. Host credential variables, provider API keys, shell startup state, and credential
-paths must not reach the DeepLaw MCP child. Point the wrapper at an immutable database with
+The raw MCP process inherits its caller environment, so every official static and generated Host
+configuration uses the built-in fixed-target `--closed-environment` launcher. It accepts only
+`law_support`, `knowledge_support`, or an explicitly granted `knowledge_sink`; it is not a generic
+command runner. The child receives a small portable process allowlist, isolated `HOME`, Windows
+`USERPROFILE`, XDG and temporary roots, and only explicit DeepLaw data/task settings. `CODEX_HOME`,
+Host plugin/hook state, provider API keys, `.env` settings, credential paths, and the ambient user
+profile are absent. Point the launcher at an immutable database with
 `DEEPLAW_DB`, or at a directory containing `ACTIVE` and the corresponding
 `releases/<release-id>/deeplaw.sqlite3`. Do not put a machine-local database or credential path in a
 committed plugin manifest. With neither DeepLaw data override, every host
@@ -157,7 +160,8 @@ deeplaw doctor
 deeplaw mcp --help
 ```
 
-Running `deeplaw mcp --stdio` directly waits for MCP messages on standard input;
+Running either raw `deeplaw mcp --stdio` for local diagnostics or the production closed launcher
+waits for MCP messages on standard input;
 that is expected, not a startup hang.
 
 The plugin never downloads or mutates a corpus in the background. Official
@@ -167,8 +171,10 @@ pins both available scopes at startup. Restart it after an official update or a
 private mutation; after either managed epoch changes, the old process rejects
 later reads in that scope when its pinned epoch no longer matches.
 
-The Knowledge Asset process selects one vault through
-`DEEPLAW_KNOWLEDGE_VAULT` or `--vault`. It opens the vault read-only for each
+The closed Knowledge Asset launcher selects one vault through the owner-set
+`DEEPLAW_KNOWLEDGE_VAULT` or an explicit local `--vault`; generated Host configuration contains
+neither the path nor its value. `--expected-vault-id` binds the path selected at launch and fails
+closed if it resolves to another Vault. It opens the vault read-only for each
 operation, verifies its closed identities and audit chains, and never mutates
 knowledge. An untouched v0.7 Vault advertises the v1 reviewed-asset contract;
 an autonomous v0.9 Vault advertises v3 with source-derived and Agent-derived
@@ -206,7 +212,7 @@ vector dump or a complete legal memorandum.
 The Codex plugin is rooted at `plugins/deeplaw`:
 
 - `.codex-plugin/plugin.json` provides plugin metadata;
-- `.mcp.json` starts `deeplaw mcp --stdio`;
+- `.mcp.json` starts `deeplaw mcp --closed-environment --stdio`;
 - `skills/research-chinese-law/SKILL.md` is the shared workflow;
 - `skills/research-chinese-law/agents/openai.yaml` sets
   `policy.allow_implicit_invocation: false`.
@@ -371,6 +377,15 @@ deeplaw knowledge host connect --host claude-code --vault ./vault
 deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
+For task-continuity setup, add one canonical opaque binding. The Host/owner integration derives
+the registered project, repository, stable worktree, task-line, base revision and dirty-snapshot
+identities; DeepLaw validates them but does not infer them from CWD, branch names or task text:
+
+```bash
+deeplaw knowledge host connect --host codex --vault ./vault \
+  --task-binding '<canonical-deeplaw.task-context-binding/v1-json>'
+```
+
 The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
 core installed. It also executes one fixed, bounded, no-write, no-model Context health probe and
 verifies that the audit head is unchanged. That attestation covers only the fixed internal probe;
@@ -379,7 +394,7 @@ caller-supplied Context/ingestion/mutation request still requires its own explic
 `confirm_no_case_data` confirmation. The plan distinguishes compiled Knowledge, a source-only
 honest Gap, and an empty honest Gap; an uncallable read seam is blocked rather than reported ready.
 It then validates and prints a
-[`host-connect-plan/v1`](../contracts/host-connect-plan.v1.schema.json) document containing only a
+[`host-connect-plan/v2`](../contracts/host-connect-plan.v2.schema.json) document containing only a
 `knowledge_support` stdio configuration. Codex direct setup is represented as TOML for either
 `~/.codex/config.toml` or trusted-project `.codex/config.toml`, together with the equivalent
 `codex mcp add ...` command and `codex mcp list` verification command. The separately named
@@ -389,7 +404,12 @@ Claude Code receives its actual `mcpServers` JSON shape. OpenCode receives a loc
 MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the exact read leaf allow.
 `merge_required=true`: DeepLaw does not write Host
 configuration, install a Host, manage Host authentication or runtime state, or enable the separate
-`knowledge_sink` process.
+`knowledge_sink` process. The plan does not contain the Vault path. It names
+`DEEPLAW_KNOWLEDGE_VAULT` with `value_included=false`, binds `--expected-vault-id`, and uses the
+fixed closed launcher. An optional task binding is embedded as opaque canonical JSON and its digest
+is recorded; static manifests may instead receive the same canonical value from the owner/Host as
+`DEEPLAW_TASK_BINDING`. A configured launcher binding is a fixed read boundary: a call cannot
+replace it with another line.
 
 Owner-side direct verification remains explicit:
 
@@ -399,10 +419,11 @@ claude mcp list
 opencode mcp list
 ```
 
-This is an owner-side setup artifact, not provider-visible context. The plan necessarily contains
-the owner-selected local Vault path. Qualification receipts, Provider Capsules, logs, screenshots,
-and public support bundles must omit or redact that path. Adapters continue to delegate retrieval,
-admission, governance, and persistence to the shared domain services.
+This is an owner-side setup artifact, not provider-visible context. The owner-selected local Vault
+path remains only in the Host environment and never appears in the generated plan. Qualification
+receipts, Provider Capsules, logs, screenshots, and public support bundles also omit it. Adapters
+continue to delegate retrieval, admission, governance, and persistence to the shared domain
+services.
 
 For owner/Host compilation orchestration, the command
 `deeplaw knowledge compile handoff --source-revision-id <exact-id>` produces a read-only receipt
@@ -418,13 +439,17 @@ codex plugin marketplace add /absolute/path/to/DeepLaw
 codex plugin add deeplaw-knowledge-os@deeplaw
 ```
 
-The Pass 14 no-model lifecycle check used a fresh temporary HOME, `CODEX_HOME` and XDG roots,
+Historical status — Pass 14 only: the no-model lifecycle check used a fresh temporary HOME,
+`CODEX_HOME` and XDG roots,
 discovered both local plugins, installed/removed/re-added them, and compared the cached plugin bytes
 with their source bytes. It passed with `codex-cli 0.147.0-alpha.1.2`, but remains
 `full_host_acceptance=false` and `claim_eligible=false`: no model or MCP session was started.
 The subsequent isolated ChatGPT-login preflight failed closed, so real Codex diagnostic and
 continuity qualification are `not_executed`. No installed OpenCode binary was available for its
-required version/config preflight, so its diagnostic and qualification are also `not_executed`.
+required version/config preflight, so its diagnostic and qualification were also `not_executed`.
+This paragraph does not describe current Pass 17 evidence; see
+[`V0_13_PASS17_DISPOSITION.md`](V0_13_PASS17_DISPOSITION.md). Pass 19 adds local no-model closed
+launcher and task-continuity regressions only and does not upgrade real-Host qualification.
 
 Claude Code development load:
 
@@ -548,7 +573,8 @@ deeplaw knowledge sink enable \
 Only then may the owner add a separate host MCP entry whose command is:
 
 ```text
-deeplaw knowledge sink mcp --vault <owner-vault> --grant-id <exact-grant-id> --stdio
+DEEPLAW_KNOWLEDGE_VAULT=<owner-vault> deeplaw knowledge sink mcp \
+  --closed-environment --grant-id <exact-grant-id> --stdio
 ```
 
 Do not commit a Vault path, grant ID, or capability token. Never add this
@@ -556,6 +582,27 @@ server to the default plugin manifest. The server exposes exactly one
 `knowledge_sink` leaf; its closed request requires an idempotency key and
 `confirm_no_case_data=true`. A model, retrieved page, Skill, or router cannot
 run `sink enable`, choose a broader grant, or add owner-only operations.
+
+### Explicit task checkpoint and restore chain
+
+Query and Context are always read-only and never checkpoint. At an explicit successful task
+boundary, a Host that has received an owner grant with only the needed operations performs two
+separate `knowledge_sink` calls: `record_run(status=succeeded)` with the canonical task binding in
+`run_metadata`, then `remember(kind=memory, memory_type=working, run_id=...)`. This reuses the
+existing Run, Knowledge Revision, Ledger event and rebuildable checkpoint-route projection; it
+does not store a transcript, hidden reasoning, complete log, authentication state or Host session.
+Selective withdrawal uses the same separately authorized Sink's `forget` operation with the exact
+current revision and owner reason.
+
+Each new MCP process can restore the same line when it receives the same registered binding. This
+covers a new thread, resume and post-compaction restart. A fork can recover the same current line
+when its binding preserves the route and snapshot while recording its opaque parent lineage.
+Concurrent worktrees remain distinct. Changed base/dirty snapshots return `workspace_diverged` or
+`stale_checkpoint`; wrong or ambiguous task lines and forgotten checkpoints return bounded Gaps
+without guessing. Without an exact binding, only a unique task-text route may be recovered; that
+compatibility path cannot prove the caller's current workspace snapshot and therefore is not a
+substitute for Host binding. Fork merge/conflict reconciliation, transcript crawling, background
+checkpointing and semantic whole-session restore are not implemented.
 
 ## Client and case workspaces remain outside DeepLaw
 

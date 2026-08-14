@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -8,7 +9,8 @@ from jsonschema import Draft202012Validator
 from .api import KnowledgeOS
 from .knowledge_autonomy import AutonomousKnowledgeStore
 from .knowledge_maintenance import knowledge_doctor
-from .util import strict_json_loads
+from .task_context import normalize_task_context_binding
+from .util import canonical_json, strict_json_loads
 
 HostName = Literal["codex", "claude-code", "opencode"]
 
@@ -28,7 +30,7 @@ def _permission_error_categories(permission_report: dict[str, Any]) -> list[str]
 
 
 def _contract() -> dict[str, Any]:
-    name = "host-connect-plan.v1.schema.json"
+    name = "host-connect-plan.v2.schema.json"
     packaged = Path(__file__).resolve().parent / "contracts" / name
     repository = Path(__file__).resolve().parents[2] / "contracts" / name
     path = packaged if packaged.is_file() else repository
@@ -38,25 +40,40 @@ def _contract() -> dict[str, Any]:
     return value
 
 
-def _server_argv(vault_path: Path) -> list[str]:
-    return [
+def _server_argv(
+    *,
+    vault_id: str,
+    task_binding: Mapping[str, Any] | None,
+) -> list[str]:
+    argv = [
         "deeplaw",
         "knowledge",
         "mcp",
+        "--closed-environment",
         "--stdio",
-        "--vault",
-        str(vault_path),
+        "--expected-vault-id",
+        vault_id,
     ]
+    if task_binding is not None:
+        argv.extend(("--task-binding", canonical_json(task_binding)))
+    return argv
 
 
 def build_host_connect_plan(
-    *, host: str, vault_path: str | Path
+    *,
+    host: str,
+    vault_path: str | Path,
+    task_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one read-only MCP configuration without changing Host state."""
 
     if host not in {"codex", "claude-code", "opencode"}:
         raise ValueError("host must be codex, claude-code, or opencode")
     selected_host = cast(HostName, host)
+    selected_task_binding = normalize_task_context_binding(
+        task_binding,
+        allow_none=True,
+    )
     selected_vault = Path(vault_path).expanduser().absolute()
     doctor = knowledge_doctor(selected_vault)
     autonomous = doctor.get("checks", {}).get("autonomous_core", {})
@@ -86,6 +103,7 @@ def build_host_connect_plan(
     with AutonomousKnowledgeStore(selected_vault, read_only=True) as store:
         audit_before = store.audit_head
         scope = store.vault_scope
+        vault_id = store.vault_id
         compiled_knowledge_available = bool(
             store.connection.execute(
                 """
@@ -203,7 +221,10 @@ def build_host_connect_plan(
         "caller_confirmation_required_for_future_context": True,
     }
 
-    argv = _server_argv(selected_vault)
+    argv = _server_argv(
+        vault_id=vault_id,
+        task_binding=selected_task_binding,
+    )
     plugin_manifest: dict[str, Any] | None = None
     if selected_host == "codex":
         configuration_kind = "codex_direct_config"
@@ -283,10 +304,22 @@ def build_host_connect_plan(
         equivalent_command = []
         verification_command = ["opencode", "mcp", "list"]
     plan = {
-        "schema_version": "deeplaw.host-connect-plan/v1",
+        "schema_version": "deeplaw.host-connect-plan/v2",
         "host": selected_host,
         "server_leaf": "knowledge_support",
         "read_only": True,
+        "vault_id": vault_id,
+        "data_binding": {
+            "environment_variable": "DEEPLAW_KNOWLEDGE_VAULT",
+            "expected_vault_id": vault_id,
+            "value_included": False,
+        },
+        "task_binding_configured": selected_task_binding is not None,
+        "task_binding_sha256": (
+            selected_task_binding["binding_sha256"]
+            if selected_task_binding is not None
+            else None
+        ),
         "configuration_kind": configuration_kind,
         "configuration_format": configuration_format,
         "merge_targets": merge_targets,

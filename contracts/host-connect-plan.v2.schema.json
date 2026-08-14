@@ -1,0 +1,409 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-connect-plan.v2.schema.json",
+  "title": "DeepLaw Host Connect Plan v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "host",
+    "server_leaf",
+    "read_only",
+    "vault_id",
+    "data_binding",
+    "task_binding_configured",
+    "task_binding_sha256",
+    "configuration_kind",
+    "configuration_format",
+    "merge_targets",
+    "configuration",
+    "equivalent_command",
+    "verification_command",
+    "preflight",
+    "context_preflight",
+    "merge_required",
+    "authentication_managed",
+    "host_runtime_managed",
+    "install_performed",
+    "write_performed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-connect-plan/v2"},
+    "host": {"enum": ["codex", "claude-code", "opencode"]},
+    "server_leaf": {"const": "knowledge_support"},
+    "read_only": {"const": true},
+    "vault_id": {"$ref": "#/$defs/vaultId"},
+    "data_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment_variable", "expected_vault_id", "value_included"],
+      "properties": {
+        "environment_variable": {"const": "DEEPLAW_KNOWLEDGE_VAULT"},
+        "expected_vault_id": {"$ref": "#/$defs/vaultId"},
+        "value_included": {"const": false}
+      }
+    },
+    "task_binding_configured": {"type": "boolean"},
+    "task_binding_sha256": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      ]
+    },
+    "configuration_kind": {
+      "enum": [
+        "codex_direct_config",
+        "claude_code_project_config",
+        "opencode_project_config"
+      ]
+    },
+    "configuration_format": {"enum": ["toml", "json", "jsonc"]},
+    "merge_targets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "configuration": {
+      "oneOf": [
+        {"$ref": "#/$defs/codexConfiguration"},
+        {"$ref": "#/$defs/claudeConfiguration"},
+        {"$ref": "#/$defs/openCodeConfiguration"}
+      ]
+    },
+    "equivalent_command": {"$ref": "#/$defs/command"},
+    "verification_command": {"$ref": "#/$defs/command"},
+    "codex_plugin_manifest": {"$ref": "#/$defs/codexPluginManifest"},
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vault_ready",
+        "canonical_valid",
+        "autonomous_core_installed",
+        "schema_core_installed",
+        "read_seam_callable",
+        "compiled_knowledge_available",
+        "source_only_honest_gap_available",
+        "blocked"
+      ],
+      "properties": {
+        "vault_ready": {"const": true},
+        "canonical_valid": {"const": true},
+        "autonomous_core_installed": {"const": true},
+        "schema_core_installed": {"const": true},
+        "read_seam_callable": {"const": true},
+        "compiled_knowledge_available": {"type": "boolean"},
+        "source_only_honest_gap_available": {"type": "boolean"},
+        "blocked": {"const": false}
+      }
+    },
+    "context_preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "gap_codes",
+        "provider_payload_bytes",
+        "write_performed",
+        "audit_head_unchanged",
+        "attestation_scope",
+        "future_task_attested",
+        "real_host_observed",
+        "real_mcp_registration_observed",
+        "caller_confirmation_required_for_future_context"
+      ],
+      "properties": {
+        "status": {"enum": ["compiled_knowledge", "source_only_gap", "empty_honest_gap"]},
+        "gap_codes": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "write_performed": {"const": false},
+        "audit_head_unchanged": {"const": true},
+        "attestation_scope": {"const": "fixed_internal_health_probe_only"},
+        "future_task_attested": {"const": false},
+        "real_host_observed": {"const": false},
+        "real_mcp_registration_observed": {"const": false},
+        "caller_confirmation_required_for_future_context": {"const": true}
+      }
+    },
+    "merge_required": {"const": true},
+    "authentication_managed": {"const": false},
+    "host_runtime_managed": {"const": false},
+    "install_performed": {"const": false},
+    "write_performed": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"task_binding_configured": {"const": true}}},
+      "then": {"properties": {"task_binding_sha256": {"type": "string"}}},
+      "else": {"properties": {"task_binding_sha256": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"host": {"const": "codex"}}},
+      "then": {
+        "required": ["codex_plugin_manifest"],
+        "properties": {
+          "configuration_kind": {"const": "codex_direct_config"},
+          "configuration_format": {"const": "toml"},
+          "merge_targets": {"const": ["~/.codex/config.toml", ".codex/config.toml"]},
+          "configuration": {"$ref": "#/$defs/codexConfiguration"},
+          "equivalent_command": {"$ref": "#/$defs/codexAddCommand"},
+          "verification_command": {"const": ["codex", "mcp", "list"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"host": {"const": "claude-code"}}},
+      "then": {
+        "properties": {
+          "configuration_kind": {"const": "claude_code_project_config"},
+          "configuration_format": {"const": "json"},
+          "merge_targets": {"const": [".mcp.json"]},
+          "configuration": {"$ref": "#/$defs/claudeConfiguration"},
+          "equivalent_command": {"$ref": "#/$defs/claudeAddCommand"},
+          "verification_command": {"const": ["claude", "mcp", "list"]}
+        },
+        "not": {"required": ["codex_plugin_manifest"]}
+      }
+    },
+    {
+      "if": {"properties": {"host": {"const": "opencode"}}},
+      "then": {
+        "properties": {
+          "configuration_kind": {"const": "opencode_project_config"},
+          "configuration_format": {"const": "jsonc"},
+          "merge_targets": {"const": ["opencode.json", "opencode.jsonc"]},
+          "configuration": {"$ref": "#/$defs/openCodeConfiguration"},
+          "equivalent_command": {"const": []},
+          "verification_command": {"const": ["opencode", "mcp", "list"]}
+        },
+        "not": {"required": ["codex_plugin_manifest"]}
+      }
+    }
+  ],
+  "$defs": {
+    "argument": {"type": "string", "minLength": 1, "maxLength": 8192},
+    "vaultId": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "command": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/argument"}
+    },
+    "stdioArguments": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"}
+          ],
+          "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "prefixItems": [
+            {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
+          ],
+          "items": false
+        }
+      ]
+    },
+    "fullCommand": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"}
+          ],
+          "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
+          ],
+          "items": false
+        }
+      ]
+    },
+    "stdioServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "args"],
+      "properties": {
+        "command": {"const": "deeplaw"},
+        "args": {"$ref": "#/$defs/stdioArguments"}
+      }
+    },
+    "codexConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp_servers"],
+      "properties": {
+        "mcp_servers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw-knowledge"],
+          "properties": {"deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}}
+        }
+      }
+    },
+    "claudeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcpServers"],
+      "properties": {
+        "mcpServers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw-knowledge"],
+          "properties": {"deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}}
+        }
+      }
+    },
+    "openCodeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp", "permission"],
+      "properties": {
+        "mcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deeplaw_knowledge"],
+          "properties": {
+            "deeplaw_knowledge": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "command", "enabled", "timeout"],
+              "properties": {
+                "type": {"const": "local"},
+                "command": {"$ref": "#/$defs/fullCommand"},
+                "enabled": {"const": true},
+                "timeout": {"type": "integer", "minimum": 1000, "maximum": 60000}
+              }
+            }
+          }
+        },
+        "permission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["*", "deeplaw_knowledge_knowledge_support"],
+          "properties": {
+            "*": {"const": "deny"},
+            "deeplaw_knowledge_knowledge_support": {"const": "allow"}
+          }
+        }
+      }
+    },
+    "codexPluginManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration_kind", "configuration_format", "merge_target", "configuration"],
+      "properties": {
+        "configuration_kind": {"const": "codex_plugin_manifest"},
+        "configuration_format": {"const": "json"},
+        "merge_target": {"const": ".mcp.json"},
+        "configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mcpServers"],
+          "properties": {
+            "mcpServers": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["deeplaw-knowledge"],
+              "properties": {"deeplaw-knowledge": {"$ref": "#/$defs/stdioServer"}}
+            }
+          }
+        }
+      }
+    },
+    "codexAddCommand": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "prefixItems": [
+            {"const": "codex"}, {"const": "mcp"}, {"const": "add"},
+            {"const": "deeplaw-knowledge"}, {"const": "--"},
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"}
+          ],
+          "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 14,
+          "maxItems": 14,
+          "prefixItems": [
+            {"const": "codex"}, {"const": "mcp"}, {"const": "add"},
+            {"const": "deeplaw-knowledge"}, {"const": "--"},
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
+          ],
+          "items": false
+        }
+      ]
+    },
+    "claudeAddCommand": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 14,
+          "maxItems": 14,
+          "prefixItems": [
+            {"const": "claude"}, {"const": "mcp"}, {"const": "add"},
+            {"const": "--transport"}, {"const": "stdio"},
+            {"const": "deeplaw-knowledge"}, {"const": "--"},
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"}
+          ],
+          "items": false
+        },
+        {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "prefixItems": [
+            {"const": "claude"}, {"const": "mcp"}, {"const": "add"},
+            {"const": "--transport"}, {"const": "stdio"},
+            {"const": "deeplaw-knowledge"}, {"const": "--"},
+            {"const": "deeplaw"}, {"const": "knowledge"}, {"const": "mcp"},
+            {"const": "--closed-environment"}, {"const": "--stdio"},
+            {"const": "--expected-vault-id"}, {"$ref": "#/$defs/vaultId"},
+            {"const": "--task-binding"}, {"$ref": "#/$defs/argument"}
+          ],
+          "items": false
+        }
+      ]
+    }
+  }
+}

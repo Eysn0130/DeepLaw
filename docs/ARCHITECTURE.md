@@ -477,6 +477,14 @@ The default plugin registers only its read surface. No retrieval operation hides
 build/update/upload/delete/signing never enters a query MCP. An OS process with arbitrary same-owner
 shell access can bypass MCP and must be constrained by the host or a separate OS identity.
 
+Official static and generated Host configurations enter these leaves through the fixed-target
+closed launcher on the existing CLI commands. It creates an isolated HOME/USERPROFILE/XDG/temp
+root, copies only portable process values plus explicit DeepLaw data/task settings, and can dispatch
+only `knowledge_support`, `law_support`, or an owner-granted `knowledge_sink`. Host/provider auth,
+plugin/hook state and credential paths do not enter the child. Host Connect Plan v2 keeps the local
+Vault path outside generated configuration and checks the selected Vault's opaque identity before
+starting the read process.
+
 These isolated processes are deployment and trust boundaries within one governed Knowledge OS.
 They must not evolve into disconnected identity, graph, versioning, or retrieval implementations.
 

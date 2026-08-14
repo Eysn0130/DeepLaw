@@ -6,6 +6,7 @@
       "command": [
         "deeplaw",
         "mcp",
+        "--closed-environment",
         "--stdio"
       ],
       "enabled": true,

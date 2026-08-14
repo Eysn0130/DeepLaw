@@ -676,7 +676,7 @@ def host_bridge_contract(host: HostFrontend) -> dict[str, Any]:
             "host_surface": "official_plugin_api_and_domain_cli",
             "exact_upstream": {
                 "name": "Obsidian",
-                "version": "1.13.1-api",
+                "version": "1.13.2",
                 "commit": "cc1744324150c632416857c98964f87b1574a5fc",
                 "plugin_api_status": "supported",
                 "stable_active_note_preview_promote": False,

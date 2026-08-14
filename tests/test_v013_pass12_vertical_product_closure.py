@@ -238,6 +238,14 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
     assert plan["context_preflight"][
         "caller_confirmation_required_for_future_context"
     ] is True
+    expected_args = [
+        "knowledge",
+        "mcp",
+        "--closed-environment",
+        "--stdio",
+        "--expected-vault-id",
+        plan["vault_id"],
+    ]
 
     assert plan["configuration_kind"] == "codex_direct_config"
     assert plan["configuration_format"] == "toml"
@@ -249,13 +257,7 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
         "mcp_servers": {
             "deeplaw-knowledge": {
                 "command": "deeplaw",
-                "args": [
-                    "knowledge",
-                    "mcp",
-                    "--stdio",
-                    "--vault",
-                    str(vault.resolve()),
-                ],
+                "args": expected_args,
             }
         }
     }
@@ -266,11 +268,7 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
         "deeplaw-knowledge",
         "--",
         "deeplaw",
-        "knowledge",
-        "mcp",
-        "--stdio",
-        "--vault",
-        str(vault.resolve()),
+        *expected_args,
     ]
     assert plan["verification_command"] == ["codex", "mcp", "list"]
     assert plan["codex_plugin_manifest"] == {
@@ -281,13 +279,7 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
             "mcpServers": {
                 "deeplaw-knowledge": {
                     "command": "deeplaw",
-                    "args": [
-                        "knowledge",
-                        "mcp",
-                        "--stdio",
-                        "--vault",
-                        str(vault.resolve()),
-                    ],
+                    "args": expected_args,
                 }
             }
         },
@@ -313,11 +305,7 @@ def test_host_connect_preflight_calls_source_only_context_seam(tmp_path: Path) -
     assert opencode["merge_targets"] == ["opencode.json", "opencode.jsonc"]
     assert opencode["configuration"]["mcp"]["deeplaw_knowledge"]["command"] == [
         "deeplaw",
-        "knowledge",
-        "mcp",
-        "--stdio",
-        "--vault",
-        str(vault.resolve()),
+        *expected_args,
     ]
     assert opencode["configuration"]["permission"] == {
         "*": "deny",
@@ -363,13 +351,13 @@ def test_host_connect_loads_contract_from_installed_package_layout(
 ) -> None:
     installed_module = tmp_path / "site-packages" / "deeplaw" / "host_connect.py"
     packaged_contract = installed_module.parent / "contracts" / (
-        "host-connect-plan.v1.schema.json"
+        "host-connect-plan.v2.schema.json"
     )
     packaged_contract.parent.mkdir(parents=True)
     shutil.copy2(
         Path(__file__).resolve().parents[1]
         / "contracts"
-        / "host-connect-plan.v1.schema.json",
+        / "host-connect-plan.v2.schema.json",
         packaged_contract,
     )
     installed_module.touch()
@@ -377,7 +365,7 @@ def test_host_connect_loads_contract_from_installed_package_layout(
 
     contract = host_connect_module._contract()
 
-    assert contract["$id"].endswith("host-connect-plan.v1.schema.json")
+    assert contract["$id"].endswith("host-connect-plan.v2.schema.json")
 
 
 def test_owner_forget_routes_explicit_asset_knowledge_and_source_targets(

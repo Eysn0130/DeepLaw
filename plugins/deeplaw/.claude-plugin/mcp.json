@@ -4,6 +4,7 @@
       "command": "deeplaw",
       "args": [
         "mcp",
+        "--closed-environment",
         "--stdio"
       ]
     }

@@ -1,8 +1,15 @@
 # DeepLaw PRD 1.3.1 traceability matrix
 
 Status: **current source-candidate mapping**, carried forward from the Pass 5 full mapping and
-updated 2026-08-13 with the Pass 17 native Host receipt and diagnostic boundary.
+updated 2026-08-14 with the Pass 19 Host product-closure current fix.
 This is not a fresh qualification, release note, or permission to implement every Target.
+
+Pass 19 current pointer: the fixed-target production MCP launcher closes the ambient Host/provider
+environment, Host Connect Plan v2 carries only an expected Vault identity plus an optional opaque
+task binding, and a no-model public stdio fixture covers explicit checkpoint/write, exact-route
+read recovery, stale/wrong/ambiguous routes, selective forget, and read-only Ledger invariance.
+These are current-source development regressions, not Human Gold or real-Host qualification. See
+[`V0_13_PASS19_DISPOSITION.md`](V0_13_PASS19_DISPOSITION.md).
 
 Pass 17 current pointer: Host receipt v1 remains historical and invalid for current qualification;
 v2 separates semantic task family, transport/request seam, native request, actual observation,
@@ -398,8 +405,8 @@ omissions. The three prior Wiki skips now execute but remain development-only:
 
 ## Current source-candidate status pointer
 
-Pass 1-15 reports remain immutable evidence snapshots. The latest committed evidence boundary is
-`docs/V0_13_PASS15_DISPOSITION.md`; this matrix and the latest committed pass-specific
+Pass 1-17 reports remain immutable evidence snapshots. The latest committed evidence boundary is
+`docs/V0_13_PASS19_DISPOSITION.md`; this matrix and the latest committed pass-specific
 disposition jointly locate current status. Pass 10's b14 Statement, Codex, and Obsidian artifacts
 are historical candidate evidence: the Statement report fails the current Gold
 byte binding, the Codex environment receipt fails the current child-argv contract, and the Codex

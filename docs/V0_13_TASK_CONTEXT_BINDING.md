@@ -30,9 +30,11 @@ temporal admission rules remain authoritative for access.
   existing rules.
 - Query Plan v6 and local Knowledge Capsule v3 always record either the normalized binding or
   explicit `null`. Their hashes therefore bind the selector used for the read.
-- A working checkpoint is admitted only when the request binding exactly equals its Run Record
-  binding. A request without a binding withholds working checkpoints and returns the bounded
-  `task_binding_required` Gap. A legacy unbound Run is withheld with `task_binding_unbound`.
+- A working checkpoint is admitted only when the request binding resolves the same task route and
+  current base/dirty snapshot as its Run Record. A request without a binding may use only the
+  compatibility path for a unique task-text route; otherwise it returns `task_binding_required` or
+  `task_line_ambiguous`. That compatibility path cannot attest current workspace freshness. A
+  legacy unbound Run is withheld with `task_binding_unbound`.
 - A checkpoint from another valid task line is rejected locally. Its existence, binding, branch,
   base, dirty state, path, and content are not projected as a Provider-visible mismatch Gap.
 - Provider Capsule v2 remains unchanged and receives only admitted bounded context, safe Gap data,
@@ -43,6 +45,12 @@ The binding is accepted by Python retrieval/context, both Knowledge CLI query/co
 and autonomous MCP `query`/`context`. CLI accepts one canonical JSON object through
 `--task-binding`. Explicit Query Plan v4/v5 calls reject a binding; v5 compatibility does not
 silently discard it.
+
+Host Connect Plan v2 can embed the canonical binding in a path-free fixed closed-launcher
+configuration. Static configurations accept the same value as `DEEPLAW_TASK_BINDING`. The launcher
+injects it into omitted MCP `query`/`context` arguments and rejects an attempt to replace the fixed
+binding. It also binds the owner-selected Vault by expected Vault identity while keeping the local
+path outside generated configuration and provider-visible output.
 
 ## Compatibility, migration, and recovery
 

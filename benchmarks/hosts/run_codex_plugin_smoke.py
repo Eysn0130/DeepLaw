@@ -161,9 +161,9 @@ def _load_plugin_specs(repository: Path) -> tuple[PluginSpec, ...]:
         mcp = _json_file(source_root / ".mcp.json", field=f"Codex MCP config {name}")
         expected_server = "deeplaw" if name == "deeplaw" else "deeplaw-knowledge"
         expected_args = (
-            ["mcp", "--stdio"]
+            ["mcp", "--closed-environment", "--stdio"]
             if name == "deeplaw"
-            else ["knowledge", "mcp", "--stdio"]
+            else ["knowledge", "mcp", "--closed-environment", "--stdio"]
         )
         if mcp != {
             "mcpServers": {

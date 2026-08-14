@@ -45,7 +45,7 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
         "mcpServers": {
             "deeplaw-knowledge": {
                 "command": "deeplaw",
-                "args": ["knowledge", "mcp", "--stdio"],
+                "args": ["knowledge", "mcp", "--closed-environment", "--stdio"],
             }
         }
     }
@@ -89,10 +89,10 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
 def test_codex_plugins_use_only_plugin_json_and_root_mcp_configuration() -> None:
     repository = Path(__file__).resolve().parents[1]
     expected = {
-        "deeplaw": ("deeplaw", ["mcp", "--stdio"]),
+        "deeplaw": ("deeplaw", ["mcp", "--closed-environment", "--stdio"]),
         "deeplaw-knowledge-os": (
             "deeplaw-knowledge",
-            ["knowledge", "mcp", "--stdio"],
+            ["knowledge", "mcp", "--closed-environment", "--stdio"],
         ),
     }
     for plugin_name, (server_name, arguments) in expected.items():

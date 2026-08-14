@@ -1974,6 +1974,12 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     sink_mcp.add_argument("--grant-id", required=True)
     sink_mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     sink_mcp.add_argument("--stdio", action="store_true")
+    sink_mcp.add_argument(
+        "--closed-environment",
+        action="store_true",
+        help="Launch the fixed knowledge_sink child with an isolated environment",
+    )
+    sink_mcp.add_argument("--expected-vault-id")
 
     host = subcommands.add_parser(
         "host",
@@ -1990,6 +1996,10 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         required=True,
     )
     host_connect.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    host_connect.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding embedded in the generated launcher",
+    )
 
     mcp = subcommands.add_parser(
         "mcp",
@@ -1998,6 +2008,16 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     mcp.add_argument("--vault", type=Path)
     mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     mcp.add_argument("--stdio", action="store_true")
+    mcp.add_argument(
+        "--closed-environment",
+        action="store_true",
+        help="Launch the fixed knowledge_support child with an isolated environment",
+    )
+    mcp.add_argument("--expected-vault-id")
+    mcp.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding used by read-only query/context calls",
+    )
     _curate_default_help(subcommands)
 
 
@@ -2291,7 +2311,11 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
 
         if args.host_command != "connect":
             raise ValueError(f"unsupported Host action: {args.host_command}")
-        return build_host_connect_plan(host=args.host, vault_path=args.vault)
+        return build_host_connect_plan(
+            host=args.host,
+            vault_path=args.vault,
+            task_binding=_parse_task_binding_argument(args.task_binding),
+        )
     if command == "reconcile":
         args.autonomy_command = "reconcile"
         command = "autonomy"
@@ -2902,6 +2926,16 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     if command == "sink":
         action = args.sink_command
         if action == "mcp":
+            if args.closed_environment:
+                from .closed_mcp_launcher import launch_closed_mcp
+
+                launch_closed_mcp(
+                    surface="knowledge_sink",
+                    vault_path=args.vault,
+                    expected_vault_id=args.expected_vault_id,
+                    grant_id=args.grant_id,
+                )
+                return None
             from .knowledge_sink_mcp_server import run_knowledge_sink_mcp
 
             run_knowledge_sink_mcp(
@@ -3029,11 +3063,25 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             model_root=args.model_root,
         )
     if command == "mcp":
+        task_binding = _parse_task_binding_argument(
+            args.task_binding or os.environ.get("DEEPLAW_TASK_BINDING")
+        )
+        if args.closed_environment:
+            from .closed_mcp_launcher import launch_closed_mcp
+
+            launch_closed_mcp(
+                surface="knowledge_support",
+                vault_path=args.vault,
+                expected_vault_id=args.expected_vault_id,
+                task_binding=task_binding,
+            )
+            return None
         from .knowledge_mcp_server import run_knowledge_mcp
 
         run_knowledge_mcp(
             transport="stdio" if args.stdio else args.transport,
             vault_path=args.vault,
+            default_task_binding=task_binding,
         )
         return None
     if command == "migrate" and args.rollback:

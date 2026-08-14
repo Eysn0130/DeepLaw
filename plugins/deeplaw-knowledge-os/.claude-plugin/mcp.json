@@ -5,6 +5,7 @@
       "args": [
         "knowledge",
         "mcp",
+        "--closed-environment",
         "--stdio"
       ]
     }

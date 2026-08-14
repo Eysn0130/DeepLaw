@@ -285,6 +285,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use stdio transport (explicit alias for host plugin manifests)",
     )
+    mcp.add_argument(
+        "--closed-environment",
+        action="store_true",
+        help="Launch the fixed law_support child with an isolated environment",
+    )
 
     document_engine = commands.add_parser(
         "document-engine",
@@ -574,6 +579,11 @@ def main(argv: list[str] | None = None) -> None:
             )
             return
         if args.command == "mcp":
+            if args.closed_environment:
+                from .closed_mcp_launcher import launch_closed_mcp
+
+                launch_closed_mcp(surface="law_support")
+                return
             run_mcp(transport="stdio" if args.stdio else args.transport)
             return
         if args.command == "document-engine":

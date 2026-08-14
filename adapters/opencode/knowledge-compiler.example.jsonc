@@ -3,7 +3,13 @@
   "mcp": {
     "deeplaw_knowledge": {
       "type": "local",
-      "command": ["deeplaw", "knowledge", "mcp", "--stdio"],
+      "command": [
+        "deeplaw",
+        "knowledge",
+        "mcp",
+        "--closed-environment",
+        "--stdio"
+      ],
       "enabled": true,
       "timeout": 5000
     },
@@ -14,6 +20,7 @@
         "knowledge",
         "sink",
         "mcp",
+        "--closed-environment",
         "--grant-id",
         "<owner-created-compilation-grant-id>",
         "--stdio"

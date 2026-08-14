@@ -140,7 +140,7 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
 
     for host in ("codex", "claude-code", "opencode"):
         plan = build_host_connect_plan(host=host, vault_path=vault)
-        assert plan["schema_version"] == "deeplaw.host-connect-plan/v1"
+        assert plan["schema_version"] == "deeplaw.host-connect-plan/v2"
         assert plan["host"] == host
         assert plan["server_leaf"] == "knowledge_support"
         assert plan["read_only"] is True
@@ -170,7 +170,7 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
         assert store.audit_head == audit_before
 
     schema = json.loads(
-        (REPOSITORY / "contracts/host-connect-plan.v1.schema.json").read_bytes()
+        (REPOSITORY / "contracts/host-connect-plan.v2.schema.json").read_bytes()
     )
     Draft202012Validator.check_schema(schema)
 
