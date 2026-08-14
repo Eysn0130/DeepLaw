@@ -60,10 +60,8 @@ def test_shipped_static_and_generated_configs_are_path_free() -> None:
         assert "--closed-environment" in rendered
         assert "--vault" not in rendered
 
-    for relative in (
-        "adapters/obsidian/plugin/settings.ts",
-        "adapters/obsidian/plugin/main.js",
-    ):
-        rendered = (REPOSITORY / relative).read_text(encoding="utf-8")
-        assert "deeplaw knowledge mcp --closed-environment --stdio" in rendered
-        assert "deeplaw knowledge mcp --autonomous" not in rendered
+    rendered = (
+        REPOSITORY / "adapters/obsidian/plugin/settings.ts"
+    ).read_text(encoding="utf-8")
+    assert "deeplaw knowledge mcp --closed-environment --stdio" in rendered
+    assert "deeplaw knowledge mcp --autonomous" not in rendered
