@@ -87,25 +87,6 @@ def test_default_or_ambient_profile_roots_are_rejected(
         qualification._validate_profile_root(ambient, repository=repository)
 
 
-@pytest.mark.parametrize("ambient_name", ["path.home", "HOME", "USERPROFILE", "CODEX_HOME"])
-def test_profile_below_ambient_root_is_rejected(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    ambient_name: str,
-) -> None:
-    ambient = tmp_path / ambient_name.lower().replace(".", "-")
-    profile = ambient / "qualification-profile"
-    profile.mkdir(parents=True)
-    repository = tmp_path / "repository"
-    repository.mkdir()
-    if ambient_name == "path.home":
-        monkeypatch.setattr(Path, "home", classmethod(lambda cls: ambient))
-    else:
-        monkeypatch.setenv(ambient_name, str(ambient))
-    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
-        qualification._validate_profile_root(profile, repository=repository)
-
-
 def test_default_codex_home_is_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     default_codex = home / ".codex"
@@ -116,6 +97,35 @@ def test_default_codex_home_is_rejected(monkeypatch: pytest.MonkeyPatch, tmp_pat
     repository.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
+    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
+        qualification._validate_profile_root(default_codex, repository=repository)
+
+
+@pytest.mark.parametrize("default_codex", [False, True])
+def test_path_home_and_its_default_codex_home_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    default_codex: bool,
+) -> None:
+    platform_home = tmp_path / "platform-home"
+    candidate = platform_home / ".codex" if default_codex else platform_home
+    candidate.mkdir(parents=True)
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
+    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
+        qualification._validate_profile_root(candidate, repository=repository)
+
+
+def test_userprofile_default_codex_home_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    userprofile = tmp_path / "userprofile"
+    default_codex = userprofile / ".codex"
+    default_codex.mkdir(parents=True)
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    monkeypatch.setenv("USERPROFILE", str(userprofile))
     with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
         qualification._validate_profile_root(default_codex, repository=repository)
 

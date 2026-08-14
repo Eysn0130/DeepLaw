@@ -221,7 +221,7 @@ def _validate_profile_root(
         candidate_path = _resolved_path(codex_home)
         if candidate_path is not None:
             ambient_paths.add(candidate_path)
-    if any(resolved == ambient or ambient in resolved.parents for ambient in ambient_paths):
+    if resolved in ambient_paths:
         raise QualificationFailure(
             "Codex qualification profile root must differ from ambient HOME/CODEX_HOME"
         )
