@@ -206,15 +206,22 @@ def _validate_profile_root(
     ambient_paths: set[Path] = set()
     for candidate in (
         Path.home(),
-        Path.home() / ".codex",
         os.environ.get("HOME"),
-        os.environ.get("CODEX_HOME"),
+        os.environ.get("USERPROFILE"),
     ):
         if candidate:
             candidate_path = _resolved_path(candidate)
             if candidate_path is not None:
                 ambient_paths.add(candidate_path)
-    if resolved in ambient_paths:
+                default_codex_path = _resolved_path(candidate_path / ".codex")
+                if default_codex_path is not None:
+                    ambient_paths.add(default_codex_path)
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        candidate_path = _resolved_path(codex_home)
+        if candidate_path is not None:
+            ambient_paths.add(candidate_path)
+    if any(resolved == ambient or ambient in resolved.parents for ambient in ambient_paths):
         raise QualificationFailure(
             "Codex qualification profile root must differ from ambient HOME/CODEX_HOME"
         )

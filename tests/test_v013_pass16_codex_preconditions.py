@@ -72,7 +72,7 @@ def test_missing_external_human_gold_blocks_before_candidate_or_codex_start(
     assert called is False
 
 
-@pytest.mark.parametrize("ambient_name", ["HOME", "CODEX_HOME"])
+@pytest.mark.parametrize("ambient_name", ["HOME", "USERPROFILE", "CODEX_HOME"])
 def test_default_or_ambient_profile_roots_are_rejected(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -87,15 +87,58 @@ def test_default_or_ambient_profile_roots_are_rejected(
         qualification._validate_profile_root(ambient, repository=repository)
 
 
+@pytest.mark.parametrize("ambient_name", ["path.home", "HOME", "USERPROFILE", "CODEX_HOME"])
+def test_profile_below_ambient_root_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    ambient_name: str,
+) -> None:
+    ambient = tmp_path / ambient_name.lower().replace(".", "-")
+    profile = ambient / "qualification-profile"
+    profile.mkdir(parents=True)
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    if ambient_name == "path.home":
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: ambient))
+    else:
+        monkeypatch.setenv(ambient_name, str(ambient))
+    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
+        qualification._validate_profile_root(profile, repository=repository)
+
+
 def test_default_codex_home_is_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     default_codex = home / ".codex"
     default_codex.mkdir(parents=True)
+    platform_home = tmp_path / "platform-home"
+    platform_home.mkdir()
     repository = tmp_path / "repository"
     repository.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
     with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
         qualification._validate_profile_root(default_codex, repository=repository)
+
+
+def test_default_codex_home_symlink_target_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    default_codex_target = tmp_path / "ambient-codex"
+    default_codex_target.mkdir()
+    try:
+        (home / ".codex").symlink_to(default_codex_target, target_is_directory=True)
+    except OSError:
+        pytest.skip("symbolic links are unavailable")
+    platform_home = tmp_path / "platform-home"
+    platform_home.mkdir()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
+    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
+        qualification._validate_profile_root(default_codex_target, repository=repository)
 
 
 def test_profile_inside_repository_is_rejected(tmp_path: Path) -> None:
