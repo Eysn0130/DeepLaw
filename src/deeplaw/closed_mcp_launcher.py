@@ -14,6 +14,7 @@ from typing import Literal
 
 from .host_runtime import (
     closed_mcp_surface,
+    observed_knowledge_vault_id,
     resolve_knowledge_vault,
     safe_existing_path,
 )
@@ -98,10 +99,7 @@ def closed_mcp_environment(
         )
         explicit = {"DEEPLAW_KNOWLEDGE_VAULT": str(selected_vault)}
         if (selected_vault / "vault.json").is_file():
-            from .knowledge_store import KnowledgeVault
-
-            with KnowledgeVault(selected_vault, read_only=True) as store:
-                child_expected_vault_id = store.vault_id
+            child_expected_vault_id = observed_knowledge_vault_id(selected_vault)
     else:
         if vault_path is not None or expected_vault_id is not None:
             raise ValueError("law_support does not accept a Knowledge Vault argument")

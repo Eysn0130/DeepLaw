@@ -285,6 +285,43 @@ def test_closed_launcher_revalidates_expected_vault_identity_in_child(
     assert observed[-2:] == ["--expected-vault-id", expected_vault_id]
 
 
+def test_closed_launcher_observes_vault_identity_without_opening_sqlite(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deeplaw import host_runtime, knowledge_store
+    from deeplaw.closed_mcp_launcher import closed_mcp_environment
+    from deeplaw.knowledge_autonomy import initialize_autonomous_core
+    from deeplaw.knowledge_store import initialize_knowledge_vault
+
+    vault = tmp_path / "vault"
+    initialized = initialize_knowledge_vault(
+        vault,
+        name="manifest-only-identity",
+        scope="project",
+    )
+    initialize_autonomous_core(vault)
+
+    class ForbiddenKnowledgeVault:
+        def __init__(self, *_: object, **__: object) -> None:
+            raise AssertionError("Host identity observation must not open SQLite")
+
+    monkeypatch.setattr(
+        host_runtime,
+        "KnowledgeVault",
+        ForbiddenKnowledgeVault,
+        raising=False,
+    )
+    monkeypatch.setattr(knowledge_store, "KnowledgeVault", ForbiddenKnowledgeVault)
+
+    with closed_mcp_environment(
+        surface="knowledge_support",
+        vault_path=vault,
+        expected_vault_id=str(initialized["vault_id"]),
+    ) as launch:
+        assert launch.expected_vault_id == initialized["vault_id"]
+
+
 def test_owner_local_vault_binding_resolves_custom_vault_without_host_path(
     tmp_path: Path,
 ) -> None:

@@ -10,7 +10,7 @@ from typing import Any, Literal, cast
 
 from .knowledge_autonomy import _atomic_owner_write
 from .knowledge_maintenance import knowledge_vault_permission_report
-from .knowledge_store import KnowledgeVault, default_knowledge_vault
+from .knowledge_store import _load_manifest, default_knowledge_vault
 from .store import default_home
 from .task_context import normalize_task_context_binding
 from .util import canonical_json, sha256_bytes, strict_json_loads
@@ -117,10 +117,11 @@ def _validate_empty_discovery_directory(vault: Path) -> None:
         raise RuntimeError("selected Knowledge Vault owner or permissions are unsafe")
 
 
-def _observed_vault_id(vault: Path) -> str:
+def observed_knowledge_vault_id(vault: Path) -> str:
+    """Read the protected manifest identity without opening SQLite sidecars."""
+
     try:
-        with KnowledgeVault(vault, read_only=True) as store:
-            return store.vault_id
+        return cast(str, _load_manifest(vault)["vault_id"])
     except Exception:
         raise RuntimeError("selected Knowledge Vault is invalid") from None
 
@@ -191,7 +192,7 @@ def bind_owner_vault(
         owner_home=owner_home,
         use_owner_binding=False,
     )
-    vault_id = _observed_vault_id(selected)
+    vault_id = observed_knowledge_vault_id(selected)
     bindings = _load_owner_bindings(owner_home)
     entries = dict(bindings["bindings"])
     if vault_id not in entries and len(entries) >= _MAX_BINDINGS:
@@ -248,7 +249,7 @@ def resolve_knowledge_vault(
             _validate_empty_discovery_directory(selected)
             return selected
         _validate_vault_security(selected)
-        observed_vault_id = _observed_vault_id(selected)
+        observed_vault_id = observed_knowledge_vault_id(selected)
         if expected_vault_id is not None and observed_vault_id != expected_vault_id:
             raise RuntimeError("selected Knowledge Vault identity does not match")
     return selected
@@ -322,6 +323,7 @@ __all__ = [
     "bind_owner_vault",
     "build_closed_mcp_argv",
     "closed_mcp_surface",
+    "observed_knowledge_vault_id",
     "resolve_knowledge_vault",
     "safe_directory_path",
     "safe_existing_path",
