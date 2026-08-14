@@ -3,11 +3,15 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from deeplaw import knowledge_store, windows_acl
-from deeplaw.knowledge_autonomy import initialize_autonomous_core
+from deeplaw.knowledge_autonomy import (
+    AutonomousKnowledgeStore,
+    initialize_autonomous_core,
+)
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import (
     KnowledgeVault,
@@ -45,6 +49,79 @@ def test_windows_acl_prefers_the_matching_pwsh_runtime(
 
     assert windows_acl._powershell() == "C:\\tools\\pwsh.exe"
     assert observed == ["pwsh.exe"]
+
+
+def test_windows_acl_uses_the_fixed_system_powershell_when_path_is_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = (
+        tmp_path
+        / "System32"
+        / "WindowsPowerShell"
+        / "v1.0"
+        / "powershell.exe"
+    )
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"fixed-system-powershell")
+    monkeypatch.setattr(windows_acl.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("SYSTEMROOT", str(tmp_path))
+    monkeypatch.delenv("WINDIR", raising=False)
+
+    assert windows_acl._powershell() == str(executable)
+
+
+def test_read_only_stores_harden_only_their_sqlite_sidecars_on_close(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="windows-read-sidecars", scope="project")
+    initialize_autonomous_core(root)
+    observed: list[Path] = []
+    monkeypatch.setattr(
+        windows_acl,
+        "harden_windows_sqlite_sidecars",
+        lambda database, **_kwargs: observed.append(Path(database)),
+    )
+
+    with KnowledgeVault(root, read_only=True):
+        pass
+    with AutonomousKnowledgeStore(root, read_only=True):
+        pass
+
+    assert observed == [
+        root / ".deeplaw" / "ledger.sqlite3",
+        root / ".deeplaw" / "ledger.sqlite3",
+        root / ".deeplaw" / "ledger.sqlite3",
+    ]
+
+
+def test_sqlite_sidecar_hardening_targets_only_new_file_identities(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "ledger.sqlite3"
+    wal = Path(f"{database}-wal")
+    shm = Path(f"{database}-shm")
+    wal.write_bytes(b"existing-safe-sidecar")
+    wal_info = wal.lstat()
+    previous = {"-wal": (int(wal_info.st_dev), int(wal_info.st_ino))}
+    shm.write_bytes(b"new-sidecar")
+    observed: list[Path] = []
+    monkeypatch.setattr(windows_acl, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        windows_acl,
+        "harden_windows_private_file",
+        lambda path: observed.append(Path(path)),
+    )
+
+    windows_acl.harden_windows_sqlite_sidecars(
+        database,
+        previous_identities=previous,
+    )
+
+    assert observed == [shm]
 
 
 def test_windows_acl_evaluator_requires_owner_only_native_acl() -> None:

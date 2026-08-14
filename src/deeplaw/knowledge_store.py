@@ -1066,6 +1066,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     )
         self.database = database
         self.read_only = read_only
+        if read_only:
+            from .windows_acl import windows_sqlite_sidecar_identities
+
+            self._opened_sqlite_sidecars = windows_sqlite_sidecar_identities(database)
         self._opened_database_fingerprint = self._database_file_fingerprint()
         self._integrity_cache_key: tuple[Any, ...] | None = None
         self._integrity_cache_value: dict[str, Any] | None = None
@@ -1100,7 +1104,14 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
 
     def close(self) -> None:
         self.connection.close()
-        if not self.read_only:
+        if self.read_only:
+            from .windows_acl import harden_windows_sqlite_sidecars
+
+            harden_windows_sqlite_sidecars(
+                self.database,
+                previous_identities=self._opened_sqlite_sidecars,
+            )
+        else:
             _harden_vault_after_write_if_windows(self.root)
 
     @property

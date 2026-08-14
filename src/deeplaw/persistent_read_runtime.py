@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import sqlite3
 import stat
@@ -27,14 +26,9 @@ _MAX_WIKI_PAGE_BYTES = 256 * 1024
 def _harden_windows_sqlite_read_sidecars(database: Path) -> None:
     """Keep WAL read sidecars inside the Vault's native ACL boundary."""
 
-    if os.name != "nt":
-        return
-    from .windows_acl import harden_windows_private_file
+    from .windows_acl import harden_windows_sqlite_sidecars
 
-    for suffix in ("-wal", "-shm"):
-        sidecar = Path(f"{database}{suffix}")
-        if sidecar.exists() or sidecar.is_symlink():
-            harden_windows_private_file(sidecar)
+    harden_windows_sqlite_sidecars(database)
 
 
 def _immutable(value: Any) -> Any:

@@ -489,7 +489,7 @@ Path("mcp-environment-receipt.json").write_text(
     json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
     encoding="utf-8",
 )
-os.execv("runtime/bin/deeplaw", child_argv)
+os.execv(sys.executable, [sys.executable, *child_argv])
 '''
 
 

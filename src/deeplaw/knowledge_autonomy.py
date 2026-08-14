@@ -2315,6 +2315,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
         self.database = _database_path(self.root)
         if read_only:
+            from .windows_acl import windows_sqlite_sidecar_identities
+
+            self._opened_sqlite_sidecars = windows_sqlite_sidecar_identities(
+                self.database
+            )
+        if read_only:
             self.connection = sqlite3.connect(
                 f"{self.database.as_uri()}?mode=ro",
                 uri=True,
@@ -2367,7 +2373,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
     def close(self) -> None:
         self.connection.close()
-        if self._windows_acl_refresh_required and os.name == "nt":
+        if self.read_only:
+            from .windows_acl import harden_windows_sqlite_sidecars
+
+            harden_windows_sqlite_sidecars(
+                self.database,
+                previous_identities=self._opened_sqlite_sidecars,
+            )
+        elif self._windows_acl_refresh_required and os.name == "nt":
             self._windows_acl_refresh_required = False
             from .windows_acl import harden_windows_vault
 

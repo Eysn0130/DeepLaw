@@ -113,8 +113,65 @@ foreach ($item in $items) {
 def _powershell() -> str:
     executable = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
     if executable is None:
+        system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+        if system_root:
+            candidate = (
+                Path(system_root)
+                / "System32"
+                / "WindowsPowerShell"
+                / "v1.0"
+                / "powershell.exe"
+            )
+            if candidate.is_file() and not candidate.is_symlink():
+                executable = str(candidate)
+    if executable is None:
         raise RuntimeError("native Windows ACL verification requires PowerShell")
     return executable
+
+
+def windows_sqlite_sidecar_identities(
+    database: str | Path,
+) -> dict[str, tuple[int, int]]:
+    """Capture safe SQLite sidecar identities without opening their contents."""
+
+    if os.name != "nt":
+        return {}
+    selected = Path(database).expanduser().absolute()
+    identities: dict[str, tuple[int, int]] = {}
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{selected}{suffix}")
+        try:
+            info = sidecar.lstat()
+        except FileNotFoundError:
+            continue
+        if sidecar.is_symlink() or not sidecar.is_file():
+            continue
+        identities[suffix] = (int(info.st_dev), int(info.st_ino))
+    return identities
+
+
+def harden_windows_sqlite_sidecars(
+    database: str | Path,
+    *,
+    previous_identities: dict[str, tuple[int, int]] | None = None,
+) -> None:
+    """Keep SQLite-generated read sidecars inside the database ACL boundary."""
+
+    if os.name != "nt":
+        return
+    selected = Path(database).expanduser().absolute()
+    current_identities = windows_sqlite_sidecar_identities(selected)
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{selected}{suffix}")
+        current_identity = current_identities.get(suffix)
+        if (
+            sidecar.exists() or sidecar.is_symlink()
+        ) and (
+            previous_identities is None
+            or current_identity is None
+            or previous_identities.get(suffix) != current_identity
+        ):
+            harden_windows_private_file(sidecar)
 
 
 def _run_encoded_script(script: str, *, environment: dict[str, str]) -> dict[str, Any]:
