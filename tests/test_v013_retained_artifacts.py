@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -61,6 +62,30 @@ def test_retained_manifest_binds_candidate_tree_lock_wheel_and_sdist(
     assert set(manifest["wheel"]) == {"filename", "sha256", "bytes"}
     assert set(manifest["sdist"]) == {"filename", "sha256", "bytes"}
     assert all("/" not in item["filename"] for item in (manifest["wheel"], manifest["sdist"]))
+
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks/release/retained_artifact_manifest.py"
+    )
+    isolated = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            str(script),
+            "--repository",
+            str(repository),
+            "--dist",
+            str(dist),
+            "--output",
+            str(manifest_path),
+            "--verify",
+        ],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert isolated.returncode == 0, isolated.stderr
 
     wheel.write_bytes(b"changed wheel bytes")
     with pytest.raises(RuntimeError, match="hashes do not match"):

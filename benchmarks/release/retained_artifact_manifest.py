@@ -4,13 +4,35 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
 
-from deeplaw.util import canonical_json, strict_json_loads
-
 SCHEMA_VERSION = "deeplaw.retained-candidate-artifacts/v1"
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("retained artifact manifest contains a duplicate key")
+        value[key] = item
+    return value
+
+
+def _strict_json_loads(payload: str) -> Any:
+    return json.loads(payload, object_pairs_hook=_strict_json_object)
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -73,7 +95,7 @@ def build_manifest(*, repository: Path, dist: Path) -> dict[str, Any]:
 def verify_manifest(
     *, repository: Path, dist: Path, manifest_path: Path
 ) -> dict[str, Any]:
-    manifest = strict_json_loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = _strict_json_loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise RuntimeError("retained artifact manifest must be an object")
     expected = build_manifest(repository=repository, dist=dist)
@@ -101,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         manifest = build_manifest(repository=args.repository, dist=args.dist)
-        args.output.write_text(canonical_json(manifest) + "\n", encoding="utf-8")
+        args.output.write_text(_canonical_json(manifest) + "\n", encoding="utf-8")
     return 0
 
 
