@@ -2314,7 +2314,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     manifest_scope if manifest_scope in SCOPES else "project",
                 )
         self.database = _database_path(self.root)
-        if read_only:
+        self._opened_sqlite_sidecars: dict[str, tuple[int, int]] = {}
+        if os.name == "nt":
             from .windows_acl import windows_sqlite_sidecar_identities
 
             self._opened_sqlite_sidecars = windows_sqlite_sidecar_identities(
@@ -2373,18 +2374,22 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
     def close(self) -> None:
         self.connection.close()
-        if self.read_only:
+        if (
+            not self.read_only
+            and self._windows_acl_refresh_required
+            and os.name == "nt"
+        ):
+            self._windows_acl_refresh_required = False
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(self.root)
+        else:
             from .windows_acl import harden_windows_sqlite_sidecars
 
             harden_windows_sqlite_sidecars(
                 self.database,
                 previous_identities=self._opened_sqlite_sidecars,
             )
-        elif self._windows_acl_refresh_required and os.name == "nt":
-            self._windows_acl_refresh_required = False
-            from .windows_acl import harden_windows_vault
-
-            harden_windows_vault(self.root)
 
     @property
     def audit_head(self) -> str:
