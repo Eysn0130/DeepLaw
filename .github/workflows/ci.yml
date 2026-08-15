@@ -15,17 +15,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-integrity:
+    name: Candidate source integrity and inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Verify source and candidate inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv sync --frozen --extra dev --extra discovery
+          uv run --frozen ruff check .
+          git diff --check
+          uv run --frozen python -m benchmarks.release.platform_inventory \
+            --mode candidate \
+            --selection common \
+            --output "${RUNNER_TEMP}/candidate-current-source-inventory.json"
+
+      - name: Upload candidate source inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-current-source-inventory
+          if-no-files-found: error
+          path: ${{ runner.temp }}/candidate-current-source-inventory.json
+
   test:
     name: Candidate current-source regression ${{ matrix.os }} Python ${{ matrix.python-version }}
+    needs: source-integrity
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 240
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         os:
           - ubuntu-latest
           - macos-latest
-          - windows-latest
         python-version:
           - "3.11"
           - "3.12"
@@ -45,125 +84,33 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Check lockfile
-        run: uv lock --check
-
       - name: Install dependencies
         run: uv sync --frozen --extra dev --extra discovery
 
-      - name: Lint
-        run: uv run --frozen ruff check .
-
-      - name: Windows closed-environment preflight
-        if: runner.os == 'Windows'
-        run: >-
-          uv run --frozen pytest --strict-markers -vv --maxfail=1
-          tests/test_prd12_goal_route_identity_reproduction.py::test_prd12_goal_is_retrieval_only_and_not_route_identity
-          tests/test_prd12_task_routing_reproduction.py::test_p0c_cli_cold_thread_task_text_only_recovery
-          tests/test_v013_runtime_stability.py::test_runtime_stability_smoke_is_schema_bound_and_read_only
-          tests/test_v013_pass12_vertical_product_closure.py::test_host_connect_preflight_calls_source_only_context_seam
-          tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest
-          tests/test_windows_acl.py::test_host_connect_and_launcher_reject_junction_ancestor
-
       - name: Candidate current-source regression (not release readiness)
+        id: regression
+        continue-on-error: true
         shell: bash
         env:
           JUNIT_PATH: ${{ runner.temp }}/candidate-tests.xml
-          SKIP_RECEIPT_PATH: ${{ runner.temp }}/candidate-skip-receipt.json
-          INVENTORY_RECEIPT_PATH: ${{ runner.temp }}/candidate-current-source-inventory.json
-          MATRIX_OS: ${{ matrix.os }}
-          MATRIX_PYTHON: ${{ matrix.python-version }}
           PYTHONUTF8: "1"
         run: |
           set -euo pipefail
           uv run --frozen pytest --strict-markers --junitxml="${JUNIT_PATH}"
-          uv run --frozen python - "${JUNIT_PATH}" "${SKIP_RECEIPT_PATH}" <<'PY'
-          import json
-          import os
-          import pathlib
-          import sys
-          import xml.etree.ElementTree as ET
 
-          junit_path = pathlib.Path(sys.argv[1])
-          receipt_path = pathlib.Path(sys.argv[2])
-          manifest = json.loads(
-              pathlib.Path("benchmarks/release/platform-core-test-manifest-v1.json")
-              .read_text(encoding="utf-8")
-          )
-          def identities(cases):
-              return {
-                  (case["junit"]["classname"], case["junit"]["name"])
-                  for case in cases
-              }
-          qualification = identities(manifest["classifications"]["qualification"]["cases"])
-          nonapplicable = identities(manifest["classifications"]["nonapplicable"]["cases"])
-          historical_compatibility = identities(
-              manifest["classifications"]["historical_compatibility"]["cases"]
-          )
-          root = ET.parse(junit_path).getroot()
-          actual_python = f"{sys.version_info.major}.{sys.version_info.minor}"
-          expected_python = os.environ["MATRIX_PYTHON"]
-          if actual_python != expected_python:
-              raise SystemExit(
-                  f"matrix Python mismatch: expected {expected_python}, got {actual_python}"
-              )
-          skipped = []
-          for case in root.findall(".//testcase"):
-              if case.find("skipped") is not None:
-                  skipped.append((case.attrib.get("classname", ""), case.attrib.get("name", "")))
-          unclassified = sorted(
-              set(skipped) - qualification - nonapplicable - historical_compatibility
-          )
-          if unclassified:
-              raise SystemExit(f"unclassified candidate skips: {unclassified[:8]}")
-          suites = root.findall(".//testsuite")
-          receipt = {
-              "schema_version": "deeplaw.platform-candidate-regression-receipt/v1",
-              "status": "current_source_regression",
-              "release_ready": False,
-              "environment": {
-                  "matrix_os": os.environ["MATRIX_OS"],
-                  "matrix_python": os.environ["MATRIX_PYTHON"],
-                  "python_version": sys.version,
-              },
-              "test_manifest": {
-                  "schema_version": manifest["schema_version"],
-                  "manifest_sha256": manifest["manifest_sha256"],
-              },
-              "junit": {
-                  "tests": sum(int(suite.attrib.get("tests", "0")) for suite in suites),
-                  "failures": sum(int(suite.attrib.get("failures", "0")) for suite in suites),
-                  "errors": sum(int(suite.attrib.get("errors", "0")) for suite in suites),
-                  "skipped": len(skipped),
-              },
-              "qualification": {
-                  "status": "not_executed",
-                  "skipped": sum(identity in qualification for identity in skipped),
-              },
-              "nonapplicable": {
-                  "status": "nonapplicable",
-                  "skipped": sum(identity in nonapplicable for identity in skipped),
-              },
-              "historical_compatibility": {
-                  "status": "not_executed",
-                  "skipped": sum(
-                      identity in historical_compatibility for identity in skipped
-                  ),
-              },
-          }
-          receipt_path.write_text(
-              json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-              encoding="utf-8",
-          )
-          PY
-          # Candidate inventory is evidence only.  Drift is retained in the
-          # receipt and cannot become a Platform Core release pass.
-          uv run --frozen python -m benchmarks.release.platform_inventory \
-            --mode candidate \
-            --selection common \
-            --output "${INVENTORY_RECEIPT_PATH}"
+      - name: Build candidate regression receipt
+        if: always()
+        shell: bash
+        run: >-
+          uv run --frozen python -m benchmarks.release.candidate_regression
+          receipt
+          --junit "${{ runner.temp }}/candidate-tests.xml"
+          --output "${{ runner.temp }}/candidate-skip-receipt.json"
+          --matrix-os "${{ matrix.os }}"
+          --matrix-python "${{ matrix.python-version }}"
 
       - name: Upload candidate regression receipt
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: candidate-regression-${{ matrix.os }}-${{ matrix.python-version }}
@@ -171,7 +118,10 @@ jobs:
           path: |
             ${{ runner.temp }}/candidate-tests.xml
             ${{ runner.temp }}/candidate-skip-receipt.json
-            ${{ runner.temp }}/candidate-current-source-inventory.json
+
+      - name: Enforce candidate regression result
+        if: steps.regression.outcome != 'success'
+        run: exit 1
 
       - name: Build distribution
         run: uv build --build-constraints benchmarks/release/build-constraints.txt
@@ -179,8 +129,147 @@ jobs:
       - name: Verify fresh wheel lifecycle
         run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
 
-      - name: Check patch whitespace
-        run: git diff --check
+  windows-test:
+    name: Candidate current-source regression windows-latest Python ${{ matrix.python-version }} shard ${{ matrix.shard }} of 3
+    needs:
+      - source-integrity
+      - windows-sentinel
+    runs-on: windows-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+        shard:
+          - 1
+          - 2
+          - 3
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev --extra discovery
+
+      - name: Select deterministic Windows test shard
+        shell: bash
+        run: >-
+          uv run --frozen python -m benchmarks.release.candidate_regression
+          select
+          --shard-count 3
+          --shard-index "${{ matrix.shard }}"
+          --output "${{ runner.temp }}/candidate-test-shard.json"
+          > "${{ runner.temp }}/candidate-test-files.txt"
+
+      - name: Candidate Windows shard (not release readiness)
+        id: regression
+        continue-on-error: true
+        shell: bash
+        env:
+          JUNIT_PATH: ${{ runner.temp }}/candidate-tests.xml
+          TEST_FILES_PATH: ${{ runner.temp }}/candidate-test-files.txt
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < "${TEST_FILES_PATH}"
+          test "${#test_files[@]}" -gt 0
+          uv run --frozen pytest --strict-markers \
+            --junitxml="${JUNIT_PATH}" "${test_files[@]}"
+
+      - name: Build Windows shard receipt
+        if: always()
+        shell: bash
+        run: >-
+          uv run --frozen python -m benchmarks.release.candidate_regression
+          receipt
+          --junit "${{ runner.temp }}/candidate-tests.xml"
+          --output "${{ runner.temp }}/candidate-skip-receipt.json"
+          --matrix-os windows-latest
+          --matrix-python "${{ matrix.python-version }}"
+          --shard-manifest "${{ runner.temp }}/candidate-test-shard.json"
+
+      - name: Upload Windows shard receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-regression-windows-latest-${{ matrix.python-version }}-shard-${{ matrix.shard }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/candidate-tests.xml
+            ${{ runner.temp }}/candidate-skip-receipt.json
+            ${{ runner.temp }}/candidate-test-shard.json
+
+      - name: Enforce Windows shard result
+        if: steps.regression.outcome != 'success'
+        run: exit 1
+
+      - name: Build distribution once per Windows Python
+        if: matrix.shard == 1
+        run: uv build --build-constraints benchmarks/release/build-constraints.txt
+
+      - name: Verify fresh wheel lifecycle once per Windows Python
+        if: matrix.shard == 1
+        run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
+
+  windows-regression-aggregate:
+    name: Aggregate Windows Python ${{ matrix.python-version }} regression shards
+    needs: windows-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download exact Windows shard receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: candidate-regression-windows-latest-${{ matrix.python-version }}-shard-*
+          path: ${{ runner.temp }}/windows-shards
+
+      - name: Verify complete disjoint Windows coverage
+        run: >-
+          python -m benchmarks.release.candidate_regression
+          aggregate
+          --input-directory "${{ runner.temp }}/windows-shards"
+          --matrix-python "${{ matrix.python-version }}"
+          --output "${{ runner.temp }}/candidate-windows-aggregate.json"
+
+      - name: Upload Windows aggregate receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-regression-windows-latest-${{ matrix.python-version }}
+          if-no-files-found: error
+          path: ${{ runner.temp }}/candidate-windows-aggregate.json
 
   candidate-distributions:
     name: Retain exact candidate wheel and sdist
@@ -338,16 +427,11 @@ jobs:
             ${{ runner.temp }}/installed-licenses.json
             ${{ runner.temp }}/reproducible-build.json
 
-  cross-platform-smoke:
-    name: ${{ matrix.os }} smoke
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - macos-latest
-          - windows-latest
+  windows-sentinel:
+    name: Windows Host, ACL, continuity, and projection sentinel
+    needs: source-integrity
+    runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -368,7 +452,7 @@ jobs:
 
       - name: Run CLI and MCP smoke tests
         run: >-
-          uv run --frozen pytest
+          uv run --frozen pytest --strict-markers -vv --maxfail=1
           tests/test_golden_cli.py
           tests/test_knowledge_cli_acceptance.py
           tests/test_knowledge_control.py
@@ -377,9 +461,5 @@ jobs:
           tests/test_mcp_cli.py
           tests/test_operator_workbench.py
           tests/test_windows_acl.py
-
-      - name: Build distribution
-        run: uv build --build-constraints benchmarks/release/build-constraints.txt
-
-      - name: Verify fresh wheel lifecycle
-        run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
+          tests/test_v013_task_continuity_driver.py
+          tests/test_v013_projection_recovery.py::test_symlinked_projection_ancestor_fails_closed

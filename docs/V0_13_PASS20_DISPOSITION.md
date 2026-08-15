@@ -67,6 +67,14 @@ manifest, install that exact wheel into a fresh environment, and execute the pro
 initialize/`tools/list`/bounded Context lifecycle. This is retained-artifact and no-model MCP
 evidence only, not Host/model qualification.
 
+Current-source CI keeps Linux and macOS on the full Python 3.11/3.12/3.13 matrix. Windows runs the
+same tracked `tests/test_*.py` modules on all three Python versions in three deterministic,
+non-overlapping shards per version. A separate aggregate gate recomputes the shard assignment from
+the exact checkout and rejects missing, duplicate, drifted, failed or differently classified
+receipts. The Windows sentinel runs the Host, ACL, task-continuity and projection fail-closed seams
+before starting those shards. This changes scheduling and diagnostic latency only; it does not
+replace native Windows behavior with a mock or reduce the retained test-module set.
+
 Remaining gates include repository-external Human Gold, real Codex/OpenCode model qualification,
 Legal Pack qualification, human Living Wiki tasks, 1k/10k/100k Wiki/Relation scale, final blind
 review, signing and publication. No RC/GA, parity, superiority or complete-validation claim is

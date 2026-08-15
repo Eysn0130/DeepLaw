@@ -296,7 +296,7 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
     exact_ci_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
     assert commercial.count(exact_commercial_ref) == 7
     assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
-    assert ci.count(exact_ci_ref) == 5
+    assert ci.count(exact_ci_ref) == 8
     assert "  pull_request:" not in commercial
     assert "qualification and not windows_native" in commercial
     assert 'marker: not qualification' in commercial
@@ -309,10 +309,14 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
 
     assert "current-source regression" in ci
     assert "runs-on: ${{ matrix.os }}" in ci
-    assert "    timeout-minutes: 240" in ci
+    assert "timeout-minutes: 240" not in ci
+    assert "timeout-minutes: 150" in ci
     assert all(system in ci for system in ("ubuntu-latest", "macos-latest", "windows-latest"))
     assert all(version in ci for version in ('"3.11"', '"3.12"', '"3.13"'))
     assert "fail-fast: false" in ci
+    assert "shard ${{ matrix.shard }} of 3" in ci
+    assert "benchmarks.release.candidate_regression" in ci
+    assert "Verify complete disjoint Windows coverage" in ci
     assert "candidate-skip-receipt.json" in ci
     assert "candidate-current-source-inventory.json" in ci
     assert "benchmarks.release.platform_inventory" in ci
