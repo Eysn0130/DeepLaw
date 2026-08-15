@@ -83,11 +83,18 @@ def test_symlinked_projection_ancestor_fails_closed(tmp_path: Path) -> None:
         _seed(store)
         outside = tmp_path / "outside"
         outside.mkdir()
-        (root / "wiki").rename(root / "wiki-original")
-        (root / "wiki").symlink_to(outside, target_is_directory=True)
-        with pytest.raises(RuntimeError, match=r"unsafe|symbolic"):
-            rebuild_living_wiki(store)
-        assert not list(outside.iterdir())
+        wiki = root / "wiki"
+        original_wiki = root / "wiki-original"
+        wiki.rename(original_wiki)
+        try:
+            wiki.symlink_to(outside, target_is_directory=True)
+            with pytest.raises(RuntimeError, match=r"unsafe|symbolic"):
+                rebuild_living_wiki(store)
+            assert not list(outside.iterdir())
+        finally:
+            if wiki.is_symlink():
+                wiki.unlink()
+            original_wiki.rename(wiki)
 
 
 def test_tampered_prepare_journal_refuses_recovery(tmp_path: Path) -> None:
