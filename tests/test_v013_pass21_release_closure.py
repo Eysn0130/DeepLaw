@@ -76,8 +76,8 @@ def test_gate_v6_is_active_timeline_is_core_and_validators_are_ready() -> None:
 
     assert classification_path == release_policy.V013_ACTIVE_CLASSIFICATION_PATH
     assert classification["assembly_policy"] == {
-        "assembly_enabled": True,
-        "reason_code": "all_core_validators_ready",
+        "assembly_enabled": False,
+        "reason_code": "awaiting_all_core_gate_pass",
     }
     gates = {
         item["gate_id"]: item
@@ -88,7 +88,7 @@ def test_gate_v6_is_active_timeline_is_core_and_validators_are_ready() -> None:
     for gate_id in release_policy.V013_CORE_GATE_IDS:
         gate = gates[gate_id]
         assert gate["implementation_status"] == "ready"
-        assert gate["assembly_enabled"] is True
+        assert gate["assembly_enabled"] is False
         assert "deeplaw.v013-gate-result/v1" in gate["output_schema_versions"]
     for gate_id in {
         "canonical_integrity",

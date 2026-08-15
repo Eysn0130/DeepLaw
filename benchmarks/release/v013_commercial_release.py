@@ -209,10 +209,12 @@ def assemble_manifest(
         )
     _validate_provenance_classification(classification)
     assembly_policy = classification["assembly_policy"]
-    if assembly_policy["assembly_enabled"] is not True:
+    if assembly_policy != {
+        "assembly_enabled": False,
+        "reason_code": "awaiting_all_core_gate_pass",
+    }:
         raise V013CommercialReleaseError(
-            "v0.13 provenance assembly remains disabled: "
-            f"{assembly_policy['reason_code']}"
+            "v0.13 classification must not pre-enable provenance assembly"
         )
     try:
         result = validate_collection(

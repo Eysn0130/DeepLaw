@@ -109,10 +109,10 @@
       ],
       "properties": {
         "assembly_enabled": {
-          "const": true
+          "const": false
         },
         "reason_code": {
-          "const": "all_core_validators_ready"
+          "const": "awaiting_all_core_gate_pass"
         }
       }
     },

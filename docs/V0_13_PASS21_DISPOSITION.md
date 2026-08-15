@@ -47,7 +47,8 @@ unchanged. Current contracts are:
 
 - `deeplaw.v013-active-qualification/v1` for one exact candidate and external-input binding;
 - Gate classification v6 plus reusable raw evidence, derived Gate Result, selective-forget raw
-  receipt, and exact all-Core collection contracts;
+  receipt, and exact all-Core collection contracts; v6 keeps assembly disabled until that
+  reproducible collection proves every Core Gate passed with zero hard failures;
 - Platform Core v2 for complete, disjoint current collection classification;
 - one reproducible-build output whose wheel/sdist bytes are the only downstream artifact source.
 

@@ -58,9 +58,11 @@ validators. The release assembler reopens every Core result and raw input and en
 decision only when the collection contains exactly every Core Gate, every validator reproduces,
 every Core status is `passed`, and every hard-failure count is zero.
 
-This makes validator and assembly availability a code property, not a qualification result. While
-the tracked active candidate is not frozen, all Core Gate executions remain `not_executed`, and no
-empty or skeleton collection is produced.
+Validator availability is a code property, not a qualification result. Gate v6 keeps
+`assembly_enabled=false` with `awaiting_all_core_gate_pass`; the assembler cannot pre-enable a
+release and derives eligibility only after reopening a complete reproducible all-Core collection.
+While the tracked active candidate is not frozen, all Core Gate executions remain `not_executed`,
+and no empty or skeleton collection is produced.
 
 ## Frozen minimum Kernel compatibility map
 
