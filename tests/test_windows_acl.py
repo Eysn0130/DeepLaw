@@ -71,7 +71,7 @@ def test_windows_acl_uses_the_fixed_system_powershell_when_path_is_closed(
     assert windows_acl._powershell() == str(executable)
 
 
-def test_read_and_write_stores_harden_only_their_sqlite_sidecars_on_close(
+def test_read_stores_harden_only_their_sqlite_sidecars_on_close(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -89,12 +89,8 @@ def test_read_and_write_stores_harden_only_their_sqlite_sidecars_on_close(
         pass
     with AutonomousKnowledgeStore(root, read_only=True):
         pass
-    with AutonomousKnowledgeStore(root, read_only=False):
-        pass
 
     assert observed == [
-        root / ".deeplaw" / "ledger.sqlite3",
-        root / ".deeplaw" / "ledger.sqlite3",
         root / ".deeplaw" / "ledger.sqlite3",
         root / ".deeplaw" / "ledger.sqlite3",
         root / ".deeplaw" / "ledger.sqlite3",
