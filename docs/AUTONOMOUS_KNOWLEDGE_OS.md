@@ -36,11 +36,26 @@ remain unchanged. This is a semantic
 compatibility boundary: new writes enforce one route/one current head, and legacy bytes/history
 remain immutable and verifiable.
 
-Gate labels stay separate: **Core** gates remain required and are not reduced; **Capability** gates
-may be `not_claimed` when not declared (Run Timeline, semantic restore, and Claude/OpenCode remain
-deferred unless support is explicitly declared); and the **Competitive Claim** gate is independent
+Gate labels stay separate: active Gate v6 **Core** gates, including Timeline, Codex, and OpenCode,
+remain required and are not reduced; **Capability** gates may be `not_claimed` when not declared
+(semantic restore and Claude remain deferred); and the **Competitive Claim** gate is independent
 of kernel evidence. For the affected rows, Pass 2 records `kernel=Implemented`, `E2E=Target`, and
 `external qualification=not_executed`.
+
+### Pass 21 task identity projection
+
+The current source candidate exposes owner-local `task locate`, `task inspect`, and `task timeline`
+operations through `task_continuity.py`. They reuse `knowledge_run_records_v4`,
+`knowledge_checkpoint_routes_v1`, and related `autonomous_events_v3` identities. Timeline is a
+bounded content-minimized projection, not a new canonical table: it returns only route-related
+identity, status, recorded time, and opaque Artifact identity. A global or unrelated Ledger head
+is not inserted into another task's timeline.
+
+Workspace binding hashes bounded non-sensitive untracked file content so same-size/same-metadata
+changes cannot alias. Secret-looking tracked, untracked, or ignored candidates are classified by
+path only and return `workspace_secret_unverifiable`; their bytes are not opened. Per-file, total
+byte, and path-count limits return `workspace_snapshot_bound`. Provider Capsules never receive
+workspace metadata, raw diffs, local paths, or these local inspection details.
 
 ## 1. Product boundary
 

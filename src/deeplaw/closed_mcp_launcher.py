@@ -33,6 +33,7 @@ class ClosedMCPEnvironment:
     environment: dict[str, str]
     allowed_environment_names: frozenset[str]
     expected_vault_id: str | None
+    native_acl_verified: bool
 
 
 def _explicit_law_environment() -> dict[str, str]:
@@ -85,6 +86,7 @@ def closed_mcp_environment(
     expected_vault_id: str | None = None,
     task_binding: Mapping[str, object] | None = None,
     task_handle: str | None = None,
+    workspace: str | Path | None = None,
 ) -> Iterator[ClosedMCPEnvironment]:
     """Yield the closed environment for one enumerated DeepLaw MCP surface."""
 
@@ -113,11 +115,16 @@ def closed_mcp_environment(
             raise ValueError("task handle is accepted only by knowledge_support")
         from .task_continuity import binding_for_task_handle
 
+        if workspace is None:
+            raise ValueError("task handle requires explicit Host workspace metadata")
+
         normalized_binding = binding_for_task_handle(
             task_handle,
             vault_path=selected_vault,
-            workspace=Path.cwd(),
+            workspace=workspace,
         )
+    elif workspace is not None:
+        raise ValueError("workspace metadata is accepted only with a task handle")
     if normalized_binding is not None:
         if selected_surface != "knowledge_support":
             raise ValueError("task binding is accepted only by knowledge_support")
@@ -130,6 +137,17 @@ def closed_mcp_environment(
         temporary_files = root / "tmp"
         for path in (home, work, temporary_files):
             path.mkdir(mode=0o700)
+        native_acl_verified = os.name != "nt"
+        if os.name == "nt":
+            from .windows_acl import harden_windows_vault
+
+            acl_hardening = harden_windows_vault(root)
+            native_acl_verified = bool(
+                acl_hardening.get("applied")
+                and acl_hardening.get("verification", {}).get("permissions_verified")
+            )
+            if not native_acl_verified:
+                raise RuntimeError("launcher temporary root ACL hardening failed closed")
         overrides = {
             "HOME": str(home),
             "TEMP": str(temporary_files),
@@ -152,6 +170,7 @@ def closed_mcp_environment(
             environment=environment,
             allowed_environment_names=frozenset(environment),
             expected_vault_id=child_expected_vault_id,
+            native_acl_verified=native_acl_verified,
         )
 
 
@@ -162,6 +181,7 @@ def launch_closed_mcp(
     expected_vault_id: str | None = None,
     task_binding: Mapping[str, object] | None = None,
     task_handle: str | None = None,
+    workspace: str | Path | None = None,
     grant_id: str | None = None,
 ) -> None:
     """Launch one fixed DeepLaw MCP child; arbitrary commands are not accepted."""
@@ -194,6 +214,7 @@ def launch_closed_mcp(
         expected_vault_id=expected_vault_id,
         task_binding=task_binding,
         task_handle=task_handle,
+        workspace=workspace,
     ) as launch:
         if launch.expected_vault_id is not None:
             child_arguments.extend(

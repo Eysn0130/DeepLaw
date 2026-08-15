@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -19,6 +20,7 @@ from benchmarks.release.platform_gate import (
 from benchmarks.release.platform_inventory import (
     CANDIDATE_STATUS,
     build_receipt,
+    frozen_comparison,
     inventory_digest,
     write_receipt,
 )
@@ -27,8 +29,8 @@ from benchmarks.release.platform_inventory import (
 )
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = REPOSITORY / "benchmarks/release/platform-core-test-manifest-v1.json"
-SCHEMA_PATH = REPOSITORY / "contracts/platform-core-test-manifest.v1.schema.json"
+MANIFEST_PATH = REPOSITORY / "benchmarks/release/platform-core-test-manifest-v2.json"
+SCHEMA_PATH = REPOSITORY / "contracts/platform-core-test-manifest.v2.schema.json"
 INVENTORY_SCHEMA_PATH = (
     REPOSITORY / "contracts/platform-core-inventory-preflight.v1.schema.json"
 )
@@ -56,6 +58,19 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
     assert load_platform_manifest(MANIFEST_PATH) == manifest
 
 
+def test_platform_core_v1_bytes_remain_historical() -> None:
+    expected = {
+        "benchmarks/release/platform-core-test-manifest-v1.json": (
+            "90ef22db1725f07aca8e6ab68cb65f305f87a9145c23d351b9ae69de3d3df70e"
+        ),
+        "contracts/platform-core-test-manifest.v1.schema.json": (
+            "e65dbe0ea8fa98d383b19be42400c7be733de1d0c748cc00a44f03584896a94e"
+        ),
+    }
+    for relative, digest in expected.items():
+        assert hashlib.sha256((REPOSITORY / relative).read_bytes()).hexdigest() == digest
+
+
 def test_platform_core_manifest_generation_commands_are_explicit() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     commands = manifest["generation"]["commands"]
@@ -63,6 +78,7 @@ def test_platform_core_manifest_generation_commands_are_explicit() -> None:
         "uv run --frozen pytest --collect-only -q -o addopts='' -m "
         "'not qualification and not windows_native'",
         "uv run --frozen pytest --collect-only -q -o addopts='' -m 'not qualification'",
+        "uv run --frozen pytest --collect-only -q -o addopts='' -m 'qualification'",
     ]
     assert manifest["inventories"]["common"]["count"] == len(
         manifest["inventories"]["common"]["cases"]
@@ -71,6 +87,21 @@ def test_platform_core_manifest_generation_commands_are_explicit() -> None:
         len(manifest["inventories"]["common"]["cases"])
         + len(manifest["inventories"]["windows"]["additional_cases"])
     )
+
+
+def test_platform_core_qualification_inventory_drift_is_visible() -> None:
+    manifest = load_platform_manifest(MANIFEST_PATH)
+    expected = sorted(
+        case["node_id"]
+        for case in manifest["classifications"]["qualification"]["cases"]
+    )
+    result = frozen_comparison(
+        expected[1:],
+        manifest=manifest,
+        selection="qualification",
+    )
+    assert result["matches"] is False
+    assert result["missing"] == [expected[0]]
 
 
 def test_platform_inventory_candidate_receipt_is_closed_and_preserves_drift(
@@ -92,11 +123,9 @@ def test_platform_inventory_candidate_receipt_is_closed_and_preserves_drift(
     assert sealed["node_ids"] == sorted(sealed["node_ids"])
     assert sealed["count"] == len(sealed["node_ids"])
     assert sealed["digest"] == inventory_digest(sealed["node_ids"])
-    assert sealed["frozen_comparison"]["expected_count"] == 1339
-    assert {
-        "tests/test_subprocess_environment.py::test_closed_environment_maps_isolated_home_to_windows_userprofile",
-        "tests/test_v013_runtime_stability.py::test_rss_child_uses_closed_portable_environment",
-    } <= set(sealed["frozen_comparison"]["unexpected"])
+    assert sealed["frozen_comparison"]["expected_count"] == sealed["count"]
+    assert sealed["frozen_comparison"]["unexpected"] == []
+    assert sealed["frozen_comparison"]["missing"] == []
     assert MANIFEST_PATH.read_bytes() == manifest_before
 
 
@@ -181,7 +210,7 @@ def test_platform_core_manifest_requires_exact_junit_inventory(tmp_path: Path) -
     binding_schema = json.loads(
         (
             REPOSITORY
-            / "contracts/platform-gate-binding-receipt.v1.schema.json"
+            / "contracts/platform-gate-binding-receipt.v2.schema.json"
         ).read_text(encoding="utf-8")
     )
     Draft202012Validator(binding_schema).validate(binding_receipt)

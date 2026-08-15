@@ -31,7 +31,7 @@ from deeplaw.subprocess_environment import _build_subprocess_environment
 SCHEMA_VERSION = "deeplaw.platform-core-inventory-preflight/v1"
 INVENTORY_SCHEMA_VERSION = SCHEMA_VERSION
 PLATFORM_INVENTORY_SCHEMA_VERSION = SCHEMA_VERSION
-MANIFEST_FILENAME = "platform-core-test-manifest-v1.json"
+MANIFEST_FILENAME = "platform-core-test-manifest-v2.json"
 SCHEMA_FILENAME = "platform-core-inventory-preflight.v1.schema.json"
 MODE_CANDIDATE = "candidate"
 MODE_PLATFORM_CORE = "platform_core"
@@ -48,6 +48,7 @@ PLATFORM_CORE_STATUS = "platform_core_inventory_preflight"
 SELECTIONS = {
     "common": "not qualification and not windows_native",
     "windows": "not qualification",
+    "qualification": "qualification",
 }
 
 
@@ -188,6 +189,10 @@ def collect_node_ids(
 def _manifest_inventory(
     manifest: dict[str, Any], *, selection: str
 ) -> tuple[list[str], str, str]:
+    if selection == "qualification":
+        cases = list(manifest["classifications"]["qualification"]["cases"])
+        node_ids = sorted(str(case["node_id"]) for case in cases)
+        return node_ids, inventory_digest(node_ids), str(manifest["manifest_sha256"])
     inventory_name = "windows" if selection == "windows" else "common"
     inventory = manifest["inventories"][inventory_name]
     if inventory_name == "windows":
@@ -237,6 +242,90 @@ def frozen_comparison(
         "duplicate": duplicate,
         "matches": matches,
         "digest_matches": observed_digest == expected_digest,
+    }
+
+
+def verify_platform_inventory(
+    *,
+    repository: Path,
+    manifest_path: Path,
+    require_match: bool,
+    python_executable: str | None = None,
+) -> dict[str, Any]:
+    """Verify both active Platform Core inventories and classification disjointness."""
+
+    manifest = load_platform_manifest(manifest_path.resolve(strict=True))
+    common = collect_node_ids(
+        repository.resolve(strict=True),
+        selection="common",
+        python_executable=python_executable,
+    )
+    windows = collect_node_ids(
+        repository.resolve(strict=True),
+        selection="windows",
+        python_executable=python_executable,
+    )
+    qualification = collect_node_ids(
+        repository.resolve(strict=True),
+        selection="qualification",
+        python_executable=python_executable,
+    )
+    common_result = frozen_comparison(common, manifest=manifest, selection="common")
+    windows_result = frozen_comparison(windows, manifest=manifest, selection="windows")
+    qualification_result = frozen_comparison(
+        qualification,
+        manifest=manifest,
+        selection="qualification",
+    )
+    common_set = set(common)
+    windows_set = set(windows)
+    qualification_set = set(qualification)
+    additional = windows_set - common_set
+    classified = {
+        label: {
+            str(case["node_id"])
+            for case in manifest["classifications"][label]["cases"]
+        }
+        for label in ("qualification", "nonapplicable", "historical_compatibility")
+    }
+    overlap = sorted(
+        (classified["qualification"] & classified["nonapplicable"])
+        | (classified["qualification"] & classified["historical_compatibility"])
+        | (classified["nonapplicable"] & classified["historical_compatibility"])
+    )
+    missing = sorted(
+        set(common_result["missing"])
+        | set(windows_result["missing"])
+        | set(qualification_result["missing"])
+    )
+    unexpected = sorted(
+        set(common_result["unexpected"])
+        | set(windows_result["unexpected"])
+        | set(qualification_result["unexpected"])
+    )
+    overlap.extend(sorted(windows_set & qualification_set))
+    if classified["nonapplicable"] != additional:
+        overlap.append("nonapplicable_windows_inventory_mismatch")
+    if classified["qualification"] != qualification_set:
+        overlap.append("qualification_inventory_mismatch")
+    exact = all(
+        result["matches"] and result["digest_matches"]
+        for result in (common_result, windows_result, qualification_result)
+    )
+    passed = exact and not missing and not unexpected and not overlap
+    if require_match and not passed:
+        raise PlatformInventoryError(
+            "current Platform Core v2 collection does not match its frozen manifest"
+        )
+    return {
+        "schema_version": "deeplaw.platform-core-v2-verification/v1",
+        "status": "passed" if passed else "failed",
+        "missing_node_ids": missing,
+        "unexpected_node_ids": unexpected,
+        "overlap_node_ids": sorted(set(overlap)),
+        "common_count": len(common),
+        "windows_count": len(windows),
+        "qualification_count": len(qualification),
     }
 
 

@@ -1,11 +1,11 @@
 """Fail-closed validation for v0.13 commercial evidence.
 
-``commercial-evidence-report/v1`` records caller-authored observations.  Its hashes prove only
+``commercial-evidence-report/v1`` records caller-authored observations. Its hashes prove only
 that those bytes are internally consistent; they do not prove that a command ran, that a model
 exists, or that reported metrics came from independent raw rows.  The v1 shape is retained as a
 diagnostic compatibility boundary, but it can no longer produce a passing Core Gate or a release
-or claim decision.  A future release path must aggregate provenance-bound results emitted by
-dedicated validators over their raw artifacts.
+or claim decision. The current v0.13 release path accepts only an exact Gate collection whose
+dedicated validators reproduce every Core result from its bound raw artifacts.
 """
 
 from __future__ import annotations
@@ -210,8 +210,12 @@ def _load_json_file(path: Path) -> dict[str, Any]:
         raise SemanticEvidenceError("evidence report exceeds the bounded input size")
     try:
         text = selected.read_text(encoding="utf-8")
-        payload = json.loads(text, parse_constant=_reject_nonfinite_json)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        payload = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_json_keys,
+            parse_constant=_reject_nonfinite_json,
+        )
+    except (OSError, UnicodeError, ValueError) as error:
         raise SemanticEvidenceError(f"invalid evidence report JSON: {error}") from error
     if not isinstance(payload, dict):
         raise SemanticEvidenceError("evidence report must be a JSON object")
@@ -220,6 +224,15 @@ def _load_json_file(path: Path) -> dict[str, Any]:
 
 def _reject_nonfinite_json(value: str) -> Any:
     raise ValueError(f"non-finite JSON number is not allowed: {value}")
+
+
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON key is not allowed")
+        value[key] = item
+    return value
 
 
 def _as_document(value: Mapping[str, Any] | str | Path) -> dict[str, Any]:
@@ -845,18 +858,38 @@ def validate_release_manifest_semantics(
         raise SemanticEvidenceError("gate classification is not bound by the manifest")
 
     report = _load_json_file(report_path)
-    result = validate_report(
-        report,
-        expected_candidate_commit=bindings["candidate_commit"],
-        expected_candidate_tree=bindings["candidate_tree"],
-        expected_wheel_sha256=bindings["candidate_wheel_sha256"],
-        expected_sdist_sha256=bindings["candidate_sdist_sha256"],
-        expected_protocol_sha256=bindings["qualification_protocol_sha256"],
-        expected_threshold_sha256=bindings["thresholds_sha256"],
-        expected_gold_sha256=bindings["human_gold_manifest_sha256"],
-        expected_corpus_role="final_blind",
-        classification=classification_path,
-    )
+    if report.get("schema_version") == "deeplaw.v013-gate-collection/v1":
+        from benchmarks.release.v013_gate_collection import (
+            GateCollectionError,
+            validate_collection,
+        )
+
+        try:
+            result = validate_collection(
+                report,
+                root=Path(assets_root),
+                active_path=_asset_path(
+                    Path(assets_root), bindings["qualification_protocol_path"]
+                ),
+                classification_path=classification_path,
+            )
+        except GateCollectionError as error:
+            raise SemanticEvidenceError(str(error)) from error
+        report_kind = "v013_commercial_gate_collection"
+    else:
+        result = validate_report(
+            report,
+            expected_candidate_commit=bindings["candidate_commit"],
+            expected_candidate_tree=bindings["candidate_tree"],
+            expected_wheel_sha256=bindings["candidate_wheel_sha256"],
+            expected_sdist_sha256=bindings["candidate_sdist_sha256"],
+            expected_protocol_sha256=bindings["qualification_protocol_sha256"],
+            expected_threshold_sha256=bindings["thresholds_sha256"],
+            expected_gold_sha256=bindings["human_gold_manifest_sha256"],
+            expected_corpus_role="final_blind",
+            classification=classification_path,
+        )
+        report_kind = report["report_kind"]
     if semantic.get("report_record_sha256") != report["report_sha256"]:
         raise SemanticEvidenceError("semantic report record digest differs from actual content")
     classification = _classification_map(_load_json_file(classification_path))
@@ -872,7 +905,7 @@ def validate_release_manifest_semantics(
         "report_path": semantic["report_path"],
         "report_artifact_sha256": report_artifact_sha256,
         "report_record_sha256": report["report_sha256"],
-        "report_kind": report["report_kind"],
+        "report_kind": report_kind,
         "status": result["status"],
         "hard_zero": result["hard_zero"],
         "release_ready": result["release_ready"],

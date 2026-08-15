@@ -21,6 +21,7 @@ from benchmarks.release.evidence import (
     repository_binding,
     sha256_bytes,
 )
+from deeplaw.subprocess_environment import _build_subprocess_environment
 
 SCHEMA_VERSION = "deeplaw.reproducible-build-report/v2"
 DEFAULT_SOURCE_DATE_EPOCH = 946684800
@@ -104,7 +105,10 @@ _REQUIRED_SDIST_PATHS = (
     "benchmarks/release/commercial_release.py",
     "benchmarks/release/evidence.py",
     "benchmarks/release/evaluator_candidate.py",
+    "benchmarks/release/freeze_platform_manifest.py",
+    "benchmarks/release/freeze_qualification_candidate.py",
     "benchmarks/release/platform_gate.py",
+    "benchmarks/release/platform-core-test-manifest-v2.json",
     "benchmarks/release/post_release_verify.py",
     "benchmarks/release/release_policy.py",
     "benchmarks/release/retained_artifact_manifest.py",
@@ -114,6 +118,9 @@ _REQUIRED_SDIST_PATHS = (
     "benchmarks/release/v013-gate-classification-v3.json",
     "benchmarks/release/v013-gate-classification-v4.json",
     "benchmarks/release/v013-gate-classification-v5.json",
+    "benchmarks/release/v013-gate-classification-v6.json",
+    "benchmarks/release/v013_gate_collection.py",
+    "benchmarks/release/v013_gate_validator.py",
     "benchmarks/release/v013_commercial_release.py",
     "benchmarks/release/verify_oci.py",
     "benchmarks/release/verify_reproducible_build.py",
@@ -136,6 +143,8 @@ _REQUIRED_SDIST_PATHS = (
     "contracts/v013-release-gate-classification.v3.schema.json",
     "contracts/v013-release-gate-classification.v4.schema.json",
     "contracts/v013-release-gate-classification.v5.schema.json",
+    "contracts/v013-release-gate-classification.v6.schema.json",
+    "benchmarks/v013/active-qualification-v1.json",
     "benchmarks/typed_compiler/score.py",
     "docs/INSTALL_UPGRADE_ROLLBACK.md",
     "docs/EVALUATION_PROTOCOL.md",
@@ -206,12 +215,13 @@ def archive_inventory(path: Path) -> dict[str, Any]:
 
 
 def _build(repository: Path, output: Path, *, source_date_epoch: int) -> list[Path]:
-    environment = {
-        **os.environ,
-        "PYTHONHASHSEED": "0",
-        "SOURCE_DATE_EPOCH": str(source_date_epoch),
-        "TZ": "UTC",
-    }
+    environment = _build_subprocess_environment(
+        overrides={
+            "PYTHONHASHSEED": "0",
+            "SOURCE_DATE_EPOCH": str(source_date_epoch),
+            "TZ": "UTC",
+        }
+    )
     process = subprocess.run(
         [
             "uv",

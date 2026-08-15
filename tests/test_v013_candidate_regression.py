@@ -70,6 +70,31 @@ def test_candidate_windows_shards_are_deterministic_complete_and_disjoint() -> N
     }
 
 
+def test_candidate_windows_duration_weighted_shards_are_rebuildable() -> None:
+    files = sorted(
+        path.relative_to(REPOSITORY).as_posix()
+        for path in (REPOSITORY / "tests").glob("test_*.py")
+        if path.is_file() and not path.is_symlink()
+    )
+    weights = {path: float(index + 1) for index, path in enumerate(files)}
+    shards = [
+        build_shard_manifest(
+            repository=REPOSITORY,
+            shard_count=3,
+            shard_index=index,
+            duration_weights=weights,
+        )
+        for index in range(1, 4)
+    ]
+    selected = [path for shard in shards for path in shard["selected_test_files"]]
+    assert sorted(selected) == files
+    assert len(selected) == len(set(selected))
+    assert {shard["algorithm"] for shard in shards} == {
+        "longest_processing_time_duration_v1"
+    }
+    assert len({shard["duration_weights_sha256"] for shard in shards}) == 1
+
+
 def test_candidate_shard_cli_writes_lf_only_paths(tmp_path: Path) -> None:
     manifest_path = tmp_path / "shard.json"
     paths_path = tmp_path / "paths.txt"

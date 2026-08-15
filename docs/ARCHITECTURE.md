@@ -41,12 +41,35 @@ remain unchanged. The resulting
 compatibility boundary is semantic (new writes use the single-head/CAS policy; legacy bytes and
 history remain readable and immutable), not a persistence-contract expansion.
 
-The gate classification is explicit: **Core** gates remain required and are not lowered;
-**Capability** gates may remain `not_claimed` when not declared (Run Timeline, semantic restore,
-and Claude/OpenCode support remain deferred unless explicitly supported); the **Competitive Claim**
+The active Gate v6 classification is explicit: **Core** gates, including Timeline, Codex, and
+OpenCode, remain required and are not lowered; **Capability** gates may remain `not_claimed` when
+not declared (semantic restore and Claude remain deferred); the **Competitive Claim**
 gate is independent and cannot be satisfied by local kernel or development evidence. Pass 2 records
 `kernel=Implemented`, `E2E=Target`, and `external qualification=not_executed` for the affected
 continuity/context rows only.
+
+## Pass 21 task routing and artifact boundary (source candidate; not released)
+
+Task recovery is an owner-local read projection over the existing governed stores. Project text,
+task text, and an explicit current worktree deterministically derive the route; an opaque task
+handle may narrow an exact lookup but is not required for ordinary resume. `locate`, `inspect`,
+and `timeline` do not copy transcript, hidden reasoning, raw logs, authentication, complete diffs,
+or local paths. Timeline emits only bounded Run, Checkpoint, related Ledger, and opaque Artifact
+identities with status and time. Ambiguity, snapshot divergence, Secret-looking workspace files,
+and content bounds return structured Gaps.
+
+This uses the existing Ledger, Run Record, checkpoint projection, Knowledge Store, and Sink
+coordinator. It adds no Timeline database, page family, Host runtime, or hidden mutation. A child
+fork may select another worktree only when it resolves to the same Git repository; parent and
+child task lines retain distinct worktree and lineage identities. Exact owner forget validates the
+stable repository/worktree route rather than requiring the old base/dirty snapshot, so later
+workspace changes do not make a known checkpoint undeletable.
+
+The tracked active qualification document remains a `0.12.0` construction template. After—and
+only after—a clean `0.13.0` commit has all external input hashes, Candidate Full produces one
+reproducible wheel/sdist pair and then creates an external frozen qualification binding to those
+bytes. That post-build binding avoids a circular source-tree/artifact hash. It is not a tag,
+release decision, or publication.
 
 ## Product boundary
 
@@ -487,12 +510,13 @@ rules. Host Connect Plan v2 registers a private owner-local Vault-ID-to-path bin
 configuration stays path-free. Both launcher parent and raw MCP child independently verify the
 opaque expected Vault ID.
 
-The host-neutral task driver compiles a user-selected project/task and current Git worktree into one
-opaque task handle, then reconstructs the existing task-context binding on every operation. It adds
+The host-neutral task driver binds a user-selected project/task and explicit current Git worktree.
+Ordinary operations locate the exact task-context route from those owner-visible inputs; an opaque
+task handle is an optional exact optimization, not a static Host-configuration requirement. It adds
 no table, Knowledge kind, relation, Host runtime or daemon. Start/resume/compaction are read-only;
 checkpoint/forget enter only through a separate owner-granted `knowledge_sink` and an explicit
 success/idempotency boundary. Fork is either continue-parent or child-task. Host session/thread IDs
-remain optional route metadata, never Knowledge identity, and compaction reacquires a verified
+remain untrusted optional route hints, never Knowledge identity, and compaction reacquires a verified
 Capsule rather than copying transcripts. This guarantees deterministic data-plane recovery, not
 native Host lifecycle continuity; the latter remains qualification work.
 

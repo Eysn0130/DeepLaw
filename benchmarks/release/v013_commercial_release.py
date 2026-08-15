@@ -2,8 +2,7 @@
 
 The historical ``commercial-evidence-report/v1`` observation format is deliberately rejected: its
 hashes do not prove that the reported command, model, runs, metrics, or scans exist.  The assembler
-remains fail closed until the additive provenance-bound report/classification contracts and every
-Core Gate's dedicated raw-artifact validator are complete.
+accepts only the active qualification binding plus independently revalidated Core Gate results.
 """
 
 from __future__ import annotations
@@ -24,17 +23,19 @@ from benchmarks.release.release_policy import (
     validate_manifest_for_release,
 )
 from benchmarks.release.semantic_evidence import (
-    SemanticEvidenceError,
     canonical_json,
     validate_release_manifest_semantics,
-    validate_report,
+)
+from benchmarks.release.v013_gate_collection import (
+    GateCollectionError,
+    validate_collection,
 )
 
 MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / (
     "commercial-release-manifest.v6.schema.json"
 )
 LEGACY_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v1"
-PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v3"
+PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.v013-gate-collection/v1"
 PROVENANCE_CLASSIFICATION_SCHEMA_VERSION = V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION
 _INPUT_FIELDS = {"schema_version", "environment", "release", "bindings", "artifacts"}
 _DERIVED_FIELDS = {
@@ -50,10 +51,27 @@ class V013CommercialReleaseError(ValueError):
     """Raised when decision-free v0.13 release inputs cannot produce a safe manifest."""
 
 
+def _reject_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON key")
+        value[key] = item
+    return value
+
+
+def _reject_constant(value: str) -> Any:
+    raise ValueError(f"non-finite JSON constant: {value}")
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_pairs,
+            parse_constant=_reject_constant,
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         raise V013CommercialReleaseError(f"invalid JSON input: {error}") from error
     if not isinstance(value, dict):
         raise V013CommercialReleaseError("v0.13 release input must be a JSON object")
@@ -170,6 +188,9 @@ def assemble_manifest(
         raise V013CommercialReleaseError("v0.13 release bindings must be an object")
     report_path = _safe_asset(root, semantic_report_path)
     classification_path = _safe_asset(root, bindings.get("gate_classification_path"))
+    active_qualification_path = _safe_asset(
+        root, bindings.get("qualification_protocol_path")
+    )
     report = _load_json(report_path)
     classification = _load_json(classification_path)
     report_schema_version = report.get("schema_version")
@@ -180,7 +201,7 @@ def assemble_manifest(
         )
     if report_schema_version != PROVENANCE_REPORT_SCHEMA_VERSION:
         raise V013CommercialReleaseError(
-            "v0.13 assembler requires provenance-bound commercial evidence report v3"
+            "v0.13 assembler requires provenance-bound gate collection v1"
         )
     if classification.get("schema_version") != PROVENANCE_CLASSIFICATION_SCHEMA_VERSION:
         raise V013CommercialReleaseError(
@@ -194,19 +215,13 @@ def assemble_manifest(
             f"{assembly_policy['reason_code']}"
         )
     try:
-        result = validate_report(
+        result = validate_collection(
             report,
-            expected_candidate_commit=bindings.get("candidate_commit"),
-            expected_candidate_tree=bindings.get("candidate_tree"),
-            expected_wheel_sha256=bindings.get("candidate_wheel_sha256"),
-            expected_sdist_sha256=bindings.get("candidate_sdist_sha256"),
-            expected_protocol_sha256=bindings.get("qualification_protocol_sha256"),
-            expected_threshold_sha256=bindings.get("thresholds_sha256"),
-            expected_gold_sha256=bindings.get("human_gold_manifest_sha256"),
-            expected_corpus_role="final_blind",
-            classification=classification,
+            root=root,
+            active_path=active_qualification_path,
+            classification_path=classification_path,
         )
-    except SemanticEvidenceError as error:
+    except GateCollectionError as error:
         raise V013CommercialReleaseError(str(error)) from error
     if not result["release_ready"] or not result["claim_eligible"]:
         raise V013CommercialReleaseError("semantic evidence does not pass every Core release gate")
@@ -219,7 +234,7 @@ def assemble_manifest(
         "report_path": semantic_report_path,
         "report_artifact_sha256": _file_sha256(report_path),
         "report_record_sha256": report["report_sha256"],
-        "report_kind": report["report_kind"],
+        "report_kind": "v013_commercial_gate_collection",
         "status": result["status"],
         "hard_zero": result["hard_zero"],
         "release_ready": result["release_ready"],

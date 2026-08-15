@@ -5,11 +5,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = "deeplaw.retained-candidate-artifacts/v1"
+
+
+class SingleArtifactError(RuntimeError):
+    """Raised when a consumer does not use the reproducibly verified bytes."""
 
 
 def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -62,6 +68,65 @@ def _artifact(path: Path) -> dict[str, Any]:
     }
 
 
+def _package_version(repository: Path) -> str:
+    value = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
+    version = value.get("project", {}).get("version")
+    if not isinstance(version, str) or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+        raise RuntimeError("package version is not a bounded pure semver")
+    return version
+
+
+def _distribution_files(directory: Path) -> dict[str, Path]:
+    selected = directory.expanduser().resolve(strict=True)
+    files = {
+        path.name: path
+        for path in selected.iterdir()
+        if path.is_file()
+        and not path.is_symlink()
+        and (path.name.endswith(".whl") or path.name.endswith(".tar.gz"))
+    }
+    wheels = [name for name in files if name.endswith(".whl")]
+    sdists = [name for name in files if name.endswith(".tar.gz")]
+    if len(wheels) != 1 or len(sdists) != 1 or len(files) != 2:
+        raise SingleArtifactError("expected exactly one verified wheel and sdist")
+    return files
+
+
+def verify_single_artifact_source(
+    *,
+    verified_dist: Path,
+    consumer_dist: Path,
+) -> dict[str, Any]:
+    """Require one consumer directory to contain the exact verified artifacts."""
+
+    verified = _distribution_files(verified_dist)
+    consumer = _distribution_files(consumer_dist)
+    if set(verified) != set(consumer):
+        raise SingleArtifactError("consumer artifact names differ from verified artifacts")
+    artifacts: list[dict[str, Any]] = []
+    for name in sorted(verified):
+        expected = verified[name]
+        observed = consumer[name]
+        expected_sha256 = _sha256(expected)
+        if (
+            expected_sha256 != _sha256(observed)
+            or expected.stat().st_size != observed.stat().st_size
+        ):
+            raise SingleArtifactError(f"verified artifact hash differs for {name}")
+        artifacts.append(
+            {
+                "filename": name,
+                "sha256": expected_sha256,
+                "bytes": expected.stat().st_size,
+            }
+        )
+    return {
+        "schema_version": "deeplaw.single-verified-artifact-source/v1",
+        "status": "verified",
+        "artifacts": artifacts,
+    }
+
+
 def build_manifest(*, repository: Path, dist: Path) -> dict[str, Any]:
     repository = repository.resolve(strict=True)
     dist = dist.resolve(strict=True)
@@ -75,13 +140,14 @@ def build_manifest(*, repository: Path, dist: Path) -> dict[str, Any]:
         ":(exclude)dist/**",
     ):
         raise RuntimeError("retained candidate source tree must be clean")
-    wheels = sorted(dist.glob("deeplaw-0.12.0-*.whl"))
-    sdists = sorted(dist.glob("deeplaw-0.12.0.tar.gz"))
+    version = _package_version(repository)
+    wheels = sorted(dist.glob(f"deeplaw-{version}-*.whl"))
+    sdists = sorted(dist.glob(f"deeplaw-{version}.tar.gz"))
     if len(wheels) != 1 or len(sdists) != 1:
-        raise RuntimeError("expected exactly one DeepLaw 0.12.0 wheel and sdist")
+        raise RuntimeError(f"expected exactly one DeepLaw {version} wheel and sdist")
     return {
         "schema_version": SCHEMA_VERSION,
-        "package_version": "0.12.0",
+        "package_version": version,
         "release_ready": False,
         "claim_eligible": False,
         "git_commit": _git(repository, "rev-parse", "HEAD"),

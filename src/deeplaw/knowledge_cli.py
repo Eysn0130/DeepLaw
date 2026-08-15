@@ -1995,12 +1995,24 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     for action in ("resume", "compaction"):
         task_read = task_commands.add_parser(action)
         task_read.add_argument("--vault", type=Path, default=default_knowledge_vault())
-        task_read.add_argument("--task-handle", required=True)
+        task_read.add_argument("--task-handle")
+        task_read.add_argument("--project")
+        task_read.add_argument("--task", dest="task_text")
         task_read.add_argument("--workspace", type=Path, default=Path.cwd())
+    for action in ("locate", "inspect", "timeline"):
+        task_route = task_commands.add_parser(action)
+        task_route.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        task_route.add_argument("--project", required=True)
+        task_route.add_argument("--task", dest="task_text", required=True)
+        task_route.add_argument("--workspace", type=Path, default=Path.cwd())
+        task_route.add_argument("--task-handle")
+        if action == "timeline":
+            task_route.add_argument("--limit", type=int, default=50)
     task_fork = task_commands.add_parser("fork")
     task_fork.add_argument("--vault", type=Path, default=default_knowledge_vault())
     task_fork.add_argument("--task-handle", required=True)
     task_fork.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_fork.add_argument("--child-workspace", type=Path)
     task_fork.add_argument(
         "--mode",
         choices=("continue-parent", "child-task"),
@@ -2013,6 +2025,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     task_checkpoint.add_argument("--workspace", type=Path, default=Path.cwd())
     task_checkpoint.add_argument("--grant-id", required=True)
     task_checkpoint.add_argument("--idempotency-key", required=True)
+    task_checkpoint.add_argument("--task", dest="task_text")
     task_checkpoint.add_argument("--summary", required=True)
     task_checkpoint.add_argument("--next-action", required=True)
     task_checkpoint.add_argument("--expires-at", required=True)
@@ -2074,7 +2087,12 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     mcp_task.add_argument(
         "--task-handle",
-        help="Stable opaque task handle resolved against the current Git worktree",
+        help="Stable opaque task handle resolved against explicit Host workspace metadata",
+    )
+    mcp.add_argument(
+        "--workspace",
+        type=Path,
+        help="Explicit Host task worktree used only with --task-handle",
     )
     _curate_default_help(subcommands)
 
@@ -2369,8 +2387,11 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             checkpoint_task,
             forget_task,
             fork_task,
+            inspect_task,
+            locate_task,
             resume_task,
             start_task,
+            timeline_task,
         )
 
         if args.task_command == "start":
@@ -2384,14 +2405,30 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             return resume_task(
                 vault_path=args.vault,
                 task_handle=args.task_handle,
+                project=args.project,
+                task=args.task_text,
                 workspace=args.workspace,
                 operation=args.task_command,
             )
+        if args.task_command in {"locate", "inspect", "timeline"}:
+            route_arguments = {
+                "vault_path": args.vault,
+                "project": args.project,
+                "task": args.task_text,
+                "workspace": args.workspace,
+                "task_handle": args.task_handle,
+            }
+            if args.task_command == "locate":
+                return locate_task(**route_arguments)
+            if args.task_command == "inspect":
+                return inspect_task(**route_arguments)
+            return timeline_task(**route_arguments, limit=args.limit)
         if args.task_command == "fork":
             return fork_task(
                 vault_path=args.vault,
                 task_handle=args.task_handle,
                 workspace=args.workspace,
+                child_workspace=args.child_workspace,
                 mode=args.mode,
                 child_task=args.child_task,
             )
@@ -2402,6 +2439,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 workspace=args.workspace,
                 grant_id=args.grant_id,
                 idempotency_key=args.idempotency_key,
+                task=args.task_text,
                 summary=args.summary,
                 next_action=args.next_action,
                 expires_at=args.expires_at,
@@ -3203,6 +3241,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 expected_vault_id=args.expected_vault_id,
                 task_binding=task_binding,
                 task_handle=args.task_handle,
+                workspace=args.workspace,
             )
             return None
         if args.task_handle is not None:

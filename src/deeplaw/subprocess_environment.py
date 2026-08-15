@@ -35,9 +35,12 @@ _OVERRIDE_NAMES = frozenset(
     {
         "HOME",
         "PYTHONPATH",
+        "PYTHONHASHSEED",
+        "SOURCE_DATE_EPOCH",
         "TEMP",
         "TMP",
         "TMPDIR",
+        "TZ",
         "XDG_CACHE_HOME",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",

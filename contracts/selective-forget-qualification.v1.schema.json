@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/selective-forget-qualification.v1.schema.json",
+  "title": "DeepLaw selective-forget raw qualification receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_kind",
+    "candidate_version",
+    "candidate_binding",
+    "protocol_binding",
+    "run_id",
+    "checkpoint",
+    "forget",
+    "post_forget_resume",
+    "control_resume",
+    "ledger",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.selective-forget-qualification/v1"},
+    "artifact_kind": {"const": "selective-forget-raw-receipt"},
+    "candidate_version": {"$ref": "#/$defs/semver"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "knowledge_id", "revision_id", "run_id", "write_performed"],
+      "properties": {
+        "status": {"const": "checkpointed"},
+        "knowledge_id": {"$ref": "#/$defs/identifier"},
+        "revision_id": {"$ref": "#/$defs/identifier"},
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "write_performed": {"const": true}
+      }
+    },
+    "forget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "knowledge_id",
+        "expected_revision_id",
+        "tombstone_revision_id",
+        "write_performed"
+      ],
+      "properties": {
+        "status": {"const": "forgotten"},
+        "knowledge_id": {"$ref": "#/$defs/identifier"},
+        "expected_revision_id": {"$ref": "#/$defs/identifier"},
+        "tombstone_revision_id": {"$ref": "#/$defs/identifier"},
+        "write_performed": {"const": true}
+      }
+    },
+    "post_forget_resume": {"$ref": "#/$defs/resumeReceipt"},
+    "control_resume": {
+      "allOf": [
+        {"$ref": "#/$defs/resumeReceipt"},
+        {"properties": {"status": {"const": "admitted"}}}
+      ]
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "head_before_checkpoint",
+        "head_after_checkpoint",
+        "head_after_forget",
+        "head_after_reads",
+        "write_event_types"
+      ],
+      "properties": {
+        "head_before_checkpoint": {"$ref": "#/$defs/nullableSha256"},
+        "head_after_checkpoint": {"$ref": "#/$defs/sha256"},
+        "head_after_forget": {"$ref": "#/$defs/sha256"},
+        "head_after_reads": {"$ref": "#/$defs/sha256"},
+        "write_event_types": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "maxLength": 32
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "lock_sha256",
+        "wheel_sha256",
+        "sdist_sha256"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_sha256", "active_qualification_sha256"],
+      "properties": {
+        "protocol_id": {"$ref": "#/$defs/identifier"},
+        "protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "active_qualification_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "resumeReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "selected_knowledge_ids",
+        "gap_codes",
+        "provider_bytes",
+        "absolute_path_count",
+        "secret_count",
+        "write_performed"
+      ],
+      "properties": {
+        "status": {"enum": ["admitted", "gap"]},
+        "selected_knowledge_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "gap_codes": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "provider_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "absolute_path_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "secret_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "write_performed": {"const": false}
+      }
+    }
+  }
+}

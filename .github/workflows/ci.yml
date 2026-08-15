@@ -1,4 +1,4 @@
-name: CI
+name: Fast PR
 
 on:
   push:
@@ -11,15 +11,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: fast-pr-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  source-integrity:
-    name: Candidate source integrity and inventory
+  fast-pr:
+    name: Lock, lint, diff, and focused contracts (Ubuntu Python 3.12)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -34,402 +33,33 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Verify source and candidate inventory
-        shell: bash
+      - name: Verify lock, source style, and patch integrity
         run: |
-          set -euo pipefail
           uv lock --check
           uv sync --frozen --extra dev --extra discovery
           uv run --frozen ruff check .
           git diff --check
-          uv run --frozen python -m benchmarks.release.platform_inventory \
-            --mode candidate \
-            --selection common \
-            --output "${RUNNER_TEMP}/candidate-current-source-inventory.json"
 
-      - name: Upload candidate source inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: candidate-current-source-inventory
-          if-no-files-found: error
-          path: ${{ runner.temp }}/candidate-current-source-inventory.json
-
-  test:
-    name: Candidate current-source regression ${{ matrix.os }} Python ${{ matrix.python-version }}
-    needs: source-integrity
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-        python-version:
-          - "3.11"
-          - "3.12"
-          - "3.13"
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --extra discovery
-
-      - name: Candidate current-source regression (not release readiness)
-        id: regression
-        continue-on-error: true
-        shell: bash
-        env:
-          JUNIT_PATH: ${{ runner.temp }}/candidate-tests.xml
-          PYTHONUTF8: "1"
-        run: |
-          set -euo pipefail
-          uv run --frozen pytest --strict-markers --junitxml="${JUNIT_PATH}"
-
-      - name: Build candidate regression receipt
-        if: always()
-        shell: bash
+      - name: Run focused public contracts
         run: >-
-          uv run --frozen python -m benchmarks.release.candidate_regression
-          receipt
-          --junit "${{ runner.temp }}/candidate-tests.xml"
-          --output "${{ runner.temp }}/candidate-skip-receipt.json"
-          --matrix-os "${{ matrix.os }}"
-          --matrix-python "${{ matrix.python-version }}"
-
-      - name: Upload candidate regression receipt
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: candidate-regression-${{ matrix.os }}-${{ matrix.python-version }}
-          if-no-files-found: error
-          path: |
-            ${{ runner.temp }}/candidate-tests.xml
-            ${{ runner.temp }}/candidate-skip-receipt.json
-
-      - name: Enforce candidate regression result
-        if: steps.regression.outcome != 'success'
-        run: exit 1
-
-      - name: Build distribution
-        run: uv build --build-constraints benchmarks/release/build-constraints.txt
-
-      - name: Verify fresh wheel lifecycle
-        run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
-
-  windows-test:
-    name: Candidate current-source regression windows-latest Python ${{ matrix.python-version }} shard ${{ matrix.shard }} of 3
-    needs:
-      - source-integrity
-      - windows-sentinel
-    runs-on: windows-latest
-    timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version:
-          - "3.11"
-          - "3.12"
-          - "3.13"
-        shard:
-          - 1
-          - 2
-          - 3
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --extra discovery
-
-      - name: Select deterministic Windows test shard
-        shell: bash
-        run: >-
-          uv run --frozen python -m benchmarks.release.candidate_regression
-          select
-          --shard-count 3
-          --shard-index "${{ matrix.shard }}"
-          --output "${{ runner.temp }}/candidate-test-shard.json"
-          --paths-output "${{ runner.temp }}/candidate-test-files.txt"
-
-      - name: Candidate Windows shard (not release readiness)
-        id: regression
-        continue-on-error: true
-        shell: bash
-        env:
-          JUNIT_PATH: ${{ runner.temp }}/candidate-tests.xml
-          TEST_FILES_PATH: ${{ runner.temp }}/candidate-test-files.txt
-          PYTHONUTF8: "1"
-        run: |
-          set -euo pipefail
-          mapfile -t test_files < "${TEST_FILES_PATH}"
-          test "${#test_files[@]}" -gt 0
-          uv run --frozen pytest --strict-markers \
-            --junitxml="${JUNIT_PATH}" "${test_files[@]}"
-
-      - name: Build Windows shard receipt
-        if: always()
-        shell: bash
-        run: >-
-          uv run --frozen python -m benchmarks.release.candidate_regression
-          receipt
-          --junit "${{ runner.temp }}/candidate-tests.xml"
-          --output "${{ runner.temp }}/candidate-skip-receipt.json"
-          --matrix-os windows-latest
-          --matrix-python "${{ matrix.python-version }}"
-          --shard-manifest "${{ runner.temp }}/candidate-test-shard.json"
-
-      - name: Upload Windows shard receipt
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: candidate-regression-windows-latest-${{ matrix.python-version }}-shard-${{ matrix.shard }}
-          if-no-files-found: error
-          path: |
-            ${{ runner.temp }}/candidate-tests.xml
-            ${{ runner.temp }}/candidate-skip-receipt.json
-            ${{ runner.temp }}/candidate-test-shard.json
-
-      - name: Enforce Windows shard result
-        if: steps.regression.outcome != 'success'
-        run: exit 1
-
-      - name: Build distribution once per Windows Python
-        if: matrix.shard == 1
-        run: uv build --build-constraints benchmarks/release/build-constraints.txt
-
-      - name: Verify fresh wheel lifecycle once per Windows Python
-        if: matrix.shard == 1
-        run: uv run --frozen python -m benchmarks.verify_fresh_wheel --dist dist
-
-  windows-regression-aggregate:
-    name: Aggregate Windows Python ${{ matrix.python-version }} regression shards
-    needs: windows-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version:
-          - "3.11"
-          - "3.12"
-          - "3.13"
-
-    steps:
-      - name: Check out exact candidate
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Download exact Windows shard receipts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: candidate-regression-windows-latest-${{ matrix.python-version }}-shard-*
-          path: ${{ runner.temp }}/windows-shards
-
-      - name: Verify complete disjoint Windows coverage
-        run: >-
-          python -m benchmarks.release.candidate_regression
-          aggregate
-          --input-directory "${{ runner.temp }}/windows-shards"
-          --matrix-python "${{ matrix.python-version }}"
-          --output "${{ runner.temp }}/candidate-windows-aggregate.json"
-
-      - name: Upload Windows aggregate receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: candidate-regression-windows-latest-${{ matrix.python-version }}
-          if-no-files-found: error
-          path: ${{ runner.temp }}/candidate-windows-aggregate.json
-
-  candidate-distributions:
-    name: Retain exact candidate wheel and sdist
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Check out exact candidate
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          python-version: "3.12"
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Build and bind exact candidate artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv lock --check
-          uv sync --frozen --extra dev
-          uv build --build-constraints benchmarks/release/build-constraints.txt
-          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
-            --dist dist \
-            --output dist/retained-artifact-manifest.json
-
-      - name: Retain exact wheel, sdist, and identity manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: candidate-distributions
-          if-no-files-found: error
-          retention-days: 30
-          path: dist/
-
-  retained-wheel-lifecycle:
-    name: Download retained wheel and run production launcher lifecycle
-    needs: candidate-distributions
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Check out exact candidate
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          python-version: "3.12"
-
-      - name: Download exact retained candidate artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: candidate-distributions
-          path: ${{ runner.temp }}/candidate-dist
-
-      - name: Verify retained identity and install exact wheel
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m benchmarks.release.retained_artifact_manifest \
-            --repository . \
-            --dist "${RUNNER_TEMP}/candidate-dist" \
-            --output "${RUNNER_TEMP}/candidate-dist/retained-artifact-manifest.json" \
-            --verify
-          uv venv "${RUNNER_TEMP}/retained-venv" --python 3.12 --seed
-          uv pip install \
-            --python "${RUNNER_TEMP}/retained-venv/bin/python" \
-            "${RUNNER_TEMP}"/candidate-dist/deeplaw-0.12.0-*.whl
-          "${RUNNER_TEMP}/retained-venv/bin/python" \
-            benchmarks/hosts/run_production_launcher_registration.py \
-            --deeplaw-executable "${RUNNER_TEMP}/retained-venv/bin/deeplaw" \
-            --codex-command deeplaw-ci-codex-not-installed \
-            --opencode-command deeplaw-ci-opencode-not-installed \
-            --output "${RUNNER_TEMP}/retained-launcher-registration.json"
-
-      - name: Upload retained-wheel launcher receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: retained-wheel-launcher-registration
-          if-no-files-found: error
-          retention-days: 30
-          path: ${{ runner.temp }}/retained-launcher-registration.json
-
-  supply-chain:
-    name: Supply chain and reproducible release
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          python-version: "3.12"
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Check lockfile
-        run: uv lock --check
-
-      - name: Audit default dependencies
-        run: uv run --frozen python -m benchmarks.release.audit_dependencies --profile default
-
-      - name: Audit Discovery extra
-        run: uv run --frozen python -m benchmarks.release.audit_dependencies --profile discovery
-
-      - name: Audit document-engine extra with OpenVEX enforcement
-        run: >-
-          uv run --frozen python -m benchmarks.release.audit_dependencies
-          --profile document-engine
-
-      - name: Audit exact build environment
-        run: uv run --frozen python -m benchmarks.release.audit_dependencies --profile build
-
-      - name: Install all locked release profiles
-        run: uv sync --frozen --extra dev --extra discovery --extra document-engine
-
-      - name: Verify reproducible wheel, sdist, and package inventory
-        run: >-
-          uv run --frozen python -m benchmarks.release.verify_reproducible_build
-          --output "${{ runner.temp }}/reproducible-build.json"
-
-      - name: Generate CycloneDX SBOM
-        run: >-
-          uv export --quiet --frozen --all-extras --no-extra dev --no-dev
-          --format cyclonedx1.5 --output-file "${{ runner.temp }}/deeplaw.cdx.json"
-
-      - name: Scan installed licenses
-        run: >-
-          uv run --frozen python -m benchmarks.release.inventory_licenses
-          --output "${{ runner.temp }}/installed-licenses.json"
-
-      - name: Upload release evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-evidence
-          if-no-files-found: error
-          path: |
-            ${{ runner.temp }}/deeplaw.cdx.json
-            ${{ runner.temp }}/installed-licenses.json
-            ${{ runner.temp }}/reproducible-build.json
+          uv run --frozen pytest --strict-markers -q
+          tests/test_v013_pass21_task_routing_closure.py
+          tests/test_v013_pass21_windows_acl_environment.py
+          tests/test_v013_pass21_release_closure.py
+          tests/test_v013_gate_validator_v1.py
+          tests/test_v013_task_continuity_driver.py
+          tests/test_closed_mcp_launcher.py
+          tests/test_v013_pass16_host_version_binding.py
+          tests/test_v013_commercial_release_gate.py
+          tests/test_v013_platform_core_manifest.py
+          tests/test_release_engineering.py
 
   windows-sentinel:
-    name: Windows Host, ACL, continuity, and projection sentinel
-    needs: source-integrity
+    name: Windows launcher, native ACL, environment, and continuity sentinel
     runs-on: windows-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 20
     steps:
-      - name: Check out repository
+      - name: Check out exact candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -442,19 +72,15 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Install dependencies
+      - name: Install focused dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Run CLI and MCP smoke tests
+      - name: Run native Windows sentinel
+        env:
+          PYTHONUTF8: "1"
         run: >-
-          uv run --frozen pytest --strict-markers -vv --maxfail=1
-          tests/test_golden_cli.py
-          tests/test_knowledge_cli_acceptance.py
-          tests/test_knowledge_control.py
-          tests/test_knowledge_mcp.py
-          tests/test_knowledge_plugin.py
-          tests/test_mcp_cli.py
-          tests/test_operator_workbench.py
+          uv run --frozen pytest --strict-markers -q
           tests/test_windows_acl.py
+          tests/test_v013_pass21_windows_acl_environment.py
+          tests/test_closed_mcp_launcher.py
           tests/test_v013_task_continuity_driver.py
-          tests/test_v013_projection_recovery.py::test_symlinked_projection_ancestor_fails_closed

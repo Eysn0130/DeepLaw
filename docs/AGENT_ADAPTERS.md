@@ -381,16 +381,21 @@ deeplaw knowledge host connect --host claude-code --vault ./vault
 deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
-For task-continuity setup, an ordinary user generates one host-neutral opaque handle. DeepLaw
-normalizes the chosen project/task labels, derives only digests for project, task lineage,
-repository and worktree, and recomputes the base revision and bounded dirty snapshot from the
-selected Git worktree. The user does not construct the binding hashes:
+Static Host configuration is task-neutral. For task continuity, DeepLaw normalizes the chosen
+project/task labels, derives only digests for project, task lineage, repository and worktree, and
+recomputes the base revision and bounded dirty snapshot from the explicitly selected Git worktree.
+An opaque task handle remains an optional exact optimization; ordinary recovery locates the route
+from project + task text + current workspace and returns a Gap if more than one route remains:
 
 ```bash
 deeplaw knowledge task start --vault ./vault \
   --project DeepLaw --task 'Finish the selected task.' --workspace .
-deeplaw knowledge host connect --host codex --vault ./vault \
-  --task-handle taskh_REPLACE_WITH_RETURNED_HANDLE
+deeplaw knowledge task locate --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task timeline --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task resume --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
 ```
 
 The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
@@ -413,9 +418,11 @@ MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the e
 authentication or runtime state, or enable the separate `knowledge_sink` process. It does perform
 one narrowly scoped owner-local DeepLaw configuration write that binds the opaque Vault ID to the
 selected path; the plan reports that write explicitly. The plan itself is path-free, binds
-`--expected-vault-id`, and uses the fixed closed launcher. An optional task handle is converted to
-the existing canonical task binding only after the selected worktree and current Git snapshot are
-revalidated. The compatibility `--task-binding` form remains available for existing callers. A
+`--expected-vault-id`, and uses the fixed closed launcher. Static configuration cannot embed a task
+handle. At Host lifecycle time, a Host-local official session event supplies its current cwd plus
+an optional Host session/fork hint; the adapter passes the explicit workspace and DeepLaw
+re-resolves the Vault/project/task/workspace binding. The launcher never falls back to ambient
+`Path.cwd()`. The compatibility `--task-binding` form remains available for existing callers. A
 configured launcher binding is a fixed read boundary: a call cannot replace it with another line.
 
 Owner-side direct verification remains explicit:
@@ -432,6 +439,13 @@ the generated plan. Qualification
 receipts, Provider Capsules, logs, screenshots, and public support bundles also omit it. Adapters
 continue to delegate retrieval, admission, governance, and persistence to the shared domain
 services.
+
+Codex continuity consumes only the public `thread/start`, `thread/resume`, `thread/fork`, and
+`thread/compact` lifecycle, official session/fork lineage, and cwd. OpenCode continuity consumes
+the public session lifecycle of exact version `1.18.16`. Host IDs are untrusted routing hints, not
+DeepLaw identity or Authority: DeepLaw rebinds them to the owner-selected Vault, project, task, and
+workspace. Neither adapter stores transcript, hidden reasoning, authentication material, or Host
+private memory, and neither implements a second Agent runtime.
 
 The shipped MCP caller inventory is closed as follows:
 

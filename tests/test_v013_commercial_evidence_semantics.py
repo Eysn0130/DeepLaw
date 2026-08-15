@@ -279,12 +279,15 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
     assert {
         item["gate_id"] for item in CLASSIFICATION["gates"] if item["category"] == "Core"
     } == set(CORE_GATES)
-    assert set(CORE_GATES) == release_policy.V013_CORE_GATE_IDS - {"opencode"}
+    assert set(CORE_GATES) == release_policy.V013_CORE_GATE_IDS - {
+        "opencode",
+        "timeline",
+    }
     assert {
         item["gate_id"]
         for item in CLASSIFICATION["gates"]
         if item["category"] == "Capability"
-    } == release_policy.V013_CAPABILITY_GATE_IDS | {"opencode"}
+    } == release_policy.V013_CAPABILITY_GATE_IDS | {"opencode", "timeline"}
     assert {
         item["gate_id"]
         for item in CLASSIFICATION["gates"]
@@ -592,7 +595,7 @@ def test_v013_assembler_rejects_legacy_self_report_bytes(tmp_path: Path) -> None
         )
 
 
-def test_v013_provenance_assembler_remains_disabled_until_core_validators_exist(
+def test_v013_provenance_assembler_rejects_legacy_v3_after_validator_activation(
     tmp_path: Path,
 ) -> None:
     template, _report_value, root = _release_inputs(tmp_path)
@@ -616,7 +619,7 @@ def test_v013_provenance_assembler_remains_disabled_until_core_validators_exist(
         classification_path.read_bytes()
     ).hexdigest()
 
-    with pytest.raises(V013CommercialReleaseError, match="assembly remains disabled"):
+    with pytest.raises(V013CommercialReleaseError, match="gate collection v1"):
         assemble_manifest(
             template,
             semantic_report_path="evidence/semantic-report.json",

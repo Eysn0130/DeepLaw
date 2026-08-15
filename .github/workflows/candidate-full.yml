@@ -1,0 +1,337 @@
+name: Candidate Full
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - labeled
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-full-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verified-artifact:
+    name: Freeze the single verified wheel and sdist
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'candidate-full' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Verify frozen source prerequisites
+        run: |
+          uv lock --check
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv sync --frozen --extra dev
+
+      - name: Build twice and publish only the byte-identical artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_date_epoch=$(git show -s --format=%ct HEAD)
+          uv run --frozen python -m benchmarks.release.verify_reproducible_build \
+            --source-date-epoch "${source_date_epoch}" \
+            --artifact-dir "${RUNNER_TEMP}/verified-dist" \
+            --output "${RUNNER_TEMP}/verified-dist/reproducible-build.json"
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --dist "${RUNNER_TEMP}/verified-dist" \
+            --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json"
+          uv run --frozen python -m benchmarks.release.freeze_qualification_candidate \
+            --template benchmarks/v013/active-qualification-v1.json \
+            --reproducible-report "${RUNNER_TEMP}/verified-dist/reproducible-build.json" \
+            --artifact-manifest "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
+            --output "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
+
+      - name: Retain the one verified artifact source
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-candidate-artifacts
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/verified-dist/
+
+  windows-calibration:
+    name: Measure exact Windows Python 3.12 module durations
+    needs: verified-artifact
+    runs-on: windows-latest
+    timeout-minutes: 100
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev --extra discovery
+
+      - name: Download and verify the exact candidate artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Execute duration calibration
+        env:
+          PYTHONUTF8: "1"
+        run: >-
+          uv run --frozen pytest --strict-markers
+          -m "not qualification"
+          --junitxml="${{ runner.temp }}/windows-calibration.xml"
+
+      - name: Fresh-install the exact Windows Python 3.12 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/verified-dist"
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . --dist "${dist}" \
+            --output "${dist}/retained-artifact-manifest.json" --verify
+          wheel=$(find "${dist}" -maxdepth 1 -type f -name '*.whl')
+          uv venv "${RUNNER_TEMP}/fresh" --python "3.12" --seed
+          uv pip install --python "${RUNNER_TEMP}/fresh/Scripts/python.exe" "${wheel}"
+          "${RUNNER_TEMP}/fresh/Scripts/deeplaw.exe" --version
+
+      - name: Freeze duration weights
+        run: >-
+          uv run --frozen python -m benchmarks.release.candidate_regression
+          weights
+          --junit "${{ runner.temp }}/windows-calibration.xml"
+          --output "${{ runner.temp }}/windows-duration-weights.json"
+
+      - name: Retain exact duration calibration
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-duration-calibration
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/windows-calibration.xml
+            ${{ runner.temp }}/windows-duration-weights.json
+
+  posix-matrix:
+    name: Full ${{ matrix.os }} Python ${{ matrix.python-version }}
+    needs: verified-artifact
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download the exact verified artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Verify identity, execute full current-source suite, and fresh-install exact wheel
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev --extra discovery
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . \
+            --dist "${RUNNER_TEMP}/verified-dist" \
+            --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
+            --verify
+          uv run --frozen pytest --strict-markers \
+            -m "not qualification and not windows_native" \
+            --junitxml="${RUNNER_TEMP}/candidate-tests.xml"
+          wheel=$(find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type f -name '*.whl')
+          test "$(printf '%s\n' "${wheel}" | wc -l | tr -d ' ')" = 1
+          uv venv "${RUNNER_TEMP}/fresh" --python "${{ matrix.python-version }}" --seed
+          uv pip install --python "${RUNNER_TEMP}/fresh/bin/python" "${wheel}"
+          "${RUNNER_TEMP}/fresh/bin/deeplaw" --version
+
+      - name: Retain matrix JUnit
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-full-${{ matrix.os }}-${{ matrix.python-version }}
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/candidate-tests.xml
+
+  windows-shards:
+    name: Full Windows Python ${{ matrix.python-version }} duration shard ${{ matrix.shard }} of 3
+    needs:
+      - verified-artifact
+      - windows-calibration
+    runs-on: windows-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.13"
+        shard:
+          - 1
+          - 2
+          - 3
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download the exact verified artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          path: ${{ runner.temp }}/inputs/verified-candidate-artifacts
+
+      - name: Download the deterministic duration weights
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-duration-calibration
+          path: ${{ runner.temp }}/inputs/windows-duration-calibration
+
+      - name: Select deterministic duration-weighted shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev --extra discovery
+          uv run --frozen python -m benchmarks.release.candidate_regression \
+            select \
+            --duration-weights "${RUNNER_TEMP}/inputs/windows-duration-calibration/windows-duration-weights.json" \
+            --shard-count 3 \
+            --shard-index "${{ matrix.shard }}" \
+            --output "${RUNNER_TEMP}/candidate-test-shard.json" \
+            --paths-output "${RUNNER_TEMP}/candidate-test-files.txt"
+
+      - name: Execute exact Windows shard
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < "${RUNNER_TEMP}/candidate-test-files.txt"
+          uv run --frozen pytest --strict-markers \
+            -m "not qualification" \
+            --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
+            "${test_files[@]}"
+          uv run --frozen python -m benchmarks.release.candidate_regression \
+            receipt \
+            --junit "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-skip-receipt.json" \
+            --matrix-os windows-latest \
+            --matrix-python "${{ matrix.python-version }}" \
+            --shard-manifest "${RUNNER_TEMP}/candidate-test-shard.json"
+
+      - name: Verify and fresh-install the exact artifact once per Python
+        if: matrix.shard == 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/inputs/verified-candidate-artifacts"
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . --dist "${dist}" \
+            --output "${dist}/retained-artifact-manifest.json" --verify
+          wheel=$(find "${dist}" -maxdepth 1 -type f -name '*.whl')
+          uv venv "${RUNNER_TEMP}/fresh" --python "${{ matrix.python-version }}" --seed
+          uv pip install --python "${RUNNER_TEMP}/fresh/Scripts/python.exe" "${wheel}"
+          "${RUNNER_TEMP}/fresh/Scripts/deeplaw.exe" --version
+
+      - name: Retain exact Windows shard evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-full-windows-${{ matrix.python-version }}-${{ matrix.shard }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/candidate-tests.xml
+            ${{ runner.temp }}/candidate-test-shard.json
+            ${{ runner.temp }}/candidate-skip-receipt.json
+
+  windows-aggregate:
+    name: Verify complete disjoint Windows Python ${{ matrix.python-version }} coverage
+    needs: windows-shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.13"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Download exact shard receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: candidate-full-windows-${{ matrix.python-version }}-*
+          path: ${{ runner.temp }}/windows-shards
+
+      - name: Aggregate and rebuild shard coverage
+        run: >-
+          python -m benchmarks.release.candidate_regression
+          aggregate
+          --input-directory "${{ runner.temp }}/windows-shards"
+          --matrix-python "${{ matrix.python-version }}"
+          --output "${{ runner.temp }}/windows-aggregate.json"
+
+      - name: Retain aggregate receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-full-windows-${{ matrix.python-version }}-aggregate
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/windows-aggregate.json

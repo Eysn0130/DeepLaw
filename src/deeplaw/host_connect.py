@@ -71,6 +71,11 @@ def build_host_connect_plan(
 
     if host not in {"codex", "claude-code", "opencode"}:
         raise ValueError("host must be codex, claude-code, or opencode")
+    if task_handle is not None:
+        raise ValueError(
+            "static Host configuration cannot bind a task handle; pass it with explicit "
+            "Host workspace metadata at lifecycle time"
+        )
     selected_host = cast(HostName, host)
     selected_task_binding = normalize_task_context_binding(
         task_binding,
@@ -233,16 +238,8 @@ def build_host_connect_plan(
     argv = _server_argv(
         vault_id=vault_id,
         task_binding=selected_task_binding,
-        task_handle=task_handle,
+        task_handle=None,
     )
-    selected_task_handle: dict[str, Any] | None = None
-    if task_handle is not None:
-        from .task_continuity import decode_task_handle
-
-        selected_task_handle = decode_task_handle(
-            task_handle,
-            expected_vault_id=vault_id,
-        )
     owner_binding = bind_owner_vault(selected_vault, owner_home=owner_home)
     plugin_manifest: dict[str, Any] | None = None
     if selected_host == "codex":
@@ -344,12 +341,8 @@ def build_host_connect_plan(
             if selected_task_binding is not None
             else None
         ),
-        "task_handle_configured": selected_task_handle is not None,
-        "task_handle_sha256": (
-            selected_task_handle["task_handle_sha256"]
-            if selected_task_handle is not None
-            else None
-        ),
+        "task_handle_configured": False,
+        "task_handle_sha256": None,
         "configuration_kind": configuration_kind,
         "configuration_format": configuration_format,
         "merge_targets": merge_targets,

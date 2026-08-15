@@ -25,6 +25,43 @@ fixture whose filename says `holdout`, is not a qualification holdout or a final
 this protocol. A holdout used for diagnosis, tuning, or repair is automatically downgraded to the
 development layer.
 
+## Pass 21 active candidate and evidence assembly
+
+The frozen protocol JSON above remains byte-for-byte historical. Pass 21 adds the separate active
+candidate contract `deeplaw.v013-active-qualification/v1`, whose tracked construction document is
+`benchmarks/v013/active-qualification-v1.json`. The generic schema accepts bounded pure semver; an
+externally materialized `frozen_exact_candidate`, however, is admitted only for exact `0.13.0` and
+must bind all of the following before any real qualification execution:
+
+- clean source commit, tree, `uv.lock` SHA-256, and `SOURCE_DATE_EPOCH`;
+- the single reproducibly verified wheel and sdist names and SHA-256 values;
+- the retained artifact manifest bytes;
+- repository-external Human Gold, qualification holdout, final-blind holdout, and
+  compiler/scorer-isolation manifest SHA-256 values;
+- Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` / `reasoning=max` and OpenCode `1.18.16` /
+  `deepseek/deepseek-v4-flash`.
+
+The tracked document remains `candidate_version=0.12.0`, `status=construction_candidate`, and
+`blocker=release_version_binding_deadlock`. This is deliberate: package version may change to
+`0.13.0` only after behavior, dependencies, Platform Core v2, and external input hashes are final.
+The reproducible build then materializes the frozen active binding outside the source tree, which
+avoids an artifact-hash/source-tree circular dependency. Changing the package version earlier, or
+using `0.12.0` evidence for a later `0.13.0` package, is forbidden.
+
+Gate classification v6 preserves v1-v5 and makes Timeline a required Core Gate. Mechanical Gates
+use the exact development source binding and do not pretend to need a blind corpus. Human, Host,
+Legal, Context, and other semantic Gates require the external qualification or final-blind layer.
+Raw evidence has no caller-authored pass flag: the validator reopens bounded strict JSON, verifies
+the active candidate/protocol/Gold/corpus/isolation/Host bindings, recomputes raw metrics and hard
+failures, and emits a derived Gate Result. One raw execution may be reused by several independent
+validators. The release assembler reopens every Core result and raw input and enables a release
+decision only when the collection contains exactly every Core Gate, every validator reproduces,
+every Core status is `passed`, and every hard-failure count is zero.
+
+This makes validator and assembly availability a code property, not a qualification result. While
+the tracked active candidate is not frozen, all Core Gate executions remain `not_executed`, and no
+empty or skeleton collection is produced.
+
 ## Frozen minimum Kernel compatibility map
 
 Minimum Kernel compatibility parity is a release acceptance requirement and has not yet been

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .bounded_subprocess import BoundedSubprocessError, run_bounded_subprocess
+from .subprocess_environment import _build_subprocess_environment
 from .util import strict_json_loads
 
 WINDOWS_ACL_SCHEMA = "deeplaw.windows-acl-report/v1"
@@ -176,6 +177,15 @@ def harden_windows_sqlite_sidecars(
 
 def _run_encoded_script(script: str, *, environment: dict[str, str]) -> dict[str, Any]:
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    if any(
+        not isinstance(name, str)
+        or not name.startswith("DEEPLAW_ACL_")
+        or not isinstance(value, str)
+        for name, value in environment.items()
+    ):
+        raise ValueError("native Windows ACL environment is invalid")
+    closed_environment = _build_subprocess_environment(platform_name="nt")
+    closed_environment.update(environment)
     try:
         process = run_bounded_subprocess(
             [
@@ -191,7 +201,7 @@ def _run_encoded_script(script: str, *, environment: dict[str, str]) -> dict[str
             timeout_seconds=120,
             max_stdout_bytes=16 * 1024 * 1024,
             max_stderr_bytes=1024 * 1024,
-            environment={**os.environ, **environment},
+            environment=closed_environment,
         )
     except BoundedSubprocessError as error:
         raise RuntimeError("native Windows ACL command failed closed") from error

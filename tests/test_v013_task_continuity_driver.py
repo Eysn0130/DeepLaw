@@ -120,15 +120,21 @@ def test_task_handle_drives_restart_fork_compaction_checkpoint_and_forget(
     assert started["write_performed"] is False
     assert str(repository) not in handle
     assert "Finish the bounded task driver" not in handle
+    with pytest.raises(ValueError, match="static Host configuration"):
+        build_host_connect_plan(
+            host="codex",
+            vault_path=vault,
+            task_handle=handle,
+            owner_home=tmp_path / "owner-home",
+        )
     plan = build_host_connect_plan(
         host="codex",
         vault_path=vault,
-        task_handle=handle,
         owner_home=tmp_path / "owner-home",
     )
     assert plan["task_binding_configured"] is False
-    assert plan["task_handle_configured"] is True
-    assert plan["task_handle_sha256"] == started["task_handle_sha256"]
+    assert plan["task_handle_configured"] is False
+    assert plan["task_handle_sha256"] is None
     assert str(vault) not in str(plan)
     assert str(repository) not in str(plan)
     monkeypatch.chdir(repository)
@@ -136,6 +142,7 @@ def test_task_handle_drives_restart_fork_compaction_checkpoint_and_forget(
         surface="knowledge_support",
         vault_path=vault,
         task_handle=handle,
+        workspace=repository,
     ) as launch:
         assert "DEEPLAW_TASK_BINDING" in launch.environment
 
@@ -186,15 +193,19 @@ def test_task_handle_drives_restart_fork_compaction_checkpoint_and_forget(
         mode="continue-parent",
     )
     assert continued["task_handle"] == handle
+    child_worktree = tmp_path / "child-worktree"
+    _git(repository, "worktree", "add", "-q", "--detach", str(child_worktree), "HEAD")
     child = fork_task(
         vault_path=vault,
         task_handle=handle,
         workspace=repository,
+        child_workspace=child_worktree,
         mode="child-task",
         child_task="Implement the child-only validation.",
     )
     assert child["task_handle"] != handle
     assert child["parent_task_lineage_sha256"] == started["task_lineage_sha256"]
+    assert child["workspace_independent"] is True
 
     compacted = resume_task(
         vault_path=vault,

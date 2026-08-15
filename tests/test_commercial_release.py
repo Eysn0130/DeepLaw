@@ -296,7 +296,7 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
     exact_ci_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
     assert commercial.count(exact_commercial_ref) == 7
     assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
-    assert ci.count(exact_ci_ref) == 8
+    assert ci.count(exact_ci_ref) == 2
     assert "  pull_request:" not in commercial
     assert "qualification and not windows_native" in commercial
     assert 'marker: not qualification' in commercial
@@ -306,29 +306,36 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
 
 def test_candidate_ci_is_current_source_regression_not_release_readiness() -> None:
     ci = (REPOSITORY / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    candidate = (REPOSITORY / ".github/workflows/candidate-full.yml").read_text(
+        encoding="utf-8"
+    )
 
-    assert "current-source regression" in ci
-    assert "runs-on: ${{ matrix.os }}" in ci
-    assert "timeout-minutes: 240" not in ci
-    assert "timeout-minutes: 150" in ci
-    assert all(system in ci for system in ("ubuntu-latest", "macos-latest", "windows-latest"))
-    assert all(version in ci for version in ('"3.11"', '"3.12"', '"3.13"'))
-    assert "fail-fast: false" in ci
-    assert "shard ${{ matrix.shard }} of 3" in ci
-    assert "benchmarks.release.candidate_regression" in ci
-    assert "Verify complete disjoint Windows coverage" in ci
-    assert "candidate-skip-receipt.json" in ci
-    assert "candidate-current-source-inventory.json" in ci
-    assert "benchmarks.release.platform_inventory" in ci
+    assert "name: Fast PR" in ci
+    assert "timeout-minutes: 20" in ci
+    assert "Ubuntu Python 3.12" in ci
+    assert "windows-sentinel" in ci
+    assert "uv lock --check" in ci
+    assert "ruff check ." in ci
+    assert "git diff --check" in ci
 
-    aggregate = ci.split("  windows-regression-aggregate:", 1)[1].split(
-        "  candidate-distributions:", 1
-    )[0]
+    assert "runs-on: ${{ matrix.os }}" in candidate
+    assert all(
+        system in candidate
+        for system in ("ubuntu-latest", "macos-latest", "windows-latest")
+    )
+    assert all(version in candidate for version in ('"3.11"', '"3.12"', '"3.13"'))
+    assert "fail-fast: false" in candidate
+    assert "duration shard ${{ matrix.shard }} of 3" in candidate
+    assert "benchmarks.release.candidate_regression" in candidate
+    assert "Verify complete disjoint Windows" in candidate
+    assert "candidate-skip-receipt.json" in candidate
+    assert "windows-duration-weights.json" in candidate
+
+    aggregate = candidate.split("  windows-aggregate:", 1)[1]
     assert "setup-uv" not in aggregate
     assert "python -m benchmarks.release.candidate_regression" in aggregate
-    assert "candidate_current_source_inventory" in ci or "--mode candidate" in ci
-    assert "--require-eligible" not in ci
-    assert "--selection common" in ci
+    assert "--require-eligible" not in candidate
+    assert "tests/test_v013_pass21_release_closure.py" in ci
 
 
 def test_manual_platform_core_preflight_is_fail_closed_before_core_execution() -> None:
@@ -355,13 +362,17 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert "--verify-report-dir" in gate
     assert 'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in gate
     assert "--evaluation" in gate
-    assert "evaluation/EVALUATION_SHA256SUMS" in release
     assert "python -m benchmarks.release.release_policy" in release
-    publish = release.split("\n  publish:", maxsplit=1)[1].split("\n  post-release:", maxsplit=1)[0]
-    post_release = release.split("\n  post-release:", maxsplit=1)[1]
+    publish = release.split("\n  publish:", maxsplit=1)[1].split(
+        "\n  public-redownload:", maxsplit=1
+    )[0]
+    public_redownload = release.split("\n  public-redownload:", maxsplit=1)[1]
     assert "deeplaw.commercial-release-manifest/v5" not in publish
-    assert "deeplaw.commercial-release-manifest/v5" not in post_release
-    assert "semantic_evidence_run_id" in release
+    assert "deeplaw.commercial-release-manifest/v5" not in public_redownload
+    assert "qualification_run_id" in release
+    assert "candidate_run_id" in release
+    assert "commercial-release-assets" in release
+    assert "verified-candidate-artifacts" in release
     assert "semantic-release-evidence" in gate
     assert "--semantic-consensus" in gate
     assert gate.count("--semantic-machine-review") == 6
@@ -381,7 +392,8 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert gate.count('python: "3.12"') == 3
     assert gate.count('python: "3.13"') == 3
     assert "--expected-python" in gate
-    assert 'manifest.get("quality_protocol_eligible") is not True' in release
+    assert "benchmarks.release.semantic_evidence" in release
+    assert "benchmarks.release.retained_artifact_manifest" in release
 
 
 def test_living_wiki_quality_uploads_partial_evidence_after_scorer_failure() -> None:
@@ -437,8 +449,8 @@ def test_semantic_release_evidence_uses_deterministic_machine_consensus() -> Non
     assert "reviewer_id" not in workflow
     assert "semantic-review-vault.tar.gz" not in workflow
     assert "external_model_execution" not in workflow
-    assert "semantic_evidence_run_id" in release
-    assert "semantic-release-evidence" in release
+    assert "commercial-qualification.yml" in release
+    assert "semantic-release-evidence" not in release
     assert lifecycle_schema["properties"]["formal_release_evidence_ready"] == {
         "const": False
     }
@@ -467,44 +479,21 @@ def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
 def test_release_workflow_resumes_without_overwriting_published_assets() -> None:
     workflow = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
-    validation = workflow.split(
-        "      - name: Create and verify Sigstore OIDC bundles", maxsplit=1
-    )[0]
-    assert 'for path in sorted(assets_root.rglob("*")):' in validation
-    assert 'raise SystemExit(f"duplicate release asset basename: {path.name}")' in validation
-    assert "files_by_name.get(name)" in validation
-    assert "hashlib.sha256(path.read_bytes()).hexdigest()" in validation
-    assert "expected_names = set(files_by_name) - {checksum_path.name}" in validation
-    assert 'raise SystemExit("release checksum inventory is incomplete")' in validation
-    assert "sha256sum --check SHA256SUMS" not in validation
     assert "Create or resume the release without overwriting assets" in workflow
-    assert "Attach or verify post-release evidence without overwriting assets" in workflow
-    assert "post_release_only" in workflow
-    assert "needs.publish.result == 'success'" in workflow
-    assert "verified provenance: %s" in workflow
-    assert "verified CycloneDX SBOM: %s" in workflow
-    assert "uvx --from sigstore==4.3.0 sigstore sign" in workflow
+    assert "cmp --silent" in workflow
+    assert "published release asset differs" in workflow
+    assert "--clobber" not in workflow
+    assert "Publicly redownload immutable release without credentials" in workflow
+    assert "GH_TOKEN: ${{ github.token }}" not in workflow.split(
+        "  public-redownload:", maxsplit=1
+    )[1]
+    assert "curl --fail --location" in workflow
+    assert "sha256sum --check SHA256SUMS" in workflow
+    assert "sigstore/gh-action-sigstore-python" in workflow
+    assert '"${artifact}.sigstore.json"' in workflow
     assert "uvx --from sigstore==4.3.0 sigstore verify identity" in workflow
-    assert '--cert-identity "${RELEASE_CERT_IDENTITY}"' in workflow
-    assert (
-        "https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/"
-        in workflow
-    )
-    assert "required_signed_assets=(" in workflow
-    assert '"commercial-release-manifest.json"' in workflow
-    assert '"SHA256SUMS"' in workflow
-    assert "-name '*.sigstore.json' -print0 | sort -z" in workflow
-    assert 'artifact="${bundle%.sigstore.json}"' in workflow
-    assert "verified_bundle_count=$((verified_bundle_count + 1))" in workflow
-    assert "releases?per_page=100" in workflow
-    assert "for attempt in 1 2 3 4 5; do" in workflow
-    assert 'if [[ "${attempt}" -eq 5 ]]; then' in workflow
-    assert "draft release was not observable after bounded retries" in workflow
-    assert "release_id=$(jq -r '.id'" in workflow
-    assert "uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" in workflow
-    assert "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" in workflow
-    assert "{tag_name, target_commitish, name, body, draft, prerelease, make_latest}" in workflow
-    assert workflow.count('remote_digest=$(jq -r --arg name "${name}"') == 2
-    assert '[[ "${remote_digest}" == "${local_digest}" ]]' in workflow
-    assert workflow.count('gh release upload "${RELEASE_TAG}" "${asset}"') == 1
+    assert "gh attestation verify" in workflow
+    assert "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" in workflow
+    assert "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" in workflow
+    assert 'gh release upload "${RELEASE_TAG}" "${artifact}"' in workflow
     assert "--clobber" not in workflow

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/task-continuity-result.v2.schema.json",
+  "title": "DeepLaw content-minimized task continuity result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "status",
+    "write_performed",
+    "transcript_copied",
+    "native_host_lifecycle_observed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.task-continuity-result/v2"},
+    "operation": {
+      "enum": [
+        "start", "locate", "inspect", "timeline", "fork", "resume",
+        "compaction", "checkpoint", "forget"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ready", "exact", "admitted", "gap", "checkpointed", "partial",
+        "forgotten", "not_found", "workspace_diverged", "ambiguous",
+        "index_unavailable", "bound_exceeded", "invalid"
+      ]
+    },
+    "write_performed": {"type": "boolean"},
+    "transcript_copied": {"const": false},
+    "native_host_lifecycle_observed": {"const": false},
+    "task_handle": {"type": "string", "pattern": "^taskh_[A-Za-z0-9_-]+$", "maxLength": 2048},
+    "task_handle_sha256": {"$ref": "#/$defs/sha256"},
+    "project_sha256": {"$ref": "#/$defs/sha256"},
+    "task_lineage_sha256": {"$ref": "#/$defs/sha256"},
+    "parent_task_lineage_sha256": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "workspace_bound": {"const": true},
+    "binding_sha256": {"$ref": "#/$defs/sha256"},
+    "checkpoint_identity": {"$ref": "#/$defs/identifier"},
+    "knowledge_identity": {"$ref": "#/$defs/identifier"},
+    "fork_mode": {"enum": ["continue-parent", "child-task"]},
+    "workspace_independent": {"type": "boolean"},
+    "checkpoint_route_status": {"$ref": "#/$defs/identifier"},
+    "gap_codes": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "provider_capsule": {"type": "object"},
+    "deterministic_data_plane_recovery": {"const": true},
+    "entries": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/timelineEntry"}
+    },
+    "timeline_truncated": {"type": "boolean"},
+    "sink_leaf": {"const": "knowledge_sink"},
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "run_status": {"enum": ["succeeded", "failed", "partial", "aborted"]},
+    "checkpoint_status": {"const": "pending_idempotent_retry"},
+    "recovery_idempotency_key_sha256": {"$ref": "#/$defs/sha256"},
+    "knowledge_id": {"$ref": "#/$defs/identifier"},
+    "revision_id": {"$ref": "#/$defs/identifier"},
+    "gap": {"$ref": "#/$defs/gap"},
+    "workspace_snapshot": {"type": "object"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,511}$"
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 100},
+        "candidate_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "cause_type": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "timelineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_type", "identity", "status", "recorded_at", "artifact_identities"
+      ],
+      "properties": {
+        "entry_type": {"enum": ["run", "checkpoint", "ledger"]},
+        "identity": {"$ref": "#/$defs/identifier"},
+        "related_identity": {"$ref": "#/$defs/identifier"},
+        "status": {"$ref": "#/$defs/identifier"},
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "artifact_identities": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    }
+  }
+}

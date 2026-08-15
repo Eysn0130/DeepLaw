@@ -23,9 +23,11 @@ from benchmarks.release.evidence import (
 )
 
 SCHEMA_VERSION = "deeplaw.platform-release-gate/v1"
-MANIFEST_SCHEMA_VERSION = "deeplaw.platform-core-test-manifest/v1"
-BINDING_RECEIPT_SCHEMA_VERSION = "deeplaw.platform-gate-binding-receipt/v1"
-MANIFEST_FILENAME = "platform-core-test-manifest-v1.json"
+MANIFEST_SCHEMA_VERSION = "deeplaw.platform-core-test-manifest/v2"
+HISTORICAL_MANIFEST_SCHEMA_VERSION = "deeplaw.platform-core-test-manifest/v1"
+BINDING_RECEIPT_SCHEMA_VERSION = "deeplaw.platform-gate-binding-receipt/v2"
+HISTORICAL_BINDING_RECEIPT_SCHEMA_VERSION = "deeplaw.platform-gate-binding-receipt/v1"
+MANIFEST_FILENAME = "platform-core-test-manifest-v2.json"
 SUPPORTED_SYSTEMS = frozenset({"Linux", "Darwin", "Windows"})
 SUPPORTED_PYTHON_MINORS = frozenset({"3.11", "3.12", "3.13"})
 REQUIRED_TEST_MODULES = frozenset(
@@ -46,6 +48,7 @@ WINDOWS_NATIVE_TESTS = frozenset(
         "test_native_windows_vault_acl_is_owner_only_after_real_ingest",
         "test_native_windows_acl_rejects_directory_junction",
         "test_host_connect_and_launcher_reject_junction_ancestor",
+        "test_closed_launcher_hardens_root_home_tmp_and_work_with_native_acl",
     }
 )
 
@@ -69,9 +72,10 @@ _STRICT_MANDATORY_FIELDS = frozenset(
 )
 
 
-def _manifest_schema_path() -> Path:
+def _manifest_schema_path(schema_version: str) -> Path:
+    suffix = "v2" if schema_version == MANIFEST_SCHEMA_VERSION else "v1"
     return Path(__file__).resolve().parents[2] / "contracts" / (
-        "platform-core-test-manifest.v1.schema.json"
+        f"platform-core-test-manifest.{suffix}.schema.json"
     )
 
 
@@ -158,12 +162,16 @@ def load_platform_manifest(path: Path) -> dict[str, Any]:
         raise PlatformGateError("platform test manifest must be a regular file")
     try:
         manifest = load_json(selected)
-        schema = load_json(_manifest_schema_path())
+        schema_version = manifest.get("schema_version")
+        if schema_version not in {
+            MANIFEST_SCHEMA_VERSION,
+            HISTORICAL_MANIFEST_SCHEMA_VERSION,
+        }:
+            raise PlatformGateError("platform test manifest schema is unsupported")
+        schema = load_json(_manifest_schema_path(str(schema_version)))
         Draft202012Validator(schema).validate(manifest)
     except (OSError, RuntimeError, ValidationError) as error:
         raise PlatformGateError(f"platform test manifest is invalid: {error}") from error
-    if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
-        raise PlatformGateError("platform test manifest schema is unsupported")
     if manifest.get("manifest_sha256") != _manifest_digest(manifest):
         raise PlatformGateError("platform test manifest digest is invalid")
     _validate_manifest_invariants(manifest)
@@ -384,8 +392,13 @@ def _binding_receipt(
     manifest_path: Path,
     mandatory: dict[str, Any],
 ) -> dict[str, Any]:
+    receipt_schema_version = (
+        BINDING_RECEIPT_SCHEMA_VERSION
+        if manifest["schema_version"] == MANIFEST_SCHEMA_VERSION
+        else HISTORICAL_BINDING_RECEIPT_SCHEMA_VERSION
+    )
     return {
-        "schema_version": BINDING_RECEIPT_SCHEMA_VERSION,
+        "schema_version": receipt_schema_version,
         "binding": binding,
         "environment": environment,
         "toolchain": toolchain,
@@ -393,7 +406,7 @@ def _binding_receipt(
             "schema_version": manifest["schema_version"],
             "manifest": file_record(
                 manifest_path,
-                logical_name=MANIFEST_FILENAME,
+                logical_name=manifest_path.name,
             ),
             "manifest_sha256": manifest["manifest_sha256"],
             "inventory_selection": mandatory["inventory_selection"],
@@ -507,9 +520,10 @@ def build_report(
         binding_receipt["record_sha256"] = sha256_bytes(
             canonical_json(binding_receipt).encode("utf-8")
         )
+        receipt_suffix = "v2" if manifest["schema_version"] == MANIFEST_SCHEMA_VERSION else "v1"
         binding_schema = load_json(
             Path(__file__).resolve().parents[2]
-            / "contracts/platform-gate-binding-receipt.v1.schema.json"
+            / f"contracts/platform-gate-binding-receipt.{receipt_suffix}.schema.json"
         )
         Draft202012Validator(binding_schema).validate(binding_receipt)
         write_report(

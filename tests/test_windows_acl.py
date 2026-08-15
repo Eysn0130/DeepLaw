@@ -317,6 +317,29 @@ def test_native_windows_vault_acl_is_owner_only_after_real_ingest(tmp_path: Path
 
 
 @pytest.mark.windows_native
+@pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
+def test_closed_launcher_hardens_root_home_tmp_and_work_with_native_acl(
+    tmp_path: Path,
+) -> None:
+    from deeplaw.closed_mcp_launcher import closed_mcp_environment
+
+    vault = tmp_path / "launcher-vault"
+    initialize_knowledge_vault(vault, name="launcher-native-acl", scope="project")
+    initialize_autonomous_core(vault)
+
+    with closed_mcp_environment(
+        surface="knowledge_support",
+        vault_path=vault,
+    ) as launch:
+        root = Path(launch.cwd).parent
+        report = native_windows_acl_report(root)
+        protected = {Path(item["path"]).name for item in report["entries"]}
+        assert launch.native_acl_verified is True
+        assert report["permissions_verified"] is True
+        assert {"home", "tmp", "work"} <= protected
+
+
+@pytest.mark.windows_native
 @pytest.mark.skipif(os.name != "nt", reason="requires a native Windows junction")
 def test_native_windows_acl_rejects_directory_junction(tmp_path: Path) -> None:
     root = tmp_path / "vault"

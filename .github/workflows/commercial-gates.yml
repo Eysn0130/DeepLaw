@@ -1,4 +1,4 @@
-name: Commercial GA gates
+name: Legacy v0.12 Commercial GA gates
 
 on:
   workflow_call:
@@ -51,6 +51,16 @@ jobs:
           version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
+
+      - name: Reject v0.13 and later candidates
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          if tuple(map(int, version.split("."))) >= (0, 13, 0):
+              raise SystemExit("v0.13 must consume Candidate Full verified artifacts")
+          PY
 
       - name: Verify source and build exact distributions
         shell: bash

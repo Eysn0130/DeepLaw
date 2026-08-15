@@ -1,12 +1,25 @@
 # DeepLaw PRD 1.3.1 traceability matrix
 
 Status: **current source-candidate mapping**, carried forward from the Pass 5 full mapping and
-updated 2026-08-14 with the Pass 19 Host product-closure current fix.
+updated 2026-08-16 with the Pass 21 routing and qualification-contract current fix.
 This is not a fresh qualification, release note, or permission to implement every Target.
 
-Pass 19 current pointer: the fixed-target production MCP launcher closes the ambient Host/provider
-environment, Host Connect Plan v2 carries only an expected Vault identity plus an optional opaque
-task binding, and a no-model public stdio fixture covers explicit checkpoint/write, exact-route
+Pass 21 current pointer: ordinary Task recovery now locates one exact route from owner-visible
+project text, task text, and an explicit current Git worktree; the opaque handle remains an
+optional exact optimization. `task locate`, `task inspect`, and `task timeline` are bounded,
+read-only, content-minimized projections over the existing Run/Checkpoint/Ledger stores. Forks
+may bind a different worktree in the same repository, workspace snapshots digest bounded
+non-sensitive untracked content, Secret-looking candidates return a structured Gap without
+content inspection, and exact forget remains available after base/dirty drift. Timeline is
+therefore implemented and is a required Core Gate in Gate classification v6. No external Human
+Gold, real Host, Legal, Context, scale, Candidate Full, signature, or public-redownload result is
+created by this implementation status.
+See [`V0_13_PASS21_DISPOSITION.md`](V0_13_PASS21_DISPOSITION.md).
+
+Pass 19 compatibility pointer: the fixed-target production MCP launcher closes the ambient
+Host/provider environment. Pass 21 supersedes its task-bound static configuration: Host Connect
+Plan v2 now carries only an expected Vault identity, while lifecycle calls supply explicit cwd and
+optional task hints. A no-model public stdio fixture covers explicit checkpoint/write, exact-route
 read recovery, stale/wrong/ambiguous routes, selective forget, and read-only Ledger invariance.
 These are current-source development regressions, not Human Gold or real-Host qualification. See
 [`V0_13_PASS19_DISPOSITION.md`](V0_13_PASS19_DISPOSITION.md).
@@ -46,7 +59,7 @@ qualification passed. The default CLI product journey, layered Help, direct reco
 read-only Host connection plan, and frozen caller/contract preservation boundary are recorded in
 [`../governance/product-surface-manifest.v1.json`](../governance/product-surface-manifest.v1.json)
 and [`V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md`](V0_13_PASS11_CALLER_CONTRACT_INVENTORY.md).
-Run Timeline and semantic restore remain `not_claimed` as recorded in
+The historical Pass 11 Run Timeline and semantic restore disposition remains recorded in
 [`V0_13_PASS11_TIMELINE_RESTORE_DISPOSITION.md`](V0_13_PASS11_TIMELINE_RESTORE_DISPOSITION.md).
 The exact-candidate Obsidian seam, current Tolaria pin, professional-Evidence regressions, and
 partial 1k/10k/100k scale observations are bounded by
@@ -122,10 +135,11 @@ gate. Third-party desktop visual E2E is also not a Kernel release gate, while re
 Markdown/Wikilink/alias/link/rename/edit/reconcile behavior remains Core.
 
 The active classification is
-`../benchmarks/release/v013-gate-classification-v5.json`: Codex and OpenCode are both Core,
-required, and release-blocking; Claude, Timeline, and semantic restore remain optional and
-`not_claimed`. Pass 17 preserves the historical v4 bytes and rotates only the two active Host
-inputs from receipt v1 to v2; v1 is historical and invalid for current qualification. OpenCode
+`../benchmarks/release/v013-gate-classification-v6.json`: Codex, OpenCode, and Timeline are Core,
+required, and release-blocking; Claude and semantic restore remain optional and `not_claimed`.
+Gate v6 preserves v1-v5 as history, admits development corpus for deterministic/mechanical
+Gates, requires external holdout/final-blind material for semantic Gates, and derives every result
+through the current raw validator contract. OpenCode
 remains bound to exact tool version `1.18.16`; this prerequisite is not a Host result. Native Host
 qualification is separate from the nine-row Linux/macOS/Windows artifact gate. Human Gold, legal evidence, Context Utility,
 scale, three-OS evidence, and the provenance/signing/public-redownload artifact chain continue to
@@ -152,8 +166,8 @@ Three reproduced defects and minimum repairs are mapped here before the row-leve
 The route projection is derived/rebuildable. The continuity correction introduces no new
 canonical Knowledge table, migration, or sink schema, and `knowledge-sink.input/v2` bytes remain
 unchanged. This is a semantic compatibility boundary only. Core gates are not lowered; deferred
-Capability gates may remain `not_claimed` when not declared (Timeline, semantic restore, and
-Claude), while Codex and OpenCode are declared Core Host gates. The Competitive Claim gate is
+Capability gates may remain `not_claimed` when not declared (semantic restore and Claude), while
+Timeline, Codex, and OpenCode are declared Core gates. The Competitive Claim gate is
 independent of kernel evidence.
 
 ## Status and evidence rules
@@ -224,9 +238,9 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-CONT-009 | Optional future intention, never a scheduler | Deferred | None | None | None | None | No admitted user failure; not core v0.13 | Revisit only through feature admission |
 | PRD-CONT-010 | Bind Vault/project/task lineage/repo/worktree/base/dirty state | Target | KA, Q6, CAP, TC, TR kernel | route/snapshot binding v1; Query Plan v6; Capsule v3 | task routing, divergence, lineage, real-worktree regressions, Pass 2 route reservation/goal identity/head-conflict regressions | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | Top-20 loss and silent divergence reproduced; exact route reservation keeps a combined ceiling of `512` (`511` ordinary plus one exact route); real Host-neutral identity derivation, fork reconciliation, independent Gold, and full external scale remain absent | Run a fresh unseen concurrent-worktree holdout |
 | PRD-CONT-011 | Independent concurrent/fork task-line current state and explicit conflicts | Target | Exact-line read isolation only; no merge coordinator | task binding v1 preserves optional opaque parent only | two-line regressions | Concurrent current lines no longer cross-admit in development | Fork/merge/conflict reconciliation lifecycle remains not_executed | Freeze external fork/conflict Gold before any coordinator |
-| PRD-CONT-012 | Content-minimized searchable Run Timeline | Not Implemented | Run records/events are primitives only | No Timeline schema/API | `test_prd12_run_timeline_reproduction.py` | `reproduced_missing_public_seam` | No owner filtering/search/deletion surface | Freeze external time-to-locate and forget Gold |
+| PRD-CONT-012 | Content-minimized searchable Run Timeline | Implemented | KA identity-only Run/Checkpoint/Ledger projection; TC locate/inspect/timeline | task-continuity result v2; workspace snapshot receipt v1 | Pass 21 task-routing closure; CLI acceptance; unrelated-route exclusion | Development public-seam regression only | No GUI, external time-to-locate Gold, or real Host observation; ambiguity and bounds remain explicit Gaps | Freeze external time-to-locate and forget Gold |
 | PRD-CONT-013 | Treat Host/session/memory references as untrusted hints | Implemented | adapter envelope/admission | Agent Context v1 | cross-host/context tests | Static adapter evidence | No real Host malicious-hint run | Include wrong Host reference in holdout |
-| PRD-CONT-014 | Bounded bootstrap → drill-down → explicit Checkpoint lifecycle | Target | KMCP, KOS, TR, sink split kernel | Context/Capsule/SINK5 contracts | context, route-first, legacy reconciliation, Pass 2 single-head/CAS/recovery tests | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | No owner UI/real Host lifecycle/Human Gold; Timeline absent; pre-fix multi-head reads are sanitized Gaps and Owner reconciliation is not LWW | Measure provider bytes and First Correct Action end to end |
+| PRD-CONT-014 | Bounded bootstrap → drill-down → explicit Checkpoint lifecycle | Target | KMCP, KOS, TR, sink split kernel | Context/Capsule/SINK5 contracts | context, route-first, legacy reconciliation, Pass 2 single-head/CAS/recovery and Pass 21 locate/timeline tests | Kernel `Implemented` in development; E2E `Target`; external qualification `not_executed` | No owner UI/real Host lifecycle/Human Gold; pre-fix multi-head reads are sanitized Gaps and Owner reconciliation is not LWW | Measure provider bytes and First Correct Action end to end |
 
 ## Source and governed knowledge mapping
 
@@ -329,7 +343,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | PRD-OPS-006 | Exports bind exact hashes and exclude secrets/paths | Target | partial package/export code | package v1/manifests | package/security tests | Historical local artifacts only | Fresh current wheel/provenance/redownload absent | Freeze export disclosure and round-trip task |
 | PRD-OPS-007 | Forget/erasure updates eligibility and projections without tombstone leakage | Implemented | target-aware owner CLI, KA forget/GC, Source lifecycle, WIKI rebuild | lifecycle/tombstone contracts | explicit Asset/Knowledge/Source, scope/sensitivity/CAS/idempotency/recall/Wiki tests | Local deterministic vertical only | Independent selective-forget Gold absent | Run write-execute-forget holdout |
 | PRD-OPS-008 | Semantic restore creates a new attributable revision/event | Not Implemented | Snapshot/Vault rollback only | No public semantic-restore contract | No complete revision-restore acceptance | None | Pointer rewind is forbidden and not a substitute | Reproduce user rollback task before design |
-| PRD-OPS-009 | Bounded integrity-verifiable operational and Run Timeline | Target | events/run records/query trace primitives | separate existing contracts | `test_prd12_run_timeline_reproduction.py` | `reproduced_missing_public_seam` | No unified owner timeline, filtering, pagination, forget, or restore events | Freeze owner time-to-locate and lifecycle Gold |
+| PRD-OPS-009 | Bounded integrity-verifiable operational and Run Timeline | Implemented | existing events/run records/checkpoint projection with TC content-minimized view | task-continuity result v2; existing Ledger/Run/Checkpoint contracts | Pass 21 locate/inspect/timeline, bound and route-isolation regressions | Development public-seam regression only | Task-scoped CLI projection only; no GUI or semantic restore; external lifecycle Gold absent | Freeze owner time-to-locate and lifecycle Gold |
 
 ## Capability disposition
 
@@ -339,7 +353,7 @@ Evidence abbreviations in the table are repository-relative paths:
 | Living Wiki | Implemented development chain with partial exact-candidate scale/editor evidence | Independent Human usability, 10k/100k incremental equivalence, RSS, Relation scale, and platform evidence pending |
 | Protected/Legal Evidence | Implemented runtime, failed development qualification | Exact signed/verified Pack, independent legal Gold, and temporal/exception primary evidence pending |
 | Host Integration | Bounded read-seam preflight and split read/sink deterministic Host configuration implemented; current Codex/OpenCode protocol and plugin regressions pass locally | Codex and OpenCode/DeepSeek are Core and real isolated three-task qualification remains pending; Claude is optional/not_claimed; Pass 14 Codex/OpenCode diagnostics were not executed |
-| Portability/Operations | Target with local primitives, a current exact-wheel/fresh-install Darwin journey and green current-source 3-OS CI | Timeline, semantic restore, native platform release receipts, provenance/signing, and public redownload pending |
+| Portability/Operations | Target with local primitives and an implemented task Timeline | Candidate Full, native Windows ACL receipt, semantic restore, provenance/signing, and public redownload remain unexecuted for this tree |
 
 ## Pass 14 current-fix addendum
 
@@ -385,7 +399,7 @@ Pass 5 does not upgrade any PRD row to `Qualified` or `Released`.
 | Gate class | Rule | Pass 5 status |
 |---|---|---|
 | **Core** | Required; no core safety, integrity, legal, boundary, scale, platform, or supply-chain gate may be lowered | Kernel correction does not lower a Core gate; required external evidence remains `not_executed` |
-| **Capability** | May remain `not_claimed` when the capability is not declared | Run Timeline and semantic restore remain deferred; Claude remains `not_claimed`; Codex and OpenCode are not Capability gates |
+| **Capability** | May remain `not_claimed` when the capability is not declared | Semantic restore and Claude remain `not_claimed`; Timeline, Codex, and OpenCode are Core gates in v6 |
 | **Competitive Claim** | Independent named-comparator/host evidence; kernel evidence cannot satisfy it | Independent gate remains false and `not_executed`; no superiority/SOTA claim |
 
 The remaining six pytest skip dispositions are explicit non-results, not passes or silent

@@ -237,16 +237,21 @@ def test_required_evidence_inventory_names_semantic_bindings() -> None:
 
 def test_publish_and_post_release_validate_semantics_before_envelope() -> None:
     workflow = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
-    publish = workflow.split("\n  publish:", maxsplit=1)[1].split(
-        "\n  post-release:", maxsplit=1
+    validation = workflow.split("\n  validate-assets:", maxsplit=1)[1].split(
+        "\n  fresh-install:", maxsplit=1
     )[0]
-    post_release = workflow.split("\n  post-release:", maxsplit=1)[1]
-    for section in (publish, post_release):
-        assert "benchmarks.release.semantic_evidence" in section
-        assert "--assets-root" in section
-        assert section.index("benchmarks.release.semantic_evidence") < section.index(
-            "benchmarks.release.release_policy"
-        )
+    assert "benchmarks.release.semantic_evidence" in validation
+    assert "--assets-root" in validation
+    assert validation.index("benchmarks.release.semantic_evidence") < validation.index(
+        "benchmarks.release.release_policy"
+    )
+    public = workflow.split("\n  public-redownload:", maxsplit=1)[1]
+    assert "gh release download" not in public
+    assert "https://github.com/${GITHUB_REPOSITORY}/releases/download" in public
+    assert "curl --fail --location" in public
+    assert "sha256sum --check" in public
+    assert "sigstore verify identity" in public
+    assert "gh attestation verify" in public
 
 
 def test_historical_assembler_points_v013_to_semantic_assembler() -> None:
@@ -256,28 +261,24 @@ def test_historical_assembler_points_v013_to_semantic_assembler() -> None:
     assert "benchmarks.release.v013_commercial_release" in source
 
 
-def test_commercial_gates_keeps_v013_closed_until_core_provenance_validators_close() -> None:
-    """Do not switch the workflow before every Core raw-artifact validator is ready."""
-
-    workflow = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
+def test_v013_commercial_qualification_consumes_verified_artifacts_and_gate_v6() -> None:
+    workflow = (
+        REPOSITORY / ".github/workflows/commercial-qualification.yml"
+    ).read_text(
         encoding="utf-8"
     )
-    assemble_block = workflow.split(
-        "\n      - name: Audit all profiles and assemble normalized assets",
-        maxsplit=1,
-    )[1]
-    assert "benchmarks.release.commercial_release" in assemble_block
-    assert "benchmarks.release.v013_commercial_release" not in assemble_block
+    assert "verified-candidate-artifacts" in workflow
+    assert "v013-qualification-evidence" in workflow
+    assert "benchmarks.release.v013_commercial_release" in workflow
+    assert "benchmarks.release.semantic_evidence" in workflow
+    assert "verify_single_artifact_source" in workflow
+    assert "uv build" not in workflow
 
-    # The legacy assembler is intentionally the fail-closed workflow path for
-    # v0.13 until every provenance-bound Core validator is ready.  Its source
-    # rejects the v6 requirement rather than silently producing a manifest.
-    assert release_policy.required_manifest_schema_version(VERSION) == V6
-    legacy_source = (REPOSITORY / "benchmarks/release/commercial_release.py").read_text(
+    legacy = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(
         encoding="utf-8"
     )
-    assert "if required_schema != V5_MANIFEST_SCHEMA:" in legacy_source
-    assert "the historical v5/no-model assembler is closed" in legacy_source
+    assert "Legacy v0.12" in legacy
+    assert "v0.13 must consume Candidate Full verified artifacts" in legacy
 
 
 def test_envelope_fixture_is_not_misrepresented_as_external_evidence() -> None:
