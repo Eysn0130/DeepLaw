@@ -12,6 +12,7 @@ from benchmarks.release.candidate_regression import (
     aggregate_shard_receipts,
     build_regression_receipt,
     build_shard_manifest,
+    main,
 )
 from deeplaw.util import canonical_json
 
@@ -67,6 +68,36 @@ def test_candidate_windows_shards_are_deterministic_complete_and_disjoint() -> N
     assert {shard["all_test_files_sha256"] for shard in shards} == {
         shards[0]["all_test_files_sha256"]
     }
+
+
+def test_candidate_shard_cli_writes_lf_only_paths(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "shard.json"
+    paths_path = tmp_path / "paths.txt"
+
+    assert (
+        main(
+            [
+                "--repository",
+                str(REPOSITORY),
+                "select",
+                "--shard-count",
+                "3",
+                "--shard-index",
+                "1",
+                "--output",
+                str(manifest_path),
+                "--paths-output",
+                str(paths_path),
+            ]
+        )
+        == 0
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    encoded = paths_path.read_bytes()
+
+    assert b"\r" not in encoded
+    assert encoded.endswith(b"\n")
+    assert encoded.decode("utf-8").splitlines() == manifest["selected_test_files"]
 
 
 def test_candidate_regression_receipt_parses_junit_and_binds_python(

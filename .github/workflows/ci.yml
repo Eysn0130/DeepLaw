@@ -173,7 +173,7 @@ jobs:
           --shard-count 3
           --shard-index "${{ matrix.shard }}"
           --output "${{ runner.temp }}/candidate-test-shard.json"
-          > "${{ runner.temp }}/candidate-test-files.txt"
+          --paths-output "${{ runner.temp }}/candidate-test-files.txt"
 
       - name: Candidate Windows shard (not release readiness)
         id: regression

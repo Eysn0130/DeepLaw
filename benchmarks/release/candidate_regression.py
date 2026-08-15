@@ -33,6 +33,11 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(_canonical_json(value) + "\n", encoding="utf-8")
 
 
+def _write_paths(path: Path, paths: list[str]) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write("\n".join(paths) + "\n")
+
+
 def _read_object(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
@@ -281,6 +286,7 @@ def _parser() -> argparse.ArgumentParser:
     select.add_argument("--shard-count", type=int, required=True)
     select.add_argument("--shard-index", type=int, required=True)
     select.add_argument("--output", type=Path, required=True)
+    select.add_argument("--paths-output", type=Path, required=True)
     receipt = commands.add_parser("receipt")
     receipt.add_argument("--junit", type=Path, required=True)
     receipt.add_argument("--output", type=Path, required=True)
@@ -303,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             shard_index=args.shard_index,
         )
         _write_json(args.output, manifest)
-        print("\n".join(manifest["selected_test_files"]))
+        _write_paths(args.paths_output, manifest["selected_test_files"])
     elif args.command == "receipt":
         receipt = build_regression_receipt(
             repository=args.repository,
