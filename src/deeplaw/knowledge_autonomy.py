@@ -2374,11 +2374,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
     def close(self) -> None:
         self.connection.close()
-        if (
-            not self.read_only
-            and self._windows_acl_refresh_required
-            and os.name == "nt"
-        ):
+        if not self.read_only and os.name == "nt":
             self._windows_acl_refresh_required = False
             from .windows_acl import harden_windows_vault
 

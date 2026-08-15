@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deeplaw import knowledge_store, windows_acl
+from deeplaw import knowledge_autonomy, knowledge_store, windows_acl
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
@@ -99,6 +99,35 @@ def test_read_and_write_stores_harden_only_their_sqlite_sidecars_on_close(
         root / ".deeplaw" / "ledger.sqlite3",
         root / ".deeplaw" / "ledger.sqlite3",
     ]
+
+
+def test_windows_writable_autonomous_store_restores_the_whole_vault_on_close(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "vault"
+    initialize_knowledge_vault(root, name="windows-write-boundary", scope="project")
+    initialize_autonomous_core(root)
+    store = AutonomousKnowledgeStore(root, read_only=False)
+    store.enable_grant(writer_id="windows-ledger-writer")
+    hardened_vaults: list[Path] = []
+    hardened_sidecars: list[Path] = []
+    monkeypatch.setattr(knowledge_autonomy, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        windows_acl,
+        "harden_windows_vault",
+        lambda vault: hardened_vaults.append(Path(vault)),
+    )
+    monkeypatch.setattr(
+        windows_acl,
+        "harden_windows_sqlite_sidecars",
+        lambda database, **_kwargs: hardened_sidecars.append(Path(database)),
+    )
+
+    store.close()
+
+    assert hardened_vaults == [root]
+    assert hardened_sidecars == []
 
 
 def test_sqlite_sidecar_hardening_targets_only_new_file_identities(
