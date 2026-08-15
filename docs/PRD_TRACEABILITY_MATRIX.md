@@ -137,6 +137,8 @@ Markdown/Wikilink/alias/link/rename/edit/reconcile behavior remains Core.
 The active classification is
 `../benchmarks/release/v013-gate-classification-v6.json`: Codex, OpenCode, and Timeline are Core,
 required, and release-blocking; Claude and semantic restore remain optional and `not_claimed`.
+Gate v6 supersedes active classification v5 while preserving historical
+`../benchmarks/release/v013-gate-classification-v5.json` bytes as qualification evidence.
 Gate v6 preserves v1-v5 as history, admits development corpus for deterministic/mechanical
 Gates, requires external holdout/final-blind material for semantic Gates, and derives every result
 through the current raw validator contract. OpenCode

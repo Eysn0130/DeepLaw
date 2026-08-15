@@ -10,9 +10,9 @@ from jsonschema import Draft202012Validator
 from benchmarks.release import release_policy
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v5.json"
+CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v6.json"
 CLASSIFICATION_SCHEMA = (
-    REPOSITORY / "contracts/v013-release-gate-classification.v5.schema.json"
+    REPOSITORY / "contracts/v013-release-gate-classification.v6.schema.json"
 )
 
 
@@ -50,7 +50,7 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
     gates = {item["gate_id"]: item for item in classification["gates"]}  # type: ignore[index]
     for gate_id in ("codex", "opencode"):
         assert gates[gate_id]["accepted_input_schema_versions"] == [
-            "deeplaw.host-continuity-qualification/v2"
+            "deeplaw.v013-gate-raw-evidence/v1"
         ]
         assert gates[gate_id]["minimum_distinct_run_count"] == 3
         assert gates[gate_id]["required_unique_dimensions"] == [

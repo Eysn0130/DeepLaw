@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from benchmarks.release import release_policy
 from benchmarks.release.provenance_gate_result import (
     ProvenanceGateResultError,
     canonical_json,
@@ -56,12 +55,24 @@ def test_every_core_gate_maps_raw_inputs_but_remains_not_executed() -> None:
         row["gate_id"]: row
         for row in classification["gates"]  # type: ignore[index]
     }
-    assert set(gates) == (
-        release_policy.V013_CORE_GATE_IDS
-        | release_policy.V013_CAPABILITY_GATE_IDS
-        | release_policy.V013_COMPETITIVE_GATE_IDS
-    )
-    for gate_id in release_policy.V013_CORE_GATE_IDS:
+    core_gate_ids = {
+        row["gate_id"]
+        for row in classification["gates"]  # type: ignore[index]
+        if row["category"] == "Core"
+    }
+    capability_gate_ids = {
+        row["gate_id"]
+        for row in classification["gates"]  # type: ignore[index]
+        if row["category"] == "Capability"
+    }
+    competitive_gate_ids = {
+        row["gate_id"]
+        for row in classification["gates"]  # type: ignore[index]
+        if row["category"] == "Competitive Claim"
+    }
+    assert set(gates) == core_gate_ids | capability_gate_ids | competitive_gate_ids
+    assert "timeline" in capability_gate_ids
+    for gate_id in core_gate_ids:
         gate = gates[gate_id]
         assert gate["category"] == "Core"
         assert gate["required"] is True

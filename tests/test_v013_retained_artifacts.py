@@ -17,8 +17,16 @@ def _repository(tmp_path: Path) -> Path:
     repository = tmp_path / "repository"
     repository.mkdir()
     (repository / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+    (repository / "pyproject.toml").write_text(
+        '[project]\nname = "deeplaw"\nversion = "0.12.0"\n',
+        encoding="utf-8",
+    )
     subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
-    subprocess.run(["git", "add", "uv.lock"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "add", "uv.lock", "pyproject.toml"],
+        cwd=repository,
+        check=True,
+    )
     subprocess.run(
         [
             "git",
