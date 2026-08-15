@@ -320,6 +320,12 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "candidate-skip-receipt.json" in ci
     assert "candidate-current-source-inventory.json" in ci
     assert "benchmarks.release.platform_inventory" in ci
+
+    aggregate = ci.split("  windows-regression-aggregate:", 1)[1].split(
+        "  candidate-distributions:", 1
+    )[0]
+    assert "setup-uv" not in aggregate
+    assert "python -m benchmarks.release.candidate_regression" in aggregate
     assert "candidate_current_source_inventory" in ci or "--mode candidate" in ci
     assert "--require-eligible" not in ci
     assert "--selection common" in ci
