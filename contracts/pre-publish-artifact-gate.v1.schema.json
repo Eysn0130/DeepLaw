@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/pre-publish-artifact-gate.v1.schema.json",
+  "title": "DeepLaw pre-publish artifact gate v1",
+  "description": "Pre-publish supply-chain receipt. It covers reproducible retained artifacts and does not require public redownload or post-public verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "created_at",
+    "candidate",
+    "builds",
+    "retained_artifacts",
+    "sbom",
+    "openvex",
+    "licenses",
+    "provenance",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.pre-publish-artifact-gate/v1"},
+    "status": {"const": "pre_publish_passed"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "builds": {"$ref": "#/$defs/builds"},
+    "retained_artifacts": {"$ref": "#/$defs/retainedArtifacts"},
+    "sbom": {"$ref": "#/$defs/verifiedArtifact"},
+    "openvex": {"$ref": "#/$defs/verifiedArtifact"},
+    "licenses": {"$ref": "#/$defs/verifiedArtifact"},
+    "provenance": {"$ref": "#/$defs/verifiedArtifact"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["build_id", "wheel_sha256", "sdist_sha256", "receipt_sha256"],
+      "properties": {
+        "build_id": {"enum": ["first", "second"]},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "builds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "byte_identical", "first", "second"],
+      "properties": {
+        "count": {"const": 2},
+        "byte_identical": {"const": true},
+        "first": {
+          "allOf": [
+            {"$ref": "#/$defs/build"},
+            {"properties": {"build_id": {"const": "first"}}}
+          ]
+        },
+        "second": {
+          "allOf": [
+            {"$ref": "#/$defs/build"},
+            {"properties": {"build_id": {"const": "second"}}}
+          ]
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "byte_size", "retained_path"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1},
+        "retained_path": {"$ref": "#/$defs/safePath"}
+      }
+    },
+    "retainedArtifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_sha256", "manifest_path", "wheel", "sdist"],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_path": {"$ref": "#/$defs/safePath"},
+        "wheel": {"$ref": "#/$defs/artifact"},
+        "sdist": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "verifiedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "sha256", "path", "verified"],
+      "properties": {
+        "format": {"type": "string", "minLength": 1, "maxLength": 100},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "path": {"$ref": "#/$defs/safePath"},
+        "verified": {"const": true}
+      }
+    }
+  }
+}
