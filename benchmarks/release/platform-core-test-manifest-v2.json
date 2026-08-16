@@ -9554,9 +9554,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass17_native_host_receipts",
-            "name": "test_retained_pass17_diagnostics_are_current_v2_and_claim_ineligible"
+            "name": "test_retained_pass17_diagnostics_are_immutable_and_stale_for_provider_v7"
           },
-          "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_retained_pass17_diagnostics_are_current_v2_and_claim_ineligible"
+          "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_retained_pass17_diagnostics_are_immutable_and_stale_for_provider_v7"
         },
         {
           "junit": {
@@ -13782,7 +13782,7 @@
       ],
       "count": 1953,
       "selection": "not qualification and not windows_native",
-      "sha256": "420bcfc029086f48bf07e88b86fe3d6655417a2833c92e7e592396ce03e4c7a4"
+      "sha256": "8b2a2e9aabf0d75ec7550e9803da4ad01af34cb5232e10416cda4c58400213eb"
     },
     "windows": {
       "additional_cases": [
@@ -13818,10 +13818,10 @@
       "count": 1957,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "c8783fa9b04c6861ca5e5c85f1113aec3aa79924d8faab8e51d64c70f1f624fd"
+      "sha256": "68c36dc427cc3e2389c46cca4310d497741922ab7ad2769980c36a79d9cc626d"
     }
   },
-  "manifest_sha256": "3eef05a45168ee24b2b2ff539156039881f97f5eae77b04cba00d0e0466eb344",
+  "manifest_sha256": "e8b4d846e400ea38cab3f11a7346a4c9924170bb528431ce06535a8400839951",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
