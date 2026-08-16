@@ -775,7 +775,7 @@ def resolve_host_session(
     selected_session = _session_sha256(session_sha256)
     selected, vault_id = _vault(vault_path, expected_vault_id=None)
     try:
-        workspace_identity = _workspace_route_identity(workspace)
+        workspace_snapshot = _workspace_snapshot(workspace)
     except WorkspaceSnapshotGap as error:
         return _host_route_gap(
             operation="resolve",
@@ -836,14 +836,61 @@ def resolve_host_session(
         )
     payload, task_handle, binding = next(iter(handles.values()))
     if (
-        binding["repository_sha256"] != workspace_identity["repository_sha256"]
-        or binding["worktree_sha256"] != workspace_identity["worktree_sha256"]
+        binding["repository_sha256"] != workspace_snapshot["repository_sha256"]
+        or binding["worktree_sha256"] != workspace_snapshot["worktree_sha256"]
     ):
         return _host_route_gap(
             operation="resolve",
             host=selected_host,
             session_sha256=selected_session,
             code="route_wrong_worktree",
+            candidate_count=1,
+        )
+    current_binding = build_task_context_binding(
+        binding["project_sha256"],
+        binding["task_lineage_sha256"],
+        parent_task_lineage_sha256=binding["parent_task_lineage_sha256"],
+        repository_sha256=workspace_snapshot["repository_sha256"],
+        worktree_sha256=workspace_snapshot["worktree_sha256"],
+        base_revision=workspace_snapshot["base_revision"],
+        dirty_state_sha256=workspace_snapshot["dirty_state_sha256"],
+    )
+    if current_binding["binding_sha256"] != binding["binding_sha256"]:
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code="route_stale",
+            candidate_count=1,
+        )
+    with AutonomousKnowledgeStore(selected, read_only=True) as store:
+        audit_before = store.audit_head
+        route_history = store.locate_task_route_history(
+            task_sha256=sha256_bytes(_RESUME_TASK.encode()),
+            fallback_task_lineage_sha256=binding["task_lineage_sha256"],
+            project_sha256=binding["project_sha256"],
+            repository_sha256=binding["repository_sha256"],
+            worktree_sha256=binding["worktree_sha256"],
+            snapshot_sha256=task_snapshot_sha256(current_binding),
+            scope=store.vault_scope,
+            max_sensitivity="private",
+        )
+        if store.audit_head != audit_before:
+            raise RuntimeError("Host route resolution changed the canonical audit head")
+    if route_history.get("status") == "forgotten":
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code="route_forgotten",
+            candidate_count=1,
+        )
+    if route_history.get("status") == "ambiguous":
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code="route_ambiguous",
             candidate_count=1,
         )
     return {
@@ -856,7 +903,7 @@ def resolve_host_session(
         "task_handle_sha256": payload["task_handle_sha256"],
         "repository_sha256": payload["repository_sha256"],
         "worktree_sha256": payload["worktree_sha256"],
-        "binding_sha256": binding["binding_sha256"],
+        "binding_sha256": current_binding["binding_sha256"],
         "write_performed": False,
         "transcript_copied": False,
     }

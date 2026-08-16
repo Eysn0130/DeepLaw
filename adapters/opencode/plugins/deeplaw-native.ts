@@ -60,6 +60,8 @@ const GAP_CODES = new Set([
   "route_unbound",
   "route_ambiguous",
   "route_wrong_worktree",
+  "route_stale",
+  "route_forgotten",
   "workspace_snapshot_bound",
   "workspace_secret_unverifiable",
   "workspace_unavailable",

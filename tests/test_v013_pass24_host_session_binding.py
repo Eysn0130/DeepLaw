@@ -16,6 +16,8 @@ from deeplaw.knowledge_mcp_server import _resolve_provider_host_route
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.task_continuity import (
     bind_host_session,
+    checkpoint_task,
+    forget_task,
     resolve_host_session,
     start_task,
 )
@@ -67,7 +69,7 @@ def _vault(tmp_path: Path) -> tuple[Path, str]:
         grant_id = str(
             store.enable_grant(
                 writer_id="pass24-host-route-owner",
-                operations=("record_run",),
+                operations=("record_run", "remember", "forget"),
             )["grant_id"]
         )
     return vault, grant_id
@@ -208,6 +210,73 @@ def test_host_session_resolution_returns_closed_gaps(tmp_path: Path) -> None:
     _validate(ambiguous)
     assert ambiguous["status"] == "gap"
     assert ambiguous["gap"] == {"code": "route_ambiguous", "candidate_count": 2}
+
+
+def test_host_session_resolution_rejects_stale_and_forgotten_routes(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    vault, grant_id = _vault(tmp_path)
+    task = start_task(
+        vault_path=vault,
+        project="DeepLaw",
+        task="Stale and forgotten native route",
+        workspace=repository,
+    )
+    session_sha256 = sha256_bytes(b"opaque-stale-session")
+    bind_host_session(
+        vault_path=vault,
+        host="codex",
+        session_sha256=session_sha256,
+        task_handle=str(task["task_handle"]),
+        workspace=repository,
+        grant_id=grant_id,
+        idempotency_key="bind-stale-route",
+        confirm_no_case_data=True,
+    )
+
+    (repository / "tracked.txt").write_text("drifted\n", encoding="utf-8")
+    stale = resolve_host_session(
+        vault_path=vault,
+        host="codex",
+        session_sha256=session_sha256,
+        workspace=repository,
+    )
+    _validate(stale)
+    assert stale["gap"] == {"code": "route_stale", "candidate_count": 1}
+
+    (repository / "tracked.txt").write_text("stable\n", encoding="utf-8")
+    checkpoint_task(
+        vault_path=vault,
+        task_handle=str(task["task_handle"]),
+        workspace=repository,
+        grant_id=grant_id,
+        idempotency_key="checkpoint-before-forget",
+        summary="Keep the route governed before selective forget.",
+        next_action="Forget this exact checkpoint.",
+        expires_at="2099-01-01T00:00:00Z",
+        confirm_no_case_data=True,
+    )
+    forget_task(
+        vault_path=vault,
+        task_handle=str(task["task_handle"]),
+        workspace=repository,
+        grant_id=grant_id,
+        idempotency_key="forget-native-route",
+        reason="Owner requested selective task forget.",
+        confirm_no_case_data=True,
+    )
+    forgotten = resolve_host_session(
+        vault_path=vault,
+        host="codex",
+        session_sha256=session_sha256,
+        workspace=repository,
+    )
+    _validate(forgotten)
+    assert forgotten["gap"] == {
+        "code": "route_forgotten",
+        "candidate_count": 1,
+    }
 
 
 @pytest.mark.parametrize("host", ["claude", "Codex", ""])

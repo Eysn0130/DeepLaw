@@ -998,6 +998,15 @@ def _resolve_provider_host_route(
         vault_path=vault_path,
         workspace=workspace,
     )
+    if current_binding["binding_sha256"] != resolved.get("binding_sha256"):
+        return None, {
+            "schema_version": "deeplaw.host-route-gap/v1",
+            "status": "gap",
+            "host": str(route["host"]),
+            "session_sha256": str(route["session_sha256"]),
+            "write_performed": False,
+            "gaps": [{"code": "route_stale"}],
+        }
     selected_fixed = normalize_task_context_binding(fixed_task_binding, allow_none=True)
     if selected_fixed is not None and current_binding != selected_fixed:
         raise PermissionError(
