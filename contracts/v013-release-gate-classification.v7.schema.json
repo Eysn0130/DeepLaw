@@ -1,0 +1,1287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-release-gate-classification.v7.schema.json",
+  "title": "DeepLaw v0.13 executable provenance-bound release gate classification v7",
+  "description": "Closed v7 classification for a candidate-domain Candidate Full and an external qualification-domain holdout/blind evidence boundary. It declares validator inputs and thresholds only; it contains no Gate result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "classification_id",
+    "categories",
+    "assembly_policy",
+    "gates"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.v013-release-gate-classification/v7"
+    },
+    "classification_id": {
+      "const": "deeplaw-v013-commercial-gates-v7"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/category"
+      }
+    },
+    "assembly_policy": {
+      "$ref": "#/$defs/assemblyPolicy"
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/gate"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+/-]{0,127}$"
+    },
+    "categoryName": {
+      "type": "string",
+      "enum": [
+        "Core",
+        "Capability",
+        "Competitive Claim"
+      ]
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "category_id",
+        "required",
+        "not_claimed_allowed",
+        "gate_ids"
+      ],
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/categoryName"
+        },
+        "category_id": {
+          "enum": [
+            "core",
+            "capability",
+            "competitive_claim"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "not_claimed_allowed": {
+          "type": "boolean"
+        },
+        "gate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      }
+    },
+    "assemblyPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly_enabled",
+        "reason_code"
+      ],
+      "properties": {
+        "assembly_enabled": {
+          "const": false
+        },
+        "reason_code": {
+          "const": "awaiting_all_core_gate_pass"
+        }
+      }
+    },
+    "validatorStatus": {
+      "enum": [
+        "blocked_missing_raw_contract",
+        "blocked_missing_validator",
+        "ready",
+        "not_claimed_only"
+      ]
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "tool_version",
+        "model_id",
+        "argv_prefix"
+      ],
+      "properties": {
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "tool_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "argv_prefix": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": false,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "minimum",
+        "maximum"
+      ],
+      "properties": {
+        "metric": {
+          "$ref": "#/$defs/identifier"
+        },
+        "minimum": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "maximum": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "hardZeroDerivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_field",
+        "failure_ids",
+        "maximum_allowed"
+      ],
+      "properties": {
+        "source_field": {
+          "const": "gate_result.hard_failures"
+        },
+        "failure_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "maximum_allowed": {
+          "const": 0
+        }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "python_version"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "linux",
+            "macos",
+            "windows"
+          ]
+        },
+        "python_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "category",
+        "category_id",
+        "required",
+        "not_claimed_only",
+        "assembly_enabled",
+        "validator_id",
+        "validator_version",
+        "implementation_status",
+        "accepted_input_schema_versions",
+        "minimum_distinct_run_count",
+        "required_unique_dimensions",
+        "constraints",
+        "required_corpus_roles",
+        "artifact_kinds",
+        "thresholds",
+        "hard_zero_derivation",
+        "allowed_applicability",
+        "required_execution_platforms",
+        "output_schema_versions"
+      ],
+      "properties": {
+        "gate_id": {
+          "enum": [
+            "canonical_integrity",
+            "migration_recovery",
+            "secret_host_isolation",
+            "bounded_context",
+            "legal_evidence",
+            "source_citation_locator",
+            "scale_performance",
+            "supported_platforms",
+            "reproducible_supply_chain",
+            "human_gold_isolation",
+            "codex",
+            "selective_forget",
+            "timeline",
+            "semantic_restore",
+            "claude",
+            "opencode",
+            "comparative_incremental_benefit",
+            "superiority",
+            "sota"
+          ]
+        },
+        "category": {
+          "$ref": "#/$defs/categoryName"
+        },
+        "category_id": {
+          "enum": [
+            "core",
+            "capability",
+            "competitive_claim"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "not_claimed_only": {
+          "type": "boolean"
+        },
+        "assembly_enabled": {
+          "type": "boolean"
+        },
+        "validator_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "validator_version": {
+          "$ref": "#/$defs/version"
+        },
+        "implementation_status": {
+          "$ref": "#/$defs/validatorStatus"
+        },
+        "accepted_input_schema_versions": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/schemaVersion"
+          }
+        },
+        "minimum_distinct_run_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "required_unique_dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "constraints": {
+          "$ref": "#/$defs/constraints"
+        },
+        "required_corpus_roles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "development",
+              "candidate_full",
+              "qualification_holdout",
+              "final_blind"
+            ]
+          }
+        },
+        "artifact_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "thresholds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/threshold"
+          }
+        },
+        "hard_zero_derivation": {
+          "$ref": "#/$defs/hardZeroDerivation"
+        },
+        "allowed_applicability": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "applicable",
+              "not_applicable"
+            ]
+          }
+        },
+        "required_execution_platforms": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 27,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/platform"
+          }
+        },
+        "output_schema_versions": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/schemaVersion"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category_id": {
+                "const": "core"
+              },
+              "required": {
+                "const": true
+              },
+              "not_claimed_only": {
+                "const": false
+              },
+              "assembly_enabled": {
+                "const": false
+              },
+              "implementation_status": {
+                "const": "ready"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "Capability",
+                  "Competitive Claim"
+                ]
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "required": {
+                "const": false
+              },
+              "not_claimed_only": {
+                "const": true
+              },
+              "assembly_enabled": {
+                "const": false
+              },
+              "implementation_status": {
+                "const": "not_claimed_only"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "category": {
+                    "const": "Core"
+                  }
+                },
+                "required": [
+                  "category"
+                ]
+              },
+              {
+                "not": {
+                  "properties": {
+                    "gate_id": {
+                      "enum": [
+                        "migration_recovery",
+                        "supported_platforms",
+                        "reproducible_supply_chain"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "gate_id"
+                  ]
+                }
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "required_corpus_roles": {
+                "minItems": 1,
+                "maxItems": 2,
+                "items": {
+                  "enum": [
+                    "qualification_holdout",
+                    "final_blind"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "canonical_integrity"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "required_corpus_roles": {
+                "const": [
+                  "qualification_holdout"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "migration_recovery"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "category_id": {
+                "const": "core"
+              },
+              "required": {
+                "const": true
+              },
+              "not_claimed_only": {
+                "const": false
+              },
+              "assembly_enabled": {
+                "const": false
+              },
+              "implementation_status": {
+                "const": "ready"
+              },
+              "required_corpus_roles": {
+                "const": [
+                  "candidate_full"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "supported_platforms"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "category_id": {
+                "const": "core"
+              },
+              "required": {
+                "const": true
+              },
+              "not_claimed_only": {
+                "const": false
+              },
+              "assembly_enabled": {
+                "const": false
+              },
+              "implementation_status": {
+                "const": "ready"
+              },
+              "required_corpus_roles": {
+                "const": [
+                  "candidate_full"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "reproducible_supply_chain"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "category_id": {
+                "const": "core"
+              },
+              "required": {
+                "const": true
+              },
+              "not_claimed_only": {
+                "const": false
+              },
+              "assembly_enabled": {
+                "const": false
+              },
+              "implementation_status": {
+                "const": "ready"
+              },
+              "required_corpus_roles": {
+                "const": [
+                  "candidate_full"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "canonical_integrity"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "exact_wheel_execution"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "migration_recovery"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "candidate_full_junit"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "secret_host_isolation"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "host_event_sequence"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "bounded_context"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "context_capsule_selection_usage"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "legal_evidence"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "legal_rows"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "source_citation_locator"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "legal_rows"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "scale_performance"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "scale_report"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "supported_platforms"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "candidate_platform_receipt"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "reproducible_supply_chain"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "retained_supply_chain"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "human_gold_isolation"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "human_gold_scorer"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "codex"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "host_event_sequence"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "opencode"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "host_event_sequence"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "selective_forget"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "wiki_journey_rows"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gate_id": {
+                "const": "timeline"
+              }
+            },
+            "required": [
+              "gate_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "Core"
+              },
+              "validator_id": {
+                "const": "deeplaw-typed-qualification-v1"
+              },
+              "validator_version": {
+                "const": "1"
+              },
+              "accepted_input_schema_versions": {
+                "const": [
+                  "deeplaw.typed-qualification-evidence/v1"
+                ]
+              },
+              "artifact_kinds": {
+                "const": [
+                  "host_event_sequence"
+                ]
+              },
+              "output_schema_versions": {
+                "const": [
+                  "deeplaw.provenance-bound-gate-result/v3"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "core"
+              }
+            },
+            "required": [
+              "category_id"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "capability"
+              }
+            },
+            "required": [
+              "category_id"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "competitive_claim"
+              }
+            },
+            "required": [
+              "category_id"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    }
+  ]
+}
