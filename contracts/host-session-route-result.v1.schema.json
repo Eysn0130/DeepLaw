@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/host-session-route-result.v1.schema.json",
+  "title": "DeepLaw Host Session Route Result v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/bound"
+    },
+    {
+      "$ref": "#/$defs/exact"
+    },
+    {
+      "$ref": "#/$defs/gap"
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "common": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "host",
+        "session_sha256",
+        "write_performed",
+        "transcript_copied"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.host-session-route-result/v1"
+        },
+        "operation": {
+          "enum": [
+            "bind",
+            "resolve"
+          ]
+        },
+        "status": {
+          "enum": [
+            "bound",
+            "exact",
+            "gap"
+          ]
+        },
+        "host": {
+          "enum": [
+            "codex",
+            "opencode"
+          ]
+        },
+        "session_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "write_performed": {
+          "type": "boolean"
+        },
+        "transcript_copied": {
+          "const": false
+        }
+      }
+    },
+    "bound": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/common"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "operation",
+            "status",
+            "host",
+            "session_sha256",
+            "task_handle",
+            "task_handle_sha256",
+            "repository_sha256",
+            "worktree_sha256",
+            "run_id",
+            "write_performed",
+            "transcript_copied",
+            "idempotent_replay"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "deeplaw.host-session-route-result/v1"
+            },
+            "operation": {
+              "const": "bind"
+            },
+            "status": {
+              "const": "bound"
+            },
+            "host": {
+              "enum": [
+                "codex",
+                "opencode"
+              ]
+            },
+            "session_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "task_handle": {
+              "type": "string",
+              "pattern": "^taskh_[A-Za-z0-9_-]+$",
+              "maxLength": 2048
+            },
+            "task_handle_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "repository_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "worktree_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "run_id": {
+              "type": "string",
+              "pattern": "^hostroute_[0-9a-f]{24}$"
+            },
+            "write_performed": {
+              "const": true
+            },
+            "transcript_copied": {
+              "const": false
+            },
+            "idempotent_replay": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "exact": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/common"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "operation",
+            "status",
+            "host",
+            "session_sha256",
+            "task_handle",
+            "task_handle_sha256",
+            "repository_sha256",
+            "worktree_sha256",
+            "binding_sha256",
+            "write_performed",
+            "transcript_copied"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "deeplaw.host-session-route-result/v1"
+            },
+            "operation": {
+              "const": "resolve"
+            },
+            "status": {
+              "const": "exact"
+            },
+            "host": {
+              "enum": [
+                "codex",
+                "opencode"
+              ]
+            },
+            "session_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "task_handle": {
+              "type": "string",
+              "pattern": "^taskh_[A-Za-z0-9_-]+$",
+              "maxLength": 2048
+            },
+            "task_handle_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "repository_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "worktree_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "binding_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "write_performed": {
+              "const": false
+            },
+            "transcript_copied": {
+              "const": false
+            }
+          }
+        }
+      ]
+    },
+    "gap": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/common"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "operation",
+            "status",
+            "host",
+            "session_sha256",
+            "write_performed",
+            "transcript_copied",
+            "gap"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "deeplaw.host-session-route-result/v1"
+            },
+            "operation": {
+              "const": "resolve"
+            },
+            "status": {
+              "const": "gap"
+            },
+            "host": {
+              "enum": [
+                "codex",
+                "opencode"
+              ]
+            },
+            "session_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "write_performed": {
+              "const": false
+            },
+            "transcript_copied": {
+              "const": false
+            },
+            "gap": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "code"
+              ],
+              "properties": {
+                "code": {
+                  "enum": [
+                    "route_unbound",
+                    "route_ambiguous",
+                    "route_wrong_worktree",
+                    "workspace_snapshot_bound",
+                    "workspace_secret_unverifiable"
+                  ]
+                },
+                "candidate_count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 101
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

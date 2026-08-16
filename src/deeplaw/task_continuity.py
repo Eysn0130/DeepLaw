@@ -33,6 +33,7 @@ from .util import canonical_json, sha256_bytes, strict_json_loads
 
 TASK_HANDLE_SCHEMA_VERSION = "deeplaw.task-handle/v1"
 TASK_CONTINUITY_SCHEMA_VERSION = "deeplaw.task-continuity-result/v2"
+HOST_SESSION_ROUTE_SCHEMA_VERSION = "deeplaw.host-session-route-result/v1"
 WORKSPACE_SNAPSHOT_SCHEMA_VERSION = "deeplaw.workspace-snapshot-receipt/v1"
 
 _HANDLE_PREFIX = "taskh_"
@@ -55,6 +56,13 @@ _MAX_UNTRACKED_FILE_BYTES = 4 * 1024 * 1024
 _MAX_UNTRACKED_TOTAL_BYTES = 16 * 1024 * 1024
 _MAX_TIMELINE_ENTRIES = 100
 _RESUME_TASK = "Restore the exact admitted working checkpoint for this task route."
+_HOST_SESSION_ROUTE_TASK = (
+    "Bind an opaque native Host session to one governed DeepLaw task route."
+)
+_HOST_SESSION_ROUTE_KIND = "host_session_route"
+_HOST_SESSION_ROUTE_LIMIT = 100
+
+HostName = Literal["codex", "opencode"]
 
 ForkMode = Literal["continue-parent", "child-task"]
 ReadOperation = Literal["resume", "compaction"]
@@ -632,6 +640,225 @@ def start_task(
         ),
         "status": "ready",
         "workspace_bound": True,
+    }
+
+
+def _host_name(value: str) -> HostName:
+    if value not in {"codex", "opencode"}:
+        raise ValueError("native Host must be codex or opencode")
+    return value
+
+
+def _session_sha256(value: str) -> str:
+    if not isinstance(value, str) or _SHA256.fullmatch(value) is None or value == "0" * 64:
+        raise ValueError("native Host session digest is invalid")
+    return value
+
+
+def _host_route_gap(
+    *,
+    operation: str,
+    host: HostName,
+    session_sha256: str,
+    code: str,
+    candidate_count: int | None = None,
+) -> dict[str, Any]:
+    gap: dict[str, Any] = {"code": code}
+    if candidate_count is not None:
+        gap["candidate_count"] = candidate_count
+    return {
+        "schema_version": HOST_SESSION_ROUTE_SCHEMA_VERSION,
+        "operation": operation,
+        "status": "gap",
+        "host": host,
+        "session_sha256": session_sha256,
+        "write_performed": False,
+        "transcript_copied": False,
+        "gap": gap,
+    }
+
+
+def bind_host_session(
+    *,
+    vault_path: str | Path | None,
+    host: str,
+    session_sha256: str,
+    task_handle: str,
+    workspace: str | Path,
+    grant_id: str,
+    idempotency_key: str,
+    confirm_no_case_data: bool,
+) -> dict[str, Any]:
+    """Bind one opaque native Host session through the governed sink seam."""
+
+    if confirm_no_case_data is not True:
+        raise PermissionError("Host route binding requires explicit no-case-data confirmation")
+    selected_host = _host_name(host)
+    selected_session = _session_sha256(session_sha256)
+    key = _normalized_label(idempotency_key, label="idempotency key", maximum=160)
+    preliminary = decode_task_handle(task_handle)
+    selected, vault_id = _vault(
+        vault_path,
+        expected_vault_id=preliminary["vault_id"],
+    )
+    handle, binding = _binding(
+        task_handle,
+        vault_id=vault_id,
+        workspace=workspace,
+    )
+    route_identity = sha256_bytes(
+        (
+            f"{selected_host}\0{selected_session}\0"
+            f"{handle['task_handle_sha256']}\0{key}"
+        ).encode()
+    )
+    run_id = f"hostroute_{route_identity[:24]}"
+    run_request: dict[str, Any] = {
+        "operation": "record_run",
+        "idempotency_key": f"host-route:{key}",
+        "confirm_no_case_data": True,
+        "run_id": run_id,
+        "task": _HOST_SESSION_ROUTE_TASK,
+        "host_id": f"deeplaw-native-route:{selected_host}",
+        "status": "succeeded",
+        "run_metadata": {
+            "task_kind": _HOST_SESSION_ROUTE_KIND,
+            "artifact_ids": [f"hostsession:{selected_session}"],
+            "task_binding": binding,
+        },
+    }
+    with AutonomousKnowledgeStore(selected, read_only=True) as store:
+        try:
+            existing_run = store.get_run(run_id)
+        except KeyError:
+            existing_run = None
+    if existing_run is not None:
+        run_request.update(
+            {
+                "started_at": existing_run["started_at"],
+                "ended_at": existing_run["ended_at"],
+            }
+        )
+    response = handle_knowledge_sink(
+        run_request,
+        grant_id=grant_id,
+        vault_path=selected,
+    )
+    recorded = response["result"]
+    return {
+        "schema_version": HOST_SESSION_ROUTE_SCHEMA_VERSION,
+        "operation": "bind",
+        "status": "bound",
+        "host": selected_host,
+        "session_sha256": selected_session,
+        "task_handle": task_handle,
+        "task_handle_sha256": handle["task_handle_sha256"],
+        "repository_sha256": handle["repository_sha256"],
+        "worktree_sha256": handle["worktree_sha256"],
+        "run_id": recorded["run_id"],
+        "write_performed": True,
+        "transcript_copied": False,
+        "idempotent_replay": recorded["idempotent_replay"],
+    }
+
+
+def resolve_host_session(
+    *,
+    vault_path: str | Path | None,
+    host: str,
+    session_sha256: str,
+    workspace: str | Path,
+) -> dict[str, Any]:
+    """Resolve exactly one verified Host route without a recent-task fallback."""
+
+    selected_host = _host_name(host)
+    selected_session = _session_sha256(session_sha256)
+    selected, vault_id = _vault(vault_path, expected_vault_id=None)
+    try:
+        workspace_identity = _workspace_route_identity(workspace)
+    except WorkspaceSnapshotGap as error:
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code=str(error.receipt["gap"]["code"]),
+        )
+    artifact_id = f"hostsession:{selected_session}"
+    with AutonomousKnowledgeStore(selected, read_only=True) as store:
+        audit_before = store.audit_head
+        rows = store.connection.execute(
+            """
+            SELECT run_id
+            FROM knowledge_run_records_v4
+            WHERE status = 'succeeded'
+              AND host_id = ?
+              AND json_extract(metadata_json, '$.task_kind') = ?
+              AND EXISTS (
+                  SELECT 1
+                  FROM json_each(metadata_json, '$.artifact_ids')
+                  WHERE json_each.value = ?
+              )
+            ORDER BY recorded_at DESC, run_id DESC
+            LIMIT ?
+            """,
+            (
+                f"deeplaw-native-route:{selected_host}",
+                _HOST_SESSION_ROUTE_KIND,
+                artifact_id,
+                _HOST_SESSION_ROUTE_LIMIT + 1,
+            ),
+        ).fetchall()
+        verified_bindings = [
+            binding
+            for row in rows
+            if (binding := store.run_task_context_binding(str(row["run_id"]))) is not None
+        ]
+        if store.audit_head != audit_before:
+            raise RuntimeError("Host route resolution changed the canonical audit head")
+    if not verified_bindings:
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code="route_unbound",
+        )
+    handles: dict[str, tuple[dict[str, Any], str, dict[str, Any]]] = {}
+    for binding in verified_bindings:
+        payload, task_handle = _handle_from_binding(vault_id=vault_id, binding=binding)
+        handles[payload["task_handle_sha256"]] = (payload, task_handle, binding)
+    if len(rows) > _HOST_SESSION_ROUTE_LIMIT or len(handles) != 1:
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code="route_ambiguous",
+            candidate_count=max(len(handles), len(rows)),
+        )
+    payload, task_handle, binding = next(iter(handles.values()))
+    if (
+        binding["repository_sha256"] != workspace_identity["repository_sha256"]
+        or binding["worktree_sha256"] != workspace_identity["worktree_sha256"]
+    ):
+        return _host_route_gap(
+            operation="resolve",
+            host=selected_host,
+            session_sha256=selected_session,
+            code="route_wrong_worktree",
+            candidate_count=1,
+        )
+    return {
+        "schema_version": HOST_SESSION_ROUTE_SCHEMA_VERSION,
+        "operation": "resolve",
+        "status": "exact",
+        "host": selected_host,
+        "session_sha256": selected_session,
+        "task_handle": task_handle,
+        "task_handle_sha256": payload["task_handle_sha256"],
+        "repository_sha256": payload["repository_sha256"],
+        "worktree_sha256": payload["worktree_sha256"],
+        "binding_sha256": binding["binding_sha256"],
+        "write_performed": False,
+        "transcript_copied": False,
     }
 
 
@@ -1295,10 +1522,12 @@ def forget_task(
 
 
 __all__ = [
+    "HOST_SESSION_ROUTE_SCHEMA_VERSION",
     "TASK_CONTINUITY_SCHEMA_VERSION",
     "TASK_HANDLE_SCHEMA_VERSION",
     "WORKSPACE_SNAPSHOT_SCHEMA_VERSION",
     "WorkspaceSnapshotGap",
+    "bind_host_session",
     "binding_for_task_handle",
     "checkpoint_task",
     "decode_task_handle",
@@ -1307,6 +1536,7 @@ __all__ = [
     "fork_task",
     "inspect_task",
     "locate_task",
+    "resolve_host_session",
     "resume_task",
     "start_task",
     "timeline_task",
