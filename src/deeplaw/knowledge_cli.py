@@ -2052,6 +2052,24 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     task_checkpoint.add_argument("--gap", action="append", default=[])
     task_checkpoint.add_argument("--artifact-ref", action="append", default=[])
     task_checkpoint.add_argument("--confirm-no-case-data", action="store_true")
+    task_bind_host = task_commands.add_parser("bind-host-session")
+    task_bind_host.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_bind_host.add_argument("--host", choices=("codex", "opencode"), required=True)
+    task_bind_host.add_argument("--session-sha256", required=True)
+    task_bind_host.add_argument("--task-handle", required=True)
+    task_bind_host.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_bind_host.add_argument("--grant-id", required=True)
+    task_bind_host.add_argument("--idempotency-key", required=True)
+    task_bind_host.add_argument("--confirm-no-case-data", action="store_true")
+    task_resolve_host = task_commands.add_parser("resolve-host-session")
+    task_resolve_host.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    task_resolve_host.add_argument(
+        "--host", choices=("codex", "opencode"), required=True
+    )
+    task_resolve_host.add_argument("--session-sha256", required=True)
+    task_resolve_host.add_argument("--workspace", type=Path, default=Path.cwd())
     task_forget = task_commands.add_parser("forget")
     task_forget.add_argument("--vault", type=Path, default=default_knowledge_vault())
     task_forget.add_argument("--task-handle", required=True)
@@ -2403,11 +2421,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "task":
         from .task_continuity import (
+            bind_host_session,
             checkpoint_task,
             forget_task,
             fork_task,
             inspect_task,
             locate_task,
+            resolve_host_session,
             resume_task,
             start_task,
             timeline_task,
@@ -2466,6 +2486,24 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 gaps=tuple(args.gap),
                 artifact_refs=tuple(args.artifact_ref),
                 confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "bind-host-session":
+            return bind_host_session(
+                vault_path=args.vault,
+                host=args.host,
+                session_sha256=args.session_sha256,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "resolve-host-session":
+            return resolve_host_session(
+                vault_path=args.vault,
+                host=args.host,
+                session_sha256=args.session_sha256,
+                workspace=args.workspace,
             )
         if args.task_command == "forget":
             return forget_task(

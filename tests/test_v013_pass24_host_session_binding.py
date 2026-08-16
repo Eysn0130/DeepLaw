@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
+from deeplaw import cli
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
@@ -229,3 +230,47 @@ def test_host_session_binding_rejects_unfrozen_hosts(tmp_path: Path, host: str) 
             idempotency_key="reject-host",
             confirm_no_case_data=True,
         )
+
+
+def test_host_session_route_commands_are_explicit_cli_seams() -> None:
+    parser = cli._parser()
+    bind = parser.parse_args(
+        [
+            "knowledge",
+            "task",
+            "bind-host-session",
+            "--vault",
+            "vault",
+            "--host",
+            "codex",
+            "--session-sha256",
+            "a" * 64,
+            "--task-handle",
+            "taskh_opaque",
+            "--grant-id",
+            "grant-owner",
+            "--idempotency-key",
+            "bind-route",
+            "--confirm-no-case-data",
+        ]
+    )
+    assert bind.task_command == "bind-host-session"
+    assert bind.host == "codex"
+    assert bind.confirm_no_case_data is True
+
+    resolve = parser.parse_args(
+        [
+            "knowledge",
+            "task",
+            "resolve-host-session",
+            "--vault",
+            "vault",
+            "--host",
+            "opencode",
+            "--session-sha256",
+            "b" * 64,
+        ]
+    )
+    assert resolve.task_command == "resolve-host-session"
+    assert resolve.host == "opencode"
+    assert not hasattr(resolve, "grant_id")
