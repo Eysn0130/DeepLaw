@@ -67,6 +67,21 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Revalidate the closed external evidence bundle before assembly
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+          uv run --frozen python -m benchmarks.release.external_qualification_bundle \
+            --root "${RUNNER_TEMP}/release-assets" \
+            --active-qualification "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
+            --classification benchmarks/release/v013-gate-classification-v6.json \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}"
+
       - name: Inject only the exact verified distributions
         shell: bash
         run: |

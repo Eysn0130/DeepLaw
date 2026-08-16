@@ -78,6 +78,8 @@ jobs:
           test -x "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}"
 
       - name: Execute external qualification against the downloaded bytes
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -86,14 +88,20 @@ jobs:
           mkdir "${evidence}"
           "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}" \
             --candidate "${RUNNER_TEMP}/verified-dist" \
+            --active-qualification "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${GITHUB_RUN_ID}" \
             --qualification-root "${DEEPLAW_QUALIFICATION_ROOT}" \
             --human-gold-root "${DEEPLAW_HUMAN_GOLD_ROOT}" \
             --independent-scorer "${DEEPLAW_INDEPENDENT_SCORER}" \
             --output "${evidence}"
           test ! -e "${evidence}/dist"
           test ! -e "${evidence}/.env"
+          test -f "${evidence}/bundle-manifest.json"
 
       - name: Revalidate only the sanitized evidence bundle
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -101,6 +109,7 @@ jobs:
             --root "${RUNNER_TEMP}/v013-qualification-evidence" \
             --active-qualification "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
             --classification benchmarks/release/v013-gate-classification-v6.json \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --evidence-run-id "${GITHUB_RUN_ID}"
 
       - name: Upload sanitized evidence only
