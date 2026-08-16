@@ -324,7 +324,7 @@ vault/
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
 | `deeplaw knowledge mcp --closed-environment --stdio` / `knowledge_support` | 只读 | input/output v6：推荐 query/context/source/wiki/verify；默认 Query Plan v6，v5 仅显式兼容 |
-| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | input v5 / output v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
+| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | input v6 / output v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；input v2-v5 保持兼容，默认插件仍不注册 |
 | `deeplaw mcp --closed-environment --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主

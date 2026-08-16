@@ -1951,7 +1951,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     sink_status.add_argument("--vault", type=Path, default=default_knowledge_vault())
     sink_status.add_argument("--grant-id", required=True)
     sink_apply_help = (
-        "Apply one closed knowledge-sink input v2-v5 request; the contract is "
+        "Apply one closed knowledge-sink input v2-v6 request; the contract is "
         "selected from the active grant"
     )
     sink_apply = sink_commands.add_parser(

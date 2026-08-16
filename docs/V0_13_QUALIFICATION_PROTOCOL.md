@@ -35,7 +35,7 @@ must bind all of the following before any real qualification execution:
 
 - clean source commit, tree, `uv.lock` SHA-256, and `SOURCE_DATE_EPOCH`;
 - the single reproducibly verified wheel and sdist names and SHA-256 values;
-- the retained artifact manifest bytes;
+- the `retained-candidate-artifacts.v1` manifest bytes and its exact wheel/sdist hashes;
 - repository-external Human Gold, qualification holdout, final-blind holdout, and
   compiler/scorer-isolation manifest SHA-256 values;
 - Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` / `reasoning=max` and OpenCode `1.18.16` /

@@ -130,6 +130,11 @@ jobs:
         run: |
           set -euo pipefail
           uv sync --frozen --extra dev
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . \
+            --dist "${RUNNER_TEMP}/verified-dist" \
+            --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
+            --verify
           uv run --frozen python - <<'PY'
           from pathlib import Path
           from benchmarks.release.retained_artifact_manifest import verify_single_artifact_source
@@ -185,6 +190,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "verified-dist"
+          manifest = json.loads(
+              (root / "retained-artifact-manifest.json").read_text(encoding="utf-8")
+          )
+          expected = {manifest["wheel"]["filename"], manifest["sdist"]["filename"]}
+          observed = {
+              path.name
+              for path in root.iterdir()
+              if path.is_file()
+              and (path.name.endswith(".whl") or path.name.endswith(".tar.gz"))
+          }
+          if observed != expected:
+              raise SystemExit("fresh install artifact names differ from retained manifest")
+          hashes = []
+          for kind in ("wheel", "sdist"):
+              item = manifest[kind]
+              path = root / item["filename"]
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              if digest != item["sha256"] or path.stat().st_size != item["bytes"]:
+                  raise SystemExit(f"fresh install {kind} differs from retained manifest")
+              hashes.append(digest)
+          print(json.dumps({
+              "schema_version": "deeplaw.fresh-install-verified-artifact/v1",
+              "status": "verified",
+              "artifact_sha256": hashes,
+          }, sort_keys=True, separators=(",", ":")))
+          PY
           wheel=$(find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type f -name '*.whl')
           test -n "${wheel}"
           uv venv "${RUNNER_TEMP}/fresh" --python "${{ matrix.python-version }}" --seed

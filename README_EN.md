@@ -273,7 +273,7 @@ lexical fallback remains available.
 | Process / leaf | Permission | Purpose |
 | --- | --- | --- |
 | `deeplaw knowledge mcp --closed-environment --stdio` / `knowledge_support` | Read-only | input/output v6; recommended query/context/source/wiki/verify, default Query Plan v6, explicit v5 compatibility |
-| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | input v5 / output v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
+| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | input v6 / output v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision; input v2-v5 remains compatible |
 | `deeplaw mcp --closed-environment --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
 
 The default Knowledge OS plugin registers only `knowledge_support`. A sink requires an owner-created

@@ -36,7 +36,7 @@ The three reproduced defects and their minimum repairs are:
    and no LWW choice is made.
 
 The route projection is derived and rebuildable. The continuity correction adds no canonical
-Knowledge table or migration. Pass 22 adds `knowledge-sink.input/v6` so every current `record_run`
+Knowledge table or migration. The Pass 21 closure adds `knowledge-sink.input/v6` so every current `record_run`
 commit accepts only opaque, bounded, non-path, non-Secret-shaped Artifact IDs; the same validator
 is reused by task checkpoints and Timeline output. Published input v2-v5 bytes remain unchanged
 and readable. Rollback to a v5 runtime requires no data migration because v6 narrows accepted
@@ -491,7 +491,7 @@ non-persistent; it is not Canonical Knowledge or a Ledger mutation.
 | Surface | Boundary |
 | --- | --- |
 | `knowledge_support` | One read-only stdio leaf; v3 exposes only its closed bounded read operations, including query, context, explain, identity, and gaps |
-| `knowledge_sink` | Separate stdio leaf; additive input v5 for bound writes, frozen v2 legacy compatibility, explicit owner token, writer, scope, sensitivity, operation allowlist, byte/rate/capacity limits, idempotency, and audit |
+| `knowledge_sink` | Separate stdio leaf; additive input v6 for bound writes, frozen v2-v5 compatibility, explicit owner token, writer, scope, sensitivity, operation allowlist, byte/rate/capacity limits, idempotency, and audit |
 | `law_support` | Separate read-only process and storage for signed official and owner-private legal evidence |
 | CLI | Owner administration, source ingestion, grants, migration, rollback, snapshot, rebuild, official/private Legal operations |
 | Watcher | Explicit foreground polling adapter over the same reconcile/coordinator service; no background daemon |

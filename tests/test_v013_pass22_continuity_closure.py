@@ -63,7 +63,7 @@ def _vault(tmp_path: Path) -> tuple[Path, str]:
     return vault, grant_id
 
 
-def test_ignored_files_never_enter_workspace_snapshot_identity(
+def test_ordinary_ignored_files_never_enter_workspace_snapshot_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -71,7 +71,7 @@ def test_ignored_files_never_enter_workspace_snapshot_identity(
 
     repository = _repository(tmp_path)
     (repository / ".gitignore").write_text(
-        ".env\n.venv/\nignored-tree/\n",
+        "local.cache\n.venv/\nignored-tree/\n",
         encoding="utf-8",
     )
     _git(repository, "add", ".gitignore")
@@ -86,7 +86,7 @@ def test_ignored_files_never_enter_workspace_snapshot_identity(
         "-m",
         "ignore generated state",
     )
-    (repository / ".env").write_text("IGNORED_SECRET=one\n", encoding="utf-8")
+    (repository / "local.cache").write_text("ignored=one\n", encoding="utf-8")
     credentials = repository / ".venv" / "credentials.py"
     credentials.parent.mkdir()
     credentials.write_text("TOKEN = 'ignored'\n", encoding="utf-8")
@@ -98,25 +98,29 @@ def test_ignored_files_never_enter_workspace_snapshot_identity(
     original_git = task_continuity._git
 
     def audit_git(workspace: Path, *arguments: str, **kwargs: object) -> bytes:
-        assert "--ignored" not in arguments, "ignored trees must never be enumerated"
+        if "--ignored" in arguments:
+            assert "--directory" in arguments
+            assert "--no-empty-directory" in arguments
         return original_git(workspace, *arguments, **kwargs)
 
     monkeypatch.setattr(task_continuity, "_git", audit_git)
     before = task_continuity.workspace_snapshot_receipt(repository)
     assert before["status"] == "ready"
 
-    (repository / ".env").write_text("IGNORED_SECRET=two\n", encoding="utf-8")
+    (repository / "local.cache").write_text("ignored=two\n", encoding="utf-8")
     credentials.write_text("TOKEN = 'changed-but-ignored'\n", encoding="utf-8")
     (ignored_tree / "generated-0000.txt").write_text("changed", encoding="utf-8")
     after = task_continuity.workspace_snapshot_receipt(repository)
     assert after == before
 
 
-def test_current_deeplaw_repository_snapshot_excludes_generated_ignored_state() -> None:
+def test_current_deeplaw_repository_snapshot_excludes_or_gaps_on_ignored_state() -> None:
     from deeplaw.task_continuity import workspace_snapshot_receipt
 
     receipt = workspace_snapshot_receipt(REPOSITORY)
-    assert receipt["status"] == "ready", receipt.get("gap")
+    assert receipt["status"] in {"ready", "gap"}
+    if receipt["status"] == "gap":
+        assert receipt["gap"]["code"] == "workspace_secret_unverifiable"
 
 
 def test_child_task_text_locates_after_checkpoint_and_conflicts_are_ambiguous(

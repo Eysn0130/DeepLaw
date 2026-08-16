@@ -156,6 +156,41 @@ def test_codex_events_delegate_to_continuity_and_emit_path_free_receipts(
     ]
 
 
+def test_host_workspace_binding_does_not_depend_on_ambient_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, child = _repository(tmp_path)
+    ambient = tmp_path / "ambient"
+    ambient.mkdir()
+    vault, _grant_id = _vault(tmp_path)
+    config = _config(
+        host="codex",
+        version="0.147.0-alpha.1.2",
+        vault=vault,
+        workspace=repository,
+        child=child,
+    )
+    started = start_task(
+        vault_path=vault,
+        project="DeepLaw",
+        task="Registered continuity task",
+        workspace=repository,
+    )
+
+    monkeypatch.chdir(ambient)
+    receipt = handle_host_lifecycle_event(
+        config,
+        {"event": "thread/start"},
+        expected_host="codex",
+    )
+
+    assert receipt["status"] == "ready"
+    assert receipt["task_handle_sha256"] == started["task_handle_sha256"]
+    assert receipt["repository_worktree_rebound"] is True
+    assert str(ambient) not in str(receipt)
+
+
 def test_opencode_summarize_maps_to_compaction_without_changing_v2_claim(
     tmp_path: Path,
 ) -> None:

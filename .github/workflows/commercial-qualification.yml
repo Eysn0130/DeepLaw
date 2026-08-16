@@ -86,6 +86,11 @@ jobs:
         run: |
           set -euo pipefail
           uv sync --frozen --extra dev
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . \
+            --dist "${RUNNER_TEMP}/verified-dist" \
+            --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
+            --verify
           uv run --frozen python -m benchmarks.release.v013_commercial_release \
             --template "${RUNNER_TEMP}/release-assets/commercial-release-template.json" \
             --semantic-report evidence/gate-collection.json \

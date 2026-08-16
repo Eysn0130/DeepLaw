@@ -8077,9 +8077,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass11_product_surface",
-            "name": "test_sink_apply_help_matches_additive_v2_through_v5_contracts"
+            "name": "test_sink_apply_help_matches_additive_v2_through_v6_contracts"
           },
-          "node_id": "tests/test_v013_pass11_product_surface.py::test_sink_apply_help_matches_additive_v2_through_v5_contracts"
+          "node_id": "tests/test_v013_pass11_product_surface.py::test_sink_apply_help_matches_additive_v2_through_v6_contracts"
         },
         {
           "junit": {
@@ -9603,6 +9603,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass21_release_closure",
+            "name": "test_product_surface_manifest_routes_current_sink_to_v6"
+          },
+          "node_id": "tests/test_v013_pass21_release_closure.py::test_product_surface_manifest_routes_current_sink_to_v6"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass21_release_closure",
             "name": "test_retained_manifest_rejects_hash_drift_from_verified_build"
           },
           "node_id": "tests/test_v013_pass21_release_closure.py::test_retained_manifest_rejects_hash_drift_from_verified_build"
@@ -9680,6 +9687,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass21_task_routing_closure",
+            "name": "test_ignored_env_candidate_fails_closed_without_content_or_tree_scan"
+          },
+          "node_id": "tests/test_v013_pass21_task_routing_closure.py::test_ignored_env_candidate_fails_closed_without_content_or_tree_scan"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass21_task_routing_closure",
             "name": "test_secret_looking_workspace_candidates_fail_closed_without_content[False-.env]"
           },
           "node_id": "tests/test_v013_pass21_task_routing_closure.py::test_secret_looking_workspace_candidates_fail_closed_without_content[False-.env]"
@@ -9736,16 +9750,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass22_continuity_closure",
-            "name": "test_current_deeplaw_repository_snapshot_excludes_generated_ignored_state"
+            "name": "test_current_deeplaw_repository_snapshot_excludes_or_gaps_on_ignored_state"
           },
-          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_current_deeplaw_repository_snapshot_excludes_generated_ignored_state"
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_current_deeplaw_repository_snapshot_excludes_or_gaps_on_ignored_state"
         },
         {
           "junit": {
             "classname": "tests.test_v013_pass22_continuity_closure",
-            "name": "test_ignored_files_never_enter_workspace_snapshot_identity"
+            "name": "test_ordinary_ignored_files_never_enter_workspace_snapshot_identity"
           },
-          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_ignored_files_never_enter_workspace_snapshot_identity"
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_ordinary_ignored_files_never_enter_workspace_snapshot_identity"
         },
         {
           "junit": {
@@ -9858,6 +9872,13 @@
             "name": "test_codex_events_delegate_to_continuity_and_emit_path_free_receipts"
           },
           "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_codex_events_delegate_to_continuity_and_emit_path_free_receipts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_host_workspace_binding_does_not_depend_on_ambient_cwd"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_host_workspace_binding_does_not_depend_on_ambient_cwd"
         },
         {
           "junit": {
@@ -12653,9 +12674,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 1792,
+      "count": 1795,
       "selection": "not qualification and not windows_native",
-      "sha256": "2559df9e3b29d9e4d9d360b4181e2418443c3fab293f41d4e67c713c819b0d50"
+      "sha256": "ac7f31155b5941ffc1706893a039b4d8afa6d84719504a6f17acc5296ed063e8"
     },
     "windows": {
       "additional_cases": [
@@ -12688,13 +12709,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 1796,
+      "count": 1799,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "9d0ec611ffff48b9efaffb09bb518273c05cd01dfec70eca42099d5b063c3518"
+      "sha256": "35debe9e40fe6ce45a897094b48c93e9ef8216c9d353f1a2ed81e48d204edc2c"
     }
   },
-  "manifest_sha256": "79a8b434182e301bf73901b18c7648b1f92612f25ce6cfedde5253fd875c495d",
+  "manifest_sha256": "3e48b98ae7502028e1a1c0fe467f34b046e3bed990ea90741abfffcd9d95c891",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

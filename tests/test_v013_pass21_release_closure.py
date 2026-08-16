@@ -41,6 +41,28 @@ def test_active_qualification_binding_accepts_semver_and_matches_package() -> No
     Draft202012Validator(schema).validate(candidate)
 
 
+def test_product_surface_manifest_routes_current_sink_to_v6() -> None:
+    manifest = _load(REPOSITORY / "governance/product-surface-manifest.v1.json")
+    caller = next(
+        item
+        for item in manifest["external_callers"]  # type: ignore[index]
+        if item["caller"] == "knowledge_sink"
+    )
+    assert "contracts/knowledge-sink.input.v6.schema.json" in caller[
+        "current_bindings"
+    ]
+    assert caller["compatibility_bindings"] == [
+        "contracts/knowledge-sink.input.v1.schema.json through v5",
+        "contracts/knowledge-sink.output.v1.schema.json through v3",
+    ]
+    surface = next(
+        item
+        for item in manifest["surfaces"]  # type: ignore[index]
+        if item["surface_id"] == "advanced.knowledge_sink"
+    )
+    assert "contracts/knowledge-sink.input.v6.schema.json" in surface["bindings"]
+
+
 def test_pre_freeze_version_deadlock_is_explicit_and_fail_closed() -> None:
     from benchmarks.release.freeze_qualification_candidate import (
         QualificationFreezeError,
@@ -155,9 +177,19 @@ def test_candidate_artifact_retention_is_at_least_ninety_days() -> None:
     workflow = (REPOSITORY / ".github/workflows/candidate-full.yml").read_text(
         encoding="utf-8"
     )
+    commercial = (
+        REPOSITORY / ".github/workflows/commercial-qualification.yml"
+    ).read_text(encoding="utf-8")
+    release = (REPOSITORY / ".github/workflows/release.yml").read_text(
+        encoding="utf-8"
+    )
     assert "retention-days: 90" in workflow
     assert workflow.count("verify_reproducible_build") == 1
     assert "uv build" not in workflow
+    verifier_command = "python -m benchmarks.release.retained_artifact_manifest"
+    assert verifier_command in commercial
+    assert verifier_command in release
+    assert "fresh-install-verified-artifact/v1" in release
 
 
 def test_historical_gate_v5_and_protocol_v1_bytes_remain_unchanged() -> None:

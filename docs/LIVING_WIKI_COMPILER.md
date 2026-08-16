@@ -244,7 +244,7 @@ The public facade maps internal validation, not-found, permission and state conf
 
 `knowledge_support` input/output v6 is read-only and exposes compilation
 inventory/profile/status/explain, purpose-aware Query Plan v6 query/context and existing
-verification operations. `knowledge_sink` input v5 / output v4 is a separate
+verification operations. `knowledge_sink` input v6 / output v4 is a separate
 process and exposes only the operations in its owner-created grant. Its caller-supplied idempotency
 key is durably bound to the exact closed request and a content-addressed result; reusing the key for
 different input fails closed. A compiler host requires both processes; a Skill or retrieved

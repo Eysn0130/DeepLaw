@@ -176,6 +176,55 @@ def test_secret_looking_workspace_candidates_fail_closed_without_content(
         }
 
 
+def test_ignored_env_candidate_fails_closed_without_content_or_tree_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deeplaw import task_continuity
+
+    repository = _repository(tmp_path)
+    (repository / ".gitignore").write_text(".env\n.venv/\n", encoding="utf-8")
+    _git(repository, "add", ".gitignore")
+    _git(
+        repository,
+        "-c",
+        "user.name=DeepLaw Test",
+        "-c",
+        "user.email=deeplaw@example.invalid",
+        "commit",
+        "-q",
+        "-m",
+        "ignore local state",
+    )
+    (repository / ".env").write_text("DO_NOT_READ_IGNORED_VALUE\n", encoding="utf-8")
+    generated = repository / ".venv" / "generated.txt"
+    generated.parent.mkdir()
+    generated.write_text("ordinary ignored state\n", encoding="utf-8")
+
+    original_git = task_continuity._git
+    observed: list[tuple[str, ...]] = []
+
+    def audit_git(workspace: Path, *arguments: str, **kwargs: object) -> bytes:
+        observed.append(arguments)
+        assert "--directory" in arguments or "--ignored" not in arguments
+        return original_git(workspace, *arguments, **kwargs)
+
+    monkeypatch.setattr(task_continuity, "_git", audit_git)
+    receipt = task_continuity.workspace_snapshot_receipt(repository)
+
+    assert receipt == {
+        "schema_version": "deeplaw.workspace-snapshot-receipt/v1",
+        "status": "gap",
+        "gap": {
+            "code": "workspace_secret_unverifiable",
+            "candidate_count": 1,
+        },
+    }
+    assert any("--ignored" in arguments for arguments in observed)
+    assert ".env" not in str(receipt)
+    assert "DO_NOT_READ_IGNORED_VALUE" not in str(receipt)
+
+
 def test_child_fork_selects_an_explicit_independent_worktree(tmp_path: Path) -> None:
     from deeplaw.task_continuity import decode_task_handle, fork_task, start_task
 

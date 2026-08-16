@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/retained-candidate-artifacts.v1.schema.json",
+  "title": "DeepLaw retained candidate artifact manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_version",
+    "release_ready",
+    "claim_eligible",
+    "git_commit",
+    "git_tree",
+    "lock_sha256",
+    "wheel",
+    "sdist"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.retained-candidate-artifacts/v1"},
+    "package_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false},
+    "git_commit": {"$ref": "#/$defs/gitObject"},
+    "git_tree": {"$ref": "#/$defs/gitObject"},
+    "lock_sha256": {"$ref": "#/$defs/sha256"},
+    "wheel": {"$ref": "#/$defs/artifact"},
+    "sdist": {"$ref": "#/$defs/artifact"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitObject": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256", "bytes"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

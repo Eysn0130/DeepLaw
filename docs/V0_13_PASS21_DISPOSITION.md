@@ -14,10 +14,11 @@ wrong-worktree, stale, forgotten, secret-unverifiable, and workspace-bound cases
 Gaps.
 
 Workspace identity hashes bounded non-sensitive untracked content rather than trusting
-size/mtime/inode. Secret-looking tracked or non-ignored untracked candidates are detected only from
-Git path/status metadata: their contents are never opened, and the snapshot becomes unverifiable.
-Ignored paths and ignored trees are never enumerated and never enter route or snapshot identity.
-The capacity ceiling remains closed and reports `workspace_snapshot_bound`. Fork selects and
+size/mtime/inode. Secret-looking tracked, untracked, or direct ignored candidates are detected only
+from bounded Git path/status metadata: their contents are never opened, and the snapshot becomes
+unverifiable. Ignored directory contents are collapsed rather than recursively enumerated, and
+ordinary ignored state never enters route or snapshot identity. The capacity ceiling remains closed
+and reports `workspace_snapshot_bound`. Fork selects and
 validates a separate child worktree in the same repository. Exact forget resolves the recorded
 checkpoint identity rather than requiring the current dirty/base snapshot to remain unchanged.
 
@@ -55,8 +56,9 @@ unchanged. Current contracts are:
 - one reproducible-build output whose wheel/sdist bytes are the only downstream artifact source.
 
 Candidate Full builds twice from clean tracked material with one `SOURCE_DATE_EPOCH`, retains only
-the byte-identical wheel/sdist plus their reports for 90 days, and makes every OS/Python consumer
-download and verify those same hashes. Windows uses its complete Python 3.12 run as the executed
+the byte-identical wheel/sdist plus their reports for 90 days, and binds their names, sizes, hashes,
+commit, tree, and lock through `retained-candidate-artifacts.v1`. Every OS/Python consumer downloads
+and verifies those same hashes before installation. Windows uses its complete Python 3.12 run as the executed
 duration calibration, then applies deterministic duration-weighted, complete, non-overlapping
 shards to 3.11 and 3.13. Together those lanes cover all three supported Python minors. Periodic
 Scale and Release resolve a successful Candidate Full run and consume its bytes; neither rebuilds.

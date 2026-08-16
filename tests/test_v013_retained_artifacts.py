@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from benchmarks.release.retained_artifact_manifest import (
     build_manifest,
@@ -58,6 +60,14 @@ def test_retained_manifest_binds_candidate_tree_lock_wheel_and_sdist(
     manifest = build_manifest(repository=repository, dist=dist)
     manifest_path = dist / "retained-artifact-manifest.json"
     manifest_path.write_text(canonical_json(manifest) + "\n", encoding="utf-8")
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/retained-candidate-artifacts.v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(manifest)
 
     assert verify_manifest(
         repository=repository,

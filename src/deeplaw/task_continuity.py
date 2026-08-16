@@ -226,9 +226,22 @@ def _dirty_state_sha256(worktree: Path) -> str:
             max_stdout_bytes=_MAX_GIT_STATUS_BYTES,
         )
     )
+    ignored = _workspace_paths(
+        _git(
+            worktree,
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+            "--no-empty-directory",
+            "-z",
+            max_stdout_bytes=_MAX_GIT_STATUS_BYTES,
+        )
+    )
     secret_candidates = {
         relative_text
-        for relative_text, _relative in (*tracked, *untracked)
+        for relative_text, _relative in (*tracked, *untracked, *ignored)
         if _secret_looking_workspace_path(relative_text)
     }
     if secret_candidates:

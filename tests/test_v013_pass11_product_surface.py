@@ -123,13 +123,13 @@ def test_layered_help_exposes_advanced_and_admin_inventory(capsys) -> None:
     assert "migrate" in admin
 
 
-def test_sink_apply_help_matches_additive_v2_through_v5_contracts() -> None:
+def test_sink_apply_help_matches_additive_v2_through_v6_contracts() -> None:
     knowledge = _command_parser("knowledge")
     action = _subparsers(knowledge)
     sink = action.choices["sink"]
     sink_action = _subparsers(sink)
     apply_help = sink_action.choices["apply"].format_help()
-    assert "v2-v5" in apply_help
+    assert "v2-v6" in apply_help
     assert "selected from the active grant" in " ".join(apply_help.split())
 
 

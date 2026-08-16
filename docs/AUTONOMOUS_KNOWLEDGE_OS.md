@@ -52,10 +52,11 @@ identity, status, recorded time, and opaque Artifact identity. A global or unrel
 is not inserted into another task's timeline.
 
 Workspace binding hashes bounded non-sensitive untracked file content so same-size/same-metadata
-changes cannot alias. Secret-looking tracked or non-ignored untracked candidates are classified by
-path only and return `workspace_secret_unverifiable`; their bytes are not opened. Ignored paths are
-not enumerated and do not contribute to route or snapshot identity. Per-file, total byte, and
-path-count limits return `workspace_snapshot_bound`. Provider Capsules never receive workspace
+changes cannot alias. Secret-looking tracked, untracked, or direct ignored candidates are classified
+by bounded path metadata only and return `workspace_secret_unverifiable`; their bytes are not opened.
+Ignored directory contents are collapsed instead of recursively enumerated, and ordinary ignored
+state does not contribute to route or snapshot identity. Per-file, total byte, and path-count limits
+return `workspace_snapshot_bound`. Provider Capsules never receive workspace
 metadata, raw diffs, local paths, or these local inspection details.
 
 ## 1. Product boundary
