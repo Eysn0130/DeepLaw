@@ -1,0 +1,69 @@
+{
+  "description": "Read-only DeepLaw Native Host observations. Owner must review and trust the exact current command hash before these unmanaged plugin hooks run; no trust state is changed here.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/native_lifecycle.py\" SessionStart",
+            "timeout": 5,
+            "additionalContextLimit": 2048,
+            "statusMessage": "Preparing bounded DeepLaw route status"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/native_lifecycle.py\" UserPromptSubmit",
+            "timeout": 5,
+            "additionalContextLimit": 2048,
+            "statusMessage": "Preparing bounded DeepLaw route status"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/native_lifecycle.py\" PreCompact",
+            "timeout": 5,
+            "additionalContextLimit": 2048,
+            "statusMessage": "Checking checkpoint grant status"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/native_lifecycle.py\" PostCompact",
+            "timeout": 5,
+            "additionalContextLimit": 2048,
+            "statusMessage": "Preparing post-compaction route status"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/native_lifecycle.py\" SessionEnd",
+            "timeout": 3,
+            "statusMessage": "Recording read-only SessionEnd advisory"
+          }
+        ]
+      }
+    ]
+  }
+}

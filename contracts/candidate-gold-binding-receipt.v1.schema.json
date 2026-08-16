@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/candidate-gold-binding-receipt.v1.schema.json",
+  "title": "DeepLaw post-build Candidate Gold binding receipt v1",
+  "description": "Binds a frozen, candidate-independent semantic Gold manifest to one exact built candidate and its isolated holdout, blind, scorer, and runner inputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "bound_at",
+    "semantic_gold",
+    "candidate",
+    "artifacts",
+    "holdout",
+    "blind",
+    "scorer",
+    "runner",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.candidate-gold-binding-receipt/v1"},
+    "status": {"const": "post_build_candidate_gold_bound"},
+    "bound_at": {"type": "string", "format": "date-time"},
+    "semantic_gold": {"$ref": "#/$defs/semanticGold"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "artifacts": {"$ref": "#/$defs/artifacts"},
+    "holdout": {"$ref": "#/$defs/digest"},
+    "blind": {"$ref": "#/$defs/digest"},
+    "scorer": {"$ref": "#/$defs/identityDigest"},
+    "runner": {"$ref": "#/$defs/identityDigest"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "semanticGold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_id", "schema_version", "sha256"],
+      "properties": {
+        "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+        "schema_version": {"const": "deeplaw.semantic-human-gold/v3"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "byte_size"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel", "sdist"],
+      "properties": {
+        "wheel": {"$ref": "#/$defs/artifact"},
+        "sdist": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "sha256"],
+      "properties": {
+        "role": {"enum": ["qualification_holdout", "final_blind"]},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "identityDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

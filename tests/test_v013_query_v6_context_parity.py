@@ -18,7 +18,11 @@ from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
 )
-from deeplaw.knowledge_mcp_server import handle_knowledge_support, knowledge_tool_definition
+from deeplaw.knowledge_mcp_server import (
+    _validate_knowledge_tool_arguments,
+    handle_knowledge_support,
+    knowledge_tool_definition,
+)
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
 from deeplaw.task_context import build_task_context_binding
 from deeplaw.util import canonical_json, sha256_bytes, stable_id
@@ -510,14 +514,16 @@ def test_mcp_context_contract_defaults_v6_and_closes_v5_controls() -> None:
             "confirm_no_case_data": True,
         }
     )
-    validator.validate(
-        {
-            "operation": "context",
-            "query_plan_version": "5",
-            "task": _TASK,
-            "confirm_no_case_data": True,
-            "plane": "autonomous",
-        }
+    legacy_v5 = {
+        "operation": "context",
+        "query_plan_version": "5",
+        "task": _TASK,
+        "confirm_no_case_data": True,
+        "plane": "autonomous",
+    }
+    assert list(validator.iter_errors(legacy_v5))
+    assert _validate_knowledge_tool_arguments(legacy_v5, autonomous=True) == (
+        "internal_compatibility"
     )
     assert list(
         validator.iter_errors(

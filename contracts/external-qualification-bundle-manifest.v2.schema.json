@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/external-qualification-bundle-manifest.v2.schema.json",
+  "title": "DeepLaw External Qualification Bundle Manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "candidate_run_id", "evidence_run_id", "candidate_binding",
+    "external_inputs", "files", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.external-qualification-bundle-manifest/v2"},
+    "candidate_run_id": {"type": "integer", "minimum": 1},
+    "evidence_run_id": {"type": "integer", "minimum": 1},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "external_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_gold_sha256", "candidate_gold_binding_sha256",
+        "qualification_holdout_sha256", "final_blind_holdout_sha256",
+        "runner_sha256", "scorer_sha256", "compiler_scorer_isolation_sha256"
+      ],
+      "properties": {
+        "semantic_gold_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_gold_binding_sha256": {"$ref": "#/$defs/sha256"},
+        "qualification_holdout_sha256": {"$ref": "#/$defs/sha256"},
+        "final_blind_holdout_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_sha256": {"$ref": "#/$defs/sha256"},
+        "scorer_sha256": {"$ref": "#/$defs/sha256"},
+        "compiler_scorer_isolation_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]{1,512}$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "sha256", "media_type", "evidence_kind"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {
+          "enum": ["application/json", "application/xml", "text/plain", "text/csv"]
+        },
+        "evidence_kind": {
+          "enum": [
+            "candidate_full_junit", "candidate_platform_receipt", "host_event_sequence",
+            "exact_wheel_execution", "human_gold_scorer", "legal_rows",
+            "wiki_journey_rows", "context_capsule_selection_usage", "scale_report",
+            "retained_artifact", "sbom", "openvex", "licenses", "provenance",
+            "gate_result", "gate_collection", "commercial_release_template",
+            "post_build_gold_binding", "sanitized_supporting_receipt"
+          ]
+        }
+      }
+    }
+  }
+}

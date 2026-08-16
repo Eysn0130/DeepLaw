@@ -142,7 +142,8 @@ def _parser() -> argparse.ArgumentParser:
         description=(
             "Local Agent Knowledge OS with independently governed Legal Pack evidence\n\n"
             "Basic journey: init -> doctor -> knowledge source/compile/reconcile -> "
-            "host context -> wiki/source drill-down -> snapshot/forget"
+            "knowledge query/context -> host connect -> task continuity -> "
+            "wiki/source drill-down -> snapshot/forget"
         ),
         epilog=(
             "Use --help-advanced, --help-admin, or --help-compatibility for layered "

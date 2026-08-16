@@ -25,13 +25,14 @@ jobs:
       - deeplaw-qualification
     timeout-minutes: 360
     steps:
-      - name: Check out the exact requested commit
+      - name: Check out the exact requested candidate verifier
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify Candidate Full run identity
+      - name: Verify the successful Candidate Full run and exact head
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
@@ -39,75 +40,535 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .conclusion)" = success
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .head_sha)" = "${GITHUB_SHA}"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .name)" = "Candidate Full"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .path)" = ".github/workflows/candidate-full.yml"
+          candidate_api="repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}"
+          test "$(gh api "${candidate_api}" --jq .status)" = completed
+          test "$(gh api "${candidate_api}" --jq .conclusion)" = success
+          test "$(gh api "${candidate_api}" --jq .head_sha)" = "${GITHUB_SHA}"
+          test "$(gh api "${candidate_api}" --jq .name)" = "Candidate Full"
+          test "$(gh api "${candidate_api}" --jq .path)" = ".github/workflows/candidate-full.yml"
 
-      - name: Download the unique Candidate Full artifact
+      - name: Download the sole verified candidate artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: verified-candidate-artifacts
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/verified-dist
+          path: ${{ runner.temp }}/external-inputs/verified-candidate-artifacts
 
-      - name: Install closed verifier runtime
+      - name: Download Candidate Full raw evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: candidate-full-raw-evidence
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/external-inputs/candidate-full-raw-evidence
+
+      - name: Install the checkout verifier runtime
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      - name: Verify exact candidate and external prerequisites
+      - name: Verify Candidate Full artifact and raw-evidence closure
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_HEAD_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
+          uv lock --check
           uv sync --frozen --extra dev
+          dist="${RUNNER_TEMP}/external-inputs/verified-candidate-artifacts"
+          raw="${RUNNER_TEMP}/external-inputs/candidate-full-raw-evidence"
+          manifest="${dist}/retained-artifact-manifest.json"
+          run_receipt="${raw}/candidate-full-run-receipt.json"
+          inventory="${raw}/candidate-full-inventory-receipt.json"
+          test -d "${dist}" && test ! -L "${dist}"
+          test -d "${raw}" && test ! -L "${raw}"
+          test "$(find "${dist}" -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')" = 1
+          test "$(find "${dist}" -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = 1
+          for required in \
+            retained-artifact-manifest.json \
+            reproducible-build.json \
+            frozen-active-qualification.json \
+            candidate-requirements.txt; do
+            test -f "${dist}/${required}"
+            test ! -L "${dist}/${required}"
+          done
+          test -s "${run_receipt}"
+          test -s "${inventory}"
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
-            --repository . \
-            --dist "${RUNNER_TEMP}/verified-dist" \
-            --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
+            --repository "${GITHUB_WORKSPACE}" \
+            --dist "${dist}" \
+            --output "${manifest}" \
             --verify
-          test -f "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
-          test -n "${DEEPLAW_QUALIFICATION_ROOT:-}"
-          test -d "${DEEPLAW_QUALIFICATION_ROOT}"
-          test -n "${DEEPLAW_HUMAN_GOLD_ROOT:-}"
-          test -d "${DEEPLAW_HUMAN_GOLD_ROOT}"
-          test -n "${DEEPLAW_INDEPENDENT_SCORER:-}"
-          test -x "${DEEPLAW_INDEPENDENT_SCORER}"
-          test -n "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER:-}"
-          test -x "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}"
+          CANDIDATE_RUN_ID="${CANDIDATE_RUN_ID}" \
+          CANDIDATE_HEAD_SHA="${CANDIDATE_HEAD_SHA}" \
+          DIST_ROOT="${dist}" \
+          RAW_ROOT="${raw}" \
+          python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import subprocess
+          from pathlib import Path
 
-      - name: Execute external qualification against the downloaded bytes
+          def strict(path: Path):
+              def pairs(items):
+                  value = {}
+                  for key, item in items:
+                      if key in value:
+                          raise SystemExit(f"duplicate JSON key in {path.name}")
+                      value[key] = item
+                  return value
+
+              def constant(value):
+                  raise SystemExit(f"non-finite JSON number in {path.name}: {value}")
+
+              value = json.loads(
+                  path.read_text(encoding="utf-8"),
+                  object_pairs_hook=pairs,
+                  parse_constant=constant,
+              )
+              def finite(item):
+                  if isinstance(item, float) and not math.isfinite(item):
+                      raise SystemExit(f"non-finite JSON number in {path.name}")
+                  if isinstance(item, dict):
+                      for child in item.values():
+                          finite(child)
+                  elif isinstance(item, list):
+                      for child in item:
+                          finite(child)
+              finite(value)
+              return value
+
+          def digest(path: Path) -> str:
+              value = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      value.update(chunk)
+              return value.hexdigest()
+
+          def regular(path: Path) -> None:
+              if path.is_symlink() or not path.is_file():
+                  raise SystemExit(f"candidate evidence path is not regular: {path.name}")
+
+          dist = Path(os.environ["DIST_ROOT"]).resolve(strict=True)
+          raw = Path(os.environ["RAW_ROOT"]).resolve(strict=True)
+          run_id = int(os.environ["CANDIDATE_RUN_ID"])
+          head = os.environ["CANDIDATE_HEAD_SHA"]
+          manifest_path = dist / "retained-artifact-manifest.json"
+          run_path = raw / "candidate-full-run-receipt.json"
+          inventory_path = raw / "candidate-full-inventory-receipt.json"
+          for selected in (manifest_path, run_path, inventory_path):
+              regular(selected)
+          manifest = strict(manifest_path)
+          if manifest.get("schema_version") != "deeplaw.retained-candidate-artifacts/v1":
+              raise SystemExit("retained artifact manifest schema differs")
+          if manifest.get("git_commit") != head:
+              raise SystemExit("retained artifact manifest commit differs")
+          observed_tree = subprocess.run(
+              ["git", "rev-parse", "HEAD^{tree}"],
+              cwd=os.environ["GITHUB_WORKSPACE"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.strip()
+          if manifest.get("git_tree") != observed_tree:
+              raise SystemExit("retained artifact manifest tree differs")
+          lock = Path(os.environ["GITHUB_WORKSPACE"]) / "uv.lock"
+          if manifest.get("lock_sha256") != digest(lock):
+              raise SystemExit("retained artifact manifest lock differs")
+          wheel = sorted(dist.glob("*.whl"))
+          sdist = sorted(dist.glob("*.tar.gz"))
+          if len(wheel) != 1 or len(sdist) != 1:
+              raise SystemExit("Candidate Full must retain one wheel and one sdist")
+          if manifest["wheel"]["filename"] != wheel[0].name:
+              raise SystemExit("retained wheel filename differs")
+          if manifest["wheel"]["sha256"] != digest(wheel[0]):
+              raise SystemExit("retained wheel hash differs")
+          if manifest["sdist"]["filename"] != sdist[0].name:
+              raise SystemExit("retained sdist filename differs")
+          if manifest["sdist"]["sha256"] != digest(sdist[0]):
+              raise SystemExit("retained sdist hash differs")
+          run_receipt = strict(run_path)
+          if (
+              run_receipt.get("record_kind") != "candidate_full_raw_evidence"
+              or run_receipt.get("workflow") != "Candidate Full"
+              or run_receipt.get("workflow_path") != ".github/workflows/candidate-full.yml"
+              or run_receipt.get("run_id") != run_id
+              or run_receipt.get("head_sha") != head
+          ):
+              raise SystemExit("Candidate Full raw run identity differs")
+          inventory = strict(inventory_path)
+          if (
+              inventory.get("record_kind") != "candidate_full_raw_inventory"
+              or inventory.get("run_id") != run_id
+              or inventory.get("head_sha") != head
+              or not isinstance(inventory.get("files"), list)
+          ):
+              raise SystemExit("Candidate Full raw inventory identity differs")
+          observed = {}
+          for path in sorted(raw.rglob("*")):
+              if path == inventory_path:
+                  continue
+              if path.is_symlink():
+                  raise SystemExit("Candidate Full raw evidence contains a symlink")
+              if path.is_file():
+                  observed[path.relative_to(raw).as_posix()] = {
+                      "sha256": digest(path),
+                      "bytes": path.stat().st_size,
+                  }
+          declared = {}
+          for row in inventory["files"]:
+              if not isinstance(row, dict) or set(row) != {"logical_path", "sha256", "bytes"}:
+                  raise SystemExit("Candidate Full raw inventory row is not closed")
+              logical = row["logical_path"]
+              if not isinstance(logical, str) or logical in declared:
+                  raise SystemExit("Candidate Full raw inventory path is invalid")
+              declared[logical] = {"sha256": row["sha256"], "bytes": row["bytes"]}
+          if declared != observed:
+              raise SystemExit("Candidate Full raw inventory does not match retained bytes")
+          print("Candidate Full artifact and raw-evidence bindings verified")
+          PY
+
+      - name: Execute the exact downloaded wheel in a new repository-external venv
         shell: bash
         run: |
           set -euo pipefail
-          evidence="${RUNNER_TEMP}/v013-qualification-evidence"
-          test ! -e "${evidence}"
-          mkdir "${evidence}"
+          dist="${RUNNER_TEMP}/external-inputs/verified-candidate-artifacts"
+          manifest="${dist}/retained-artifact-manifest.json"
+          requirements="${dist}/candidate-requirements.txt"
+          receipt="${RUNNER_TEMP}/external-exact-wheel-receipt.json"
+          venv="${RUNNER_TEMP}/external-exact-wheel-venv"
+          test ! -e "${venv}"
+          test ! -e "${receipt}"
+          expected_wheel_sha256="$(uv run --frozen python -c \
+            'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["wheel"]["sha256"])' \
+            "${manifest}")"
+          expected_version="$(uv run --frozen python -c \
+            'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["package_version"])' \
+            "${manifest}")"
+          expected_requirements_sha256="$(uv run --frozen python -c \
+            'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' \
+            "${requirements}")"
+          uv run --frozen python -m benchmarks.release.exact_wheel_runner \
+            --candidate-dir "${dist}" \
+            --expected-wheel-sha256 "${expected_wheel_sha256}" \
+            --requirements-filename candidate-requirements.txt \
+            --expected-requirements-sha256 "${expected_requirements_sha256}" \
+            --expected-version "${expected_version}" \
+            --repository "${GITHUB_WORKSPACE}" \
+            --venv "${venv}" \
+            --receipt "${receipt}"
+          test -s "${receipt}"
+          test ! -L "${receipt}"
+
+      - name: Validate owner-controlled Host inputs without reading credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${DEEPLAW_CODEX_BINARY:-}"
+          test -n "${DEEPLAW_OPENCODE_BINARY:-}"
+          test -n "${DEEPLAW_OPENCODE_PACKAGE:-}"
+          test -n "${DEEPLAW_OPENCODE_DOTENV:-}"
+          test -n "${DEEPLAW_QUALIFICATION_ROOT:-}"
+          test -n "${DEEPLAW_HUMAN_GOLD_ROOT:-}"
+          test -n "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER:-}"
+          test -n "${DEEPLAW_INDEPENDENT_SCORER:-}"
+          test -n "${DEEPLAW_TRUSTED_HUMAN_APPROVER:-}"
+          GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
+          DEEPLAW_CODEX_BINARY="${DEEPLAW_CODEX_BINARY}" \
+          DEEPLAW_OPENCODE_BINARY="${DEEPLAW_OPENCODE_BINARY}" \
+          DEEPLAW_OPENCODE_PACKAGE="${DEEPLAW_OPENCODE_PACKAGE}" \
+          DEEPLAW_OPENCODE_DOTENV="${DEEPLAW_OPENCODE_DOTENV}" \
+          DEEPLAW_QUALIFICATION_ROOT="${DEEPLAW_QUALIFICATION_ROOT}" \
+          DEEPLAW_HUMAN_GOLD_ROOT="${DEEPLAW_HUMAN_GOLD_ROOT}" \
+          DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER="${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}" \
+          DEEPLAW_INDEPENDENT_SCORER="${DEEPLAW_INDEPENDENT_SCORER}" \
+          DEEPLAW_TRUSTED_HUMAN_APPROVER="${DEEPLAW_TRUSTED_HUMAN_APPROVER}" \
+          python - <<'PY'
+          import os
+          import stat
+          from pathlib import Path
+
+          repository = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
+
+          def has_symlink_component(path: Path) -> bool:
+              parts = path.parts
+              for index in range(1, len(parts) + 1):
+                  if Path(*parts[:index]).is_symlink():
+                      return True
+              return False
+
+          def outside(path: Path, label: str) -> Path:
+              if has_symlink_component(path):
+                  raise SystemExit(f"{label} must not be a symlink")
+              selected = path.resolve(strict=True)
+              if selected == repository or repository in selected.parents:
+                  raise SystemExit(f"{label} must be outside the checkout")
+              return selected
+
+          def regular_file(name: str, *, executable: bool = False, owner_only: bool = False) -> Path:
+              selected = outside(Path(os.environ[name]), name)
+              mode = os.lstat(selected).st_mode
+              if not stat.S_ISREG(mode):
+                  raise SystemExit(f"{name} must be a regular file")
+              if executable and not os.access(selected, os.X_OK):
+                  raise SystemExit(f"{name} must be executable")
+              if owner_only and mode & 0o077:
+                  raise SystemExit(f"{name} must be owner-only")
+              return selected
+
+          def directory(name: str, *, owner_only: bool = True) -> Path:
+              selected = outside(Path(os.environ[name]), name)
+              mode = os.lstat(selected).st_mode
+              if not stat.S_ISDIR(mode):
+                  raise SystemExit(f"{name} must be a regular directory")
+              if owner_only and mode & 0o077:
+                  raise SystemExit(f"{name} must be owner-only")
+              return selected
+
+          regular_file("DEEPLAW_CODEX_BINARY", executable=True)
+          regular_file("DEEPLAW_OPENCODE_BINARY", executable=True)
+          regular_file("DEEPLAW_OPENCODE_PACKAGE")
+          regular_file("DEEPLAW_OPENCODE_DOTENV", owner_only=True)
+          regular_file("DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER", executable=True)
+          regular_file("DEEPLAW_INDEPENDENT_SCORER", executable=True)
+          regular_file("DEEPLAW_TRUSTED_HUMAN_APPROVER")
+          directory("DEEPLAW_QUALIFICATION_ROOT")
+          directory("DEEPLAW_HUMAN_GOLD_ROOT")
+          print("Owner-controlled Host and qualification path metadata verified")
+          PY
+          test "$("${DEEPLAW_CODEX_BINARY}" --version)" = "codex-cli 0.148.0-alpha.9"
+          test "$("${DEEPLAW_CODEX_BINARY}" login status)" = "Logged in using ChatGPT"
+          test "$("${DEEPLAW_OPENCODE_BINARY}" --version)" = "1.18.16"
+          codex_sha256="$(python -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${DEEPLAW_CODEX_BINARY}")"
+          opencode_sha256="$(python -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${DEEPLAW_OPENCODE_BINARY}")"
+          opencode_package_sha256="$(python -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${DEEPLAW_OPENCODE_PACKAGE}")"
+          test "${codex_sha256}" = "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+          test -n "${opencode_sha256}"
+          test -n "${opencode_package_sha256}"
+
+      - name: Run the owner-controlled external runner against the exact bytes
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/external-inputs/verified-candidate-artifacts"
+          raw="${RUNNER_TEMP}/external-inputs/candidate-full-raw-evidence"
+          receipt="${RUNNER_TEMP}/external-exact-wheel-receipt.json"
+          bundle="${RUNNER_TEMP}/external-qualification-bundle"
+          active="${dist}/frozen-active-qualification.json"
+          test -f "${active}" && test ! -L "${active}"
+          test ! -e "${bundle}"
+          mkdir "${bundle}"
           "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}" \
-            --candidate "${RUNNER_TEMP}/verified-dist" \
+            --candidate-full-raw-root "${raw}" \
+            --verified-dist "${dist}" \
+            --exact-wheel-receipt "${receipt}" \
+            --active-qualification "${active}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${GITHUB_RUN_ID}" \
             --qualification-root "${DEEPLAW_QUALIFICATION_ROOT}" \
             --human-gold-root "${DEEPLAW_HUMAN_GOLD_ROOT}" \
             --independent-scorer "${DEEPLAW_INDEPENDENT_SCORER}" \
-            --output "${evidence}"
-          test ! -e "${evidence}/dist"
-          test ! -e "${evidence}/.env"
+            --trusted-human-approver "${DEEPLAW_TRUSTED_HUMAN_APPROVER}" \
+            --codex-binary "${DEEPLAW_CODEX_BINARY}" \
+            --codex-version "codex-cli 0.148.0-alpha.9" \
+            --codex-sha256 "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" \
+            --codex-model "gpt-5.6-luna" \
+            --codex-reasoning-effort max \
+            --opencode-binary "${DEEPLAW_OPENCODE_BINARY}" \
+            --opencode-package "${DEEPLAW_OPENCODE_PACKAGE}" \
+            --opencode-sha256 "$(python -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${DEEPLAW_OPENCODE_BINARY}")" \
+            --opencode-package-sha256 "$(python -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${DEEPLAW_OPENCODE_PACKAGE}")" \
+            --opencode-version "1.18.16" \
+            --opencode-source-commit "a3647eb025c7615159d417dcc49fc39fdaeba65b" \
+            --opencode-config-selector "deepseek/deepseek-v4-flash" \
+            --opencode-response-model-id "deepseek-v4-flash" \
+            --dotenv "${DEEPLAW_OPENCODE_DOTENV}" \
+            --output "${bundle}"
+          test -f "${bundle}/bundle-manifest.json"
+          test ! -e "${bundle}/.env"
+          test ! -e "${bundle}/auth.json"
+          test ! -e "${bundle}/transcript"
+          test ! -e "${bundle}/reasoning"
+          test ! -e "${bundle}/raw-events"
 
-      - name: Revalidate only the sanitized evidence bundle
+      - name: Reopen typed parser and validate only the sanitized v3 bundle
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
-          uv run --frozen python -m benchmarks.release.external_qualification_bundle \
-            --root "${RUNNER_TEMP}/v013-qualification-evidence" \
-            --active-qualification "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
-            --classification benchmarks/release/v013-gate-classification-v6.json \
-            --evidence-run-id "${GITHUB_RUN_ID}"
+          bundle="${RUNNER_TEMP}/external-qualification-bundle"
+          active="${RUNNER_TEMP}/external-inputs/verified-candidate-artifacts/frozen-active-qualification.json"
+          validation="${RUNNER_TEMP}/external-qualification-bundle-validation.json"
+          test -s "${bundle}/bundle-manifest.json"
+          uv run --frozen python -c \
+            'import benchmarks.release.typed_qualification_evidence as parser; assert callable(parser.parse_typed_evidence)'
+          uv run --frozen python -m benchmarks.release.external_qualification_bundle_v3 \
+            --root "${bundle}" \
+            --active-qualification "${active}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --trusted-human-approver "${DEEPLAW_TRUSTED_HUMAN_APPROVER}" \
+            > "${validation}"
+          test -s "${validation}"
+          test ! -L "${validation}"
+          BUNDLE_ROOT="${bundle}" \
+          RAW_ROOT="${RUNNER_TEMP}/external-inputs/candidate-full-raw-evidence" \
+          EXACT_RECEIPT="${RUNNER_TEMP}/external-exact-wheel-receipt.json" \
+          ACTIVE_QUALIFICATION="${active}" \
+          TRUSTED_HUMAN_APPROVER="${DEEPLAW_TRUSTED_HUMAN_APPROVER}" \
+          CANDIDATE_RUN_ID="${CANDIDATE_RUN_ID}" \
+          EVIDENCE_RUN_ID="${EVIDENCE_RUN_ID}" \
+          python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          from pathlib import Path
 
-      - name: Upload sanitized evidence only
+          from benchmarks.release.typed_qualification_evidence import (
+              TypedQualificationEvidenceError,
+              parse_typed_evidence,
+          )
+
+          def strict(path: Path):
+              def pairs(items):
+                  value = {}
+                  for key, item in items:
+                      if key in value:
+                          raise SystemExit(f"duplicate JSON key in {path.name}")
+                      value[key] = item
+                  return value
+
+              def constant(value):
+                  raise SystemExit(f"non-finite JSON number in {path.name}: {value}")
+
+              value = json.loads(
+                  path.read_text(encoding="utf-8"),
+                  object_pairs_hook=pairs,
+                  parse_constant=constant,
+              )
+              def finite(item):
+                  if isinstance(item, float) and not math.isfinite(item):
+                      raise SystemExit(f"non-finite JSON number in {path.name}")
+                  if isinstance(item, dict):
+                      for child in item.values():
+                          finite(child)
+                  elif isinstance(item, list):
+                      for child in item:
+                          finite(child)
+              finite(value)
+              return value
+
+          bundle = Path(os.environ["BUNDLE_ROOT"]).resolve(strict=True)
+          raw = Path(os.environ["RAW_ROOT"]).resolve(strict=True)
+          exact_receipt = Path(os.environ["EXACT_RECEIPT"]).resolve(strict=True)
+          active = strict(Path(os.environ["ACTIVE_QUALIFICATION"]))
+          trusted = strict(Path(os.environ["TRUSTED_HUMAN_APPROVER"]))
+          active_candidate = active["candidate_binding"]
+          candidate = {
+              "commit": active_candidate["source_commit"],
+              "tree": active_candidate["source_tree"],
+              "lock_sha256": active_candidate["lock_sha256"],
+              "wheel_sha256": active_candidate["wheel_sha256"],
+              "sdist_sha256": active_candidate["sdist_sha256"],
+          }
+          holdout = active["external_inputs"]["qualification_holdout_sha256"]
+          evidence_run_id = int(os.environ["EVIDENCE_RUN_ID"])
+          candidate_run_id = int(os.environ["CANDIDATE_RUN_ID"])
+          raw_inventory = strict(raw / "candidate-full-inventory-receipt.json")
+          raw_digests = {row["sha256"] for row in raw_inventory["files"]}
+          exact_digest = hashlib.sha256(exact_receipt.read_bytes()).hexdigest()
+          manifest = strict(bundle / "bundle-manifest.json")
+          typed_kinds = {
+              "candidate_full_junit",
+              "candidate_platform_receipt",
+              "host_event_sequence",
+              "exact_wheel_execution",
+              "human_gold_scorer",
+              "legal_rows",
+              "wiki_journey_rows",
+              "context_capsule_selection_usage",
+              "scale_report",
+              "retained_supply_chain",
+          }
+          candidate_kinds = {
+              "candidate_full_junit",
+              "candidate_platform_receipt",
+              "retained_supply_chain",
+          }
+          exact_kinds = {"exact_wheel_execution"}
+
+          def source_refs(value):
+              if isinstance(value, dict):
+                  if {"relative_path", "sha256", "byte_size"} <= set(value):
+                      yield value
+                  for item in value.values():
+                      yield from source_refs(item)
+              elif isinstance(value, list):
+                  for item in value:
+                      yield from source_refs(item)
+
+          seen = 0
+          for reference in manifest["files"]:
+              if reference["evidence_kind"] not in typed_kinds:
+                  continue
+              selected = bundle / reference["relative_path"]
+              envelope = strict(selected)
+              if envelope.get("schema_version") != "deeplaw.typed-qualification-evidence/v1":
+                  raise SystemExit("typed evidence reference is not a typed manifest")
+              seen += 1
+              if reference["evidence_kind"] in candidate_kinds:
+                  for source in source_refs(envelope.get("payload")):
+                      if source["sha256"] not in raw_digests:
+                          raise SystemExit(
+                              "Candidate Full typed source is not retained Candidate Full evidence"
+                          )
+              if reference["evidence_kind"] in exact_kinds:
+                  if exact_digest not in {
+                      source["sha256"] for source in source_refs(envelope.get("payload"))
+                  }:
+                      raise SystemExit("exact-wheel typed source differs from exact receipt")
+              expected_workflow_run_id = (
+                  candidate_run_id
+                  if reference["evidence_kind"] in candidate_kinds
+                  else evidence_run_id
+              )
+              expected_corpus = (
+                  None
+                  if reference["evidence_kind"] in candidate_kinds
+                  else holdout
+              )
+              try:
+                  parse_typed_evidence(
+                      selected,
+                      root=selected.parent,
+                      expected_candidate=candidate,
+                      expected_workflow_run_id=expected_workflow_run_id,
+                      expected_corpus_sha256=expected_corpus,
+                      trusted_human_approver=trusted,
+                  )
+              except (OSError, TypedQualificationEvidenceError, ValueError) as error:
+                  raise SystemExit("typed qualification evidence revalidation failed") from error
+          if seen < 1:
+              raise SystemExit("external bundle has no typed qualification manifests")
+          print(f"typed qualification manifests revalidated: {seen}")
+          PY
+
+      - name: Upload sanitized external qualification evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: v013-qualification-evidence
           if-no-files-found: error
           retention-days: 90
           include-hidden-files: false
-          path: ${{ runner.temp }}/v013-qualification-evidence/
+          path: ${{ runner.temp }}/external-qualification-bundle/

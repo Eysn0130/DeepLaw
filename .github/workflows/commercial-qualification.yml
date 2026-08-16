@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   assemble:
-    name: Revalidate every Core Gate and assemble exact commercial assets
+    name: Recompute every current Core Gate from typed evidence
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -26,25 +26,42 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify upstream run identities
+      - name: Verify distinct upstream run identities
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id }}
+          QUALIFICATION_RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
-          for run_id in "${CANDIDATE_RUN_ID}" "${EVIDENCE_RUN_ID}"; do
-            [[ "${run_id}" =~ ^[0-9]+$ ]]
-            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .conclusion)" = success
-            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .head_sha)" = "${GITHUB_SHA}"
-          done
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .name)" = "Candidate Full"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}" --jq .name)" = "External Qualification Evidence"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .path)" = ".github/workflows/candidate-full.yml"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}" --jq .path)" = ".github/workflows/external-qualification-evidence.yml"
+          [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${EVIDENCE_RUN_ID}" =~ ^[0-9]+$ ]]
+          test "${CANDIDATE_RUN_ID}" != "${EVIDENCE_RUN_ID}"
+          test "${CANDIDATE_RUN_ID}" != "${QUALIFICATION_RUN_ID}"
+          test "${EVIDENCE_RUN_ID}" != "${QUALIFICATION_RUN_ID}"
+          verify_run() {
+            local run_id="$1"
+            local expected_name="$2"
+            local expected_path="$3"
+            local api="repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
+            test "$(gh api "${api}" --jq .status)" = completed
+            test "$(gh api "${api}" --jq .conclusion)" = success
+            test "$(gh api "${api}" --jq .head_sha)" = "${GITHUB_SHA}"
+            test "$(gh api "${api}" --jq .name)" = "${expected_name}"
+            test "$(gh api "${api}" --jq .path)" = "${expected_path}"
+          }
+          verify_run \
+            "${CANDIDATE_RUN_ID}" \
+            "Candidate Full" \
+            ".github/workflows/candidate-full.yml"
+          verify_run \
+            "${EVIDENCE_RUN_ID}" \
+            "External Qualification Evidence" \
+            ".github/workflows/external-qualification-evidence.yml"
 
       - name: Download the one verified artifact source
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -54,65 +71,231 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/verified-dist
 
+      - name: Download Candidate Full raw evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: candidate-full-raw-evidence
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate-full-raw-evidence
+
       - name: Download owner-controlled external qualification evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: v013-qualification-evidence
           run-id: ${{ inputs.evidence_run_id }}
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/release-assets
+          path: ${{ runner.temp }}/external-source
 
       - name: Install closed validator runtime
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
 
-      - name: Inject only the exact verified distributions
-        shell: bash
-        run: |
-          set -euo pipefail
-          test ! -e "${RUNNER_TEMP}/release-assets/dist"
-          mkdir "${RUNNER_TEMP}/release-assets/dist"
-          cp "${RUNNER_TEMP}"/verified-dist/*.whl "${RUNNER_TEMP}/release-assets/dist/"
-          cp "${RUNNER_TEMP}"/verified-dist/*.tar.gz "${RUNNER_TEMP}/release-assets/dist/"
-          test ! -e "${RUNNER_TEMP}/release-assets/evidence/active-qualification.json"
-          cp "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
-            "${RUNNER_TEMP}/release-assets/evidence/active-qualification.json"
-
-      - name: Revalidate Gate collection and derive release decisions
+      - name: Reopen Candidate Full and derive exact assembler inputs
+        id: bindings
         env:
-          EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id }}
+          ACTIVE_PATH: ${{ runner.temp }}/verified-dist/frozen-active-qualification.json
+          BUNDLE_PATH: ${{ runner.temp }}/external-source/bundle-manifest.json
         shell: bash
         run: |
           set -euo pipefail
+          uv lock --check
           uv sync --frozen --extra dev
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
             --repository . \
             --dist "${RUNNER_TEMP}/verified-dist" \
             --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
             --verify
-          uv run --frozen python -m benchmarks.release.v013_commercial_release \
-            --template "${RUNNER_TEMP}/release-assets/commercial-release-template.json" \
-            --semantic-report evidence/gate-collection.json \
-            --assets-root "${RUNNER_TEMP}/release-assets" \
-            --evidence-run-id "${EVIDENCE_RUN_ID}" \
-            --output "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json"
-          uv run --frozen python -m benchmarks.release.semantic_evidence \
-            --manifest "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
-            --assets-root "${RUNNER_TEMP}/release-assets" \
-            --evidence-run-id "${EVIDENCE_RUN_ID}"
-          uv run --frozen python - <<'PY'
+          python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import subprocess
           from pathlib import Path
-          from benchmarks.release.retained_artifact_manifest import verify_single_artifact_source
-          verify_single_artifact_source(
-              verified_dist=Path("${{ runner.temp }}/verified-dist"),
-              consumer_dist=Path("${{ runner.temp }}/release-assets/dist"),
-          )
+
+          def strict(path: Path):
+              def pairs(items):
+                  value = {}
+                  for key, item in items:
+                      if key in value:
+                          raise SystemExit(f"duplicate JSON key in {path.name}")
+                      value[key] = item
+                  return value
+
+              def constant(value):
+                  raise SystemExit(f"non-finite JSON number in {path.name}: {value}")
+
+              if path.is_symlink() or not path.is_file():
+                  raise SystemExit(f"qualification input is not a regular file: {path.name}")
+              value = json.loads(
+                  path.read_text(encoding="utf-8"),
+                  object_pairs_hook=pairs,
+                  parse_constant=constant,
+              )
+              def finite(item):
+                  if isinstance(item, float) and not math.isfinite(item):
+                      raise SystemExit(f"non-finite JSON number in {path.name}")
+                  if isinstance(item, dict):
+                      for child in item.values():
+                          finite(child)
+                  elif isinstance(item, list):
+                      for child in item:
+                          finite(child)
+              finite(value)
+              return value
+
+          active = strict(Path(os.environ["ACTIVE_PATH"]))
+          bundle = strict(Path(os.environ["BUNDLE_PATH"]))
+          source = active["candidate_binding"]
+          candidate = {
+              "commit": source["source_commit"],
+              "tree": source["source_tree"],
+              "lock_sha256": source["lock_sha256"],
+              "wheel_sha256": source["wheel_sha256"],
+              "sdist_sha256": source["sdist_sha256"],
+          }
+          if bundle["candidate_binding"] != candidate:
+              raise SystemExit("external bundle candidate differs from Candidate Full")
+          if candidate["commit"] != os.environ["GITHUB_SHA"]:
+              raise SystemExit("Candidate Full commit differs from qualification commit")
+          observed_tree = subprocess.run(
+              ["git", "rev-parse", "HEAD^{tree}"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.strip()
+          if candidate["tree"] != observed_tree:
+              raise SystemExit("Candidate Full tree differs from qualification tree")
+          lock_sha = hashlib.sha256(Path("uv.lock").read_bytes()).hexdigest()
+          if candidate["lock_sha256"] != lock_sha:
+              raise SystemExit("Candidate Full lock differs from qualification lock")
+          external = bundle["external_inputs"]
+          outputs = {
+              **candidate,
+              "semantic_gold_sha256": external["semantic_gold_sha256"],
+              "qualification_holdout_sha256": external[
+                  "qualification_holdout_sha256"
+              ],
+              "final_blind_sha256": external["final_blind_holdout_sha256"],
+              "scorer_sha256": external["scorer_sha256"],
+              "runner_sha256": external["runner_sha256"],
+              "isolation_sha256": external[
+                  "compiler_scorer_isolation_sha256"
+              ],
+          }
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as stream:
+              for key, value in outputs.items():
+                  if not isinstance(value, str) or "\n" in value or "\r" in value:
+                      raise SystemExit(f"qualification binding is invalid: {key}")
+                  stream.write(f"{key}={value}\n")
           PY
-          test -f "${RUNNER_TEMP}/release-assets/deeplaw.cdx.json"
-          test -f "${RUNNER_TEMP}/release-assets/openvex.json"
-          test -f "${RUNNER_TEMP}/release-assets/installed-licenses.json"
-          test -f "${RUNNER_TEMP}/release-assets/provenance.json"
+
+      - name: Assemble current v7 Gate results from raw typed evidence
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id }}
+          QUALIFICATION_RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets="${RUNNER_TEMP}/release-assets"
+          test ! -e "${assets}"
+          mkdir "${assets}"
+          test -z "$(find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type l -print -quit)"
+          find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type f -exec cp {} "${assets}/" \;
+          uv run --frozen python -m benchmarks.release.assemble_commercial_qualification_v7 \
+            --bundle-root "${RUNNER_TEMP}/external-source" \
+            --assets-root "${assets}" \
+            --candidate-raw-root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
+            --active-qualification \
+              "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
+            --classification benchmarks/release/v013-gate-classification-v7.json \
+            --trusted-human-approver benchmarks/v013/trusted-human-approver-v1.json \
+            --protocol benchmarks/v013/qualification-protocol-v1.json \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --qualification-run-id "${QUALIFICATION_RUN_ID}" \
+            --candidate-commit "${{ steps.bindings.outputs.commit }}" \
+            --candidate-tree "${{ steps.bindings.outputs.tree }}" \
+            --lock-sha256 "${{ steps.bindings.outputs.lock_sha256 }}" \
+            --wheel-sha256 "${{ steps.bindings.outputs.wheel_sha256 }}" \
+            --sdist-sha256 "${{ steps.bindings.outputs.sdist_sha256 }}" \
+            --semantic-gold-sha256 \
+              "${{ steps.bindings.outputs.semantic_gold_sha256 }}" \
+            --qualification-holdout-sha256 \
+              "${{ steps.bindings.outputs.qualification_holdout_sha256 }}" \
+            --final-blind-sha256 \
+              "${{ steps.bindings.outputs.final_blind_sha256 }}" \
+            --scorer-sha256 "${{ steps.bindings.outputs.scorer_sha256 }}" \
+            --runner-sha256 "${{ steps.bindings.outputs.runner_sha256 }}" \
+            --isolation-sha256 "${{ steps.bindings.outputs.isolation_sha256 }}"
+
+      - name: Discover closed transitive provenance paths
+        id: provenance-paths
+        env:
+          ASSETS_ROOT: ${{ runner.temp }}/release-assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+
+          root = Path(os.environ["ASSETS_ROOT"])
+          release = json.loads(
+              (root / "commercial-release-manifest.json").read_text(encoding="utf-8")
+          )
+          bundle = json.loads(
+              (root / "external-evidence/bundle-manifest.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          pre_publish = release["pre_publish_artifact_gate"]["path"]
+          bindings = [
+              item["relative_path"]
+              for item in bundle["files"]
+              if item["evidence_kind"] == "post_build_gold_binding"
+          ]
+          if len(bindings) != 1:
+              raise SystemExit("external bundle must contain one Candidate Gold binding")
+          for label, relative in (
+              ("pre_publish", pre_publish),
+              ("candidate_gold", f"external-evidence/{bindings[0]}"),
+          ):
+              path = PurePosixPath(relative)
+              if path.is_absolute() or ".." in path.parts or "." in path.parts:
+                  raise SystemExit(f"unsafe provenance path: {label}")
+              selected = root / path
+              if selected.is_symlink() or not selected.is_file():
+                  raise SystemExit(f"provenance path is not a regular file: {label}")
+              with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as stream:
+                  stream.write(f"{label}={path.as_posix()}\n")
+          PY
+      - name: Reopen the assembled manifest and all transitive provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.release_provenance_v7 \
+            --release-manifest \
+              "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
+            --classification benchmarks/release/v013-gate-classification-v7.json \
+            --pre-publish-receipt \
+              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.pre_publish }}" \
+            --candidate-gold-binding \
+              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.candidate_gold }}" \
+            --external-bundle-manifest \
+              "${RUNNER_TEMP}/release-assets/external-evidence/bundle-manifest.json" \
+            --active-qualification \
+              "${RUNNER_TEMP}/release-assets/evidence/active-qualification.json" \
+            --assets-root "${RUNNER_TEMP}/release-assets" \
+            --candidate-raw-root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
+            --candidate-run-id "${{ inputs.candidate_run_id }}" \
+            --evidence-run-id "${{ inputs.evidence_run_id }}" \
+            --qualification-run-id "${GITHUB_RUN_ID}" \
+            --trusted-human-approver benchmarks/v013/trusted-human-approver-v1.json
 
       - name: Retain exact commercial release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

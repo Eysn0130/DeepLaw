@@ -58,6 +58,43 @@ jobs:
             --artifact-manifest "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
             --output "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
 
+      - name: Export hash-pinned runtime requirements
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv export --frozen --no-dev --no-emit-project --no-emit-local --no-sources \
+            --output-file "${RUNNER_TEMP}/verified-dist/candidate-requirements.txt"
+
+      - name: Derive closed pre-publish supply-chain evidence from the verified bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/verified-dist"
+          wheel=$(find "${dist}" -maxdepth 1 -type f -name '*.whl')
+          test -n "${wheel}"
+          supply_venv="${RUNNER_TEMP}/supply-chain-venv"
+          uv venv "${supply_venv}" --python "3.12" --seed
+          uv pip install --python "${supply_venv}/bin/python" \
+            --require-hashes \
+            --requirements "${dist}/candidate-requirements.txt"
+          uv pip install --python "${supply_venv}/bin/python" --no-deps "${wheel}"
+          "${supply_venv}/bin/python" -m benchmarks.release.inventory_licenses \
+            --output "${dist}/installed-licenses.json"
+          uv export --quiet --frozen --all-extras --no-extra dev --no-dev \
+            --format cyclonedx1.5 \
+            --output-file "${dist}/deeplaw.cdx.json"
+          cp security/openvex.json "${dist}/openvex.json"
+          source_date_epoch=$(git show -s --format=%ct HEAD)
+          uv run --frozen python -m benchmarks.release.pre_publish_artifact_gate \
+            --artifact-root "${dist}" \
+            --reproducible-report "${dist}/reproducible-build.json" \
+            --retained-manifest "${dist}/retained-artifact-manifest.json" \
+            --sbom "${dist}/deeplaw.cdx.json" \
+            --openvex "${dist}/openvex.json" \
+            --licenses "${dist}/installed-licenses.json" \
+            --created-at-epoch "${source_date_epoch}" \
+            --output "${dist}/pre-publish-artifact-gate.json"
+
       - name: Retain the one verified artifact source
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -65,6 +102,75 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           path: ${{ runner.temp }}/verified-dist/
+
+  exact-wheel:
+    name: Execute exact verified wheel public journey
+    needs: verified-artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out exact candidate verifier
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install verifier runtime
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install verifier dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Download the exact verified candidate artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Execute the installed wheel and real public journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/verified-dist"
+          manifest="${dist}/retained-artifact-manifest.json"
+          requirements="${dist}/candidate-requirements.txt"
+          receipt="${RUNNER_TEMP}/exact-wheel-execution.json"
+          venv="${RUNNER_TEMP}/exact-wheel-venv"
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . \
+            --dist "${dist}" \
+            --output "${manifest}" \
+            --verify
+          test "$(find "${dist}" -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')" = 1
+          test -s "${requirements}"
+          expected_wheel_sha256="$(uv run --frozen python -c \
+            'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["wheel"]["sha256"])' \
+            "${manifest}")"
+          expected_version="$(uv run --frozen python -c \
+            'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["package_version"])' \
+            "${manifest}")"
+          expected_requirements_sha256="$(sha256sum "${requirements}" | cut -d ' ' -f 1)"
+          uv run --frozen python -m benchmarks.release.exact_wheel_runner \
+            --candidate-dir "${dist}" \
+            --expected-wheel-sha256 "${expected_wheel_sha256}" \
+            --requirements-filename "candidate-requirements.txt" \
+            --expected-requirements-sha256 "${expected_requirements_sha256}" \
+            --expected-version "${expected_version}" \
+            --repository "${GITHUB_WORKSPACE}" \
+            --venv "${venv}" \
+            --receipt "${receipt}"
+
+      - name: Retain exact wheel execution receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: exact-wheel-evidence
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/exact-wheel-execution.json
 
   windows-calibration:
     name: Measure exact Windows Python 3.12 module durations
@@ -327,6 +433,7 @@ jobs:
           --input-directory "${{ runner.temp }}/windows-shards"
           --matrix-python "${{ matrix.python-version }}"
           --output "${{ runner.temp }}/windows-aggregate.json"
+          --junit-output "${{ runner.temp }}/candidate-tests.xml"
 
       - name: Retain aggregate receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -334,4 +441,178 @@ jobs:
           name: candidate-full-windows-${{ matrix.python-version }}-aggregate
           if-no-files-found: error
           retention-days: 90
-          path: ${{ runner.temp }}/windows-aggregate.json
+          path: |
+            ${{ runner.temp }}/windows-aggregate.json
+            ${{ runner.temp }}/candidate-tests.xml
+
+  aggregate-raw-evidence:
+    name: Aggregate Candidate Full raw evidence
+    needs:
+      - verified-artifact
+      - exact-wheel
+      - windows-calibration
+      - posix-matrix
+      - windows-shards
+      - windows-aggregate
+    if: ${{ always() && needs['verified-artifact'].result == 'success' && needs['exact-wheel'].result == 'success' && needs['windows-calibration'].result == 'success' && needs['posix-matrix'].result == 'success' && needs['windows-shards'].result == 'success' && needs['windows-aggregate'].result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact Candidate Full evidence definitions
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Download the verified candidate artifacts without rebuilding
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          path: ${{ runner.temp }}/candidate-full-raw-evidence/verified-candidate-artifacts
+
+      - name: Download the exact wheel execution receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: exact-wheel-evidence
+          path: ${{ runner.temp }}/candidate-full-raw-evidence/exact-wheel-evidence
+
+      - name: Download every raw platform artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: candidate-full-*
+          path: ${{ runner.temp }}/candidate-full-raw-evidence/platform-artifacts
+          merge-multiple: false
+
+      - name: Download raw Windows calibration artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-duration-calibration
+          path: ${{ runner.temp }}/candidate-full-raw-evidence/windows-duration-calibration
+
+      - name: Verify all raw evidence inputs are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${RUNNER_TEMP}/candidate-full-raw-evidence"
+          verified="${raw}/verified-candidate-artifacts"
+          mkdir "${raw}/candidate-platform"
+          cp benchmarks/release/platform-core-test-manifest-v2.json \
+            "${raw}/candidate-platform/platform-core-test-manifest-v2.json"
+          python -m benchmarks.release.candidate_regression platform \
+            --active-qualification "${verified}/frozen-active-qualification.json" \
+            --platform-artifacts "${raw}/platform-artifacts" \
+            --windows-calibration "${raw}/windows-duration-calibration" \
+            --candidate-run-id "${GITHUB_RUN_ID}" \
+            --output "${raw}/candidate-platform/platform-matrix-receipt.json"
+          test "$(find "${verified}" -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')" = 1
+          test "$(find "${verified}" -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = 1
+          for required in \
+            reproducible-build.json \
+            retained-artifact-manifest.json \
+            frozen-active-qualification.json \
+            candidate-requirements.txt \
+            pre-publish-artifact-gate.json \
+            deeplaw.cdx.json \
+            openvex.json \
+            installed-licenses.json; do
+            test -s "${verified}/${required}"
+          done
+          test -s "${raw}/exact-wheel-evidence/exact-wheel-execution.json"
+          test "$(find "${raw}/platform-artifacts" -type f -name 'candidate-tests.xml' | wc -l | tr -d ' ')" = 14
+          test "$(find "${raw}/windows-duration-calibration" -type f -name 'windows-calibration.xml' | wc -l | tr -d ' ')" = 1
+          test "$(find "${raw}/platform-artifacts" -type f -name 'windows-aggregate.json' | wc -l | tr -d ' ')" = 2
+          test -s "${raw}/candidate-platform/platform-core-test-manifest-v2.json"
+          test -s "${raw}/candidate-platform/platform-matrix-receipt.json"
+
+      - name: Write path-independent Candidate Full run receipt
+        shell: bash
+        env:
+          RAW_ROOT: ${{ runner.temp }}/candidate-full-raw-evidence
+          CANDIDATE_RUN_ID: ${{ github.run_id }}
+          CANDIDATE_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CANDIDATE_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RAW_ROOT"])
+          receipt = {
+              "schema_version": "deeplaw.candidate-full-run-receipt/v1",
+              "record_kind": "candidate_full_raw_evidence",
+              "workflow": "Candidate Full",
+              "workflow_path": ".github/workflows/candidate-full.yml",
+              "run_id": int(os.environ["CANDIDATE_RUN_ID"]),
+              "run_attempt": int(os.environ["CANDIDATE_RUN_ATTEMPT"]),
+              "head_sha": os.environ["CANDIDATE_HEAD_SHA"],
+              "event": os.environ["CANDIDATE_EVENT"],
+              "retention_days": 90,
+              "path_policy": "logical_relative_paths_only",
+          }
+          (root / "candidate-full-run-receipt.json").write_text(
+              json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Write path-independent raw evidence inventory receipt
+        shell: bash
+        env:
+          RAW_ROOT: ${{ runner.temp }}/candidate-full-raw-evidence
+          CANDIDATE_RUN_ID: ${{ github.run_id }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RAW_ROOT"])
+          inventory_name = "candidate-full-inventory-receipt.json"
+          files = []
+          for path in sorted(root.rglob("*")):
+              if path.name == inventory_name:
+                  continue
+              if path.is_symlink():
+                  raise SystemExit(f"raw evidence contains a symlink: {path.name}")
+              if not path.is_file():
+                  continue
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              files.append(
+                  {
+                      "logical_path": path.relative_to(root).as_posix(),
+                      "sha256": digest.hexdigest(),
+                      "bytes": path.stat().st_size,
+                  }
+              )
+          receipt = {
+              "schema_version": "deeplaw.candidate-full-inventory-receipt/v1",
+              "record_kind": "candidate_full_raw_inventory",
+              "run_id": int(os.environ["CANDIDATE_RUN_ID"]),
+              "head_sha": os.environ["CANDIDATE_HEAD_SHA"],
+              "path_policy": "logical_relative_paths_only",
+              "files": files,
+          }
+          (root / inventory_name).write_text(
+              json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Retain Candidate Full raw evidence for 90 days
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-full-raw-evidence
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/candidate-full-raw-evidence/

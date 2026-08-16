@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-human-gold.v3.schema.json",
+  "title": "DeepLaw semantic Human Gold manifest v3",
+  "description": "Candidate-independent semantic Gold. The external human attestation is a structural input to the manifest; it is not established by an author_is_human self-assertion.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "frozen_at",
+    "gold_id",
+    "model_outputs_seen_before_freeze",
+    "candidate_visible_when_frozen",
+    "claim_eligible",
+    "author",
+    "human_approval",
+    "labels",
+    "cases",
+    "duties",
+    "hard_failures",
+    "thresholds"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-human-gold/v3"},
+    "status": {"const": "semantic_human_gold_frozen"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "model_outputs_seen_before_freeze": {"const": false},
+    "candidate_visible_when_frozen": {"const": false},
+    "claim_eligible": {"const": false},
+    "author": {"$ref": "#/$defs/author"},
+    "human_approval": {"$ref": "#/$defs/humanApproval"},
+    "labels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/label"}
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "duties": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/duty"}
+    },
+    "hard_failures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/hardFailure"}
+    },
+    "thresholds": {"$ref": "#/$defs/thresholds"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "role"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "role": {"const": "human_author"}
+      }
+    },
+    "humanApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attestation_type",
+        "attestation_identity",
+        "attestation_digest",
+        "approval_record",
+        "approved_at",
+        "decision"
+      ],
+      "properties": {
+        "attestation_type": {"const": "external_human_attestation"},
+        "attestation_identity": {"$ref": "#/$defs/identifier"},
+        "attestation_digest": {"$ref": "#/$defs/sha256"},
+        "approval_record": {"$ref": "#/$defs/approvalRecord"},
+        "approved_at": {"type": "string", "format": "date-time"},
+        "decision": {"const": "approved"}
+      }
+    },
+    "approvalRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "record_sha256", "issuer"],
+      "properties": {
+        "record_id": {"$ref": "#/$defs/identifier"},
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "issuer": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label_id", "description"],
+      "properties": {
+        "label_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{1,63}$"
+        },
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["include", "exclude"],
+      "properties": {
+        "include": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "exclude": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "labels",
+        "expected",
+        "duties",
+        "hard_failures",
+        "thresholds"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^goldcase_[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "expected": {"$ref": "#/$defs/expected"},
+        "duties": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "hard_failures": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "thresholds": {"$ref": "#/$defs/thresholds"}
+      }
+    },
+    "duty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty_id", "description"],
+      "properties": {
+        "duty_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "hardFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "description"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_case_pass_rate",
+        "minimum_duty_coverage",
+        "maximum_hard_failures",
+        "maximum_false_authority"
+      ],
+      "properties": {
+        "minimum_case_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_duty_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "maximum_hard_failures": {"const": 0},
+        "maximum_false_authority": {"const": 0}
+      }
+    }
+  }
+}

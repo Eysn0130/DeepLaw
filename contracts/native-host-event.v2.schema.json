@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/native-host-event.v2.schema.json",
+  "title": "DeepLaw Native Host Observation Event v2",
+  "description": "A content-minimized native Host observation. It carries identities and digests only; Host content is never an event field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provenance_level",
+    "host",
+    "host_identity",
+    "event_type",
+    "event_sequence",
+    "session_sha256",
+    "parent_session_sha256",
+    "observation"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.native-host-event/v2"},
+    "provenance_level": {
+      "enum": ["native_plugin_hook", "compatibility_bridge"]
+    },
+    "host": {"enum": ["codex", "opencode"]},
+    "host_identity": {
+      "oneOf": [
+        {"$ref": "#/$defs/codexIdentity"},
+        {"$ref": "#/$defs/opencodeIdentity"}
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreCompact",
+        "PostCompact",
+        "SessionEnd",
+        "chat.message",
+        "session",
+        "fork",
+        "compaction"
+      ]
+    },
+    "event_sequence": {"$ref": "#/$defs/eventSequence"},
+    "session_sha256": {"$ref": "#/$defs/sha256"},
+    "parent_session_sha256": {"$ref": "#/$defs/nullableSha256"},
+    "observation": {"$ref": "#/$defs/observation"},
+    "route": {"$ref": "#/$defs/route"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"host": {"const": "codex"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "host_identity": {"$ref": "#/$defs/codexIdentity"},
+          "event_type": {
+            "enum": [
+              "SessionStart",
+              "UserPromptSubmit",
+              "PreCompact",
+              "PostCompact",
+              "SessionEnd"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"host": {"const": "opencode"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "host_identity": {"$ref": "#/$defs/opencodeIdentity"},
+          "event_type": {
+            "enum": ["chat.message", "session", "fork", "compaction"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "codexIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binary_version",
+        "binary_sha256",
+        "request_model",
+        "reasoning"
+      ],
+      "properties": {
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.9"},
+        "binary_sha256": {
+          "const": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+        },
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning": {"const": "max"}
+      }
+    },
+    "opencodeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_commit",
+        "config_selector",
+        "expected_response_model_id",
+        "executable_sha256",
+        "package_sha256"
+      ],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "source_commit": {
+          "const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"
+        },
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "executable_sha256": {"$ref": "#/$defs/sha256"},
+        "package_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "eventSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "sequence_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["methods_observed", "status"],
+      "properties": {
+        "methods_observed": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"
+          }
+        },
+        "status": {"enum": ["received", "completed", "gap"]}
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": [
+            "exact",
+            "unbound",
+            "mismatch",
+            "stale",
+            "forgotten",
+            "ambiguous"
+          ]
+        },
+        "binding_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "task_handle_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "project_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "repository_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "worktree_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    }
+  }
+}

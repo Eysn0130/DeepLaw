@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/post-public-verification.v1.schema.json",
+  "title": "DeepLaw post-public release verification receipt v1",
+  "description": "Post-public verification receipt. It is emitted after publication and is not a precondition of the pre-publish release authorization gate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "verified_at",
+    "artifact_binding",
+    "sigstore",
+    "attestation",
+    "anonymous_redownload",
+    "public_sha256",
+    "public_release_verified",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.post-public-verification/v1"},
+    "status": {"const": "post_public_verified"},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "artifact_binding": {"$ref": "#/$defs/artifactHashes"},
+    "sigstore": {"$ref": "#/$defs/verification"},
+    "attestation": {"$ref": "#/$defs/attestation"},
+    "anonymous_redownload": {"$ref": "#/$defs/redownload"},
+    "public_sha256": {"$ref": "#/$defs/artifactHashes"},
+    "public_release_verified": {"const": true},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "artifactHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "bundle_sha256", "verified"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "verified": {"const": true}
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "attestation_sha256", "verified"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "attestation_sha256": {"$ref": "#/$defs/sha256"},
+        "verified": {"const": true}
+      }
+    },
+    "redownload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "source",
+        "wheel_sha256",
+        "sdist_sha256",
+        "sha256_matches"
+      ],
+      "properties": {
+        "attempt_id": {"$ref": "#/$defs/identifier"},
+        "source": {"const": "anonymous_public_redownload"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "sha256_matches": {"const": true}
+      }
+    }
+  }
+}

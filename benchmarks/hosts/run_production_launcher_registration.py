@@ -133,10 +133,16 @@ async def _mcp_registration(
             raise RuntimeError("production launcher exposed an unexpected tool inventory")
         input_schema = tools.tools[0].inputSchema
         rendered_input_schema = canonical_json(input_schema)
+        advertised_operations = {
+            branch.get("$ref", "").rsplit("/", maxsplit=1)[-1]
+            for branch in input_schema.get("oneOf", [])
+            if isinstance(branch, dict)
+        }
         if (
             not isinstance(input_schema, dict)
-            or input_schema.get("type") != "object"
+            or input_schema.get("title") != "DeepLaw Knowledge Support Provider Input v7"
             or not isinstance(input_schema.get("oneOf"), list)
+            or advertised_operations != {"query", "context", "explain"}
             or '"additionalProperties":false' not in rendered_input_schema
             or '"context"' not in rendered_input_schema
         ):

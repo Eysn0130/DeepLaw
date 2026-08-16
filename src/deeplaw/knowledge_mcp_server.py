@@ -892,15 +892,151 @@ def _v6_input_schema() -> dict[str, Any]:
     return schema
 
 
+@cache
+def _v7_input_schema() -> dict[str, Any]:
+    """Return the compact, self-contained Provider-advertised contract."""
+
+    schema = deepcopy(_load_contract("knowledge-support.input.v7.schema.json"))
+    schema.pop("$id", None)
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
+@cache
+def _provider_input_validator() -> Draft202012Validator:
+    return Draft202012Validator(_v7_input_schema(), format_checker=FormatChecker())
+
+
+@cache
+def _compatibility_input_validator() -> Draft202012Validator:
+    return Draft202012Validator(_v6_input_schema(), format_checker=FormatChecker())
+
+
+@cache
+def _legacy_v1_input_validator() -> Draft202012Validator:
+    schema = _load_contract("knowledge-support.input.v1.schema.json")
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+def _validate_knowledge_tool_arguments(
+    arguments: Mapping[str, Any],
+    *,
+    autonomous: bool,
+) -> str:
+    """Validate current Provider inputs or historical internal compatibility inputs."""
+
+    if not isinstance(arguments, Mapping):
+        raise ValueError("knowledge_support arguments must be an object")
+    provider_error = next(_provider_input_validator().iter_errors(arguments), None)
+    if provider_error is None:
+        return "provider_v7"
+    compatibility = (
+        _compatibility_input_validator()
+        if autonomous
+        else _legacy_v1_input_validator()
+    )
+    compatibility_error = next(compatibility.iter_errors(arguments), None)
+    if compatibility_error is None:
+        return "internal_compatibility"
+    path = ".".join(str(item) for item in provider_error.absolute_path)
+    location = f" at {path}" if path else ""
+    raise ValueError(
+        "knowledge_support input is not admitted by the current Provider contract "
+        f"or a historical compatibility contract{location}: {provider_error.message}"
+    )
+
+
+def _default_provider_max_chars(arguments: Mapping[str, Any]) -> int:
+    """Apply initial Capsule budgets pending exact-candidate Host A/B freezing."""
+
+    if "max_chars" in arguments:
+        return int(arguments["max_chars"])
+    return 16_000 if arguments.get("purpose") == "legal" else 8_000
+
+
+def _resolve_provider_host_route(
+    arguments: Mapping[str, Any],
+    *,
+    vault_path: Path,
+    workspace: Path,
+    fixed_task_binding: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Resolve one opaque native Host route into the existing task binding."""
+
+    route = arguments.get("host_route")
+    if route is None:
+        return (
+            normalize_task_context_binding(fixed_task_binding, allow_none=True),
+            None,
+        )
+    if arguments.get("operation") not in {"query", "context"}:
+        raise ValueError("host_route is supported only for query/context")
+    if not isinstance(route, Mapping) or set(route) != {"host", "session_sha256"}:
+        raise ValueError("host_route does not match its closed Provider contract")
+    from .task_continuity import binding_for_task_handle, resolve_host_session
+
+    resolved = resolve_host_session(
+        vault_path=vault_path,
+        host=str(route["host"]),
+        session_sha256=str(route["session_sha256"]),
+        workspace=workspace,
+    )
+    if resolved.get("status") != "exact":
+        gap = resolved.get("gap")
+        code = gap.get("code") if isinstance(gap, Mapping) else "route_unbound"
+        return None, {
+            "schema_version": "deeplaw.host-route-gap/v1",
+            "status": "gap",
+            "host": str(route["host"]),
+            "session_sha256": str(route["session_sha256"]),
+            "write_performed": False,
+            "gaps": [{"code": str(code)}],
+        }
+    current_binding = binding_for_task_handle(
+        str(resolved["task_handle"]),
+        vault_path=vault_path,
+        workspace=workspace,
+    )
+    if current_binding["binding_sha256"] != resolved.get("binding_sha256"):
+        return None, {
+            "schema_version": "deeplaw.host-route-gap/v1",
+            "status": "gap",
+            "host": str(route["host"]),
+            "session_sha256": str(route["session_sha256"]),
+            "write_performed": False,
+            "gaps": [{"code": "route_stale"}],
+        }
+    selected_fixed = normalize_task_context_binding(fixed_task_binding, allow_none=True)
+    if selected_fixed is not None and current_binding != selected_fixed:
+        raise PermissionError(
+            "native Host route does not match the fixed launcher task binding"
+        )
+    return current_binding, None
+
+
+def _provider_host_route_gap_response(
+    *, operation: str, result: Mapping[str, Any]
+) -> dict[str, Any]:
+    response = {
+        "schema_version": "deeplaw.knowledge-support-output/v6",
+        "operation": operation,
+        "authority_boundary": dict(_AUTHORITY_BOUNDARY),
+        "result": dict(result),
+    }
+    assert_provider_output_safe(response, interface="knowledge_support")
+    if len(canonical_json(response).encode("utf-8")) > _MAX_MCP_OUTPUT_CHARS:
+        raise RuntimeError("knowledge_support output exceeds its hard 64 KiB budget")
+    return response
+
+
 def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
     if autonomous:
         description = (
-            "Read-only access to explicitly selected DeepLaw source-derived and autonomous "
-            "knowledge planes, version lineage, graph relations, Living Wiki discovery, and "
-            "bounded Knowledge Capsules. Persistent writes exist only in the separate, "
-            "explicitly enabled knowledge_sink process."
+            "Read-only query, context assembly, and receipt explanation for bounded, "
+            "verifiable DeepLaw Knowledge Capsules."
         )
-        input_schema = _v6_input_schema()
+        input_schema = _v7_input_schema()
         output_schema = _load_contract("knowledge-support.output.v6.schema.json")
     else:
         description = _DESCRIPTION
@@ -3335,6 +3471,7 @@ def create_knowledge_mcp_server(
     *,
     vault_path: str | Path | None = None,
     default_task_binding: Mapping[str, Any] | None = None,
+    host_workspace: str | Path | None = None,
 ) -> Server[_KnowledgeRuntime]:
     selected_path = (
         Path(vault_path).expanduser().absolute()
@@ -3344,6 +3481,13 @@ def create_knowledge_mcp_server(
     selected_task_binding = normalize_task_context_binding(
         default_task_binding,
         allow_none=True,
+    )
+    from .host_runtime import safe_directory_path
+
+    selected_host_workspace = safe_directory_path(
+        host_workspace if host_workspace is not None else Path.cwd(),
+        label="native Host workspace",
+        require_existing=True,
     )
 
     @asynccontextmanager
@@ -3373,10 +3517,11 @@ def create_knowledge_mcp_server(
     async def list_tools() -> list[types.Tool]:
         return [definition]
 
-    @server.call_tool(validate_input=True)
+    @server.call_tool(validate_input=False)
     async def call_tool(name: str, arguments: dict[str, Any]) -> Any:
         if name != "knowledge_support":
             raise ValueError("unknown DeepLaw knowledge tool")
+        _validate_knowledge_tool_arguments(arguments, autonomous=autonomous)
         runtime = server.request_context.lifespan_context
         with runtime.lock:
             try:
@@ -3384,6 +3529,23 @@ def create_knowledge_mcp_server(
                     KnowledgeOperation,
                     arguments.get("operation", "search"),
                 )
+                route_binding, route_gap = _resolve_provider_host_route(
+                    arguments,
+                    vault_path=runtime.vault_path,
+                    workspace=selected_host_workspace,
+                    fixed_task_binding=runtime.default_task_binding,
+                )
+                if route_gap is not None:
+                    return _knowledge_mcp_transport_result(
+                        _provider_host_route_gap_response(
+                            operation=operation,
+                            result=route_gap,
+                        )
+                    )
+                if "host_route" in arguments:
+                    arguments = dict(arguments)
+                    arguments.pop("host_route")
+                    arguments["task_binding"] = route_binding
                 if "task_binding" in arguments:
                     arguments = dict(arguments)
                     arguments["task_binding"] = normalize_task_context_binding(
@@ -3477,7 +3639,7 @@ def create_knowledge_mcp_server(
                     asset_id=cast(str | None, arguments.get("asset_id")),
                     knowledge_id=cast(str | None, arguments.get("knowledge_id")),
                     limit=int(arguments.get("limit", 5)),
-                    max_chars=int(arguments.get("max_chars", 5_000)),
+                    max_chars=_default_provider_max_chars(arguments),
                     max_tokens=int(arguments.get("max_tokens", 4_000)),
                     max_sources=int(arguments.get("max_sources", 8)),
                     graph_hops=int(arguments.get("graph_hops", 1)),
@@ -3605,6 +3767,7 @@ def run_knowledge_mcp(
     transport: str = "stdio",
     vault_path: str | Path | None = None,
     default_task_binding: Mapping[str, Any] | None = None,
+    host_workspace: str | Path | None = None,
 ) -> None:
     if transport != "stdio":
         raise ValueError("DeepLaw Knowledge Assets supports only local stdio MCP")
@@ -3613,6 +3776,7 @@ def run_knowledge_mcp(
         server = create_knowledge_mcp_server(
             vault_path=vault_path,
             default_task_binding=default_task_binding,
+            host_workspace=host_workspace,
         )
         async with stdio_server() as (read_stream, write_stream):
             await server.run(

@@ -16,6 +16,7 @@ from .host_runtime import (
     closed_mcp_surface,
     observed_knowledge_vault_id,
     resolve_knowledge_vault,
+    safe_directory_path,
     safe_existing_path,
 )
 from .store import default_home
@@ -123,8 +124,16 @@ def closed_mcp_environment(
             vault_path=selected_vault,
             workspace=workspace,
         )
-    elif workspace is not None:
-        raise ValueError("workspace metadata is accepted only with a task handle")
+    if workspace is not None:
+        if selected_surface != "knowledge_support":
+            raise ValueError("workspace metadata is accepted only by knowledge_support")
+        explicit["DEEPLAW_HOST_WORKSPACE"] = str(
+            safe_directory_path(
+                workspace,
+                label="native Host workspace",
+                require_existing=True,
+            )
+        )
     if normalized_binding is not None:
         if selected_surface != "knowledge_support":
             raise ValueError("task binding is accepted only by knowledge_support")

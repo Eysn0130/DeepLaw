@@ -240,11 +240,11 @@ def test_publish_and_post_release_validate_semantics_before_envelope() -> None:
     validation = workflow.split("\n  validate-assets:", maxsplit=1)[1].split(
         "\n  fresh-install:", maxsplit=1
     )[0]
-    assert "benchmarks.release.semantic_evidence" in validation
+    assert "benchmarks.release.release_provenance_v7" in validation
     assert "--assets-root" in validation
-    assert validation.index("benchmarks.release.semantic_evidence") < validation.index(
-        "benchmarks.release.release_policy"
-    )
+    assert "--candidate-run-id" in validation
+    assert "--evidence-run-id" in validation
+    assert "--qualification-run-id" in validation
     public = workflow.split("\n  public-redownload:", maxsplit=1)[1]
     assert "gh release download" not in public
     assert "https://github.com/${GITHUB_REPOSITORY}/releases/download" in public
@@ -261,7 +261,7 @@ def test_historical_assembler_points_v013_to_semantic_assembler() -> None:
     assert "benchmarks.release.v013_commercial_release" in source
 
 
-def test_v013_commercial_qualification_consumes_verified_artifacts_and_gate_v6() -> None:
+def test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts() -> None:
     workflow = (
         REPOSITORY / ".github/workflows/commercial-qualification.yml"
     ).read_text(
@@ -269,9 +269,10 @@ def test_v013_commercial_qualification_consumes_verified_artifacts_and_gate_v6()
     )
     assert "verified-candidate-artifacts" in workflow
     assert "v013-qualification-evidence" in workflow
-    assert "benchmarks.release.v013_commercial_release" in workflow
-    assert "benchmarks.release.semantic_evidence" in workflow
-    assert "verify_single_artifact_source" in workflow
+    assert "candidate-full-raw-evidence" in workflow
+    assert "benchmarks.release.assemble_commercial_qualification_v7" in workflow
+    assert "benchmarks.release.release_provenance_v7" in workflow
+    assert "v013-gate-classification-v7.json" in workflow
     assert "uv build" not in workflow
 
     legacy = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(

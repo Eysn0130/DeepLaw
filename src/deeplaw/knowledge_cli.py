@@ -155,6 +155,24 @@ _BASIC_KNOWLEDGE_COMMANDS = (
     "snapshot",
     "forget",
 )
+# Keep the historical subparser metavar stable while making the existing
+# read-only query seam visible beside context in the default journey.  Query
+# remains the parser and handler already defined below; this list only
+# controls which existing choices are shown in default help.
+_DEFAULT_KNOWLEDGE_HELP_COMMANDS = (
+    "init",
+    "doctor",
+    "source",
+    "compile",
+    "reconcile",
+    "query",
+    "context",
+    "wiki",
+    "snapshot",
+    "forget",
+    "host",
+    "task",
+)
 _KNOWLEDGE_HELP_TIERS = {
     "advanced": (
         "agent-context",
@@ -237,7 +255,7 @@ def _curate_default_help(
 ) -> None:
     by_name = {choice.dest: choice for choice in action._choices_actions}
     action._choices_actions[:] = [
-        by_name[name] for name in _BASIC_KNOWLEDGE_COMMANDS
+        by_name[name] for name in _DEFAULT_KNOWLEDGE_HELP_COMMANDS
     ]
 
 
@@ -272,7 +290,8 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         help="Operate the local Markdown-native Agent Knowledge OS",
         description=(
             "Basic journey: init -> doctor -> source add -> compile -> reconcile -> "
-            "task start -> host context -> wiki/source drill-down -> checkpoint/snapshot/forget"
+            "query/context -> task start -> host connect -> wiki/source drill-down -> "
+            "checkpoint/snapshot/forget"
         ),
         epilog=(
             "Use --help-advanced, --help-admin, or --help-compatibility for the "
@@ -2033,6 +2052,24 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     task_checkpoint.add_argument("--gap", action="append", default=[])
     task_checkpoint.add_argument("--artifact-ref", action="append", default=[])
     task_checkpoint.add_argument("--confirm-no-case-data", action="store_true")
+    task_bind_host = task_commands.add_parser("bind-host-session")
+    task_bind_host.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_bind_host.add_argument("--host", choices=("codex", "opencode"), required=True)
+    task_bind_host.add_argument("--session-sha256", required=True)
+    task_bind_host.add_argument("--task-handle", required=True)
+    task_bind_host.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_bind_host.add_argument("--grant-id", required=True)
+    task_bind_host.add_argument("--idempotency-key", required=True)
+    task_bind_host.add_argument("--confirm-no-case-data", action="store_true")
+    task_resolve_host = task_commands.add_parser("resolve-host-session")
+    task_resolve_host.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    task_resolve_host.add_argument(
+        "--host", choices=("codex", "opencode"), required=True
+    )
+    task_resolve_host.add_argument("--session-sha256", required=True)
+    task_resolve_host.add_argument("--workspace", type=Path, default=Path.cwd())
     task_forget = task_commands.add_parser("forget")
     task_forget.add_argument("--vault", type=Path, default=default_knowledge_vault())
     task_forget.add_argument("--task-handle", required=True)
@@ -2092,7 +2129,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     mcp.add_argument(
         "--workspace",
         type=Path,
-        help="Explicit Host task worktree used only with --task-handle",
+        help="Explicit native Host worktree; defaults to the launcher working directory",
     )
     _curate_default_help(subcommands)
 
@@ -2384,11 +2421,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "task":
         from .task_continuity import (
+            bind_host_session,
             checkpoint_task,
             forget_task,
             fork_task,
             inspect_task,
             locate_task,
+            resolve_host_session,
             resume_task,
             start_task,
             timeline_task,
@@ -2447,6 +2486,24 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 gaps=tuple(args.gap),
                 artifact_refs=tuple(args.artifact_ref),
                 confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "bind-host-session":
+            return bind_host_session(
+                vault_path=args.vault,
+                host=args.host,
+                session_sha256=args.session_sha256,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "resolve-host-session":
+            return resolve_host_session(
+                vault_path=args.vault,
+                host=args.host,
+                session_sha256=args.session_sha256,
+                workspace=args.workspace,
             )
         if args.task_command == "forget":
             return forget_task(
@@ -3241,7 +3298,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 expected_vault_id=args.expected_vault_id,
                 task_binding=task_binding,
                 task_handle=args.task_handle,
-                workspace=args.workspace,
+                workspace=args.workspace or Path.cwd(),
             )
             return None
         if args.task_handle is not None:
@@ -3262,6 +3319,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             transport="stdio" if args.stdio else args.transport,
             vault_path=selected_vault,
             default_task_binding=task_binding,
+            host_workspace=os.environ.get("DEEPLAW_HOST_WORKSPACE"),
         )
         return None
     if command == "migrate" and args.rollback:

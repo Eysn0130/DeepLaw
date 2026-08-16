@@ -1,9 +1,6 @@
 name: Release verified DeepLaw candidate
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -14,8 +11,16 @@ on:
         description: Successful Candidate Full run for the exact tag commit.
         required: true
         type: string
+      evidence_run_id:
+        description: Successful External Qualification Evidence run for the same candidate.
+        required: true
+        type: string
       qualification_run_id:
         description: Successful Commercial Qualification run for the same artifact hashes.
+        required: true
+        type: string
+      owner_release_confirmation:
+        description: Exact owner confirmation required to publish v0.13.0.
         required: true
         type: string
 
@@ -32,26 +37,31 @@ jobs:
       commit: ${{ steps.release.outputs.commit }}
       version: ${{ steps.release.outputs.version }}
       candidate_run_id: ${{ steps.release.outputs.candidate_run_id }}
+      evidence_run_id: ${{ steps.release.outputs.evidence_run_id }}
       qualification_run_id: ${{ steps.release.outputs.qualification_run_id }}
     steps:
       - name: Check out immutable tag
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          ref: ${{ inputs.release_tag }}
           persist-credentials: false
 
       - name: Validate exact release inputs
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUESTED_CANDIDATE_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_run_id || '' }}
-          REQUESTED_QUALIFICATION_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.qualification_run_id || '' }}
-          TARGET_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          REQUESTED_CANDIDATE_RUN: ${{ inputs.candidate_run_id }}
+          REQUESTED_EVIDENCE_RUN: ${{ inputs.evidence_run_id }}
+          REQUESTED_QUALIFICATION_RUN: ${{ inputs.qualification_run_id }}
+          TARGET_TAG: ${{ inputs.release_tag }}
+          OWNER_RELEASE_CONFIRMATION: ${{ inputs.owner_release_confirmation }}
         shell: bash
         run: |
           set -euo pipefail
+          test "${OWNER_RELEASE_CONFIRMATION}" = "publish-v0.13.0"
           test "${TARGET_TAG}" = "v0.13.0"
+          test "${GITHUB_REF}" = "refs/tags/${TARGET_TAG}"
           commit=$(git rev-parse HEAD)
           test "${commit}" = "$(git rev-list -n 1 "${TARGET_TAG}")"
           version=$(python - <<'PY'
@@ -63,19 +73,12 @@ jobs:
           test "${TARGET_TAG}" = "v${version}"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
-          resolve_run() {
-            local requested="$1"
-            local workflow_file="$2"
-            if [[ -n "${requested}" ]]; then
-              printf '%s' "${requested}"
-            else
-              gh api \
-                "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?status=success&per_page=100" \
-                --jq "[.workflow_runs[] | select(.head_sha == \"${commit}\")] | first | .id"
-            fi
-          }
-          candidate_run_id=$(resolve_run "${REQUESTED_CANDIDATE_RUN}" candidate-full.yml)
-          qualification_run_id=$(resolve_run "${REQUESTED_QUALIFICATION_RUN}" commercial-qualification.yml)
+          candidate_run_id="${REQUESTED_CANDIDATE_RUN}"
+          evidence_run_id="${REQUESTED_EVIDENCE_RUN}"
+          qualification_run_id="${REQUESTED_QUALIFICATION_RUN}"
+          test "${candidate_run_id}" != "${evidence_run_id}"
+          test "${candidate_run_id}" != "${qualification_run_id}"
+          test "${evidence_run_id}" != "${qualification_run_id}"
           verify_run() {
             local run_id="$1"
             local expected_path="$2"
@@ -85,11 +88,13 @@ jobs:
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .path)" = "${expected_path}"
           }
           verify_run "${candidate_run_id}" ".github/workflows/candidate-full.yml"
+          verify_run "${evidence_run_id}" ".github/workflows/external-qualification-evidence.yml"
           verify_run "${qualification_run_id}" ".github/workflows/commercial-qualification.yml"
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
           echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "candidate_run_id=${candidate_run_id}" >> "${GITHUB_OUTPUT}"
+          echo "evidence_run_id=${evidence_run_id}" >> "${GITHUB_OUTPUT}"
           echo "qualification_run_id=${qualification_run_id}" >> "${GITHUB_OUTPUT}"
 
   validate-assets:
@@ -117,6 +122,22 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/verified-dist
 
+      - name: Download Candidate Full raw evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: candidate-full-raw-evidence
+          run-id: ${{ needs.resolve.outputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate-full-raw-evidence
+
+      - name: Download owner-controlled external qualification evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: v013-qualification-evidence
+          run-id: ${{ needs.resolve.outputs.evidence_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/external-source
+
       - name: Download exact qualification assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -125,7 +146,7 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/release-assets
 
-      - name: Verify one artifact source and all commercial evidence
+      - name: Verify one artifact source and the embedded external bundle
         shell: bash
         run: |
           set -euo pipefail
@@ -140,19 +161,114 @@ jobs:
           from benchmarks.release.retained_artifact_manifest import verify_single_artifact_source
           verify_single_artifact_source(
               verified_dist=Path("${{ runner.temp }}/verified-dist"),
-              consumer_dist=Path("${{ runner.temp }}/release-assets/dist"),
+              consumer_dist=Path("${{ runner.temp }}/release-assets"),
           )
           PY
-          uv run --frozen python -m benchmarks.release.semantic_evidence \
-            --manifest "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
-            --assets-root "${RUNNER_TEMP}/release-assets"
-          uv run --frozen python -m benchmarks.release.release_policy \
-            --manifest "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
-            --release-version "${{ needs.resolve.outputs.version }}"
+          EXTERNAL_SOURCE="${RUNNER_TEMP}/external-source" \
+          EMBEDDED_EXTERNAL="${RUNNER_TEMP}/release-assets/external-evidence" \
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          def inventory(root: Path):
+              root = root.resolve(strict=True)
+              result = {}
+              for path in sorted(root.rglob("*")):
+                  if path.is_symlink():
+                      raise SystemExit("external qualification evidence contains a symlink")
+                  if path.is_file():
+                      relative = path.relative_to(root).as_posix()
+                      raw = path.read_bytes()
+                      result[relative] = (hashlib.sha256(raw).hexdigest(), len(raw))
+              if not result:
+                  raise SystemExit("external qualification evidence is empty")
+              return result
+
+          source = inventory(Path(os.environ["EXTERNAL_SOURCE"]))
+          embedded = inventory(Path(os.environ["EMBEDDED_EXTERNAL"]))
+          if source != embedded:
+              raise SystemExit("commercial assets do not embed the exact external bundle")
+          PY
+          uv run --frozen python -m benchmarks.release.external_qualification_bundle_v3 \
+            --root "${RUNNER_TEMP}/external-source" \
+            --active-qualification \
+              "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
+            --candidate-run-id "${{ needs.resolve.outputs.candidate_run_id }}" \
+            --evidence-run-id "${{ needs.resolve.outputs.evidence_run_id }}" \
+            --trusted-human-approver \
+              benchmarks/v013/trusted-human-approver-v1.json
+
+      - name: Discover closed transitive provenance paths
+        id: provenance-paths
+        env:
+          ASSETS_ROOT: ${{ runner.temp }}/release-assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+
+          root = Path(os.environ["ASSETS_ROOT"])
+          release = json.loads(
+              (root / "commercial-release-manifest.json").read_text(encoding="utf-8")
+          )
+          bundle = json.loads(
+              (root / "external-evidence/bundle-manifest.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          values = {
+              "pre_publish": release["pre_publish_artifact_gate"]["path"],
+          }
+          bindings = [
+              item["relative_path"]
+              for item in bundle["files"]
+              if item["evidence_kind"] == "post_build_gold_binding"
+          ]
+          if len(bindings) != 1:
+              raise SystemExit("external bundle must contain one Candidate Gold binding")
+          values["candidate_gold"] = f"external-evidence/{bindings[0]}"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as stream:
+              for label, relative in values.items():
+                  path = PurePosixPath(relative)
+                  if path.is_absolute() or ".." in path.parts or "." in path.parts:
+                      raise SystemExit(f"unsafe provenance path: {label}")
+                  selected = root / path
+                  if selected.is_symlink() or not selected.is_file():
+                      raise SystemExit(f"provenance path is not a regular file: {label}")
+                  stream.write(f"{label}={path.as_posix()}\n")
+          PY
+
+      - name: Reopen all transitive commercial evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.release_provenance_v7 \
+            --release-manifest \
+              "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
+            --classification benchmarks/release/v013-gate-classification-v7.json \
+            --pre-publish-receipt \
+              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.pre_publish }}" \
+            --candidate-gold-binding \
+              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.candidate_gold }}" \
+            --external-bundle-manifest \
+              "${RUNNER_TEMP}/release-assets/external-evidence/bundle-manifest.json" \
+            --active-qualification \
+              "${RUNNER_TEMP}/release-assets/evidence/active-qualification.json" \
+            --assets-root "${RUNNER_TEMP}/release-assets" \
+            --candidate-raw-root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
+            --candidate-run-id "${{ needs.resolve.outputs.candidate_run_id }}" \
+            --evidence-run-id "${{ needs.resolve.outputs.evidence_run_id }}" \
+            --qualification-run-id "${{ needs.resolve.outputs.qualification_run_id }}" \
+            --trusted-human-approver \
+              benchmarks/v013/trusted-human-approver-v1.json
           test -f "${RUNNER_TEMP}/release-assets/deeplaw.cdx.json"
           test -f "${RUNNER_TEMP}/release-assets/openvex.json"
           test -f "${RUNNER_TEMP}/release-assets/installed-licenses.json"
-          test -f "${RUNNER_TEMP}/release-assets/provenance.json"
+          test -f "${RUNNER_TEMP}/release-assets/reproducible-build.json"
 
   fresh-install:
     name: Fresh install ${{ matrix.os }} Python ${{ matrix.python-version }}
@@ -246,6 +362,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       actions: read
+      artifact-metadata: write
       attestations: write
       contents: write
       id-token: write
@@ -274,7 +391,7 @@ jobs:
           cp "${RUNNER_TEMP}/commercial/deeplaw.cdx.json" "${RUNNER_TEMP}/publish/"
           cp "${RUNNER_TEMP}/commercial/openvex.json" "${RUNNER_TEMP}/publish/"
           cp "${RUNNER_TEMP}/commercial/installed-licenses.json" "${RUNNER_TEMP}/publish/"
-          cp "${RUNNER_TEMP}/commercial/provenance.json" "${RUNNER_TEMP}/publish/"
+          cp "${RUNNER_TEMP}/commercial/reproducible-build.json" "${RUNNER_TEMP}/publish/"
           cd "${RUNNER_TEMP}/publish"
           sha256sum -- * > SHA256SUMS
 
@@ -282,6 +399,13 @@ jobs:
         uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
         with:
           inputs: |
+            ${{ runner.temp }}/publish/*.whl
+            ${{ runner.temp }}/publish/*.tar.gz
+
+      - name: Attest exact distribution provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: |
             ${{ runner.temp }}/publish/*.whl
             ${{ runner.temp }}/publish/*.tar.gz
 
@@ -293,7 +417,7 @@ jobs:
             ${{ runner.temp }}/publish/*.tar.gz
           sbom-path: ${{ runner.temp }}/publish/deeplaw.cdx.json
 
-      - name: Create or resume the release without overwriting assets
+      - name: Create or resume the draft or public prerelease without overwriting assets
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
@@ -301,7 +425,9 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release create "${RELEASE_TAG}" --verify-tag --generate-notes
+            gh release create "${RELEASE_TAG}" --verify-tag --draft --prerelease --generate-notes
+          else
+            test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           fi
           release_id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)
@@ -324,6 +450,35 @@ jobs:
               gh release upload "${RELEASE_TAG}" "${artifact}"
             fi
           done < <(find "${RUNNER_TEMP}/publish" -maxdepth 1 -type f -print0 | sort -z)
+          while IFS= read -r -d '' artifact; do
+            name=$(basename "${artifact}")
+            asset_id=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?per_page=100" \
+              --jq ".[] | select(.name == \"${name}\") | .id")
+            test -n "${asset_id}"
+            observed=$(mktemp -d)
+            gh api \
+              -H "Accept: application/octet-stream" \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" \
+              > "${observed}/${name}"
+            cmp --silent "${artifact}" "${observed}/${name}" || {
+              echo "draft release asset differs after upload: ${name}" >&2
+              exit 1
+            }
+          done < <(find "${RUNNER_TEMP}/publish" -maxdepth 1 -type f -print0 | sort -z)
+
+      - name: Publish the verified draft as a public prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = true ]]; then
+            gh release edit "${RELEASE_TAG}" --draft=false
+          else
+            test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
+          fi
 
   public-redownload:
     name: Verify public redownload and signature bundles
@@ -331,16 +486,24 @@ jobs:
       - resolve
       - publish
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       attestations: read
-      contents: read
-      id-token: write
+      contents: write
     steps:
+      - name: Check out exact release verifier
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          persist-credentials: false
+
       - name: Install verification tooling
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+
+      - name: Install closed receipt validator
+        run: uv sync --frozen --extra dev
 
       - name: Publicly redownload immutable release without credentials
         env:
@@ -370,5 +533,162 @@ jobs:
               "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}" \
               --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
               "${artifact}"
-            gh attestation verify "${artifact}" --repo "${GITHUB_REPOSITORY}"
           done
+
+      - name: Download and verify public provenance and SBOM attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/downloads"
+          for artifact in *.whl *.tar.gz; do
+            digest="$(sha256sum "${artifact}" | cut -d ' ' -f 1)"
+            bundle="sha256:${digest}.jsonl"
+            gh attestation download "${artifact}" --repo "${GITHUB_REPOSITORY}"
+            test -s "${bundle}"
+            gh attestation verify "${artifact}" \
+              --bundle "${bundle}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --cert-identity \
+              "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${{ needs.resolve.outputs.tag }}"
+            gh attestation verify "${artifact}" \
+              --bundle "${bundle}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --predicate-type "https://cyclonedx.org/bom/v1.5" \
+              --cert-identity \
+              "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${{ needs.resolve.outputs.tag }}"
+          done
+
+      - name: Derive and validate post-public verification receipt
+        env:
+          RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/downloads"
+          uv --directory "${GITHUB_WORKSPACE}" run --frozen python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from jsonschema import Draft202012Validator, FormatChecker
+
+          def sha(path: Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          def set_digest(paths: list[Path]) -> str:
+              rows = [{"name": path.name, "sha256": sha(path)} for path in sorted(paths)]
+              raw = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+              return hashlib.sha256(raw).hexdigest()
+
+          wheels = sorted(Path.cwd().glob("*.whl"))
+          sdists = sorted(Path.cwd().glob("*.tar.gz"))
+          sigstore = sorted(Path.cwd().glob("*.sigstore.json"))
+          attestations = sorted(Path.cwd().glob("sha256:*.jsonl"))
+          if len(wheels) != 1 or len(sdists) != 1 or len(sigstore) != 2 or len(attestations) != 2:
+              raise SystemExit("post-public verification artifact inventory is incomplete")
+          wheel_sha = sha(wheels[0])
+          sdist_sha = sha(sdists[0])
+          binding = {"wheel_sha256": wheel_sha, "sdist_sha256": sdist_sha}
+          receipt = {
+              "schema_version": "deeplaw.post-public-verification/v1",
+              "status": "post_public_verified",
+              "verified_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+              "artifact_binding": binding,
+              "sigstore": {
+                  "identity": "sigstore-github-release-workflow",
+                  "bundle_sha256": set_digest(sigstore),
+                  "verified": True,
+              },
+              "attestation": {
+                  "identity": "github-release-provenance-and-sbom",
+                  "attestation_sha256": set_digest(attestations),
+                  "verified": True,
+              },
+              "anonymous_redownload": {
+                  "attempt_id": (
+                      f"release-run-{os.environ['RELEASE_RUN_ID']}-"
+                      f"{os.environ['RELEASE_RUN_ATTEMPT']}"
+                  ),
+                  "source": "anonymous_public_redownload",
+                  **binding,
+                  "sha256_matches": True,
+              },
+              "public_sha256": binding,
+              "public_release_verified": True,
+          }
+          canonical = json.dumps(
+              receipt,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode("utf-8")
+          receipt["record_sha256"] = hashlib.sha256(canonical).hexdigest()
+          schema_path = Path(os.environ["GITHUB_WORKSPACE"]) / "contracts" / (
+              "post-public-verification.v1.schema.json"
+          )
+          schema = json.loads(schema_path.read_text(encoding="utf-8"))
+          errors = sorted(
+              Draft202012Validator(
+                  schema,
+                  format_checker=FormatChecker(),
+              ).iter_errors(receipt),
+              key=lambda error: list(error.path),
+          )
+          if errors:
+              raise SystemExit(f"post-public receipt schema violation: {errors[0].message}")
+          Path("post-public-verification.json").write_text(
+              json.dumps(
+                  receipt,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Retain post-public verification receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: post-public-verification
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/downloads/post-public-verification.json
+
+      - name: Attach post-public receipt and clear prerelease state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="${RUNNER_TEMP}/downloads/post-public-verification.json"
+          release_id=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)
+          asset_id=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?per_page=100" \
+            --jq '.[] | select(.name == "post-public-verification.json") | .id')
+          if [[ -n "${asset_id}" ]]; then
+            observed=$(mktemp -d)
+            gh api \
+              -H "Accept: application/octet-stream" \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" \
+              > "${observed}/post-public-verification.json"
+            cmp --silent "${receipt}" "${observed}/post-public-verification.json" || {
+              echo "post-public verification receipt differs" >&2
+              exit 1
+            }
+          else
+            gh release upload "${RELEASE_TAG}" "${receipt}"
+          fi
+          gh release edit "${RELEASE_TAG}" --prerelease=false

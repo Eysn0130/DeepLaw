@@ -6,6 +6,14 @@
   "agent_context_schema": "deeplaw.agent-context-envelope/v1",
   "plugin_api_status": "beta",
   "integration_status": "supported_local_only",
+  "native_plugin": {
+    "version": "1.18.16",
+    "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+    "config_selector": "deepseek/deepseek-v4-flash",
+    "expected_response_model_id": "deepseek-v4-flash",
+    "entrypoint": "plugins/deeplaw-native.ts",
+    "status": "candidate_requires_owner_review"
+  },
   "products": [
     {
       "id": "deeplaw",

@@ -146,6 +146,30 @@ def test_closed_launcher_rejects_arbitrary_surface_and_linked_vault(
         pass
 
 
+def test_closed_launcher_passes_only_verified_host_workspace_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deeplaw.closed_mcp_launcher import closed_mcp_environment
+
+    vault = tmp_path / "vault"
+    vault.mkdir(mode=0o700)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(mode=0o700)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "must-not-cross-to-mcp")
+
+    with closed_mcp_environment(
+        surface="knowledge_support",
+        vault_path=vault,
+        workspace=workspace,
+    ) as launch:
+        assert launch.environment["DEEPLAW_HOST_WORKSPACE"] == str(
+            workspace.resolve()
+        )
+        assert "DEEPSEEK_API_KEY" not in launch.environment
+        assert "must-not-cross-to-mcp" not in repr(launch.environment)
+
+
 def test_host_connect_and_launcher_reject_the_same_linked_vault_ancestor(
     tmp_path: Path,
 ) -> None:
