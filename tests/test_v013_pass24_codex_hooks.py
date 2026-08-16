@@ -112,6 +112,11 @@ def test_all_five_hooks_are_bounded_and_redact_untrusted_input() -> None:
         assert "route_status=unbound" in context
         assert "knowledge_support" in context
         assert "query, context, or explain" in context
+        assert (
+            'host_route={"host":"codex",'
+            f'"session_sha256":"{session_digest}"}}' in context
+        )
+        assert "task_handle=" not in context
 
 
 def test_precompact_is_explicitly_read_only_without_checkpoint_grant() -> None:
