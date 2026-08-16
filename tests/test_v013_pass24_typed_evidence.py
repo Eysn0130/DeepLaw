@@ -808,6 +808,26 @@ def test_exact_wheel_receipt_rechecks_record_and_candidate_identity(tmp_path: Pa
     assert result["status"] == "passed"
     assert result["metrics"]["import_origin_verified"] is True
 
+    receipt["runner_source_sha256"] = "0" * 64
+    receipt["record_sha256"] = _sha(
+        _canonical({key: item for key, item in receipt.items() if key != "record_sha256"})
+    )
+    forged_source = _json_file(tmp_path, "exact-wheel-forged-runner.json", receipt)
+    forged_envelope = json.loads(path.read_text(encoding="utf-8"))
+    forged_envelope["payload"]["source"] = forged_source
+    forged_envelope["record_sha256"] = _sha(
+        _canonical(
+            {key: item for key, item in forged_envelope.items() if key != "record_sha256"}
+        )
+    )
+    forged_path = tmp_path / "exact-wheel-forged-envelope.json"
+    forged_path.write_bytes(_canonical(forged_envelope))
+    _assert_reject(forged_path)
+    forged_path.unlink()
+    (tmp_path / "exact-wheel-forged-runner.json").unlink()
+
+    receipt["runner_source_sha256"] = RUNNER["sha256"]
+
     receipt["network_acquisition"]["mode"] = "fixed_pypi_index"
     receipt["environment_policy"]["network_disabled_for_install"] = False
     receipt["record_sha256"] = _sha(
@@ -833,6 +853,206 @@ def test_exact_wheel_receipt_rechecks_record_and_candidate_identity(tmp_path: Pa
         name="exact-wheel-bad-envelope.json",
     )
     _assert_reject(bad_path)
+
+
+def test_exact_wheel_v2_receipt_rejects_cross_binding_replays_and_v1_receipts(
+    tmp_path: Path,
+) -> None:
+    receipt: dict[str, Any] = {
+        "schema_version": "deeplaw.exact-wheel-execution-receipt/v2",
+        "status": "exact_wheel_executed",
+        "runner_source_sha256": RUNNER["sha256"],
+        "candidate_provenance": {
+            "commit": COMMIT,
+            "tree": TREE,
+            "lock_sha256": LOCK,
+        },
+        "run_binding": {"candidate_run_id": 101, "evidence_run_id": 202},
+        "corpus_binding": {"role": "qualification_holdout", "sha256": CORPUS},
+        "candidate": {
+            "wheel_filename": "deeplaw-0.13.0-py3-none-any.whl",
+            "wheel_sha256": WHEEL,
+            "wheel_size": 1,
+            "path_class": "candidate_full_wheel",
+        },
+        "requirements": {
+            "filename": "requirements.txt",
+            "sha256": "7" * 64,
+            "bytes": 1,
+            "path_class": "candidate_requirements",
+            "hash_pinned": True,
+        },
+        "venv": {
+            "path_class": "new_isolated_venv",
+            "path_sha256": "2" * 64,
+            "created_new": True,
+            "system_site_packages": False,
+            "site_packages_path_class": "venv_site_packages",
+        },
+        "runtime": {
+            "python_implementation": "CPython",
+            "python_version": "3.12.1",
+            "python_executable_sha256": "3" * 64,
+            "python_executable_path_class": "new_isolated_venv",
+            "distribution_name": "deeplaw",
+            "distribution_version": "0.13.0",
+            "import_module": "deeplaw",
+            "import_file_path_class": "venv_site_packages",
+            "import_file_relative_path": "deeplaw/__init__.py",
+            "import_file_sha256": "4" * 64,
+        },
+        "entrypoint": {
+            "name": "deeplaw",
+            "group": "console_scripts",
+            "value": "deeplaw.cli:main",
+            "executable_path_class": "venv_bin",
+            "executable_relative_path": "bin/deeplaw",
+            "executable_sha256": "5" * 64,
+            "module_path_class": "venv_site_packages",
+            "module_relative_path": "deeplaw/cli.py",
+            "module_sha256": "6" * 64,
+        },
+        "version_check": {
+            "argv": ["deeplaw", "--version"],
+            "exit_code": 0,
+            "stdout_sha256": "8" * 64,
+            "stdout_bytes": 1,
+            "stdout_path_class": "sanitized_stdout",
+        },
+        "public_journey": {
+            "journey_status": "passed",
+            "journey_root_path_class": "ephemeral_journey_root",
+            "step_count": 5,
+            "steps": [
+                {
+                    "name": name,
+                    "status": "passed",
+                    "exit_code": 0,
+                    "argv": ["deeplaw", name],
+                    "stdout_sha256": "9" * 64,
+                    "stdout_bytes": 1,
+                    "stdout_path_class": "sanitized_stdout",
+                    "output_schema_version": "deeplaw.synthetic/v1",
+                    "budget": None,
+                }
+                for name in (
+                    "knowledge_init",
+                    "source_add",
+                    "source_verify",
+                    "evidence_first_query",
+                    "bounded_context",
+                )
+            ],
+            "network_policy": {
+                "network_access": "not_requested",
+                "model_sidecar": False,
+                "environment_allowlist": "minimal",
+            },
+        },
+        "network_acquisition": {
+            "explicit": True,
+            "mode": "candidate_wheelhouse",
+            "hash_pinned": True,
+        },
+        "environment_policy": {
+            "python_isolated_mode": True,
+            "pythonpath_cleared": True,
+            "pythonhome_cleared": True,
+            "user_site_disabled": True,
+            "network_disabled_for_install": True,
+            "requirements_hashes_required": True,
+            "candidate_source_only": True,
+        },
+        "record_sha256": "",
+    }
+
+    def seal_receipt() -> None:
+        receipt["record_sha256"] = _sha(
+            _canonical({key: item for key, item in receipt.items() if key != "record_sha256"})
+        )
+
+    def v2_envelope(source: dict[str, Any]) -> dict[str, Any]:
+        template = _envelope(
+            tmp_path,
+            kind="exact_wheel_execution",
+            payload={"source": source},
+            corpus_role="qualification_holdout",
+            name="v2-template.json",
+        )
+        envelope = json.loads(template.read_text(encoding="utf-8"))
+        template.unlink()
+        envelope.update(
+            {
+                "schema_version": "deeplaw.typed-qualification-evidence/v2",
+                "profile": "machine_evaluated_no_human_attestation",
+                "reference_provenance": "agent_consensus",
+                "human_authenticity": "not_claimed",
+                "run_binding": {"run_id": "evidence-run-202", "workflow_run_id": 202},
+                "corpus": {"sha256": CORPUS, "role": "qualification_holdout"},
+            }
+        )
+        envelope["record_sha256"] = _sha(
+            _canonical({key: item for key, item in envelope.items() if key != "record_sha256"})
+        )
+        return envelope
+
+    def write_case(name: str, value: dict[str, Any]) -> Path:
+        source = _json_file(tmp_path, "v2-receipt.json", value)
+        envelope = v2_envelope(source)
+        path = tmp_path / "v2-manifest.json"
+        path.write_bytes(_canonical(envelope))
+        return path
+
+    seal_receipt()
+    positive_path = write_case("exact-v2-positive", receipt)
+    result = parse_typed_evidence(
+        positive_path,
+        root=tmp_path,
+        expected_candidate_run_id=101,
+        expected_workflow_run_id=202,
+    )
+    assert result["status"] == "passed"
+
+    for field, value in (
+        ("commit", "9" * 40),
+        ("tree", "8" * 40),
+        ("lock_sha256", "6" * 64),
+    ):
+        receipt["candidate_provenance"][field] = value
+        seal_receipt()
+        _assert_reject(write_case(f"exact-v2-candidate-{field}", receipt))
+        receipt["candidate_provenance"][field] = {
+            "commit": COMMIT,
+            "tree": TREE,
+            "lock_sha256": LOCK,
+        }[field]
+
+    receipt["run_binding"]["candidate_run_id"] = 102
+    seal_receipt()
+    _assert_reject(write_case("exact-v2-run-mismatch", receipt))
+    receipt["run_binding"]["candidate_run_id"] = 101
+    receipt["run_binding"]["evidence_run_id"] = 203
+    seal_receipt()
+    _assert_reject(write_case("exact-v2-evidence-mismatch", receipt))
+    receipt["run_binding"]["evidence_run_id"] = 202
+    receipt["corpus_binding"]["sha256"] = "a" * 64
+    seal_receipt()
+    _assert_reject(write_case("exact-v2-corpus-mismatch", receipt))
+    receipt["corpus_binding"]["sha256"] = CORPUS
+    receipt["runner_source_sha256"] = "0" * 64
+    seal_receipt()
+    _assert_reject(write_case("exact-v2-runner-mismatch", receipt))
+
+    receipt["runner_source_sha256"] = RUNNER["sha256"]
+    seal_receipt()
+    v1_receipt = dict(receipt)
+    v1_receipt["schema_version"] = "deeplaw.exact-wheel-execution-receipt/v1"
+    for field in ("candidate_provenance", "run_binding", "corpus_binding"):
+        v1_receipt.pop(field)
+    v1_receipt["record_sha256"] = _sha(
+        _canonical({key: item for key, item in v1_receipt.items() if key != "record_sha256"})
+    )
+    _assert_reject(write_case("exact-v2-v1-receipt", v1_receipt))
 
 
 def test_retained_supply_chain_rechecks_pre_publish_and_all_retained_bytes(

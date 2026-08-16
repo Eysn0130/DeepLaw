@@ -1,0 +1,581 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/exact-wheel-execution-receipt.v2.schema.json",
+  "title": "DeepLaw exact wheel execution receipt v2",
+  "description": "Path-free receipt for an isolated execution of the one retained Candidate Full wheel, bound to the candidate build, external evidence run, and qualification holdout. It is an execution identity receipt, not Candidate Full JUnit/platform evidence and not scorer isolation evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "runner_source_sha256",
+    "candidate_provenance",
+    "run_binding",
+    "corpus_binding",
+    "candidate",
+    "requirements",
+    "venv",
+    "runtime",
+    "entrypoint",
+    "version_check",
+    "public_journey",
+    "network_acquisition",
+    "environment_policy",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.exact-wheel-execution-receipt/v2"
+    },
+    "status": {
+      "const": "exact_wheel_executed"
+    },
+    "runner_source_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "candidate": {
+      "$ref": "#/$defs/candidate"
+    },
+    "requirements": {
+      "$ref": "#/$defs/requirements"
+    },
+    "venv": {
+      "$ref": "#/$defs/venv"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "entrypoint": {
+      "$ref": "#/$defs/entrypoint"
+    },
+    "version_check": {
+      "$ref": "#/$defs/versionCheck"
+    },
+    "public_journey": {
+      "$ref": "#/$defs/publicJourney"
+    },
+    "network_acquisition": {
+      "$ref": "#/$defs/networkAcquisition"
+    },
+    "environment_policy": {
+      "$ref": "#/$defs/environmentPolicy"
+    },
+    "record_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "candidate_provenance": {
+      "$ref": "#/$defs/candidateProvenance"
+    },
+    "run_binding": {
+      "$ref": "#/$defs/runBinding"
+    },
+    "corpus_binding": {
+      "$ref": "#/$defs/corpusBinding"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "pathClass": {
+      "type": "string",
+      "enum": [
+        "candidate_full_wheel",
+        "candidate_requirements",
+        "new_isolated_venv",
+        "venv_bin",
+        "venv_site_packages",
+        "runner_source"
+      ]
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wheel_filename",
+        "wheel_sha256",
+        "wheel_size",
+        "path_class"
+      ],
+      "properties": {
+        "wheel_filename": {
+          "type": "string",
+          "pattern": "^deeplaw-[0-9]+\\.[0-9]+\\.[0-9]+-[A-Za-z0-9_.-]+\\.whl$"
+        },
+        "wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "wheel_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "path_class": {
+          "const": "candidate_full_wheel"
+        }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filename",
+        "sha256",
+        "bytes",
+        "path_class",
+        "hash_pinned"
+      ],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "path_class": {
+          "const": "candidate_requirements"
+        },
+        "hash_pinned": {
+          "const": true
+        }
+      }
+    },
+    "venv": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path_class",
+        "path_sha256",
+        "created_new",
+        "system_site_packages",
+        "site_packages_path_class"
+      ],
+      "properties": {
+        "path_class": {
+          "const": "new_isolated_venv"
+        },
+        "path_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "created_new": {
+          "const": true
+        },
+        "system_site_packages": {
+          "const": false
+        },
+        "site_packages_path_class": {
+          "const": "venv_site_packages"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_implementation",
+        "python_version",
+        "python_executable_sha256",
+        "python_executable_path_class",
+        "distribution_name",
+        "distribution_version",
+        "import_module",
+        "import_file_path_class",
+        "import_file_relative_path",
+        "import_file_sha256"
+      ],
+      "properties": {
+        "python_implementation": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,63}$"
+        },
+        "python_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "python_executable_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "python_executable_path_class": {
+          "const": "new_isolated_venv"
+        },
+        "distribution_name": {
+          "const": "deeplaw"
+        },
+        "distribution_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "import_module": {
+          "const": "deeplaw"
+        },
+        "import_file_path_class": {
+          "const": "venv_site_packages"
+        },
+        "import_file_relative_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "import_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "entrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "group",
+        "value",
+        "executable_path_class",
+        "executable_relative_path",
+        "executable_sha256",
+        "module_path_class",
+        "module_relative_path",
+        "module_sha256"
+      ],
+      "properties": {
+        "name": {
+          "const": "deeplaw"
+        },
+        "group": {
+          "const": "console_scripts"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^deeplaw\\.[A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z_][A-Za-z0-9_.-]*$"
+        },
+        "executable_path_class": {
+          "const": "venv_bin"
+        },
+        "executable_relative_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "module_path_class": {
+          "const": "venv_site_packages"
+        },
+        "module_relative_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "module_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "versionCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "exit_code",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stdout_path_class"
+      ],
+      "properties": {
+        "argv": {
+          "const": [
+            "deeplaw",
+            "--version"
+          ]
+        },
+        "exit_code": {
+          "const": 0
+        },
+        "stdout_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stdout_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stdout_path_class": {
+          "const": "sanitized_stdout"
+        }
+      }
+    },
+    "publicJourneyBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_characters",
+        "selected_characters",
+        "provider_payload_bytes",
+        "provider_hard_limit_bytes",
+        "local_payload_bytes",
+        "local_hard_limit_bytes"
+      ],
+      "properties": {
+        "max_characters": {
+          "type": "integer",
+          "minimum": 200,
+          "maximum": 2000
+        },
+        "selected_characters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "provider_payload_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "provider_hard_limit_bytes": {
+          "const": 65536
+        },
+        "local_payload_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 262144
+        },
+        "local_hard_limit_bytes": {
+          "const": 262144
+        }
+      }
+    },
+    "publicJourneyStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status",
+        "exit_code",
+        "argv",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stdout_path_class",
+        "output_schema_version",
+        "budget"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "knowledge_init",
+            "source_add",
+            "source_verify",
+            "evidence_first_query",
+            "bounded_context"
+          ]
+        },
+        "status": {
+          "const": "passed"
+        },
+        "exit_code": {
+          "const": 0
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[A-Za-z0-9_.-]+|<[a-z-]+>|--[A-Za-z0-9-]+|[0-9]+)$"
+          }
+        },
+        "stdout_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stdout_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "stdout_path_class": {
+          "const": "sanitized_stdout"
+        },
+        "output_schema_version": {
+          "type": "string",
+          "pattern": "^deeplaw\\.[A-Za-z0-9._/-]+$"
+        },
+        "budget": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/publicJourneyBudget"
+            }
+          ]
+        }
+      }
+    },
+    "publicJourney": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "journey_status",
+        "journey_root_path_class",
+        "step_count",
+        "steps",
+        "network_policy"
+      ],
+      "properties": {
+        "journey_status": {
+          "const": "passed"
+        },
+        "journey_root_path_class": {
+          "const": "ephemeral_journey_root"
+        },
+        "step_count": {
+          "const": 5
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/publicJourneyStep"
+          }
+        },
+        "network_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "network_access",
+            "model_sidecar",
+            "environment_allowlist"
+          ],
+          "properties": {
+            "network_access": {
+              "const": "not_requested"
+            },
+            "model_sidecar": {
+              "const": false
+            },
+            "environment_allowlist": {
+              "const": "minimal"
+            }
+          }
+        }
+      }
+    },
+    "networkAcquisition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "explicit",
+        "mode",
+        "hash_pinned"
+      ],
+      "properties": {
+        "explicit": {
+          "const": true
+        },
+        "mode": {
+          "enum": [
+            "candidate_wheelhouse",
+            "fixed_pypi_index"
+          ]
+        },
+        "hash_pinned": {
+          "const": true
+        }
+      }
+    },
+    "environmentPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_isolated_mode",
+        "pythonpath_cleared",
+        "pythonhome_cleared",
+        "user_site_disabled",
+        "network_disabled_for_install",
+        "requirements_hashes_required",
+        "candidate_source_only"
+      ],
+      "properties": {
+        "python_isolated_mode": {
+          "const": true
+        },
+        "pythonpath_cleared": {
+          "const": true
+        },
+        "pythonhome_cleared": {
+          "const": true
+        },
+        "user_site_disabled": {
+          "const": true
+        },
+        "network_disabled_for_install": {
+          "type": "boolean"
+        },
+        "requirements_hashes_required": {
+          "const": true
+        },
+        "candidate_source_only": {
+          "const": true
+        }
+      }
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "candidateProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "lock_sha256"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/git"
+        },
+        "tree": {
+          "$ref": "#/$defs/git"
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_run_id",
+        "evidence_run_id"
+      ],
+      "properties": {
+        "candidate_run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evidence_run_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "corpusBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "sha256"
+      ],
+      "properties": {
+        "role": {
+          "const": "qualification_holdout"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

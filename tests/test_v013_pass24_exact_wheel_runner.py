@@ -9,16 +9,41 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+import benchmarks.release.exact_wheel_runner as exact_wheel_runner
 from benchmarks.release.exact_wheel_runner import (
     ExactWheelExecutionError,
     _validate_probe,
     _validate_receipt,
-    execute_exact_wheel,
+)
+from benchmarks.release.exact_wheel_runner import (
+    execute_exact_wheel as _execute_exact_wheel,
 )
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = REPOSITORY / "contracts/exact-wheel-execution-receipt.v1.schema.json"
+SCHEMA_PATH = REPOSITORY / "contracts/exact-wheel-execution-receipt.v2.schema.json"
 EXPECTED_VERSION = "0.12.0"
+CANDIDATE_COMMIT = "a" * 40
+CANDIDATE_TREE = "b" * 40
+CANDIDATE_LOCK_SHA256 = "c" * 64
+CANDIDATE_RUN_ID = 101
+EVIDENCE_RUN_ID = 202
+QUALIFICATION_HOLDOUT_SHA256 = "d" * 64
+
+
+def execute_exact_wheel(**kwargs: Any) -> dict[str, Any]:
+    receipt_contract = kwargs.pop("receipt_contract", "external-qualification-v2")
+    if receipt_contract == "candidate-full-v1":
+        return _execute_exact_wheel(receipt_contract=receipt_contract, **kwargs)
+    return _execute_exact_wheel(
+        receipt_contract=receipt_contract,
+        candidate_commit=CANDIDATE_COMMIT,
+        candidate_tree=CANDIDATE_TREE,
+        expected_lock_sha256=CANDIDATE_LOCK_SHA256,
+        candidate_run_id=CANDIDATE_RUN_ID,
+        evidence_run_id=EVIDENCE_RUN_ID,
+        corpus_sha256=QUALIFICATION_HOLDOUT_SHA256,
+        **kwargs,
+    )
 
 
 def _fake_wheel(
@@ -215,7 +240,21 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
         venv_path=venv_path,
     )
 
+    assert receipt["schema_version"] == "deeplaw.exact-wheel-execution-receipt/v2"
     assert receipt["status"] == "exact_wheel_executed"
+    assert receipt["candidate_provenance"] == {
+        "commit": CANDIDATE_COMMIT,
+        "tree": CANDIDATE_TREE,
+        "lock_sha256": CANDIDATE_LOCK_SHA256,
+    }
+    assert receipt["run_binding"] == {
+        "candidate_run_id": CANDIDATE_RUN_ID,
+        "evidence_run_id": EVIDENCE_RUN_ID,
+    }
+    assert receipt["corpus_binding"] == {
+        "role": "qualification_holdout",
+        "sha256": QUALIFICATION_HOLDOUT_SHA256,
+    }
     assert receipt["candidate"] == {
         "wheel_filename": wheel.name,
         "wheel_sha256": _sha256(wheel),
@@ -297,6 +336,109 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
     ).encode("utf-8")
     assert receipt["record_sha256"] == hashlib.sha256(canonical).hexdigest()
     assert list(_schema_validator().iter_errors(receipt)) == []
+
+
+def test_candidate_full_v1_receipt_contract_is_path_free_and_uses_v1_schema(
+    tmp_path: Path,
+) -> None:
+    candidate_dir = tmp_path / "candidate-full"
+    wheel = _fake_wheel(candidate_dir)
+    requirements_filename, requirements_sha256 = _candidate_inputs(candidate_dir)
+
+    receipt = execute_exact_wheel(
+        candidate_dir=candidate_dir,
+        expected_wheel_sha256=_sha256(wheel),
+        requirements_filename=requirements_filename,
+        expected_requirements_sha256=requirements_sha256,
+        expected_version=EXPECTED_VERSION,
+        repository=REPOSITORY,
+        venv_path=tmp_path / "isolated-venv",
+        receipt_contract="candidate-full-v1",
+    )
+
+    assert receipt["schema_version"] == "deeplaw.exact-wheel-execution-receipt/v1"
+    assert "candidate_provenance" not in receipt
+    assert "run_binding" not in receipt
+    assert "corpus_binding" not in receipt
+    v1_schema = json.loads(
+        (REPOSITORY / "contracts/exact-wheel-execution-receipt.v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    validator = Draft202012Validator(v1_schema, format_checker=FormatChecker())
+    assert list(validator.iter_errors(receipt)) == []
+
+
+def test_external_v2_requires_every_provenance_binding_before_execution(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ExactWheelExecutionError, match="requires candidate, run, and corpus"):
+        _execute_exact_wheel(
+            candidate_dir=tmp_path / "missing-candidate",
+            expected_wheel_sha256="a" * 64,
+            requirements_filename="candidate-requirements.txt",
+            expected_requirements_sha256="b" * 64,
+            expected_version=EXPECTED_VERSION,
+            repository=REPOSITORY,
+            venv_path=tmp_path / "isolated-venv",
+            receipt_contract="external-qualification-v2",
+        )
+
+
+def test_requirements_drift_after_private_staging_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_dir = tmp_path / "candidate-full"
+    wheel = _fake_wheel(candidate_dir)
+    requirements_filename, requirements_sha256 = _candidate_inputs(candidate_dir)
+    original_install = exact_wheel_runner._install_requirements
+
+    def mutate_original_before_install(**kwargs: Any) -> str:
+        assert kwargs["requirements"] != candidate_dir / requirements_filename
+        (candidate_dir / requirements_filename).write_text(
+            "dependency-pkg==9.9 --hash=sha256:" + "0" * 64 + "\n",
+            encoding="utf-8",
+        )
+        return original_install(**kwargs)
+
+    monkeypatch.setattr(
+        exact_wheel_runner,
+        "_install_requirements",
+        mutate_original_before_install,
+    )
+    venv_path = tmp_path / "isolated-venv"
+    with pytest.raises(ExactWheelExecutionError, match="changed during installation"):
+        execute_exact_wheel(
+            candidate_dir=candidate_dir,
+            expected_wheel_sha256=_sha256(wheel),
+            requirements_filename=requirements_filename,
+            expected_requirements_sha256=requirements_sha256,
+            expected_version=EXPECTED_VERSION,
+            repository=REPOSITORY,
+            venv_path=venv_path,
+        )
+    assert not venv_path.exists()
+
+
+def test_candidate_full_v1_rejects_external_binding_arguments(tmp_path: Path) -> None:
+    with pytest.raises(ExactWheelExecutionError, match="does not accept external qualification"):
+        _execute_exact_wheel(
+            candidate_dir=tmp_path / "missing-candidate",
+            expected_wheel_sha256="a" * 64,
+            requirements_filename="candidate-requirements.txt",
+            expected_requirements_sha256="b" * 64,
+            expected_version=EXPECTED_VERSION,
+            repository=REPOSITORY,
+            venv_path=tmp_path / "isolated-venv",
+            receipt_contract="candidate-full-v1",
+            candidate_commit=CANDIDATE_COMMIT,
+            candidate_tree=CANDIDATE_TREE,
+            expected_lock_sha256=CANDIDATE_LOCK_SHA256,
+            candidate_run_id=CANDIDATE_RUN_ID,
+            evidence_run_id=EVIDENCE_RUN_ID,
+            corpus_sha256=QUALIFICATION_HOLDOUT_SHA256,
+        )
 
 
 def test_candidate_directory_requires_one_regular_wheel(tmp_path: Path) -> None:

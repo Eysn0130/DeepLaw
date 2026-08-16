@@ -40,7 +40,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           uv sync --frozen --extra dev
 
-      - name: Build twice and publish only the byte-identical artifacts
+      - name: Build twice and retain only the byte-identical artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -52,11 +52,13 @@ jobs:
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
             --dist "${RUNNER_TEMP}/verified-dist" \
             --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json"
-          uv run --frozen python -m benchmarks.release.freeze_qualification_candidate \
-            --template benchmarks/v013/active-qualification-v1.json \
+          uv run --frozen python -m benchmarks.release.freeze_qualification_candidate_v2 \
+            --template benchmarks/v013/active-qualification-v2.json \
             --reproducible-report "${RUNNER_TEMP}/verified-dist/reproducible-build.json" \
             --artifact-manifest "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
             --output "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
+          test -f "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
+          test ! -L "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
 
       - name: Export hash-pinned runtime requirements
         shell: bash
@@ -162,6 +164,7 @@ jobs:
             --expected-version "${expected_version}" \
             --repository "${GITHUB_WORKSPACE}" \
             --venv "${venv}" \
+            --receipt-contract candidate-full-v1 \
             --receipt "${receipt}"
 
       - name: Retain exact wheel execution receipt

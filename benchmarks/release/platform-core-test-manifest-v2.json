@@ -7552,9 +7552,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_commercial_release_gate",
-            "name": "test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts"
+            "name": "test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts"
           },
-          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts"
+          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts"
         },
         {
           "junit": {
@@ -10184,6 +10184,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_candidate_full_v1_receipt_contract_is_path_free_and_uses_v1_schema"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_candidate_full_v1_receipt_contract_is_path_free_and_uses_v1_schema"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_candidate_full_v1_rejects_external_binding_arguments"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_candidate_full_v1_rejects_external_binding_arguments"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
             "name": "test_candidate_wheel_hash_mismatch_fails_before_venv_creation"
           },
           "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_candidate_wheel_hash_mismatch_fails_before_venv_creation"
@@ -10205,6 +10219,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_external_v2_requires_every_provenance_binding_before_execution"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_external_v2_requires_every_provenance_binding_before_execution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
             "name": "test_public_journey_receipt_rejects_extra_raw_fields"
           },
           "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_public_journey_receipt_rejects_extra_raw_fields"
@@ -10215,6 +10236,13 @@
             "name": "test_public_journey_step_failure_cleans_venv"
           },
           "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_public_journey_step_failure_cleans_venv"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_requirements_drift_after_private_staging_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_requirements_drift_after_private_staging_is_rejected"
         },
         {
           "junit": {
@@ -10387,9 +10415,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_external_workflow_v3",
-            "name": "test_current_typed_parser_is_loaded_without_making_a_gate_decision"
+            "name": "test_current_v4_bundle_validator_is_loaded_without_making_a_gate_decision"
           },
-          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_current_typed_parser_is_loaded_without_making_a_gate_decision"
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_current_v4_bundle_validator_is_loaded_without_making_a_gate_decision"
         },
         {
           "junit": {
@@ -10429,9 +10457,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_external_workflow_v3",
-            "name": "test_runner_receipt_is_sanitized_and_v3_validator_is_the_only_bundle_boundary"
+            "name": "test_runner_receipt_is_sanitized_and_v4_validator_is_the_only_bundle_boundary"
           },
-          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_runner_receipt_is_sanitized_and_v3_validator_is_the_only_bundle_boundary"
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_runner_receipt_is_sanitized_and_v4_validator_is_the_only_bundle_boundary"
         },
         {
           "junit": {
@@ -10821,6 +10849,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_post_public_v2_binds_immutable_release_and_checksum_set"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_post_public_v2_binds_immutable_release_and_checksum_set"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
             "name": "test_pre_publish_gate_has_two_builds_and_no_public_verification_requirement"
           },
           "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_pre_publish_gate_has_two_builds_and_no_public_verification_requirement"
@@ -11003,6 +11038,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_exact_wheel_v2_receipt_rejects_cross_binding_replays_and_v1_receipts"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_exact_wheel_v2_receipt_rejects_cross_binding_replays_and_v1_receipts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
             "name": "test_forbidden_caller_pass_fact_and_duplicate_or_nonfinite_json_are_rejected"
           },
           "node_id": "tests/test_v013_pass24_typed_evidence.py::test_forbidden_caller_pass_fact_and_duplicate_or_nonfinite_json_are_rejected"
@@ -11062,6 +11104,594 @@
             "name": "test_wiki_context_and_scale_recompute_rows_without_caller_counts"
           },
           "node_id": "tests/test_v013_pass24_typed_evidence.py::test_wiki_context_and_scale_recompute_rows_without_caller_counts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_active_v2_has_no_candidate_or_external_evidence_claims"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_active_v2_has_no_candidate_or_external_evidence_claims"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_blind_layers_and_human_status_are_explicit"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_blind_layers_and_human_status_are_explicit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_exact_host_pins_are_frozen"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_exact_host_pins_are_frozen"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_historical_v1_contracts_remain_historical"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_historical_v1_contracts_remain_historical"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_isolation_and_scoring_are_fail_closed"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_isolation_and_scoring_are_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_machine_protocol_and_active_binding_validate"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_machine_protocol_and_active_binding_validate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_machine_roles_are_closed_and_independent"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_machine_roles_are_closed_and_independent"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_profile_cannot_be_relabelled_as_human_or_passed"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_profile_cannot_be_relabelled_as_human_or_passed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_agent_protocol",
+            "name": "test_protocol_sidecar_hash_binds_exact_json_bytes"
+          },
+          "node_id": "tests/test_v013_pass25_agent_protocol.py::test_protocol_sidecar_hash_binds_exact_json_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_machine_reference_gate_has_no_human_semantics"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_machine_reference_gate_has_no_human_semantics"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_only_machine_reference_gate_consumes_final_blind"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_only_machine_reference_gate_consumes_final_blind"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_contains_no_gate_result_or_pass_fact"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_contains_no_gate_result_or_pass_fact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_core_uses_typed_v2_and_gate_result_v4"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_core_uses_typed_v2_and_gate_result_v4"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_freezes_exact_host_pins"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_freezes_exact_host_pins"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_is_versioned_without_mutating_v7"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_is_versioned_without_mutating_v7"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_keeps_capability_and_competitive_claims_not_claimed"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_keeps_capability_and_competitive_claims_not_claimed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_keeps_fourteen_core_gates_but_replaces_human_gate"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_keeps_fourteen_core_gates_but_replaces_human_gate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_schema_and_profile_are_closed"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_schema_and_profile_are_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_v8_schema_rejects_forged_machine_or_human_artifact"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_v8_schema_rejects_forged_machine_or_human_artifact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_accepts_machine_only_bundle_and_returns_no_claim_flags"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_accepts_machine_only_bundle_and_returns_no_claim_flags"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_caller_authored_pass_without_real_receipt"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_caller_authored_pass_without_real_receipt"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_duplicate_or_nonfinite_manifest[{\"x\":1,\"x\":2}\\n]"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_duplicate_or_nonfinite_manifest[{\"x\":1,\"x\":2}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_duplicate_or_nonfinite_manifest[{\"x\":Infinity}\\n]"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_duplicate_or_nonfinite_manifest[{\"x\":Infinity}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_duplicate_or_nonfinite_manifest[{\"x\":NaN}\\n]"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_duplicate_or_nonfinite_manifest[{\"x\":NaN}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_exact_wheel_bound_to_external_or_caller_runner"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_exact_wheel_bound_to_external_or_caller_runner"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_human_gold_even_when_self_hashed"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_human_gold_even_when_self_hashed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_machine_manifest_without_bound_arbiter_scorer"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_machine_manifest_without_bound_arbiter_scorer"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_non_candidate_full_inventory_schema"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_non_candidate_full_inventory_schema"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_orphan_and_symlink"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_orphan_and_symlink"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_wrong_candidate_binding_even_with_valid_record"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_wrong_candidate_binding_even_with_valid_record"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_requires_distinct_candidate_and_evidence_run_ids"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_requires_distinct_candidate_and_evidence_run_ids"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_requires_retained_reviewer_and_corpus_bytes[corpus/final-blind.json-final blind holdout]"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_requires_retained_reviewer_and_corpus_bytes[corpus/final-blind.json-final blind holdout]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_requires_retained_reviewer_and_corpus_bytes[reference/reviewer-1-output.json-reviewer output]"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_requires_retained_reviewer_and_corpus_bytes[reference/reviewer-1-output.json-reviewer output]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_candidate_full_calls_v2_freezer_before_retaining_active_qualification"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_candidate_full_calls_v2_freezer_before_retaining_active_qualification"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_binds_exact_candidate_and_preserves_machine_pending_status"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_binds_exact_candidate_and_preserves_machine_pending_status"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_rejects_cross_receipt_identity[commit]"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_rejects_cross_receipt_identity[commit]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_rejects_cross_receipt_identity[lock_sha256]"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_rejects_cross_receipt_identity[lock_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_rejects_cross_receipt_identity[tree]"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_rejects_cross_receipt_identity[tree]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_rejects_duplicate_json_keys"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_rejects_duplicate_json_keys"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_rejects_tampered_retained_wheel"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_rejects_tampered_retained_wheel"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_freeze_machine_candidate",
+            "name": "test_freeze_rejects_the_pending_012_template"
+          },
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_freeze_rejects_the_pending_012_template"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_machine_bundle_excludes_trusted_human_descriptor_and_old_bundle_rejects_it"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_machine_bundle_excludes_trusted_human_descriptor_and_old_bundle_rejects_it"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_machine_reference_is_candidate_independent_and_nonhuman"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_machine_reference_is_candidate_independent_and_nonhuman"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_new_machine_contracts_are_closed_and_schema_valid"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_new_machine_contracts_are_closed_and_schema_valid"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_old_consumers_fail_closed_on_machine_contract_versions"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_old_consumers_fail_closed_on_machine_contract_versions"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_typed_v2_preserves_kind_vocabulary_and_adds_machine_reference_scorer"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_typed_v2_preserves_kind_vocabulary_and_adds_machine_reference_scorer"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_v2_binding_requires_reference_and_agent_provenance"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_v2_binding_requires_reference_and_agent_provenance"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_v4_gate_and_v5_report_bind_machine_provenance"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_v4_gate_and_v5_report_bind_machine_provenance"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_contracts",
+            "name": "test_v8_separates_release_ready_public_verification_and_claim_classes"
+          },
+          "node_id": "tests/test_v013_pass25_machine_contracts.py::test_v8_separates_release_ready_public_verification_and_claim_classes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_caller_authored_pass_is_rejected_even_with_fresh_record_hash"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_caller_authored_pass_is_rejected_even_with_fresh_record_hash"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_fixture_mutation_does_not_reuse_original_envelope"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_fixture_mutation_does_not_reuse_original_envelope"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_human_authenticity_claim_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_human_authenticity_claim_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_machine_reference_recomputes_pass_without_human_attestation"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_machine_reference_recomputes_pass_without_human_attestation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_orphan_receipt_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_orphan_receipt_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_panel_digest_mismatch_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_panel_digest_mismatch_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_process_identity_collision_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_process_identity_collision_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_reference_candidate_binding_mismatch_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_reference_candidate_binding_mismatch_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_scorer_disagreement_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_scorer_disagreement_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_candidate_full_freezes_construction_machine_only_active_v2"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_freezes_construction_machine_only_active_v2"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_candidate_full_retains_reproducible_artifact_and_raw_platform_evidence"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_retains_reproducible_artifact_and_raw_platform_evidence"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_commercial_qualification_dispatch_and_assembly_are_machine_only_v8"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_commercial_qualification_dispatch_and_assembly_are_machine_only_v8"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_dispatch_requires_only_candidate_run_id"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_dispatch_requires_only_candidate_run_id"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_inputs_are_owner_controlled_regular_paths_with_closed_env"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_inputs_are_owner_controlled_regular_paths_with_closed_env"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_interface_is_machine_only_and_has_no_legacy_human_or_singular_scorer"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_interface_is_machine_only_and_has_no_legacy_human_or_singular_scorer"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_keeps_exact_host_pins_and_only_login_status_auth_check"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_keeps_exact_host_pins_and_only_login_status_auth_check"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_runner_binds_all_machine_inputs_and_two_available_run_ids"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_runner_binds_all_machine_inputs_and_two_available_run_ids"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_uploads_only_sanitized_v4_bundle_without_gate_claims"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_uploads_only_sanitized_v4_bundle_without_gate_claims"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_release_reopens_v8_transitive_provenance_and_keeps_public_state_separate"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_release_reopens_v8_transitive_provenance_and_keeps_public_state_separate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_release_resume_rejects_remote_extra_assets_without_deleting_them"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_release_resume_rejects_remote_extra_assets_without_deleting_them"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_cli_parser_does_not_accept_human_approver_argument"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_cli_parser_does_not_accept_human_approver_argument"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_cli_parser_requires_all_machine_bindings"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_cli_parser_requires_all_machine_bindings"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_digest_helpers_are_sha256_sized"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_digest_helpers_are_sha256_sized"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_execution_identity_is_path_free"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_execution_identity_is_path_free"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_gate_result_rejects_parser_failure_instead_of_accepting_pass_override"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_gate_result_rejects_parser_failure_instead_of_accepting_pass_override"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_load_active_accepts_current_machine_only_profile"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_load_active_accepts_current_machine_only_profile"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_safe_relative_rejects_absolute_and_parent_paths"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_safe_relative_rejects_absolute_and_parent_paths"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_v8_mapping_has_fourteen_core_machine_gates"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_v8_mapping_has_fourteen_core_machine_gates"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_active_requires_frozen_exact_candidate_and_complete_external_bindings"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_active_requires_frozen_exact_candidate_and_complete_external_bindings"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_machine_binding_path_cannot_be_used_as_human_gold_input"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_machine_binding_path_cannot_be_used_as_human_gold_input"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_machine_external_binding_keeps_panel_arbiter_and_isolation_distinct"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_machine_external_binding_keeps_panel_arbiter_and_isolation_distinct"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_parser_rejects_trusted_human_approver_option"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_parser_rejects_trusted_human_approver_option"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_record_digest_is_canonical_and_excludes_only_record_field"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_record_digest_is_canonical_and_excludes_only_record_field"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates"
         },
         {
           "junit": {
@@ -13780,9 +14410,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 1953,
+      "count": 2043,
       "selection": "not qualification and not windows_native",
-      "sha256": "8b2a2e9aabf0d75ec7550e9803da4ad01af34cb5232e10416cda4c58400213eb"
+      "sha256": "cda5d6c17129bdbacc3e00047109bb92db4350cb675693e557382f268c0e800e"
     },
     "windows": {
       "additional_cases": [
@@ -13815,13 +14445,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 1957,
+      "count": 2047,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "68c36dc427cc3e2389c46cca4310d497741922ab7ad2769980c36a79d9cc626d"
+      "sha256": "4129d1b14e25cc9688794cd3671e09c3401eaf50367c30cc5483fe455b79a9e8"
     }
   },
-  "manifest_sha256": "e8b4d846e400ea38cab3f11a7346a4c9924170bb528431ce06535a8400839951",
+  "manifest_sha256": "12b6a1699b60371dae9dce590921f07b1c11ceb7772e437846582c3078c55a49",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

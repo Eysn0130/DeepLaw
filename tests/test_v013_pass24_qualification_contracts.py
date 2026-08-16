@@ -217,6 +217,19 @@ def _post_public_verification() -> dict[str, Any]:
     }
 
 
+def _post_public_verification_v2() -> dict[str, Any]:
+    value = _post_public_verification()
+    value["schema_version"] = "deeplaw.post-public-verification/v2"
+    value["release_binding"] = {
+        "tag": "v0.13.0",
+        "commit": COMMIT,
+        "tree": TREE,
+        "commercial_manifest_sha256": SHA,
+        "sha256s_sha256": OTHER_SHA,
+    }
+    return value
+
+
 def _release_manifest() -> dict[str, Any]:
     return {
         "schema_version": "deeplaw.commercial-release-manifest/v7",
@@ -314,6 +327,7 @@ def test_all_pass24_contracts_are_closed_and_current() -> None:
         "candidate-gold-binding-receipt.v1.schema.json",
         "pre-publish-artifact-gate.v1.schema.json",
         "post-public-verification.v1.schema.json",
+        "post-public-verification.v2.schema.json",
         "commercial-release-manifest.v7.schema.json",
     ]
     for filename in filenames:
@@ -393,6 +407,30 @@ def test_post_public_receipt_is_separate_and_requires_public_sha_and_attestation
         missing = copy.deepcopy(value)
         del missing[field]
         _assert_invalid("post-public-verification.v1.schema.json", missing)
+
+
+def test_post_public_v2_binds_immutable_release_and_checksum_set() -> None:
+    value = _post_public_verification_v2()
+    _assert_valid("post-public-verification.v2.schema.json", value)
+
+    for field in (
+        "tag",
+        "commit",
+        "tree",
+        "commercial_manifest_sha256",
+        "sha256s_sha256",
+    ):
+        missing = copy.deepcopy(value)
+        del missing["release_binding"][field]
+        _assert_invalid("post-public-verification.v2.schema.json", missing)
+
+    wrong_commit = copy.deepcopy(value)
+    wrong_commit["release_binding"]["commit"] = "not-a-commit"
+    _assert_invalid("post-public-verification.v2.schema.json", wrong_commit)
+
+    wrong_tag = copy.deepcopy(value)
+    wrong_tag["release_binding"]["tag"] = "release-candidate"
+    _assert_invalid("post-public-verification.v2.schema.json", wrong_tag)
 
 
 def test_v7_release_manifest_requires_three_distinct_runs_and_exact_bindings() -> None:
