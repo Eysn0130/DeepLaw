@@ -433,6 +433,7 @@ jobs:
           --input-directory "${{ runner.temp }}/windows-shards"
           --matrix-python "${{ matrix.python-version }}"
           --output "${{ runner.temp }}/windows-aggregate.json"
+          --junit-output "${{ runner.temp }}/candidate-tests.xml"
 
       - name: Retain aggregate receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -440,7 +441,9 @@ jobs:
           name: candidate-full-windows-${{ matrix.python-version }}-aggregate
           if-no-files-found: error
           retention-days: 90
-          path: ${{ runner.temp }}/windows-aggregate.json
+          path: |
+            ${{ runner.temp }}/windows-aggregate.json
+            ${{ runner.temp }}/candidate-tests.xml
 
   aggregate-raw-evidence:
     name: Aggregate Candidate Full raw evidence
@@ -455,6 +458,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Check out exact Candidate Full evidence definitions
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
       - name: Download the verified candidate artifacts without rebuilding
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -486,6 +495,15 @@ jobs:
           set -euo pipefail
           raw="${RUNNER_TEMP}/candidate-full-raw-evidence"
           verified="${raw}/verified-candidate-artifacts"
+          mkdir "${raw}/candidate-platform"
+          cp benchmarks/release/platform-core-test-manifest-v2.json \
+            "${raw}/candidate-platform/platform-core-test-manifest-v2.json"
+          python -m benchmarks.release.candidate_regression platform \
+            --active-qualification "${verified}/frozen-active-qualification.json" \
+            --platform-artifacts "${raw}/platform-artifacts" \
+            --windows-calibration "${raw}/windows-duration-calibration" \
+            --candidate-run-id "${GITHUB_RUN_ID}" \
+            --output "${raw}/candidate-platform/platform-matrix-receipt.json"
           test "$(find "${verified}" -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')" = 1
           test "$(find "${verified}" -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = 1
           for required in \
@@ -500,9 +518,11 @@ jobs:
             test -s "${verified}/${required}"
           done
           test -s "${raw}/exact-wheel-evidence/exact-wheel-execution.json"
-          test "$(find "${raw}/platform-artifacts" -type f -name 'candidate-tests.xml' | wc -l | tr -d ' ')" = 12
+          test "$(find "${raw}/platform-artifacts" -type f -name 'candidate-tests.xml' | wc -l | tr -d ' ')" = 14
           test "$(find "${raw}/windows-duration-calibration" -type f -name 'windows-calibration.xml' | wc -l | tr -d ' ')" = 1
           test "$(find "${raw}/platform-artifacts" -type f -name 'windows-aggregate.json' | wc -l | tr -d ' ')" = 2
+          test -s "${raw}/candidate-platform/platform-core-test-manifest-v2.json"
+          test -s "${raw}/candidate-platform/platform-matrix-receipt.json"
 
       - name: Write path-independent Candidate Full run receipt
         shell: bash

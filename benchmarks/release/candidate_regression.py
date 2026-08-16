@@ -15,6 +15,7 @@ SHARD_SCHEMA = "deeplaw.candidate-test-shard/v1"
 RECEIPT_SCHEMA = "deeplaw.platform-candidate-regression-receipt/v1"
 AGGREGATE_SCHEMA = "deeplaw.platform-candidate-regression-aggregate/v1"
 DURATION_SCHEMA = "deeplaw.candidate-duration-weights/v1"
+PLATFORM_MATRIX_SCHEMA = "deeplaw.candidate-platform-matrix-receipt/v1"
 
 
 def _canonical_json(value: Any) -> str:
@@ -391,6 +392,206 @@ def aggregate_shard_receipts(
     }
 
 
+def merge_shard_junit(
+    *, input_directory: Path, output: Path, matrix_python: str
+) -> None:
+    """Write one deterministic raw JUnit document for a complete Windows cell."""
+
+    input_directory = input_directory.resolve(strict=True)
+    sources = sorted(input_directory.glob("**/candidate-tests.xml"))
+    if len(sources) != 3:
+        raise RuntimeError("candidate regression aggregate requires exactly three JUnit shards")
+    cases: dict[tuple[str, str], ET.Element] = {}
+    failures = errors = skipped = 0
+    for source in sources:
+        if source.is_symlink() or not source.is_file():
+            raise RuntimeError("candidate regression JUnit shard is not a regular file")
+        try:
+            source_root = ET.parse(source).getroot()
+        except ET.ParseError as error:
+            raise RuntimeError("candidate regression JUnit shard is invalid") from error
+        for case in source_root.findall(".//testcase"):
+            classname = case.attrib.get("classname")
+            name = case.attrib.get("name")
+            if not classname or not name:
+                raise RuntimeError("candidate regression JUnit testcase lacks identity")
+            identity = (classname, name)
+            if identity in cases:
+                raise RuntimeError("candidate regression JUnit shards overlap by testcase")
+            failures += int(case.find("failure") is not None)
+            errors += int(case.find("error") is not None)
+            skipped += int(case.find("skipped") is not None)
+            cases[identity] = case
+    if not cases:
+        raise RuntimeError("candidate regression JUnit shards contain no testcases")
+    suite = ET.Element(
+        "testsuite",
+        {
+            "name": f"candidate-full-windows-{matrix_python}",
+            "tests": str(len(cases)),
+            "failures": str(failures),
+            "errors": str(errors),
+            "skipped": str(skipped),
+        },
+    )
+    for identity in sorted(cases):
+        suite.append(cases[identity])
+    document = ET.Element("testsuites")
+    document.append(suite)
+    ET.indent(document, space="  ")
+    raw = ET.tostring(document, encoding="utf-8", xml_declaration=True) + b"\n"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.exists() and output.is_symlink():
+        raise RuntimeError("candidate regression aggregate JUnit output is a symlink")
+    output.write_bytes(raw)
+
+
+def _candidate_provenance_identity(
+    repository: Path, *, role: str, relatives: tuple[str, ...]
+) -> dict[str, str]:
+    components = []
+    for relative in relatives:
+        selected = repository / relative
+        if selected.is_symlink() or not selected.is_file():
+            raise RuntimeError("candidate provenance source is unavailable")
+        components.append(
+            {
+                "path": relative,
+                "sha256": hashlib.sha256(selected.read_bytes()).hexdigest(),
+            }
+        )
+    return {
+        "identity": f"candidate-{role}-set/{'/'.join(relatives)}",
+        "sha256": hashlib.sha256(
+            _canonical_json({"files": components}).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def build_platform_matrix_receipt(
+    *,
+    repository: Path,
+    active_qualification: Path,
+    platform_artifacts: Path,
+    windows_calibration: Path,
+    candidate_run_id: int,
+) -> dict[str, Any]:
+    """Bind the nine Candidate Full JUnit cells before external qualification."""
+
+    repository = repository.resolve(strict=True)
+    active = _read_object(active_qualification)
+    candidate_source = active.get("candidate_binding")
+    if not isinstance(candidate_source, dict):
+        raise RuntimeError("active qualification candidate binding is missing")
+    candidate = {
+        "commit": candidate_source.get("source_commit"),
+        "tree": candidate_source.get("source_tree"),
+        "lock_sha256": candidate_source.get("lock_sha256"),
+        "wheel_sha256": candidate_source.get("wheel_sha256"),
+        "sdist_sha256": candidate_source.get("sdist_sha256"),
+    }
+    if any(not isinstance(value, str) or not value for value in candidate.values()):
+        raise RuntimeError("active qualification candidate binding is invalid")
+    if (
+        isinstance(candidate_run_id, bool)
+        or not isinstance(candidate_run_id, int)
+        or candidate_run_id < 1
+    ):
+        raise RuntimeError("Candidate Full run id is invalid")
+    corpus = {
+        "role": "candidate_full",
+        "sha256": _sha256_json(candidate),
+    }
+    run = {
+        "run_id": f"candidate-platform:{candidate_run_id}",
+        "workflow_run_id": candidate_run_id,
+    }
+    runner = _candidate_provenance_identity(
+        repository,
+        role="runner",
+        relatives=(".github/workflows/candidate-full.yml",),
+    )
+    scorer = _candidate_provenance_identity(
+        repository,
+        role="scorer",
+        relatives=(
+            "benchmarks/release/typed_qualification_evidence.py",
+            "benchmarks/release/platform-core-test-manifest-v2.json",
+        ),
+    )
+
+    def one(pattern: str, *, root: Path) -> Path:
+        matches = sorted(root.glob(pattern))
+        if len(matches) != 1 or matches[0].is_symlink() or not matches[0].is_file():
+            raise RuntimeError(f"Candidate Platform JUnit cell is not unique: {pattern}")
+        return matches[0]
+
+    cells: list[tuple[str, str, Path]] = []
+    for platform_name, artifact_name in (
+        ("ubuntu", "ubuntu-latest"),
+        ("macos", "macos-latest"),
+    ):
+        for python_version in ("3.11", "3.12", "3.13"):
+            cells.append(
+                (
+                    platform_name,
+                    python_version,
+                    one(
+                        f"candidate-full-{artifact_name}-{python_version}/candidate-tests.xml",
+                        root=platform_artifacts,
+                    ),
+                )
+            )
+    cells.extend(
+        [
+            (
+                "windows",
+                "3.11",
+                one(
+                    "candidate-full-windows-3.11-aggregate/candidate-tests.xml",
+                    root=platform_artifacts,
+                ),
+            ),
+            (
+                "windows",
+                "3.12",
+                one("windows-calibration.xml", root=windows_calibration),
+            ),
+            (
+                "windows",
+                "3.13",
+                one(
+                    "candidate-full-windows-3.13-aggregate/candidate-tests.xml",
+                    root=platform_artifacts,
+                ),
+            ),
+        ]
+    )
+    rows = []
+    for platform_name, python_version, source in cells:
+        raw = source.read_bytes()
+        if not raw:
+            raise RuntimeError("Candidate Platform JUnit cell is empty")
+        rows.append(
+            {
+                "platform": platform_name,
+                "python_version": python_version,
+                "artifact_sha256": candidate["wheel_sha256"],
+                "junit_source_sha256": hashlib.sha256(raw).hexdigest(),
+            }
+        )
+    return {
+        "receipt": {
+            "candidate": candidate,
+            "run": run,
+            "corpus": corpus,
+            "runner": runner,
+            "scorer": scorer,
+        },
+        "rows": rows,
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=Path.cwd())
@@ -414,6 +615,13 @@ def _parser() -> argparse.ArgumentParser:
     aggregate.add_argument("--input-directory", type=Path, required=True)
     aggregate.add_argument("--matrix-python", required=True)
     aggregate.add_argument("--output", type=Path, required=True)
+    aggregate.add_argument("--junit-output", type=Path, required=True)
+    platform = commands.add_parser("platform")
+    platform.add_argument("--active-qualification", type=Path, required=True)
+    platform.add_argument("--platform-artifacts", type=Path, required=True)
+    platform.add_argument("--windows-calibration", type=Path, required=True)
+    platform.add_argument("--candidate-run-id", type=int, required=True)
+    platform.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -448,13 +656,27 @@ def main(argv: list[str] | None = None) -> int:
             shard_manifest_path=args.shard_manifest,
         )
         _write_json(args.output, receipt)
-    else:
+    elif args.command == "aggregate":
         aggregate = aggregate_shard_receipts(
             repository=args.repository,
             input_directory=args.input_directory,
             matrix_python=args.matrix_python,
         )
         _write_json(args.output, aggregate)
+        merge_shard_junit(
+            input_directory=args.input_directory,
+            output=args.junit_output,
+            matrix_python=args.matrix_python,
+        )
+    else:
+        receipt = build_platform_matrix_receipt(
+            repository=args.repository,
+            active_qualification=args.active_qualification,
+            platform_artifacts=args.platform_artifacts,
+            windows_calibration=args.windows_calibration,
+            candidate_run_id=args.candidate_run_id,
+        )
+        _write_json(args.output, receipt)
     return 0
 
 
