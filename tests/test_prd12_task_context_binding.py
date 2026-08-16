@@ -16,7 +16,11 @@ from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
 )
-from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+from deeplaw.knowledge_mcp_server import (
+    _compatibility_input_validator,
+    _validate_knowledge_tool_arguments,
+    knowledge_tool_definition,
+)
 from deeplaw.knowledge_sink_mcp_server import knowledge_sink_tool_definition
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.task_context import (
@@ -125,6 +129,7 @@ def test_mcp_schemas_accept_only_opaque_task_binding() -> None:
     support_validator = Draft202012Validator(
         knowledge_tool_definition(autonomous=True).inputSchema
     )
+    compatibility_validator = _compatibility_input_validator()
     run_request = {
         "operation": "record_run",
         "idempotency_key": "task-binding-schema",
@@ -143,7 +148,11 @@ def test_mcp_schemas_accept_only_opaque_task_binding() -> None:
     }
 
     sink_validator.validate(run_request)
-    support_validator.validate(query_request)
+    assert list(support_validator.iter_errors(query_request))
+    compatibility_validator.validate(query_request)
+    assert _validate_knowledge_tool_arguments(query_request, autonomous=True) == (
+        "internal_compatibility"
+    )
     assert list(
         sink_validator.iter_errors(
             {
@@ -155,7 +164,7 @@ def test_mcp_schemas_accept_only_opaque_task_binding() -> None:
         )
     )
     assert list(
-        support_validator.iter_errors(
+        compatibility_validator.iter_errors(
             {
                 **query_request,
                 "task_binding": {**binding, "branch": "private-feature"},
@@ -163,7 +172,7 @@ def test_mcp_schemas_accept_only_opaque_task_binding() -> None:
         )
     )
     assert list(
-        support_validator.iter_errors(
+        compatibility_validator.iter_errors(
             {
                 **query_request,
                 "query_plan_version": "5",

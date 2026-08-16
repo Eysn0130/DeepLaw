@@ -24,6 +24,7 @@ from deeplaw.knowledge_autonomy import (
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_inbox import submit_inbox_artifact
 from deeplaw.knowledge_mcp_server import (
+    _compatibility_input_validator,
     handle_knowledge_support,
     knowledge_tool_definition,
 )
@@ -161,7 +162,7 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
     assert len(canonical_json(response).encode("utf-8")) <= 65_536
 
 
-def test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4() -> None:
+def test_provider_v7_is_compact_without_mutating_frozen_v2_to_v4() -> None:
     repository = Path(__file__).resolve().parents[1]
     v2 = json.loads(
         (repository / "contracts/knowledge-support.input.v2.schema.json").read_text()
@@ -181,9 +182,13 @@ def test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4() -> None
         "query",
         "compilation",
     }
-    assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
-        "knowledge-support.input.v6.schema.json"
-    )
+    provider = knowledge_tool_definition(autonomous=True).inputSchema
+    assert "$id" not in provider
+    assert provider["title"] == "DeepLaw Knowledge Support Provider Input v7"
+    assert {
+        branch["$ref"].rsplit("/", maxsplit=1)[-1]
+        for branch in provider["oneOf"]
+    } == {"query", "context", "explain"}
     purpose_context = {
         "operation": "context",
         "task": "Quote the exact governed statement.",
@@ -192,7 +197,7 @@ def test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4() -> None
         "policy": "evidence-first-v1",
     }
     Draft202012Validator(
-        knowledge_tool_definition(autonomous=True).inputSchema
+        provider
     ).validate(purpose_context)
     assert list(Draft202012Validator(v4).iter_errors(purpose_context))
 
@@ -522,10 +527,7 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
     with AutonomousKnowledgeStore(root, read_only=False):
         pass
 
-    validator = Draft202012Validator(
-        knowledge_tool_definition(autonomous=True).inputSchema,
-        format_checker=FormatChecker(),
-    )
+    validator = _compatibility_input_validator()
     validator.validate(
         {"operation": "recall", "plane": "all", "query": "boundary", "kinds": ["fact"]}
     )
@@ -1379,7 +1381,7 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
         }
 
 
-def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> None:
+def test_stdio_advertises_v7_and_accepts_internal_v5_compatibility(tmp_path: Path) -> None:
     root, grant_id = _ready(tmp_path)
     handle_knowledge_sink(
         _remember_request("stdio-purpose-aware-context"),
@@ -1411,9 +1413,12 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
             await session.initialize()
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_support"]
-            assert listed.tools[0].inputSchema["$id"].endswith(
-                "knowledge-support.input.v6.schema.json"
-            )
+            provider = listed.tools[0].inputSchema
+            assert provider["title"] == "DeepLaw Knowledge Support Provider Input v7"
+            assert {
+                branch["$ref"].rsplit("/", maxsplit=1)[-1]
+                for branch in provider["oneOf"]
+            } == {"query", "context", "explain"}
             semantic = await session.call_tool(
                 "knowledge_support",
                 {"operation": "semantic", "semantic_action": "profile"},

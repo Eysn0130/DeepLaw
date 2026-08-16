@@ -345,25 +345,9 @@ def bind_relevant_chars(
 
 
 _EXPECTED_KNOWLEDGE_OPERATIONS = (
-    "compilation",
     "context",
-    "editor_context",
     "explain",
-    "gaps",
-    "get",
-    "graph",
-    "identity_lookup",
-    "inspect",
-    "lineage",
     "query",
-    "recall",
-    "search",
-    "semantic",
-    "source",
-    "synthesis",
-    "verify",
-    "wiki",
-    "wiki_lookup",
 )
 
 

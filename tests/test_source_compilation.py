@@ -41,6 +41,7 @@ from deeplaw.knowledge_autonomy import (
 )
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_mcp_server import (
+    _compatibility_input_validator,
     handle_knowledge_support,
     knowledge_tool_definition,
 )
@@ -761,7 +762,10 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
     assert status["gaps"] == []
 
     support_tool = knowledge_tool_definition(autonomous=True)
-    support_validator = Draft202012Validator(support_tool.inputSchema)
+    assert support_tool.inputSchema["title"] == (
+        "DeepLaw Knowledge Support Provider Input v7"
+    )
+    support_validator = _compatibility_input_validator()
     for request in (
         {
             "operation": "semantic",

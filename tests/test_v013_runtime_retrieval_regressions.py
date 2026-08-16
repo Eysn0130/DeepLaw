@@ -202,13 +202,17 @@ def test_query_without_explicit_plan_version_uses_v6_provider_receipt(
     assert set(result.get("receipt", {})) == {"receipt_id"}
 
 
-def test_v6_tool_contract_and_instructions_recommend_one_read_path(
+def test_provider_v7_contract_and_instructions_recommend_one_read_path(
     tmp_path: Path,
 ) -> None:
     root = _synthetic_vault(tmp_path)
     tool = knowledge_tool_definition(autonomous=True)
-    assert tool.inputSchema["$id"].endswith("knowledge-support.input.v6.schema.json")
-    assert tool.inputSchema["type"] == "object"
+    assert "$id" not in tool.inputSchema
+    assert tool.inputSchema["title"] == "DeepLaw Knowledge Support Provider Input v7"
+    assert {
+        branch["$ref"].rsplit("/", maxsplit=1)[-1]
+        for branch in tool.inputSchema["oneOf"]
+    } == {"query", "context", "explain"}
     query = {
         "operation": "query",
         "query": "bounded task knowledge",
