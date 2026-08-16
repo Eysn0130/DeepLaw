@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import venv
 from collections.abc import Mapping
 from pathlib import Path
@@ -36,6 +37,9 @@ _LOCAL_REQUIREMENT_RE = re.compile(
     re.IGNORECASE,
 )
 _MAX_REQUIREMENTS_BYTES = 64 * 1024 * 1024
+_MAX_PUBLIC_JOURNEY_STDOUT_BYTES = 256 * 1024
+_PUBLIC_JOURNEY_QUERY = "DeepLaw synthetic public journey marker"
+_PUBLIC_JOURNEY_TASK = "Verify synthetic public journey evidence"
 _WHEEL_RE = re.compile(
     r"^deeplaw-(?P<version>[0-9]+\.[0-9]+\.[0-9]+)-[A-Za-z0-9_.-]+\.whl$"
 )
@@ -420,6 +424,513 @@ def _run_version(
     }
 
 
+def _public_journey_budget(
+    value: Mapping[str, Any],
+    *,
+    max_characters: int,
+    selected_characters: int,
+    provider_payload_bytes: int,
+    local_payload_bytes: int,
+) -> dict[str, int]:
+    budget = value.get("budget")
+    if not isinstance(budget, Mapping):
+        raise ExactWheelExecutionError("public journey budget is missing")
+    reported_selected_characters = budget.get("selected_characters")
+    observed_max_characters = budget.get("max_characters")
+    max_provider_characters = budget.get("max_provider_characters")
+    if any(
+        isinstance(item, bool) or not isinstance(item, int)
+        for item in (
+            reported_selected_characters,
+            observed_max_characters,
+            max_provider_characters,
+        )
+    ):
+        raise ExactWheelExecutionError("public journey budget is invalid")
+    if (
+        observed_max_characters != max_characters
+        or reported_selected_characters != selected_characters
+        or selected_characters < 0
+        or selected_characters > observed_max_characters
+        or max_provider_characters != 65_536
+        or provider_payload_bytes < 0
+        or provider_payload_bytes > max_provider_characters
+        or local_payload_bytes < 0
+        or local_payload_bytes > 262_144
+    ):
+        raise ExactWheelExecutionError("public journey budget exceeds its hard bound")
+    return {
+        "max_characters": observed_max_characters,
+        "selected_characters": selected_characters,
+        "provider_payload_bytes": provider_payload_bytes,
+        "provider_hard_limit_bytes": 65_536,
+        "local_payload_bytes": local_payload_bytes,
+        "local_hard_limit_bytes": 262_144,
+    }
+
+
+def _derived_selected_characters(value: Mapping[str, Any]) -> int:
+    statements = value.get("statements")
+    evidence = value.get("evidence")
+    if not isinstance(statements, list) or not isinstance(evidence, list):
+        raise ExactWheelExecutionError("public journey selected content is missing")
+    selected = 0
+    for item in statements:
+        if not isinstance(item, Mapping) or not isinstance(item.get("statement_text"), str):
+            raise ExactWheelExecutionError("public journey statement content is invalid")
+        selected += len(item["statement_text"])
+    for item in evidence:
+        if not isinstance(item, Mapping) or not isinstance(item.get("excerpt"), str):
+            raise ExactWheelExecutionError("public journey evidence content is invalid")
+        selected += len(item["excerpt"])
+    return selected
+
+
+def _validate_public_query(value: Mapping[str, Any]) -> dict[str, int]:
+    if (
+        value.get("purpose") != "verify"
+        or value.get("policy_id") != "evidence-first-v1"
+        or value.get("write_performed") is not False
+    ):
+        raise ExactWheelExecutionError("public journey query policy/status is invalid")
+    plan = value.get("query_plan")
+    controls = plan.get("retrieval_controls") if isinstance(plan, Mapping) else None
+    if (
+        not isinstance(plan, Mapping)
+        or plan.get("schema_version") != "deeplaw.knowledge-query-plan/v6"
+        or plan.get("policy_id") != "evidence-first-v1"
+        or not isinstance(controls, Mapping)
+        or controls.get("retrieval_mode") != "lexical"
+    ):
+        raise ExactWheelExecutionError("public journey query plan is invalid")
+    capsule = value.get("capsule")
+    if not isinstance(capsule, Mapping):
+        raise ExactWheelExecutionError("public journey query capsule is missing")
+    selected_characters = _derived_selected_characters(value)
+    provider_payload_bytes = len(_canonical_json(capsule))
+    local_payload_bytes = len(_canonical_json(value))
+    return _public_journey_budget(
+        value,
+        max_characters=2_000,
+        selected_characters=selected_characters,
+        provider_payload_bytes=provider_payload_bytes,
+        local_payload_bytes=local_payload_bytes,
+    )
+
+
+def _validate_public_context(value: Mapping[str, Any]) -> dict[str, int]:
+    if (
+        value.get("purpose") != "verify"
+        or value.get("policy_id") != "evidence-first-v1"
+        or value.get("write_performed") is not False
+    ):
+        raise ExactWheelExecutionError("public journey context policy/status is invalid")
+    provider = value.get("provider_capsule")
+    budget = value.get("budget")
+    if not isinstance(provider, Mapping) or not isinstance(budget, Mapping):
+        raise ExactWheelExecutionError("public journey context budget is missing")
+    delivery = provider.get("delivery")
+    provider_capsule = provider.get("capsule")
+    provider_bytes = budget.get("provider_payload_bytes")
+    if not isinstance(provider_capsule, Mapping):
+        raise ExactWheelExecutionError("public journey context provider capsule is invalid")
+    derived_provider_bytes = len(_canonical_json(provider_capsule))
+    if (
+        not isinstance(delivery, Mapping)
+        or isinstance(provider_bytes, bool)
+        or not isinstance(provider_bytes, int)
+        or provider_bytes != derived_provider_bytes
+        or delivery.get("provider_content_bytes") != derived_provider_bytes
+    ):
+        raise ExactWheelExecutionError("public journey context provider budget is invalid")
+    return _public_journey_budget(
+        value,
+        max_characters=2_000,
+        selected_characters=_derived_selected_characters(value),
+        provider_payload_bytes=provider_bytes,
+        local_payload_bytes=len(_canonical_json(value)),
+    )
+
+
+def _run_public_step(
+    *,
+    name: str,
+    console_entrypoint: Path,
+    python_executable: Path,
+    journey_root: Path,
+    actual_argv: list[str],
+    receipt_argv: list[str],
+    expected_schema_version: str,
+    validator: Any | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if any(
+        value.startswith(("/", "\\")) or re.fullmatch(r"[A-Za-z]:[\\/].*", value)
+        for value in receipt_argv
+    ):
+        raise ExactWheelExecutionError("public journey receipt argv contains a path")
+    try:
+        completed = subprocess.run(
+            [str(console_entrypoint), *actual_argv],
+            cwd=journey_root,
+            env=_safe_environment(python_executable),
+            capture_output=True,
+            check=False,
+            timeout=180,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ExactWheelExecutionError(f"public journey {name} execution failed") from exc
+    if completed.returncode != 0 or completed.stderr:
+        raise ExactWheelExecutionError(f"public journey {name} execution failed")
+    if not 1 <= len(completed.stdout) <= _MAX_PUBLIC_JOURNEY_STDOUT_BYTES:
+        raise ExactWheelExecutionError(f"public journey {name} stdout is invalid or oversized")
+    try:
+        stdout = completed.stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ExactWheelExecutionError(f"public journey {name} stdout is not UTF-8") from exc
+    value = _strict_json_loads(stdout)
+    if not isinstance(value, dict) or value.get("schema_version") != expected_schema_version:
+        raise ExactWheelExecutionError(f"public journey {name} returned an invalid JSON result")
+    budget = validator(value) if validator is not None else None
+    return (
+        {
+            "name": name,
+            "status": "passed",
+            "exit_code": completed.returncode,
+            "argv": receipt_argv,
+            "stdout_sha256": _sha256_bytes(completed.stdout),
+            "stdout_bytes": len(completed.stdout),
+            "stdout_path_class": "sanitized_stdout",
+            "output_schema_version": value["schema_version"],
+            "budget": budget,
+        },
+        value,
+    )
+
+
+def _run_public_journey(
+    *,
+    console_entrypoint: Path,
+    python_executable: Path,
+    venv_path: Path,
+    repository: Path,
+) -> dict[str, Any]:
+    try:
+        console_entrypoint.resolve(strict=True).relative_to(venv_path.resolve(strict=True))
+    except (OSError, ValueError) as exc:
+        raise ExactWheelExecutionError(
+            "public journey console executable is outside the isolated venv"
+        ) from exc
+    try:
+        journey_root = Path(tempfile.mkdtemp(prefix="deeplaw-exact-wheel-journey-"))
+    except OSError as exc:
+        raise ExactWheelExecutionError("public journey root could not be created") from exc
+    try:
+        journey_root = journey_root.resolve(strict=True)
+        if repository == journey_root or repository in journey_root.parents:
+            raise ExactWheelExecutionError("public journey root must be outside the repository")
+        vault = journey_root / "vault"
+        source = journey_root / "source.md"
+        output = journey_root / "capsule.json"
+        source.write_text(
+            "DeepLaw synthetic public journey marker.\n"
+            "The bounded journey preserves exact source evidence.\n",
+            encoding="utf-8",
+        )
+        common = ["knowledge", "--format", "json"]
+        init_step, _ = _run_public_step(
+            name="knowledge_init",
+            console_entrypoint=console_entrypoint,
+            python_executable=python_executable,
+            journey_root=journey_root,
+            actual_argv=[
+                *common,
+                "init",
+                "--vault",
+                str(vault),
+                "--name",
+                "public-journey",
+                "--scope",
+                "project",
+            ],
+            receipt_argv=[
+                "deeplaw",
+                *common,
+                "init",
+                "--vault",
+                "<vault>",
+                "--name",
+                "<redacted>",
+                "--scope",
+                "project",
+            ],
+            expected_schema_version="deeplaw.knowledge-vault-initialization/v2",
+        )
+        source_add_step, source_add = _run_public_step(
+            name="source_add",
+            console_entrypoint=console_entrypoint,
+            python_executable=python_executable,
+            journey_root=journey_root,
+            actual_argv=[
+                *common,
+                "source",
+                "add",
+                "--vault",
+                str(vault),
+                "--source",
+                str(source),
+                "--source-kind",
+                "document",
+                "--pdf-fallback",
+                "off",
+                "--typed-extraction",
+                "off",
+                "--confirm-no-case-data",
+            ],
+            receipt_argv=[
+                "deeplaw",
+                *common,
+                "source",
+                "add",
+                "--vault",
+                "<vault>",
+                "--source",
+                "<source>",
+                "--source-kind",
+                "document",
+                "--pdf-fallback",
+                "off",
+                "--typed-extraction",
+                "off",
+                "--confirm-no-case-data",
+            ],
+            expected_schema_version="deeplaw.knowledge-ingest/v1",
+        )
+        source_value = source_add.get("source")
+        source_id = source_value.get("source_id") if isinstance(source_value, Mapping) else None
+        if not isinstance(source_id, str) or not source_id:
+            raise ExactWheelExecutionError("public journey source add did not return a source id")
+        source_verify_step, source_verify = _run_public_step(
+            name="source_verify",
+            console_entrypoint=console_entrypoint,
+            python_executable=python_executable,
+            journey_root=journey_root,
+            actual_argv=[
+                *common,
+                "source",
+                "verify",
+                "--vault",
+                str(vault),
+                "--source-id",
+                source_id,
+            ],
+            receipt_argv=[
+                "deeplaw",
+                *common,
+                "source",
+                "verify",
+                "--vault",
+                "<vault>",
+                "--source-id",
+                "<source>",
+            ],
+            expected_schema_version="deeplaw.knowledge-source-verification/v1",
+        )
+        if (
+            source_verify.get("valid") is not True
+            or source_verify.get("database_integrity_valid") is not True
+            or not isinstance(source_verify.get("file"), Mapping)
+            or source_verify["file"].get("valid") is not True
+        ):
+            raise ExactWheelExecutionError("public journey source verification did not pass")
+        query_step, _ = _run_public_step(
+            name="evidence_first_query",
+            console_entrypoint=console_entrypoint,
+            python_executable=python_executable,
+            journey_root=journey_root,
+            actual_argv=[
+                *common,
+                "query",
+                "--vault",
+                str(vault),
+                "--query",
+                _PUBLIC_JOURNEY_QUERY,
+                "--purpose",
+                "verify",
+                "--policy",
+                "evidence-first-v1",
+                "--scope",
+                "project",
+                "--max-sensitivity",
+                "private",
+                "--limit",
+                "2",
+                "--max-chars",
+                "2000",
+                "--max-tokens",
+                "256",
+                "--max-sources",
+                "2",
+                "--graph-hops",
+                "0",
+                "--retrieval-mode",
+                "lexical",
+                "--query-plan-version",
+                "6",
+                "--capsule-projection",
+                "compact",
+            ],
+            receipt_argv=[
+                "deeplaw",
+                *common,
+                "query",
+                "--vault",
+                "<vault>",
+                "--query",
+                "<redacted>",
+                "--purpose",
+                "verify",
+                "--policy",
+                "evidence-first-v1",
+                "--scope",
+                "project",
+                "--max-sensitivity",
+                "private",
+                "--limit",
+                "2",
+                "--max-chars",
+                "2000",
+                "--max-tokens",
+                "256",
+                "--max-sources",
+                "2",
+                "--graph-hops",
+                "0",
+                "--retrieval-mode",
+                "lexical",
+                "--query-plan-version",
+                "6",
+                "--capsule-projection",
+                "compact",
+            ],
+            expected_schema_version="deeplaw.purpose-aware-retrieval/v3",
+            validator=_validate_public_query,
+        )
+        context_step, context = _run_public_step(
+            name="bounded_context",
+            console_entrypoint=console_entrypoint,
+            python_executable=python_executable,
+            journey_root=journey_root,
+            actual_argv=[
+                *common,
+                "context",
+                "--vault",
+                str(vault),
+                "--task",
+                _PUBLIC_JOURNEY_TASK,
+                "--purpose",
+                "verify",
+                "--policy",
+                "evidence-first-v1",
+                "--scope",
+                "project",
+                "--max-sensitivity",
+                "private",
+                "--max-items",
+                "2",
+                "--max-chars",
+                "2000",
+                "--max-tokens",
+                "256",
+                "--max-sources",
+                "2",
+                "--graph-hops",
+                "0",
+                "--retrieval-mode",
+                "lexical",
+                "--query-plan-version",
+                "6",
+                "--capsule-projection",
+                "compact",
+                "--confirm-no-case-data",
+                "--output",
+                str(output),
+            ],
+            receipt_argv=[
+                "deeplaw",
+                *common,
+                "context",
+                "--vault",
+                "<vault>",
+                "--task",
+                "<redacted>",
+                "--purpose",
+                "verify",
+                "--policy",
+                "evidence-first-v1",
+                "--scope",
+                "project",
+                "--max-sensitivity",
+                "private",
+                "--max-items",
+                "2",
+                "--max-chars",
+                "2000",
+                "--max-tokens",
+                "256",
+                "--max-sources",
+                "2",
+                "--graph-hops",
+                "0",
+                "--retrieval-mode",
+                "lexical",
+                "--query-plan-version",
+                "6",
+                "--capsule-projection",
+                "compact",
+                "--confirm-no-case-data",
+                "--output",
+                "<output>",
+            ],
+            expected_schema_version="deeplaw.knowledge-capsule/v3",
+            validator=_validate_public_context,
+        )
+        if (
+            output.is_symlink()
+            or not output.is_file()
+            or output.stat().st_size > 262_144
+        ):
+            raise ExactWheelExecutionError("public journey context output is unavailable")
+        try:
+            output_value = _strict_json_loads(output.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError) as exc:
+            raise ExactWheelExecutionError("public journey context output is invalid") from exc
+        if not isinstance(output_value, dict) or output_value.get("schema_version") != (
+            "deeplaw.knowledge-capsule/v3"
+        ):
+            raise ExactWheelExecutionError("public journey context output schema is invalid")
+        if output_value != context:
+            raise ExactWheelExecutionError("public journey context output differs from stdout")
+        return {
+            "journey_status": "passed",
+            "journey_root_path_class": "ephemeral_journey_root",
+            "step_count": 5,
+            "steps": [
+                init_step,
+                source_add_step,
+                source_verify_step,
+                query_step,
+                context_step,
+            ],
+            "network_policy": {
+                "network_access": "not_requested",
+                "model_sidecar": False,
+                "environment_allowlist": "minimal",
+            },
+        }
+    finally:
+        shutil.rmtree(journey_root, ignore_errors=True)
+
+
 def _probe_script() -> str:
     return r'''
 import importlib.metadata
@@ -707,6 +1218,12 @@ def execute_exact_wheel(
             expected_version=expected_version,
             python_executable=python_executable,
         )
+        public_journey = _run_public_journey(
+            console_entrypoint=console_entrypoint,
+            python_executable=python_executable,
+            venv_path=resolved_venv,
+            repository=repository,
+        )
         try:
             console_relative = console_entrypoint.relative_to(
                 resolved_venv.resolve(strict=True)
@@ -768,6 +1285,7 @@ def execute_exact_wheel(
                 "module_sha256": entrypoint_module_sha256,
             },
             "version_check": version_check,
+            "public_journey": public_journey,
             "network_acquisition": {
                 "explicit": True,
                 "mode": requirements_mode,

@@ -15,6 +15,7 @@
     "runtime",
     "entrypoint",
     "version_check",
+    "public_journey",
     "network_acquisition",
     "environment_policy",
     "record_sha256"
@@ -29,6 +30,7 @@
     "runtime": {"$ref": "#/$defs/runtime"},
     "entrypoint": {"$ref": "#/$defs/entrypoint"},
     "version_check": {"$ref": "#/$defs/versionCheck"},
+    "public_journey": {"$ref": "#/$defs/publicJourney"},
     "network_acquisition": {"$ref": "#/$defs/networkAcquisition"},
     "environment_policy": {"$ref": "#/$defs/environmentPolicy"},
     "record_sha256": {"$ref": "#/$defs/sha256"}
@@ -181,6 +183,108 @@
         "stdout_sha256": {"$ref": "#/$defs/sha256"},
         "stdout_bytes": {"type": "integer", "minimum": 1},
         "stdout_path_class": {"const": "sanitized_stdout"}
+      }
+    },
+    "publicJourneyBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_characters",
+        "selected_characters",
+        "provider_payload_bytes",
+        "provider_hard_limit_bytes",
+        "local_payload_bytes",
+        "local_hard_limit_bytes"
+      ],
+      "properties": {
+        "max_characters": {"type": "integer", "minimum": 200, "maximum": 2000},
+        "selected_characters": {"type": "integer", "minimum": 0},
+        "provider_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "provider_hard_limit_bytes": {"const": 65536},
+        "local_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "local_hard_limit_bytes": {"const": 262144}
+      }
+    },
+    "publicJourneyStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status",
+        "exit_code",
+        "argv",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stdout_path_class",
+        "output_schema_version",
+        "budget"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "knowledge_init",
+            "source_add",
+            "source_verify",
+            "evidence_first_query",
+            "bounded_context"
+          ]
+        },
+        "status": {"const": "passed"},
+        "exit_code": {"const": 0},
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[A-Za-z0-9_.-]+|<[a-z-]+>|--[A-Za-z0-9-]+|[0-9]+)$"
+          }
+        },
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stdout_bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "stdout_path_class": {"const": "sanitized_stdout"},
+        "output_schema_version": {
+          "type": "string",
+          "pattern": "^deeplaw\\.[A-Za-z0-9._/-]+$"
+        },
+        "budget": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/publicJourneyBudget"}
+          ]
+        }
+      }
+    },
+    "publicJourney": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "journey_status",
+        "journey_root_path_class",
+        "step_count",
+        "steps",
+        "network_policy"
+      ],
+      "properties": {
+        "journey_status": {"const": "passed"},
+        "journey_root_path_class": {"const": "ephemeral_journey_root"},
+        "step_count": {"const": 5},
+        "steps": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/publicJourneyStep"}
+        },
+        "network_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["network_access", "model_sidecar", "environment_allowlist"],
+          "properties": {
+            "network_access": {"const": "not_requested"},
+            "model_sidecar": {"const": false},
+            "environment_allowlist": {"const": "minimal"}
+          }
+        }
       }
     },
     "networkAcquisition": {

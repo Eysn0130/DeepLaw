@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from benchmarks.release.exact_wheel_runner import (
     ExactWheelExecutionError,
     _validate_probe,
+    _validate_receipt,
     execute_exact_wheel,
 )
 
@@ -26,24 +27,109 @@ def _fake_wheel(
     name: str = "deeplaw-0.12.0-py3-none-any.whl",
     version_output: str | None = None,
     version_exit: int = 0,
+    journey_failure_step: str | None = None,
 ) -> Path:
     candidate_dir.mkdir(parents=True, exist_ok=True)
     wheel = candidate_dir / name
     version = name.split("-")[1]
     dist_info = f"deeplaw-{version}.dist-info"
     output = version_output or f"deeplaw {version}"
+    cli_source = (
+        "import json\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        "import dependency_pkg\n"
+        "\n"
+        f"VERSION_OUTPUT = {output!r}\n"
+        f"VERSION_EXIT = {version_exit!r}\n"
+        f"JOURNEY_FAILURE = {journey_failure_step!r}\n"
+        "\n"
+        "def _emit(value):\n"
+        "    print(json.dumps(value, sort_keys=True, separators=(\",\", \":\")))\n"
+        "\n"
+        "def _arg(name):\n"
+        "    if name not in sys.argv:\n"
+        "        return None\n"
+        "    return sys.argv[sys.argv.index(name) + 1]\n"
+        "\n"
+        "def main():\n"
+        "    if \"--version\" in sys.argv:\n"
+        "        print(VERSION_OUTPUT)\n"
+        "        raise SystemExit(VERSION_EXIT)\n"
+        "    if JOURNEY_FAILURE and JOURNEY_FAILURE in sys.argv:\n"
+        "        raise SystemExit(9)\n"
+        "    if \"init\" in sys.argv:\n"
+        "        _emit({\n"
+        "            \"schema_version\": \"deeplaw.knowledge-vault-initialization/v2\",\n"
+        "            \"vault_id\": \"vault_aaaaaaaaaaaaaaaaaaaaaaaa\",\n"
+        "        })\n"
+        "        return 0\n"
+        "    if \"source\" in sys.argv and \"add\" in sys.argv:\n"
+        "        _emit({\n"
+        "            \"schema_version\": \"deeplaw.knowledge-ingest/v1\",\n"
+        "            \"source\": {\"source_id\": \"source_aaaaaaaaaaaaaaaaaaaaaaaa\"},\n"
+        "        })\n"
+        "        return 0\n"
+        "    if \"source\" in sys.argv and \"verify\" in sys.argv:\n"
+        "        _emit({\n"
+        "            \"schema_version\": \"deeplaw.knowledge-source-verification/v1\",\n"
+        "            \"valid\": True,\n"
+        "            \"database_integrity_valid\": True,\n"
+        "            \"file\": {\"valid\": True},\n"
+        "        })\n"
+        "        return 0\n"
+        "    if \"query\" in sys.argv:\n"
+        "        _emit({\n"
+        "            \"schema_version\": \"deeplaw.purpose-aware-retrieval/v3\",\n"
+        "            \"purpose\": \"verify\",\n"
+        "            \"policy_id\": \"evidence-first-v1\",\n"
+        "            \"write_performed\": False,\n"
+        "            \"query_plan\": {\n"
+        "                \"schema_version\": \"deeplaw.knowledge-query-plan/v6\",\n"
+        "                \"policy_id\": \"evidence-first-v1\",\n"
+        "                \"retrieval_controls\": {\"retrieval_mode\": \"lexical\"},\n"
+        "            },\n"
+        "            \"capsule\": {},\n"
+        "            \"statements\": [],\n"
+        "            \"evidence\": [],\n"
+        "            \"budget\": {\n"
+        "                \"max_characters\": 2000,\n"
+        "                \"selected_characters\": 0,\n"
+        "                \"max_provider_characters\": 65536,\n"
+        "            },\n"
+        "        })\n"
+        "        return 0\n"
+        "    if \"context\" in sys.argv:\n"
+        "        value = {\n"
+        "            \"schema_version\": \"deeplaw.knowledge-capsule/v3\",\n"
+        "            \"purpose\": \"verify\",\n"
+        "            \"policy_id\": \"evidence-first-v1\",\n"
+        "            \"write_performed\": False,\n"
+        "            \"statements\": [],\n"
+        "            \"evidence\": [],\n"
+        "            \"provider_capsule\": {\n"
+        "                \"capsule\": {},\n"
+        "                \"delivery\": {\"provider_content_bytes\": 2},\n"
+        "            },\n"
+        "            \"budget\": {\n"
+        "                \"max_characters\": 2000,\n"
+        "                \"selected_characters\": 0,\n"
+        "                \"max_provider_characters\": 65536,\n"
+        "                \"provider_payload_bytes\": 2,\n"
+        "            },\n"
+        "        }\n"
+        "        output_path = _arg(\"--output\")\n"
+        "        if output_path:\n"
+        "            Path(output_path).write_text(\n"
+        "                json.dumps(value, sort_keys=True), encoding=\"utf-8\"\n"
+        "            )\n"
+        "        _emit(value)\n"
+        "        return 0\n"
+        "    raise SystemExit(2)\n"
+    )
     files = {
         "deeplaw/__init__.py": f"__version__ = {version!r}\n",
-        "deeplaw/cli.py": (
-            "import sys\n"
-            "import dependency_pkg\n"
-            "\n"
-            "def main():\n"
-            "    if \"--version\" in sys.argv:\n"
-            f"        print({output!r})\n"
-            f"        raise SystemExit({version_exit})\n"
-            "    return 0\n"
-        ),
+        "deeplaw/cli.py": cli_source,
         f"{dist_info}/METADATA": (
             "Metadata-Version: 2.1\n"
             "Name: deeplaw\n"
@@ -160,6 +246,25 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
         "mode": "candidate_wheelhouse",
         "hash_pinned": True,
     }
+    assert receipt["public_journey"]["journey_status"] == "passed"
+    assert receipt["public_journey"]["step_count"] == 5
+    assert [
+        step["name"] for step in receipt["public_journey"]["steps"]
+    ] == [
+        "knowledge_init",
+        "source_add",
+        "source_verify",
+        "evidence_first_query",
+        "bounded_context",
+    ]
+    assert all(step["exit_code"] == 0 for step in receipt["public_journey"]["steps"])
+    assert receipt["public_journey"]["steps"][3]["budget"]["selected_characters"] <= 2_000
+    assert receipt["public_journey"]["steps"][4]["budget"]["selected_characters"] <= 2_000
+    assert receipt["public_journey"]["network_policy"] == {
+        "network_access": "not_requested",
+        "model_sidecar": False,
+        "environment_allowlist": "minimal",
+    }
     assert receipt["environment_policy"] == {
         "python_isolated_mode": True,
         "pythonpath_cleared": True,
@@ -169,7 +274,15 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
         "requirements_hashes_required": True,
         "candidate_source_only": True,
     }
-    assert str(tmp_path) not in json.dumps(receipt, sort_keys=True)
+    rendered_receipt = json.dumps(receipt, sort_keys=True)
+    assert str(tmp_path) not in rendered_receipt
+    assert "DeepLaw synthetic public journey marker" not in rendered_receipt
+    assert "Verify synthetic public journey evidence" not in rendered_receipt
+    assert "raw_stdout" not in rendered_receipt
+    assert "raw_stderr" not in rendered_receipt
+    assert "<vault>" in rendered_receipt
+    assert "<source>" in rendered_receipt
+    assert "<output>" in rendered_receipt
     assert "junit" not in receipt
     assert "platform" not in receipt
     assert "scorer" not in receipt
@@ -306,6 +419,43 @@ def test_console_version_execution_failure_cleans_venv(tmp_path: Path) -> None:
             venv_path=venv_path,
         )
     assert not venv_path.exists()
+
+
+def test_public_journey_step_failure_cleans_venv(tmp_path: Path) -> None:
+    candidate_dir = tmp_path / "candidate-full"
+    wheel = _fake_wheel(candidate_dir, journey_failure_step="query")
+    requirements_filename, requirements_sha256 = _candidate_inputs(candidate_dir)
+    venv_path = tmp_path / "isolated-venv"
+
+    with pytest.raises(ExactWheelExecutionError, match="public journey"):
+        execute_exact_wheel(
+            candidate_dir=candidate_dir,
+            expected_wheel_sha256=_sha256(wheel),
+            requirements_filename=requirements_filename,
+            expected_requirements_sha256=requirements_sha256,
+            expected_version=EXPECTED_VERSION,
+            repository=REPOSITORY,
+            venv_path=venv_path,
+        )
+    assert not venv_path.exists()
+
+
+def test_public_journey_receipt_rejects_extra_raw_fields(tmp_path: Path) -> None:
+    candidate_dir = tmp_path / "candidate-full"
+    wheel = _fake_wheel(candidate_dir)
+    requirements_filename, requirements_sha256 = _candidate_inputs(candidate_dir)
+    receipt = execute_exact_wheel(
+        candidate_dir=candidate_dir,
+        expected_wheel_sha256=_sha256(wheel),
+        requirements_filename=requirements_filename,
+        expected_requirements_sha256=requirements_sha256,
+        expected_version=EXPECTED_VERSION,
+        repository=REPOSITORY,
+        venv_path=tmp_path / "isolated-venv",
+    )
+    receipt["public_journey"]["steps"][0]["raw_stdout"] = "untrusted"
+    with pytest.raises(ExactWheelExecutionError, match="receipt failed"):
+        _validate_receipt(receipt, repository=REPOSITORY)
 
 
 def _probe(
