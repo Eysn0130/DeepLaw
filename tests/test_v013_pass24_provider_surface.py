@@ -65,6 +65,21 @@ def test_legacy_v1_to_v6_calls_are_internal_compatibility_only() -> None:
     )
 
 
+def test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised() -> None:
+    route = {
+        "operation": "query",
+        "query": "governed decision",
+        "host_route": {"host": "codex", "session_sha256": "a" * 64},
+    }
+    assert next(_provider_input_validator().iter_errors(route), None) is None
+    assert _validate_knowledge_tool_arguments(route, autonomous=True) == "provider_v7"
+
+    schema = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    rendered = json.dumps(schema, sort_keys=True)
+    assert "host_route" in rendered
+    assert "task_binding" not in rendered
+
+
 def test_unknown_operation_is_rejected_by_both_contract_planes() -> None:
     invalid = {"operation": "hidden_admin", "query": "x"}
     try:

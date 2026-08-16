@@ -955,6 +955,72 @@ def _default_provider_max_chars(arguments: Mapping[str, Any]) -> int:
     return 16_000 if arguments.get("purpose") == "legal" else 8_000
 
 
+def _resolve_provider_host_route(
+    arguments: Mapping[str, Any],
+    *,
+    vault_path: Path,
+    workspace: Path,
+    fixed_task_binding: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Resolve one opaque native Host route into the existing task binding."""
+
+    route = arguments.get("host_route")
+    if route is None:
+        return (
+            normalize_task_context_binding(fixed_task_binding, allow_none=True),
+            None,
+        )
+    if arguments.get("operation") not in {"query", "context"}:
+        raise ValueError("host_route is supported only for query/context")
+    if not isinstance(route, Mapping) or set(route) != {"host", "session_sha256"}:
+        raise ValueError("host_route does not match its closed Provider contract")
+    from .task_continuity import binding_for_task_handle, resolve_host_session
+
+    resolved = resolve_host_session(
+        vault_path=vault_path,
+        host=str(route["host"]),
+        session_sha256=str(route["session_sha256"]),
+        workspace=workspace,
+    )
+    if resolved.get("status") != "exact":
+        gap = resolved.get("gap")
+        code = gap.get("code") if isinstance(gap, Mapping) else "route_unbound"
+        return None, {
+            "schema_version": "deeplaw.host-route-gap/v1",
+            "status": "gap",
+            "host": str(route["host"]),
+            "session_sha256": str(route["session_sha256"]),
+            "write_performed": False,
+            "gaps": [{"code": str(code)}],
+        }
+    current_binding = binding_for_task_handle(
+        str(resolved["task_handle"]),
+        vault_path=vault_path,
+        workspace=workspace,
+    )
+    selected_fixed = normalize_task_context_binding(fixed_task_binding, allow_none=True)
+    if selected_fixed is not None and current_binding != selected_fixed:
+        raise PermissionError(
+            "native Host route does not match the fixed launcher task binding"
+        )
+    return current_binding, None
+
+
+def _provider_host_route_gap_response(
+    *, operation: str, result: Mapping[str, Any]
+) -> dict[str, Any]:
+    response = {
+        "schema_version": "deeplaw.knowledge-support-output/v6",
+        "operation": operation,
+        "authority_boundary": dict(_AUTHORITY_BOUNDARY),
+        "result": dict(result),
+    }
+    assert_provider_output_safe(response, interface="knowledge_support")
+    if len(canonical_json(response).encode("utf-8")) > _MAX_MCP_OUTPUT_CHARS:
+        raise RuntimeError("knowledge_support output exceeds its hard 64 KiB budget")
+    return response
+
+
 def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
     if autonomous:
         description = (
@@ -3396,6 +3462,7 @@ def create_knowledge_mcp_server(
     *,
     vault_path: str | Path | None = None,
     default_task_binding: Mapping[str, Any] | None = None,
+    host_workspace: str | Path | None = None,
 ) -> Server[_KnowledgeRuntime]:
     selected_path = (
         Path(vault_path).expanduser().absolute()
@@ -3405,6 +3472,13 @@ def create_knowledge_mcp_server(
     selected_task_binding = normalize_task_context_binding(
         default_task_binding,
         allow_none=True,
+    )
+    from .host_runtime import safe_directory_path
+
+    selected_host_workspace = safe_directory_path(
+        host_workspace if host_workspace is not None else Path.cwd(),
+        label="native Host workspace",
+        require_existing=True,
     )
 
     @asynccontextmanager
@@ -3446,6 +3520,23 @@ def create_knowledge_mcp_server(
                     KnowledgeOperation,
                     arguments.get("operation", "search"),
                 )
+                route_binding, route_gap = _resolve_provider_host_route(
+                    arguments,
+                    vault_path=runtime.vault_path,
+                    workspace=selected_host_workspace,
+                    fixed_task_binding=runtime.default_task_binding,
+                )
+                if route_gap is not None:
+                    return _knowledge_mcp_transport_result(
+                        _provider_host_route_gap_response(
+                            operation=operation,
+                            result=route_gap,
+                        )
+                    )
+                if "host_route" in arguments:
+                    arguments = dict(arguments)
+                    arguments.pop("host_route")
+                    arguments["task_binding"] = route_binding
                 if "task_binding" in arguments:
                     arguments = dict(arguments)
                     arguments["task_binding"] = normalize_task_context_binding(
@@ -3667,6 +3758,7 @@ def run_knowledge_mcp(
     transport: str = "stdio",
     vault_path: str | Path | None = None,
     default_task_binding: Mapping[str, Any] | None = None,
+    host_workspace: str | Path | None = None,
 ) -> None:
     if transport != "stdio":
         raise ValueError("DeepLaw Knowledge Assets supports only local stdio MCP")
@@ -3675,6 +3767,7 @@ def run_knowledge_mcp(
         server = create_knowledge_mcp_server(
             vault_path=vault_path,
             default_task_binding=default_task_binding,
+            host_workspace=host_workspace,
         )
         async with stdio_server() as (read_stream, write_stream):
             await server.run(

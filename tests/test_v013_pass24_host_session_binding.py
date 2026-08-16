@@ -12,6 +12,7 @@ from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
 )
+from deeplaw.knowledge_mcp_server import _resolve_provider_host_route
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.task_continuity import (
     bind_host_session,
@@ -274,3 +275,61 @@ def test_host_session_route_commands_are_explicit_cli_seams() -> None:
     assert resolve.task_command == "resolve-host-session"
     assert resolve.host == "opencode"
     assert not hasattr(resolve, "grant_id")
+
+
+def test_provider_host_route_recomputes_binding_or_returns_gap(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    vault, grant_id = _vault(tmp_path)
+    task = start_task(
+        vault_path=vault,
+        project="DeepLaw",
+        task="Provider native route",
+        workspace=repository,
+    )
+    session_sha256 = sha256_bytes(b"provider-native-session")
+    bind_host_session(
+        vault_path=vault,
+        host="codex",
+        session_sha256=session_sha256,
+        task_handle=str(task["task_handle"]),
+        workspace=repository,
+        grant_id=grant_id,
+        idempotency_key="provider-native-route",
+        confirm_no_case_data=True,
+    )
+
+    binding, gap = _resolve_provider_host_route(
+        {
+            "operation": "context",
+            "host_route": {"host": "codex", "session_sha256": session_sha256},
+        },
+        vault_path=vault,
+        workspace=repository,
+        fixed_task_binding=None,
+    )
+    assert gap is None
+    assert binding is not None
+    assert binding["project_sha256"] == task["project_sha256"]
+    assert binding["task_lineage_sha256"] == task["task_lineage_sha256"]
+
+    missing_binding, missing_gap = _resolve_provider_host_route(
+        {
+            "operation": "query",
+            "host_route": {
+                "host": "codex",
+                "session_sha256": sha256_bytes(b"missing-native-session"),
+            },
+        },
+        vault_path=vault,
+        workspace=repository,
+        fixed_task_binding=None,
+    )
+    assert missing_binding is None
+    assert missing_gap == {
+        "schema_version": "deeplaw.host-route-gap/v1",
+        "status": "gap",
+        "host": "codex",
+        "session_sha256": sha256_bytes(b"missing-native-session"),
+        "write_performed": False,
+        "gaps": [{"code": "route_unbound"}],
+    }

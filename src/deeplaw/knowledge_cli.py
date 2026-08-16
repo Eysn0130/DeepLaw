@@ -2129,7 +2129,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     mcp.add_argument(
         "--workspace",
         type=Path,
-        help="Explicit Host task worktree used only with --task-handle",
+        help="Explicit native Host worktree; defaults to the launcher working directory",
     )
     _curate_default_help(subcommands)
 
@@ -3298,7 +3298,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 expected_vault_id=args.expected_vault_id,
                 task_binding=task_binding,
                 task_handle=args.task_handle,
-                workspace=args.workspace,
+                workspace=args.workspace or Path.cwd(),
             )
             return None
         if args.task_handle is not None:
@@ -3319,6 +3319,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             transport="stdio" if args.stdio else args.transport,
             vault_path=selected_vault,
             default_task_binding=task_binding,
+            host_workspace=os.environ.get("DEEPLAW_HOST_WORKSPACE"),
         )
         return None
     if command == "migrate" and args.rollback:

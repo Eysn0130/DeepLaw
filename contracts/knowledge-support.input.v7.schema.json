@@ -17,7 +17,7 @@
         "operation": {"const": "query"},
         "query": {"$ref": "#/$defs/queryText"},
         "query_plan_version": {"const": "6"},
-        "task_binding": {"$ref": "#/$defs/taskBinding"},
+        "host_route": {"$ref": "#/$defs/hostRoute"},
         "purpose": {"$ref": "#/$defs/purpose"},
         "policy": {"$ref": "#/$defs/policy"},
         "scope": {"$ref": "#/$defs/scope"},
@@ -45,7 +45,7 @@
         "goal": {"type": "string", "minLength": 1, "maxLength": 2000},
         "confirm_no_case_data": {"const": true},
         "query_plan_version": {"const": "6"},
-        "task_binding": {"$ref": "#/$defs/taskBinding"},
+        "host_route": {"$ref": "#/$defs/hostRoute"},
         "purpose": {"$ref": "#/$defs/purpose"},
         "policy": {"$ref": "#/$defs/policy"},
         "scope": {"$ref": "#/$defs/scope"},
@@ -129,55 +129,15 @@
         ]
       }
     },
-    "taskBinding": {
+    "hostRoute": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version", "project_sha256", "task_lineage_sha256",
-        "parent_task_lineage_sha256", "repository_sha256", "worktree_sha256",
-        "base_revision", "dirty_state_sha256", "binding_sha256"
-      ],
+      "required": ["host", "session_sha256"],
       "properties": {
-        "schema_version": {"const": "deeplaw.task-context-binding/v1"},
-        "project_sha256": {"$ref": "#/$defs/sha256"},
-        "task_lineage_sha256": {"$ref": "#/$defs/sha256"},
-        "parent_task_lineage_sha256": {"$ref": "#/$defs/nullableSha256"},
-        "repository_sha256": {"$ref": "#/$defs/nullableSha256"},
-        "worktree_sha256": {"$ref": "#/$defs/nullableSha256"},
-        "base_revision": {
-          "type": ["string", "null"],
-          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
-        },
-        "dirty_state_sha256": {"$ref": "#/$defs/nullableSha256"},
-        "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "repository_sha256": {"type": "null"},
-              "worktree_sha256": {"type": "null"},
-              "base_revision": {"type": "null"},
-              "dirty_state_sha256": {"type": "null"}
-            },
-            "required": [
-              "repository_sha256", "worktree_sha256", "base_revision",
-              "dirty_state_sha256"
-            ]
-          },
-          "then": {},
-          "else": {
-            "properties": {
-              "repository_sha256": {"type": "string"},
-              "worktree_sha256": {"type": "string"},
-              "base_revision": {"type": "string"},
-              "dirty_state_sha256": {"type": "string"}
-            }
-          }
-        }
-      ]
+        "host": {"enum": ["codex", "opencode"]},
+        "session_sha256": {"$ref": "#/$defs/sha256"}
+      }
     },
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "nullableSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   }
 }
