@@ -1,7 +1,7 @@
 {
   "name": "deeplaw-knowledge-os",
   "version": "0.12.0",
-  "description": "Explicit-use read-only DeepLaw Knowledge OS and bounded Context Capsule runtime.",
+  "description": "Explicit-use read-only DeepLaw Knowledge OS and bounded Context Capsule runtime. Native Codex hooks are opt-in and require owner review and trust of the exact current hook hash.",
   "author": {
     "name": "Eysn0130",
     "url": "https://github.com/Eysn0130"
@@ -18,10 +18,11 @@
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "DeepLaw Knowledge OS",
     "shortDescription": "Compile governed local knowledge into bounded Agent context",
-    "longDescription": "DeepLaw Knowledge OS reads an explicitly selected local Markdown-native vault, preserves source-derived and Agent-derived authority partitions, and compiles task-specific, hash-verifiable Knowledge Capsules. This default plugin remains read-only and isolated from both the DeepLaw Legal Pack and the separately enabled Knowledge Sink.",
+    "longDescription": "DeepLaw Knowledge OS reads an explicitly selected local Markdown-native vault, preserves source-derived and Agent-derived authority partitions, and compiles task-specific, hash-verifiable Knowledge Capsules. This default plugin remains read-only and isolated from both the DeepLaw Legal Pack and the separately enabled Knowledge Sink. Bundled Codex hooks are advisory, do not read transcripts or retain prompts, and run only after the owner reviews and trusts the exact current hook hash; this plugin never changes trust state.",
     "developerName": "Eysn0130",
     "category": "Productivity",
     "capabilities": [
