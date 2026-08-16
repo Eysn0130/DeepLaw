@@ -50,7 +50,7 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
     gates = {item["gate_id"]: item for item in classification["gates"]}  # type: ignore[index]
     for gate_id in ("codex", "opencode"):
         assert gates[gate_id]["accepted_input_schema_versions"] == [
-            "deeplaw.v013-gate-raw-evidence/v1"
+            "deeplaw.v013-gate-source-evidence/v1"
         ]
         assert gates[gate_id]["minimum_distinct_run_count"] == 3
         assert gates[gate_id]["required_unique_dimensions"] == [

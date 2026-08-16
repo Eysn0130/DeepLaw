@@ -51,18 +51,26 @@ using `0.12.0` evidence for a later `0.13.0` package, is forbidden.
 Gate classification v6 preserves v1-v5 and makes Timeline a required Core Gate. Mechanical Gates
 use the exact development source binding and do not pretend to need a blind corpus. Human, Host,
 Legal, Context, and other semantic Gates require the external qualification or final-blind layer.
-Raw evidence has no caller-authored pass flag: the validator reopens bounded strict JSON, verifies
-the active candidate/protocol/Gold/corpus/isolation/Host bindings, recomputes raw metrics and hard
-failures, and emits a derived Gate Result. One raw execution may be reused by several independent
-validators. The release assembler reopens every Core result and raw input and enables a release
-decision only when the collection contains exactly every Core Gate, every validator reproduces,
-every Core status is `passed`, and every hard-failure count is zero.
+Generic raw evidence is development-diagnostic only and cannot pass a Core Gate. Core validators
+reopen a source-specific envelope plus retained JUnit, Platform inventory, reproducible-artifact,
+Host, Human Gold/scorer, Legal exact-source, scale, or Timeline evidence; validate exact candidate,
+protocol, Gold, corpus, isolation, and Host bindings; and derive executions, metrics, and hard
+failures without accepting caller-authored pass/exit/metric fields. CI JUnit must contain the
+Gate-specific public-seam inventory, and every Platform cell must match Platform Core v2 exactly.
+One retained source may be referenced by multiple independent validators. The collection assembler
+reopens every Core result and recursively reruns its source validator before enabling a decision.
 
 Validator availability is a code property, not a qualification result. Gate v6 keeps
 `assembly_enabled=false` with `awaiting_all_core_gate_pass`; the assembler cannot pre-enable a
 release and derives eligibility only after reopening a complete reproducible all-Core collection.
 While the tracked active candidate is not frozen, all Core Gate executions remain `not_executed`,
 and no empty or skeleton collection is produced.
+
+The checked-in `External Qualification Evidence` workflow consumes the unique successful
+`Candidate Full` artifact on an owner-controlled self-hosted macOS qualification runner. It never
+rebuilds the distribution and uploads only the bounded, path-free evidence bundle after recursive
+source validation. Missing runner labels, external Gold/holdout mounts, or an executable independent
+scorer fail the workflow; they do not create placeholder execution evidence.
 
 ## Frozen minimum Kernel compatibility map
 

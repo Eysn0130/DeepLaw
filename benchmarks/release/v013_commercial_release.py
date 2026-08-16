@@ -158,6 +158,7 @@ def assemble_manifest(
     *,
     semantic_report_path: str,
     assets_root: str | Path,
+    expected_evidence_run_id: int | None = None,
 ) -> dict[str, Any]:
     """Return a release manifest whose decisions are derived from actual report bytes."""
 
@@ -222,6 +223,7 @@ def assemble_manifest(
             root=root,
             active_path=active_qualification_path,
             classification_path=classification_path,
+            expected_evidence_run_id=expected_evidence_run_id,
         )
     except GateCollectionError as error:
         raise V013CommercialReleaseError(str(error)) from error
@@ -270,7 +272,11 @@ def assemble_manifest(
         )
     try:
         validate_manifest_for_release(document, release_version=document["release"]["version"])
-        validate_release_manifest_semantics(document, assets_root=root)
+        validate_release_manifest_semantics(
+            document,
+            assets_root=root,
+            expected_evidence_run_id=expected_evidence_run_id,
+        )
     except Exception as error:
         raise V013CommercialReleaseError(str(error)) from error
     return document
@@ -282,12 +288,14 @@ def _main() -> int:
     parser.add_argument("--semantic-report", required=True)
     parser.add_argument("--assets-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--evidence-run-id", type=int)
     args = parser.parse_args()
     try:
         manifest = assemble_manifest(
             args.template,
             semantic_report_path=args.semantic_report,
             assets_root=args.assets_root,
+            expected_evidence_run_id=args.evidence_run_id,
         )
         args.output.write_text(canonical_json(manifest) + "\n", encoding="utf-8")
     except (OSError, V013CommercialReleaseError) as error:

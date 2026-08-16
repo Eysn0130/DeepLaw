@@ -1,0 +1,113 @@
+name: External Qualification Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful Candidate Full run for this exact commit.
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: external-qualification-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Execute owner-controlled external qualification without rebuilding
+    runs-on:
+      - self-hosted
+      - macOS
+      - deeplaw-qualification
+    timeout-minutes: 360
+    steps:
+      - name: Check out the exact requested commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify Candidate Full run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .conclusion)" = success
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .head_sha)" = "${GITHUB_SHA}"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .name)" = "Candidate Full"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" --jq .path)" = ".github/workflows/candidate-full.yml"
+
+      - name: Download the unique Candidate Full artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Install closed verifier runtime
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+
+      - name: Verify exact candidate and external prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . \
+            --dist "${RUNNER_TEMP}/verified-dist" \
+            --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
+            --verify
+          test -f "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
+          test -n "${DEEPLAW_QUALIFICATION_ROOT:-}"
+          test -d "${DEEPLAW_QUALIFICATION_ROOT}"
+          test -n "${DEEPLAW_HUMAN_GOLD_ROOT:-}"
+          test -d "${DEEPLAW_HUMAN_GOLD_ROOT}"
+          test -n "${DEEPLAW_INDEPENDENT_SCORER:-}"
+          test -x "${DEEPLAW_INDEPENDENT_SCORER}"
+          test -n "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER:-}"
+          test -x "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}"
+
+      - name: Execute external qualification against the downloaded bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="${RUNNER_TEMP}/v013-qualification-evidence"
+          test ! -e "${evidence}"
+          mkdir "${evidence}"
+          "${DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER}" \
+            --candidate "${RUNNER_TEMP}/verified-dist" \
+            --qualification-root "${DEEPLAW_QUALIFICATION_ROOT}" \
+            --human-gold-root "${DEEPLAW_HUMAN_GOLD_ROOT}" \
+            --independent-scorer "${DEEPLAW_INDEPENDENT_SCORER}" \
+            --output "${evidence}"
+          test ! -e "${evidence}/dist"
+          test ! -e "${evidence}/.env"
+
+      - name: Revalidate only the sanitized evidence bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.external_qualification_bundle \
+            --root "${RUNNER_TEMP}/v013-qualification-evidence" \
+            --active-qualification "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
+            --classification benchmarks/release/v013-gate-classification-v6.json \
+            --evidence-run-id "${GITHUB_RUN_ID}"
+
+      - name: Upload sanitized evidence only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: v013-qualification-evidence
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+          path: ${{ runner.temp }}/v013-qualification-evidence/

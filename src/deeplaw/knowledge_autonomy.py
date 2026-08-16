@@ -230,6 +230,12 @@ _RELATION_REVISION_ID = re.compile(r"^relationrev_[0-9a-f]{24}$")
 _GRANT_ID = re.compile(r"^grant_[0-9a-f]{24}$")
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_SAFE_ARTIFACT_ID = re.compile(r"^[A-Za-z][A-Za-z0-9._:-]{0,199}$")
+_SECRET_ARTIFACT_ID = re.compile(
+    r"(?:^|[._:-])(?:auth|credential|credentials|secret|secrets|password|passwd|"
+    r"api[_-]?key|private[_-]?key|token|key)(?:$|[._:-])",
+    re.IGNORECASE,
+)
 _WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 _SKILL_FACTORY_STEP = re.compile(
     r"^\s*(?:\d{1,3}[.)]|[-*+])\s+(.{1,4000}?)\s+(?:=>|::)\s+(.{1,2000})\s*$"
@@ -296,6 +302,29 @@ _SOURCE_REFERENCE_FIELDS = {
     "uri": 4_000,
     "quote_sha256": 64,
 }
+
+
+def normalize_run_artifact_ids(values: Any) -> list[str]:
+    """Validate content-minimized artifact identities before a Run commit."""
+
+    if not isinstance(values, list) or len(values) > 100:
+        raise ValueError("run metadata artifact_ids is invalid")
+    selected: list[str] = []
+    for value in values:
+        if (
+            not isinstance(value, str)
+            or _SAFE_ARTIFACT_ID.fullmatch(value) is None
+            or value in {".", ".."}
+            or ".." in value
+            or "/" in value
+            or "\\" in value
+            or _SECRET_ARTIFACT_ID.search(value) is not None
+        ):
+            raise ValueError(
+                "run metadata artifact_ids must contain opaque bounded safe identifiers"
+            )
+        selected.append(value)
+    return selected
 
 _KIND_DIRECTORIES = {
     "claim": "knowledge/claims",
@@ -3733,12 +3762,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 selected_metadata["task_binding"],
                 allow_none=False,
             )
+        if "artifact_ids" in selected_metadata:
+            selected_metadata["artifact_ids"] = normalize_run_artifact_ids(
+                selected_metadata["artifact_ids"]
+            )
         metadata_bytes = canonical_json(selected_metadata).encode("utf-8")
         if len(metadata_bytes) > _MAX_RUN_METADATA_BYTES or has_instruction_risk(
             metadata_bytes.decode("utf-8")
         ):
             raise ValueError("run metadata is unsafe or exceeds its size bound")
-        for list_field in ("tool_ids", "artifact_ids"):
+        for list_field in ("tool_ids",):
             values = selected_metadata.get(list_field, [])
             if (
                 not isinstance(values, list)
@@ -4591,6 +4624,267 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "truncated": False,
         }
 
+    def locate_checkpoint_task_projection(
+        self,
+        *,
+        task_sha256: str,
+        project_sha256: str,
+        repository_sha256: str,
+        worktree_sha256: str,
+        snapshot_sha256: str,
+        limit: int = _MAX_CHECKPOINT_ROUTE_LOOKUP,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Locate a current route by task text plus stable workspace identities."""
+
+        for field, digest in (
+            ("task_sha256", task_sha256),
+            ("project_sha256", project_sha256),
+            ("repository_sha256", repository_sha256),
+            ("worktree_sha256", worktree_sha256),
+            ("snapshot_sha256", snapshot_sha256),
+        ):
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise ValueError(f"{field} is invalid")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("checkpoint task locate limit is invalid")
+        limit = min(limit, _MAX_CHECKPOINT_ROUTE_LOOKUP)
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("checkpoint task locate scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("checkpoint task locate sensitivity is invalid")
+        base = {
+            "schema_version": "deeplaw.checkpoint-task-locate/v1",
+            "task_sha256": task_sha256,
+            "limit": limit,
+        }
+        if not self._checkpoint_route_projection_exists():
+            return {**base, "status": "index_unavailable", "scanned": 0}
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_values = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        scope_clause = ""
+        parameters: list[Any] = [task_sha256]
+        if scope is not None:
+            scope_clause = " AND scope = ?"
+            parameters.append(scope)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in sensitivity_values)})"
+        )
+        parameters.extend(sensitivity_values)
+        parameters.append(limit + 1)
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE task_sha256 = ?
+            """
+            + scope_clause
+            + sensitivity_clause
+            + " ORDER BY route_sha256, knowledge_id LIMIT ?",
+            tuple(parameters),
+        ).fetchall()
+        if len(rows) > limit:
+            return {
+                **base,
+                "status": "ambiguous",
+                "scanned": len(rows),
+                "truncated": True,
+            }
+        matches: list[tuple[sqlite3.Row, dict[str, Any]]] = []
+        for row in rows:
+            if not self._checkpoint_route_projection_row_is_current(row):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            try:
+                raw_binding = strict_json_loads(row["canonical_binding_json"])
+                binding = normalize_task_context_binding(raw_binding, allow_none=False)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            if (
+                canonical_json(raw_binding) != canonical_json(binding)
+                or task_route_sha256(binding) != row["route_sha256"]
+                or binding["project_sha256"] != project_sha256
+                or binding["repository_sha256"] != repository_sha256
+                or binding["worktree_sha256"] != worktree_sha256
+            ):
+                continue
+            matches.append((row, binding))
+        if len(matches) > 1:
+            return {
+                **base,
+                "status": "ambiguous",
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        if not matches:
+            return {
+                **base,
+                "status": "not_found",
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        row, binding = matches[0]
+        if row["snapshot_sha256"] != snapshot_sha256:
+            return {
+                **base,
+                "status": "workspace_diverged",
+                "canonical_binding": binding,
+                "route_sha256": row["route_sha256"],
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        return {
+            **base,
+            "status": "exact",
+            "route_sha256": row["route_sha256"],
+            "snapshot_sha256": row["snapshot_sha256"],
+            "canonical_binding": binding,
+            "knowledge_ids": [row["knowledge_id"]],
+            "revision_ids": [row["revision_id"]],
+            "run_ids": [row["run_id"]],
+            "scanned": len(rows),
+            "truncated": False,
+        }
+
+    def locate_task_route_history(
+        self,
+        *,
+        task_sha256: str,
+        fallback_task_lineage_sha256: str,
+        project_sha256: str,
+        repository_sha256: str,
+        worktree_sha256: str,
+        snapshot_sha256: str | None,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Locate one stable task route from immutable Run history."""
+
+        for field, digest in (
+            ("task_sha256", task_sha256),
+            ("fallback_task_lineage_sha256", fallback_task_lineage_sha256),
+            ("project_sha256", project_sha256),
+            ("repository_sha256", repository_sha256),
+            ("worktree_sha256", worktree_sha256),
+        ):
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise ValueError(f"{field} is invalid")
+        if snapshot_sha256 is not None and not _SHA256.fullmatch(snapshot_sha256):
+            raise ValueError("snapshot_sha256 is invalid")
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("task history scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("task history sensitivity is invalid")
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_values = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        scope_clause = ""
+        parameters: list[Any] = [
+            task_sha256,
+            fallback_task_lineage_sha256,
+            project_sha256,
+            repository_sha256,
+            worktree_sha256,
+        ]
+        if scope is not None:
+            scope_clause = " AND scope = ?"
+            parameters.append(scope)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in sensitivity_values)})"
+        )
+        parameters.extend(sensitivity_values)
+        rows = self.connection.execute(
+            """
+            SELECT run_id, task_sha256, metadata_json, recorded_at
+            FROM knowledge_run_records_v4
+            WHERE (task_sha256 = ?
+                   OR json_extract(metadata_json, '$.task_binding.task_lineage_sha256') = ?)
+              AND json_extract(metadata_json, '$.task_binding.project_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.repository_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.worktree_sha256') = ?
+            """
+            + scope_clause
+            + sensitivity_clause
+            + " ORDER BY recorded_at DESC, run_id LIMIT 101",
+            tuple(parameters),
+        ).fetchall()
+        base = {
+            "schema_version": "deeplaw.task-route-history-locate/v1",
+            "scanned": len(rows),
+        }
+        if not rows:
+            return {**base, "status": "not_found"}
+        routes: dict[str, dict[str, Any]] = {}
+        run_ids: list[str] = []
+        for row in rows:
+            binding = self.run_task_context_binding(row["run_id"])
+            if binding is None:
+                return {**base, "status": "index_unavailable"}
+            route = task_route_sha256(binding)
+            routes.setdefault(route, binding)
+            run_ids.append(str(row["run_id"]))
+        if len(rows) > 100 or len(routes) > 1:
+            return {**base, "status": "ambiguous"}
+        route_sha256, binding = next(iter(routes.items()))
+        current_rows = self.connection.execute(
+            """
+            SELECT snapshot_sha256, knowledge_id, revision_id
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            ORDER BY knowledge_id
+            LIMIT 2
+            """,
+            (route_sha256,),
+        ).fetchall()
+        if len(current_rows) > 1:
+            return {**base, "status": "ambiguous"}
+        if current_rows:
+            current = current_rows[0]
+            status = (
+                "exact"
+                if snapshot_sha256 is not None
+                and current["snapshot_sha256"] == snapshot_sha256
+                else "workspace_diverged"
+            )
+            return {
+                **base,
+                "status": status,
+                "route_sha256": route_sha256,
+                "canonical_binding": binding,
+                "knowledge_id": current["knowledge_id"],
+                "revision_id": current["revision_id"],
+            }
+        lifecycle_rows = self.connection.execute(
+            """
+            SELECT current.lifecycle
+            FROM knowledge_revisions_v3 AS historical
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = historical.knowledge_id
+            JOIN knowledge_revisions_v3 AS current
+              ON current.revision_id = objects.current_revision_id
+            WHERE json_extract(historical.generation_json, '$.run_id')
+                  IN (SELECT value FROM json_each(?))
+              AND historical.kind = 'memory'
+            ORDER BY historical.recorded_at DESC
+            LIMIT 2
+            """,
+            (canonical_json(run_ids),),
+        ).fetchall()
+        if lifecycle_rows and all(row["lifecycle"] == "forgotten" for row in lifecycle_rows):
+            return {
+                **base,
+                "status": "forgotten",
+                "route_sha256": route_sha256,
+                "canonical_binding": binding,
+            }
+        return {
+            **base,
+            "status": "index_unavailable",
+            "route_sha256": route_sha256,
+            "canonical_binding": binding,
+        }
+
     def task_identity_timeline(
         self,
         *,
@@ -4618,16 +4912,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 binding["task_lineage_sha256"],
                 binding["repository_sha256"],
                 binding["worktree_sha256"],
-                limit + 1,
+                min(101, limit + 1),
             ),
         ).fetchall()
-        if len(rows) > limit:
-            return {
-                "schema_version": "deeplaw.task-identity-timeline/v1",
-                "status": "bound_exceeded",
-                "entries": [],
-                "truncated": True,
-            }
         entries: list[dict[str, Any]] = []
         related_object_ids: list[str] = []
         route_sha256 = task_route_sha256(binding)
@@ -4637,13 +4924,24 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 continue
             metadata = strict_json_loads(row["metadata_json"])
             artifacts = metadata.get("artifact_ids", []) if isinstance(metadata, dict) else []
+            try:
+                artifact_identities = normalize_run_artifact_ids(artifacts)
+            except ValueError:
+                artifact_identities = []
             checkpoint_revision = self.connection.execute(
                 """
-                SELECT revision_id
-                FROM knowledge_revisions_v3
-                WHERE json_extract(generation_json, '$.run_id') = ?
-                  AND kind = 'memory'
-                ORDER BY recorded_at DESC
+                SELECT historical.revision_id, historical.knowledge_id,
+                       historical.recorded_at, objects.current_revision_id,
+                       current.lifecycle AS current_lifecycle
+                FROM knowledge_revisions_v3 AS historical
+                JOIN knowledge_objects_v3 AS objects
+                  ON objects.knowledge_id = historical.knowledge_id
+                JOIN knowledge_revisions_v3 AS current
+                  ON current.revision_id = objects.current_revision_id
+                WHERE json_extract(historical.generation_json, '$.run_id') = ?
+                  AND historical.kind = 'memory'
+                  AND historical.lifecycle != 'forgotten'
+                ORDER BY historical.recorded_at DESC
                 LIMIT 1
                 """,
                 (row["run_id"],),
@@ -4657,37 +4955,27 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "identity": row["run_id"],
                     "status": run_status,
                     "recorded_at": row["recorded_at"],
-                    "artifact_identities": list(artifacts),
+                    "artifact_identities": artifact_identities,
                 }
             )
             related_object_ids.append(str(row["run_id"]))
-        if self._checkpoint_route_projection_exists():
-            checkpoint = self.connection.execute(
-                """
-                SELECT knowledge_id, revision_id, run_id, recorded_at
-                FROM knowledge_checkpoint_routes_v1
-                WHERE route_sha256 = ?
-                ORDER BY knowledge_id
-                LIMIT 2
-                """,
-                (route_sha256,),
-            ).fetchall()
-            if len(checkpoint) > 1:
-                return {
-                    "schema_version": "deeplaw.task-identity-timeline/v1",
-                    "status": "ambiguous",
-                    "entries": [],
-                    "truncated": False,
-                }
-            if checkpoint:
-                related_object_ids.append(str(checkpoint[0]["knowledge_id"]))
+            if checkpoint_revision is not None:
+                related_object_ids.append(str(checkpoint_revision["knowledge_id"]))
+                checkpoint_status = "superseded"
+                if checkpoint_revision["current_lifecycle"] == "forgotten":
+                    checkpoint_status = "forgotten"
+                elif (
+                    checkpoint_revision["revision_id"]
+                    == checkpoint_revision["current_revision_id"]
+                ):
+                    checkpoint_status = "current"
                 entries.append(
                     {
                         "entry_type": "checkpoint",
-                        "identity": checkpoint[0]["revision_id"],
-                        "related_identity": checkpoint[0]["knowledge_id"],
-                        "status": "current",
-                        "recorded_at": checkpoint[0]["recorded_at"],
+                        "identity": checkpoint_revision["revision_id"],
+                        "related_identity": checkpoint_revision["knowledge_id"],
+                        "status": checkpoint_status,
+                        "recorded_at": checkpoint_revision["recorded_at"],
                         "artifact_identities": [],
                     }
                 )
@@ -4713,19 +5001,16 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "artifact_identities": [],
                 }
             )
-        if len(entries) > limit:
-            return {
-                "schema_version": "deeplaw.task-identity-timeline/v1",
-                "status": "bound_exceeded",
-                "entries": [],
-                "truncated": True,
-            }
-        entries.sort(key=lambda item: (str(item["recorded_at"]), str(item["identity"])))
+        entries.sort(
+            key=lambda item: (str(item["recorded_at"]), str(item["identity"])),
+            reverse=True,
+        )
+        truncated = len(entries) > limit or len(rows) > limit
         return {
             "schema_version": "deeplaw.task-identity-timeline/v1",
             "status": "exact",
-            "entries": entries,
-            "truncated": False,
+            "entries": entries[:limit],
+            "truncated": truncated,
         }
 
     def _run_binding_admitted(

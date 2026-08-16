@@ -323,24 +323,43 @@ def _classification_map(classification: Mapping[str, Any]) -> dict[str, dict[str
         if not isinstance(gate_id, str) or gate_id in result:
             raise SemanticEvidenceError("gate classification contains duplicate or invalid gate")
         result[gate_id] = dict(gate)
-    expected_categories = {
-        "Core": {
-            "canonical_integrity",
-            "migration_recovery",
-            "secret_host_isolation",
-            "bounded_context",
-            "legal_evidence",
-            "source_citation_locator",
-            "scale_performance",
-            "supported_platforms",
-            "reproducible_supply_chain",
-            "human_gold_isolation",
-            "codex",
-            "selective_forget",
-        },
-        "Capability": {"timeline", "semantic_restore", "claude", "opencode"},
-        "Competitive Claim": {"comparative_incremental_benefit", "superiority", "sota"},
-    }
+    if classification.get("schema_version") == (
+        "deeplaw.v013-release-gate-classification/v6"
+    ):
+        from benchmarks.release.release_policy import (
+            V013_CAPABILITY_GATE_IDS,
+            V013_COMPETITIVE_GATE_IDS,
+            V013_CORE_GATE_IDS,
+        )
+
+        expected_categories = {
+            "Core": set(V013_CORE_GATE_IDS),
+            "Capability": set(V013_CAPABILITY_GATE_IDS),
+            "Competitive Claim": set(V013_COMPETITIVE_GATE_IDS),
+        }
+    else:
+        expected_categories = {
+            "Core": {
+                "canonical_integrity",
+                "migration_recovery",
+                "secret_host_isolation",
+                "bounded_context",
+                "legal_evidence",
+                "source_citation_locator",
+                "scale_performance",
+                "supported_platforms",
+                "reproducible_supply_chain",
+                "human_gold_isolation",
+                "codex",
+                "selective_forget",
+            },
+            "Capability": {"timeline", "semantic_restore", "claude", "opencode"},
+            "Competitive Claim": {
+                "comparative_incremental_benefit",
+                "superiority",
+                "sota",
+            },
+        }
     observed: dict[str, set[str]] = {key: set() for key in expected_categories}
     for gate_id, gate in result.items():
         category = gate.get("category")
@@ -787,6 +806,7 @@ def validate_release_manifest_semantics(
     manifest: Mapping[str, Any] | str | Path,
     *,
     assets_root: str | Path,
+    expected_evidence_run_id: int | None = None,
 ) -> dict[str, Any]:
     """Validate actual v6 report/classification bytes and the derived manifest receipt."""
 
@@ -872,6 +892,7 @@ def validate_release_manifest_semantics(
                     Path(assets_root), bindings["qualification_protocol_path"]
                 ),
                 classification_path=classification_path,
+                expected_evidence_run_id=expected_evidence_run_id,
             )
         except GateCollectionError as error:
             raise SemanticEvidenceError(str(error)) from error
@@ -922,11 +943,13 @@ def _main() -> int:
     parser = argparse.ArgumentParser(description="Validate v0.13 semantic release evidence")
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--assets-root", type=Path, required=True)
+    parser.add_argument("--evidence-run-id", type=int)
     args = parser.parse_args()
     try:
         result = validate_release_manifest_semantics(
             args.manifest,
             assets_root=args.assets_root,
+            expected_evidence_run_id=args.evidence_run_id,
         )
     except (OSError, SemanticEvidenceError) as error:
         print(str(error), file=sys.stderr)

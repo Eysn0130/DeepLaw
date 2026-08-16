@@ -29,6 +29,11 @@ class GateCollectionError(ValueError):
     """Raised when a Gate collection is incomplete or not reproducible."""
 
 
+def _collection_sha256(value: Mapping[str, Any]) -> str:
+    body = {key: item for key, item in value.items() if key != "report_sha256"}
+    return hashlib.sha256(canonical_json(body).encode("utf-8")).hexdigest()
+
+
 def _reject_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}
     for key, item in pairs:
@@ -109,6 +114,7 @@ def validate_collection(
     root: Path,
     active_path: Path = ACTIVE_QUALIFICATION_PATH,
     classification_path: Path = CLASSIFICATION_PATH,
+    expected_evidence_run_id: int | None = None,
 ) -> dict[str, Any]:
     """Re-run every Core validator and derive the release Gate disposition."""
 
@@ -119,7 +125,7 @@ def validate_collection(
     else:
         raise GateCollectionError("Gate collection must be a mapping or path")
     _validate_schema(document, COLLECTION_SCHEMA, label="Gate collection")
-    if document["report_sha256"] != record_sha256(document):
+    if document["report_sha256"] != _collection_sha256(document):
         raise GateCollectionError("Gate collection record digest differs")
     active, active_raw = _load(active_path)
     classification, classification_raw = _load(classification_path)
@@ -168,6 +174,7 @@ def validate_collection(
                 root=root,
                 active_path=active_path,
                 classification_path=classification_path,
+                expected_evidence_run_id=expected_evidence_run_id,
             )
         except GateValidationError as error:
             raise GateCollectionError(
@@ -200,6 +207,7 @@ def build_collection(
     report_id: str,
     active_path: Path = ACTIVE_QUALIFICATION_PATH,
     classification_path: Path = CLASSIFICATION_PATH,
+    expected_evidence_run_id: int | None = None,
 ) -> dict[str, Any]:
     """Build a decision-free reference collection, then fully revalidate it."""
 
@@ -231,12 +239,13 @@ def build_collection(
         "classification_sha256": hashlib.sha256(classification_raw).hexdigest(),
         "gate_results": sorted(references, key=lambda item: item["gate_id"]),
     }
-    document["report_sha256"] = record_sha256(document)
+    document["report_sha256"] = _collection_sha256(document)
     validate_collection(
         document,
         root=root,
         active_path=active_path,
         classification_path=classification_path,
+        expected_evidence_run_id=expected_evidence_run_id,
     )
     return document
 

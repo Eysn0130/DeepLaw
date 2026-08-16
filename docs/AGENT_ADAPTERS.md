@@ -440,12 +440,15 @@ receipts, Provider Capsules, logs, screenshots, and public support bundles also 
 continue to delegate retrieval, admission, governance, and persistence to the shared domain
 services.
 
-Codex continuity consumes only the public `thread/start`, `thread/resume`, `thread/fork`, and
-`thread/compact` lifecycle, official session/fork lineage, and cwd. OpenCode continuity consumes
-the public session lifecycle of exact version `1.18.16`. Host IDs are untrusted routing hints, not
+Codex and OpenCode continuity consume only the official lifecycle seams documented in their
+adjacent adapter READMEs, verified lineage, and cwd. Host IDs are untrusted routing hints, not
 DeepLaw identity or Authority: DeepLaw rebinds them to the owner-selected Vault, project, task, and
 workspace. Neither adapter stores transcript, hidden reasoning, authentication material, or Host
 private memory, and neither implements a second Agent runtime.
+
+The disabled sidecars, owner-only enable/disable path, read-only boundary, and exact event
+mappings are documented in `adapters/codex/README.md` and `adapters/opencode/README.md`; static
+tests are not real Host receipts.
 
 The shipped MCP caller inventory is closed as follows:
 
@@ -558,10 +561,11 @@ the newest is forbidden. The Provider sees neither candidate identities nor rout
 local exact-match development path and static Codex/Claude/OpenCode adapter parity are implemented;
 stable identity derivation and three-run real-Host cold-start qualification remain not executed.
 
-New bound mutations use additive `knowledge-sink.input/v5`. Frozen input v2 remains accepted for
-legacy `record_run`, but an unbound legacy Run cannot silently ground a new default-v6 working
-checkpoint. Owner reconciliation creates a new bound Run and successor Revision; adapters must not
-rewrite history or implement a second identity/reconciliation path.
+New bound mutations use additive `knowledge-sink.input/v6`. Frozen input v2-v5 bytes remain
+readable; an unbound legacy Run cannot silently ground a new default-v6 working checkpoint.
+Current Run Artifact IDs are validated once at the domain commit seam as opaque, bounded,
+non-path, non-Secret-shaped identifiers. Owner reconciliation creates a new bound Run and successor
+Revision; adapters must not rewrite history or implement a second identity/reconciliation path.
 
 `context` requires `confirm_no_case_data=true` because task and goal text become
 provider-visible Capsule data. A host may send that confirmation only after keeping

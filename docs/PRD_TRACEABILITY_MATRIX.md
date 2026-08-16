@@ -95,7 +95,7 @@ The current artifact and final executed/failed/not-executed decision are recorde
   implemented in the domain stores.
 - Current source-candidate read surfaces are Query Plan v6, local Capsule v3, Provider Capsule v2,
   and MCP `knowledge-support-output/v6`; the mutation surface is
-  `knowledge-sink.input/v5` with frozen v2 compatibility. The published package remains v0.12.0;
+  `knowledge-sink.input/v6` with frozen v2-v5 compatibility. The published package remains v0.12.0;
   these candidate surfaces are not thereby released as v0.13.
 - Pass 8 final code-candidate baseline before this documentation rotation:
   `uv run --frozen pytest --strict-markers` → `1427 passed, 6 skipped`.
@@ -140,8 +140,9 @@ required, and release-blocking; Claude and semantic restore remain optional and 
 Gate v6 supersedes active classification v5 while preserving historical
 `../benchmarks/release/v013-gate-classification-v5.json` bytes as qualification evidence.
 Gate v6 preserves v1-v5 as history, admits development corpus for deterministic/mechanical
-Gates, requires external holdout/final-blind material for semantic Gates, and derives every result
-through the current raw validator contract. OpenCode
+Gates, requires external holdout/final-blind material for semantic Gates, and derives every Core
+result through a source-specific retained-evidence validator; generic raw evidence remains a
+development diagnostic. OpenCode
 remains bound to exact tool version `1.18.16`; this prerequisite is not a Host result. Native Host
 qualification is separate from the nine-row Linux/macOS/Windows artifact gate. Human Gold, legal evidence, Context Utility,
 scale, three-OS evidence, and the provenance/signing/public-redownload artifact chain continue to
@@ -190,8 +191,8 @@ Evidence abbreviations in the table are repository-relative paths:
   `KMCP`: `src/deeplaw/knowledge_mcp_server.py`.
 - `TC`: `src/deeplaw/task_context.py` and
   `contracts/task-context-binding.v1.schema.json`.
-- `TR`: the rebuildable `knowledge_checkpoint_routes_v1` projection in `KA`; `SINK5`:
-  `contracts/knowledge-sink.input.v5.schema.json` with frozen v2 compatibility.
+- `TR`: the rebuildable `knowledge_checkpoint_routes_v1` projection in `KA`; `SINK6`:
+  `contracts/knowledge-sink.input.v6.schema.json` with frozen v2-v5 compatibility.
 - `WIKI`: `src/deeplaw/projection/`, `src/deeplaw/wiki/`, and
   `src/deeplaw/wiki_coverage.py`; `LEGAL`: `src/deeplaw/store.py`,
   `src/deeplaw/search.py`, and `src/deeplaw/mcp_server.py`.

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-source-observation.v1.schema.json",
+  "title": "DeepLaw v0.13 retained source observation v1",
+  "description": "Low-level retained facts. Gate pass, exit, metric, and hard-failure decisions are deliberately absent and are derived by the Gate validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_source", "gate_id", "run_id",
+    "candidate_binding", "facts", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-source-observation/v1"},
+    "evidence_source": {
+      "enum": [
+        "reproducible_artifact", "host_receipt", "human_gold_scorer",
+        "legal_exact_source", "scale_report", "timeline_receipt"
+      ]
+    },
+    "gate_id": {"$ref": "#/$defs/identifier"},
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "facts": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 64,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{1,99}$"},
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "boolean"},
+          {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+          {"type": "string", "minLength": 1, "maxLength": 500}
+        ]
+      }
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

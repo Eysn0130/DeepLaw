@@ -14,8 +14,9 @@ wrong-worktree, stale, forgotten, secret-unverifiable, and workspace-bound cases
 Gaps.
 
 Workspace identity hashes bounded non-sensitive untracked content rather than trusting
-size/mtime/inode. Secret-looking tracked, untracked, or ignored candidates are detected only from
+size/mtime/inode. Secret-looking tracked or non-ignored untracked candidates are detected only from
 Git path/status metadata: their contents are never opened, and the snapshot becomes unverifiable.
+Ignored paths and ignored trees are never enumerated and never enter route or snapshot identity.
 The capacity ceiling remains closed and reports `workspace_snapshot_bound`. Fork selects and
 validates a separate child worktree in the same repository. Exact forget resolves the recorded
 checkpoint identity rather than requiring the current dirty/base snapshot to remain unchanged.
@@ -46,8 +47,9 @@ Historical qualification schemas, fixtures, Gate classifications v1-v5, and Plat
 unchanged. Current contracts are:
 
 - `deeplaw.v013-active-qualification/v1` for one exact candidate and external-input binding;
-- Gate classification v6 plus reusable raw evidence, derived Gate Result, selective-forget raw
-  receipt, and exact all-Core collection contracts; v6 keeps assembly disabled until that
+- Gate classification v6 plus source-specific retained evidence, derived Gate Result,
+  selective-forget raw receipt, and exact all-Core collection contracts; generic raw evidence is
+  diagnostic-only, and v6 keeps assembly disabled until that
   reproducible collection proves every Core Gate passed with zero hard failures;
 - Platform Core v2 for complete, disjoint current collection classification;
 - one reproducible-build output whose wheel/sdist bytes are the only downstream artifact source.

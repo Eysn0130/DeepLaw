@@ -36,10 +36,11 @@ The three reproduced defects and their minimum repairs are:
    and no LWW choice is made.
 
 The route projection is derived and rebuildable. The continuity correction adds no canonical
-Knowledge table, migration, or sink schema, and the published `knowledge-sink.input/v2` bytes
-remain unchanged. The resulting
-compatibility boundary is semantic (new writes use the single-head/CAS policy; legacy bytes and
-history remain readable and immutable), not a persistence-contract expansion.
+Knowledge table or migration. Pass 22 adds `knowledge-sink.input/v6` so every current `record_run`
+commit accepts only opaque, bounded, non-path, non-Secret-shaped Artifact IDs; the same validator
+is reused by task checkpoints and Timeline output. Published input v2-v5 bytes remain unchanged
+and readable. Rollback to a v5 runtime requires no data migration because v6 narrows accepted
+input without changing the stored Run shape; records created through v6 are a valid v5 subset.
 
 The active Gate v6 classification is explicit: **Core** gates, including Timeline, Codex, and
 OpenCode, remain required and are not lowered; **Capability** gates may remain `not_claimed` when

@@ -62,7 +62,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -118,7 +118,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -174,7 +174,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -232,7 +232,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -289,7 +289,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -352,7 +352,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -411,7 +411,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -467,7 +467,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 9,
       "required_unique_dimensions": [
@@ -557,7 +557,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -615,7 +615,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -674,7 +674,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 3,
       "required_unique_dimensions": [
@@ -741,7 +741,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.selective-forget-qualification/v1"
+        "deeplaw.v013-selective-forget-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -810,7 +810,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 1,
       "required_unique_dimensions": [
@@ -982,7 +982,7 @@
       "validator_version": "1.0.0",
       "implementation_status": "ready",
       "accepted_input_schema_versions": [
-        "deeplaw.v013-gate-raw-evidence/v1"
+        "deeplaw.v013-gate-source-evidence/v1"
       ],
       "minimum_distinct_run_count": 3,
       "required_unique_dimensions": [

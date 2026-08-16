@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-selective-forget-evidence.v1.schema.json",
+  "title": "DeepLaw v0.13 selective-forget workflow evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "workflow_provenance", "receipt", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-selective-forget-evidence/v1"},
+    "workflow_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository", "workflow_name", "workflow_path", "workflow_run_id",
+        "head_sha", "event", "runner_environment"
+      ],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "workflow_name": {"const": "External Qualification Evidence"},
+        "workflow_path": {"const": ".github/workflows/external-qualification-evidence.yml"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "event": {"const": "workflow_dispatch"},
+        "runner_environment": {"const": "self-hosted-macos-qualification"}
+      }
+    },
+    "receipt": {"type": "object"},
+    "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

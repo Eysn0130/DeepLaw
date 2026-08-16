@@ -3667,16 +3667,16 @@
         {
           "junit": {
             "classname": "tests.test_prd12_sink_v5_contract",
-            "name": "test_grant_operation_selection_is_additive[operations3-v5-v2]"
+            "name": "test_grant_operation_selection_is_additive[operations3-v6-v2]"
           },
-          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations3-v5-v2]"
+          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations3-v6-v2]"
         },
         {
           "junit": {
             "classname": "tests.test_prd12_sink_v5_contract",
-            "name": "test_grant_operation_selection_is_additive[operations4-v5-v4]"
+            "name": "test_grant_operation_selection_is_additive[operations4-v6-v4]"
           },
-          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations4-v5-v4]"
+          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations4-v6-v4]"
         },
         {
           "junit": {
@@ -3695,16 +3695,16 @@
         {
           "junit": {
             "classname": "tests.test_prd12_sink_v5_contract",
-            "name": "test_v2_v3_v4_contract_bytes_remain_unchanged"
+            "name": "test_v2_v3_v4_v5_contract_bytes_remain_unchanged"
           },
-          "node_id": "tests/test_prd12_sink_v5_contract.py::test_v2_v3_v4_contract_bytes_remain_unchanged"
+          "node_id": "tests/test_prd12_sink_v5_contract.py::test_v2_v3_v4_v5_contract_bytes_remain_unchanged"
         },
         {
           "junit": {
             "classname": "tests.test_prd12_sink_v5_contract",
-            "name": "test_v5_schema_is_valid_and_hydrated_tool_accepts_both_run_shapes"
+            "name": "test_v5_schema_remains_valid_and_v6_tool_accepts_both_run_shapes"
           },
-          "node_id": "tests/test_prd12_sink_v5_contract.py::test_v5_schema_is_valid_and_hydrated_tool_accepts_both_run_shapes"
+          "node_id": "tests/test_prd12_sink_v5_contract.py::test_v5_schema_remains_valid_and_v6_tool_accepts_both_run_shapes"
         },
         {
           "junit": {
@@ -7664,9 +7664,37 @@
         {
           "junit": {
             "classname": "tests.test_v013_gate_validator_v1",
-            "name": "test_one_raw_execution_is_reusable_by_independent_validators"
+            "name": "test_host_gate_requires_two_holdout_and_one_final_blind"
           },
-          "node_id": "tests/test_v013_gate_validator_v1.py::test_one_raw_execution_is_reusable_by_independent_validators"
+          "node_id": "tests/test_v013_gate_validator_v1.py::test_host_gate_requires_two_holdout_and_one_final_blind"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_validator_v1",
+            "name": "test_self_hashed_generic_raw_cannot_produce_a_core_pass"
+          },
+          "node_id": "tests/test_v013_gate_validator_v1.py::test_self_hashed_generic_raw_cannot_produce_a_core_pass"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_validator_v1",
+            "name": "test_self_hashed_source_json_without_verified_workflow_run_cannot_pass_core"
+          },
+          "node_id": "tests/test_v013_gate_validator_v1.py::test_self_hashed_source_json_without_verified_workflow_run_cannot_pass_core"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_validator_v1",
+            "name": "test_source_observation_rejects_caller_authored_pass_field"
+          },
+          "node_id": "tests/test_v013_gate_validator_v1.py::test_source_observation_rejects_caller_authored_pass_field"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_validator_v1",
+            "name": "test_source_specific_timeline_derives_pass_from_retained_receipt"
+          },
+          "node_id": "tests/test_v013_gate_validator_v1.py::test_source_specific_timeline_derives_pass_from_retained_receipt"
         },
         {
           "junit": {
@@ -9697,6 +9725,216 @@
             "name": "test_windows_acl_powershell_subprocess_uses_minimal_environment"
           },
           "node_id": "tests/test_v013_pass21_windows_acl_environment.py::test_windows_acl_powershell_subprocess_uses_minimal_environment"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_child_task_text_locates_after_checkpoint_and_conflicts_are_ambiguous"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_child_task_text_locates_after_checkpoint_and_conflicts_are_ambiguous"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_current_deeplaw_repository_snapshot_excludes_generated_ignored_state"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_current_deeplaw_repository_snapshot_excludes_generated_ignored_state"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_ignored_files_never_enter_workspace_snapshot_identity"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_ignored_files_never_enter_workspace_snapshot_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_partial_checkpoint_recovers_after_process_exit_and_restart"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_partial_checkpoint_recovers_after_process_exit_and_restart"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_keeps_safe_opaque_artifact_ids"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_keeps_safe_opaque_artifact_ids"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[../outside]"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[../outside]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[/absolute/private/report.json]"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[/absolute/private/report.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[C:/private/report.json]"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[C:/private/report.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[deployment-secret]"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[deployment-secret]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[provider_token]"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[provider_token]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[signing-key]"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_record_run_shared_commit_seam_rejects_unsafe_artifact_ids[signing-key]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_continuity_closure",
+            "name": "test_timeline_retains_identity_only_history_after_drift_and_forget"
+          },
+          "node_id": "tests/test_v013_pass22_continuity_closure.py::test_timeline_retains_identity_only_history_after_drift_and_forget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_projection_rejects_path_and_secret_values[/Users/example/private/evidence.json]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_projection_rejects_path_and_secret_values[/Users/example/private/evidence.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_projection_rejects_path_and_secret_values[api_key=not-a-real-secret-canary]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_projection_rejects_path_and_secret_values[api_key=not-a-real-secret-canary]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_projection_rejects_path_and_secret_values[ghp_abcdefghijklmnopqrstuvwxyz123456]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_projection_rejects_path_and_secret_values[ghp_abcdefghijklmnopqrstuvwxyz123456]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_secret_named_or_raw_log_artifacts"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_secret_named_or_raw_log_artifacts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_qualification_workflow_matches_consumer_and_never_rebuilds"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_qualification_workflow_matches_consumer_and_never_rebuilds"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_codex_events_delegate_to_continuity_and_emit_path_free_receipts"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_codex_events_delegate_to_continuity_and_emit_path_free_receipts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_lifecycle_config_requires_owner_only_non_symlink_file"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_lifecycle_config_requires_owner_only_non_symlink_file"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_lifecycle_is_disabled_by_default_and_rejects_client_case_workspace"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_lifecycle_is_disabled_by_default_and_rejects_client_case_workspace"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_opencode_summarize_maps_to_compaction_without_changing_v2_claim"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_opencode_summarize_maps_to_compaction_without_changing_v2_claim"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_host_lifecycle",
+            "name": "test_read_lifecycle_rejects_checkpoint_or_unknown_event"
+          },
+          "node_id": "tests/test_v013_pass22_host_lifecycle.py::test_read_lifecycle_rejects_checkpoint_or_unknown_event"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_complete_v6_collection_assembles_commercial_manifest"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_complete_v6_collection_assembles_commercial_manifest"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_reproducible_gate_derives_candidate_artifact_mismatch"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_reproducible_gate_derives_candidate_artifact_mismatch"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_unrelated_passing_junit_cannot_validate_core_gate"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_unrelated_passing_junit_cannot_validate_core_gate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_v6_collection_derives_hard_failure_from_mismatched_observation"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_v6_collection_derives_hard_failure_from_mismatched_observation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_v6_collection_rejects_missing_core"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_v6_collection_rejects_missing_core"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_v6_collection_reopens_retained_source_artifact_bytes"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_v6_collection_reopens_retained_source_artifact_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_release_provenance",
+            "name": "test_v6_validator_rejects_noncanonical_classification"
+          },
+          "node_id": "tests/test_v013_pass22_release_provenance.py::test_v6_validator_rejects_noncanonical_classification"
         },
         {
           "junit": {
@@ -12415,9 +12653,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 1758,
+      "count": 1792,
       "selection": "not qualification and not windows_native",
-      "sha256": "0a71354bab9161c2a13b0594993adc559d21f798b0a4fb2cf11b2154703900de"
+      "sha256": "2559df9e3b29d9e4d9d360b4181e2418443c3fab293f41d4e67c713c819b0d50"
     },
     "windows": {
       "additional_cases": [
@@ -12450,13 +12688,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 1762,
+      "count": 1796,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "90a860f127f42d2606e6ec9e9133236517b63844743a869ee013a3388aad2a0c"
+      "sha256": "9d0ec611ffff48b9efaffb09bb518273c05cd01dfec70eca42099d5b063c3518"
     }
   },
-  "manifest_sha256": "cea976369c0b4c8b85ae56a95deb6d1a259ba880025408b9cac73666f0d560c8",
+  "manifest_sha256": "79a8b434182e301bf73901b18c7648b1f92612f25ce6cfedde5253fd875c495d",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

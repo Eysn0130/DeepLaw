@@ -25,6 +25,7 @@ from deeplaw.util import sha256_bytes
 _V2_SHA256 = "b3c5c100471cec3a8ecdce115255ae3e4d0d7053800936e5a611fe103527019a"
 _V3_SHA256 = "828ccd6ca1faf1229c121236d43844ed7f3e010b98b7cf82d3dfc772958bbcd3"
 _V4_SHA256 = "8e127318b821169f19408f60c4be3da19d240a7cc180776adb5715e30efe2b77"
+_V5_SHA256 = "fd4dbcb6ab75dca703643f4c09f7f10fa09eddcc63674ae017cb8a77040011f7"
 
 
 def _repository() -> Path:
@@ -72,13 +73,13 @@ def test_v2_is_byte_exact_and_keeps_unbound_record_run() -> None:
     assert list(validator.iter_errors(_record_run(metadata={"task_binding": {}})))
 
 
-def test_v5_schema_is_valid_and_hydrated_tool_accepts_both_run_shapes() -> None:
+def test_v5_schema_remains_valid_and_v6_tool_accepts_both_run_shapes() -> None:
     path = _repository() / "contracts/knowledge-sink.input.v5.schema.json"
     schema = json.loads(path.read_text())
     Draft202012Validator.check_schema(schema)
 
     tool = knowledge_sink_tool_definition()
-    assert tool.inputSchema["$id"].endswith("knowledge-sink.input.v5.schema.json")
+    assert tool.inputSchema["$id"].endswith("knowledge-sink.input.v6.schema.json")
     validator = Draft202012Validator(tool.inputSchema, format_checker=FormatChecker())
     validator.validate(_record_run(key="legacy"))
     validator.validate(
@@ -101,6 +102,11 @@ def test_v5_schema_is_valid_and_hydrated_tool_accepts_both_run_shapes() -> None:
     assert list(validator.iter_errors(unknown))
     top_level_unknown = {**_record_run(key="top-level-unknown"), "branch": "private-feature"}
     assert list(validator.iter_errors(top_level_unknown))
+    unsafe = _record_run(
+        key="unsafe-artifact",
+        metadata={"task_binding": _binding(), "artifact_ids": ["C:/private/report.json"]},
+    )
+    assert list(validator.iter_errors(unsafe))
 
 
 @pytest.mark.parametrize(
@@ -109,8 +115,8 @@ def test_v5_schema_is_valid_and_hydrated_tool_accepts_both_run_shapes() -> None:
         (("remember",), "v2", "v2"),
         (("begin_compilation",), "v3", "v3"),
         (("stage_semantic_observations",), "v4", "v4"),
-        (("record_run",), "v5", "v2"),
-        (("record_run", "stage_semantic_observations"), "v5", "v4"),
+        (("record_run",), "v6", "v2"),
+        (("record_run", "stage_semantic_observations"), "v6", "v4"),
     ],
 )
 def test_grant_operation_selection_is_additive(
@@ -162,11 +168,12 @@ def test_handle_accepts_legacy_and_bound_runs_through_one_store(tmp_path: Path) 
         )
 
 
-def test_v2_v3_v4_contract_bytes_remain_unchanged() -> None:
+def test_v2_v3_v4_v5_contract_bytes_remain_unchanged() -> None:
     expected = {
         "knowledge-sink.input.v2.schema.json": _V2_SHA256,
         "knowledge-sink.input.v3.schema.json": _V3_SHA256,
         "knowledge-sink.input.v4.schema.json": _V4_SHA256,
+        "knowledge-sink.input.v5.schema.json": _V5_SHA256,
     }
     for name, digest in expected.items():
         path = _repository() / "contracts" / name

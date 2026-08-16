@@ -52,10 +52,11 @@ identity, status, recorded time, and opaque Artifact identity. A global or unrel
 is not inserted into another task's timeline.
 
 Workspace binding hashes bounded non-sensitive untracked file content so same-size/same-metadata
-changes cannot alias. Secret-looking tracked, untracked, or ignored candidates are classified by
-path only and return `workspace_secret_unverifiable`; their bytes are not opened. Per-file, total
-byte, and path-count limits return `workspace_snapshot_bound`. Provider Capsules never receive
-workspace metadata, raw diffs, local paths, or these local inspection details.
+changes cannot alias. Secret-looking tracked or non-ignored untracked candidates are classified by
+path only and return `workspace_secret_unverifiable`; their bytes are not opened. Ignored paths are
+not enumerated and do not contribute to route or snapshot identity. Per-file, total byte, and
+path-count limits return `workspace_snapshot_bound`. Provider Capsules never receive workspace
+metadata, raw diffs, local paths, or these local inspection details.
 
 ## 1. Product boundary
 
@@ -447,12 +448,15 @@ and MCP exception text crosses the same projection rather than reflecting sensit
 details.
 
 The published `knowledge-sink.input/v2` bytes remain a historical compatibility contract: an old
-client may still record an unbound Run. The additive `knowledge-sink.input/v5` contract is the
-current bound-write seam for new working checkpoints. An unbound legacy Run and checkpoint remain
+client may still record an unbound Run. Input v5 remains byte-frozen history, while additive
+`knowledge-sink.input/v6` is the current bound-write seam. It narrows every current Run commit to
+opaque, bounded, non-path, non-Secret-shaped Artifact IDs at the shared domain commit seam; CLI,
+MCP, task checkpoints, and Timeline reuse that rule. An unbound legacy Run and checkpoint remain
 immutable, verifiable history but are withheld from default v6 Context. Owner-controlled
 reconciliation creates a new bound Run and an attributable successor Knowledge Revision; it never
 rewrites the historical Run or checkpoint in place. This is a semantic compatibility boundary
-even though no new canonical table is required.
+and requires no new canonical table or migration. A runtime rollback to v5 can read v6-created
+records because their persistence shape is unchanged and their Artifact IDs are a strict v5 subset.
 
 Query receipts have three distinct roles. The provider receipt receives only an opaque `receipt_id`.
 The current source candidate keeps a process-local, non-persistent Query Trace with

@@ -645,17 +645,34 @@ def _v5_input_schema(
     return schema
 
 
+def _v6_input_schema(
+    *,
+    operations: tuple[str, ...] | None = None,
+    evaluator_types: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    contract = deepcopy(_contract("knowledge-sink.input.v6.schema.json"))
+    schema = _v5_input_schema(
+        operations=operations,
+        evaluator_types=evaluator_types,
+    )
+    schema["$id"] = contract["$id"]
+    schema["title"] = contract["title"]
+    schema["allOf"] = [deepcopy(contract["allOf"][1])]
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def knowledge_sink_tool_definition(
     *,
     operations: tuple[str, ...] | None = None,
     evaluator_types: tuple[str, ...] | None = None,
 ) -> types.Tool:
-    v5 = operations is None or "record_run" in operations
+    v6 = operations is None or "record_run" in operations
     v4 = bool(operations and _V4_OPERATIONS.intersection(operations))
     extended = bool(operations and _EXTENDED_OPERATIONS.intersection(operations))
     input_schema = (
-        _v5_input_schema(operations=operations, evaluator_types=evaluator_types)
-        if v5
+        _v6_input_schema(operations=operations, evaluator_types=evaluator_types)
+        if v6
         else _v4_input_schema(operations=operations, evaluator_types=evaluator_types)
         if v4
         else _v3_input_schema(operations=operations, evaluator_types=evaluator_types)
@@ -704,7 +721,9 @@ def knowledge_sink_tool_definition(
 
 def _validate(name: str, value: dict[str, Any]) -> None:
     schema = (
-        _v5_input_schema()
+        _v6_input_schema()
+        if name == "knowledge-sink.input.v6.schema.json"
+        else _v5_input_schema()
         if name == "knowledge-sink.input.v5.schema.json"
         else _v4_input_schema()
         if name == "knowledge-sink.input.v4.schema.json"
@@ -732,6 +751,7 @@ def _validate(name: str, value: dict[str, Any]) -> None:
         "knowledge-sink.input.v3.schema.json",
         "knowledge-sink.input.v4.schema.json",
         "knowledge-sink.input.v5.schema.json",
+        "knowledge-sink.input.v6.schema.json",
     }:
         operation = value.get("operation")
         allowed = _OPERATION_FIELDS.get(operation)
@@ -761,13 +781,13 @@ def handle_knowledge_sink(
     grant_operations = cast(list[str], grant_status["operations"])
     if operation not in grant_operations:
         raise PermissionError("Knowledge Sink operation is outside the active grant")
-    v5 = "record_run" in grant_operations
+    v6 = "record_run" in grant_operations
     v4 = bool(_V4_OPERATIONS.intersection(grant_operations))
     extended = bool(_EXTENDED_OPERATIONS.intersection(grant_operations))
     _validate(
         (
-            "knowledge-sink.input.v5.schema.json"
-            if v5
+            "knowledge-sink.input.v6.schema.json"
+            if v6
             else "knowledge-sink.input.v4.schema.json"
             if v4
             else "knowledge-sink.input.v3.schema.json"

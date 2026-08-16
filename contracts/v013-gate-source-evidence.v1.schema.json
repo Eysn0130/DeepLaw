@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-gate-source-evidence.v1.schema.json",
+  "title": "DeepLaw v0.13 source-specific Gate evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "artifact_kind", "evidence_source", "gate_id",
+    "candidate_version", "candidate_binding", "protocol_binding", "gold_binding",
+    "corpus", "isolation", "workflow_provenance", "executions", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-gate-source-evidence/v1"},
+    "artifact_kind": {"$ref": "#/$defs/identifier"},
+    "evidence_source": {
+      "enum": [
+        "ci_junit", "platform", "reproducible_artifact", "host_receipt",
+        "human_gold_scorer", "legal_exact_source", "scale_report", "timeline_receipt"
+      ]
+    },
+    "gate_id": {"$ref": "#/$defs/identifier"},
+    "candidate_version": {"$ref": "#/$defs/semver"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "gold_binding": {"$ref": "#/$defs/goldBinding"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "isolation": {"$ref": "#/$defs/isolation"},
+    "workflow_provenance": {"$ref": "#/$defs/workflowProvenance"},
+    "executions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {"$ref": "#/$defs/execution"}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "maxLength": 32
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_sha256", "active_qualification_sha256"],
+      "properties": {
+        "protocol_id": {"$ref": "#/$defs/identifier"},
+        "protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "active_qualification_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "goldBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_sha256", "role", "source", "independent"],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"enum": ["development", "qualification_holdout", "final_blind"]},
+        "source": {"enum": ["repository", "repository_external"]},
+        "independent": {"type": "boolean"}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "role", "source", "read_only"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"enum": ["development", "qualification_holdout", "final_blind"]},
+        "source": {"enum": ["repository", "repository_external"]},
+        "read_only": {"const": true}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_sha256", "source_mount_read_only", "compiler_gold_visible",
+        "compiler_scorer_visible", "scorer_process_separate",
+        "repository_source_visible", "ambient_credentials_visible"
+      ],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "source_mount_read_only": {"const": true},
+        "compiler_gold_visible": {"const": false},
+        "compiler_scorer_visible": {"const": false},
+        "scorer_process_separate": {"const": true},
+        "repository_source_visible": {"const": false},
+        "ambient_credentials_visible": {"const": false}
+      }
+    },
+    "workflowProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository", "workflow_name", "workflow_path", "workflow_run_id",
+        "head_sha", "event", "runner_environment"
+      ],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "workflow_name": {"const": "External Qualification Evidence"},
+        "workflow_path": {"const": ".github/workflows/external-qualification-evidence.yml"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "head_sha": {"$ref": "#/$defs/git"},
+        "event": {"const": "workflow_dispatch"},
+        "runner_environment": {"const": "self-hosted-macos-qualification"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256", "format"],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,512}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "format": {"enum": ["junit_xml", "source_observation_v1"]}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id", "argv", "os_name", "python_version", "tool_name",
+        "tool_version", "model_id", "reasoning_effort", "dimensions", "source"
+      ],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "argv": {
+          "type": "array", "minItems": 1, "maxItems": 64,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "os_name": {"enum": ["linux", "macos", "windows"]},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$"},
+        "tool_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "tool_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "model_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200},
+        "reasoning_effort": {
+          "anyOf": [{"type": "null"}, {"enum": ["low", "medium", "high", "xhigh", "max"]}]
+        },
+        "dimensions": {
+          "type": "object", "minProperties": 1, "maxProperties": 32,
+          "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "source": {"$ref": "#/$defs/source"}
+      }
+    }
+  }
+}

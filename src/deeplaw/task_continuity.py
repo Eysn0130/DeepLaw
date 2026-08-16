@@ -21,7 +21,7 @@ from typing import Any, Literal
 from .api import KnowledgeOS
 from .bounded_subprocess import BoundedSubprocessError, run_bounded_subprocess
 from .host_runtime import resolve_knowledge_vault, safe_directory_path
-from .knowledge_autonomy import AutonomousKnowledgeStore
+from .knowledge_autonomy import AutonomousKnowledgeStore, normalize_run_artifact_ids
 from .knowledge_sink_mcp_server import handle_knowledge_sink
 from .knowledge_store import KnowledgeVault
 from .task_context import (
@@ -55,12 +55,6 @@ _MAX_UNTRACKED_FILE_BYTES = 4 * 1024 * 1024
 _MAX_UNTRACKED_TOTAL_BYTES = 16 * 1024 * 1024
 _MAX_TIMELINE_ENTRIES = 100
 _RESUME_TASK = "Restore the exact admitted working checkpoint for this task route."
-_SAFE_ARTIFACT_REF = re.compile(r"^[A-Za-z][A-Za-z0-9._:-]{0,199}$")
-_SECRET_ARTIFACT_REF = re.compile(
-    r"(?:^|[._:-])(?:auth|credential|credentials|secret|secrets|password|passwd|"
-    r"api[_-]?key|private[_-]?key|token)(?:$|[._:-])",
-    re.IGNORECASE,
-)
 
 ForkMode = Literal["continue-parent", "child-task"]
 ReadOperation = Literal["resume", "compaction"]
@@ -232,20 +226,9 @@ def _dirty_state_sha256(worktree: Path) -> str:
             max_stdout_bytes=_MAX_GIT_STATUS_BYTES,
         )
     )
-    ignored = _workspace_paths(
-        _git(
-            worktree,
-            "ls-files",
-            "--others",
-            "--ignored",
-            "--exclude-standard",
-            "-z",
-            max_stdout_bytes=_MAX_GIT_STATUS_BYTES,
-        )
-    )
     secret_candidates = {
         relative_text
-        for relative_text, _relative in (*tracked, *untracked, *ignored)
+        for relative_text, _relative in (*tracked, *untracked)
         if _secret_looking_workspace_path(relative_text)
     }
     if secret_candidates:
@@ -651,7 +634,7 @@ def locate_task(
 
     expected_vault_id = decode_task_handle(task_handle)["vault_id"] if task_handle else None
     selected, vault_id = _vault(vault_path, expected_vault_id=expected_vault_id)
-    project_sha256, _start_lineage, _ = _project_task_identities(project, task)
+    project_sha256, _start_lineage, task_text = _project_task_identities(project, task)
     try:
         snapshot = _workspace_snapshot(workspace)
     except WorkspaceSnapshotGap as error:
@@ -665,9 +648,8 @@ def locate_task(
         dirty_state_sha256=snapshot["dirty_state_sha256"],
     )
     with AutonomousKnowledgeStore(selected, read_only=True) as store:
-        lookup = store.locate_checkpoint_route_projection(
-            route_sha256=task_route_sha256(current_binding),
-            task_lineage_sha256=_start_lineage,
+        lookup = store.locate_checkpoint_task_projection(
+            task_sha256=sha256_bytes(task_text.encode("utf-8")),
             project_sha256=project_sha256,
             repository_sha256=snapshot["repository_sha256"],
             worktree_sha256=snapshot["worktree_sha256"],
@@ -675,15 +657,28 @@ def locate_task(
             scope=store.vault_scope,
             max_sensitivity="private",
         )
+        if lookup.get("status") == "not_found":
+            lookup = store.locate_checkpoint_route_projection(
+                route_sha256=task_route_sha256(current_binding),
+                task_lineage_sha256=_start_lineage,
+                project_sha256=project_sha256,
+                repository_sha256=snapshot["repository_sha256"],
+                worktree_sha256=snapshot["worktree_sha256"],
+                snapshot_sha256=task_snapshot_sha256(current_binding),
+                scope=store.vault_scope,
+                max_sensitivity="private",
+            )
     if lookup.get("status") != "exact":
+        lookup_status = str(lookup.get("status", "invalid"))
+        gap_code = "task_line_ambiguous" if lookup_status == "ambiguous" else lookup_status
         return {
             "schema_version": TASK_CONTINUITY_SCHEMA_VERSION,
             "operation": "locate",
-            "status": lookup.get("status", "invalid"),
+            "status": lookup_status,
             "write_performed": False,
             "transcript_copied": False,
             "native_host_lifecycle_observed": False,
-            "gap": {"code": str(lookup.get("status", "invalid"))},
+            "gap": {"code": gap_code},
         }
     binding = lookup.get("canonical_binding")
     if not isinstance(binding, dict):
@@ -949,39 +944,96 @@ def timeline_task(
         or not 1 <= limit <= _MAX_TIMELINE_ENTRIES
     ):
         raise ValueError("task timeline limit is invalid")
-    located = locate_task(
-        vault_path=vault_path,
-        project=project,
-        task=task,
-        workspace=workspace,
-        task_handle=task_handle,
-    )
-    if located.get("status") != "exact":
-        return {**located, "operation": "timeline", "entries": []}
-    selected, vault_id = _vault(
-        vault_path,
-        expected_vault_id=decode_task_handle(str(located["task_handle"]))["vault_id"],
-    )
-    _handle, binding = _binding(
-        str(located["task_handle"]),
-        vault_id=vault_id,
-        workspace=workspace,
-    )
+    expected_vault_id = decode_task_handle(task_handle)["vault_id"] if task_handle else None
+    selected, vault_id = _vault(vault_path, expected_vault_id=expected_vault_id)
+    project_sha256, start_lineage, task_text = _project_task_identities(project, task)
+    route_identity = _workspace_route_identity(workspace)
+    snapshot_gap: WorkspaceSnapshotGap | None = None
+    snapshot_sha256: str | None = None
+    try:
+        snapshot = _workspace_snapshot(workspace)
+        current_binding = build_task_context_binding(
+            project_sha256,
+            start_lineage,
+            repository_sha256=snapshot["repository_sha256"],
+            worktree_sha256=snapshot["worktree_sha256"],
+            base_revision=snapshot["base_revision"],
+            dirty_state_sha256=snapshot["dirty_state_sha256"],
+        )
+        snapshot_sha256 = task_snapshot_sha256(current_binding)
+    except WorkspaceSnapshotGap as error:
+        snapshot_gap = error
     with AutonomousKnowledgeStore(selected, read_only=True) as store:
-        timeline = store.task_identity_timeline(task_binding=binding, limit=limit)
+        history = store.locate_task_route_history(
+            task_sha256=sha256_bytes(task_text.encode("utf-8")),
+            fallback_task_lineage_sha256=start_lineage,
+            project_sha256=project_sha256,
+            repository_sha256=route_identity["repository_sha256"],
+            worktree_sha256=route_identity["worktree_sha256"],
+            snapshot_sha256=snapshot_sha256,
+            scope=store.vault_scope,
+            max_sensitivity="private",
+        )
+        binding = history.get("canonical_binding")
+        if isinstance(binding, dict):
+            timeline = store.task_identity_timeline(task_binding=binding, limit=limit)
+        else:
+            timeline = None
+    history_status = str(history.get("status", "invalid"))
+    if not isinstance(binding, dict) or timeline is None:
+        gap_code = (
+            "task_line_ambiguous" if history_status == "ambiguous" else history_status
+        )
+        return {
+            "schema_version": TASK_CONTINUITY_SCHEMA_VERSION,
+            "operation": "timeline",
+            "status": history_status,
+            "write_performed": False,
+            "transcript_copied": False,
+            "native_host_lifecycle_observed": False,
+            "gap": {"code": gap_code},
+            "entries": [],
+        }
+    handle_payload, located_handle = _handle_from_binding(vault_id=vault_id, binding=binding)
+    if task_handle is not None:
+        supplied = decode_task_handle(task_handle, expected_vault_id=vault_id)
+        if supplied["task_handle_sha256"] != handle_payload["task_handle_sha256"]:
+            return {
+                "schema_version": TASK_CONTINUITY_SCHEMA_VERSION,
+                "operation": "timeline",
+                "status": "ambiguous",
+                "write_performed": False,
+                "transcript_copied": False,
+                "native_host_lifecycle_observed": False,
+                "gap": {"code": "task_handle_route_mismatch"},
+                "entries": [],
+            }
+    base = _base_result(
+        handle_payload,
+        task_handle=located_handle,
+        operation="timeline",
+        write_performed=False,
+    )
     if timeline.get("status") != "exact":
         return {
-            **located,
-            "operation": "timeline",
+            **base,
             "status": "gap",
             "entries": [],
             "gap": {"code": str(timeline.get("status", "invalid"))},
         }
+    gap_code: str | None = None
+    if history_status == "forgotten":
+        gap_code = "forgotten"
+    elif snapshot_gap is not None:
+        gap_code = str(snapshot_gap.receipt["gap"]["code"])
+    elif history_status != "exact":
+        gap_code = history_status
     return {
-        **located,
-        "operation": "timeline",
+        **base,
+        "status": "exact" if gap_code is None else "gap",
         "entries": timeline["entries"],
         "timeline_truncated": timeline["truncated"],
+        **({"gap": {"code": gap_code}} if gap_code is not None else {}),
     }
 
 
@@ -996,17 +1048,12 @@ def _bounded_items(values: Sequence[str], *, label: str, maximum: int = 8) -> li
 
 def _bounded_artifact_refs(values: Sequence[str]) -> list[str]:
     selected = _bounded_items(values, label="artifact reference")
-    for value in selected:
-        if (
-            _SAFE_ARTIFACT_REF.fullmatch(value) is None
-            or value in {".", ".."}
-            or ".." in value
-            or "/" in value
-            or "\\" in value
-            or _SECRET_ARTIFACT_REF.search(value) is not None
-        ):
-            raise ValueError("artifact reference must be an opaque bounded safe identifier")
-    return selected
+    try:
+        return normalize_run_artifact_ids(selected)
+    except ValueError:
+        raise ValueError(
+            "artifact reference must be an opaque bounded safe identifier"
+        ) from None
 
 
 def checkpoint_task(
