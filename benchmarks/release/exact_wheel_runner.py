@@ -20,6 +20,22 @@ SCHEMA_VERSION = "deeplaw.exact-wheel-execution-receipt/v1"
 PACKAGE_NAME = "deeplaw"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
+_REQUIREMENT_HASH_RE = re.compile(r"--hash=sha256:([0-9a-f]{64})(?=\s|$)")
+_REQUIREMENT_OPTION_RE = re.compile(
+    r"(?:^|\s)(?:-e|--editable|-r|--requirement|-c|--constraint|-f|--find-links|"
+    r"--index-url|--extra-index-url|--no-index|--trusted-host|--no-binary|"
+    r"--only-binary|--config-settings)(?:[=\s]|$)",
+    re.IGNORECASE,
+)
+_REQUIREMENT_OPTION_TOKEN_RE = re.compile(
+    r"(?:^|\s)--(?!hash=)[A-Za-z][A-Za-z0-9-]*(?:=|\s|$)"
+)
+_LOCAL_REQUIREMENT_RE = re.compile(
+    r"(?:^|[\s])(?:file://|file:|\.{1,2}/|/|~[/\\]|[A-Za-z]:[/\\])",
+    re.IGNORECASE,
+)
+_MAX_REQUIREMENTS_BYTES = 64 * 1024 * 1024
 _WHEEL_RE = re.compile(
     r"^deeplaw-(?P<version>[0-9]+\.[0-9]+\.[0-9]+)-[A-Za-z0-9_.-]+\.whl$"
 )
@@ -129,6 +145,117 @@ def _candidate_wheel(
     return wheel
 
 
+def _candidate_requirements(
+    candidate_dir: Path,
+    *,
+    requirements_filename: str,
+    expected_requirements_sha256: str,
+) -> tuple[Path, bytes]:
+    _strict_sha256(expected_requirements_sha256, label="expected requirements SHA-256")
+    if (
+        not isinstance(requirements_filename, str)
+        or _SAFE_FILENAME_RE.fullmatch(requirements_filename) is None
+        or requirements_filename in {".", ".."}
+    ):
+        raise ExactWheelExecutionError("requirements filename must be a safe candidate file name")
+    if Path(requirements_filename).name != requirements_filename:
+        raise ExactWheelExecutionError("requirements file must be directly inside Candidate Full")
+    selected = candidate_dir.resolve(strict=True) / requirements_filename
+    if selected.is_symlink() or not selected.is_file():
+        raise ExactWheelExecutionError(
+            "requirements input must be a regular non-symlink file in Candidate Full"
+        )
+    try:
+        raw = selected.read_bytes()
+    except OSError as exc:
+        raise ExactWheelExecutionError("requirements input could not be read") from exc
+    if not 1 <= len(raw) <= _MAX_REQUIREMENTS_BYTES:
+        raise ExactWheelExecutionError("requirements input exceeds its byte bound")
+    if _sha256_bytes(raw) != expected_requirements_sha256:
+        raise ExactWheelExecutionError("requirements hash mismatch")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ExactWheelExecutionError("requirements input must be strict UTF-8") from exc
+    _validate_requirements_text(text)
+    return selected, raw
+
+
+def _validate_requirements_text(text: str) -> None:
+    """Accept only hash-pinned package records from a locked requirements export."""
+
+    if "\x00" in text:
+        raise ExactWheelExecutionError("requirements input contains a NUL byte")
+    logical_lines: list[str] = []
+    pending = ""
+    for physical in text.splitlines():
+        line = physical.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if line.endswith("\\"):
+            pending = f"{pending} {line[:-1].rstrip()}".strip()
+            continue
+        logical = f"{pending} {line}".strip() if pending else line
+        pending = ""
+        logical_lines.append(logical)
+    if pending:
+        raise ExactWheelExecutionError("requirements input has a dangling continuation")
+    if not logical_lines:
+        raise ExactWheelExecutionError("requirements input has no package records")
+
+    for line in logical_lines:
+        if "\\" in line:
+            raise ExactWheelExecutionError("requirements input contains an unsafe continuation")
+        if _REQUIREMENT_OPTION_RE.search(line):
+            raise ExactWheelExecutionError(
+                "requirements input contains an unsupported installer option"
+            )
+        if _REQUIREMENT_OPTION_TOKEN_RE.search(line):
+            raise ExactWheelExecutionError(
+                "requirements input contains an unsupported installer option"
+            )
+        if _LOCAL_REQUIREMENT_RE.search(line) or "://" in line or " @ " in line:
+            raise ExactWheelExecutionError(
+                "requirements input contains a local or direct URL requirement"
+            )
+        if "==" not in line:
+            raise ExactWheelExecutionError(
+                "requirements input must contain an exact pinned package version"
+            )
+        hash_tokens = re.findall(r"--hash=([^\s]+)", line)
+        if not hash_tokens or any(
+            _REQUIREMENT_HASH_RE.fullmatch(f"--hash={token}") is None
+            for token in hash_tokens
+        ):
+            raise ExactWheelExecutionError(
+                "every locked requirement must include a lowercase sha256 hash"
+            )
+
+
+def _candidate_wheelhouse(candidate_dir: Path) -> Path | None:
+    wheelhouse = candidate_dir.resolve(strict=True) / "wheelhouse"
+    if not wheelhouse.exists():
+        return None
+    if wheelhouse.is_symlink() or not wheelhouse.is_dir():
+        raise ExactWheelExecutionError("dependency wheelhouse must be a regular directory")
+    try:
+        entries = list(wheelhouse.iterdir())
+    except OSError as exc:
+        raise ExactWheelExecutionError("dependency wheelhouse could not be read") from exc
+    wheels = []
+    for entry in entries:
+        if entry.is_symlink() or not entry.is_file():
+            raise ExactWheelExecutionError("dependency wheelhouse contains an unsafe file")
+        if not entry.name.endswith(".whl"):
+            raise ExactWheelExecutionError(
+                "dependency wheelhouse may contain only regular wheel files"
+            )
+        wheels.append(entry)
+    if not wheels:
+        raise ExactWheelExecutionError("dependency wheelhouse contains no wheels")
+    return wheelhouse
+
+
 def _venv_python(venv_path: Path) -> Path:
     relative = Path("Scripts/python.exe") if os.name == "nt" else Path("bin/python")
     executable = venv_path / relative
@@ -142,6 +269,7 @@ def _safe_environment(venv_python: Path) -> dict[str, str]:
     environment = {
         "PATH": str(bin_dir),
         "PYTHONNOUSERSITE": "1",
+        "PIP_CONFIG_FILE": os.devnull,
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",
         "PIP_NO_INPUT": "1",
         "LC_ALL": "C",
@@ -187,6 +315,48 @@ def _create_venv(venv_path: Path) -> Path:
     return python_executable
 
 
+def _install_requirements(
+    *,
+    python_executable: Path,
+    requirements: Path,
+    venv_path: Path,
+    wheelhouse: Path | None,
+) -> str:
+    command = [
+        str(python_executable),
+        "-I",
+        "-m",
+        "pip",
+        "install",
+        "--require-hashes",
+        "--no-cache-dir",
+        "--disable-pip-version-check",
+        "--force-reinstall",
+    ]
+    if wheelhouse is None:
+        command.extend(("--index-url", "https://pypi.org/simple"))
+        mode = "fixed_pypi_index"
+    else:
+        command.extend(("--no-index", "--find-links", str(wheelhouse)))
+        mode = "candidate_wheelhouse"
+    command.extend(("-r", str(requirements)))
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=venv_path,
+            env=_safe_environment(python_executable),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ExactWheelExecutionError("locked requirements installation failed") from exc
+    if completed.returncode != 0:
+        raise ExactWheelExecutionError("locked requirements installation failed")
+    return mode
+
+
 def _install_wheel(*, python_executable: Path, wheel: Path, venv_path: Path) -> None:
     try:
         completed = subprocess.run(
@@ -214,6 +384,40 @@ def _install_wheel(*, python_executable: Path, wheel: Path, venv_path: Path) -> 
         raise ExactWheelExecutionError("exact wheel installation failed") from exc
     if completed.returncode != 0:
         raise ExactWheelExecutionError("exact wheel installation failed")
+
+
+def _run_version(
+    *, console_entrypoint: Path, venv_path: Path, expected_version: str, python_executable: Path
+) -> dict[str, Any]:
+    argv = ["deeplaw", "--version"]
+    try:
+        completed = subprocess.run(
+            [str(console_entrypoint), "--version"],
+            cwd=venv_path,
+            env=_safe_environment(python_executable),
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ExactWheelExecutionError("isolated deeplaw --version execution failed") from exc
+    if completed.returncode != 0:
+        raise ExactWheelExecutionError("isolated deeplaw --version execution failed")
+    try:
+        stdout = completed.stdout.decode("utf-8")
+        stderr = completed.stderr.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ExactWheelExecutionError("isolated deeplaw --version output is not UTF-8") from exc
+    expected_output = f"deeplaw {expected_version}\n"
+    if stdout != expected_output or stderr:
+        raise ExactWheelExecutionError("isolated deeplaw --version output differs")
+    return {
+        "argv": argv,
+        "exit_code": completed.returncode,
+        "stdout_sha256": _sha256_bytes(completed.stdout),
+        "stdout_bytes": len(completed.stdout),
+        "stdout_path_class": "sanitized_stdout",
+    }
 
 
 def _probe_script() -> str:
@@ -437,6 +641,8 @@ def execute_exact_wheel(
     *,
     candidate_dir: Path,
     expected_wheel_sha256: str,
+    requirements_filename: str,
+    expected_requirements_sha256: str,
     expected_version: str,
     repository: Path,
     venv_path: Path,
@@ -450,6 +656,12 @@ def execute_exact_wheel(
         expected_wheel_sha256=expected_wheel_sha256,
         expected_version=expected_version,
     )
+    candidate_requirements, requirements_raw = _candidate_requirements(
+        candidate_dir,
+        requirements_filename=requirements_filename,
+        expected_requirements_sha256=expected_requirements_sha256,
+    )
+    dependency_wheelhouse = _candidate_wheelhouse(candidate_dir)
     requested_venv = Path(venv_path).expanduser()
     if requested_venv.exists() or requested_venv.is_symlink():
         raise ExactWheelExecutionError("isolated venv path must not already exist")
@@ -466,6 +678,12 @@ def execute_exact_wheel(
     try:
         python_executable = _create_venv(resolved_venv)
         created = True
+        requirements_mode = _install_requirements(
+            python_executable=python_executable,
+            requirements=candidate_requirements,
+            venv_path=resolved_venv,
+            wheelhouse=dependency_wheelhouse,
+        )
         _install_wheel(
             python_executable=python_executable,
             wheel=candidate_wheel,
@@ -483,6 +701,12 @@ def execute_exact_wheel(
             expected_python=python_executable,
         )
         console_entrypoint = _console_entrypoint(resolved_venv)
+        version_check = _run_version(
+            console_entrypoint=console_entrypoint,
+            venv_path=resolved_venv,
+            expected_version=expected_version,
+            python_executable=python_executable,
+        )
         try:
             console_relative = console_entrypoint.relative_to(
                 resolved_venv.resolve(strict=True)
@@ -505,6 +729,13 @@ def execute_exact_wheel(
                 "wheel_sha256": _sha256_file(candidate_wheel),
                 "wheel_size": candidate_wheel.stat().st_size,
                 "path_class": "candidate_full_wheel",
+            },
+            "requirements": {
+                "filename": candidate_requirements.name,
+                "sha256": _sha256_bytes(requirements_raw),
+                "bytes": len(requirements_raw),
+                "path_class": "candidate_requirements",
+                "hash_pinned": True,
             },
             "venv": {
                 "path_class": "new_isolated_venv",
@@ -536,12 +767,19 @@ def execute_exact_wheel(
                 "module_relative_path": runtime["entrypoint_relative"].as_posix(),
                 "module_sha256": entrypoint_module_sha256,
             },
+            "version_check": version_check,
+            "network_acquisition": {
+                "explicit": True,
+                "mode": requirements_mode,
+                "hash_pinned": True,
+            },
             "environment_policy": {
                 "python_isolated_mode": True,
                 "pythonpath_cleared": True,
                 "pythonhome_cleared": True,
                 "user_site_disabled": True,
-                "network_disabled_for_install": True,
+                "network_disabled_for_install": requirements_mode == "candidate_wheelhouse",
+                "requirements_hashes_required": True,
                 "candidate_source_only": True,
             },
         }
@@ -568,6 +806,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-dir", type=Path, required=True)
     parser.add_argument("--expected-wheel-sha256", required=True)
+    parser.add_argument("--requirements-filename", required=True)
+    parser.add_argument("--expected-requirements-sha256", required=True)
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--venv", type=Path, required=True)
@@ -580,6 +820,8 @@ def main(argv: list[str] | None = None) -> int:
     receipt = execute_exact_wheel(
         candidate_dir=args.candidate_dir,
         expected_wheel_sha256=args.expected_wheel_sha256,
+        requirements_filename=args.requirements_filename,
+        expected_requirements_sha256=args.expected_requirements_sha256,
         expected_version=args.expected_version,
         repository=args.repository,
         venv_path=args.venv,

@@ -10,9 +10,12 @@
     "status",
     "runner_source_sha256",
     "candidate",
+    "requirements",
     "venv",
     "runtime",
     "entrypoint",
+    "version_check",
+    "network_acquisition",
     "environment_policy",
     "record_sha256"
   ],
@@ -21,9 +24,12 @@
     "status": {"const": "exact_wheel_executed"},
     "runner_source_sha256": {"$ref": "#/$defs/sha256"},
     "candidate": {"$ref": "#/$defs/candidate"},
+    "requirements": {"$ref": "#/$defs/requirements"},
     "venv": {"$ref": "#/$defs/venv"},
     "runtime": {"$ref": "#/$defs/runtime"},
     "entrypoint": {"$ref": "#/$defs/entrypoint"},
+    "version_check": {"$ref": "#/$defs/versionCheck"},
+    "network_acquisition": {"$ref": "#/$defs/networkAcquisition"},
     "environment_policy": {"$ref": "#/$defs/environmentPolicy"},
     "record_sha256": {"$ref": "#/$defs/sha256"}
   },
@@ -37,6 +43,7 @@
       "type": "string",
       "enum": [
         "candidate_full_wheel",
+        "candidate_requirements",
         "new_isolated_venv",
         "venv_bin",
         "venv_site_packages",
@@ -55,6 +62,21 @@
         "wheel_sha256": {"$ref": "#/$defs/sha256"},
         "wheel_size": {"type": "integer", "minimum": 1},
         "path_class": {"const": "candidate_full_wheel"}
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256", "bytes", "path_class", "hash_pinned"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "path_class": {"const": "candidate_requirements"},
+        "hash_pinned": {"const": true}
       }
     },
     "venv": {
@@ -141,6 +163,38 @@
         "module_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
+    "versionCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "exit_code",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stdout_path_class"
+      ],
+      "properties": {
+        "argv": {
+          "const": ["deeplaw", "--version"]
+        },
+        "exit_code": {"const": 0},
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stdout_bytes": {"type": "integer", "minimum": 1},
+        "stdout_path_class": {"const": "sanitized_stdout"}
+      }
+    },
+    "networkAcquisition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["explicit", "mode", "hash_pinned"],
+      "properties": {
+        "explicit": {"const": true},
+        "mode": {
+          "enum": ["candidate_wheelhouse", "fixed_pypi_index"]
+        },
+        "hash_pinned": {"const": true}
+      }
+    },
     "environmentPolicy": {
       "type": "object",
       "additionalProperties": false,
@@ -150,6 +204,7 @@
         "pythonhome_cleared",
         "user_site_disabled",
         "network_disabled_for_install",
+        "requirements_hashes_required",
         "candidate_source_only"
       ],
       "properties": {
@@ -157,7 +212,8 @@
         "pythonpath_cleared": {"const": true},
         "pythonhome_cleared": {"const": true},
         "user_site_disabled": {"const": true},
-        "network_disabled_for_install": {"const": true},
+        "network_disabled_for_install": {"type": "boolean"},
+        "requirements_hashes_required": {"const": true},
         "candidate_source_only": {"const": true}
       }
     }
