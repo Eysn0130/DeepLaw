@@ -531,6 +531,13 @@
         {
           "junit": {
             "classname": "tests.test_closed_mcp_launcher",
+            "name": "test_closed_launcher_passes_only_verified_host_workspace_metadata"
+          },
+          "node_id": "tests/test_closed_mcp_launcher.py::test_closed_launcher_passes_only_verified_host_workspace_metadata"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_closed_mcp_launcher",
             "name": "test_closed_launcher_real_child_sees_only_portable_and_explicit_environment"
           },
           "node_id": "tests/test_closed_mcp_launcher.py::test_closed_launcher_real_child_sees_only_portable_and_explicit_environment"
@@ -2834,16 +2841,16 @@
         {
           "junit": {
             "classname": "tests.test_knowledge_sink_mcp",
-            "name": "test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4"
+            "name": "test_mcp_budgets_temporal_reads_and_scope_admission_are_closed"
           },
-          "node_id": "tests/test_knowledge_sink_mcp.py::test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4"
+          "node_id": "tests/test_knowledge_sink_mcp.py::test_mcp_budgets_temporal_reads_and_scope_admission_are_closed"
         },
         {
           "junit": {
             "classname": "tests.test_knowledge_sink_mcp",
-            "name": "test_mcp_budgets_temporal_reads_and_scope_admission_are_closed"
+            "name": "test_provider_v7_is_compact_without_mutating_frozen_v2_to_v4"
           },
-          "node_id": "tests/test_knowledge_sink_mcp.py::test_mcp_budgets_temporal_reads_and_scope_admission_are_closed"
+          "node_id": "tests/test_knowledge_sink_mcp.py::test_provider_v7_is_compact_without_mutating_frozen_v2_to_v4"
         },
         {
           "junit": {
@@ -2883,9 +2890,9 @@
         {
           "junit": {
             "classname": "tests.test_knowledge_sink_mcp",
-            "name": "test_stdio_autonomous_support_exposes_v5_read_operations"
+            "name": "test_stdio_advertises_v7_and_accepts_internal_v5_compatibility"
           },
-          "node_id": "tests/test_knowledge_sink_mcp.py::test_stdio_autonomous_support_exposes_v5_read_operations"
+          "node_id": "tests/test_knowledge_sink_mcp.py::test_stdio_advertises_v7_and_accepts_internal_v5_compatibility"
         },
         {
           "junit": {
@@ -7027,6 +7034,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_regression",
+            "name": "test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells"
+          },
+          "node_id": "tests/test_v013_candidate_regression.py::test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_regression",
             "name": "test_candidate_regression_receipt_parses_junit_and_binds_python"
           },
           "node_id": "tests/test_v013_candidate_regression.py::test_candidate_regression_receipt_parses_junit_and_binds_python"
@@ -7538,9 +7552,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_commercial_release_gate",
-            "name": "test_v013_commercial_qualification_consumes_verified_artifacts_and_gate_v6"
+            "name": "test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts"
           },
-          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_commercial_qualification_consumes_verified_artifacts_and_gate_v6"
+          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts"
         },
         {
           "junit": {
@@ -9848,9 +9862,58 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_manifest_file_hash_mismatch"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_manifest_file_hash_mismatch"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"schema_version\":\"x\",\"schema_version\":\"y\"}\\n]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"schema_version\":\"x\",\"schema_version\":\"y\"}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"value\":1e999}\\n]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"value\":1e999}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"value\":Infinity}\\n]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"value\":Infinity}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"value\":NaN}\\n]"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_non_strict_json_before_gate_validation[{\"value\":NaN}\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_rejects_orphan_files"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_orphan_files"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
             "name": "test_external_bundle_rejects_secret_named_or_raw_log_artifacts"
           },
           "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_rejects_secret_named_or_raw_log_artifacts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass22_external_qualification_workflow",
+            "name": "test_external_bundle_scans_non_json_sanitized_artifacts"
+          },
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_bundle_scans_non_json_sanitized_artifacts"
         },
         {
           "junit": {
@@ -9956,6 +10019,1049 @@
             "name": "test_v6_validator_rejects_noncanonical_classification"
           },
           "node_id": "tests/test_v013_pass22_release_provenance.py::test_v6_validator_rejects_noncanonical_classification"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_classification_declares_no_gate_result_or_pass_fact"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_classification_declares_no_gate_result_or_pass_fact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_core_uses_only_the_current_typed_evidence_and_gate_result_surfaces"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_core_uses_only_the_current_typed_evidence_and_gate_result_surfaces"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_cross_host_gates_require_all_six_distinct_composite_runs"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_cross_host_gates_require_all_six_distinct_composite_runs"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_freezes_real_host_identity_without_a_version_range"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_freezes_real_host_identity_without_a_version_range"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_has_exactly_fourteen_core_gates_and_separate_corpus_domains"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_has_exactly_fourteen_core_gates_and_separate_corpus_domains"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_is_a_new_current_contract_and_leaves_v6_historical_contract_intact"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_is_a_new_current_contract_and_leaves_v6_historical_contract_intact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_keeps_non_core_capabilities_and_claims_not_claimed"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_keeps_non_core_capabilities_and_claims_not_claimed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_schema_and_canonical_document_are_closed"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_schema_and_canonical_document_are_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_classification_v7",
+            "name": "test_v7_schema_rejects_cross_domain_candidate_role_and_extra_result_field"
+          },
+          "node_id": "tests/test_v013_pass24_classification_v7.py::test_v7_schema_rejects_cross_domain_candidate_role_and_extra_result_field"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_cli_surface",
+            "name": "test_default_help_highlights_the_existing_query_context_journey"
+          },
+          "node_id": "tests/test_v013_pass24_cli_surface.py::test_default_help_highlights_the_existing_query_context_journey"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_cli_surface",
+            "name": "test_hidden_commands_remain_directly_parseable"
+          },
+          "node_id": "tests/test_v013_pass24_cli_surface.py::test_hidden_commands_remain_directly_parseable"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_cli_surface",
+            "name": "test_query_and_context_parse_through_existing_public_seams"
+          },
+          "node_id": "tests/test_v013_pass24_cli_surface.py::test_query_and_context_parse_through_existing_public_seams"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_all_five_hooks_are_bounded_and_redact_untrusted_input"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_all_five_hooks_are_bounded_and_redact_untrusted_input"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_invalid_utf8_duplicate_nan_and_oversize_input_fail_closed_without_echo"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_invalid_utf8_duplicate_nan_and_oversize_input_fail_closed_without_echo"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_manifest_registers_hooks_and_states_owner_exact_hash_trust"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_manifest_registers_hooks_and_states_owner_exact_hash_trust"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_output_bound_holds_for_maximal_bounded_fields"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_output_bound_holds_for_maximal_bounded_fields"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_precompact_is_explicitly_read_only_without_checkpoint_grant"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_precompact_is_explicitly_read_only_without_checkpoint_grant"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_reason_source_and_trigger_are_reduced_to_safe_route_metadata"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_reason_source_and_trigger_are_reduced_to_safe_route_metadata"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_current_workflows",
+            "name": "test_candidate_full_retains_raw_platform_and_exact_wheel_evidence"
+          },
+          "node_id": "tests/test_v013_pass24_current_workflows.py::test_candidate_full_retains_raw_platform_and_exact_wheel_evidence"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_current_workflows",
+            "name": "test_commercial_qualification_recomputes_current_typed_core_gates"
+          },
+          "node_id": "tests/test_v013_pass24_current_workflows.py::test_commercial_qualification_recomputes_current_typed_core_gates"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_current_workflows",
+            "name": "test_external_qualification_consumes_candidate_full_and_emits_typed_evidence"
+          },
+          "node_id": "tests/test_v013_pass24_current_workflows.py::test_external_qualification_consumes_candidate_full_and_emits_typed_evidence"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_current_workflows",
+            "name": "test_release_is_manual_three_run_provenance_then_draft_and_public_verify"
+          },
+          "node_id": "tests/test_v013_pass24_current_workflows.py::test_release_is_manual_three_run_provenance_then_draft_and_public_verify"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_candidate_directory_requires_one_regular_wheel"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_candidate_directory_requires_one_regular_wheel"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_candidate_wheel_hash_mismatch_fails_before_venv_creation"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_candidate_wheel_hash_mismatch_fails_before_venv_creation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_checkout_source_import_origin_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_checkout_source_import_origin_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_console_version_execution_failure_cleans_venv"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_console_version_execution_failure_cleans_venv"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_public_journey_receipt_rejects_extra_raw_fields"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_public_journey_receipt_rejects_extra_raw_fields"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_public_journey_step_failure_cleans_venv"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_public_journey_step_failure_cleans_venv"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_requirements_hash_mismatch_fails_before_venv_creation"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_requirements_hash_mismatch_fails_before_venv_creation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_requirements_reject_unbound_or_local_inputs[--index-url https://example.invalid/simple\\n]"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_requirements_reject_unbound_or_local_inputs[--index-url https://example.invalid/simple\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_requirements_reject_unbound_or_local_inputs[-e .\\n]"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_requirements_reject_unbound_or_local_inputs[-e .\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_requirements_reject_unbound_or_local_inputs[dependency-pkg @ file:///tmp/dependency.whl --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000\\n]"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_requirements_reject_unbound_or_local_inputs[dependency-pkg @ file:///tmp/dependency.whl --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000\\n]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_unique_wheel_is_installed_and_receipt_is_path_free"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_unique_wheel_is_installed_and_receipt_is_path_free"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_exact_wheel_runner",
+            "name": "test_venv_inside_checkout_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_exact_wheel_runner.py::test_venv_inside_checkout_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_accepts_current_typed_and_opaque_artifacts_with_path_free_output"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_accepts_current_typed_and_opaque_artifacts_with_path_free_output"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_allows_only_false_auth_receipts_and_non_sensitive_digests"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_allows_only_false_auth_receipts_and_non_sensitive_digests"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_cli_requires_explicit_bindings_and_emits_only_derived_values"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_cli_requires_explicit_bindings_and_emits_only_derived_values"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_contract_admits_candidate_full_retained_supply_chain_manifest"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_contract_admits_candidate_full_retained_supply_chain_manifest"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_descriptor_is_closed_and_public_key_bound"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_descriptor_is_closed_and_public_key_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_does_not_read_an_in_bundle_trusted_descriptor"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_does_not_read_an_in_bundle_trusted_descriptor"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_active_construction_candidate"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_active_construction_candidate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_binary_with_wrong_evidence_role"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_binary_with_wrong_evidence_role"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_duplicate_and_non_finite_json[{\"x\":1,\"x\":2}]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_duplicate_and_non_finite_json[{\"x\":1,\"x\":2}]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_duplicate_and_non_finite_json[{\"x\":Infinity}]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_duplicate_and_non_finite_json[{\"x\":Infinity}]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_duplicate_and_non_finite_json[{\"x\":NaN}]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_duplicate_and_non_finite_json[{\"x\":NaN}]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_orphan_file"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_orphan_file"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_secret_or_absolute_path_text[/Users/private/evidence]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_secret_or_absolute_path_text[/Users/private/evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_secret_or_absolute_path_text[api_key=not-a-secret]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_secret_or_absolute_path_text[api_key=not-a-secret]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_self_hashed_but_wrong_cross_binding[candidate]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_self_hashed_but_wrong_cross_binding[candidate]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_self_hashed_but_wrong_cross_binding[run]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_self_hashed_but_wrong_cross_binding[run]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_self_hashed_but_wrong_cross_binding[trusted_key]"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_self_hashed_but_wrong_cross_binding[trusted_key]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_bundle_v3",
+            "name": "test_v3_rejects_symlink"
+          },
+          "node_id": "tests/test_v013_pass24_external_bundle_v3.py::test_v3_rejects_symlink"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_current_typed_parser_is_loaded_without_making_a_gate_decision"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_current_typed_parser_is_loaded_without_making_a_gate_decision"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_dotenv_and_external_inputs_are_metadata_only"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_dotenv_and_external_inputs_are_metadata_only"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_external_dispatch_requires_one_candidate_full_run_id"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_external_dispatch_requires_one_candidate_full_run_id"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_external_downloads_and_rebinds_both_candidate_full_artifacts"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_external_downloads_and_rebinds_both_candidate_full_artifacts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_external_executes_only_the_unique_downloaded_wheel"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_external_executes_only_the_unique_downloaded_wheel"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_host_preflight_uses_exact_pins_and_never_reads_auth_material"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_host_preflight_uses_exact_pins_and_never_reads_auth_material"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_runner_receipt_is_sanitized_and_v3_validator_is_the_only_bundle_boundary"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_runner_receipt_is_sanitized_and_v3_validator_is_the_only_bundle_boundary"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_binding_rejects_unfrozen_hosts[Codex]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_binding_rejects_unfrozen_hosts[Codex]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_binding_rejects_unfrozen_hosts[]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_binding_rejects_unfrozen_hosts[]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_binding_rejects_unfrozen_hosts[claude]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_binding_rejects_unfrozen_hosts[claude]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_binding_uses_governed_run_and_resolves_exactly"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_binding_uses_governed_run_and_resolves_exactly"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_resolution_rejects_stale_and_forgotten_routes"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_resolution_rejects_stale_and_forgotten_routes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_resolution_returns_closed_gaps"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_resolution_returns_closed_gaps"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_route_commands_are_explicit_cli_seams"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_route_commands_are_explicit_cli_seams"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_provider_host_route_recomputes_binding_or_returns_gap"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_provider_host_route_recomputes_binding_or_returns_gap"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_additional_properties_duplicate_keys_and_nonfinite_numbers_are_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_additional_properties_duplicate_keys_and_nonfinite_numbers_are_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_codex_event_vocabulary_is_closed[PostCompact-compaction_post]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_codex_event_vocabulary_is_closed[PostCompact-compaction_post]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_codex_event_vocabulary_is_closed[PreCompact-compaction_pre]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_codex_event_vocabulary_is_closed[PreCompact-compaction_pre]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_codex_event_vocabulary_is_closed[SessionEnd-end]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_codex_event_vocabulary_is_closed[SessionEnd-end]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_codex_event_vocabulary_is_closed[SessionStart-start]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_codex_event_vocabulary_is_closed[SessionStart-start]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_codex_event_vocabulary_is_closed[UserPromptSubmit-message]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_codex_event_vocabulary_is_closed[UserPromptSubmit-message]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_codex_receipt_binds_exact_identity_and_not_legacy_fact"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_codex_receipt_binds_exact_identity_and_not_legacy_fact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_content_and_auth_fields_are_rejected[api_secret]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[api_secret]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_content_and_auth_fields_are_rejected[auth]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[auth]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_content_and_auth_fields_are_rejected[raw_prompt]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[raw_prompt]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_content_and_auth_fields_are_rejected[reasoning_content]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[reasoning_content]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_content_and_auth_fields_are_rejected[transcript]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[transcript]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_content_and_auth_fields_are_rejected[transcript_path]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[transcript_path]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_event_mapping_is_not_mutated"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_event_mapping_is_not_mutated"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_fork_parent_digest_is_never_fabricated"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_fork_parent_digest_is_never_fabricated"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_opencode_event_vocabulary_requires_observed_artifact_identity[chat.message-message]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_opencode_event_vocabulary_requires_observed_artifact_identity[chat.message-message]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_opencode_event_vocabulary_requires_observed_artifact_identity[compaction-compaction]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_opencode_event_vocabulary_requires_observed_artifact_identity[compaction-compaction]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_opencode_event_vocabulary_requires_observed_artifact_identity[fork-fork]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_opencode_event_vocabulary_requires_observed_artifact_identity[fork-fork]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_opencode_event_vocabulary_requires_observed_artifact_identity[session-resume]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_opencode_event_vocabulary_requires_observed_artifact_identity[session-resume]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_opencode_placeholder_artifact_digest_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_opencode_placeholder_artifact_digest_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_raw_observation_is_hashed_but_not_returned"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_raw_observation_is_hashed_but_not_returned"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_regular_non_symlink_file_and_size_bound_are_enforced"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_regular_non_symlink_file_and_size_bound_are_enforced"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_route_statuses_are_explicit_gaps_until_exact_binding_is_complete"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_route_statuses_are_explicit_gaps_until_exact_binding_is_complete"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_context_re_resolves_route_and_binds_provider_hint_to_opaque_host_route"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_context_re_resolves_route_and_binds_provider_hint_to_opaque_host_route"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_helpers_cover_parent_identity_and_all_native_seams"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_helpers_cover_parent_identity_and_all_native_seams"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_manifest_and_readme_freeze_exact_candidate_identity"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_manifest_and_readme_freeze_exact_candidate_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_pre_publish_gate",
+            "name": "test_pre_publish_receipt_is_derived_from_exact_retained_bytes"
+          },
+          "node_id": "tests/test_v013_pass24_pre_publish_gate.py::test_pre_publish_receipt_is_derived_from_exact_retained_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_pre_publish_gate",
+            "name": "test_pre_publish_rejects_openvex_for_another_candidate"
+          },
+          "node_id": "tests/test_v013_pass24_pre_publish_gate.py::test_pre_publish_rejects_openvex_for_another_candidate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_pre_publish_gate",
+            "name": "test_pre_publish_rejects_retained_bytes_changed_after_build"
+          },
+          "node_id": "tests/test_v013_pass24_pre_publish_gate.py::test_pre_publish_rejects_retained_bytes_changed_after_build"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_pre_publish_gate",
+            "name": "test_pre_publish_rejects_self_claimed_license_pass_with_wrong_binding"
+          },
+          "node_id": "tests/test_v013_pass24_pre_publish_gate.py::test_pre_publish_rejects_self_claimed_license_pass_with_wrong_binding"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_canonical_tool_definition_stays_within_eight_kibibytes"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_canonical_tool_definition_stays_within_eight_kibibytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_initial_capsule_character_budgets_are_bounded"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_initial_capsule_character_budgets_are_bounded"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_legacy_v1_to_v6_calls_are_internal_compatibility_only"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_legacy_v1_to_v6_calls_are_internal_compatibility_only"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_provider_contract_is_closed_and_advertises_only_three_operations"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_provider_contract_is_closed_and_advertises_only_three_operations"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_unknown_operation_is_rejected_by_both_contract_planes"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_unknown_operation_is_rejected_by_both_contract_planes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_assembler",
+            "name": "test_cli_parser_requires_all_exact_bindings"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_assembler.py::test_cli_parser_requires_all_exact_bindings"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_assembler",
+            "name": "test_digest_helpers_are_sha256_sized"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_assembler.py::test_digest_helpers_are_sha256_sized"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_assembler",
+            "name": "test_execution_identity_is_path_free"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_assembler.py::test_execution_identity_is_path_free"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_assembler",
+            "name": "test_gate_result_rejects_parser_failure_instead_of_accepting_pass_override"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_assembler.py::test_gate_result_rejects_parser_failure_instead_of_accepting_pass_override"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_assembler",
+            "name": "test_safe_relative_rejects_absolute_and_parent_paths"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_assembler.py::test_safe_relative_rejects_absolute_and_parent_paths"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_all_pass24_contracts_are_closed_and_current"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_all_pass24_contracts_are_closed_and_current"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_candidate_binding_receipt_requires_every_two_phase_hash_and_identity"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_candidate_binding_receipt_requires_every_two_phase_hash_and_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_historical_v6_release_schema_bytes_are_unchanged"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_historical_v6_release_schema_bytes_are_unchanged"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_post_public_receipt_is_separate_and_requires_public_sha_and_attestation"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_post_public_receipt_is_separate_and_requires_public_sha_and_attestation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_pre_publish_gate_has_two_builds_and_no_public_verification_requirement"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_pre_publish_gate_has_two_builds_and_no_public_verification_requirement"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_semantic_gold_is_candidate_independent_and_requires_external_approval"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_semantic_gold_is_candidate_independent_and_requires_external_approval"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_v7_release_manifest_requires_three_distinct_runs_and_exact_bindings"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_v7_release_manifest_requires_three_distinct_runs_and_exact_bindings"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_qualification_contracts",
+            "name": "test_v7_separates_release_ready_from_public_release_verified"
+          },
+          "node_id": "tests/test_v013_pass24_qualification_contracts.py::test_v7_separates_release_ready_from_public_release_verified"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_candidate_identity_mapping_reopens_exact_checkout_bytes"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_candidate_identity_mapping_reopens_exact_checkout_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_external_bundle_v3_closure_excludes_commercial_derivatives"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_external_bundle_v3_closure_excludes_commercial_derivatives"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_a_report_missing_a_current_core_gate"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_a_report_missing_a_current_core_gate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_a_self_hashed_empty_passed_gate"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_a_self_hashed_empty_passed_gate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_a_self_hashed_gate_without_a_raw_receipt"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_a_self_hashed_gate_without_a_raw_receipt"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_candidate_manifest_bound_to_external_holdout"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_candidate_manifest_bound_to_external_holdout"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_candidate_manifest_bound_to_external_identity[runner]"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_candidate_manifest_bound_to_external_identity[runner]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_candidate_manifest_bound_to_external_identity[scorer]"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_candidate_manifest_bound_to_external_identity[scorer]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_candidate_typed_source_missing_from_independent_raw_inventory"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_candidate_typed_source_missing_from_independent_raw_inventory"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_duplicate_json_before_schema_validation"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_duplicate_json_before_schema_validation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_embedded_inventory_different_from_independent_raw_artifact"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_embedded_inventory_different_from_independent_raw_artifact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_historical_v3_classification_and_report"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_historical_v3_classification_and_report"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_orphan_inside_external_bundle_v3_closure"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_orphan_inside_external_bundle_v3_closure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_post_public_receipt_at_authorization_boundary"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_post_public_receipt_at_authorization_boundary"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_replaced_retained_bytes"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_replaced_retained_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_self_hashed_arbitrary_candidate_identity[runner]"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_self_hashed_arbitrary_candidate_identity[runner]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_rejects_self_hashed_arbitrary_candidate_identity[scorer]"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_rejects_self_hashed_arbitrary_candidate_identity[scorer]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_reopens_and_derives_the_transitive_chain"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_reopens_and_derives_the_transitive_chain"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_release_provenance_v7",
+            "name": "test_v7_reopens_threshold_bytes_instead_of_trusting_gate_self_hash"
+          },
+          "node_id": "tests/test_v013_pass24_release_provenance_v7.py::test_v7_reopens_threshold_bytes_instead_of_trusting_gate_self_hash"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_candidate_full_junit_recomputes_testcases_and_ignores_suite_counts"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_candidate_full_junit_recomputes_testcases_and_ignores_suite_counts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_exact_wheel_receipt_rechecks_record_and_candidate_identity"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_exact_wheel_receipt_rechecks_record_and_candidate_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_forbidden_caller_pass_fact_and_duplicate_or_nonfinite_json_are_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_forbidden_caller_pass_fact_and_duplicate_or_nonfinite_json_are_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_host_event_sequence_requires_event_derived_lifecycle_receipt"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_host_event_sequence_requires_event_derived_lifecycle_receipt"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_human_gold_requires_external_attestation_and_crosses_processes"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_human_gold_requires_external_attestation_and_crosses_processes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_legal_rows_require_28_exact_sources_and_recompute_wrong_version"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_legal_rows_require_28_exact_sources_and_recompute_wrong_version"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_manifest_closure_and_self_consistent_expected_observed_are_rejected"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_manifest_closure_and_self_consistent_expected_observed_are_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_path_policy_accepts_urls_and_locators_but_rejects_local_paths"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_path_policy_accepts_urls_and_locators_but_rejects_local_paths"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_retained_supply_chain_rechecks_pre_publish_and_all_retained_bytes"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_retained_supply_chain_rechecks_pre_publish_and_all_retained_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_typed_evidence_cli_requires_all_external_bindings"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_typed_evidence_cli_requires_all_external_bindings"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_wiki_context_and_scale_recompute_rows_without_caller_counts"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_wiki_context_and_scale_recompute_rows_without_caller_counts"
         },
         {
           "junit": {
@@ -11374,6 +12480,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_runtime_retrieval_regressions",
+            "name": "test_provider_v7_contract_and_instructions_recommend_one_read_path"
+          },
+          "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_provider_v7_contract_and_instructions_recommend_one_read_path"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_runtime_retrieval_regressions",
             "name": "test_query_without_explicit_plan_version_uses_v6_provider_receipt"
           },
           "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_query_without_explicit_plan_version_uses_v6_provider_receipt"
@@ -11398,13 +12511,6 @@
             "name": "test_sensitivity_upgrade_never_reuses_a_lower_sensitivity_response"
           },
           "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_sensitivity_upgrade_never_reuses_a_lower_sensitivity_response"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_runtime_retrieval_regressions",
-            "name": "test_v6_tool_contract_and_instructions_recommend_one_read_path"
-          },
-          "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_v6_tool_contract_and_instructions_recommend_one_read_path"
         },
         {
           "junit": {
@@ -12674,9 +13780,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 1795,
+      "count": 1953,
       "selection": "not qualification and not windows_native",
-      "sha256": "ac7f31155b5941ffc1706893a039b4d8afa6d84719504a6f17acc5296ed063e8"
+      "sha256": "420bcfc029086f48bf07e88b86fe3d6655417a2833c92e7e592396ce03e4c7a4"
     },
     "windows": {
       "additional_cases": [
@@ -12709,13 +13815,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 1799,
+      "count": 1957,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "35debe9e40fe6ce45a897094b48c93e9ef8216c9d353f1a2ed81e48d204edc2c"
+      "sha256": "c8783fa9b04c6861ca5e5c85f1113aec3aa79924d8faab8e51d64c70f1f624fd"
     }
   },
-  "manifest_sha256": "3e48b98ae7502028e1a1c0fe467f34b046e3bed990ea90741abfffcd9d95c891",
+  "manifest_sha256": "3eef05a45168ee24b2b2ff539156039881f97f5eae77b04cba00d0e0466eb344",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
