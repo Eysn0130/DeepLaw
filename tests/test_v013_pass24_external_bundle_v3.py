@@ -296,6 +296,17 @@ def test_v3_accepts_current_typed_and_opaque_artifacts_with_path_free_output(
     assert result["bundle_manifest_sha256"] == _digest(paths["manifest"].read_bytes())
 
 
+def test_v3_contract_admits_candidate_full_retained_supply_chain_manifest() -> None:
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/external-qualification-bundle-manifest.v3.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    kinds = schema["$defs"]["file"]["properties"]["evidence_kind"]["enum"]
+    assert "retained_supply_chain" in kinds
+
+
 def test_v3_cli_requires_explicit_bindings_and_emits_only_derived_values(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
     completed = subprocess.run(

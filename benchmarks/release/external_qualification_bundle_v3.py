@@ -102,6 +102,7 @@ _TYPED_JSON_KINDS = frozenset(
         "wiki_journey_rows",
         "context_capsule_selection_usage",
         "scale_report",
+        "retained_supply_chain",
         "sbom",
         "openvex",
         "licenses",
@@ -134,6 +135,7 @@ _CANDIDATE_RUN_KINDS = frozenset(
         "candidate_full_raw_inventory",
         "candidate_full_junit",
         "candidate_platform_receipt",
+        "retained_supply_chain",
     }
 )
 _INVENTORY_KINDS = frozenset({"candidate_full_raw_inventory"})

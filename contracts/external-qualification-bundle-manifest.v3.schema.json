@@ -140,6 +140,7 @@
             "wiki_journey_rows",
             "context_capsule_selection_usage",
             "scale_report",
+            "retained_supply_chain",
             "retained_wheel",
             "retained_sdist",
             "sbom",
