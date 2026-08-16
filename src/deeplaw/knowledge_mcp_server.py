@@ -892,15 +892,76 @@ def _v6_input_schema() -> dict[str, Any]:
     return schema
 
 
+@cache
+def _v7_input_schema() -> dict[str, Any]:
+    """Return the compact, self-contained Provider-advertised contract."""
+
+    schema = deepcopy(_load_contract("knowledge-support.input.v7.schema.json"))
+    schema.pop("$id", None)
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
+@cache
+def _provider_input_validator() -> Draft202012Validator:
+    return Draft202012Validator(_v7_input_schema(), format_checker=FormatChecker())
+
+
+@cache
+def _compatibility_input_validator() -> Draft202012Validator:
+    return Draft202012Validator(_v6_input_schema(), format_checker=FormatChecker())
+
+
+@cache
+def _legacy_v1_input_validator() -> Draft202012Validator:
+    schema = _load_contract("knowledge-support.input.v1.schema.json")
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+def _validate_knowledge_tool_arguments(
+    arguments: Mapping[str, Any],
+    *,
+    autonomous: bool,
+) -> str:
+    """Validate current Provider inputs or historical internal compatibility inputs."""
+
+    if not isinstance(arguments, Mapping):
+        raise ValueError("knowledge_support arguments must be an object")
+    provider_error = next(_provider_input_validator().iter_errors(arguments), None)
+    if provider_error is None:
+        return "provider_v7"
+    compatibility = (
+        _compatibility_input_validator()
+        if autonomous
+        else _legacy_v1_input_validator()
+    )
+    compatibility_error = next(compatibility.iter_errors(arguments), None)
+    if compatibility_error is None:
+        return "internal_compatibility"
+    path = ".".join(str(item) for item in provider_error.absolute_path)
+    location = f" at {path}" if path else ""
+    raise ValueError(
+        "knowledge_support input is not admitted by the current Provider contract "
+        f"or a historical compatibility contract{location}: {provider_error.message}"
+    )
+
+
+def _default_provider_max_chars(arguments: Mapping[str, Any]) -> int:
+    """Apply initial Capsule budgets pending exact-candidate Host A/B freezing."""
+
+    if "max_chars" in arguments:
+        return int(arguments["max_chars"])
+    return 16_000 if arguments.get("purpose") == "legal" else 8_000
+
+
 def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
     if autonomous:
         description = (
-            "Read-only access to explicitly selected DeepLaw source-derived and autonomous "
-            "knowledge planes, version lineage, graph relations, Living Wiki discovery, and "
-            "bounded Knowledge Capsules. Persistent writes exist only in the separate, "
-            "explicitly enabled knowledge_sink process."
+            "Read-only query, context assembly, and receipt explanation for bounded, "
+            "verifiable DeepLaw Knowledge Capsules."
         )
-        input_schema = _v6_input_schema()
+        input_schema = _v7_input_schema()
         output_schema = _load_contract("knowledge-support.output.v6.schema.json")
     else:
         description = _DESCRIPTION
@@ -3373,10 +3434,11 @@ def create_knowledge_mcp_server(
     async def list_tools() -> list[types.Tool]:
         return [definition]
 
-    @server.call_tool(validate_input=True)
+    @server.call_tool(validate_input=False)
     async def call_tool(name: str, arguments: dict[str, Any]) -> Any:
         if name != "knowledge_support":
             raise ValueError("unknown DeepLaw knowledge tool")
+        _validate_knowledge_tool_arguments(arguments, autonomous=autonomous)
         runtime = server.request_context.lifespan_context
         with runtime.lock:
             try:
@@ -3477,7 +3539,7 @@ def create_knowledge_mcp_server(
                     asset_id=cast(str | None, arguments.get("asset_id")),
                     knowledge_id=cast(str | None, arguments.get("knowledge_id")),
                     limit=int(arguments.get("limit", 5)),
-                    max_chars=int(arguments.get("max_chars", 5_000)),
+                    max_chars=_default_provider_max_chars(arguments),
                     max_tokens=int(arguments.get("max_tokens", 4_000)),
                     max_sources=int(arguments.get("max_sources", 8)),
                     graph_hops=int(arguments.get("graph_hops", 1)),
