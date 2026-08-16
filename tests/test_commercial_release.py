@@ -364,7 +364,7 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert "--verify-report-dir" in gate
     assert 'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in gate
     assert "--evaluation" in gate
-    assert "python -m benchmarks.release.release_policy" in release
+    assert "python -m benchmarks.release.release_provenance_v7" in release
     publish = release.split("\n  publish:", maxsplit=1)[1].split(
         "\n  public-redownload:", maxsplit=1
     )[0]
@@ -394,7 +394,7 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert gate.count('python: "3.12"') == 3
     assert gate.count('python: "3.13"') == 3
     assert "--expected-python" in gate
-    assert "benchmarks.release.semantic_evidence" in release
+    assert "benchmarks.release.release_provenance_v7" in release
     assert "benchmarks.release.retained_artifact_manifest" in release
 
 
@@ -481,14 +481,19 @@ def test_release_oci_contract_is_non_root_and_has_no_listener() -> None:
 def test_release_workflow_resumes_without_overwriting_published_assets() -> None:
     workflow = (REPOSITORY / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
-    assert "Create or resume the release without overwriting assets" in workflow
+    assert (
+        "Create or resume the draft or public prerelease without overwriting assets"
+        in workflow
+    )
     assert "cmp --silent" in workflow
     assert "published release asset differs" in workflow
     assert "--clobber" not in workflow
     assert "Publicly redownload immutable release without credentials" in workflow
-    assert "GH_TOKEN: ${{ github.token }}" not in workflow.split(
-        "  public-redownload:", maxsplit=1
-    )[1]
+    anonymous = workflow.split(
+        "      - name: Publicly redownload immutable release without credentials",
+        maxsplit=1,
+    )[1].split("      - name:", maxsplit=1)[0]
+    assert "GH_TOKEN: ${{ github.token }}" not in anonymous
     assert "curl --fail --location" in workflow
     assert "sha256sum --check SHA256SUMS" in workflow
     assert "sigstore/gh-action-sigstore-python" in workflow
