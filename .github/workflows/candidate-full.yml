@@ -65,6 +65,36 @@ jobs:
           uv export --frozen --no-dev --no-emit-project --no-emit-local --no-sources \
             --output-file "${RUNNER_TEMP}/verified-dist/candidate-requirements.txt"
 
+      - name: Derive closed pre-publish supply-chain evidence from the verified bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/verified-dist"
+          wheel=$(find "${dist}" -maxdepth 1 -type f -name '*.whl')
+          test -n "${wheel}"
+          supply_venv="${RUNNER_TEMP}/supply-chain-venv"
+          uv venv "${supply_venv}" --python "3.12" --seed
+          uv pip install --python "${supply_venv}/bin/python" \
+            --require-hashes \
+            --requirements "${dist}/candidate-requirements.txt"
+          uv pip install --python "${supply_venv}/bin/python" --no-deps "${wheel}"
+          "${supply_venv}/bin/python" -m benchmarks.release.inventory_licenses \
+            --output "${dist}/installed-licenses.json"
+          uv export --quiet --frozen --all-extras --no-extra dev --no-dev \
+            --format cyclonedx1.5 \
+            --output-file "${dist}/deeplaw.cdx.json"
+          cp security/openvex.json "${dist}/openvex.json"
+          source_date_epoch=$(git show -s --format=%ct HEAD)
+          uv run --frozen python -m benchmarks.release.pre_publish_artifact_gate \
+            --artifact-root "${dist}" \
+            --reproducible-report "${dist}/reproducible-build.json" \
+            --retained-manifest "${dist}/retained-artifact-manifest.json" \
+            --sbom "${dist}/deeplaw.cdx.json" \
+            --openvex "${dist}/openvex.json" \
+            --licenses "${dist}/installed-licenses.json" \
+            --created-at-epoch "${source_date_epoch}" \
+            --output "${dist}/pre-publish-artifact-gate.json"
+
       - name: Retain the one verified artifact source
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -462,7 +492,11 @@ jobs:
             reproducible-build.json \
             retained-artifact-manifest.json \
             frozen-active-qualification.json \
-            candidate-requirements.txt; do
+            candidate-requirements.txt \
+            pre-publish-artifact-gate.json \
+            deeplaw.cdx.json \
+            openvex.json \
+            installed-licenses.json; do
             test -s "${verified}/${required}"
           done
           test -s "${raw}/exact-wheel-evidence/exact-wheel-execution.json"
